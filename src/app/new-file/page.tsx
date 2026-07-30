@@ -1,32 +1,29 @@
-
-
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Plus, Trash2, Save, Loader2, Calendar as CalendarIcon, Printer, X, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
-import { format, formatISO, parseISO } from 'date-fns';
+import { format, formatISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { useAppContext } from '@/context/app-provider';
-import type { NewItem, StorageLocation } from '@/lib/types';
+import type { NewItem } from '@/lib/types';
 import { useTranslation } from '@/hooks/use-translation';
-
 
 const sources = [{ value: "Showroom", label: "شۆڕوم (Showroom)" }, { value: "Ashley Store", label: "کۆگای ئاشلی (Ashley Store)" }, { value: "Huana Store", label: "کۆگای هوئانا (Huana Store)" }];
 
-export default function NewFilePage() {
+function NewFileContent() {
   const { t, language } = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -122,33 +119,6 @@ export default function NewFilePage() {
       return null;
   }
   const warehouseType = getWarehouseTypeFromSource(source);
-  
-  const filteredLocations = useMemo(() => {
-    if (!locations || !warehouseType) return [];
-    
-    let filtered = locations.filter(l => l.warehouseType === warehouseType);
-
-    if (warehouseType === 'Huana') {
-        if(filterHuanaWarehouse !== 'All') {
-            filtered = filtered.filter(l => l.name.startsWith(`H-${filterHuanaWarehouse}-`));
-        }
-        if(filterHuanaFloor !== 'All') {
-            filtered = filtered.filter(l => l.name.startsWith(`H-${filterHuanaWarehouse}-${filterHuanaFloor}-`));
-        }
-    }
-    
-    if(warehouseType === 'Ashley') {
-        if(filterAshleyFloor !== 'All') {
-            filtered = filtered.filter(l => l.name.startsWith(`A-${filterAshleyFloor}-`));
-        }
-        if(filterAshleyArea !== 'All') {
-            filtered = filtered.filter(l => l.name.startsWith(`A-3-${filterAshleyArea}-`));
-        }
-    }
-    
-    return filtered.sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
-  }, [locations, warehouseType, filterHuanaWarehouse, filterHuanaFloor, filterAshleyFloor, filterAshleyArea]);
 
   if (isAppLoading || !date) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -252,60 +222,8 @@ export default function NewFilePage() {
                     </div>
                 </CardContent>
             </Card>
-
-             {warehouseType && (
-                <Card className="rounded-[2rem] border-black/5 shadow-sm overflow-hidden">
-                    <CardHeader className="bg-slate-50/50 border-b border-black/5">
-                        <CardTitle className="text-lg font-normal uppercase tracking-tighter">{t('location_filters')}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4 p-8">
-                        {warehouseType === 'Huana' && (
-                            <>
-                                <Select value={filterHuanaWarehouse} onValueChange={setFilterHuanaWarehouse}>
-                                    <SelectTrigger className="h-11 rounded-xl border-black/5 bg-slate-50/30 font-medium"><SelectValue placeholder={t('select_huana_warehouse')} /></SelectTrigger>
-                                    <SelectContent className="rounded-xl shadow-2xl border-black/5">
-                                        <SelectItem value="All">{t('all_huana_warehouses')}</SelectItem>
-                                        {[1, 2, 3].map(n => <SelectItem key={n} value={String(n)}>{t('warehouse')} {n}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                                {filterHuanaWarehouse !== 'All' && (
-                                    <Select value={filterHuanaFloor} onValueChange={setFilterHuanaFloor}>
-                                        <SelectTrigger className="h-11 rounded-xl border-black/5 bg-slate-50/30 font-medium"><SelectValue placeholder={t('select_floor')} /></SelectTrigger>
-                                        <SelectContent className="rounded-xl shadow-2xl border-black/5">
-                                            <SelectItem value="All">{t('all_floors')}</SelectItem>
-                                            {[1, 2].map(n => <SelectItem key={n} value={String(n)}>{t('floor')} {n}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            </>
-                        )}
-                        {warehouseType === 'Ashley' && (
-                            <>
-                                <Select value={filterAshleyFloor} onValueChange={setFilterAshleyFloor}>
-                                    <SelectTrigger className="h-11 rounded-xl border-black/5 bg-slate-50/30 font-medium"><SelectValue placeholder={t('select_ashley_floor')} /></SelectTrigger>
-                                    <SelectContent className="rounded-xl shadow-2xl border-black/5">
-                                        <SelectItem value="All">{t('all_floors')}</SelectItem>
-                                        <SelectItem value="4">{t('floor')} 4</SelectItem>
-                                        <SelectItem value="3">{t('floor')} 3</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                {filterAshleyFloor === '3' && (
-                                    <Select value={filterAshleyArea} onValueChange={setFilterAshleyArea}>
-                                        <SelectTrigger className="h-11 rounded-xl border-black/5 bg-slate-50/30 font-medium"><SelectValue placeholder={t('select_area')} /></SelectTrigger>
-                                        <SelectContent className="rounded-xl shadow-2xl border-black/5">
-                                            <SelectItem value="All">{t('all_areas_on_floor_3')}</SelectItem>
-                                            <SelectItem value="1">{t('area')} 1</SelectItem>
-                                            <SelectItem value="O">{t('area')} 2 ({t('office')})</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-            )}
-
         </div>
+
         <div className="lg:col-span-3">
             <Card className="win-card bg-card border border-border rounded-xl mt-12">
                 <CardHeader className="py-3 px-6 border-b border-border flex items-center justify-between">
@@ -330,18 +248,6 @@ export default function NewFilePage() {
                             <TableBody>
                                 {items.length > 0 ? items.map((item, index) => {
                                     const locationsSelected = item.locationIds || [];
-                                    const getLocationColor = (locId: string) => {
-                                        const loc = locations?.find(l => l.id === locId);
-                                        if (loc?.warehouseType === 'Huana') {
-                                            if (loc.name.includes('-1-')) return 'bg-emerald-50 text-emerald-600 border-emerald-100';
-                                            return 'bg-blue-50 text-blue-600 border-blue-100';
-                                        }
-                                        if (loc?.warehouseType === 'Ashley') {
-                                            if (loc.name.includes('A-4')) return 'bg-purple-50 text-purple-600 border-purple-100';
-                                            return 'bg-indigo-50 text-indigo-600 border-indigo-100';
-                                        }
-                                        return 'bg-slate-50 text-slate-600 border-slate-100';
-                                    };
 
                                     return (
                                         <TableRow key={item.tempId} className="border-black/5 hover:bg-slate-50/50 group transition-colors">
@@ -364,53 +270,11 @@ export default function NewFilePage() {
                                                             <AlertDialogHeader>
                                                                 <AlertDialogTitle className="text-xl font-normal tracking-tight text-black">هەڵبژاردنی چەند شوێنێک</AlertDialogTitle>
                                                             </AlertDialogHeader>
-                                                            <div className="mt-8 space-y-6 max-h-[400px] overflow-y-auto scrollbar-none pr-4">
-                                                                {locations && Array.from(new Set(locations.filter(l => l.warehouseType === warehouseType).map(l => {
-                                                                    const parts = l.name.split('-');
-                                                                    if (warehouseType === 'Huana') return `کۆگای ${parts[1]} - نهۆمی ${parts[2]}`;
-                                                                    if (warehouseType === 'Ashley') return `نهۆمی ${parts[1]}${parts[2] === 'O' ? ' (نووسینگە)' : ` (ناوچەی ${parts[2]})`}`;
-                                                                    return 'Other';
-                                                                }))).map(groupName => (
-                                                                    <div key={groupName} className="space-y-3">
-                                                                        <h4 className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-400 sticky top-0 bg-white py-1 z-10">{groupName}</h4>
-                                                                        <div className="grid grid-cols-1 gap-2">
-                                                                            {locations.filter(l => {
-                                                                                const parts = l.name.split('-');
-                                                                                const g = warehouseType === 'Huana' ? `کۆگای ${parts[1]} - نهۆمی ${parts[2]}` : `نهۆمی ${parts[1]}${parts[2] === 'O' ? ' (نووسینگە)' : ` (ناوچەی ${parts[2]})`}`;
-                                                                                return l.warehouseType === warehouseType && g === groupName;
-                                                                            }).map(loc => (
-                                                                                <div key={loc.id} className={cn("flex items-center justify-between p-4 rounded-2xl border border-slate-50 group cursor-pointer transition-all", locationsSelected.includes(loc.id) ? "bg-black/5 border-black/20" : "hover:bg-slate-50")} onClick={() => {
-                                                                                    const current = [...locationsSelected];
-                                                                                    const i = current.indexOf(loc.id);
-                                                                                    if (i > -1) current.splice(i, 1);
-                                                                                    else current.push(loc.id);
-                                                                                    handleItemChange(index, 'locationIds', current);
-                                                                                }}>
-                                                                                    <div className="flex items-center gap-3">
-                                                                                        <div className={cn("w-4 h-4 rounded-md border border-slate-200 flex items-center justify-center transition-all", locationsSelected.includes(loc.id) && "bg-black border-black")}>
-                                                                                            {locationsSelected.includes(loc.id) && <X className="w-3 h-3 text-white" />}
-                                                                                        </div>
-                                                                                        <span className={cn("text-[11px] font-medium uppercase tracking-widest transition-all", locationsSelected.includes(loc.id) ? "text-black font-semibold" : "text-slate-500")}>{loc.name}</span>
-                                                                                    </div>
-                                                                                    <div className={cn("px-2 py-0.5 rounded-md text-[8px] font-medium uppercase opacity-60 ring-1", getLocationColor(loc.id))}>{language === 'ku' ? 'ناوچە' : 'ZONE'}</div>
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
                                                             <AlertDialogFooter className="mt-8">
                                                                 <AlertDialogAction className="rounded-2xl h-12 w-full text-[11px] font-medium uppercase tracking-widest shadow-xl">تەواوکردنی هەڵبژاردن</AlertDialogAction>
                                                             </AlertDialogFooter>
                                                         </AlertDialogContent>
                                                     </AlertDialog>
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {locationsSelected.map(locId => (
-                                                            <div key={locId} className={cn("px-1.5 py-0.5 rounded-md text-[8px] font-medium uppercase border", getLocationColor(locId))}>
-                                                                {locations.find(l => l.id === locId)?.name}
-                                                            </div>
-                                                        ))}
-                                                    </div>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
@@ -444,5 +308,17 @@ export default function NewFilePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function NewFilePage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    }>
+      <NewFileContent />
+    </Suspense>
   );
 }
