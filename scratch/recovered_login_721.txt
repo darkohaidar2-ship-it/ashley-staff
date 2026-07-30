@@ -1,0 +1,84 @@
+Created At: 2026-06-02T09:17:37Z
+Completed At: 2026-06-02T09:17:37Z
+File Path: `file:///c:/Users/Diwan-ashley/OneDrive/Ashley_Archive_Cloud/OneDrive/DAro/ashley%20project/New-Ashley-main/New-Ashley-main/src/app/login/page.tsx`
+Total Lines: 429
+Total Bytes: 20378
+Showing lines 110 to 390
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+110:     selectedItem.locationIds.forEach((locId: string) => {
+111:       const loc = locations?.find(l => l.id === locId);
+112:       if (loc) {
+113:         const match = warehouseMaps.find(wm => 
+114:           wm.halls.some(h => 
+115:             h.floors.some(f => 
+116:               f.zones.some(z => z.name === loc.name)
+117:             )
+118:           )
+119:         );
+120:         if (match && !whs.has(match.id)) {
+121:           whs.add(match.id);
+122:           result.push(match);
+123:         }
+124:       }
+125:     });
+126: 
+127:     if (result.length === 0 && selectedItem.locationIds.length > 0) {
+128:       selectedItem.locationIds.forEach((locId: string) => {
+129:         const loc = locations?.find(l => l.id === locId);
+130:         if (loc && loc.warehouseType) {
+131:           const match = warehouseMaps.find(wm => wm.warehouseType === loc.warehouseType);
+132:           if (match && !whs.has(match.id)) {
+133:             whs.add(match.id);
+134:             result.push(match);
+135:           }
+136:         }
+137:       });
+138:     }
+139: 
+140:     return result;
+141:   }, [selectedItem, warehouseMaps, locations]);
+142: 
+143:   const currentItemLocations = useMemo(() => {
+144:     if (!selectedItem || !selectedItem.locationIds) return [];
+145:     return selectedItem.locationIds
+146:       .map((locId: string) => locations?.find(l => l.id === locId))
+147:       .filter(Boolean);
+148:   }, [selectedItem, locations]);
+149: 
+150:   const handleLogin = async (e: React.FormEvent)
+<truncated 12813 bytes>
+ border border-border/80 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 text-xs font-semibold transition-all duration-300"
+358:                     />
+359:                   </div>
+360:                 </div>
+361: 
+362:                 {/* Password Input */}
+363:                 <div className="space-y-1.5">
+364:                   <label className="text-[10px] font-bold uppercase tracking-wider pr-1" style={{ color: 'var(--win-text-color)', opacity: 0.6 }} htmlFor="password">
+365:                     تێپەڕەوشە (نهێنوشە)
+366:                   </label>
+367:                   <div className="relative flex items-center">
+368:                     <Lock className="absolute right-3.5 w-4 h-4 text-muted-foreground" />
+369:                     <input
+370:                       id="password"
+371:                       type="password"
+372:                       value={password}
+373:                       onChange={(e) => setPassword(e.target.value)}
+374:                       placeholder="تێپەڕەوشە بنووسە..."
+375:                       required
+376:                       style={{
+377:                         borderRadius: 'calc(var(--win-btn-radius) - 6px)',
+378:                         color: 'var(--win-text-color)'
+379:                       }}
+380:                       className="w-full h-12 pr-11 pl-4 bg-secondary/30 hover:bg-secondary/50 focus:bg-card border border-border/80 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 text-xs font-semibold transition-all duration-300"
+381:                     />
+382:                   </div>
+383:                 </div>
+384: 
+385:               </div>
+386: 
+387:               <div className="space-y-3">
+388:                 <button 
+389:                   type="submit" 
+390:                   disabled={isLoading}
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

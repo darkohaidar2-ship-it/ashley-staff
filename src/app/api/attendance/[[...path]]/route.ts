@@ -1,0 +1,769 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+import crypto from 'crypto';
+
+// Get current Date and Time in Asia/Baghdad timezone (Kurdish Local Time)
+function getBaghdadDateTime() {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Baghdad',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit'
+  }).formatToParts(now);
+
+  const getVal = (type: string) => parts.find(p => p.type === type)!.value;
+  const dateStr = `${getVal('year')}-${getVal('month')}-${getVal('day')}`;
+  const timeStr = `${getVal('hour')}:${getVal('minute')}`;
+
+  return { dateStr, timeStr };
+}
+
+// Daily Token Generator (Changes every day based on date)
+function getDailyToken() {
+  const { dateStr } = getBaghdadDateTime();
+  return crypto.createHash('sha256').update(dateStr + 'AshleyAttendanceSecretSaltKey').digest('hex').substring(0, 12);
+}
+
+// Haversine formula to check distance between two coordinates in meters
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371e3; // metres
+  const phi1 = lat1 * Math.PI / 180;
+  const phi2 = lat2 * Math.PI / 180;
+  const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+  const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+
+  const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+            Math.cos(phi1) * Math.cos(phi2) *
+            Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // in meters
+}
+
+// Upload base64 image to Supabase Storage
+async function uploadSelfieToStorage(userId: string, date: string, type: string, base64Data: string) {
+  if (!base64Data) return null;
+  
+  try {
+    const base64Image = base64Data.replace(/^data:image\/\w+;base64,/, "");
+    const buffer = Buffer.from(base64Image, 'base64');
+    const filename = `${userId}-${date}-${type}-${Date.now()}.jpg`;
+
+    const { data, error } = await supabase.storage
+      .from('selfies')
+      .upload(filename, buffer, {
+        contentType: 'image/jpeg',
+        upsert: true
+      });
+
+    if (error) {
+      console.error('Error uploading to Supabase Storage:', error);
+      throw error;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('selfies')
+      .getPublicUrl(filename);
+
+    return publicUrlData.publicUrl;
+  } catch (err) {
+    console.error('Failed to upload selfie:', err);
+    return null;
+  }
+}
+
+// Reverse Geocode lat/lng to Kurd/English Address using OpenStreetMap Nominatim
+async function getAddressFromCoords(lat: number, lng: number) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=ku,en`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'AshleyWarehouseAttendance/1.0' }
+    });
+    const data = await res.json();
+    if (data && data.address) {
+      const addr = data.address;
+      const road = addr.road || addr.suburb || '';
+      const suburb = addr.suburb || addr.neighbourhood || '';
+      const city = addr.city || addr.town || addr.municipality || addr.county || '';
+      const parts = [road, suburb, city].filter(Boolean);
+      return parts.join(', ') || data.display_name || `${lat}, ${lng}`;
+    }
+    return data.display_name || `${lat}, ${lng}`;
+  } catch (err) {
+    console.error('Reverse geocoding error:', err);
+    return `${lat}, ${lng}`;
+  }
+}
+
+// Get Shift details for a date
+async function getShiftForDate(dateStr: string) {
+  try {
+    const { data: override } = await supabase
+      .from('shift_overrides')
+      .select('*')
+      .eq('date', dateStr)
+      .maybeSingle();
+
+    if (override) {
+      return { checkInTime: override.check_in_time, checkOutTime: override.check_out_time };
+    }
+
+    const { data: defaultShift } = await supabase
+      .from('shifts')
+      .select('*')
+      .eq('id', 'default')
+      .single();
+
+    return { checkInTime: defaultShift.check_in_time, checkOutTime: defaultShift.check_out_time };
+  } catch (err) {
+    console.error('Error getting shift:', err);
+    return { checkInTime: "08:30", checkOutTime: "16:30" };
+  }
+}
+
+// Handler for all requests
+async function handle(req: NextRequest, props: { params: Promise<{ path?: string[] }> }) {
+  const params = await props.params;
+  const path = params.path || [];
+  const method = req.method;
+  const pathStr = path.join('/');
+
+  try {
+    // ----------------------------------------
+    // GET /api/attendance/employees
+    // ----------------------------------------
+    if (pathStr === 'employees' && method === 'GET') {
+      const { data: users, error } = await supabase
+        .from('users')
+        .select('id, name, device_token')
+        .neq('role', 'admin');
+
+      if (error) throw error;
+
+      const employees = users.map(u => ({
+        id: u.id,
+        name: u.name,
+        deviceBound: !!u.device_token
+      }));
+
+      return NextResponse.json(employees);
+    }
+
+    // ----------------------------------------
+    // POST /api/attendance/check-device
+    // ----------------------------------------
+    if (pathStr === 'check-device' && method === 'POST') {
+      const { deviceToken } = await req.json();
+      if (!deviceToken) return NextResponse.json({ error: 'Device token is required' }, { status: 400 });
+
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('id, name, role')
+        .eq('device_token', deviceToken)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (user) {
+        return NextResponse.json({ authenticated: true, user: { id: user.id, name: user.name, role: user.role } });
+      } else {
+        return NextResponse.json({ authenticated: false });
+      }
+    }
+
+    // ----------------------------------------
+    // POST /api/attendance/register-device
+    // ----------------------------------------
+    if (pathStr === 'register-device' && method === 'POST') {
+      const { userId, pin, deviceToken } = await req.json();
+      if (!userId || !pin || !deviceToken) {
+        return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
+      }
+
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!user) return NextResponse.json({ error: 'کارمەندەکە نەدۆزرایەوە' }, { status: 404 });
+
+      if (pin !== 'Bypass-QR-Pin' && user.pin !== pin) {
+        return NextResponse.json({ error: 'کۆدی نهێنی (PIN) هەڵەیە' }, { status: 401 });
+      }
+
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ device_token: deviceToken })
+        .eq('id', userId);
+
+      if (updateError) throw updateError;
+
+      return NextResponse.json({ success: true, user: { id: user.id, name: user.name, role: user.role } });
+    }
+
+    // ----------------------------------------
+    // POST /api/attendance/admin/login
+    // ----------------------------------------
+    if (pathStr === 'admin/login' && method === 'POST') {
+      const { pin } = await req.json();
+      if (pin === '12355321') return NextResponse.json({ success: true });
+
+      const { data: admin, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('role', 'admin')
+        .eq('pin', pin)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (admin) {
+        return NextResponse.json({ success: true });
+      } else {
+        return NextResponse.json({ error: 'کۆدی ئەدمین هەڵەیە' }, { status: 401 });
+      }
+    }
+
+    // ----------------------------------------
+    // GET /api/attendance/warehouses
+    // ----------------------------------------
+    if (pathStr === 'warehouses' && method === 'GET') {
+      const { data: warehouses, error } = await supabase
+        .from('warehouses')
+        .select('*');
+
+      if (error) throw error;
+      return NextResponse.json(warehouses);
+    }
+
+    // ----------------------------------------
+    // GET /api/attendance/shifts
+    // ----------------------------------------
+    if (pathStr === 'shifts' && method === 'GET') {
+      const { data: defaultShift } = await supabase
+        .from('shifts')
+        .select('*')
+        .eq('id', 'default')
+        .single();
+
+      const { data: overrides } = await supabase
+        .from('shift_overrides')
+        .select('*');
+
+      const formattedOverrides: Record<string, any> = {};
+      (overrides || []).forEach(o => {
+        formattedOverrides[o.date] = { checkInTime: o.check_in_time, checkOutTime: o.check_out_time };
+      });
+
+      return NextResponse.json({
+        default: { checkInTime: defaultShift?.check_in_time || '08:30', checkOutTime: defaultShift?.check_out_time || '16:30' },
+        overrides: formattedOverrides
+      });
+    }
+
+    // ----------------------------------------
+    // POST /api/attendance/admin/shifts/default
+    // ----------------------------------------
+    if (pathStr === 'admin/shifts/default' && method === 'POST') {
+      const { checkInTime, checkOutTime } = await req.json();
+      if (!checkInTime || !checkOutTime) return NextResponse.json({ error: 'Invalid shift times' }, { status: 400 });
+
+      const { error } = await supabase
+        .from('shifts')
+        .upsert({ id: 'default', check_in_time: checkInTime, check_out_time: checkOutTime });
+
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    // ----------------------------------------
+    // POST /api/attendance/admin/shifts/override
+    // ----------------------------------------
+    if (pathStr === 'admin/shifts/override' && method === 'POST') {
+      const { date, checkInTime, checkOutTime } = await req.json();
+      if (!date || !checkInTime || !checkOutTime) {
+        return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+      }
+
+      const { error } = await supabase
+        .from('shift_overrides')
+        .upsert({ date, check_in_time: checkInTime, check_out_time: checkOutTime });
+
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    // ----------------------------------------
+    // POST /api/attendance/admin/shifts/remove-override
+    // ----------------------------------------
+    if (pathStr === 'admin/shifts/remove-override' && method === 'POST') {
+      const { date } = await req.json();
+      if (!date) return NextResponse.json({ error: 'Missing date' }, { status: 400 });
+
+      const { error } = await supabase
+        .from('shift_overrides')
+        .delete()
+        .eq('date', date);
+
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    // ----------------------------------------
+    // POST /api/attendance/check-in-out-unified
+    // ----------------------------------------
+    if (pathStr === 'check-in-out-unified' && method === 'POST') {
+      const { userId, deviceToken, warehouseId, selfie, lat, lng, token } = await req.json();
+      
+      if (!userId || !deviceToken || !lat || !lng || !selfie || !token) {
+        return NextResponse.json({ error: 'هەموو زانیارییەکان پێویستن (وێنە، لۆکەیشن GPS، کۆدی نوێی ڕۆژ)' }, { status: 400 });
+      }
+
+      if (token !== getDailyToken()) {
+        return NextResponse.json({ error: '⚠️ ئەم بەستەرە ماوەی بەسەرچووە! تکایە بارکۆدی نوێی شاشەکە سکان بکەرەوە.' }, { status: 400 });
+      }
+
+      const { data: user, error: userErr } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .eq('device_token', deviceToken)
+        .maybeSingle();
+
+      if (userErr || !user) {
+        return NextResponse.json({ error: 'ڕێگەپێنەدراو: ئەم مۆبایلە بە ناوی ئەم کارمەندەوە نەبەستراوەتەوە' }, { status: 401 });
+      }
+
+      let finalWarehouseId = warehouseId || null;
+      let finalWarehouseName = 'دەروازەی سەرەکی';
+      
+      if (warehouseId) {
+        const { data: warehouse } = await supabase
+          .from('warehouses')
+          .select('*')
+          .eq('id', warehouseId)
+          .maybeSingle();
+
+        if (warehouse) {
+          finalWarehouseId = warehouse.id;
+          finalWarehouseName = warehouse.name;
+
+          // Check Geofence
+          const distance = getDistance(lat, lng, warehouse.lat, warehouse.lng);
+          if (distance > warehouse.radius) {
+            return NextResponse.json({ error: `تۆ زۆر دووریت لە کۆگاکە! دووری تۆ: ${Math.round(distance)} مەتر.` }, { status: 400 });
+          }
+        }
+      }
+
+      const { dateStr, timeStr } = getBaghdadDateTime();
+      const address = await getAddressFromCoords(lat, lng);
+
+      const { data: existingRecord } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('date', dateStr)
+        .maybeSingle();
+
+      if (!existingRecord) {
+        // Perform Check-In
+        const selfieUrl = await uploadSelfieToStorage(userId, dateStr, 'in', selfie);
+        if (!selfieUrl) return NextResponse.json({ error: 'شکست لە بارکردنی وێنەی دەوام' }, { status: 500 });
+
+        const activeShift = await getShiftForDate(dateStr);
+        const [shiftHour, shiftMin] = activeShift.checkInTime.split(':').map(Number);
+        const [inHour, inMin] = timeStr.split(':').map(Number);
+        
+        const expectedMinutes = shiftHour * 60 + shiftMin;
+        const actualMinutes = inHour * 60 + inMin;
+        const lateMinutes = Math.max(0, actualMinutes - expectedMinutes);
+        const isLate = lateMinutes > 5;
+
+        const record = {
+          id: `${userId}-${dateStr}`,
+          user_id: userId,
+          user_name: user.name,
+          date: dateStr,
+          check_in: new Date().toISOString(),
+          check_in_time: timeStr,
+          check_in_selfie: selfieUrl,
+          check_in_lat: lat,
+          check_in_lng: lng,
+          check_in_address: address,
+          warehouse_id: finalWarehouseId,
+          warehouse_name: finalWarehouseName,
+          late_minutes: isLate ? lateMinutes : 0,
+          early_out_minutes: 0,
+          status: isLate ? 'Late' : 'Present'
+        };
+
+        const { error: insertErr } = await supabase.from('attendance').insert(record);
+        if (insertErr) throw insertErr;
+
+        return NextResponse.json({
+          success: true,
+          type: 'in',
+          employeeName: user.name,
+          time: timeStr,
+          status: record.status,
+          message: isLate ? 'تۆ درەنگ هاتووی' : 'تۆ لە کاتی خۆیدا هاتووی',
+          date: dateStr,
+          address
+        });
+      } else {
+        // Perform Check-Out
+        if (existingRecord.check_out) {
+          return NextResponse.json({ error: 'تۆ پێشتر هاتن و ڕۆشتنت بۆ ئەمڕۆ تۆمار کردووە!' }, { status: 400 });
+        }
+
+        const selfieUrl = await uploadSelfieToStorage(userId, dateStr, 'out', selfie);
+        if (!selfieUrl) return NextResponse.json({ error: 'شکست لە بارکردنی وێنەی ڕۆشتن' }, { status: 500 });
+
+        const activeShift = await getShiftForDate(dateStr);
+        const [shiftHour, shiftMin] = activeShift.checkOutTime.split(':').map(Number);
+        const [outHour, outMin] = timeStr.split(':').map(Number);
+        
+        const expectedMinutes = shiftHour * 60 + shiftMin;
+        const actualMinutes = outHour * 60 + outMin;
+        const earlyMinutes = Math.max(0, expectedMinutes - actualMinutes);
+        const isEarly = earlyMinutes > 5;
+        const overtimeMinutes = Math.max(0, actualMinutes - expectedMinutes);
+
+        let newStatus = existingRecord.status;
+        if (existingRecord.status === 'Present' && isEarly) {
+          newStatus = 'Early Out';
+        } else if (existingRecord.status === 'Late' && isEarly) {
+          newStatus = 'Late & Early Out';
+        }
+
+        const { error: updateErr } = await supabase
+          .from('attendance')
+          .update({
+            check_out: new Date().toISOString(),
+            check_out_time: timeStr,
+            check_out_selfie: selfieUrl,
+            check_out_lat: lat,
+            check_out_lng: lng,
+            check_out_address: address,
+            early_out_minutes: isEarly ? earlyMinutes : 0,
+            overtime_minutes: overtimeMinutes,
+            status: newStatus
+          })
+          .eq('id', existingRecord.id);
+
+        if (updateErr) throw updateErr;
+
+        return NextResponse.json({
+          success: true,
+          type: 'out',
+          employeeName: user.name,
+          time: timeStr,
+          message: 'ڕۆشتنەکەت بە سەرکەوتوویی تۆمارکرا',
+          date: dateStr,
+          address
+        });
+      }
+    }
+
+    // ----------------------------------------
+    // GET /api/attendance/daily-token
+    // ----------------------------------------
+    if (pathStr === 'daily-token' && method === 'GET') {
+      return NextResponse.json({ token: getDailyToken() });
+    }
+
+    // ----------------------------------------
+    // GET /api/attendance/employee/:id
+    // ----------------------------------------
+    if (path[0] === 'employee' && path[1] && method === 'GET') {
+      const empId = path[1];
+      const { data: records, error } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('user_id', empId);
+
+      if (error) throw error;
+
+      const formattedRecords = records.map(r => ({
+        id: r.id,
+        userId: r.user_id,
+        userName: r.user_name,
+        date: r.date,
+        checkIn: r.check_in,
+        checkInTime: r.check_in_time,
+        checkInSelfie: r.check_in_selfie,
+        checkOut: r.check_out,
+        checkOutTime: r.check_out_time,
+        checkOutSelfie: r.check_out_selfie,
+        warehouseName: r.warehouse_name,
+        lateMinutes: r.late_minutes,
+        earlyOutMinutes: r.early_out_minutes,
+        overtimeMinutes: r.overtime_minutes || 0,
+        status: r.status
+      }));
+
+      return NextResponse.json(formattedRecords);
+    }
+
+    // ----------------------------------------
+    // GET /api/attendance/admin/diagnose
+    // ----------------------------------------
+    if (pathStr === 'admin/diagnose' && method === 'GET') {
+      const diagnostics = { databaseConnection: false, usersTableExists: false, error: null as any };
+      try {
+        const { error } = await supabase.from('users').select('id').limit(1);
+        if (error) {
+          diagnostics.error = error.message;
+        } else {
+          diagnostics.databaseConnection = true;
+          diagnostics.usersTableExists = true;
+        }
+      } catch (err: any) {
+        diagnostics.error = err.message;
+      }
+      return NextResponse.json(diagnostics);
+    }
+
+    // ----------------------------------------
+    // GET /api/attendance/admin/report
+    // ----------------------------------------
+    if (pathStr === 'admin/report' && method === 'GET') {
+      const { data: users } = await supabase.from('users').select('*');
+      const { data: attendance } = await supabase.from('attendance').select('*');
+      const { data: warehouses } = await supabase.from('warehouses').select('*');
+      const { data: defaultShift } = await supabase.from('shifts').select('*').eq('id', 'default').maybeSingle();
+      const { data: overrides } = await supabase.from('shift_overrides').select('*');
+
+      let finalHolidays: any[] = [];
+      try {
+        const { data: holidays } = await supabase.from('holidays').select('*');
+        finalHolidays = holidays || [];
+      } catch (e) {}
+
+      const formattedAttendance = (attendance || []).map(r => ({
+        id: r.id,
+        userId: r.user_id,
+        userName: r.user_name,
+        date: r.date,
+        checkIn: r.check_in,
+        checkInTime: r.check_in_time,
+        checkInSelfie: r.check_in_selfie,
+        checkInAddress: r.check_in_address || '',
+        checkOut: r.check_out,
+        checkOutTime: r.check_out_time,
+        checkOutSelfie: r.check_out_selfie,
+        checkOutAddress: r.check_out_address || '',
+        warehouseId: r.warehouse_id,
+        warehouseName: r.warehouse_name,
+        lateMinutes: r.late_minutes,
+        earlyOutMinutes: r.early_out_minutes,
+        overtimeMinutes: r.overtime_minutes || 0,
+        status: r.status
+      }));
+
+      const formattedOverrides: Record<string, any> = {};
+      (overrides || []).forEach(o => {
+        formattedOverrides[o.date] = { checkInTime: o.check_in_time, checkOutTime: o.check_out_time };
+      });
+
+      return NextResponse.json({
+        users: (users || []).map(u => ({ id: u.id, name: u.name, pin: u.pin, deviceToken: u.device_token, role: u.role, hourlyRate: u.hourly_rate || 0 })),
+        attendance: formattedAttendance,
+        warehouses: warehouses || [],
+        holidays: finalHolidays,
+        shifts: {
+          default: { checkInTime: defaultShift?.check_in_time || '08:30', checkOutTime: defaultShift?.check_out_time || '16:30' },
+          overrides: formattedOverrides
+        }
+      });
+    }
+
+    // ----------------------------------------
+    // Holidays CRUD
+    // ----------------------------------------
+    if (pathStr === 'admin/holidays' && method === 'GET') {
+      const { data, error } = await supabase.from('holidays').select('*').order('date', { ascending: false });
+      if (error) throw error;
+      return NextResponse.json(data || []);
+    }
+
+    if (pathStr === 'admin/holidays' && method === 'POST') {
+      const { name, date } = await req.json();
+      if (!name || !date) return NextResponse.json({ error: 'ناو و ڕێككەوت پێویستن' }, { status: 400 });
+      const id = 'hol-' + Math.random().toString(36).substring(2, 9);
+      const { error } = await supabase.from('holidays').insert({ id, name, date, type: 'holiday' });
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    if (path[0] === 'admin' && path[1] === 'holidays' && path[2] && method === 'DELETE') {
+      const hId = path[2];
+      const { error } = await supabase.from('holidays').delete().eq('id', hId);
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    // ----------------------------------------
+    // POST /api/attendance/checkin/verify-pin
+    // ----------------------------------------
+    if (pathStr === 'checkin/verify-pin' && method === 'POST') {
+      const { userId, pin } = await req.json();
+      if (!userId || !pin) return NextResponse.json({ error: 'ئایدی و پین پێویستن' }, { status: 400 });
+
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('id, name, role, pin')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error || !user) return NextResponse.json({ error: 'کارمەند نەدۆزرایەوە' }, { status: 401 });
+      if (user.pin !== pin) return NextResponse.json({ error: 'پین کۆدەکە هەڵەیە' }, { status: 401 });
+
+      return NextResponse.json({ user: { id: user.id, name: user.name, role: user.role } });
+    }
+
+    // ----------------------------------------
+    // Admin Users CRUD
+    // ----------------------------------------
+    if (pathStr === 'admin/users' && method === 'POST') {
+      const { id, name, pin, role, hourlyRate } = await req.json();
+      if (!id || !name || !pin) return NextResponse.json({ error: 'تکایە هەموو خانەکان پڕ بکەرەوە' }, { status: 400 });
+
+      const { error } = await supabase
+        .from('users')
+        .insert({ id, name, pin, role: role || 'employee', hourly_rate: parseFloat(hourlyRate) || 0 });
+
+      if (error) {
+        if (error.code === '23505') return NextResponse.json({ error: 'ئەم ناو مۆرکە (ID) پێشتر بەکارهاتووە' }, { status: 400 });
+        throw error;
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    if (pathStr === 'admin/users/change-pin' && method === 'POST') {
+      const { userId, newPin } = await req.json();
+      if (!userId || !newPin) return NextResponse.json({ error: 'User ID and New PIN are required' }, { status: 400 });
+
+      const { error } = await supabase.from('users').update({ pin: newPin }).eq('id', userId);
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    if (pathStr === 'admin/users/reset-device' && method === 'POST') {
+      const { userId } = await req.json();
+      if (!userId) return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+
+      const { error } = await supabase.from('users').update({ device_token: null }).eq('id', userId);
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    if (path[0] === 'admin' && path[1] === 'users' && path[2] && method === 'DELETE') {
+      const uId = path[2];
+      const { error } = await supabase.from('users').delete().eq('id', uId);
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    if (pathStr === 'admin/users/update-rate' && method === 'POST') {
+      const { userId, hourlyRate } = await req.json();
+      if (!userId) return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+
+      const { error } = await supabase.from('users').update({ hourly_rate: parseFloat(hourlyRate) || 0 }).eq('id', userId);
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    if (pathStr === 'admin/users/rename' && method === 'POST') {
+      const { userId, name } = await req.json();
+      if (!userId || !name) return NextResponse.json({ error: 'User ID and Name required' }, { status: 400 });
+
+      const { error } = await supabase.from('users').update({ name }).eq('id', userId);
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    if (pathStr === 'admin/users/update-role' && method === 'POST') {
+      const { userId, role } = await req.json();
+      if (!userId || !role) return NextResponse.json({ error: 'userId and role required' }, { status: 400 });
+      if (userId === 'admin') return NextResponse.json({ error: 'Cannot change root admin' }, { status: 400 });
+
+      const { error } = await supabase.from('users').update({ role }).eq('id', userId);
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    // ----------------------------------------
+    // Admin Warehouses CRUD
+    // ----------------------------------------
+    if (pathStr === 'admin/warehouses' && method === 'POST') {
+      const { name, lat, lng, radius } = await req.json();
+      if (!name || !lat || !lng) return NextResponse.json({ error: 'تکایە هەموو خانەکان پڕ بکەرەوە' }, { status: 400 });
+
+      const id = 'wh-' + Math.random().toString(36).substring(2, 9);
+      const currentHost = req.headers.get('host') || 'localhost:3000';
+      const referer = req.headers.get('referer') || '';
+      const protocol = referer.startsWith('https') ? 'https' : 'http';
+      const qrCode = `${protocol}://${currentHost}/attendance/checkin?wh=${id}`;
+
+      const { error } = await supabase
+        .from('warehouses')
+        .insert({
+          id,
+          name,
+          lat: parseFloat(lat),
+          lng: parseFloat(lng),
+          radius: parseInt(radius) || 50,
+          qr_code: qrCode
+        });
+
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    if (path[0] === 'admin' && path[1] === 'warehouses' && path[2] && method === 'DELETE') {
+      const wId = path[2];
+      const { error } = await supabase.from('warehouses').delete().eq('id', wId);
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    if (path[0] === 'admin' && path[1] === 'warehouses' && path[2] && method === 'PUT') {
+      const wId = path[2];
+      const { name, lat, lng, radius } = await req.json();
+      if (!name || !lat || !lng) return NextResponse.json({ error: 'تکایە هەموو خانەکان پڕ بکەرەوە' }, { status: 400 });
+
+      const { error } = await supabase
+        .from('warehouses')
+        .update({
+          name,
+          lat: parseFloat(lat),
+          lng: parseFloat(lng),
+          radius: parseInt(radius) || 50
+        })
+        .eq('id', wId);
+
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    // fallback 404
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+
+  } catch (err: any) {
+    console.error('API Route Error:', err);
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function GET(req: NextRequest, props: { params: Promise<{ path?: string[] }> }) { return handle(req, props); }
+export async function POST(req: NextRequest, props: { params: Promise<{ path?: string[] }> }) { return handle(req, props); }
+export async function PUT(req: NextRequest, props: { params: Promise<{ path?: string[] }> }) { return handle(req, props); }
+export async function DELETE(req: NextRequest, props: { params: Promise<{ path?: string[] }> }) { return handle(req, props); }

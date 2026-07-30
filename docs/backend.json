@@ -1,0 +1,193 @@
+{
+  "entities": {
+    "Volunteer": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Volunteer",
+      "type": "object",
+      "description": "Represents a volunteer in the HR section.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Volunteer entity."
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The first name of the volunteer."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The last name of the volunteer."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the volunteer.",
+          "format": "email"
+        },
+        "phone": {
+          "type": "string",
+          "description": "The phone number of the volunteer."
+        },
+        "address": {
+          "type": "string",
+          "description": "The address of the volunteer."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Any notes about the volunteer."
+        }
+      },
+      "required": [
+        "id",
+        "firstName",
+        "lastName",
+        "email",
+        "phone"
+      ]
+    },
+    "Settings": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Settings",
+      "type": "object",
+      "description": "Represents the user's application settings.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Settings entity."
+        },
+        "designColors": {
+          "type": "string",
+          "description": "The user's preferred design colors."
+        },
+        "applicationFonts": {
+          "type": "string",
+          "description": "The user's preferred application fonts."
+        },
+        "darkModeEnabled": {
+          "type": "boolean",
+          "description": "Whether dark mode is enabled."
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "ApplicationData": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ApplicationData",
+      "type": "object",
+      "description": "Represents the overall application data, including lists, edits, logo, and fonts.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the ApplicationData entity."
+        },
+        "lists": {
+          "type": "string",
+          "description": "The application's lists data."
+        },
+        "edits": {
+          "type": "string",
+          "description": "The application's edits data."
+        },
+        "logo": {
+          "type": "string",
+          "description": "The application's logo data (e.g., base64 encoded image)."
+        },
+        "fonts": {
+          "type": "string",
+          "description": "The application's font data."
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}/settings/{settingsId}",
+        "definition": {
+          "entityName": "Settings",
+          "schema": {
+            "$ref": "#/backend/entities/Settings"
+          },
+          "description": "Stores user-specific settings. Uses path-based ownership.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The ID of the user who owns these settings."
+            },
+            {
+              "name": "settingsId",
+              "description": "The unique ID of the settings document."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/applicationData/{applicationDataId}",
+        "definition": {
+          "entityName": "ApplicationData",
+          "schema": {
+            "$ref": "#/backend/entities/ApplicationData"
+          },
+          "description": "Stores application data (lists, edits, logo, fonts) for a specific user. Uses path-based ownership.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The ID of the user who owns this application data."
+            },
+            {
+              "name": "applicationDataId",
+              "description": "The unique ID of the application data document."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/volunteers/{volunteerId}",
+        "definition": {
+          "entityName": "Volunteer",
+          "schema": {
+            "$ref": "#/backend/entities/Volunteer"
+          },
+          "description": "Stores volunteer HR data for a specific user. Uses path-based ownership.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The ID of the user who manages these volunteers."
+            },
+            {
+              "name": "volunteerId",
+              "description": "The unique ID of the volunteer document."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/roles_admin/{userId}",
+        "definition": {
+          "entityName": "admin_role",
+          "schema": {
+            "$ref": "#/backend/entities/Volunteer"
+          },
+          "description": "Collection to store admin roles.  Document existence grants admin privileges.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The ID of the user with admin privileges."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "This Firestore data structure is designed to support the Ashley DRP Manager application, focusing on secure, scalable, and maintainable data management for volunteer HR, application settings, and overall application data.  The structure emphasizes Authorization Independence (CRITICAL), achieved through denormalization where necessary, and supports the required QAPs by using segregation and path-based ownership.\n\nThe design incorporates the following key aspects:\n\n1.  **Authorization Independence:** User-specific data (Settings, ApplicationData, Volunteers) are stored under the `/users/{userId}` path, ensuring that access control can be enforced without needing `get()` calls to other documents. There is no collaborative data, and thus the authorization is simply `request.auth.uid == userId`.\n\n2.  **Structural Segregation:** Each collection is designed to store homogenous data types. This simplifies security rules by ensuring that the same access control applies to all documents within a collection.\n\n3.  **Access Modeling:**\n    *   Private Data: Settings, ApplicationData, and Volunteers are stored using path-based ownership under `/users/{userId}`.\n\n\n4.  **Admin Role:** The existence of a document in the `/roles_admin/{uid}` collection grants admin privileges. This collection will be used in the security rules.\n\nThis design ensures clear separation of concerns, simplifies security rule definitions, and enables efficient data retrieval and management."
+  }
+}

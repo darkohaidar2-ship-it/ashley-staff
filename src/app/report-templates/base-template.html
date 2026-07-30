@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{document.title}}</title>
+    <!-- The stylesheet is expected to be linked or embedded by the rendering engine (e.g., jsreport assets) -->
+</head>
+<body class="{{document.type}}">
+
+    <!-- ===================================== -->
+    <!-- HEADER (Fixed on every page)        -->
+    <!-- ===================================== -->
+    <header class="report-header">
+        <div class="header-left">
+            {{#if settings.companyLogoUrl}}
+            <img src="{{settings.companyLogoUrl}}" alt="Company Logo" class="logo">
+            {{/if}}
+        </div>
+        <div class="header-center">
+            <h1>{{document.title}}</h1>
+            <p>{{settings.companyName}}</p>
+        </div>
+        <div class="header-right">
+            <div><strong>Date:</strong> {{document.date}}</div>
+            <div><strong>Doc No:</strong> {{document.number}}</div>
+        </div>
+    </header>
+
+    <!-- ===================================== -->
+    <!-- FOOTER (Fixed on every page)        -->
+    <!-- ===================================== -->
+    <footer class="report-footer">
+        <div class="footer-left">
+            {{settings.officeText}}
+        </div>
+        <div class="footer-center">
+            {{settings.footerNote}}
+        </div>
+        <div class="footer-right">
+            <span class="page-number"></span>
+        </div>
+    </footer>
+
+    <!-- ===================================== -->
+    <!-- MAIN CONTENT (Data is injected here) -->
+    <!-- ===================================== -->
+    <main class="report-content">
+        {{{content}}}
+    </main>
+
+</body>
+</html>

@@ -1,0 +1,218 @@
+/*
+=====================================
+UNIFIED PDF STYLESHEET (for jsreport/puppeteer)
+=====================================
+- Paper Sizes: A4 Landscape (Reports), A4 Portrait (Receipts/Cards)
+- All design tokens are controlled via CSS variables.
+- Handles fixed headers/footers and table pagination.
+*/
+
+/* ===================================== */
+/* 1. DESIGN CONTROL (CSS VARIABLES)     */
+/* ===================================== */
+:root {
+    /* Colors */
+    --primary-color: {{#if settings.primaryColor}}{{settings.primaryColor}}{{else}}#0d47a1{{/if}};
+    --header-background: {{#if settings.headerBg}}{{settings.headerBg}}{{else}}#f8f9fa{{/if}};
+    --table-header-background: {{#if settings.tableHeaderBg}}{{settings.tableHeaderBg}}{{else}}#e9ecef{{/if}};
+    --table-border-color: {{#if settings.borderColor}}{{settings.borderColor}}{{else}}#dee2e6{{/if}};
+    --text-color: #212529;
+    --header-text-color: #000000;
+    --footer-text-color: #6c757d;
+
+    /* Typography */
+    --base-font-family: {{#if settings.baseFontFamily}}'{{settings.baseFontFamily}}', sans-serif{{else}}Arial, sans-serif{{/if}};
+    --base-font-size: {{#if settings.baseFontSize}}{{settings.baseFontSize}}{{else}}9pt{{/if}};
+    --header-font-size: {{#if settings.headerFontSize}}{{settings.headerFontSize}}{{else}}16pt{{/if}};
+
+    /* Spacing */
+    --page-margin: 20mm;
+    --header-height: 25mm;
+    --footer-height: 15mm;
+    --cell-padding: {{#if settings.cellPadding}}{{settings.cellPadding}}{{else}}6px{{/if}};
+    --section-spacing: {{#if settings.sectionSpacing}}{{settings.sectionSpacing}}{{else}}20px{{/if}};
+}
+
+/* ===================================== */
+/* 2. PAGE SETUP & PRINT RULES           */
+/* ===================================== */
+@page {
+    size: A4;
+    margin: var(--page-margin);
+}
+
+body {
+    font-family: var(--base-font-family);
+    font-size: var(--base-font-size);
+    color: var(--text-color);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    counter-reset: page;
+}
+
+/* Document-type specific page layout */
+body.report {
+    /* Landscape is default for reports */
+    @page { size: landscape; }
+}
+body.receipt, body.card-grid {
+    @page { size: portrait; }
+}
+
+/* Page numbering is handled by CSS counters */
+.page-number::after {
+    counter-increment: page;
+    content: "Page " counter(page) " / {{totalPages}}";
+}
+
+
+/* ===================================== */
+/* 3. HEADER & FOOTER                    */
+/* ===================================== */
+.report-header,
+.report-footer {
+    position: fixed;
+    width: calc(100% - (2 * var(--page-margin)));
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 8pt;
+}
+
+.report-header {
+    top: calc(var(--page-margin) * -1);
+    left: 0;
+    right: 0;
+    height: var(--header-height);
+    background-color: var(--header-background);
+    border-bottom: 2px solid var(--primary-color);
+    padding: 0 10px;
+    color: var(--header-text-color);
+}
+
+.report-footer {
+    bottom: calc(var(--page-margin) * -1);
+    left: 0;
+    right: 0;
+    height: var(--footer-height);
+    border-top: 1px solid var(--table-border-color);
+    padding: 10px;
+    color: var(--footer-text-color);
+}
+
+.header-left, .footer-left { text-align: left; flex: 1; }
+.header-center, .footer-center { text-align: center; flex: 2; }
+.header-right, .footer-right { text-align: right; flex: 1; }
+
+.header-center h1 {
+    margin: 0;
+    font-size: var(--header-font-size);
+    color: var(--primary-color);
+}
+.header-center p {
+    margin: 0;
+    font-size: 9pt;
+}
+
+.logo {
+    max-height: calc(var(--header-height) - 10mm);
+    max-width: 100%;
+}
+
+/* ===================================== */
+/* 4. MAIN CONTENT & COMPONENTS          */
+/* ===================================== */
+main.report-content {
+    /* Main content should not overlap with header/footer */
+    /* This is handled by @page margin */
+}
+
+section {
+    margin-bottom: var(--section-spacing);
+    page-break-inside: avoid;
+}
+
+.list-title {
+    font-size: 14pt;
+    font-weight: bold;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--table-border-color);
+    padding-bottom: 5px;
+}
+
+/* --- Table Engine --- */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+thead {
+    display: table-header-group; /* MUST HAVE for repeating headers */
+    background-color: var(--table-header-background);
+}
+tbody {
+    display: table-row-group;
+}
+tr {
+    page-break-inside: avoid; /* MUST HAVE to prevent rows from breaking */
+}
+th, td {
+    border: 1px solid var(--table-border-color);
+    padding: var(--cell-padding);
+    text-align: center; /* Default center alignment */
+    vertical-align: middle;
+    overflow-wrap: anywhere; /* Wrap long text */
+    word-break: break-word;
+}
+th {
+    font-weight: bold;
+}
+
+/* --- Receipt / Key-Value Block --- */
+.key-value-block {
+    border: 1px solid var(--table-border-color);
+    padding: 15px;
+    border-radius: 4px;
+    background-color: #fdfdfd;
+}
+.key-value-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--table-border-color);
+}
+.key-value-row:last-child {
+    border-bottom: none;
+}
+.key-value-label {
+    font-weight: bold;
+    color: #333;
+}
+.key-value-value {
+    font-family: monospace;
+}
+.receipt-total {
+    margin-top: 20px;
+    padding-top: 10px;
+    border-top: 2px solid var(--primary-color);
+    text-align: right;
+    font-size: 14pt;
+    font-weight: bold;
+}
+
+/* --- Card Grid --- */
+.card-grid-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* Default 2xN grid */
+    gap: 10mm;
+    width: 100%;
+}
+.card {
+    border: 1px solid var(--table-border-color);
+    border-radius: 8px;
+    padding: 10px;
+    background-color: #fff;
+    page-break-inside: avoid;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}

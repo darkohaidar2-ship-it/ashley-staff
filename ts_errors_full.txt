@@ -1,0 +1,123 @@
+src/app/account/page.tsx(425,19): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/account/page.tsx(677,28): error TS2345: Argument of type 'Event' is not assignable to parameter of type 'FormEvent<Element>'.
+  Type 'Event' is missing the following properties from type 'FormEvent<Element>': nativeEvent, isDefaultPrevented, isPropagationStopped, persist
+src/app/archive/[id]/page.tsx(7,223): error TS2440: Import declaration conflicts with local declaration of 'Table2'.
+src/app/archive/[id]/page.tsx(7,242): error TS2440: Import declaration conflicts with local declaration of 'Lock'.
+src/app/archive/[id]/page.tsx(7,248): error TS2440: Import declaration conflicts with local declaration of 'Box'.
+src/app/archive/[id]/page.tsx(377,17): error TS2561: Object literal may only specify known properties, but 'locationId' does not exist in type 'Item'. Did you mean to write 'locationIds'?
+src/app/ashley-expenses/page.tsx(158,96): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/ashley-map/page.tsx(37,71): error TS2339: Property 'background' does not exist on type '{ readonly bg: "bg-[#ffedd5]"; readonly hover: "hover:bg-[#fed7aa]"; readonly border: "border-[#fed7aa]"; readonly text: "text-[#7c2d12]"; readonly hex: "#ffedd5"; readonly lightHex: "#fff7ed"; }'.
+src/app/ashley-map/page.tsx(80,53): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/ashley-map/page.tsx(125,17): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/ashley-map/page.tsx(126,30): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/ashley-map/page.tsx(126,56): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/ashley-map/page.tsx(127,26): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/bonuses/add/page.tsx(250,10): error TS2741: Property 'children' is missing in type '{}' but required in type '{ children: ReactNode; title?: string | undefined; date?: string | Date | null | undefined; }'.
+src/app/bonuses/add/page.tsx(282,23): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/bonuses/monthly-report/page.tsx(288,19): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/bonuses/page.tsx(111,75): error TS2322: Type 'Dispatch<SetStateAction<Date | undefined>>' is not assignable to type 'ReactEventHandler<SVGSVGElement>'.
+  Types of parameters 'value' and 'event' are incompatible.
+    Type 'SyntheticEvent<SVGSVGElement, Event>' is not assignable to type 'SetStateAction<Date | undefined>'.
+src/app/cash-withdrawal/add/page.tsx(239,10): error TS2741: Property 'children' is missing in type '{}' but required in type '{ children: ReactNode; title?: string | undefined; date?: string | Date | null | undefined; }'.
+src/app/cash-withdrawal/add/page.tsx(271,23): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/cash-withdrawal/monthly-report/page.tsx(193,19): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/cash-withdrawal/page.tsx(108,75): error TS2322: Type 'Dispatch<SetStateAction<Date | undefined>>' is not assignable to type 'ReactEventHandler<SVGSVGElement>'.
+  Types of parameters 'value' and 'event' are incompatible.
+    Type 'SyntheticEvent<SVGSVGElement, Event>' is not assignable to type 'SetStateAction<Date | undefined>'.
+src/app/employees/[id]/page.tsx(157,51): error TS2322: Type '(v: Employee["role"]) => void' is not assignable to type '(value: string) => void'.
+  Types of parameters 'v' and 'value' are incompatible.
+    Type 'string' is not assignable to type '"Super Manager" | "Manager" | "IT" | "Employee Supervisor" | "Transport Supervisor" | "Employee" | "Marketing" | null | undefined'.
+src/app/employees/[id]/page.tsx(163,501): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/employees/[id]/page.tsx(164,446): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/employees/page.tsx(104,37): error TS2322: Type '(v: Employee["role"]) => void' is not assignable to type '(value: string) => void'.
+  Types of parameters 'v' and 'value' are incompatible.
+    Type 'string' is not assignable to type '"Super Manager" | "Manager" | "IT" | "Employee Supervisor" | "Transport Supervisor" | "Employee" | "Marketing" | null | undefined'.
+src/app/employees/page.tsx(117,552): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/employees/page.tsx(118,497): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/expenses/add/page.tsx(253,33): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/expenses/monthly-report/page.tsx(208,19): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/expenses/page.tsx(138,108): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/huana-map/page.tsx(35,70): error TS2339: Property 'background' does not exist on type '{ readonly bg: "bg-[#d9f99d]"; readonly hover: "hover:bg-[#bef264]"; readonly border: "border-[#bef264]"; readonly text: "text-[#365314]"; readonly hex: "#d9f99d"; readonly lightHex: "#f7fee7"; }'.
+src/app/huana-map/page.tsx(121,53): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/huana-map/page.tsx(170,17): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/huana-map/page.tsx(171,30): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/huana-map/page.tsx(171,56): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/huana-map/page.tsx(172,26): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/items/page.tsx(130,16): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/items/page.tsx(131,27): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/items/page.tsx(131,53): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/items/page.tsx(132,22): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/items/page.tsx(174,51): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/items/page.tsx(189,23): error TS2551: Property 'locationId' does not exist on type '{ locationName: string; fileName: string; excelFileDate: string; warehouseType: "Ashley" | "Huana" | null; id: string; fileId: string; name?: string | undefined; model: string; quantity: number; ... 10 more ...; updateStatus?: "" | ... 3 more ... | undefined; }'. Did you mean 'locationIds'?
+src/app/items/page.tsx(190,46): error TS2551: Property 'locationId' does not exist on type '{ locationName: string; fileName: string; excelFileDate: string; warehouseType: "Ashley" | "Huana" | null; id: string; fileId: string; name?: string | undefined; model: string; quantity: number; ... 10 more ...; updateStatus?: "" | ... 3 more ... | undefined; }'. Did you mean 'locationIds'?
+src/app/items/page.tsx(192,63): error TS2551: Property 'locationId' does not exist on type '{ locationName: string; fileName: string; excelFileDate: string; warehouseType: "Ashley" | "Huana" | null; id: string; fileId: string; name?: string | undefined; model: string; quantity: number; ... 10 more ...; updateStatus?: "" | ... 3 more ... | undefined; }'. Did you mean 'locationIds'?
+src/app/items/page.tsx(394,76): error TS2551: Property 'locationId' does not exist on type 'SearchResult'. Did you mean 'locationIds'?
+src/app/items/page.tsx(394,95): error TS2551: Property 'locationId' does not exist on type 'SearchResult'. Did you mean 'locationIds'?
+src/app/items/page.tsx(437,50): error TS2304: Cannot find name 'Badge'.
+src/app/items/page.tsx(443,51): error TS2304: Cannot find name 'Badge'.
+src/app/locations/page.tsx(97,51): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/locations/page.tsx(538,51): error TS2551: Property 'locationId' does not exist on type 'SearchResult'. Did you mean 'locationIds'?
+src/app/locations/page.tsx(540,114): error TS2551: Property 'locationId' does not exist on type 'SearchResult'. Did you mean 'locationIds'?
+src/app/map-designer/page.tsx(77,63): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/map-management/page.tsx(77,63): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/monthly-report/page.tsx(198,92): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/new-file/page.tsx(68,14): error TS2345: Argument of type '(prev: NewItem[]) => (NewItem | { tempId: number; model: string; quantity: number; notes: string; placementNote: string; locationId: string; })[]' is not assignable to parameter of type 'SetStateAction<NewItem[]>'.
+  Type '(prev: NewItem[]) => (NewItem | { tempId: number; model: string; quantity: number; notes: string; placementNote: string; locationId: string; })[]' is not assignable to type '(prevState: NewItem[]) => NewItem[]'.
+    Type '(NewItem | { tempId: number; model: string; quantity: number; notes: string; placementNote: string; locationId: string; })[]' is not assignable to type 'NewItem[]'.
+      Type 'NewItem | { tempId: number; model: string; quantity: number; notes: string; placementNote: string; locationId: string; }' is not assignable to type 'NewItem'.
+        Type '{ tempId: number; model: string; quantity: number; notes: string; placementNote: string; locationId: string; }' is not assignable to type 'NewItem'.
+          Property 'locationIds' is missing in type '{ tempId: number; model: string; quantity: number; notes: string; placementNote: string; locationId: string; }' but required in type '{ tempId: number; locationIds: string[]; }'.
+src/app/new-file/page.tsx(227,37): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/new-file/page.tsx(355,54): error TS2304: Cannot find name 'AlertDialog'.
+src/app/new-file/page.tsx(356,58): error TS2304: Cannot find name 'AlertDialogTrigger'.
+src/app/new-file/page.tsx(361,59): error TS2304: Cannot find name 'AlertDialogTrigger'.
+src/app/new-file/page.tsx(362,58): error TS2304: Cannot find name 'AlertDialogContent'.
+src/app/new-file/page.tsx(363,62): error TS2304: Cannot find name 'AlertDialogHeader'.
+src/app/new-file/page.tsx(364,66): error TS2304: Cannot find name 'AlertDialogTitle'.
+src/app/new-file/page.tsx(364,165): error TS2304: Cannot find name 'AlertDialogTitle'.
+src/app/new-file/page.tsx(365,63): error TS2304: Cannot find name 'AlertDialogHeader'.
+src/app/new-file/page.tsx(401,62): error TS2304: Cannot find name 'AlertDialogFooter'.
+src/app/new-file/page.tsx(402,66): error TS2304: Cannot find name 'AlertDialogAction'.
+src/app/new-file/page.tsx(402,200): error TS2304: Cannot find name 'AlertDialogAction'.
+src/app/new-file/page.tsx(403,63): error TS2304: Cannot find name 'AlertDialogFooter'.
+src/app/new-file/page.tsx(404,59): error TS2304: Cannot find name 'AlertDialogContent'.
+src/app/new-file/page.tsx(405,55): error TS2304: Cannot find name 'AlertDialog'.
+src/app/overtime/add/page.tsx(236,10): error TS2741: Property 'children' is missing in type '{}' but required in type '{ children: ReactNode; title?: string | undefined; date?: string | Date | null | undefined; }'.
+src/app/overtime/add/page.tsx(268,21): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/overtime/archive/page.tsx(158,21): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/overtime/monthly-report/page.tsx(200,19): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/overtime/page.tsx(111,75): error TS2322: Type 'Dispatch<SetStateAction<Date | undefined>>' is not assignable to type 'ReactEventHandler<SVGSVGElement>'.
+  Types of parameters 'value' and 'event' are incompatible.
+    Type 'SyntheticEvent<SVGSVGElement, Event>' is not assignable to type 'SetStateAction<Date | undefined>'.
+src/app/pdf/archive/[id]/page.tsx(37,24): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/pdf/archive/[id]/page.tsx(37,58): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/public-inventory/page.tsx(28,53): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/app/public-inventory/page.tsx(123,71): error TS2551: Property 'locationId' does not exist on type '{ locationName: string; invoiceRef: string | null; id: string; fileId: string; name?: string | undefined; model: string; quantity: number; classification?: string | undefined; notes?: string | undefined; ... 8 more ...; updateStatus?: "" | ... 3 more ... | undefined; }'. Did you mean 'locationIds'?
+src/app/public-transmit/page.tsx(153,94): error TS2339: Property 'locationId' does not exist on type 'ItemForTransfer'.
+src/app/settings/page.tsx(1340,73): error TS2304: Cannot find name 'Building2'.
+src/app/transmit/archive/[id]/page.tsx(191,37): error TS18048: 'transfer' is possibly 'undefined'.
+src/app/transmit/archive/[id]/page.tsx(195,163): error TS18048: 'transfer' is possibly 'undefined'.
+src/app/transmit/archive/[id]/page.tsx(218,130): error TS18048: 'transfer' is possibly 'undefined'.
+src/app/transmit/archive/[id]/page.tsx(226,110): error TS18048: 'transfer' is possibly 'undefined'.
+src/app/transmit/archive/[id]/page.tsx(234,115): error TS18048: 'transfer' is possibly 'undefined'.
+src/app/transmit/archive/page.tsx(268,21): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/transmit/view-requests/page.tsx(47,13): error TS2304: Cannot find name 'setActivityLogs'.
+src/app/transmit/view-requests/page.tsx(47,29): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/app/transmit/view-requests/page.tsx(57,13): error TS2304: Cannot find name 'setActivityLogs'.
+src/app/transmit/view-requests/page.tsx(57,29): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/app/warehouse-map/page.tsx(44,59): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/components/archive/file-pdf-card.tsx(63,76): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/components/archive/file-pdf-card.tsx(88,59): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/components/dashboard/StorageSummaryChart.tsx(38,53): error TS2551: Property 'locationId' does not exist on type 'Item'. Did you mean 'locationIds'?
+src/components/layout/TopNavbar.tsx(131,32): error TS2339: Property 'profileImage' does not exist on type 'User'.
+src/components/layout/TopNavbar.tsx(132,46): error TS2339: Property 'profileImage' does not exist on type 'User'.
+src/components/shared/backup-reminder.tsx(18,36): error TS2339: Property 'isAnonymous' does not exist on type 'User'.
+src/components/transmit/StagedItemsPrintView.tsx(31,73): error TS2339: Property 'background' does not exist on type '{ readonly bg: "bg-[#d9f99d]"; readonly hover: "hover:bg-[#bef264]"; readonly border: "border-[#bef264]"; readonly text: "text-[#365314]"; readonly hex: "#d9f99d"; readonly lightHex: "#f7fee7"; }'.
+src/components/transmit/StagedItemsPrintView.tsx(33,74): error TS2339: Property 'background' does not exist on type '{ readonly bg: "bg-[#ffedd5]"; readonly hover: "hover:bg-[#fed7aa]"; readonly border: "border-[#fed7aa]"; readonly text: "text-[#7c2d12]"; readonly hex: "#ffedd5"; readonly lightHex: "#fff7ed"; }'.
+src/components/transmit/TransmitReportPdf.tsx(59,77): error TS2339: Property 'background' does not exist on type '{ readonly bg: "bg-[#d9f99d]"; readonly hover: "hover:bg-[#bef264]"; readonly border: "border-[#bef264]"; readonly text: "text-[#365314]"; readonly hex: "#d9f99d"; readonly lightHex: "#f7fee7"; }'.
+src/components/transmit/TransmitReportPdf.tsx(61,78): error TS2339: Property 'background' does not exist on type '{ readonly bg: "bg-[#ffedd5]"; readonly hover: "hover:bg-[#fed7aa]"; readonly border: "border-[#fed7aa]"; readonly text: "text-[#7c2d12]"; readonly hex: "#ffedd5"; readonly lightHex: "#fff7ed"; }'.
+src/components/ui/sidebar.tsx(450,34): error TS2339: Property 'showOnHover' does not exist on type 'ClassAttributes<HTMLButtonElement> & ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean | undefined; }'.
+src/firebase/hooks.ts(17,20): error TS2339: Property 'app' does not exist on type 'FirebaseContextState'.
+src/firebase/hooks.ts(22,20): error TS2339: Property 'db' does not exist on type 'FirebaseContextState'.
+src/firebase/index.ts(47,7): error TS2353: Object literal may only specify known properties, and 'cache' does not exist in type 'FirestoreSettings'.
+src/hooks/use-auth.tsx(72,37): error TS7006: Parameter 'initialUser' implicitly has an 'any' type.

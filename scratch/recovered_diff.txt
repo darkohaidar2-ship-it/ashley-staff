@@ -1,0 +1,83 @@
+Created At: 2026-06-02T09:17:54Z
+Completed At: 2026-06-02T09:18:09Z
+The following changes were made by the replace_file_content tool to: c:\Users\Diwan-ashley\OneDrive\Ashley_Archive_Cloud\OneDrive\DAro\ashley project\New-Ashley-main\New-Ashley-main\src\app\login\page.tsx. If relevant, proactively run terminal commands to execute this code for the USER. Don't ask for permission.
+[diff_block_start]
+@@ -152,197 +152,57 @@
+     setIsLoading(true);
+     const success = await login(username, password);
+     setIsLoading(false);
+-    if (success) router.push('/');
+-  };
+-
+-
++    if (success) {
++      setIsLoginDialogOpen(false);
++      router.push('/');
++    }
++  };
+ 
+   return (
+-    <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 dark:bg-zinc-950 p-4 font-sans" dir="rtl">
+-      
+-      {/* Centered Glass Container */}
+-      <div 
+-        className="w-full max-w-[460px] flex flex-col justify-center items-center p-8 backdrop-blur-[40px] border rounded-[2rem] shadow-2xl relative transition-all duration-300"
+-        style={{
+-          backgroundColor: 'var(--win-card-bg)',
+-          borderColor: 'rgba(255, 255, 255, 0.35)',
+-          color: 'var(--win-text-color)'
+-        }}
+-      >
+-        <div className="w-full max-w-[340px] space-y-10 animate-fade-in-down animate-in fade-in slide-in-from-bottom-8 duration-700">
+-          
+-          {/* Logo */}
+-          <div className="flex flex-col items-center gap-4">
+-            {settings.appLogo ? (
+-              <div className="relative w-20 h-20 opacity-90 drop-shadow-md">
+-                <Image src={settings.appLogo} alt="Logo" fill className="object-contain" unoptimized />
+-              </div>
+-            ) : (
+-              <div 
+-                className="w-16 h-16 flex items-center justify-center text-white shadow-lg"
+-                style={{
+-                  borderRadius: 'var(--win-btn-radius)',
+-                  background: 'linear-gradient(135deg, var(--win-primary) 0%, rgba(var(--win-primary), 0.8) 100%)'
+-     
+<truncated 17016 bytes>
+--win-btn-radius) - 6px)' }}
++                      className="w-full h-12 pr-11 pl-4 bg-secondary/30 hover:bg-secondary/50 focus:bg-white dark:focus:bg-zinc-800 border border-slate-200 dark:border-zinc-750 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 text-xs font-semibold transition-all duration-300 text-slate-900 dark:text-white"
++                    />
++                  </div>
++                </div>
++              </div>
++
++              <button 
++                type="submit" 
++                disabled={isLoading}
++                style={{
++                  borderRadius: 'var(--win-btn-radius)',
++                  background: 'linear-gradient(135deg, var(--win-primary) 0%, rgba(var(--win-primary), 0.8) 100%)'
++                }}
++                className="w-full h-12 text-white font-black text-xs uppercase tracking-widest transition-all duration-300 shadow-md flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
++              >
++                {isLoading ? (
++                  <>
++                    <Loader2 className="w-4 h-4 animate-spin" />
++                    <span>دڵنیایی دەکرێتەوە...</span>
++                  </>
++                ) : (
++                  <span>چوونەژوورەوە</span>
++                )}
++              </button>
+             </form>
+-          )}
+-
+-          {/* Footer branding */}
+           <div className="text-center pt-6 border-t border-border/20">
+              <span className="text-[9px] font-bold uppercase tracking-widest opacity-60" style={{ color: 'var(--win-text-color)' }}>Nexus Hub System © 2026</span>
+           </div>
+[diff_block_end]
+
+Please note that the above snippet only shows the MODIFIED lines from the last change. It shows up to 3 lines of unchanged lines before and after the modified lines. The actual file contents may have many more lines not shown.
+
+We did our best to apply changes despite some inaccuracies. Double check if the edit applied is what you intended.

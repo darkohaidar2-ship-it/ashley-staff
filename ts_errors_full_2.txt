@@ -1,0 +1,6 @@
+src/app/archive/[id]/page.tsx(770,76): error TS1005: ',' expected.
+src/app/archive/[id]/page.tsx(770,78): error TS1005: ',' expected.
+src/app/items/page.tsx(394,71): error TS1005: ',' expected.
+src/app/items/page.tsx(394,73): error TS1005: ',' expected.
+src/app/new-file/page.tsx(331,84): error TS1005: ',' expected.
+src/app/new-file/page.tsx(331,86): error TS1005: ',' expected.

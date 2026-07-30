@@ -1,0 +1,77 @@
+Created At: 2026-05-31T11:43:34Z
+Completed At: 2026-05-31T11:43:34Z
+File Path: `file:///c:/Users/Diwan-ashley/OneDrive/Ashley_Archive_Cloud/OneDrive/DAro/ashley%20project/New-Ashley-main/New-Ashley-main/src/app/client-layout.tsx`
+Total Lines: 306
+Total Bytes: 14194
+Showing lines 62 to 287
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+62: function AppContent({ children }: { children: React.ReactNode }) {
+63:     const { language } = useTranslation();
+64:     const pathname = usePathname();
+65:     const isLoginPage = pathname === '/login';
+66:     const { settings, setSettings } = useAppContext();
+67:     const { hasPermission } = useAuth();
+68:     
+69:     const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
+70:     const [primary, setPrimary] = useState('#0078d4');
+71:     const [textCol, setTextCol] = useState('#1c1c1c');
+72:     const [radius, setRadius] = useState('24px');
+73:     
+74:     // Background parameters are locked to standard Windows 12 premium glass system defaults
+75:     const secondary = '#f3f3f3';
+76:     const cardBg = 'rgba(255, 255, 255, 0.65)';
+77:     const sidebarBg = 'rgba(243, 243, 243, 0.7)';
+78:     
+79:     const isAdmin = hasPermission('admin:all');
+80: 
+81:     useEffect(() => {
+82:         document.documentElement.lang = language;
+83:         document.documentElement.dir = language === 'ku' ? 'rtl' : 'ltr';
+84:     }, [language]);
+85: 
+86:     // Initialize UI_Config
+87:     useEffect(() => {
+88:         if (typeof window === 'undefined') return;
+89:         
+90:         window.UI_Config = {
+91:             primaryColor: primary,
+92:             secondaryColor: secondary,
+93:             cardBgColor: cardBg,
+94:             textColor: textCol,
+95:             sidebarBgColor: sidebarBg,
+96:             buttonRadius: radius,
+97:             updateStyles: () => {
+98:           
+<truncated 9214 bytes>
+                                  min="0" 
+258:                                     max="40" 
+259:                                     value={parseInt(radius, 10) || 0} 
+260:                                     onChange={e => setRadius(`${e.target.value}px`)}
+261:                                     className="w-full h-1 bg-black/10 rounded-lg appearance-none cursor-pointer accent-[#0078d4]"
+262:                                 />
+263:                             </div>
+264:                         </div>
+265:                     </div>
+266: 
+267:                     <div className="border-t border-black/5 pt-4 space-y-2">
+268:                         <button 
+269:                             onClick={handleSaveTheme}
+270:                             className="w-full h-9 bg-[#0078d4] text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
+271:                         >
+272:                             <Save className="w-4 h-4" /> پاشکەوتکردن لەسەر سێرڤەر
+273:                         </button>
+274:                         <button 
+275:                             onClick={handleResetTheme}
+276:                             className="w-full h-9 border border-black/10 text-slate-700 hover:bg-black/5 rounded-xl text-xs font-bold active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
+277:                         >
+278:                             <RefreshCw className="w-3.5 h-3.5" /> گەڕانەوە بۆ بنەڕەتی
+279:                         </button>
+280:                     </div>
+281:                 </div>
+282:             )}
+283:         </div>
+284:     );
+285: }
+286: 
+287: export function ClientLayout({ children }: { children: React.ReactNode }) {
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 224 71.4% 4.1%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71.4% 4.1%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71.4% 4.1%;
+    --primary: 220 82% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 13% 91%;
+    --secondary-foreground: 220 9% 38%;
+    --muted: 220 13% 91%;
+    --muted-foreground: 220 9% 38%;
+    --accent: 220 13% 91%;
+    --accent-foreground: 220 9% 38%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 88%;
+    --input: 220 13% 85%;
+    --ring: 220 82% 55%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.8rem;
+
+    /* Sidebar variables */
+    --sidebar-background: hsl(var(--card));
+    --sidebar-foreground: hsl(var(--card-foreground));
+    --sidebar-primary: hsl(var(--primary));
+    --sidebar-primary-foreground: hsl(var(--primary-foreground));
+    --sidebar-accent: hsl(var(--accent));
+    --sidebar-accent-foreground: hsl(var(--accent-foreground));
+    --sidebar-border: hsl(var(--border));
+    --sidebar-ring: hsl(var(--ring));
+    
+    /* Custom Added Colors */
+    --tab-active-background: hsl(var(--background));
+    --tab-active-foreground: hsl(var(--foreground));
+
+    /* Custom Status Colors */
+    --status-correct-bg: 142 90% 92%;
+    --status-less-bg: 38 92% 90%; /* Darker Orange */
+    --status-more-bg: 221 83% 92%; /* Darker Blue */
+    --status-wrapped-bg: 54 100% 92%;
+    --status-damaged-bg: 0 100% 94%;
+    --location-occupied-border: 210 100% 70%;
+    --location-occupied-bg: 210 100% 96%;
+    
+    --status-new-bg: 48 96% 89%; /* Strong Yellow */
+    --status-updated-bg: 142 80% 92%; 
+  }
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 217.2 91.2% 59.8%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+
+    /* Sidebar variables */
+    --sidebar-background: hsl(var(--card));
+    --sidebar-foreground: hsl(var(--card-foreground));
+    --sidebar-primary: hsl(var(--primary));
+    --sidebar-primary-foreground: hsl(var(--primary-foreground));
+    --sidebar-accent: hsl(var(--accent));
+    --sidebar-accent-foreground: hsl(var(--accent-foreground));
+    --sidebar-border: hsl(var(--border));
+    --sidebar-ring: hsl(var(--ring));
+
+    /* Custom Added Colors */
+    --tab-active-background: hsl(var(--background));
+    --tab-active-foreground: hsl(var(--foreground));
+
+    /* Custom Status Colors */
+    --status-correct-bg: 142 76% 15%; 
+    --status-less-bg: 25 95% 20%;
+    --status-more-bg: 210 100% 20%;
+    --status-wrapped-bg: 54 92% 15%;
+    --status-damaged-bg: 0 84% 15%;
+    --location-occupied-border: 217.2 91.2% 50%;
+    --location-occupied-bg: 217.2 91.2% 15%;
+    
+    --status-new-bg: 48 96% 25%; /* Strong Yellow */
+    --status-updated-bg: 142 76% 20%; 
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    word-spacing: normal;
+  }
+  @keyframes highlight {
+    from { @apply bg-primary/30; }
+    to { @apply bg-transparent; }
+  }
+  :target {
+    animation: highlight 1.5s ease-out;
+  }
+}
+
+@layer utilities {
+  .bg-status-correct { @apply bg-[hsl(var(--status-correct-bg))]; }
+  .bg-status-less { @apply bg-[hsl(var(--status-less-bg))]; }
+  .bg-status-more { @apply bg-[hsl(var(--status-more-bg))]; }
+  .bg-status-wrapped { @apply bg-[hsl(var(--status-wrapped-bg))]; }
+  .bg-status-damaged { @apply bg-[hsl(var(--status-damaged-bg))]; }
+  /* Update Statuses */
+  .bg-status-new { @apply bg-[hsl(var(--status-new-bg))]; }
+  .bg-status-updated { @apply bg-[hsl(var(--status-updated-bg))]; }
+
+  /* Custom row/item colors */
+  .bg-table-row-primary { @apply bg-[hsl(var(--table-row-primary))]; }
+  .bg-table-row-secondary { @apply bg-[hsl(var(--table-row-secondary))]; }
+  .bg-huana-highlight { @apply bg-[hsl(var(--huana-highlight))]; }
+  .border-location-occupied-border { @apply border-[hsl(var(--location-occupied-border))]; }
+  .bg-location-occupied-bg { @apply bg-[hsl(var(--location-occupied-bg))]; }
+}
+
+@media print {
+  body {
+    background-color: white;
+    color: black;
+  }
+  .print-hidden {
+    display: none;
+  }
+  .break-after-page {
+    page-break-after: always;
+  }
+}

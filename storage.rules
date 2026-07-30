@@ -1,0 +1,13 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // WARN: This rule allows anyone to read and write to your storage bucket.
+    // This is useful for development but is not secure.
+    // Before deploying to production, you should secure your rules.
+    // See https://firebase.google.com/docs/storage/security for more information.
+    match /{allPaths=**} {
+      allow read, write: if true;
+    }
+  }
+}

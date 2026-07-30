@@ -1,0 +1,187 @@
+﻿src/app/account/page.tsx(393,49): error TS2554: Expected 1 arguments, but got 2.
+src/app/account/page.tsx(425,19): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/account/page.tsx(677,28): error TS2345: Argument of type 'Event' is not assignable to parameter of type 'FormEvent<Element>'.
+  Type 'Event' is missing the following properties from type 'FormEvent<Element>': nativeEvent, isDefaultPrevented, isPropagationStopped, persist
+src/app/admin/page.tsx(339,49): error TS2554: Expected 1 arguments, but got 2.
+src/app/admin/page.tsx(417,79): error TS2554: Expected 1 arguments, but got 2.
+src/app/admin/page.tsx(447,69): error TS2554: Expected 1 arguments, but got 2.
+src/app/admin/page.tsx(465,95): error TS2554: Expected 1 arguments, but got 2.
+src/app/archive/[id]/page.tsx(549,63): error TS2554: Expected 1 arguments, but got 2.
+src/app/archive/[id]/page.tsx(658,46): error TS2554: Expected 1 arguments, but got 2.
+src/app/ashley-expenses/page.tsx(122,102): error TS2554: Expected 1 arguments, but got 2.
+src/app/ashley-expenses/page.tsx(158,96): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/ashley-map/page.tsx(239,48): error TS2554: Expected 1 arguments, but got 2.
+src/app/bonuses/add/page.tsx(124,38): error TS2554: Expected 1 arguments, but got 2.
+src/app/bonuses/add/page.tsx(250,10): error TS2741: Property 'children' is missing in type '{}' but required in type '{ children: ReactNode; title?: string | undefined; date?: string | Date | null | undefined; }'.
+src/app/bonuses/add/page.tsx(282,23): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/bonuses/add/page.tsx(315,90): error TS2554: Expected 1 arguments, but got 2.
+src/app/bonuses/add/page.tsx(345,84): error TS2554: Expected 1 arguments, but got 2.
+src/app/bonuses/monthly-report/page.tsx(234,50): error TS2554: Expected 1 arguments, but got 2.
+src/app/bonuses/monthly-report/page.tsx(288,19): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/bonuses/page.tsx(77,91): error TS2554: Expected 1 arguments, but got 2.
+src/app/bonuses/page.tsx(111,75): error TS2322: Type 'Dispatch<SetStateAction<Date | undefined>>' is not assignable to type 'ReactEventHandler<SVGSVGElement>'.
+  Types of parameters 'value' and 'event' are incompatible.
+    Type 'SyntheticEvent<SVGSVGElement, Event>' is not assignable to type 'SetStateAction<Date | undefined>'.
+src/app/cash-withdrawal/add/page.tsx(239,10): error TS2741: Property 'children' is missing in type '{}' but required in type '{ children: ReactNode; title?: string | undefined; date?: string | Date | null | undefined; }'.
+src/app/cash-withdrawal/add/page.tsx(271,23): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/cash-withdrawal/add/page.tsx(302,88): error TS2554: Expected 1 arguments, but got 2.
+src/app/cash-withdrawal/add/page.tsx(331,85): error TS2554: Expected 1 arguments, but got 2.
+src/app/cash-withdrawal/monthly-report/page.tsx(156,104): error TS2554: Expected 1 arguments, but got 2.
+src/app/cash-withdrawal/monthly-report/page.tsx(193,19): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/cash-withdrawal/page.tsx(74,95): error TS2554: Expected 1 arguments, but got 2.
+src/app/cash-withdrawal/page.tsx(108,75): error TS2322: Type 'Dispatch<SetStateAction<Date | undefined>>' is not assignable to type 'ReactEventHandler<SVGSVGElement>'.
+  Types of parameters 'value' and 'event' are incompatible.
+    Type 'SyntheticEvent<SVGSVGElement, Event>' is not assignable to type 'SetStateAction<Date | undefined>'.
+src/app/employees/[id]/page.tsx(157,51): error TS2322: Type '(v: Employee["role"]) => void' is not assignable to type '(value: string) => void'.
+  Types of parameters 'v' and 'value' are incompatible.
+    Type 'string' is not assignable to type '"Super Manager" | "Manager" | "IT" | "Employee Supervisor" | "Transport Supervisor" | "Employee" | "Marketing" | null | undefined'.
+src/app/employees/[id]/page.tsx(163,501): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/employees/[id]/page.tsx(164,446): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/employees/[id]/page.tsx(249,83): error TS2554: Expected 1 arguments, but got 2.
+src/app/employees/[id]/page.tsx(378,102): error TS2554: Expected 1 arguments, but got 2.
+src/app/employees/[id]/page.tsx(411,174): error TS2554: Expected 1 arguments, but got 2.
+src/app/employees/[id]/page.tsx(412,155): error TS2554: Expected 1 arguments, but got 2.
+src/app/employees/page.tsx(84,83): error TS2554: Expected 1 arguments, but got 2.
+src/app/employees/page.tsx(104,37): error TS2322: Type '(v: Employee["role"]) => void' is not assignable to type '(value: string) => void'.
+  Types of parameters 'v' and 'value' are incompatible.
+    Type 'string' is not assignable to type '"Super Manager" | "Manager" | "IT" | "Employee Supervisor" | "Transport Supervisor" | "Employee" | "Marketing" | null | undefined'.
+src/app/employees/page.tsx(117,552): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/employees/page.tsx(118,497): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/expenses/add/page.tsx(193,77): error TS2554: Expected 1 arguments, but got 2.
+src/app/expenses/add/page.tsx(253,33): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/expenses/add/page.tsx(304,122): error TS2554: Expected 1 arguments, but got 2.
+src/app/expenses/archive/[id]/page.tsx(126,54): error TS2554: Expected 1 arguments, but got 2.
+src/app/expenses/archive/[id]/page.tsx(196,57): error TS2554: Expected 1 arguments, but got 2.
+src/app/expenses/monthly-report/page.tsx(208,19): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/expenses/page.tsx(104,96): error TS2554: Expected 1 arguments, but got 2.
+src/app/expenses/page.tsx(138,108): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/huana-map/page.tsx(201,48): error TS2554: Expected 1 arguments, but got 2.
+src/app/locations/page.tsx(23,21): error TS2304: Cannot find name 'Item'.
+src/app/locations/page.tsx(112,47): error TS2554: Expected 1 arguments, but got 2.
+src/app/locations/page.tsx(169,25): error TS2552: Cannot find name 'StorageLocation'. Did you mean 'Geolocation'?
+src/app/locations/page.tsx(174,45): error TS2554: Expected 1 arguments, but got 2.
+src/app/locations/page.tsx(183,25): error TS2552: Cannot find name 'StorageLocation'. Did you mean 'Geolocation'?
+src/app/locations/page.tsx(234,78): error TS2554: Expected 1 arguments, but got 2.
+src/app/locations/page.tsx(325,56): error TS2554: Expected 1 arguments, but got 2.
+src/app/locations/page.tsx(647,79): error TS2554: Expected 1 arguments, but got 2.
+src/app/locations/page.tsx(683,79): error TS2554: Expected 1 arguments, but got 2.
+src/app/login/page.tsx(74,46): error TS7006: Parameter 'hall' implicitly has an 'any' type.
+src/app/login/page.tsx(75,54): error TS7006: Parameter 'floor' implicitly has an 'any' type.
+src/app/login/page.tsx(76,60): error TS7006: Parameter 'zone' implicitly has an 'any' type.
+src/app/login/page.tsx(240,125): error TS2551: Property 'storekeeper' does not exist on type 'ExcelFile'. Did you mean 'storekeeperId'?
+src/app/map-designer/page.tsx(202,33): error TS7006: Parameter 'hall' implicitly has an 'any' type.
+src/app/map-designer/page.tsx(219,33): error TS7006: Parameter 'hall' implicitly has an 'any' type.
+src/app/map-designer/page.tsx(221,41): error TS7006: Parameter 'floor' implicitly has an 'any' type.
+src/app/map-designer/page.tsx(250,39): error TS7006: Parameter 'h' implicitly has an 'any' type.
+src/app/map-designer/page.tsx(251,36): error TS7006: Parameter 'hall' implicitly has an 'any' type.
+src/app/map-designer/page.tsx(254,50): error TS7006: Parameter 'f' implicitly has an 'any' type.
+src/app/map-designer/page.tsx(255,47): error TS7006: Parameter 'floor' implicitly has an 'any' type.
+src/app/map-designer/page.tsx(257,59): error TS7006: Parameter 'z' implicitly has an 'any' type.
+src/app/map-designer/page.tsx(350,51): error TS7006: Parameter 'hall' implicitly has an 'any' type.
+src/app/map-designer/page.tsx(377,66): error TS7006: Parameter 'floor' implicitly has an 'any' type.
+src/app/map-designer/page.tsx(399,78): error TS7006: Parameter 'zone' implicitly has an 'any' type.
+src/app/map-designer/page.tsx(448,52): error TS7006: Parameter 'h' implicitly has an 'any' type.
+src/app/map-designer/page.tsx(450,59): error TS7006: Parameter 'hall' implicitly has an 'any' type.
+src/app/map-designer/page.tsx(450,83): error TS7006: Parameter 'zone' implicitly has an 'any' type.
+src/app/map-management/page.tsx(202,33): error TS7006: Parameter 'hall' implicitly has an 'any' type.
+src/app/map-management/page.tsx(219,33): error TS7006: Parameter 'hall' implicitly has an 'any' type.
+src/app/map-management/page.tsx(221,41): error TS7006: Parameter 'floor' implicitly has an 'any' type.
+src/app/map-management/page.tsx(250,39): error TS7006: Parameter 'h' implicitly has an 'any' type.
+src/app/map-management/page.tsx(251,36): error TS7006: Parameter 'hall' implicitly has an 'any' type.
+src/app/map-management/page.tsx(254,50): error TS7006: Parameter 'f' implicitly has an 'any' type.
+src/app/map-management/page.tsx(255,47): error TS7006: Parameter 'floor' implicitly has an 'any' type.
+src/app/map-management/page.tsx(257,59): error TS7006: Parameter 'z' implicitly has an 'any' type.
+src/app/map-management/page.tsx(348,51): error TS7006: Parameter 'hall' implicitly has an 'any' type.
+src/app/map-management/page.tsx(373,66): error TS7006: Parameter 'floor' implicitly has an 'any' type.
+src/app/map-management/page.tsx(395,78): error TS7006: Parameter 'zone' implicitly has an 'any' type.
+src/app/map-management/page.tsx(438,52): error TS7006: Parameter 'h' implicitly has an 'any' type.
+src/app/map-management/page.tsx(440,59): error TS7006: Parameter 'hall' implicitly has an 'any' type.
+src/app/map-management/page.tsx(440,83): error TS7006: Parameter 'zone' implicitly has an 'any' type.
+src/app/marketing-feedback/page.tsx(62,83): error TS2554: Expected 1 arguments, but got 2.
+src/app/marketing-feedback/page.tsx(147,71): error TS2554: Expected 1 arguments, but got 2.
+src/app/marketing-feedback/page.tsx(211,55): error TS2554: Expected 1 arguments, but got 2.
+src/app/marketing-feedback/page.tsx(552,138): error TS2554: Expected 1 arguments, but got 2.
+src/app/marketing-feedback/page.tsx(624,125): error TS2554: Expected 1 arguments, but got 2.
+src/app/monthly-report/page.tsx(164,100): error TS2554: Expected 1 arguments, but got 2.
+src/app/monthly-report/page.tsx(198,92): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/new-file/page.tsx(219,37): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/new-file/page.tsx(299,50): error TS2554: Expected 1 arguments, but got 2.
+src/app/overtime/add/page.tsx(236,10): error TS2741: Property 'children' is missing in type '{}' but required in type '{ children: ReactNode; title?: string | undefined; date?: string | Date | null | undefined; }'.
+src/app/overtime/add/page.tsx(268,21): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/overtime/add/page.tsx(286,87): error TS2554: Expected 1 arguments, but got 2.
+src/app/overtime/add/page.tsx(323,93): error TS2554: Expected 1 arguments, but got 2.
+src/app/overtime/archive/page.tsx(121,99): error TS2554: Expected 1 arguments, but got 2.
+src/app/overtime/archive/page.tsx(158,21): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/overtime/monthly-report/page.tsx(163,101): error TS2554: Expected 1 arguments, but got 2.
+src/app/overtime/monthly-report/page.tsx(200,19): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/overtime/page.tsx(77,90): error TS2554: Expected 1 arguments, but got 2.
+src/app/overtime/page.tsx(111,75): error TS2322: Type 'Dispatch<SetStateAction<Date | undefined>>' is not assignable to type 'ReactEventHandler<SVGSVGElement>'.
+  Types of parameters 'value' and 'event' are incompatible.
+    Type 'SyntheticEvent<SVGSVGElement, Event>' is not assignable to type 'SetStateAction<Date | undefined>'.
+src/app/public-inventory/page.tsx(47,21): error TS2304: Cannot find name 'cn'.
+src/app/public-inventory/page.tsx(80,37): error TS2304: Cannot find name 'cn'.
+src/app/public-inventory/page.tsx(99,34): error TS2304: Cannot find name 'cn'.
+src/app/public-inventory/page.tsx(104,28): error TS2304: Cannot find name 'cn'.
+src/app/public-inventory/page.tsx(113,43): error TS2304: Cannot find name 'cn'.
+src/app/public-inventory/page.tsx(114,43): error TS2304: Cannot find name 'cn'.
+src/app/public-inventory/page.tsx(115,43): error TS2304: Cannot find name 'cn'.
+src/app/public-transmit/page.tsx(42,21): error TS2304: Cannot find name 'cn'.
+src/app/public-transmit/page.tsx(74,37): error TS2304: Cannot find name 'cn'.
+src/app/public-transmit/page.tsx(120,41): error TS2304: Cannot find name 'cn'.
+src/app/public-transmit/page.tsx(144,51): error TS2304: Cannot find name 'cn'.
+src/app/public-transmit/page.tsx(146,51): error TS2304: Cannot find name 'cn'.
+src/app/public-transmit/page.tsx(186,51): error TS2304: Cannot find name 'cn'.
+src/app/public-transmit/page.tsx(187,51): error TS2304: Cannot find name 'cn'.
+src/app/public-transmit/page.tsx(189,51): error TS2304: Cannot find name 'cn'.
+src/app/settings/page.tsx(319,81): error TS2554: Expected 1 arguments, but got 2.
+src/app/settings/page.tsx(348,79): error TS2554: Expected 1 arguments, but got 2.
+src/app/sold-items/page.tsx(117,83): error TS2554: Expected 1 arguments, but got 2.
+src/app/sold-items/page.tsx(126,83): error TS2554: Expected 1 arguments, but got 2.
+src/app/sold-items/page.tsx(253,113): error TS2304: Cannot find name 'AlertDialogDescription'.
+src/app/sold-items/page.tsx(253,162): error TS2554: Expected 1 arguments, but got 2.
+src/app/sold-items/page.tsx(253,187): error TS2304: Cannot find name 'AlertDialogDescription'.
+src/app/sold-items/page.tsx(254,38): error TS2304: Cannot find name 'AlertDialogFooter'.
+src/app/sold-items/page.tsx(254,204): error TS2304: Cannot find name 'AlertDialogFooter'.
+src/app/sold-items/page.tsx(274,123): error TS2554: Expected 1 arguments, but got 2.
+src/app/transmit/add/page.tsx(109,83): error TS2554: Expected 1 arguments, but got 2.
+src/app/transmit/add/page.tsx(160,80): error TS2554: Expected 1 arguments, but got 2.
+src/app/transmit/add/page.tsx(322,85): error TS2554: Expected 1 arguments, but got 2.
+src/app/transmit/archive/[id]/page.tsx(191,37): error TS18048: 'transfer' is possibly 'undefined'.
+src/app/transmit/archive/[id]/page.tsx(195,163): error TS18048: 'transfer' is possibly 'undefined'.
+src/app/transmit/archive/[id]/page.tsx(218,130): error TS18048: 'transfer' is possibly 'undefined'.
+src/app/transmit/archive/[id]/page.tsx(226,110): error TS18048: 'transfer' is possibly 'undefined'.
+src/app/transmit/archive/[id]/page.tsx(234,115): error TS18048: 'transfer' is possibly 'undefined'.
+src/app/transmit/archive/[id]/page.tsx(288,87): error TS2554: Expected 1 arguments, but got 2.
+src/app/transmit/archive/page.tsx(176,54): error TS2554: Expected 1 arguments, but got 2.
+src/app/transmit/archive/page.tsx(268,21): error TS2820: Type '"dropdown-nav"' is not assignable to type 'CaptionLayout | undefined'. Did you mean '"dropdown"'?
+src/app/transmit/create/page.tsx(202,54): error TS2554: Expected 1 arguments, but got 2.
+src/app/transmit/create/page.tsx(329,115): error TS2554: Expected 1 arguments, but got 2.
+src/app/transmit/request-order/page.tsx(93,90): error TS2554: Expected 1 arguments, but got 2.
+src/app/transmit/staged/page.tsx(150,117): error TS2554: Expected 1 arguments, but got 2.
+src/app/transmit/view-requests/page.tsx(45,90): error TS2554: Expected 1 arguments, but got 2.
+src/app/transmit/view-requests/page.tsx(48,13): error TS2304: Cannot find name 'setActivityLogs'.
+src/app/transmit/view-requests/page.tsx(48,29): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/app/transmit/view-requests/page.tsx(55,90): error TS2554: Expected 1 arguments, but got 2.
+src/app/transmit/view-requests/page.tsx(58,13): error TS2304: Cannot find name 'setActivityLogs'.
+src/app/transmit/view-requests/page.tsx(58,29): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/app/transmit/view-requests/page.tsx(113,57): error TS2554: Expected 1 arguments, but got 2.
+src/app/transmit/view-requests/page.tsx(147,46): error TS2304: Cannot find name 'AlertDialogTrigger'.
+src/app/transmit/view-requests/page.tsx(147,167): error TS2304: Cannot find name 'AlertDialogTrigger'.
+src/app/transmit/view-requests/page.tsx(149,177): error TS2554: Expected 1 arguments, but got 2.
+src/app/transmit/view-requests/page.tsx(150,50): error TS2304: Cannot find name 'AlertDialogFooter'.
+src/app/transmit/view-requests/page.tsx(150,209): error TS2304: Cannot find name 'AlertDialogFooter'.
+src/app/warehouse-map/page.tsx(119,51): error TS7006: Parameter 'hall' implicitly has an 'any' type.
+src/app/warehouse-map/page.tsx(131,66): error TS7006: Parameter 'floor' implicitly has an 'any' type.
+src/app/warehouse-map/page.tsx(150,81): error TS7006: Parameter 'z' implicitly has an 'any' type.
+src/app/warehouse-map/page.tsx(150,131): error TS7006: Parameter 'zone' implicitly has an 'any' type.
+src/components/employees/EmployeeActivityChart.tsx(120,89): error TS2554: Expected 1 arguments, but got 2.
+src/components/layout/app-sidebar.tsx(100,36): error TS2304: Cannot find name 'LayoutGrid'.
+src/components/shared/backup-reminder.tsx(18,36): error TS2339: Property 'isAnonymous' does not exist on type 'User'.
+src/components/ui/sidebar.tsx(450,34): error TS2339: Property 'showOnHover' does not exist on type 'ClassAttributes<HTMLButtonElement> & ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean | undefined; }'.
+src/context/app-provider.tsx(73,20): error TS2304: Cannot find name 'WarehouseMap'.
+src/context/app-provider.tsx(74,59): error TS2304: Cannot find name 'WarehouseMap'.
+src/context/app-provider.tsx(164,94): error TS2304: Cannot find name 'WarehouseMap'.
+src/firebase/hooks.ts(17,20): error TS2339: Property 'app' does not exist on type 'FirebaseContextState'.
+src/firebase/hooks.ts(22,20): error TS2339: Property 'db' does not exist on type 'FirebaseContextState'.
+src/firebase/index.ts(47,7): error TS2353: Object literal may only specify known properties, and 'cache' does not exist in type 'FirestoreSettings'.
+src/hooks/use-auth.tsx(72,37): error TS7006: Parameter 'initialUser' implicitly has an 'any' type.
