@@ -130,12 +130,16 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
 export const useFirebase = (): FirebaseServicesAndUser => {
   const context = useContext(FirebaseContext);
 
-  if (context === undefined) {
-    throw new Error('useFirebase must be used within a FirebaseProvider.');
-  }
-
-  if (!context.areServicesAvailable || !context.firebaseApp || !context.firestore || !context.auth || !context.storage) {
-    throw new Error('Firebase core services not available. Check FirebaseProvider props.');
+  if (context === undefined || !context.areServicesAvailable || !context.firebaseApp || !context.firestore || !context.auth || !context.storage) {
+    return {
+      firebaseApp: (context?.firebaseApp || null) as FirebaseApp,
+      firestore: (context?.firestore || null) as Firestore,
+      auth: (context?.auth || null) as Auth,
+      storage: (context?.storage || null) as FirebaseStorage,
+      user: context?.user || null,
+      isUserLoading: context?.isUserLoading || false,
+      userError: context?.userError || null,
+    };
   }
 
   return {
@@ -148,6 +152,7 @@ export const useFirebase = (): FirebaseServicesAndUser => {
     userError: context.userError,
   };
 };
+
 
 /** Hook to access Firebase Auth instance. */
 export const useAuth = (): Auth => {
