@@ -386,7 +386,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
 export function useAppContext() {
     const context = useContext(AppContext);
     if (context === undefined) {
-        throw new Error('useAppContext must be used within an AppProvider');
+        return {
+            employees: initialEmployees, setEmployees: () => {},
+            excelFiles: [], setExcelFiles: () => {},
+            items: initialItems, setItems: () => {},
+            locations: initialLocations, setLocations: () => {},
+            expenses: initialExpenses, setExpenses: () => {},
+            expenseReports: [], setExpenseReports: () => {},
+            overtime: initialOvertime, setOvertime: () => {},
+            bonuses: initialBonuses, setBonuses: () => {},
+            withdrawals: initialWithdrawals, setWithdrawals: () => {},
+            itemCategories: initialItemCategories, setItemCategories: () => {},
+            transfers: initialTransfers, setTransfers: () => {},
+            transferItems: initialTransferItems, setTransferItems: () => {},
+            orderRequests: initialOrderRequests, setOrderRequests: () => {},
+            marketingFeedbacks: initialMarketingFeedbacks, setMarketingFeedbacks: () => {},
+            evaluationQuestions: initialEvaluationQuestions, setEvaluationQuestions: () => {},
+            users: initialUsers, setUsers: () => {},
+            roles: initialRoles, setRoles: () => {},
+            soldItemsLists: initialSoldItemsLists, setSoldItemsLists: () => {},
+            activityLogs: initialActivityLogs, setActivityLogs: () => {},
+            warehouseMaps: initialWarehouseMaps, setWarehouseMaps: () => {},
+            settings: initialSettings, setSettings: () => {},
+            isLoading: false,
+            viewMode: 'desktop', setViewMode: () => {},
+            dashboardScale: 1, setDashboardScale: () => {},
+            exportStateAsJson: () => {}
+        } as unknown as AppState;
     }
     return context;
 }
+
