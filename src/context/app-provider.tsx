@@ -387,26 +387,26 @@ export function useAppContext() {
     const context = useContext(AppContext);
     if (context === undefined) {
         return {
-            employees: initialEmployees, setEmployees: () => {},
+            employees: [], setEmployees: () => {},
             excelFiles: [], setExcelFiles: () => {},
-            items: initialItems, setItems: () => {},
-            locations: initialLocations, setLocations: () => {},
-            expenses: initialExpenses, setExpenses: () => {},
+            items: [], setItems: () => {},
+            locations: [], setLocations: () => {},
+            expenses: [], setExpenses: () => {},
             expenseReports: [], setExpenseReports: () => {},
-            overtime: initialOvertime, setOvertime: () => {},
-            bonuses: initialBonuses, setBonuses: () => {},
-            withdrawals: initialWithdrawals, setWithdrawals: () => {},
-            itemCategories: initialItemCategories, setItemCategories: () => {},
-            transfers: initialTransfers, setTransfers: () => {},
-            transferItems: initialTransferItems, setTransferItems: () => {},
-            orderRequests: initialOrderRequests, setOrderRequests: () => {},
-            marketingFeedbacks: initialMarketingFeedbacks, setMarketingFeedbacks: () => {},
-            evaluationQuestions: initialEvaluationQuestions, setEvaluationQuestions: () => {},
-            users: initialUsers, setUsers: () => {},
-            roles: initialRoles, setRoles: () => {},
-            soldItemsLists: initialSoldItemsLists, setSoldItemsLists: () => {},
-            activityLogs: initialActivityLogs, setActivityLogs: () => {},
-            warehouseMaps: initialWarehouseMaps, setWarehouseMaps: () => {},
+            overtime: [], setOvertime: () => {},
+            bonuses: [], setBonuses: () => {},
+            withdrawals: [], setWithdrawals: () => {},
+            itemCategories: [], setItemCategories: () => {},
+            transfers: [], setTransfers: () => {},
+            transferItems: [], setTransferItems: () => {},
+            orderRequests: [], setOrderRequests: () => {},
+            marketingFeedbacks: [], setMarketingFeedbacks: () => {},
+            evaluationQuestions: [], setEvaluationQuestions: () => {},
+            users: [], setUsers: () => {},
+            roles: [], setRoles: () => {},
+            soldItemsLists: [], setSoldItemsLists: () => {},
+            activityLogs: [], setActivityLogs: () => {},
+            warehouseMaps: [], setWarehouseMaps: () => {},
             settings: initialSettings, setSettings: () => {},
             isLoading: false,
             viewMode: 'desktop', setViewMode: () => {},
@@ -416,4 +416,5 @@ export function useAppContext() {
     }
     return context;
 }
+
 
