@@ -10,7 +10,7 @@ import { format } from 'date-fns';
 function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000; // Earth radius in meters
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon1 - lon1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
@@ -22,7 +22,7 @@ function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
 }
 
 export default function MainPage() {
-  const { employees, items, settings, overtime, withdrawals } = useAppContext();
+  const { employees, items, settings, attendanceLogs, setAttendanceLogs, overtime, withdrawals } = useAppContext();
   const { user } = useAuth();
 
   // Authoritative Factory Location established exclusively by Manager
@@ -197,12 +197,16 @@ export default function MainPage() {
     const timeStr = format(new Date(), 'HH:mm:ss - yyyy/MM/dd');
 
     const newRecord = {
+      id: `att-${Date.now()}`,
       name: empName,
       type: actionType === 'check-in' ? 'هاتن (Check-In)' : 'چوون (Check-Out)',
       time: timeStr,
       distance: distanceMeters !== null ? `${distanceMeters}m` : undefined,
+      selfieUrl: capturedSelfie || undefined,
+      createdAt: new Date().toISOString(),
     };
 
+    setAttendanceLogs((prev) => [newRecord, ...(prev || [])]);
     setAttLogHistory((prev) => [newRecord, ...prev]);
     setAttMessage({
       text: `ئامادەبوون بۆ ${empName} بە سەرکەوتوویی تۆمارکرا!`,

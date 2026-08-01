@@ -14,6 +14,8 @@ function AdminMasterHubPage() {
   const {
     employees,
     setEmployees,
+    attendanceLogs,
+    setAttendanceLogs,
     settings,
     setSettings,
     exportStateAsJson,
@@ -478,6 +480,92 @@ function AdminMasterHubPage() {
             <h3 className="text-xs font-black text-slate-900 group-hover:text-blue-900">پەنەری سکانی QR بۆ دەوام</h3>
             <p className="text-[11px] text-slate-500 leading-relaxed">دروستکردنی بارکۆدی خولاوەی ئامادەبوون</p>
           </Link>
+        </div>
+
+        {/* ATTENDANCE RECORDS MANAGEMENT & DELETE TABLE */}
+        <div className="bg-white/90 backdrop-blur-xl border border-slate-300 rounded-2xl p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+            <div>
+              <h3 className="text-sm font-black text-slate-900">
+                📊 خشتەی گشتی ئامادەبوونی کارمەندان (Attendance Log Audit & Delete)
+              </h3>
+              <p className="text-xs text-slate-500 font-bold mt-0.5">
+                سەرجەم تۆمارەکانی ئامادەبوونی ڕۆژانە لێرە پاشەکەوت دەبن و ئەدمین دەتوانێت فۆتۆ، دووری و کات ببینێت و سڕینەوە بکان
+              </p>
+            </div>
+            {attendanceLogs && attendanceLogs.length > 0 && (
+              <button
+                onClick={() => {
+                  if (confirm('ئایا دڵنیایت لە سڕینەوەی تێکڕای داتاکانی ئامادەبوون؟')) {
+                    setAttendanceLogs([]);
+                  }
+                }}
+                className="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold rounded-lg text-xs border border-rose-300 cursor-pointer"
+              >
+                🗑️ پاککردنەوەی تێکڕای لیست
+              </button>
+            )}
+          </div>
+
+          <div className="border border-slate-300 rounded-xl overflow-hidden shadow-inner">
+            <table className="w-full text-right text-xs">
+              <thead className="bg-slate-100 border-b border-slate-300 text-slate-700 font-bold">
+                <tr>
+                  <th className="p-3">ناوی کارمەند</th>
+                  <th className="p-3">جۆری تۆمار</th>
+                  <th className="p-3">کاتی تۆمارکردن</th>
+                  <th className="p-3">دووری لە کۆپمانیا (مەتر)</th>
+                  <th className="p-3">فۆتۆی سێلفی</th>
+                  <th className="p-3 text-left">کردار</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 font-bold bg-white">
+                {attendanceLogs && attendanceLogs.length > 0 ? (
+                  attendanceLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-slate-50">
+                      <td className="p-3 text-slate-900 font-extrabold">{log.name}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded text-[11px] border font-bold ${
+                          log.type.includes('Check-In') || log.type.includes('هاتن')
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                            : 'bg-rose-50 text-rose-800 border-rose-300'
+                        }`}>
+                          {log.type}
+                        </span>
+                      </td>
+                      <td className="p-3 font-mono">{log.time}</td>
+                      <td className="p-3 font-mono">{log.distance || '---'}</td>
+                      <td className="p-3">
+                        {log.selfieUrl ? (
+                          <img src={log.selfieUrl} alt="Selfie" className="w-9 h-9 rounded-full object-cover border border-slate-300 shadow-sm" />
+                        ) : (
+                          <span className="text-slate-400">بەبێ فۆتۆ</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-left">
+                        <button
+                          onClick={() => {
+                            if (confirm(`ئایا دڵنیایت لە سڕینەوەی ئەم تۆمارەی ${log.name}؟`)) {
+                              setAttendanceLogs(attendanceLogs.filter((item) => item.id !== log.id));
+                            }
+                          }}
+                          className="px-2.5 py-1 bg-rose-100 hover:bg-rose-200 text-rose-800 rounded text-[11px] font-bold border border-rose-300 cursor-pointer"
+                        >
+                          🗑️ سڕینەوە
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-400 font-bold">
+                      هیچ تۆمارێکی ئامادەبوون تۆمار نەکراوە
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 

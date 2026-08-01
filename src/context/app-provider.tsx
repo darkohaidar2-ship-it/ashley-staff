@@ -26,6 +26,7 @@ import {
     ActivityLog,
     AppSettings,
     WarehouseMap,
+    AttendanceRecord,
 } from '@/lib/types';
 import { setDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { initialData, initialSettings } from './initial-data';
@@ -35,6 +36,8 @@ export type ViewMode = 'list' | 'app-icon' | 'small' | 'large';
 interface AppState {
     employees: Employee[];
     setEmployees: React.Dispatch<React.SetStateAction<Employee[]>>;
+    attendanceLogs: AttendanceRecord[];
+    setAttendanceLogs: React.Dispatch<React.SetStateAction<AttendanceRecord[]>>;
     excelFiles: ExcelFile[];
     setExcelFiles: React.Dispatch<React.SetStateAction<ExcelFile[]>>;
     items: Item[];
@@ -146,6 +149,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const db = useFirestore();
 
     const [employees, setEmployees, isEmployeesLoading] = useFirestoreCollection<Employee>('employees', initialData.employees);
+    const [attendanceLogs, setAttendanceLogs, isAttLoading] = useFirestoreCollection<AttendanceRecord>('attendanceLogs', []);
     const [excelFiles, setExcelFiles, isExcelFilesLoading] = useFirestoreCollection<ExcelFile>('excelFiles', initialData.excelFiles);
     const [rawItems, setRawItems, isItemsLoading] = useFirestoreCollection<Item>('items', initialData.items);
     const [locations, setLocations, isLocationsLoading] = useFirestoreCollection<StorageLocation>('locations', initialData.locations);
@@ -365,7 +369,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const isLoading = isUserLoading || isSettingsLoading;
 
     const value = useMemo<AppState>(() => ({
-        employees, setEmployees, excelFiles, setExcelFiles, items, setItems,
+        employees, setEmployees, attendanceLogs, setAttendanceLogs, excelFiles, setExcelFiles, items, setItems,
         locations, setLocations, expenses, setExpenses, expenseReports, setExpenseReports,
         overtime, setOvertime, bonuses, setBonuses, withdrawals, setWithdrawals,
         itemCategories, setItemCategories, transfers, setTransfers, transferItems, setTransferItems,
@@ -374,7 +378,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         soldItemsLists, setSoldItemsLists, activityLogs, setActivityLogs,
         warehouseMaps, setWarehouseMaps,
         settings, setSettings, isLoading, viewMode, setViewMode, dashboardScale, setDashboardScale, exportStateAsJson
-    }), [employees, setEmployees, excelFiles, setExcelFiles, items, setItems, locations, setLocations, expenses, setExpenses, expenseReports, setExpenseReports, overtime, setOvertime, bonuses, setBonuses, withdrawals, setWithdrawals, itemCategories, setItemCategories, transfers, setTransfers, transferItems, setTransferItems, orderRequests, setOrderRequests, marketingFeedbacks, setMarketingFeedbacks, evaluationQuestions, setEvaluationQuestions, users, setUsers, roles, setRoles, soldItemsLists, setSoldItemsLists, activityLogs, setActivityLogs, warehouseMaps, setWarehouseMaps, settings, setSettings, isLoading, viewMode, setViewMode, dashboardScale, setDashboardScale, exportStateAsJson]);
+    }), [employees, setEmployees, attendanceLogs, setAttendanceLogs, excelFiles, setExcelFiles, items, setItems, locations, setLocations, expenses, setExpenses, expenseReports, setExpenseReports, overtime, setOvertime, bonuses, setBonuses, withdrawals, setWithdrawals, itemCategories, setItemCategories, transfers, setTransfers, transferItems, setTransferItems, orderRequests, setOrderRequests, marketingFeedbacks, setMarketingFeedbacks, evaluationQuestions, setEvaluationQuestions, users, setUsers, roles, setRoles, soldItemsLists, setSoldItemsLists, activityLogs, setActivityLogs, warehouseMaps, setWarehouseMaps, settings, setSettings, isLoading, viewMode, setViewMode, dashboardScale, setDashboardScale, exportStateAsJson]);
 
     return (
         <AppContext.Provider value={value}>
@@ -388,6 +392,7 @@ export function useAppContext() {
     if (context === undefined) {
         return {
             employees: [], setEmployees: () => {},
+            attendanceLogs: [], setAttendanceLogs: () => {},
             excelFiles: [], setExcelFiles: () => {},
             items: [], setItems: () => {},
             locations: [], setLocations: () => {},

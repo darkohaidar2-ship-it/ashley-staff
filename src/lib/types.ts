@@ -412,6 +412,16 @@ export type OvertimeRecord = {
   createdAt: number;
 };
 
+export type AttendanceRecord = {
+  id: string;
+  name: string;
+  type: string;
+  time: string;
+  distance?: string;
+  selfieUrl?: string;
+  createdAt: string;
+};
+
 export type AppConfig = {
   appName: string;
   overtimeRate: number;
@@ -419,8 +429,8 @@ export type AppConfig = {
   logo: string;
   font: string;
   colors: {
-    brand: string;
     sidebar: string;
+    header: string;
+    accent: string;
   };
 };
-
