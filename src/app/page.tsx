@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import Link from 'next/link';
 import { useAppContext } from '@/context/app-provider';
 import { useAuth } from '@/hooks/use-auth';
+import { useFirestore, collection, doc, setDocumentNonBlocking } from '@/firebase';
 import { format } from 'date-fns';
 
 // Haversine formula to compute exact distance in meters between two GPS coordinates
@@ -24,6 +25,7 @@ function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
 export default function MainPage() {
   const { employees, items, settings, attendanceLogs, setAttendanceLogs, overtime, withdrawals } = useAppContext();
   const { user } = useAuth();
+  const db = useFirestore();
 
   // Authoritative Factory Location established exclusively by Manager
   const factoryLocation = settings.factoryLocation || {
@@ -233,6 +235,15 @@ export default function MainPage() {
 
     setAttendanceLogs((prev) => [newRecord, ...(prev || [])]);
     setAttLogHistory((prev) => [newRecord, ...prev]);
+
+    if (db) {
+      try {
+        const colRef = collection(db, 'attendanceLogs');
+        setDocumentNonBlocking(doc(colRef, newRecord.id), newRecord, { merge: true });
+      } catch (err) {
+        console.error('Firestore attendance sync error:', err);
+      }
+    }
     setAttMessage({
       text: `ئامادەبوون بۆ ${empName} بە سەرکەوتوویی تۆمارکرا!`,
       success: true,
