@@ -36,10 +36,14 @@ export type ActivityLog = {
 export type Employee = {
   id: string;
   name: string;
+  fullName3Part?: string | null;
   kurdishName?: string | null;
   employeeId?: string | null;
   role?: 'Super Manager' | 'Manager' | 'IT' | 'Employee Supervisor' | 'Transport Supervisor' | 'Employee' | 'Marketing' | null;
   employmentStartDate?: string | null;
+  startDate?: string | null;
+  resignedDate?: string | null;
+  rehiredDate?: string | null;
   dateOfBirth?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -48,7 +52,9 @@ export type Employee = {
   createdAt?: string;
   password?: string;
   isActive?: boolean;
+  status?: 'active' | 'resigned' | 'suspended';
 };
+
 
 export type ExcelFile = {
   id: string;

@@ -274,7 +274,7 @@ export default function MainPage() {
                     className="w-full p-2.5 border border-slate-300 rounded bg-white text-sm font-bold focus:outline-none"
                   >
                     <option value="">-- هەڵبژاردنی کارمەند --</option>
-                    {employees.map((emp) => (
+                    {employees.filter(e => e.status !== 'resigned' && e.isActive !== false).map((emp) => (
                       <option key={emp.id} value={emp.id}>
                         {emp.name} ({emp.role || 'Staff'})
                       </option>
