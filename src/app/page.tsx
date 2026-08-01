@@ -71,6 +71,16 @@ export default function MainPage() {
     );
   }, [items, searchQuery]);
 
+  // Camera Facing Mode ('user' = Front / Selfie, 'environment' = Back Camera)
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+
+  // Format Distance nicely (meters vs kilometers)
+  const formatDistText = (m: number | null) => {
+    if (m === null) return '---';
+    if (m >= 1000) return `${(m / 1000).toFixed(2)} کیلۆمەتر`;
+    return `${m} مەتر`;
+  };
+
   // Request & Calculate Geofence Location strictly against Manager's Company Base
   const requestLocation = () => {
     if (!navigator.geolocation) {
@@ -93,9 +103,9 @@ export default function MainPage() {
         setIsWithinGeofence(inside);
 
         if (inside) {
-          setGpsStatus(`✅ لۆکەیشن پەسەندکرا: دووریت ${dist} مەترە لە شوێنی کۆمپانیا (سنوور: ${radius}م)`);
+          setGpsStatus(`✅ لۆکەیشن پەسەندکرا: دووریت ${formatDistText(dist)} لە شوێنی کۆمپانیا (سنوور: ${formatDistText(radius)})`);
         } else {
-          setGpsStatus(`⚠️ ئاگاداری: تۆ لە دەرەوەی ڕووبەری کۆمپانیای! دووریت: ${dist} مەترە (سنووری بەڕێوەبەر: ${radius}م)`);
+          setGpsStatus(`⚠️ ئاگاداری: تۆ لە دەرەوەی ڕووبەری کۆمپانیای! دووریت: ${formatDistText(dist)} (سنووری بەڕێوەبەر: ${formatDistText(radius)})`);
         }
       },
       (err) => {
@@ -130,18 +140,24 @@ export default function MainPage() {
     setShowPersonalProfileModal(true);
   };
 
-  // Start Camera
-  const startCamera = async () => {
+  // Start Camera with selectable mode (Front / Back)
+  const startCamera = async (mode?: 'user' | 'environment') => {
+    const selectedMode = mode || facingMode;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach((t) => t.stop());
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: selectedMode } });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
       }
       setCameraActive(true);
+      setFacingMode(selectedMode);
     } catch {
       setAttMessage({
-        text: 'نەتوانرا کامێرا بەکاربهێندرێت',
+        text: 'نەتوانرا کامێرا بەکاربهێندرێت - تکایە ڕێگەپێدانی کامێرا لە مۆبایلەکەت چالاک بکە',
         success: false,
       });
     }
@@ -184,10 +200,19 @@ export default function MainPage() {
       return;
     }
 
+    // MANDATORY PHOTO VALIDATION
+    if (!capturedSelfie) {
+      setAttMessage({
+        text: '📷 پێویستە سەرەتا فۆتۆیەک بە کامێرای پێشەوە یان پشتەوە بگریت پێش تۆمارکردنی دەوام!',
+        success: false,
+      });
+      return;
+    }
+
     // Geofence Radius Validation against Manager's Established Company Base
     if (isWithinGeofence === false) {
       setAttMessage({
-        text: `⚠️ ئامادەبوون ڕەتکرایەوە: مۆبایلەکەت لە دەرەوەی ڕووبەری دیاریکراوی کۆمپانیایە (${distanceMeters} مەتر - سنووری بەڕێوەبەر: ${factoryLocation.radiusMeters}م)`,
+        text: `⚠️ ئامادەبوون ڕەتکرایەوە: مۆبایلەکەت لە دەرەوەی ڕووبەری دیاریکراوی کۆمپانیایە (${formatDistText(distanceMeters)} - سنووری بەڕێوەبەر: ${formatDistText(factoryLocation.radiusMeters)})`,
         success: false,
       });
       return;
@@ -201,7 +226,7 @@ export default function MainPage() {
       name: empName,
       type: actionType === 'check-in' ? 'هاتن (Check-In)' : 'چوون (Check-Out)',
       time: timeStr,
-      distance: distanceMeters !== null ? `${distanceMeters}m` : undefined,
+      distance: distanceMeters !== null ? formatDistText(distanceMeters) : undefined,
       selfieUrl: capturedSelfie || undefined,
       createdAt: new Date().toISOString(),
     };
@@ -322,12 +347,23 @@ export default function MainPage() {
               <div className="space-y-3 bg-slate-50 p-5 rounded-lg border border-slate-300 flex flex-col items-center justify-center text-center">
                 <div className="w-full aspect-[4/3] bg-slate-900 rounded overflow-hidden relative flex items-center justify-center border border-slate-700">
                   {!cameraActive && !capturedSelfie && (
-                    <button
-                      onClick={startCamera}
-                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded cursor-pointer"
-                    >
-                      📷 چالاککردنی کامێرا
-                    </button>
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-slate-300 font-bold mb-2">کامێرا هەڵبژێرە بۆ گرتنی فۆتۆ:</p>
+                      <div className="flex items-center gap-2 justify-center">
+                        <button
+                          onClick={() => startCamera('user')}
+                          className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded cursor-pointer border border-slate-600"
+                        >
+                          🤳 کامێرای پێشەوە (Selfie)
+                        </button>
+                        <button
+                          onClick={() => startCamera('environment')}
+                          className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded cursor-pointer border border-slate-600"
+                        >
+                          📷 کامێرای پشتەوە (Back)
+                        </button>
+                      </div>
+                    </div>
                   )}
 
                   <video
@@ -345,11 +381,32 @@ export default function MainPage() {
                 </div>
 
                 {cameraActive && !capturedSelfie && (
+                  <div className="flex items-center gap-2 w-full">
+                    <button
+                      onClick={capturePhoto}
+                      className="flex-1 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded cursor-pointer"
+                    >
+                      📸 گرتنی فۆتۆی ئامادەبوون
+                    </button>
+                    <button
+                      onClick={() => startCamera(facingMode === 'user' ? 'environment' : 'user')}
+                      className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-900 font-bold text-xs rounded cursor-pointer border border-slate-400"
+                      title="گۆڕینی کامێرا"
+                    >
+                      🔄 کامێرا
+                    </button>
+                  </div>
+                )}
+
+                {capturedSelfie && (
                   <button
-                    onClick={capturePhoto}
-                    className="w-full py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded cursor-pointer"
+                    onClick={() => {
+                      setCapturedSelfie(null);
+                      startCamera();
+                    }}
+                    className="w-full py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[11px] rounded cursor-pointer border border-slate-300"
                   >
-                    📸 گرتبوونی وێنە
+                    🔄 گرتنەوەی فۆتۆ
                   </button>
                 )}
               </div>
