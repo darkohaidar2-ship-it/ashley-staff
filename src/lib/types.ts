@@ -424,6 +424,7 @@ export type AttendanceRecord = {
   selfieUrl?: string;
   checkInSelfie?: string;
   checkOutSelfie?: string;
+  status?: string;
   createdAt: string;
 };
 
