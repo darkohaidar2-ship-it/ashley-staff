@@ -204,6 +204,7 @@ export default function MainPage() {
       selfieUrl: capturedSelfie,
       distance: distanceMeters !== null ? `${distanceMeters}m` : 'داخل کۆمپانیا',
       status: 'verified',
+      createdAt: timeNow,
     };
 
     setAttendanceLogs([newLog, ...attendanceLogs]);
