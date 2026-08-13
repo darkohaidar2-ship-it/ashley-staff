@@ -2,14 +2,51 @@
 
 import React, { useState, useRef } from 'react';
 import Link from 'next/link';
-import { useAppContext } from '@/context/app-provider';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { useAppContext } from '@/context/app-provider';
+import type { Employee } from '@/lib/types';
+import { FactoryMapPicker } from '@/components/maps/FactoryMapPicker';
 import { useFirestore, collection, doc, setDocumentNonBlocking } from '@/firebase';
 import { format } from 'date-fns';
+import { 
+  Users, 
+  Package, 
+  Truck, 
+  Settings, 
+  Plus, 
+  UserPlus,
+  MapPin, 
+  Download, 
+  Upload, 
+  LogOut, 
+  Type, 
+  FileSpreadsheet, 
+  FolderArchive, 
+  Map, 
+  Clock, 
+  Receipt, 
+  Calendar, 
+  DollarSign, 
+  QrCode, 
+  Trash2, 
+  CheckCircle, 
+  UserCheck, 
+  UserX,
+  Sparkles,
+  Edit,
+  Eye,
+  Layers,
+  Archive,
+  Camera,
+  FileText,
+  Shield,
+  Search
+} from 'lucide-react';
 
 // Haversine formula to compute exact distance in meters between two GPS coordinates
 function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000; // Earth radius in meters
+  const R = 6371000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -23,20 +60,27 @@ function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
 }
 
 export default function MainPage() {
-  const { employees, items, settings, attendanceLogs, setAttendanceLogs, overtime, withdrawals } = useAppContext();
-  const { user } = useAuth();
+  const router = useRouter();
+  const { user, logout } = useAuth();
+  const {
+    employees,
+    setEmployees,
+    items,
+    settings,
+    setSettings,
+    attendanceLogs,
+    setAttendanceLogs,
+    exportStateAsJson,
+  } = useAppContext();
   const db = useFirestore();
 
-  // Authoritative Factory Location established exclusively by Manager
-  const factoryLocation = settings.factoryLocation || {
-    name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Company)',
+  // Authoritative Factory Location
+  const factoryLocation = settings?.factoryLocation || {
+    name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Company Base)',
     lat: 35.5571,
     lng: 45.4352,
     radiusMeters: 500,
   };
-
-  // --- Model Search State ---
-  const [searchQuery, setSearchQuery] = useState('');
 
   // --- Attendance State ---
   const [selectedEmpId, setSelectedEmpId] = useState('');
@@ -44,576 +88,975 @@ export default function MainPage() {
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedSelfie, setCapturedSelfie] = useState<string | null>(null);
   
-  // GPS & Geofence Evaluation
+  // GPS Geofence State
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const [isWithinGeofence, setIsWithinGeofence] = useState<boolean | null>(null);
   const [gpsStatus, setGpsStatus] = useState<string | null>(null);
-
   const [attMessage, setAttMessage] = useState<{ text: string; success: boolean } | null>(null);
-  const [attLogHistory, setAttLogHistory] = useState<Array<{ name: string; type: string; time: string; distance?: string }>>([]);
-
-  // --- Employee Self-Service Personal Profile Modal ---
-  const [showPersonalProfileModal, setShowPersonalProfileModal] = useState(false);
-  const [profilePinError, setProfilePinError] = useState('');
-
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Filter items for Model Search
-  const filteredItems = React.useMemo(() => {
-    if (!searchQuery.trim()) return items.slice(0, 8);
-    const q = searchQuery.toLowerCase();
-    return items.filter(
-      (item) =>
-        (item.model && item.model.toLowerCase().includes(q)) ||
-        (item.name && item.name.toLowerCase().includes(q)) ||
-        (item.classification && item.classification.toLowerCase().includes(q)) ||
-        (item.modelCondition && item.modelCondition.toLowerCase().includes(q))
-    );
-  }, [items, searchQuery]);
+  // --- Employee Roster Management Modal & State ---
+  const [showEmpModal, setShowEmpModal] = useState(false);
+  const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
+  const [empFullName3, setEmpFullName3] = useState('');
+  const [empShortName, setEmpShortName] = useState('');
+  const [empPhone, setEmpPhone] = useState('');
+  const [empRole, setEmpRole] = useState<any>('Employee');
+  const [empStartDate, setEmpStartDate] = useState('');
+  const [empResignDate, setEmpResignDate] = useState('');
+  const [empRehireDate, setEmpRehireDate] = useState('');
+  const [empStatusFilter, setEmpStatusFilter] = useState<'all' | 'active' | 'resigned'>('active');
 
-  // Camera Facing Mode ('user' = Front / Selfie, 'environment' = Back Camera)
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  // --- Search Catalog State ---
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Format Distance nicely (meters vs kilometers)
-  const formatDistText = (m: number | null) => {
-    if (m === null) return '---';
-    if (m >= 1000) return `${(m / 1000).toFixed(2)} کیلۆمەتر`;
-    return `${m} مەتر`;
-  };
+  // --- Geofence Map & Font Modals ---
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fontInputRef = useRef<HTMLInputElement>(null);
 
-  // Request & Calculate Geofence Location strictly against Manager's Company Base
+  // Request GPS Location
   const requestLocation = () => {
     if (!navigator.geolocation) {
       setGpsStatus('جی پی ئێس لە وێبگەڕ پشتیوانی نەکراوە');
       return;
     }
-    setGpsStatus('پشکنینی لۆکەیشنی مۆبایلەکەت لەگەڵ بناغەی کۆمپانیا...');
+    setGpsStatus('پشکنینی لۆکەیشنی مۆبایل لەگەڵ کۆمپانیا...');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const uLat = pos.coords.latitude;
         const uLng = pos.coords.longitude;
         setUserCoords({ lat: uLat, lng: uLng });
-
-        // Calculate distance to Manager's established Company Base
         const dist = calculateDistanceMeters(uLat, uLng, factoryLocation.lat, factoryLocation.lng);
         setDistanceMeters(dist);
-
-        const radius = factoryLocation.radiusMeters || 500;
-        const inside = dist <= radius;
+        const inside = dist <= factoryLocation.radiusMeters;
         setIsWithinGeofence(inside);
-
-        if (inside) {
-          setGpsStatus(`✅ لۆکەیشن پەسەندکرا: دووریت ${formatDistText(dist)} لە شوێنی کۆمپانیا (سنوور: ${formatDistText(radius)})`);
-        } else {
-          setGpsStatus(`⚠️ ئاگاداری: تۆ لە دەرەوەی ڕووبەری کۆمپانیای! دووریت: ${formatDistText(dist)} (سنووری بەڕێوەبەر: ${formatDistText(radius)})`);
-        }
+        setGpsStatus(inside ? `داخل کۆمپانیا (${dist}m)` : `دەرەوەی کۆمپانیا (${dist}m)`);
       },
       (err) => {
-        setGpsStatus('نەتوانرا لۆکەیشن وەربگیرێت - تکایە GPS ی مۆبایلەکەت چالاک بکە');
+        setGpsStatus('نەتوانرا لۆکەیشنی جی پی ئێس وەربگیرێت');
+        setIsWithinGeofence(false);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   };
 
-  // Open Employee Personal Profile Modal (Requires PIN Verification)
-  const handleOpenPersonalProfile = () => {
-    if (!selectedEmpId) {
-      setAttMessage({
-        text: 'تکایە سەرەتا ناوی کارمەند هەڵبژێرە و کۆدی PIN بنووسە',
-        success: false,
-      });
-      return;
-    }
-
-    const emp = employees.find((e) => e.id === selectedEmpId);
-    if (!emp) return;
-
-    if (emp.password && pinCode.trim() !== emp.password.trim() && pinCode.trim() !== '0000' && pinCode.trim() !== '1234') {
-      setAttMessage({
-        text: 'کۆدی PIN نادروستە! ناتوانیت دۆسیەی تایبەتی ببینیت.',
-        success: false,
-      });
-      return;
-    }
-
-    setProfilePinError('');
-    setShowPersonalProfileModal(true);
-  };
-
-  // Start Camera with selectable mode (Front / Back)
-  const startCamera = async (mode?: 'user' | 'environment') => {
-    const selectedMode = mode || facingMode;
+  // Camera Control
+  const startCamera = async () => {
     try {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach((t) => t.stop());
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: selectedMode } });
+      setCameraActive(true);
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
       }
-      setCameraActive(true);
-      setFacingMode(selectedMode);
     } catch {
-      setAttMessage({
-        text: 'نەتوانرا کامێرا بەکاربهێندرێت - تکایە ڕێگەپێدانی کامێرا لە مۆبایلەکەت چالاک بکە',
-        success: false,
-      });
+      setAttMessage({ text: 'کامیرا لە مۆبایل یان کۆمپیوتەرەکەتدا نەدۆزرایەوە', success: false });
+      setCameraActive(false);
     }
   };
 
-  // Capture Photo
   const capturePhoto = () => {
     if (!videoRef.current || !canvasRef.current) return;
-    const canvas = canvasRef.current;
     const video = videoRef.current;
-    canvas.width = video.videoWidth || 300;
-    canvas.height = video.videoHeight || 300;
+    const canvas = canvasRef.current;
+    canvas.width = 300;
+    canvas.height = 300;
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/png');
+      ctx.drawImage(video, 0, 0, 300, 300);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
       setCapturedSelfie(dataUrl);
+      if (video.srcObject) {
+        (video.srcObject as MediaStream).getTracks().forEach((track) => track.stop());
+      }
+      setCameraActive(false);
     }
   };
 
-  // Handle Attendance Check-In / Check-Out
-  const handleAttendance = (actionType: 'check-in' | 'check-out') => {
+  // Check-In / Check-Out Submission
+  const handleCheckInOrOut = async (type: 'Check In' | 'Check Out') => {
     if (!selectedEmpId) {
-      setAttMessage({
-        text: 'تکایە ناوی کارمەند هەڵبژێرە',
-        success: false,
-      });
+      setAttMessage({ text: 'تکایە ناوی خۆت لە لیستەکەدا هەڵبژێرە', success: false });
       return;
     }
-
     const emp = employees.find((e) => e.id === selectedEmpId);
     if (!emp) return;
 
-    // Check PIN validation
-    if (emp.password && pinCode.trim() !== emp.password.trim() && pinCode.trim() !== '0000' && pinCode.trim() !== '1234') {
-      setAttMessage({
-        text: 'کۆدی PIN نادروستە!',
-        success: false,
-      });
+    if (pinCode.trim() !== (emp.password || '1234')) {
+      setAttMessage({ text: 'کۆدی PIN هەڵەیە! تکایە کۆدە دروستەکەت بنووسە', success: false });
       return;
     }
 
-    // MANDATORY PHOTO VALIDATION
     if (!capturedSelfie) {
-      setAttMessage({
-        text: '📷 پێویستە سەرەتا فۆتۆیەک بە کامێرای پێشەوە یان پشتەوە بگریت پێش تۆمارکردنی دەوام!',
-        success: false,
-      });
+      setAttMessage({ text: 'تکایە فۆتۆ سێلفی لەگەڵ ئامادەبوون بگرە', success: false });
       return;
     }
 
-    // Geofence Radius Validation against Manager's Established Company Base
-    if (isWithinGeofence === false) {
-      setAttMessage({
-        text: `⚠️ ئامادەبوون ڕەتکرایەوە: مۆبایلەکەت لە دەرەوەی ڕووبەری دیاریکراوی کۆمپانیایە (${formatDistText(distanceMeters)} - سنووری بەڕێوەبەر: ${formatDistText(factoryLocation.radiusMeters)})`,
-        success: false,
-      });
-      return;
-    }
-
-    const empName = emp.name;
-    const timeStr = format(new Date(), 'HH:mm:ss - yyyy/MM/dd');
-
-    const newRecord = {
-      id: `att-${Date.now()}`,
-      name: empName,
-      type: actionType === 'check-in' ? 'هاتن (Check-In)' : 'چوون (Check-Out)',
-      time: timeStr,
-      distance: distanceMeters !== null ? formatDistText(distanceMeters) : undefined,
-      selfieUrl: capturedSelfie || undefined,
-      createdAt: new Date().toISOString(),
+    const timeNow = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
+    const newLog = {
+      id: `log-${Date.now()}`,
+      employeeId: emp.id,
+      name: emp.fullName3Part || emp.name,
+      type: type === 'Check In' ? 'هاتن (Check In)' : 'دەرچوون (Check Out)',
+      time: timeNow,
+      selfieUrl: capturedSelfie,
+      distance: distanceMeters !== null ? `${distanceMeters}m` : 'داخل کۆمپانیا',
+      status: 'verified',
     };
 
-    setAttendanceLogs((prev) => [newRecord, ...(prev || [])]);
-    setAttLogHistory((prev) => [newRecord, ...prev]);
-
-    if (db) {
-      try {
-        const colRef = collection(db, 'attendanceLogs');
-        setDocumentNonBlocking(doc(colRef, newRecord.id), newRecord, { merge: true });
-      } catch (err) {
-        console.error('Firestore attendance sync error:', err);
-      }
-    }
+    setAttendanceLogs([newLog, ...attendanceLogs]);
     setAttMessage({
-      text: `ئامادەبوون بۆ ${empName} بە سەرکەوتوویی تۆمارکرا!`,
+      text: `ئامادەبوونی (${emp.name}) بە سەرکەوتوویی وەک ${type} تۆمارکرا!`,
       success: true,
     });
 
+    // Reset Form
+    setSelectedEmpId('');
     setPinCode('');
+    setCapturedSelfie(null);
   };
 
-  // Selected Employee Data for Personal Profile Modal
-  const selectedEmployee = employees.find((e) => e.id === selectedEmpId);
-  const empOvertimeRecords = overtime.filter((o) => o.employeeId === selectedEmpId);
-  const empWithdrawals = withdrawals.filter((w) => w.employeeId === selectedEmpId);
-  const totalOvertimeHours = empOvertimeRecords.reduce((sum, r) => sum + (r.hours || 0), 0);
+  // Open Employee Add/Edit Modal
+  const handleOpenEmpModal = (emp?: Employee) => {
+    if (emp) {
+      setEditingEmp(emp);
+      setEmpFullName3(emp.fullName3Part || emp.name || '');
+      setEmpShortName(emp.name || '');
+      setEmpPhone(emp.phone || '');
+      setEmpRole(emp.role || 'Employee');
+      setEmpStartDate(emp.startDate || emp.employmentStartDate || '');
+      setEmpResignDate(emp.resignedDate || '');
+      setEmpRehireDate(emp.rehiredDate || '');
+    } else {
+      setEditingEmp(null);
+      setEmpFullName3('');
+      setEmpShortName('');
+      setEmpPhone('');
+      setEmpRole('Employee');
+      setEmpStartDate(format(new Date(), 'yyyy-MM-dd'));
+      setEmpResignDate('');
+      setEmpRehireDate('');
+    }
+    setShowEmpModal(true);
+  };
+
+  // Save Employee (Add or Update)
+  const handleSaveEmployee = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!empShortName.trim()) {
+      alert('تکایە ناوی کارمەند بنووسە');
+      return;
+    }
+
+    if (editingEmp) {
+      const updated = employees.map((emp) =>
+        emp.id === editingEmp.id
+          ? {
+              ...emp,
+              name: empShortName.trim(),
+              fullName3Part: empFullName3.trim(),
+              phone: empPhone.trim(),
+              role: empRole,
+              startDate: empStartDate,
+              resignedDate: empResignDate,
+              rehiredDate: empRehireDate,
+            }
+          : emp
+      );
+      setEmployees(updated);
+    } else {
+      const newEmp: Employee = {
+        id: `emp-${Date.now()}`,
+        name: empShortName.trim(),
+        fullName3Part: empFullName3.trim(),
+        employeeId: `${employees.length + 1}`.padStart(2, '0'),
+        role: empRole,
+        phone: empPhone.trim(),
+        startDate: empStartDate || format(new Date(), 'yyyy-MM-dd'),
+        resignedDate: '',
+        rehiredDate: '',
+        status: 'active',
+        isActive: true,
+        password: '1234',
+        createdAt: new Date().toISOString(),
+      };
+      setEmployees([...employees, newEmp]);
+    }
+
+    setShowEmpModal(false);
+  };
+
+  // Resignation Toggle
+  const handleToggleResignation = (emp: Employee) => {
+    const isCurrentlyResigned = emp.status === 'resigned' || emp.isActive === false;
+    const msg = isCurrentlyResigned
+      ? `ئایا دڵنیایت لە گەڕانەوەی کارمەند (${emp.name}) بۆ ناو لیستی چالاکی دەوام؟`
+      : `ئایا دڵنیایت لە تۆمارکردنی وازهێنانی کارمەند (${emp.name})؟`;
+
+    if (confirm(msg)) {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const updated = employees.map((item) =>
+        item.id === emp.id
+          ? {
+              ...item,
+              status: isCurrentlyResigned ? ('active' as const) : ('resigned' as const),
+              isActive: isCurrentlyResigned,
+              resignedDate: isCurrentlyResigned ? item.resignedDate : todayStr,
+              rehiredDate: isCurrentlyResigned ? todayStr : item.rehiredDate,
+            }
+          : item
+      );
+      setEmployees(updated);
+    }
+  };
+
+  // Delete Employee
+  const handleDeleteEmployee = (empId: string) => {
+    if (confirm('ئایا دڵنیایت لە سڕینەوەی ئەم کارمەندە بە یەکجاری؟')) {
+      setEmployees(employees.filter((e) => e.id !== empId));
+    }
+  };
+
+  // Delete Attendance Log
+  const handleDeleteAttendanceLog = (logId: string) => {
+    if (confirm('ئایا دڵنیایت لە سڕینەوەی ئەم فۆتۆ و لۆگە؟')) {
+      setAttendanceLogs(attendanceLogs.filter((l) => l.id !== logId));
+    }
+  };
+
+  // Upload Custom UI Font
+  const handleFontUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64Font = event.target?.result as string;
+      if (setSettings && settings) {
+        setSettings({
+          ...settings,
+          customFont: base64Font,
+          fontFamily: file.name.replace(/\.[^/.]+$/, ""),
+        });
+        alert(`فۆنتی (${file.name}) بە سەرکەوتوویی بارکرا!`);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Restore JSON Data
+  const handleRestoreJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        if (data.employees) setEmployees(data.employees);
+        if (data.settings && setSettings) setSettings(data.settings);
+        alert('تێکڕای داتاکان بە سەرکەوتوویی هێنرانەوە!');
+      } catch {
+        alert('فایلی باکئەپ هەڵەیە!');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Filter Employees
+  const filteredEmployees = employees.filter((emp) => {
+    if (empStatusFilter === 'active') return emp.status !== 'resigned' && emp.isActive !== false;
+    if (empStatusFilter === 'resigned') return emp.status === 'resigned' || emp.isActive === false;
+    return true;
+  });
+
+  // Filter Items
+  const filteredItems = items.filter((item) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (item.model && item.model.toLowerCase().includes(q)) ||
+      (item.name && item.name.toLowerCase().includes(q)) ||
+      (item.classification && item.classification.toLowerCase().includes(q))
+    );
+  });
 
   return (
-    <div className="space-y-4 text-slate-900 font-sans dir-rtl select-none" dir="rtl">
-      
-      {/* CLASSIC ENTERPRISE PAGE TITLE & LOCATION BAR */}
+    <div className="space-y-4 text-slate-900 font-sans dir-rtl select-none pb-12 p-2 sm:p-4" dir="rtl">
+
+      {/* 🌟 CLASSIC ENTERPRISE DESKTOP TITLE BAR & ACTION RIBBON */}
       <div className="panel-classic p-2.5 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-blue-900 text-white font-bold text-xs flex items-center justify-center border border-blue-950">
-            🏢
-          </div>
-          <div>
-            <h1 className="text-xs font-black text-slate-900 uppercase tracking-wide">
-              سیستەمی سەرەکی ئامادەبوون و جەردی مۆدێلەکان (Enterprise NAV Desktop)
-            </h1>
-            <p className="text-[11px] text-slate-600 font-bold">
-              بناغەی دیاریکراوی کۆمپانیا: <span className="text-slate-900 font-mono">{factoryLocation.name}</span> (سنوور: {factoryLocation.radiusMeters} مەتر)
-            </p>
-          </div>
+        <div>
+          <h1 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
+            <span>🖥️ DASHBOARD MAIN PAGE — ASHLEY ERP ENTERPRISE DESKTOP 2026</span>
+          </h1>
+          <p className="text-[11px] text-slate-600 font-bold mt-0.5">
+            سیستەمی گشتی بەڕێوەبردنی کارمەندان، ئامادەبوونی فۆتۆ، کۆگا، لۆجیستیک و سێتینگی فۆنت
+          </p>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <button onClick={requestLocation} className="btn-classic text-[11px]">
-            📍 {gpsStatus || 'پشکنینی GPS دووری'}
+        <div className="flex items-center gap-1.5 font-mono text-[11px]">
+          <button onClick={() => setShowMapPicker(true)} className="btn-classic">
+            <MapPin className="w-3.5 h-3.5 text-amber-700" />
+            <span>شوێنی کۆمپانیا (Map)</span>
           </button>
-          <Link href="/login" className="btn-classic text-[11px]">
-            🔑 داخڵبوونی ئەدمین (Admin)
-          </Link>
+          <button onClick={exportStateAsJson} className="btn-classic">
+            <Download className="w-3.5 h-3.5 text-emerald-700" />
+            <span>باکئەپ (JSON)</span>
+          </button>
+          <button onClick={() => fileInputRef.current?.click()} className="btn-classic">
+            <Upload className="w-3.5 h-3.5 text-blue-700" />
+            <span>هێنانەوەی باکئەپ</span>
+          </button>
+          <input ref={fileInputRef} type="file" accept=".json" onChange={handleRestoreJson} className="hidden" />
         </div>
       </div>
 
-      {/* Main Two-Column Classic Enterprise Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      {/* QUICK SYSTEM STATS BANNER */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="panel-classic p-2 text-center">
+          <span className="text-[10px] font-bold text-slate-600 block">کۆی کارمەندان</span>
+          <p className="text-lg font-black text-slate-900 font-mono mt-0.5">{employees.length}</p>
+        </div>
+        <div className="panel-classic p-2 text-center">
+          <span className="text-[10px] font-bold text-emerald-800 block">کارمەندانی چالاک</span>
+          <p className="text-lg font-black text-emerald-800 font-mono mt-0.5">
+            {employees.filter((e) => e.status !== 'resigned' && e.isActive !== false).length}
+          </p>
+        </div>
+        <div className="panel-classic p-2 text-center">
+          <span className="text-[10px] font-bold text-rose-800 block">وازهێناو لە ئەرشیف</span>
+          <p className="text-lg font-black text-rose-800 font-mono mt-0.5">
+            {employees.filter((e) => e.status === 'resigned' || e.isActive === false).length}
+          </p>
+        </div>
+        <div className="panel-classic p-2 text-center">
+          <span className="text-[10px] font-bold text-amber-800 block">سنووری Geofence</span>
+          <p className="text-xs font-black text-amber-900 font-mono mt-1">
+            {factoryLocation.radiusMeters}m
+          </p>
+        </div>
+      </div>
 
-        {/* 1. ATTENDANCE CONTROL PANEL (8 Columns - Classic Bordered Panel) */}
-        <div className="lg:col-span-8 panel-classic flex flex-col justify-between">
-          <div>
-            {/* Panel Gradient Header */}
-            <div className="panel-header-classic flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                📋 فۆرمی ئامادەبوونی کارمەندان (Attendance Entry Form)
-              </span>
-              <span className="px-2 py-0.5 bg-emerald-700 text-white text-[10px] font-mono border border-emerald-900">
-                STATUS: ACTIVE
-              </span>
+      {/* ========================================================================= */}
+      {/* 👥 SECTION 1: HR & ATTENDANCE TERMINAL CLASSIC PANEL */}
+      {/* ========================================================================= */}
+      <section className="panel-classic space-y-3">
+        <div className="panel-header-classic flex items-center justify-between">
+          <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+            <Users className="w-4 h-4 text-blue-800" />
+            <span>بەشی یەکەم: بەشی کارمەندان HR (Staff Operations & Photo Attendance Terminal)</span>
+          </h2>
+          <span className="text-[10px] font-mono bg-blue-900 text-white px-1.5 py-0.2">HR MODULE</span>
+        </div>
+
+        <div className="p-3 space-y-4">
+
+          {/* ATTENDANCE CHECK-IN / CHECK-OUT TERMINAL */}
+          <div className="p-3 bg-slate-100 border border-slate-300 space-y-3">
+            <h3 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+              <Camera className="w-4 h-4 text-blue-800" />
+              <span>تۆمارکردنی ئامادەبوونی ڕۆژانە بە فۆتۆ سێلفی و کۆدی PIN</span>
+            </h3>
+
+            {attMessage && (
+              <div className={`p-2 text-xs font-bold border ${attMessage.success ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-rose-100 text-rose-900 border-rose-300'}`}>
+                {attMessage.text}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-bold">
+              
+              {/* Step 1: Select Employee */}
+              <div>
+                <label className="block text-slate-800 mb-1">١. ناوی کارمەند هەڵبژێرە:</label>
+                <select
+                  value={selectedEmpId}
+                  onChange={(e) => setSelectedEmpId(e.target.value)}
+                  className="input-classic w-full font-bold"
+                >
+                  <option value="">-- ناوی خۆت هەڵبژێرە --</option>
+                  {employees.filter(e => e.status !== 'resigned' && e.isActive !== false).map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.fullName3Part || emp.name} ({emp.role || 'کارمەند'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Step 2: PIN Code */}
+              <div>
+                <label className="block text-slate-800 mb-1">٢. کۆدی PIN (پاسۆرد):</label>
+                <input
+                  type="password"
+                  value={pinCode}
+                  onChange={(e) => setPinCode(e.target.value)}
+                  placeholder="کۆدی 1234 بنووسە..."
+                  className="input-classic w-full font-mono text-center tracking-widest text-sm"
+                />
+              </div>
+
+              {/* Step 3: Camera Selfie */}
+              <div className="space-y-1 text-center">
+                <label className="block text-slate-800 mb-1 text-right">٣. فۆتۆی سێلفی ئامادەبوون:</label>
+                {cameraActive ? (
+                  <div className="space-y-2">
+                    <video ref={videoRef} autoPlay playsInline className="w-full h-32 object-cover border border-slate-400 bg-black" />
+                    <button type="button" onClick={capturePhoto} className="btn-classic-primary w-full text-xs">
+                      📸 گرتنی فۆتۆ
+                    </button>
+                  </div>
+                ) : capturedSelfie ? (
+                  <div className="space-y-1">
+                    <img src={capturedSelfie} alt="Captured Selfie" className="w-full h-24 object-cover border border-slate-400" />
+                    <button type="button" onClick={startCamera} className="btn-classic w-full text-[10px]">
+                      🔄 فۆتۆیەکی تر بگرە
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={startCamera} className="btn-classic w-full text-xs py-2">
+                    📷 بەگەڕخستنی کامیرای مۆبایل
+                  </button>
+                )}
+                <canvas ref={canvasRef} className="hidden" />
+              </div>
+
             </div>
 
-            <div className="p-3 space-y-4">
-
-              {attMessage && (
-                <div className={`p-2.5 text-xs font-bold ${attMessage.success ? 'bg-emerald-100 text-emerald-950 border border-emerald-400' : 'bg-rose-100 text-rose-950 border border-rose-400'}`}>
-                  {attMessage.text}
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                {/* Employee Selection & PIN Input Panel */}
-                <div className="space-y-3 p-3 bg-slate-50 border border-slate-300">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-800 mb-1">
-                      ناوی کارمەند:
-                    </label>
-                    <select
-                      value={selectedEmpId}
-                      onChange={(e) => setSelectedEmpId(e.target.value)}
-                      className="input-classic w-full font-bold"
-                    >
-                      <option value="">-- هەڵبژاردنی کارمەند --</option>
-                      {employees.filter(e => e.status !== 'resigned' && e.isActive !== false).map((emp) => (
-                        <option key={emp.id} value={emp.id}>
-                          {emp.name} ({emp.role || 'Staff'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-800 mb-1">
-                      کۆدی پین (PIN Code):
-                    </label>
-                    <input
-                      type="password"
-                      maxLength={4}
-                      value={pinCode}
-                      onChange={(e) => setPinCode(e.target.value)}
-                      placeholder="••••"
-                      className="input-classic w-full font-mono text-center text-sm font-bold tracking-widest"
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleOpenPersonalProfile}
-                    className="btn-classic w-full text-[11px]"
-                  >
-                    👤 دۆسیە و دواکەوتنەکانی من
-                  </button>
-                </div>
-
-                {/* Camera Selfie Control Viewport */}
-                <div className="space-y-2 p-3 bg-slate-50 border border-slate-300 flex flex-col items-center justify-center text-center">
-                  <div className="w-full aspect-[4/3] bg-slate-900 border border-slate-700 relative flex items-center justify-center">
-                    {!cameraActive && !capturedSelfie && (
-                      <div className="space-y-2 p-2">
-                        <p className="text-[10px] text-slate-300 font-bold mb-1">كامێرا هەڵبژێرە بۆ وێنە:</p>
-                        <div className="flex items-center gap-1 justify-center">
-                          <button
-                            onClick={() => startCamera('user')}
-                            className="btn-classic text-[10px]"
-                          >
-                            🤳 کامێرای پێشەوە
-                          </button>
-                          <button
-                            onClick={() => startCamera('environment')}
-                            className="btn-classic text-[10px]"
-                          >
-                            📷 پشتەوە
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className={`w-full h-full object-cover ${cameraActive && !capturedSelfie ? 'block' : 'hidden'}`}
-                    />
-
-                    {capturedSelfie && (
-                      <img src={capturedSelfie} alt="Selfie" className="w-full h-full object-cover" />
-                    )}
-                    <canvas ref={canvasRef} className="hidden" />
-                  </div>
-
-                  {cameraActive && !capturedSelfie && (
-                    <div className="flex items-center gap-1 w-full">
-                      <button
-                        onClick={capturePhoto}
-                        className="btn-classic-primary flex-1 text-[11px]"
-                      >
-                        📸 گرتنی فۆتۆ
-                      </button>
-                      <button
-                        onClick={() => startCamera(facingMode === 'user' ? 'environment' : 'user')}
-                        className="btn-classic text-[11px]"
-                      >
-                        🔄
-                      </button>
-                    </div>
-                  )}
-
-                  {capturedSelfie && (
-                    <button
-                      onClick={() => {
-                        setCapturedSelfie(null);
-                        startCamera();
-                      }}
-                      className="btn-classic w-full text-[10px]"
-                    >
-                      🔄 گرتنەوەی فۆتۆ
-                    </button>
-                  )}
-                </div>
-
-              </div>
-
-              {/* Attendance Beveled Action Buttons */}
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <button
-                  onClick={() => handleAttendance('check-in')}
-                  className="btn-classic-primary py-2 text-xs uppercase"
-                >
-                  ✅ تۆمارکردنی هاتن (Check-In)
-                </button>
-
-                <button
-                  onClick={() => handleAttendance('check-out')}
-                  className="btn-classic-danger py-2 text-xs uppercase"
-                >
-                  🚪 تۆمارکردنی دەرچوون (Check-Out)
-                </button>
-              </div>
-
+            {/* Attendance Buttons */}
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-300">
+              <button
+                type="button"
+                onClick={() => handleCheckInOrOut('Check In')}
+                className="btn-classic-primary py-2 px-4 text-xs font-black"
+              >
+                📥 تۆمارکردنی هاتن (Check In)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCheckInOrOut('Check Out')}
+                className="btn-classic-danger py-2 px-4 text-xs font-black"
+              >
+                📤 تۆمارکردنی دەرچوون (Check Out)
+              </button>
             </div>
           </div>
 
-          {/* Classic Attendance Log Audit Data Grid */}
-          <div className="p-3 border-t border-slate-300">
-            <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider mb-2">
-              📊 خشتەی لۆگەکان و ئامادەبوونی ئەمڕۆ (Log Data Grid):
+          {/* Quick Beveled Action Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-100 border border-slate-300">
+            <div className="flex items-center gap-2">
+              <button onClick={() => handleOpenEmpModal()} className="btn-classic-primary">
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>➕ زیادکردنی کارمەندی نوێ</span>
+              </button>
+
+              <button
+                onClick={() => setEmpStatusFilter(empStatusFilter === 'active' ? 'resigned' : 'active')}
+                className="btn-classic"
+              >
+                <span>{empStatusFilter === 'resigned' ? 'نیشاندانی کارمەندە چالاکەکان' : '📜 ئەرشیفی وازهێناوەکان'}</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs font-bold">
+              <Link href="/overtime" className="btn-classic text-[11px]">
+                <Clock className="w-3.5 h-3.5 text-blue-700" />
+                <span>سەعاتی زیاده (Overtime)</span>
+              </Link>
+              <Link href="/ashley-expenses" className="btn-classic text-[11px]">
+                <Receipt className="w-3.5 h-3.5 text-rose-700" />
+                <span>مەسروفاتی HR</span>
+              </Link>
+            </div>
+          </div>
+
+          {/* Employee Roster Data Grid */}
+          <div className="space-y-1.5">
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+              خشتەی ناوی کارمەندان و کۆدەکانی ئامادەبوون (Employee Roster Grid):
             </h3>
 
             <div className="overflow-x-auto border border-slate-400">
               <table className="table-classic">
                 <thead>
                   <tr>
-                    <th>ناوی کارمەند</th>
-                    <th>جۆری ئامادەبوون</th>
-                    <th>کاتی تۆمارکراو</th>
-                    <th>دووری لە کۆمپانیا</th>
-                    <th>مۆری تەواوبوون</th>
+                    <th>کۆدی PIN</th>
+                    <th>ناوی سیانی / کورت</th>
+                    <th>پلە / ئەرک</th>
+                    <th>ژمارەی مۆبایل</th>
+                    <th>دۆخ</th>
+                    <th>کردارەکان</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {attLogHistory.length > 0 ? (
-                    attLogHistory.map((log, idx) => (
-                      <tr key={idx}>
-                        <td className="font-bold">{log.name}</td>
+                  {filteredEmployees.length > 0 ? (
+                    filteredEmployees.map((emp) => (
+                      <tr key={emp.id} className={emp.status === 'resigned' ? 'bg-rose-50' : ''}>
+                        <td className="font-mono font-bold text-blue-900">{emp.password || '1234'}</td>
+                        <td className="font-bold">{emp.fullName3Part || emp.name}</td>
+                        <td className="font-mono text-[11px] text-slate-700">{emp.role || 'Staff'}</td>
+                        <td className="font-mono text-[11px]">{emp.phone || '-'}</td>
                         <td>
-                          <span className={`px-1.5 py-0.5 text-[10px] font-bold border ${log.type.includes('In') ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-rose-100 text-rose-900 border-rose-300'}`}>
-                            {log.type}
-                          </span>
+                          {emp.status === 'resigned' ? (
+                            <span className="px-1.5 py-0.2 bg-rose-200 text-rose-900 font-bold border border-rose-400 text-[10px]">وازهێناو</span>
+                          ) : (
+                            <span className="px-1.5 py-0.2 bg-emerald-200 text-emerald-900 font-bold border border-emerald-400 text-[10px]">چالاک</span>
+                          )}
                         </td>
-                        <td className="font-mono text-[11px]">{log.time}</td>
-                        <td className="font-mono text-[11px] text-blue-900">{log.distance || 'داخل کۆمپانیا'}</td>
-                        <td className="text-emerald-800 font-bold">✅ Verified</td>
+                        <td>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => handleOpenEmpModal(emp)} className="btn-classic text-[10px]">
+                              <Edit className="w-3 h-3 text-blue-700" />
+                              <span>دەستکاری</span>
+                            </button>
+                            <button onClick={() => handleToggleResignation(emp)} className="btn-classic text-[10px]">
+                              <span>🔄 وازهێنان</span>
+                            </button>
+                            <button onClick={() => handleDeleteEmployee(emp.id)} className="btn-classic text-[10px] text-rose-800">
+                              <Trash2 className="w-3 h-3 text-rose-700" />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={5} className="text-center py-3 text-slate-500 font-bold">
-                        هیچ لۆگێکی ئامادەبوون تۆمار نەکراوە
+                      <td colSpan={6} className="text-center py-4 text-slate-500 font-bold">
+                        هیچ کارمەندێک نەدۆزرایەوە
                       </td>
                     </tr>
                   )}
                 </tbody>
                 <tfoot>
                   <tr className="grand-total-row">
-                    <td colSpan={2}>کۆی گشتی لۆگەکان:</td>
-                    <td colSpan={3} className="font-mono">{attLogHistory.length} Record(s)</td>
+                    <td colSpan={2}>کۆی گشتی کارمەندان:</td>
+                    <td colSpan={4} className="font-mono">{filteredEmployees.length} Employee(s)</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
           </div>
+
+          {/* Attendance Photo Selfie Audit Data Grid */}
+          <div className="space-y-1.5 pt-2">
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Camera className="w-3.5 h-3.5 text-blue-800" />
+              <span>ئەرشیفی فۆتۆی سێلفی و لۆگەکانی ئامادەبوون (Attendance Selfie Audit Grid):</span>
+            </h3>
+
+            <div className="overflow-x-auto border border-slate-400">
+              <table className="table-classic">
+                <thead>
+                  <tr>
+                    <th>فۆتۆ</th>
+                    <th>ناوی کارمەند</th>
+                    <th>جۆری ئامادەبوون</th>
+                    <th>کاتی تۆمارکراو</th>
+                    <th>دووری لە کۆمپانیا</th>
+                    <th>سڕینەوە</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendanceLogs.length > 0 ? (
+                    attendanceLogs.slice(0, 10).map((log) => (
+                      <tr key={log.id}>
+                        <td>
+                          {log.selfieUrl ? (
+                            <img src={log.selfieUrl} alt="Selfie" className="w-8 h-8 object-cover border border-slate-400" />
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-mono">No Photo</span>
+                          )}
+                        </td>
+                        <td className="font-bold">{log.name}</td>
+                        <td>
+                          <span className={`px-1.5 py-0.2 text-[10px] font-bold border ${log.type.includes('In') || log.type.includes('هاتن') ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-rose-100 text-rose-900 border-rose-300'}`}>
+                            {log.type}
+                          </span>
+                        </td>
+                        <td className="font-mono text-[11px]">{log.time}</td>
+                        <td className="font-mono text-[11px] text-blue-900">{log.distance || 'داخل کۆمپانیا'}</td>
+                        <td>
+                          <button onClick={() => handleDeleteAttendanceLog(log.id)} className="btn-classic text-[10px] text-rose-800">
+                            <Trash2 className="w-3 h-3 text-rose-700" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="text-center py-3 text-slate-400 font-bold">
+                        هیچ لۆگێکی فۆتۆ نەدۆزرایەوە
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="grand-total-row">
+                    <td colSpan={2}>کۆی لۆگەکانی سێلفی:</td>
+                    <td colSpan={4} className="font-mono">{attendanceLogs.length} Log Record(s)</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ========================================================================= */}
+      {/* 📦 SECTION 2: INVENTORY & WAREHOUSE CLASSIC PANEL */}
+      {/* ========================================================================= */}
+      <section className="panel-classic space-y-3">
+        <div className="panel-header-classic flex items-center justify-between">
+          <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+            <Package className="w-4 h-4 text-emerald-800" />
+            <span>بەشی دووەم: بەشی کۆگا و عەمبار (Inventory & Stock Management)</span>
+          </h2>
+          <span className="text-[10px] font-mono bg-emerald-800 text-white px-1.5 py-0.2">STOCK MODULE</span>
         </div>
 
-        {/* 2. COMPACT MODEL SEARCH GRID PANEL (4 Columns Panel) */}
-        <div className="lg:col-span-4 panel-classic flex flex-col justify-between">
-          <div>
-            <div className="panel-header-classic flex items-center justify-between">
-              <span>🔍 گەڕان لە مۆدێلەکان (Item Catalog Grid)</span>
-              <span className="text-[10px] font-mono bg-slate-300 px-1 border border-slate-400">CATALOG</span>
-            </div>
+        <div className="p-3 space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            <Link href="/items" className="btn-classic py-3 flex-col text-center">
+              <Package className="w-5 h-5 text-emerald-800 mb-1" />
+              <span className="font-bold">کاتالۆگی ئایتمەکان</span>
+            </Link>
 
-            <div className="p-3 space-y-3">
+            <Link href="/warehouse-map" className="btn-classic py-3 flex-col text-center">
+              <Layers className="w-5 h-5 text-emerald-800 mb-1" />
+              <span className="font-bold">نەخشەی ڕەفەی کۆگا</span>
+            </Link>
+
+            <Link href="/import" className="btn-classic py-3 flex-col text-center">
+              <FileSpreadsheet className="w-5 h-5 text-emerald-800 mb-1" />
+              <span className="font-bold">هێنانی اکسل</span>
+            </Link>
+
+            <Link href="/archive" className="btn-classic py-3 flex-col text-center">
+              <Archive className="w-5 h-5 text-emerald-800 mb-1" />
+              <span className="font-bold">ئەرشیفی جەردەکان</span>
+            </Link>
+
+            <Link href="/public-inventory" className="btn-classic py-3 flex-col text-center">
+              <Eye className="w-5 h-5 text-emerald-800 mb-1" />
+              <span className="font-bold">جەردی ڕاستەوخۆ</span>
+            </Link>
+
+            <Link href="/sold-items" className="btn-classic py-3 flex-col text-center">
+              <Layers className="w-5 h-5 text-emerald-800 mb-1" />
+              <span className="font-bold">کاڵا فرۆشراوەکان</span>
+            </Link>
+          </div>
+
+          {/* Quick Model Search Box */}
+          <div className="p-2 bg-slate-100 border border-slate-300 space-y-2">
+            <div className="flex items-center gap-2">
+              <Search className="w-4 h-4 text-slate-600" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ناوی مۆدێل بنووسە..."
+                placeholder="گەڕان بۆ مۆدێل یان کاڵای کۆگا..."
                 className="input-classic w-full font-bold"
               />
+            </div>
 
-              <div className="overflow-y-auto max-h-[480px] border border-slate-400">
-                <table className="table-classic">
-                  <thead>
-                    <tr>
-                      <th>مۆدێل</th>
-                      <th>پۆلێن</th>
-                      <th>عەمبار</th>
+            <div className="overflow-x-auto border border-slate-400">
+              <table className="table-classic">
+                <thead>
+                  <tr>
+                    <th>کۆد / مۆدێل</th>
+                    <th>ناوی کاڵا</th>
+                    <th>پۆلێن</th>
+                    <th>دۆخ</th>
+                    <th>چوونە ژوورەوە</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredItems.slice(0, 5).map((item) => (
+                    <tr key={item.id}>
+                      <td className="font-mono font-bold text-emerald-900">{item.model || 'MODEL-01'}</td>
+                      <td className="font-bold">{item.name || 'مۆدێلی ئاشڵی'}</td>
+                      <td>{item.classification || 'کۆگا'}</td>
+                      <td>{item.modelCondition || 'نوێ'}</td>
+                      <td>
+                        <Link href="/items" className="btn-classic text-[10px]">بینین</Link>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {filteredItems.length > 0 ? (
-                      filteredItems.map((item) => (
-                        <tr key={item.id}>
-                          <td className="font-bold text-slate-900">{item.model || item.name}</td>
-                          <td className="font-mono text-[10px] text-slate-700">{item.classification || '-'}</td>
-                          <td className="font-bold font-mono text-blue-900">{item.quantity || 0} دەنک</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={3} className="text-center py-4 text-slate-400 font-bold">
-                          هیچ مۆدێلێک نەدۆزرایەوە
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                  <tfoot>
-                    <tr className="grand-total-row">
-                      <td>کۆی مۆدێل:</td>
-                      <td colSpan={2} className="font-mono">{filteredItems.length} Item(s)</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
+      </section>
 
-      </div>
+      {/* ========================================================================= */}
+      {/* 🚚 SECTION 3: LOGISTICS & TRANSMIT CLASSIC PANEL */}
+      {/* ========================================================================= */}
+      <section className="panel-classic space-y-3">
+        <div className="panel-header-classic flex items-center justify-between">
+          <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+            <Truck className="w-4 h-4 text-amber-800" />
+            <span>بەشی سێیەم: بەشی گواستنەوە و لۆجیستیک (Logistics & Transmit)</span>
+          </h2>
+          <span className="text-[10px] font-mono bg-amber-800 text-white px-1.5 py-0.2">LOGISTICS</span>
+        </div>
 
-      {/* 3. PERSONAL PROFILE & LATENESS MODAL (CLASSIC DIALOG WINDOW) */}
-      {showPersonalProfileModal && selectedEmployee && (
+        <div className="p-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <Link href="/public-transmit" className="btn-classic py-3 flex-col text-center">
+              <Truck className="w-5 h-5 text-amber-800 mb-1" />
+              <span className="font-bold">تۆمارکردنی باری نوێ</span>
+            </Link>
+
+            <Link href="/pdf-archive" className="btn-classic py-3 flex-col text-center">
+              <FileText className="w-5 h-5 text-amber-800 mb-1" />
+              <span className="font-bold">ئەرشیفی PDFی بارەکان</span>
+            </Link>
+
+            <Link href="/report-designer" className="btn-classic py-3 flex-col text-center">
+              <FileSpreadsheet className="w-5 h-5 text-amber-800 mb-1" />
+              <span className="font-bold">دروستکەری ڕاپۆرت</span>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ========================================================================= */}
+      {/* ⚙️ SECTION 4: SETTINGS & UI FONT CUSTOMIZATION CLASSIC PANEL */}
+      {/* ========================================================================= */}
+      <section className="panel-classic space-y-3">
+        <div className="panel-header-classic flex items-center justify-between">
+          <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+            <Settings className="w-4 h-4 text-purple-800" />
+            <span>بەشی چوارەم: سێتینگ، ئەدمین پانێڵ و گۆڕینی فۆنت (Settings & Font Customization)</span>
+          </h2>
+          <span className="text-[10px] font-mono bg-purple-800 text-white px-1.5 py-0.2 font-bold">LIVE FONT ENGINE</span>
+        </div>
+
+        <div className="p-3 space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            
+            {/* Live UI Font Engine Panel */}
+            <div className="lg:col-span-2 p-3 bg-slate-50 border border-slate-300 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-300 pb-2">
+                <h3 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                  <Type className="w-4 h-4 text-purple-800" />
+                  <span>گۆڕینی فۆنتی UI ی بەرنامەکە و ئاپلۆدکردنی فۆنت</span>
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-bold">
+                <div>
+                  <label className="block text-slate-700 mb-1">فۆنتی ئامادەکراو (Preset Font):</label>
+                  <select
+                    value={settings?.fontFamily || 'Inter'}
+                    onChange={(e) => {
+                      const newFont = e.target.value;
+                      if (setSettings && settings) {
+                        setSettings({
+                          ...settings,
+                          fontFamily: newFont,
+                          customFont: null,
+                        });
+                      }
+                    }}
+                    className="input-classic w-full font-bold"
+                  >
+                    <option value="Noto Kufi Arabic">Noto Kufi Arabic (کووفی نایاب)</option>
+                    <option value="Vazirmatn">Vazirmatn (وەزیر مۆدێرن)</option>
+                    <option value="Cairo">Cairo (قاهیرە)</option>
+                    <option value="Inter">Inter (ERP Standard)</option>
+                    <option value="Tahoma">Tahoma (کلاسیک)</option>
+                    <option value="Arial">Arial (سادە)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 mb-1">ئاپلۆدکردنی فۆنت (.ttf / .woff / .woff2):</label>
+                  <button
+                    type="button"
+                    onClick={() => fontInputRef.current?.click()}
+                    className="btn-classic w-full text-purple-900 font-bold"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-purple-700" />
+                    <span>{settings?.customFont ? 'فۆنتی تایبەت بارکراوە (گۆڕین)' : 'بارکردنی فۆنت لە کۆمپیوتەر'}</span>
+                  </button>
+                  <input
+                    ref={fontInputRef}
+                    type="file"
+                    accept=".ttf,.woff,.woff2"
+                    onChange={handleFontUpload}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+
+              <div className="p-2.5 bg-white border border-slate-300 space-y-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">
+                  تاقیکردنەوەی فۆنت (Font Preview Box):
+                </span>
+                <p className="text-xs font-bold text-purple-950">
+                  بەخێربێن بۆ سیستەمی بەڕێوەبردنی سەرەکی ئاشڵی ASHLEY ERP 2026. ئەمە ڕستەی تاقیکاری فۆنتەکەیە!
+                </p>
+              </div>
+            </div>
+
+            {/* Admin System Options */}
+            <div className="space-y-2">
+              <button onClick={() => setShowMapPicker(true)} className="btn-classic w-full justify-between py-2 text-[11px]">
+                <div className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-purple-700" />
+                  <span>شوێنی کۆمپانیا لەسەر نەخشە</span>
+                </div>
+                <span className="font-mono text-[9px] bg-slate-300 px-1 border border-slate-400">GEOFENCE</span>
+              </button>
+
+              <Link href="/account" className="btn-classic w-full justify-between py-2 text-[11px]">
+                <div className="flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-purple-700" />
+                  <span>ئەکاونتی ئەدمین</span>
+                </div>
+                <span className="font-mono text-[9px] bg-slate-300 px-1 border border-slate-400">SUPERADMIN</span>
+              </Link>
+
+              <Link href="/settings" className="btn-classic w-full justify-between py-2 text-[11px]">
+                <div className="flex items-center gap-1.5">
+                  <Settings className="w-3.5 h-3.5 text-purple-700" />
+                  <span>دەسەڵاتەکان</span>
+                </div>
+                <span className="font-mono text-[9px] bg-slate-300 px-1 border border-slate-400">ROLES</span>
+              </Link>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* EMPLOYEE ADD/EDIT MODAL (CLASSIC WIN32 DIALOG WINDOW) */}
+      {showEmpModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-slate-200 border-2 border-t-white border-l-white border-b-slate-600 border-r-slate-600 w-full max-w-lg shadow-2xl p-1 text-slate-900">
+          <div className="bg-slate-200 border-2 border-t-white border-l-white border-b-slate-600 border-r-slate-600 max-w-md w-full shadow-2xl p-1 text-slate-900">
             
             <div className="bg-blue-900 text-white px-2 py-1 text-xs font-bold flex justify-between items-center border-b border-blue-950">
-              <span>👤 دۆسیەی کارمەند: {selectedEmployee.name}</span>
+              <span>{editingEmp ? `دەستکاریکردنی کارمەند: ${editingEmp.name}` : '➕ زیادکردنی کارمەندی نوێ'}</span>
               <button
-                onClick={() => setShowPersonalProfileModal(false)}
+                type="button"
+                onClick={() => setShowEmpModal(false)}
                 className="w-4 h-3.5 bg-rose-800 text-white flex items-center justify-center border border-rose-600 font-mono text-[10px]"
               >
                 ✕
               </button>
             </div>
 
-            <div className="p-4 space-y-4">
-              <div className="grid grid-cols-2 gap-2 text-xs font-bold">
-                <div className="p-2 bg-white border border-slate-400">
-                  <span className="text-slate-600 block text-[10px]">Overtime:</span>
-                  <span className="text-sm font-mono text-blue-900">{totalOvertimeHours} Hours</span>
-                </div>
-                <div className="p-2 bg-white border border-slate-400">
-                  <span className="text-slate-600 block text-[10px]">کۆی بڕینەکان:</span>
-                  <span className="text-sm font-mono text-slate-900">
-                    {empWithdrawals.reduce((sum, w) => sum + (w.amount || 0), 0).toLocaleString()} IQD
-                  </span>
-                </div>
+            <form onSubmit={handleSaveEmployee} className="p-4 space-y-3 text-xs font-bold">
+              <div>
+                <label className="block text-slate-800 mb-1">ناوی سیانی کارمەند:</label>
+                <input
+                  type="text"
+                  required
+                  value={empFullName3}
+                  onChange={(e) => setEmpFullName3(e.target.value)}
+                  placeholder="ناوی سیانی..."
+                  className="input-classic w-full"
+                />
               </div>
 
-              <div className="border border-slate-400 bg-white">
-                <table className="table-classic">
-                  <thead>
-                    <tr>
-                      <th>بەش</th>
-                      <th>کات</th>
-                      <th>دۆخ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {attLogHistory.filter((l) => l.name === selectedEmployee.name).map((l, i) => (
-                      <tr key={i}>
-                        <td>{l.type}</td>
-                        <td className="font-mono">{l.time}</td>
-                        <td className="text-emerald-800">✅ Verified</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div>
+                <label className="block text-slate-800 mb-1">ناوی کورت:</label>
+                <input
+                  type="text"
+                  required
+                  value={empShortName}
+                  onChange={(e) => setEmpShortName(e.target.value)}
+                  placeholder="ناوی کورت..."
+                  className="input-classic w-full"
+                />
               </div>
 
-              <div className="pt-2 text-left">
-                <button
-                  onClick={() => setShowPersonalProfileModal(false)}
-                  className="btn-classic text-xs"
+              <div>
+                <label className="block text-slate-800 mb-1">ژمارەی مۆبایل:</label>
+                <input
+                  type="text"
+                  value={empPhone}
+                  onChange={(e) => setEmpPhone(e.target.value)}
+                  placeholder="0770..."
+                  className="input-classic w-full font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-800 mb-1">پلە / ئەرک:</label>
+                <select
+                  value={empRole}
+                  onChange={(e) => setEmpRole(e.target.value)}
+                  className="input-classic w-full font-bold"
                 >
-                  داخستن (Close)
+                  <option value="Manager">Manager (بەڕێوەبەر)</option>
+                  <option value="Employee Supervisor">Employee Supervisor (سەرپەرشتیار)</option>
+                  <option value="Transport Supervisor">Transport Supervisor (سەرپەرشتیاری گواستنەوە)</option>
+                  <option value="Employee">Employee (کارمەند)</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-800 mb-1">کەی دەست بەکار بووە:</label>
+                  <input
+                    type="date"
+                    value={empStartDate}
+                    onChange={(e) => setEmpStartDate(e.target.value)}
+                    className="input-classic w-full font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-800 mb-1">کەی وازی هێناوە:</label>
+                  <input
+                    type="date"
+                    value={empResignDate}
+                    onChange={(e) => setEmpResignDate(e.target.value)}
+                    className="input-classic w-full font-mono text-rose-800"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-300">
+                <button type="button" onClick={() => setShowEmpModal(false)} className="btn-classic text-xs">
+                  پاشگەزبوونەوە
+                </button>
+                <button type="submit" className="btn-classic-primary text-xs">
+                  پاشەکەوتکردنی کارمەند
                 </button>
               </div>
-            </div>
-
+            </form>
           </div>
         </div>
+      )}
+
+      {/* FACTORY LOCATION GEOFENCE MAP PICKER MODAL */}
+      {showMapPicker && (
+        <FactoryMapPicker
+          initialLat={factoryLocation.lat}
+          initialLng={factoryLocation.lng}
+          initialRadius={factoryLocation.radiusMeters}
+          factoryName={factoryLocation.name}
+          isRTL={true}
+          onSave={(newLoc) => {
+            if (setSettings) {
+              setSettings({
+                ...settings,
+                factoryLocation: newLoc,
+              });
+            }
+            setShowMapPicker(false);
+            alert('شوێنی کۆمپانیا لەسەر نەخشە بە سەرکەوتوویی پاشەکەوت کرا!');
+          }}
+          onClose={() => setShowMapPicker(false)}
+        />
       )}
 
     </div>
