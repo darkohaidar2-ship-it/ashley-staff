@@ -7,14 +7,18 @@ export default function withAuth<P extends object>(WrappedComponent: React.Compo
   const WithAuthComponent = (props: P) => {
     const { user, loading } = useAuth();
     const router = useRouter();
+    const [hasSession, setHasSession] = React.useState<boolean | null>(null);
 
-    useEffect(() => {
-      if (!loading && !user) {
+    React.useEffect(() => {
+      const stored = typeof window !== 'undefined' ? (sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session')) : null;
+      const isAuth = !!stored || !!user;
+      setHasSession(isAuth);
+      if (!loading && !user && !stored) {
         router.replace('/login');
       }
     }, [user, loading, router]);
 
-    if (loading) {
+    if (loading || hasSession === null) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-6 font-sans dir-rtl" dir="rtl">
           <div className="bg-slate-800/80 backdrop-blur-xl border border-slate-700 p-8 rounded-2xl shadow-2xl flex flex-col items-center text-center space-y-4 max-w-sm">
@@ -28,7 +32,7 @@ export default function withAuth<P extends object>(WrappedComponent: React.Compo
       );
     }
 
-    if (!user) {
+    if (!user && !hasSession) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white p-6 font-sans dir-rtl" dir="rtl">
           <div className="bg-rose-950/40 backdrop-blur-xl border border-rose-800 p-8 rounded-2xl shadow-2xl flex flex-col items-center text-center space-y-4 max-w-sm">
