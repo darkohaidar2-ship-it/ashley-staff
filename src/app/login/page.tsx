@@ -25,7 +25,7 @@ export default function AdminLoginPage() {
     try {
       const success = await login(username, password);
       if (success) {
-        router.push('/admin');
+        window.location.href = '/admin';
       } else {
         setError(isRTL ? 'ناوی بەکاربهێنەر یان وشەی تێپەڕ نادروستە' : 'Invalid username or password');
       }
