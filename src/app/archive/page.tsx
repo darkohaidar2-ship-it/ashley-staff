@@ -119,7 +119,7 @@ export default function ArchivePage() {
           {/* Left: breadcrumb */}
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" asChild className="h-8 w-8 rounded-xl hover:bg-primary/10">
-              <Link href="/items"><ArrowLeft className="w-4 h-4" /></Link>
+              <Link href="/admin"><ArrowLeft className="w-4 h-4" /></Link>
             </Button>
             <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
               <Archive className="w-3.5 h-3.5 text-primary" />

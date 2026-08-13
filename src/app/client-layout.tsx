@@ -17,9 +17,6 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     <LanguageProvider>
       <AppProvider>
         <div className="min-h-screen bg-slate-100 text-slate-900 font-sans antialiased flex flex-col" dir="rtl">
-          {/* Top Classic Navigation */}
-          <TopNavbar />
-
           {/* Main Full Width Classic Content Container */}
           <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6">
             {children}

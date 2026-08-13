@@ -131,7 +131,7 @@ function NewFileContent() {
       <header className="max-w-[1600px] mx-auto flex items-center justify-between gap-4 mb-12 print:hidden">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" asChild className="h-8 w-8">
-            <Link href="/items">
+            <Link href="/admin">
               <ArrowLeft className="w-4 h-4" />
             </Link>
           </Button>

@@ -248,6 +248,14 @@ function ItemsPage() {
 
       {/* Main Content Area */}
       <div className="space-y-6 w-full">
+            <div className="flex items-center justify-between gap-4 mb-2">
+              <Button variant="outline" size="sm" asChild className="gap-2 font-bold text-xs rounded-xl border-slate-300">
+                <Link href="/admin">
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>گەڕانەوە بۆ ڕووکاری سەرەکی ئەدمین (Return to Admin Hub)</span>
+                </Link>
+              </Button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-4">
                 <div className="win-card p-6 !min-h-0">
                     <div className="flex items-center justify-between mb-4">

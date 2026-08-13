@@ -308,7 +308,7 @@ export default function LocationsPage() {
         <header className="p-4 md:p-8 flex items-center justify-between gap-4 flex-wrap border-b">
           <div className="flex items-center gap-4">
             <Button variant="outline" size="icon" asChild>
-              <Link href="/items">
+              <Link href="/admin">
                 <ArrowLeft />
               </Link>
             </Button>

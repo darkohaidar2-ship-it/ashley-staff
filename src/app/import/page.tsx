@@ -229,7 +229,7 @@ export default function ImportPage() {
       <header className="flex items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="icon" asChild>
-            <Link href="/items">
+            <Link href="/admin">
               <ArrowLeft className="rotate-180" />
               <span className="sr-only">گەڕانەوە</span>
             </Link>
