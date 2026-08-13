@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import type { AttendanceRecord, Employee } from '@/lib/types';
 import { Camera, Calendar, MapPin, Trash2, CheckCircle, User, FileText } from 'lucide-react';
-import { getDaysInMonth } from 'date-fns';
+import { getDaysInMonth, format } from 'date-fns';
 
 interface AttendanceSheetGridProps {
   attendanceLogs: AttendanceRecord[];
@@ -56,11 +56,68 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
     });
   };
 
+  // Handle CSV Download
+  const handleDownloadCsv = () => {
+    const printDate = format(new Date(), 'yyyy-MM-dd');
+    const printTime = format(new Date(), 'HH:mm:ss');
+    let csvContent = `\uFEFFناوی لیست: شیت ماتریسی مانگانەی ئامادەبوون, مانگ: ${selectedMonth}, بەرواری پرێنت: ${printDate}, کاتی پرێنت: ${printTime}\n\n`;
+
+    // Header Row
+    const headers = ['ناوی کارمەند', 'کۆدی PIN', 'پلە/ئەرک', ...daysArray.map(d => `${d.toString().padStart(2, '0')}/${monthStr}`)];
+    csvContent += headers.join(',') + '\n';
+
+    // Employee Rows
+    activeEmployees.forEach(emp => {
+      const row = [
+        `"${emp.fullName3Part || emp.name}"`,
+        `"${emp.password || '1234'}"`,
+        `"${emp.role || 'Staff'}"`,
+      ];
+
+      daysArray.forEach(dayNum => {
+        const cellLogs = getLogsForEmpAndDay(emp, dayNum);
+        const times = cellLogs.map(l => `${l.type?.includes('In') || l.type?.includes('هاتن') ? 'In:' : 'Out:'}${l.time?.split(' ')[1]?.slice(0, 5) || ''}`).join(' | ');
+        row.push(`"${times || '---'}"`);
+      });
+
+      csvContent += row.join(',') + '\n';
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Ashley_Attendance_Matrix_${selectedMonth}_${printDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Handle Printable View Trigger
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
     <div className="space-y-3 font-sans select-none dir-rtl" dir="rtl">
       
+      {/* 🖨️ PRINT HEADER DISPLAY (VISIBLE ONLY ON PRINT / PDF OUTPUT) */}
+      <div className="hidden print:block p-4 border-2 border-slate-900 mb-4 bg-slate-50 text-slate-900 text-xs">
+        <div className="flex justify-between items-center border-b-2 border-slate-900 pb-2 mb-2">
+          <div>
+            <h1 className="text-base font-black uppercase">ASHLEY ERP Enterprise Desktop 2026</h1>
+            <h2 className="text-sm font-bold text-blue-900">ناوی لیستەکە: شیت ماتریسی مانگانەی ئامادەبوونی کارمەندان</h2>
+          </div>
+          <div className="text-left font-mono text-xs">
+            <div>بەرواری پرێنت: <span className="font-bold">{format(new Date(), 'yyyy-MM-dd')}</span></div>
+            <div>کاتی پرێنت: <span className="font-bold">{format(new Date(), 'HH:mm:ss')}</span></div>
+            <div>مانگی تۆمار: <span className="font-bold">{selectedMonth}</span></div>
+          </div>
+        </div>
+      </div>
+
       {/* 🛠️ SHEET CONTROL BAR */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-100 border border-slate-300 text-xs font-bold shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-100 border border-slate-300 text-xs font-bold shadow-sm print:hidden">
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-blue-900" />
           <span className="text-slate-900 font-extrabold">
@@ -68,7 +125,7 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Month Picker */}
           <div className="flex items-center gap-1">
             <label className="text-slate-700 font-bold">مانگ:</label>
@@ -96,6 +153,25 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
               ))}
             </select>
           </div>
+
+          {/* PRINT & DOWNLOAD BUTTONS */}
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="btn-classic text-xs font-bold flex items-center gap-1 py-1 px-2.5"
+            title="پرێنتکردنی خشتەکە"
+          >
+            <span>🖨️ پرێنتکردن</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDownloadCsv}
+            className="btn-classic-primary text-xs font-bold flex items-center gap-1 py-1 px-2.5"
+            title="داگرتنی فایلی Excel / CSV"
+          >
+            <span>📥 داگرتن (CSV)</span>
+          </button>
         </div>
       </div>
 

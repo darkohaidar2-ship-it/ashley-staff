@@ -379,12 +379,47 @@ export default function AdminPage() {
 
           {/* Employee Roster Data Grid */}
           <div className="space-y-1.5">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center justify-between">
-              <span>🔑 خشتەی ناوی کارمەندان و کۆدەکانی PIN (Employee Roster & PIN Codes Grid):</span>
-              <span className="text-[10px] font-mono text-blue-900 bg-blue-100 px-1.5 py-0.2 border border-blue-300">
-                PIN LOGIN ACCESS ENABLED
-              </span>
-            </h3>
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-100 p-2 border border-slate-300">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <span>🔑 خشتەی ناوی کارمەندان و کۆدەکانی PIN (Employee Roster Grid):</span>
+                <span className="text-[10px] font-mono text-blue-900 bg-blue-100 px-1.5 py-0.2 border border-blue-300">
+                  PIN ACCESS ENABLED
+                </span>
+              </h3>
+
+              <div className="flex items-center gap-1.5 print:hidden">
+                <button
+                  onClick={() => window.print()}
+                  className="btn-classic text-[11px] font-bold py-0.5 px-2"
+                  title="پرێنتکردنی ناوی کارمەندان"
+                >
+                  🖨️ پرێنتکردن
+                </button>
+                <button
+                  onClick={() => {
+                    const printDate = format(new Date(), 'yyyy-MM-dd');
+                    const printTime = format(new Date(), 'HH:mm:ss');
+                    let csvContent = `\uFEFFناوی لیست: خشتەی ناوی کارمەندان و کۆدەکان, بەرواری پرێنت: ${printDate}, کاتی پرێنت: ${printTime}\n\n`;
+                    csvContent += 'کۆدی PIN,کۆدی ID,ناوی کارمەند,پلە/ئەرک,ژمارەی مۆبایل,دەست بەکاربوون,دۆخ\n';
+                    filteredEmployees.forEach(emp => {
+                      csvContent += `"${emp.password || '1234'}","EMP-${emp.employeeId || emp.id}","${emp.fullName3Part || emp.name}","${emp.role || 'Employee'}","${emp.phone || '---'}","${emp.startDate || '---'}","${emp.status || 'Active'}"\n`;
+                    });
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.setAttribute('download', `Ashley_Employees_${printDate}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="btn-classic-primary text-[11px] font-bold py-0.5 px-2"
+                  title="داگرتنی فایلی Excel/CSV"
+                >
+                  📥 داگرتن (CSV)
+                </button>
+              </div>
+            </div>
 
             <div className="overflow-x-auto border border-slate-400">
               <table className="table-classic">
