@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import withAuth from '@/hooks/withAuth';
 import { useAppContext } from '@/context/app-provider';
@@ -10,7 +11,8 @@ import { FactoryMapPicker } from '@/components/maps/FactoryMapPicker';
 import { format } from 'date-fns';
 
 function AdminMasterHubPage() {
-  const { user } = useAuth();
+  const router = useRouter();
+  const { user, logout } = useAuth();
   const {
     employees,
     setEmployees,
@@ -208,6 +210,18 @@ function AdminMasterHubPage() {
             className="px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-black rounded-xl text-xs shadow-sm cursor-pointer border border-blue-900 transition-all"
           >
             📤 هێنانەوەی باکئەپ (Restore JSON)
+          </button>
+
+          <button
+            onClick={async () => {
+              if (confirm('ئایا دڵنیایت لە دەرچوون لە ئەکاونتی ئەدمین؟')) {
+                await logout();
+                router.replace('/login');
+              }
+            }}
+            className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl text-xs shadow-sm cursor-pointer border border-rose-800 transition-all"
+          >
+            🔒 دەرچوون (Logout)
           </button>
 
           <input
