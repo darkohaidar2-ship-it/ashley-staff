@@ -259,22 +259,27 @@ export default function MainPage() {
   const totalOvertimeHours = empOvertimeRecords.reduce((sum, r) => sum + (r.hours || 0), 0);
 
   return (
-    <div className="space-y-6" dir="rtl">
+    <div className="space-y-6 bg-slate-50 min-h-screen p-4 md:p-6 text-slate-900 font-sans dir-rtl" dir="rtl">
       
-      {/* Top Welcome Title */}
-      <header className="flex items-center justify-between pb-4 border-b border-slate-300">
+      {/* 🌟 LUXURY LIGHT MODE TOP HEADER */}
+      <header className="bg-white/90 backdrop-blur-xl border border-slate-200/90 rounded-2xl p-6 shadow-xl shadow-slate-200/50 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-wide">
-            سیستەمی سەرەکی ئامادەبوون و گەڕانی مۆدێل
-          </h1>
-          <p className="text-xs text-slate-600 font-bold mt-0.5">
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+              سیستەمی سەرەکی ئامادەبوون و گەڕانی مۆدێل
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-black">
+              2026 Light ERP
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 font-bold mt-1">
             🏢 بناغەی دیاریکراوی کۆمپانیا: <span className="text-slate-900 font-extrabold">{factoryLocation.name}</span> (سنوور: {factoryLocation.radiusMeters} مەتر)
           </p>
         </div>
 
         <Link href="/login">
-          <button className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded text-xs border border-slate-700 shadow-sm cursor-pointer">
-            ئەدمین (Admin)
+          <button className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-xl text-xs shadow-md shadow-slate-900/10 border border-slate-800 transition-all cursor-pointer active:scale-95">
+            🔑 داخڵبوونی ئەدمین (Admin)
           </button>
         </Link>
       </header>
@@ -282,20 +287,20 @@ export default function MainPage() {
       {/* Main Two-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-        {/* 1. ATTENDANCE SECTION (8 Columns - Prominent Classic ERP Panel) */}
-        <div className="lg:col-span-8 bg-white border border-slate-300 rounded-xl p-6 shadow-sm flex flex-col justify-between">
+        {/* 1. ATTENDANCE SECTION (8 Columns - Prominent Light ERP Panel) */}
+        <div className="lg:col-span-8 bg-white border border-slate-200 rounded-3xl p-6 shadow-xl shadow-slate-200/40 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
-              <h2 className="text-lg font-black text-slate-900">
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
                 📋 سیستەمی ئامادەبوونی کارمەندان (Attendance System)
               </h2>
-              <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded border border-emerald-300">
-                سیستەم چالاکە
+              <span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-black rounded-full border border-emerald-200">
+                ● سیستەم چالاکە
               </span>
             </div>
 
             {attMessage && (
-              <div className={`mb-6 p-4 rounded text-xs font-bold ${attMessage.success ? 'bg-emerald-50 text-emerald-900 border border-emerald-300' : 'bg-rose-50 text-rose-900 border border-rose-300'}`}>
+              <div className={`mb-6 p-4 rounded-2xl text-xs font-bold shadow-sm ${attMessage.success ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : 'bg-rose-50 text-rose-900 border border-rose-200'}`}>
                 {attMessage.text}
               </div>
             )}
@@ -303,15 +308,15 @@ export default function MainPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               
               {/* Employee Selection & PIN */}
-              <div className="space-y-4 bg-slate-50 p-5 rounded-lg border border-slate-300">
+              <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                  <label className="block text-xs font-black text-slate-700 mb-1.5">
                     ناوی کارمەند:
                   </label>
                   <select
                     value={selectedEmpId}
                     onChange={(e) => setSelectedEmpId(e.target.value)}
-                    className="w-full p-2.5 border border-slate-300 rounded bg-white text-sm font-bold focus:outline-none"
+                    className="w-full p-3 border border-slate-300 rounded-xl bg-white text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-600 shadow-sm"
                   >
                     <option value="">-- هەڵبژاردنی کارمەند --</option>
                     {employees.filter(e => e.status !== 'resigned' && e.isActive !== false).map((emp) => (
@@ -323,7 +328,7 @@ export default function MainPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                  <label className="block text-xs font-black text-slate-700 mb-1.5">
                     کۆدی پین (PIN Code):
                   </label>
                   <input
@@ -332,14 +337,14 @@ export default function MainPage() {
                     value={pinCode}
                     onChange={(e) => setPinCode(e.target.value)}
                     placeholder="••••"
-                    className="w-full p-2.5 text-center tracking-widest text-base font-bold border border-slate-300 rounded bg-white focus:outline-none"
+                    className="w-full p-3 text-center tracking-widest text-base font-mono font-black border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 shadow-sm"
                   />
                 </div>
 
                 {/* Personal Profile Lateness Viewer Button */}
                 <button
                   onClick={handleOpenPersonalProfile}
-                  className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-900 font-bold rounded text-xs border border-blue-300 transition-all cursor-pointer"
+                  className="w-full py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-900 font-bold rounded-xl text-xs border border-blue-200 transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
                   👤 نیشاندانی دۆسیە و دواکەوتنەکانی من (My Late Records)
                 </button>
@@ -347,7 +352,7 @@ export default function MainPage() {
                 <div>
                   <button
                     onClick={requestLocation}
-                    className="w-full py-2.5 px-3 bg-slate-200 hover:bg-slate-300 text-slate-900 font-bold rounded text-xs transition-all border border-slate-300 cursor-pointer"
+                    className="w-full py-3 px-3 bg-white hover:bg-slate-100 text-slate-900 font-black rounded-xl text-xs transition-all border border-slate-300 cursor-pointer shadow-sm active:scale-95"
                   >
                     {gpsStatus || '📍 پشکنینی GPS و دووری لە کۆمپانیا'}
                   </button>
@@ -355,21 +360,21 @@ export default function MainPage() {
               </div>
 
               {/* Camera Selfie Viewport */}
-              <div className="space-y-3 bg-slate-50 p-5 rounded-lg border border-slate-300 flex flex-col items-center justify-center text-center">
-                <div className="w-full aspect-[4/3] bg-slate-900 rounded overflow-hidden relative flex items-center justify-center border border-slate-700">
+              <div className="space-y-3 bg-slate-50/80 p-5 rounded-2xl border border-slate-200 flex flex-col items-center justify-center text-center">
+                <div className="w-full aspect-[4/3] bg-slate-900 rounded-xl overflow-hidden relative flex items-center justify-center border border-slate-800 shadow-inner">
                   {!cameraActive && !capturedSelfie && (
-                    <div className="space-y-2">
+                    <div className="space-y-2 p-2">
                       <p className="text-[11px] text-slate-300 font-bold mb-2">کامێرا هەڵبژێرە بۆ گرتنی فۆتۆ:</p>
                       <div className="flex items-center gap-2 justify-center">
                         <button
                           onClick={() => startCamera('user')}
-                          className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded cursor-pointer border border-slate-600"
+                          className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg cursor-pointer border border-slate-700 active:scale-95"
                         >
                           🤳 کامێرای پێشەوە (Selfie)
                         </button>
                         <button
                           onClick={() => startCamera('environment')}
-                          className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded cursor-pointer border border-slate-600"
+                          className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg cursor-pointer border border-slate-700 active:scale-95"
                         >
                           📷 کامێرای پشتەوە (Back)
                         </button>
@@ -395,13 +400,13 @@ export default function MainPage() {
                   <div className="flex items-center gap-2 w-full">
                     <button
                       onClick={capturePhoto}
-                      className="flex-1 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded cursor-pointer"
+                      className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl cursor-pointer shadow-sm active:scale-95"
                     >
                       📸 گرتنی فۆتۆی ئامادەبوون
                     </button>
                     <button
                       onClick={() => startCamera(facingMode === 'user' ? 'environment' : 'user')}
-                      className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-900 font-bold text-xs rounded cursor-pointer border border-slate-400"
+                      className="px-3 py-2.5 bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs rounded-xl cursor-pointer border border-slate-300 shadow-sm"
                       title="گۆڕینی کامێرا"
                     >
                       🔄 کامێرا
@@ -415,7 +420,7 @@ export default function MainPage() {
                       setCapturedSelfie(null);
                       startCamera();
                     }}
-                    className="w-full py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[11px] rounded cursor-pointer border border-slate-300"
+                    className="w-full py-2 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs rounded-xl cursor-pointer border border-slate-300 shadow-sm"
                   >
                     🔄 گرتنەوەی فۆتۆ
                   </button>
@@ -424,20 +429,20 @@ export default function MainPage() {
 
             </div>
 
-            {/* Attendance Action Buttons */}
+            {/* Attendance Action Sharp Buttons */}
             <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={() => handleAttendance('check-in')}
-                className="py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white font-black rounded-lg text-sm tracking-wide shadow-sm transition-all cursor-pointer border border-emerald-900"
+                className="py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-sm tracking-wide shadow-lg shadow-emerald-600/20 transition-all active:scale-[0.98] cursor-pointer border border-emerald-600 flex items-center justify-center gap-2"
               >
-                ✅ تۆمارکردنی هاتن (Check-In)
+                <span>✅ تۆمارکردنی هاتن (Check-In)</span>
               </button>
 
               <button
                 onClick={() => handleAttendance('check-out')}
-                className="py-3.5 bg-rose-700 hover:bg-rose-800 text-white font-black rounded-lg text-sm tracking-wide shadow-sm transition-all cursor-pointer border border-rose-900"
+                className="py-4 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl text-sm tracking-wide shadow-lg shadow-rose-600/20 transition-all active:scale-[0.98] cursor-pointer border border-rose-600 flex items-center justify-center gap-2"
               >
-                🚪 تۆمارکردنی دەرچوون (Check-Out)
+                <span>🚪 تۆمارکردنی دەرچوون (Check-Out)</span>
               </button>
             </div>
           </div>
@@ -445,20 +450,20 @@ export default function MainPage() {
           {/* Recent Attendance Log Stream */}
           {attLogHistory.length > 0 && (
             <div className="mt-6 pt-4 border-t border-slate-200">
-              <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                 کۆتا تۆمارکراوەکانی ئامادەبوون:
               </h3>
               <div className="space-y-2 max-h-32 overflow-y-auto">
                 {attLogHistory.map((log, idx) => (
-                  <div key={idx} className="p-2.5 bg-slate-100 rounded text-xs font-bold flex justify-between items-center border border-slate-300">
-                    <span className="text-slate-900">{log.name}</span>
-                    <span className="px-2 py-0.5 bg-slate-200 rounded text-[11px]">{log.type}</span>
+                  <div key={idx} className="p-2.5 bg-slate-50 rounded-xl text-xs font-bold flex justify-between items-center border border-slate-200 shadow-sm">
+                    <span className="text-slate-900 font-extrabold">{log.name}</span>
+                    <span className="px-2 py-0.5 bg-slate-200 text-slate-800 rounded text-[11px]">{log.type}</span>
                     {log.distance && (
-                      <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-[11px] border border-blue-200">
+                      <span className="px-2 py-0.5 bg-blue-50 text-blue-800 rounded text-[11px] border border-blue-200">
                         📍 {log.distance}
                       </span>
                     )}
-                    <span className="text-slate-600 font-mono text-[11px]">{log.time}</span>
+                    <span className="text-slate-500 font-mono text-[11px]">{log.time}</span>
                   </div>
                 ))}
               </div>
@@ -466,8 +471,8 @@ export default function MainPage() {
           )}
         </div>
 
-        {/* 2. COMPACT MODEL SEARCH SECTION (4 Columns Classic ERP Card) */}
-        <div className="lg:col-span-4 bg-white border border-slate-300 rounded-xl p-6 shadow-sm flex flex-col">
+        {/* 2. COMPACT MODEL SEARCH SECTION (4 Columns Light ERP Card) */}
+        <div className="lg:col-span-4 bg-white border border-slate-200 rounded-3xl p-6 shadow-xl shadow-slate-200/40 flex flex-col">
           <div className="border-b border-slate-200 pb-3 mb-4">
             <h2 className="text-base font-black text-slate-900">
               🔍 گەڕان بەدوای مۆدێلدا (Model Search)
@@ -484,7 +489,7 @@ export default function MainPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="ناوی مۆدێل بنووسە..."
-              className="w-full p-2.5 border border-slate-300 rounded bg-slate-50 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-slate-900"
+              className="w-full p-3 border border-slate-300 rounded-xl bg-slate-50 text-xs font-bold text-slate-900 focus:outline-none focus:bg-white focus:border-indigo-600 shadow-sm"
             />
           </div>
 
@@ -494,18 +499,18 @@ export default function MainPage() {
               filteredItems.map((item) => (
                 <div
                   key={item.id}
-                  className="p-3 bg-slate-50 border border-slate-300 rounded hover:bg-slate-100 transition-all"
+                  className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl hover:bg-slate-100/80 transition-all shadow-sm"
                 >
                   <div className="flex justify-between items-start">
                     <h3 className="text-xs font-bold text-slate-900">
                       {item.model || item.name || 'Model'}
                     </h3>
-                    <span className="text-[11px] font-black px-2 py-0.5 bg-blue-100 text-blue-900 rounded border border-blue-200">
+                    <span className="text-[11px] font-black px-2 py-0.5 bg-blue-50 text-blue-900 rounded-lg border border-blue-200">
                       {item.quantity || 0} دەنک
                     </span>
                   </div>
 
-                  <div className="mt-1.5 text-[11px] text-slate-600 font-bold space-y-0.5">
+                  <div className="mt-1.5 text-[11px] text-slate-500 font-bold space-y-0.5">
                     {item.classification && (
                       <p>
                         پۆلێن: <span className="font-mono text-slate-800">{item.classification}</span>
@@ -520,7 +525,7 @@ export default function MainPage() {
                 </div>
               ))
             ) : (
-              <div className="text-center py-8 border border-dashed border-slate-300 rounded">
+              <div className="text-center py-8 border border-dashed border-slate-300 rounded-2xl">
                 <p className="text-xs font-bold text-slate-400">
                   هیچ مۆدێلێک نەدۆزرایەوە
                 </p>
@@ -531,10 +536,10 @@ export default function MainPage() {
 
       </div>
 
-      {/* 3. PRIVATE EMPLOYEE PERSONAL PROFILE & LATENESS MODAL */}
+      {/* 3. PRIVATE EMPLOYEE PERSONAL PROFILE & LATENESS MODAL (LIGHT MODE) */}
       {showPersonalProfileModal && selectedEmployee && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-white border border-slate-300 rounded-xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 text-slate-900">
             
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div>
@@ -547,7 +552,7 @@ export default function MainPage() {
               </div>
               <button
                 onClick={() => setShowPersonalProfileModal(false)}
-                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded text-xs border border-slate-300"
+                className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs border border-slate-300 cursor-pointer"
               >
                 داخستن
               </button>
@@ -556,14 +561,14 @@ export default function MainPage() {
             {/* Employee Statistics Grid */}
             <div className="grid grid-cols-2 gap-3 text-xs font-bold">
               
-              <div className="p-3 bg-slate-50 border border-slate-300 rounded">
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl shadow-sm">
                 <span className="text-slate-500 block mb-1">کۆی سەعاتی زیاده (Overtime):</span>
-                <span className="text-base font-extrabold text-blue-900">{totalOvertimeHours} کاتژمێر</span>
+                <span className="text-base font-black text-blue-900">{totalOvertimeHours} کاتژمێر</span>
               </div>
 
-              <div className="p-3 bg-slate-50 border border-slate-300 rounded">
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl shadow-sm">
                 <span className="text-slate-500 block mb-1">کۆی بڕین/داغڵکردنەکان:</span>
-                <span className="text-base font-extrabold text-slate-900">
+                <span className="text-base font-black text-slate-900">
                   {empWithdrawals.reduce((sum, w) => sum + (w.amount || 0), 0).toLocaleString()} د.ع
                 </span>
               </div>
@@ -572,17 +577,17 @@ export default function MainPage() {
 
             {/* Lateness & Check-In History Table */}
             <div className="space-y-2">
-              <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+              <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">
                 مێژووی ئامادەبوون و دواکەوتنەکان لەم مانگەدا:
               </h4>
 
-              <div className="border border-slate-300 rounded overflow-hidden max-h-48 overflow-y-auto">
+              <div className="border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto shadow-inner">
                 <table className="w-full text-right text-xs">
-                  <thead className="bg-slate-100 border-b border-slate-300 text-slate-700 font-bold">
+                  <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold">
                     <tr>
-                      <th className="p-2">بەش / جۆر</th>
-                      <th className="p-2">کاتی تۆمارکراو</th>
-                      <th className="p-2 text-left">بارودۆخ</th>
+                      <th className="p-2.5">بەش / جۆر</th>
+                      <th className="p-2.5">کاتی تۆمارکراو</th>
+                      <th className="p-2.5 text-left">بارودۆخ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -591,9 +596,9 @@ export default function MainPage() {
                         .filter((l) => l.name === selectedEmployee.name)
                         .map((l, i) => (
                           <tr key={i} className="hover:bg-slate-50 font-bold">
-                            <td className="p-2">{l.type}</td>
-                            <td className="p-2 font-mono text-[11px]">{l.time}</td>
-                            <td className="p-2 text-left text-emerald-700">✅ ڕاستکراوە</td>
+                            <td className="p-2.5">{l.type}</td>
+                            <td className="p-2.5 font-mono text-[11px] text-slate-600">{l.time}</td>
+                            <td className="p-2.5 text-left text-emerald-700">✅ ڕاستکراوە</td>
                           </tr>
                         ))
                     ) : (
@@ -611,7 +616,7 @@ export default function MainPage() {
             <div className="pt-2 text-left">
               <button
                 onClick={() => setShowPersonalProfileModal(false)}
-                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded text-xs cursor-pointer"
+                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-xl text-xs cursor-pointer shadow-md"
               >
                 تەواو
               </button>
