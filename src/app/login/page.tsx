@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useTranslation } from '@/hooks/use-translation';
 import Link from 'next/link';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function AdminLoginPage() {
   const [mounted, setMounted] = useState(false);
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -32,9 +34,9 @@ export default function AdminLoginPage() {
       if (res.success) {
         window.location.href = '/admin';
       } else if (res.errorField === 'username') {
-        setError(isRTL ? '⚠️ ناوی بەکاربهێنەر (Username) نادروستە! (تکایە بنووسە: admin یان Darko)' : 'Invalid username');
+        setError(isRTL ? '⚠️ تکایە ناوی بەکاربهێنەر (Username) بنووسە' : 'Please enter a username');
       } else if (res.errorField === 'password') {
-        setError(isRTL ? '⚠️ وشەی تێپەڕ (Password) نادروستە! (تکایە بنووسە: 001122)' : 'Invalid password');
+        setError(isRTL ? '⚠️ تکایە وشەی تێپەڕ (Password) بنووسە' : 'Please enter a password');
       } else {
         setError(isRTL ? 'ناوی بەکاربهێنەر یان وشەی تێپەڕ نادروستە' : 'Invalid username or password');
       }
@@ -79,7 +81,7 @@ export default function AdminLoginPage() {
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 font-bold"
               placeholder="admin"
             />
           </div>
@@ -88,14 +90,24 @@ export default function AdminLoginPage() {
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
               {isRTL ? 'وشەی تێپەڕ (Password):' : 'Password:'}
             </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
-              placeholder="••••••••"
-            />
+            <div className="relative flex items-center">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 font-mono tracking-widest pl-10"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute left-3 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1"
+                title={showPassword ? 'شاردنەوەی پاسۆرد' : 'نیشاندانی پاسۆرد'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <button
