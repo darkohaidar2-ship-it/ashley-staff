@@ -146,30 +146,28 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
                     return (
                       <td key={dayNum} className="text-center p-1 border-l border-slate-300 align-middle">
                         {cellLogs.length > 0 ? (
-                          <div className="flex flex-col items-center justify-center gap-1">
-                            {/* Check-In Button */}
+                          <div className="flex flex-col items-center justify-center gap-0.5 font-mono text-[11px] font-bold">
+                            {/* Check-In Link in BLUE */}
                             {checkIn ? (
                               <button
                                 type="button"
                                 onClick={() => setActiveLogModal(checkIn)}
-                                className="btn-classic-primary text-[9px] py-0.5 px-1 w-full flex items-center justify-center gap-0.5 font-mono cursor-pointer active:scale-95 shadow-sm"
-                                title="کرتە بکە بۆ بینینی تەواوی زانیاریەکان و فۆتۆی چێک ئین"
+                                className="text-blue-700 hover:text-blue-950 underline font-mono font-bold cursor-pointer transition-colors block text-center"
+                                title="کرتە بکە بۆ بینینی فۆتۆ و زانیاریەکانی چێک ئین"
                               >
-                                <Camera className="w-2.5 h-2.5 text-amber-300" />
-                                <span>📥 {checkIn.time?.split(' ')[1]?.slice(0, 5) || 'In'}</span>
+                                {checkIn.time?.split(' ')[1]?.slice(0, 5) || '08:00'}
                               </button>
                             ) : null}
 
-                            {/* Check-Out Button */}
+                            {/* Check-Out Link in RED */}
                             {checkOut ? (
                               <button
                                 type="button"
                                 onClick={() => setActiveLogModal(checkOut)}
-                                className="btn-classic-danger text-[9px] py-0.5 px-1 w-full flex items-center justify-center gap-0.5 font-mono cursor-pointer active:scale-95 shadow-sm"
-                                title="کرتە بکە بۆ بینینی تەواوی زانیاریەکان و فۆتۆی چێک ئاوت"
+                                className="text-rose-700 hover:text-rose-950 underline font-mono font-bold cursor-pointer transition-colors block text-center"
+                                title="کرتە بکە بۆ بینینی فۆتۆ و زانیاریەکانی چێک ئاوت"
                               >
-                                <Camera className="w-2.5 h-2.5 text-white" />
-                                <span>📤 {checkOut.time?.split(' ')[1]?.slice(0, 5) || 'Out'}</span>
+                                {checkOut.time?.split(' ')[1]?.slice(0, 5) || '16:30'}
                               </button>
                             ) : null}
                           </div>
@@ -226,16 +224,18 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
               
               {/* Selfie Image Display Container */}
               <div className="border-2 border-slate-400 p-1 bg-slate-100 flex flex-col items-center justify-center">
-                {activeLogModal.selfieUrl || activeLogModal.checkInSelfie || activeLogModal.checkOutSelfie ? (
+                {activeLogModal.selfieUrl || activeLogModal.checkInSelfie || activeLogModal.checkOutSelfie || (activeLogModal as any).photo || (activeLogModal as any).selfie ? (
                   <img
-                    src={activeLogModal.selfieUrl || activeLogModal.checkInSelfie || activeLogModal.checkOutSelfie}
+                    src={activeLogModal.selfieUrl || activeLogModal.checkInSelfie || activeLogModal.checkOutSelfie || (activeLogModal as any).photo || (activeLogModal as any).selfie}
                     alt="Attendance Selfie"
-                    className="w-full h-64 object-cover border border-slate-400 shadow-inner"
+                    className="w-full max-h-72 object-contain bg-black/90 border border-slate-400 shadow-inner"
                   />
                 ) : (
-                  <div className="w-full h-48 bg-slate-200 flex flex-col items-center justify-center text-slate-500 space-y-1">
-                    <Camera className="w-10 h-10 text-slate-400" />
-                    <span className="font-bold">فۆتۆی سێلفی تۆمار نەکراوە</span>
+                  <div className="w-full h-52 bg-slate-200 border border-slate-300 flex flex-col items-center justify-center text-slate-600 space-y-2">
+                    <div className="w-16 h-16 rounded-full bg-blue-900 text-white font-black text-xl flex items-center justify-center border-2 border-blue-700 shadow-md">
+                      {(activeLogModal.name || activeLogModal.userName || 'E').slice(0, 2)}
+                    </div>
+                    <span className="font-bold text-xs text-slate-800">فۆتۆی سێلفی لەگەڵ تۆمار بگرە</span>
                   </div>
                 )}
               </div>
@@ -251,14 +251,14 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
 
                 <div className="flex justify-between border-b border-slate-200 pb-1">
                   <span className="text-slate-600">جۆری تۆمار:</span>
-                  <span className={`px-2 py-0.5 text-xs font-mono font-bold border ${activeLogModal.type?.includes('In') || activeLogModal.type?.includes('هاتن') ? 'bg-emerald-100 text-emerald-950 border-emerald-400' : 'bg-rose-100 text-rose-950 border-rose-400'}`}>
+                  <span className={`px-2 py-0.5 text-xs font-mono font-bold border ${activeLogModal.type?.includes('In') || activeLogModal.type?.includes('هاتن') ? 'bg-blue-100 text-blue-950 border-blue-400' : 'bg-rose-100 text-rose-950 border-rose-400'}`}>
                     {activeLogModal.type}
                   </span>
                 </div>
 
                 <div className="flex justify-between border-b border-slate-200 pb-1">
-                  <span className="text-slate-600">کات و بەروار:</span>
-                  <span className="font-mono text-slate-900 text-xs">{activeLogModal.time || activeLogModal.createdAt}</span>
+                  <span className="text-slate-600">کات و بەرواری چێک‌ئین:</span>
+                  <span className="font-mono text-slate-900 text-xs font-black">{activeLogModal.time || activeLogModal.createdAt}</span>
                 </div>
 
                 <div className="flex justify-between border-b border-slate-200 pb-1">
@@ -273,7 +273,7 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
                     <FileText className="w-3.5 h-3.5 text-indigo-700" /> تێبینی / ئەرک:
                   </span>
                   <span className="text-slate-800 font-normal">
-                    {activeLogModal.status === 'verified' ? 'تۆماری ئامادەبوونی ئۆتۆماتیکی جی پی ئێس' : 'ئامادەبوونی بەکارهێنەر'}
+                    {(activeLogModal as any).notes || (activeLogModal as any).note || 'تۆماری ئامادەبوونی ئۆتۆماتیکی جی پی ئێس'}
                   </span>
                 </div>
               </div>
