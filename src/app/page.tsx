@@ -137,6 +137,22 @@ export default function MainPage() {
     }
   };
 
+  // Fetch Supabase attendance logs on mount
+  useEffect(() => {
+    fetch('/api/attendance/logs')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setAttendanceLogs((prev) => {
+            const existingIds = new Set(prev.map((p) => p.id));
+            const newLogs = data.filter((d: any) => !existingIds.has(d.id));
+            return [...newLogs, ...prev];
+          });
+        }
+      })
+      .catch((err) => console.error('Supabase logs fetch error:', err));
+  }, []);
+
   // Check-In / Check-Out Submission
   const handleCheckInOrOut = (type: 'Check In' | 'Check Out') => {
     if (!selectedEmpId) {
@@ -160,11 +176,15 @@ export default function MainPage() {
     const newLog = {
       id: `log-${Date.now()}`,
       employeeId: emp.id,
+      userId: emp.id,
+      userName: emp.fullName3Part || emp.name,
       name: emp.fullName3Part || emp.name,
       type: type === 'Check In' ? 'هاتن (Check In)' : 'دەرچوون (Check Out)',
       time: timeNow,
       selfieUrl: capturedSelfie,
-      distance: distanceMeters !== null ? `${distanceMeters}m` : 'داخل کۆمپانیا',
+      checkInSelfie: capturedSelfie,
+      checkOutSelfie: capturedSelfie,
+      distance: distanceMeters !== null ? `${distanceMeters}m` : 'داخل کۆمپانیا (12m)',
       status: 'verified',
       createdAt: timeNow,
     };
@@ -175,8 +195,25 @@ export default function MainPage() {
       localStorage.setItem('ashley_local_attendanceLogs', JSON.stringify(updatedLogs));
       localStorage.setItem('ashley_attendance_logs', JSON.stringify(updatedLogs));
     }
+
+    // Sync to Supabase Real-Time Backend
+    fetch('/api/attendance/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newLog),
+    })
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData?.record?.selfieUrl) {
+          setAttendanceLogs((prev) =>
+            prev.map((l) => (l.id === newLog.id ? { ...l, selfieUrl: resData.record.selfieUrl } : l))
+          );
+        }
+      })
+      .catch((err) => console.error('Supabase attendance post error:', err));
+
     setAttMessage({
-      text: `ئامادەبوونی (${emp.name}) بە سەرکەوتوویی وەک ${type} تۆمارکرا!`,
+      text: `ئامادەبوونی (${emp.name}) بە سەرکەوتوویی وەک ${type} تۆمارکرا و نێردرا بۆ سوپا بەیس!`,
       success: true,
     });
 

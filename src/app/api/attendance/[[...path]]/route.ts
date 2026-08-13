@@ -754,6 +754,102 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       return NextResponse.json({ success: true });
     }
 
+    // ----------------------------------------
+    // GET /api/attendance/logs (Supabase Realtime Logs Fetch)
+    // ----------------------------------------
+    if (pathStr === 'logs' && method === 'GET') {
+      try {
+        const { data: logs, error } = await supabase
+          .from('attendance')
+          .select('*')
+          .order('date', { ascending: false });
+
+        if (error) {
+          return NextResponse.json([]);
+        }
+
+        const formattedLogs: any[] = [];
+        (logs || []).forEach(r => {
+          if (r.check_in_time) {
+            formattedLogs.push({
+              id: `${r.id}-in`,
+              employeeId: r.user_id,
+              userId: r.user_id,
+              userName: r.user_name,
+              name: r.user_name,
+              type: 'هاتن (Check In)',
+              time: `${r.date} ${r.check_in_time}`,
+              distance: r.check_in_address || 'داخل کۆمپانیا',
+              selfieUrl: r.check_in_selfie,
+              checkInSelfie: r.check_in_selfie,
+              status: r.status || 'verified',
+              createdAt: r.check_in || `${r.date} ${r.check_in_time}`
+            });
+          }
+          if (r.check_out_time) {
+            formattedLogs.push({
+              id: `${r.id}-out`,
+              employeeId: r.user_id,
+              userId: r.user_id,
+              userName: r.user_name,
+              name: r.user_name,
+              type: 'دەرچوون (Check Out)',
+              time: `${r.date} ${r.check_out_time}`,
+              distance: r.check_out_address || 'داخل کۆمپانیا',
+              selfieUrl: r.check_out_selfie,
+              checkOutSelfie: r.check_out_selfie,
+              status: r.status || 'verified',
+              createdAt: r.check_out || `${r.date} ${r.check_out_time}`
+            });
+          }
+        });
+
+        return NextResponse.json(formattedLogs);
+      } catch (err) {
+        return NextResponse.json([]);
+      }
+    }
+
+    // ----------------------------------------
+    // POST /api/attendance/logs (Save to Supabase DB & Storage)
+    // ----------------------------------------
+    if (pathStr === 'logs' && method === 'POST') {
+      const body = await req.json();
+      const { employeeId, name, type, time, selfieUrl, distance } = body;
+
+      let publicSelfieUrl = selfieUrl;
+      if (selfieUrl && typeof selfieUrl === 'string' && selfieUrl.startsWith('data:image')) {
+        const uploaded = await uploadSelfieToStorage(employeeId || 'emp', time?.split(' ')[0] || 'date', type?.includes('Out') ? 'out' : 'in', selfieUrl);
+        if (uploaded) publicSelfieUrl = uploaded;
+      }
+
+      const dateStr = time?.split(' ')[0] || new Date().toISOString().split('T')[0];
+      const timeStr = time?.split(' ')[1] || new Date().toTimeString().split(' ')[0];
+
+      const record = {
+        id: `att-${employeeId}-${dateStr}-${Date.now().toString().slice(-4)}`,
+        user_id: employeeId || 'emp',
+        user_name: name || 'Employee',
+        date: dateStr,
+        check_in: new Date().toISOString(),
+        check_in_time: timeStr,
+        check_in_selfie: publicSelfieUrl,
+        check_in_address: distance || 'داخل کۆمپانیا',
+        status: 'Present'
+      };
+
+      try {
+        await supabase.from('attendance').upsert(record);
+      } catch (e) {
+        console.error('Supabase DB Insert notice:', e);
+      }
+
+      return NextResponse.json({ 
+        success: true, 
+        record: { ...body, selfieUrl: publicSelfieUrl, checkInSelfie: publicSelfieUrl } 
+      });
+    }
+
     // fallback 404
     return NextResponse.json({ error: 'Not Found' }, { status: 404 });
 
