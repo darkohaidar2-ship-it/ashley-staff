@@ -109,11 +109,10 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
                 👤 ناوی کارمەند / ڕێکەوت ➔
               </th>
 
-              {/* 31 Day Header Columns */}
+              {/* 31 Day Header Columns (Simplified Date Only) */}
               {daysArray.map((dayNum) => (
-                <th key={dayNum} className="text-center font-mono font-black min-w-[65px] px-1 py-1.5 border-l border-slate-400 bg-slate-200">
-                  <span className="block text-slate-900 text-xs">ڕۆژی {dayNum}</span>
-                  <span className="block text-[9px] text-slate-500 font-normal">
+                <th key={dayNum} className="text-center font-mono font-bold min-w-[50px] px-1 py-1 border-l border-slate-400 bg-slate-200">
+                  <span className="text-slate-600 text-[11px] font-mono font-bold">
                     {dayNum.toString().padStart(2, '0')}/{monthStr}
                   </span>
                 </th>
@@ -228,7 +227,18 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
                   <img
                     src={activeLogModal.selfieUrl || activeLogModal.checkInSelfie || activeLogModal.checkOutSelfie || (activeLogModal as any).photo || (activeLogModal as any).selfie}
                     alt="Attendance Selfie"
-                    className="w-full max-h-72 object-contain bg-black/90 border border-slate-400 shadow-inner"
+                    className="w-full max-h-72 object-contain bg-slate-900 border border-slate-400 shadow-inner"
+                    onError={(e) => {
+                      // Fallback if image fails to render
+                      (e.target as HTMLElement).style.display = 'none';
+                      const parent = (e.target as HTMLElement).parentElement;
+                      if (parent && !parent.querySelector('.fallback-avatar')) {
+                        const fallback = document.createElement('div');
+                        fallback.className = 'fallback-avatar w-full h-52 bg-slate-200 border border-slate-300 flex flex-col items-center justify-center text-slate-800 space-y-2';
+                        fallback.innerHTML = `<div class="w-16 h-16 rounded-full bg-blue-900 text-white font-black text-xl flex items-center justify-center border-2 border-blue-700 shadow-md">${(activeLogModal.name || activeLogModal.userName || 'E').slice(0, 2)}</div><span class="font-bold text-xs">فۆتۆ سێلفی ئامادەبوونی (${activeLogModal.name})</span>`;
+                        parent.appendChild(fallback);
+                      }
+                    }}
                   />
                 ) : (
                   <div className="w-full h-52 bg-slate-200 border border-slate-300 flex flex-col items-center justify-center text-slate-600 space-y-2">
