@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useTranslation } from '@/hooks/use-translation';
 import Link from 'next/link';
-import { Eye, EyeOff, ShieldCheck, Lock, User, Sparkles, ArrowRight, ArrowLeft, KeyRound, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Lock, User, KeyRound, CheckCircle2, Monitor } from 'lucide-react';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -69,150 +69,120 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-slate-50 text-slate-900 font-sans dir-rtl" dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-slate-300 text-slate-900 font-sans dir-rtl select-none" dir={isRTL ? 'rtl' : 'ltr'}>
       
-      {/* Ultra-subtle ambient background gradients for Light Mode */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-tr from-blue-200/40 via-indigo-200/40 to-purple-200/30 rounded-full blur-[140px] pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-[350px] h-[350px] bg-emerald-200/40 rounded-full blur-[110px] pointer-events-none" />
-      <div className="absolute top-10 left-10 w-[300px] h-[300px] bg-amber-200/40 rounded-full blur-[100px] pointer-events-none" />
-
-      {/* Main Glass Card (Light Mode Luxury) */}
-      <div className="relative z-10 w-full max-w-md bg-white/95 backdrop-blur-2xl border border-slate-200/90 rounded-3xl p-8 shadow-2xl shadow-slate-200/80 transition-all duration-300">
+      {/* Classic Windows Enterprise Dialog Frame */}
+      <div className="w-full max-w-md bg-slate-200 border-2 border-t-white border-l-white border-b-slate-600 border-r-slate-600 shadow-2xl p-1 font-sans">
         
-        {/* Brand Shield & Title Header */}
-        <div className="text-center mb-8 flex flex-col items-center">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 p-0.5 shadow-lg shadow-indigo-500/20 mb-4 flex items-center justify-center">
-            <div className="w-full h-full bg-white rounded-[14px] flex items-center justify-center">
-              <ShieldCheck className="w-8 h-8 text-indigo-600" />
+        {/* Win32 Dialog Window Header */}
+        <div className="bg-gradient-to-r from-blue-900 via-slate-800 to-blue-900 text-white px-2 py-1 flex items-center justify-between text-xs font-bold border-b border-slate-700">
+          <div className="flex items-center gap-1.5">
+            <Monitor className="w-3.5 h-3.5 text-blue-300" />
+            <span>{isRTL ? 'داخڵبوونی سەرەکی بەڕێوەبەری سیستەم (Win32 Security)' : 'ASHLEY ERP Win32 Security Login'}</span>
+          </div>
+          <div className="flex items-center gap-1 font-mono text-[10px]" dir="ltr">
+            <button className="w-4 h-3.5 bg-slate-700 text-slate-300 flex items-center justify-center border border-slate-500">_</button>
+            <button className="w-4 h-3.5 bg-rose-800 text-white flex items-center justify-center border border-rose-600">✕</button>
+          </div>
+        </div>
+
+        {/* Dialog Content Area */}
+        <div className="p-5 space-y-4">
+          
+          {/* Header Banner */}
+          <div className="border border-slate-400 bg-white p-3 flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-900 text-white flex items-center justify-center font-bold text-lg border border-blue-950">
+              🛡️
+            </div>
+            <div>
+              <h1 className="text-xs font-black text-slate-900 uppercase tracking-wide">
+                {isRTL ? 'سیستەمی بەڕێوەبردنی سەرەکی ASHLEY ERP' : 'ASHLEY ERP Enterprise Desktop'}
+              </h1>
+              <p className="text-[11px] text-slate-600 font-bold mt-0.5">
+                {isRTL ? 'زانیارییەکان بنووسە بۆ چوونە ژوورەوە' : 'Enter credentials for Win32 ERP access'}
+              </p>
             </div>
           </div>
-          
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-[11px] font-black tracking-wide mb-2.5">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            <span>ASHLEY ERP SECURITY 2026</span>
+
+          {/* Quick Credential Preset Section */}
+          <div className="p-2.5 bg-amber-50 border border-amber-300 text-[11px] font-bold text-amber-900 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span>🔑 {isRTL ? 'ناوی تاقیکاری:' : 'Demo Admin:'}</span>
+              <code className="bg-amber-100 px-1.5 py-0.5 border border-amber-400 font-mono text-slate-900">
+                admin / 001122
+              </code>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setUsername('admin');
+                setPassword('001122');
+                setError('');
+              }}
+              className="btn-classic text-[10px]"
+            >
+              {isRTL ? 'پڕکردنەوە' : 'Autofill'}
+            </button>
           </div>
 
-          <h1 className="text-2xl font-black tracking-tight text-slate-900">
-            {isRTL ? 'داخڵبوونی بەڕێوەبەر (Admin)' : 'Admin Portal Login'}
-          </h1>
-          <p className="text-xs text-slate-500 font-bold mt-1.5 max-w-xs leading-relaxed">
-            {isRTL ? 'تکایە زانیارییەکان بنووسە بۆ چوونە ناو داشبۆردی بەڕێوەبەری سەرەکی' : 'Enter admin credentials to manage Ashley ERP system'}
-          </p>
-        </div>
+          {/* Error Alert Box */}
+          {error && (
+            <div className="p-2.5 bg-rose-100 border border-rose-400 text-rose-900 text-xs font-bold">
+              {error}
+            </div>
+          )}
 
-        {/* Quick Credential Preset Badge */}
-        <div className="mb-6 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs shadow-inner">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-slate-600 font-bold">{isRTL ? 'زانیاری تاقیاری:' : 'Demo Admin:'}</span>
-            <code className="text-indigo-700 font-mono font-black bg-indigo-100/80 px-2 py-0.5 rounded border border-indigo-200">
-              admin / 001122
-            </code>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setUsername('admin');
-              setPassword('001122');
-              setError('');
-            }}
-            className="text-[11px] font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm px-3 py-1.5 rounded-xl transition-all cursor-pointer border border-indigo-600 active:scale-95"
-          >
-            {isRTL ? 'پڕکردنەوە' : 'Autofill'}
-          </button>
-        </div>
-
-        {/* Error Alert Box */}
-        {error && (
-          <div className="mb-6 p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-start gap-2 shadow-sm">
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Username Input */}
-          <div>
-            <label className="block text-xs font-black text-slate-700 mb-1.5 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-indigo-600" />
-              <span>{isRTL ? 'ناوی بەکاربهێنەر (Username):' : 'Username:'}</span>
-            </label>
-            <div className="relative flex items-center">
+          {/* Login Form */}
+          <form onSubmit={handleSubmit} className="space-y-3 text-xs font-bold">
+            <div>
+              <label className="block text-slate-800 mb-1">
+                {isRTL ? 'ناوی بەکاربهێنەر (Username):' : 'Username:'}
+              </label>
               <input
                 type="text"
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-3.5 border border-slate-300 rounded-xl bg-slate-50/50 text-slate-900 text-sm font-bold placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                className="input-classic w-full font-mono"
                 placeholder="admin"
               />
             </div>
-          </div>
 
-          {/* Password Input with Eye Toggle */}
-          <div>
-            <label className="block text-xs font-black text-slate-700 mb-1.5 flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-indigo-600" />
-              <span>{isRTL ? 'وشەی تێپەڕ (Password):' : 'Password:'}</span>
-            </label>
-            <div className="relative flex items-center">
+            <div>
+              <label className="block text-slate-800 mb-1">
+                {isRTL ? 'وشەی تێپەڕ (Password):' : 'Password:'}
+              </label>
               <input
-                type={showPassword ? 'text' : 'password'}
+                type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3.5 border border-slate-300 rounded-xl bg-slate-50/50 text-slate-900 text-sm font-mono tracking-widest placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 transition-all pl-12"
+                className="input-classic w-full font-mono tracking-widest"
                 placeholder="••••••••"
               />
+            </div>
+
+            <div className="pt-2 flex justify-between items-center border-t border-slate-300">
+              <Link href="/" className="btn-classic text-[11px]">
+                {isRTL ? 'گەڕانەوە بۆ سەرەکی' : 'Cancel'}
+              </Link>
+
               <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute left-3.5 text-slate-400 hover:text-slate-900 p-1 rounded-lg transition-colors cursor-pointer"
-                title={showPassword ? 'شاردنەوەی پاسۆرد' : 'نیشاندانی پاسۆرد'}
+                type="submit"
+                disabled={loading}
+                className="btn-classic-primary"
               >
-                {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+                {loading ? (isRTL ? 'پشکنین...' : 'Authenticating...') : (isRTL ? 'داخڵبوون (OK)' : 'Log In')}
               </button>
             </div>
-          </div>
+          </form>
 
-          {/* Submit Button (Sharp Luxury Button) */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-4 px-4 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-xl text-sm shadow-xl shadow-slate-900/20 border border-slate-800 transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>{isRTL ? 'داخڵبوون...' : 'Authenticating...'}</span>
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                <span>{isRTL ? 'چوونە ژوورەوە بۆ ئەدمین' : 'Log In to Admin Hub'}</span>
-                {isRTL ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
-              </span>
-            )}
-          </button>
-        </form>
+        </div>
 
-        {/* Footer Back Link */}
-        <div className="mt-8 pt-5 border-t border-slate-200/80 text-center">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-xs font-black text-slate-500 hover:text-indigo-600 transition-colors"
-          >
-            {isRTL ? (
-              <>
-                <ArrowRight className="w-3.5 h-3.5" />
-                <span>گەڕانەوە بۆ لاپەڕەی سەرەکی</span>
-              </>
-            ) : (
-              <>
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Back to Home</span>
-              </>
-            )}
-          </Link>
+        {/* Win32 Dialog Status Bar */}
+        <div className="bg-slate-300 border-t border-slate-400 p-1 flex justify-between text-[10px] font-mono text-slate-600">
+          <span>STATUS: SECURE_PROT_V26</span>
+          <span>AUTH: LOCAL_NAV</span>
         </div>
 
       </div>

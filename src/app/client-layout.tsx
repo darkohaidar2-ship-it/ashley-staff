@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import { AppProvider, useAppContext } from '@/context/app-provider';
 import { LanguageProvider } from '@/context/language-provider';
+import { TopNavbar } from '@/components/layout/TopNavbar';
 
 function DynamicFontInjector({ children }: { children: React.ReactNode }) {
   const { settings } = useAppContext();
@@ -48,11 +49,28 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     <LanguageProvider>
       <AppProvider>
         <DynamicFontInjector>
-          <div className="min-h-screen bg-slate-100 text-slate-900 font-sans antialiased flex flex-col" dir="rtl">
-            {/* Main Full Width Classic Content Container */}
-            <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6">
+          <div className="min-h-screen bg-slate-200 text-slate-900 font-sans antialiased flex flex-col dir-rtl" dir="rtl">
+            
+            {/* Classic ERP Enterprise Top Window Header & Ribbon Toolbar */}
+            <TopNavbar />
+
+            {/* Main Full Width Classic Content Area */}
+            <main className="flex-1 w-full max-w-7xl mx-auto p-2 md:p-4">
               {children}
             </main>
+
+            {/* Classic Win32 Bottom Statusbar */}
+            <footer className="w-full bg-slate-200 border-t border-slate-400 p-1 flex flex-wrap items-center justify-between text-[11px] font-mono text-slate-700 select-none">
+              <div className="flex items-center gap-2">
+                <span className="statusbar-segment text-emerald-800 font-bold">● SYSTEM READY (FIRESTORE ONLINE)</span>
+                <span className="statusbar-segment font-bold">RTL MODE: KURDISH (SORANI)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="statusbar-segment">ERP CORE: v2026.4</span>
+                <span className="statusbar-segment">USER: SUPER ADMIN</span>
+              </div>
+            </footer>
+
           </div>
         </DynamicFontInjector>
       </AppProvider>

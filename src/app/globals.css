@@ -4,428 +4,212 @@
 
 @layer base {
   :root {
-    --background: 210 40% 96%; /* Ice-Blue Light Background */
-    --foreground: 222 47% 11%; /* Dark slate text */
-    --card: 0 0% 100%; /* Pure White cards */
-    --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 190 95% 42%; /* Beautiful bright cyan-blue */
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 92%; /* Soft slate gray */
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 92%;
-    --muted-foreground: 215 16% 47%; /* Slate gray subtext */
-    --accent: 210 40% 92%;
-    --accent-foreground: 190 95% 42%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 214 32% 90%; /* Soft light border */
-    --input: 214 32% 90%;
-    --ring: 190 95% 42%;
-    
-    --chart-1: 190 95% 42%;
-    --chart-2: 217 91% 60%;
-    --chart-3: 142 76% 45%;
-    --chart-4: 37 95% 55%;
-    --chart-5: 271 91% 65%;
-    
-    --radius: 12px;
-    
-    --win-primary: #0078d4;
-    --win-secondary: #f3f3f3;
-    --win-card-bg: rgba(255, 255, 255, 0.65);
-    --win-text-color: #1c1c1c;
-    --win-sidebar-bg: rgba(243, 243, 243, 0.7);
-    --win-btn-radius: 24px;
-
-    --font-heading: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
-    --font-body: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
-    --font-mono: 'Cascadia Code', 'Consolas', monospace;
-
-    --dashboard-font-size: var(--global-font-size, 12px); 
-    --dashboard-radius: 12px;
-    --dashboard-title-color: 190 95% 42%;
-
-    --global-font-size: 12px; /* Small text */
-    --branch-font-size: 9px;
-
-    --sidebar-background: 210 30% 92%; /* Slightly darker slate-blue for sidebar */
-    --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 190 95% 42%;
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 210 40% 90%;
-    --sidebar-accent-foreground: 190 95% 42%;
-    --sidebar-border: 214 32% 88%;
-    --sidebar-ring: 190 95% 42%;
-  }
-  
-  .dark {
-    --background: 210 40% 96%;
+    --background: 210 20% 94%; /* Classic Desktop Light Gray */
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 190 95% 42%;
+    --primary: 215 50% 35%; /* Steel Blue */
     --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 92%;
+    --secondary: 210 20% 90%;
     --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 92%;
+    --muted: 210 20% 90%;
     --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 92%;
-    --accent-foreground: 190 95% 42%;
+    --accent: 210 20% 90%;
+    --accent-foreground: 215 50% 35%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 32% 90%;
-    --input: 214 32% 90%;
-    --ring: 190 95% 42%;
-
-    --sidebar-background: 210 30% 92%;
-    --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 190 95% 42%;
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 210 40% 90%;
-    --sidebar-accent-foreground: 190 95% 42%;
-    --sidebar-border: 214 32% 88%;
-    --sidebar-ring: 190 95% 42%;
-
-    --status-correct-bg: 142 76% 85%; 
-    --status-less-bg: 25 95% 85%;
-    --status-more-bg: 37 95% 85%;
-    --status-wrapped-bg: 54 92% 85%;
-    --status-damaged-bg: 0 84% 85%;
-    --location-occupied-border: 190 95% 42%;
-    --location-occupied-bg: 210 40% 96%;
+    --border: 214 20% 80%;
+    --input: 214 20% 80%;
+    --ring: 215 50% 35%;
     
-    --status-new-bg: 48 96% 85%;
-    --status-updated-bg: 142 76% 80%; 
-    --tab-active-background: 190 95% 42%;
-    --tab-active-foreground: 210 40% 98%;
+    --radius: 0px !important; /* STRICT SHARP CORNERS ONLY */
+
+    --font-heading: 'Noto Kufi Arabic', 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
+    --font-body: 'Noto Kufi Arabic', 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
+    --font-mono: 'Consolas', 'Courier New', monospace;
+
+    --global-font-size: 12px; /* DENSE COMPACT DESKTOP TEXT */
   }
 }
 
 @layer base {
   * {
-    @apply border-border;
+    border-radius: 0px !important; /* STRICT SHARP CORNERS EVERYWHERE */
+    box-shadow: none;
   }
   body {
-    @apply bg-background text-foreground font-sans leading-relaxed;
-    word-spacing: normal;
-    font-size: var(--global-font-size, 13px);
-    position: relative;
-    background-color: #f3f7fa !important;
+    background-color: #dbe2e9 !important; /* Classic Dynamics NAV Steel Gray */
+    color: #0f172a;
+    font-size: 12px;
+    font-family: 'Noto Kufi Arabic', 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
+    margin: 0;
+    padding: 0;
     min-height: 100vh;
-  }
-  body::before {
-    content: "";
-    position: fixed;
-    top: -10%;
-    left: -10%;
-    width: 60%;
-    height: 60%;
-    background: radial-gradient(circle at 10% 10%, rgba(6, 182, 212, 0.16) 0%, rgba(59, 130, 246, 0.1) 40%, rgba(255, 255, 255, 0) 80%);
-    z-index: -1;
-    pointer-events: none;
-  }
-  body::after {
-    content: "";
-    position: fixed;
-    bottom: -10%;
-    right: -10%;
-    width: 70%;
-    height: 70%;
-    background: radial-gradient(circle at 90% 90%, rgba(168, 85, 247, 0.15) 0%, rgba(236, 72, 153, 0.08) 50%, rgba(255, 255, 255, 0) 80%);
-    z-index: -1;
-    pointer-events: none;
   }
 }
 
 @layer utilities {
-  .bg-status-correct { @apply bg-[hsl(var(--status-correct-bg))]; }
-  .bg-status-less { @apply bg-[hsl(var(--status-less-bg))]; }
-  .bg-status-more { @apply bg-[hsl(var(--status-more-bg))]; }
-  .bg-status-wrapped { @apply bg-[hsl(var(--status-wrapped-bg))]; }
-  .bg-status-damaged { @apply bg-[hsl(var(--status-damaged-bg))]; }
-  .bg-status-new { @apply bg-[hsl(var(--status-new-bg))]; }
-  .bg-status-updated { @apply bg-[hsl(var(--status-updated-bg))]; }
-
-  /* Premium Glassmorphism & Glossy Styling */
-  .glass-widget, .glass-panel, .win-card, .win12-card {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.45) 100%) !important;
-    backdrop-filter: blur(20px) saturate(140%) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
-    border: 1px solid rgba(255, 255, 255, 0.55) !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.75) !important;
-    border-left: 1px solid rgba(255, 255, 255, 0.75) !important;
-    border-radius: var(--win-btn-radius, 16px) !important;
-    box-shadow: 
-      0 8px 32px 0 rgba(148, 163, 184, 0.05), 
-      inset 0 1px 1px rgba(255, 255, 255, 0.8) !important;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    color: var(--win-text-color) !important;
+  /* CLASSIC WIN32 BEVELED DESKTOP BUTTON */
+  .btn-classic {
+    background: linear-gradient(180deg, #ffffff 0%, #e2e8f0 60%, #cbd5e1 100%) !important;
+    color: #0f172a !important;
+    border-top: 1.5px solid #ffffff !important;
+    border-left: 1.5px solid #ffffff !important;
+    border-bottom: 1.5px solid #64748b !important;
+    border-right: 1.5px solid #64748b !important;
+    font-weight: 700 !important;
+    font-size: 11.5px !important;
+    padding: 3px 10px !important;
+    border-radius: 0px !important;
+    cursor: pointer !important;
+    user-select: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
   }
 
-  .win-card:hover, .win12-card:hover, .glass-widget:hover, .glass-panel:hover {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.65) 100%) !important;
-    border-color: rgba(255, 255, 255, 0.75) !important;
-    box-shadow: 
-      0 12px 40px 0 rgba(148, 163, 184, 0.1), 
-      inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
-    transform: translateY(-2px);
+  .btn-classic:hover {
+    background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 60%, #e2e8f0 100%) !important;
+    border-bottom-color: #475569 !important;
+    border-right-color: #475569 !important;
   }
 
-  .win-btn-primary, button:not([class*="bg-transparent"]):not([class*="border"]):not([class*="ghost"]):not([class*="secondary"]):not([class*="outline"]) {
-    background: linear-gradient(135deg, hsl(var(--primary)) 0%, #0093e9 100%) !important;
+  .btn-classic:active {
+    background: #cbd5e1 !important;
+    border-top: 1.5px solid #64748b !important;
+    border-left: 1.5px solid #64748b !important;
+    border-bottom: 1.5px solid #ffffff !important;
+    border-right: 1.5px solid #ffffff !important;
+  }
+
+  .btn-classic-primary {
+    background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 60%, #1e40af 100%) !important;
     color: #ffffff !important;
-    border-radius: var(--win-btn-radius, 12px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.25) !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.45) !important;
-    box-shadow: 
-      0 4px 12px 0 rgba(0, 120, 212, 0.15), 
-      inset 0 1px 1px rgba(255, 255, 255, 0.3) !important;
-    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.12);
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    cursor: pointer;
+    border-top: 1.5px solid #60a5fa !important;
+    border-left: 1.5px solid #60a5fa !important;
+    border-bottom: 1.5px solid #172554 !important;
+    border-right: 1.5px solid #172554 !important;
+    font-weight: 700 !important;
+    font-size: 11.5px !important;
+    padding: 4px 12px !important;
+    border-radius: 0px !important;
+    cursor: pointer !important;
   }
 
-  .win-btn-primary:hover, button:not([class*="bg-transparent"]):not([class*="border"]):not([class*="ghost"]):not([class*="secondary"]):not([class*="outline"]):hover {
-    opacity: 0.95 !important;
-    transform: translateY(-1px);
-    box-shadow: 
-      0 6px 16px 0 rgba(0, 120, 212, 0.22), 
-      inset 0 1px 1px rgba(255, 255, 255, 0.4) !important;
+  .btn-classic-primary:hover {
+    background: linear-gradient(180deg, #3b82f6 0%, #2563eb 60%, #1d4ed8 100%) !important;
   }
 
-  button[class*="outline"], button[class*="secondary"] {
-    background: rgba(255, 255, 255, 0.5) !important;
-    backdrop-filter: blur(10px) saturate(120%) !important;
-    -webkit-backdrop-filter: blur(10px) saturate(120%) !important;
-    border: 1px solid rgba(255, 255, 255, 0.6) !important;
-    border-radius: var(--win-btn-radius, 12px) !important;
-    color: var(--foreground) !important;
-    box-shadow: 0 2px 8px 0 rgba(148, 163, 184, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.7) !important;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    cursor: pointer;
+  .btn-classic-danger {
+    background: linear-gradient(180deg, #dc2626 0%, #b91c1c 60%, #991b1b 100%) !important;
+    color: #ffffff !important;
+    border-top: 1.5px solid #fca5a5 !important;
+    border-left: 1.5px solid #fca5a5 !important;
+    border-bottom: 1.5px solid #450a0a !important;
+    border-right: 1.5px solid #450a0a !important;
+    font-weight: 700 !important;
+    font-size: 11.5px !important;
+    padding: 4px 12px !important;
+    border-radius: 0px !important;
+    cursor: pointer !important;
   }
 
-  button[class*="outline"]:hover, button[class*="secondary"]:hover {
-    background: rgba(255, 255, 255, 0.75) !important;
-    border-color: rgba(255, 255, 255, 0.8) !important;
-    box-shadow: 0 4px 12px 0 rgba(148, 163, 184, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
-    transform: translateY(-1px);
+  /* CLASSIC ERP BORDERED PANEL */
+  .panel-classic {
+    background-color: #ffffff !important;
+    border: 1px solid #94a3b8 !important;
+    border-radius: 0px !important;
+    box-shadow: none !important;
   }
 
-  .text-gradient {
-    @apply text-foreground font-bold;
+  .panel-header-classic {
+    background: linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 100%) !important;
+    border-bottom: 1px solid #94a3b8 !important;
+    color: #0f172a !important;
+    font-weight: 800 !important;
+    font-size: 12px !important;
+    padding: 4px 8px !important;
+    border-radius: 0px !important;
   }
 
-  .branch-label {
-    font-size: var(--branch-font-size, 9px);
-    @apply font-bold uppercase tracking-widest leading-none text-muted-foreground;
+  /* CLASSIC ERP DATA GRID (TABLE) */
+  .table-classic {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    border: 1px solid #94a3b8 !important;
+    font-size: 11.5px !important;
+    text-align: right !important;
   }
-}
 
-@media print {
-  body {
-    background-color: white !important;
-    color: black;
+  .table-classic th {
+    background: linear-gradient(180deg, #f8fafc 0%, #cbd5e1 100%) !important;
+    color: #0f172a !important;
+    font-weight: 800 !important;
+    border: 1px solid #94a3b8 !important;
+    padding: 5px 8px !important;
+    white-space: nowrap !important;
   }
-  .print-hidden {
-    display: none !important;
+
+  .table-classic td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 4px 8px !important;
+    color: #0f172a !important;
   }
-}
 
-/* Simple animations */
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-5px);
+  .table-classic tr:nth-child(even) {
+    background-color: #ffffff !important;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  .table-classic tr:nth-child(odd) {
+    background-color: #f8fafc !important;
   }
-}
-.animate-fade-in-down { animation: fadeInDown 0.3s ease-out; }
 
-/* Refined, simple card */
-.win-card {
-    @apply bg-card border border-border rounded-[16px] shadow-sm transition-all duration-300 relative overflow-hidden;
-}
+  .table-classic tr:hover {
+    background-color: #fef08a !important; /* Classic Windows yellow cell highlight */
+  }
 
-.win-card:hover {
-    @apply border-primary/30 shadow-md;
-}
+  .table-classic tr.grand-total-row {
+    background: #1e293b !important;
+    color: #ffffff !important;
+    font-weight: 800 !important;
+  }
 
-.btn-text-glow {
-    @apply relative transition-colors duration-300 hover:text-primary font-medium;
-}
+  .table-classic tr.grand-total-row td {
+    border-color: #334155 !important;
+    color: #ffffff !important;
+  }
 
-/* RTL / Kurdish Language Readability Adjustments */
-html[dir="rtl"] {
-  --global-font-size: 13.5px;
-}
+  /* CLASSIC INSET INPUT FIELD */
+  .input-classic {
+    background-color: #ffffff !important;
+    border-top: 1.5px solid #64748b !important;
+    border-left: 1.5px solid #64748b !important;
+    border-bottom: 1.5px solid #e2e8f0 !important;
+    border-right: 1.5px solid #e2e8f0 !important;
+    border-radius: 0px !important;
+    padding: 3px 6px !important;
+    font-size: 12px !important;
+    color: #0f172a !important;
+  }
 
-html[dir="rtl"] body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  letter-spacing: normal;
-  word-spacing: normal;
-}
+  .input-classic:focus {
+    outline: 1px solid #2563eb !important;
+    background-color: #ffffea !important; /* Classic NAV yellow input focus */
+  }
 
-/* RTL-aware flex and grid utilities */
-[dir="rtl"] .slide-in-from-right-10 {
-  --tw-enter-translate-x: -2.5rem;
-}
-
-/* ==========================================================================
-   NEON DASHBOARD CARD GLOWS & CUSTOM COLORS (LIGHT MODE ADAPTED)
-   ========================================================================== */
-
-/* 1. Recent Employees Card (Cyan Glow) */
-#recent-employees {
-  @apply bg-card !important;
-  border-color: rgba(6, 182, 212, 0.15) !important;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.03) !important;
-}
-#recent-employees:hover {
-  border-color: rgba(6, 182, 212, 0.45) !important;
-  box-shadow: 0 12px 35px rgba(6, 182, 212, 0.08) !important;
-}
-#recent-employees .text-primary {
-  color: rgb(6, 182, 212) !important;
-}
-
-/* 2. Staged Cargo Card (Amber Glow) */
-#staged-items {
-  @apply bg-card !important;
-  border-color: rgba(245, 158, 11, 0.15) !important;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.03) !important;
-}
-#staged-items:hover {
-  border-color: rgba(245, 158, 11, 0.45) !important;
-  box-shadow: 0 12px 35px rgba(245, 158, 11, 0.08) !important;
-}
-#staged-items .text-primary {
-  color: rgb(245, 158, 11) !important;
-}
-
-/* 3. Order Requests Card (Emerald Glow) */
-#order-requests {
-  @apply bg-card !important;
-  border-color: rgba(16, 185, 129, 0.15) !important;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.03) !important;
-}
-#order-requests:hover {
-  border-color: rgba(16, 185, 129, 0.45) !important;
-  box-shadow: 0 12px 35px rgba(16, 185, 129, 0.08) !important;
-}
-#order-requests .text-primary {
-  color: rgb(16, 185, 129) !important;
-}
-
-/* 4. Storage Occupancy Chart Card (Purple Glow) */
-#storage-chart {
-  @apply bg-card !important;
-  border-color: rgba(168, 85, 247, 0.15) !important;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.03) !important;
-}
-#storage-chart:hover {
-  border-color: rgba(168, 85, 247, 0.45) !important;
-  box-shadow: 0 12px 35px rgba(168, 85, 247, 0.08) !important;
-}
-#storage-chart .text-primary {
-  color: rgb(168, 85, 247) !important;
-}
-
-/* 5. Monthly Financial Chart Card (Indigo/Blue Glow) */
-#monthly-chart {
-  @apply bg-card !important;
-  border-color: rgba(59, 130, 246, 0.15) !important;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.03) !important;
-}
-#monthly-chart:hover {
-  border-color: rgba(59, 130, 246, 0.45) !important;
-  box-shadow: 0 12px 35px rgba(59, 130, 246, 0.08) !important;
-}
-#monthly-chart .text-primary {
-  color: rgb(59, 130, 246) !important;
-}
-
-/* 6. Financial Summary Cards (Four distinct glows) */
-.financial-summaries-grid > *:nth-child(1) .win-card {
-  @apply bg-card !important;
-  border-color: rgba(6, 182, 212, 0.15) !important;
-}
-.financial-summaries-grid > *:nth-child(1) .win-card:hover {
-  border-color: rgba(6, 182, 212, 0.45) !important;
-  box-shadow: 0 10px 30px rgba(6, 182, 212, 0.08) !important;
-}
-.financial-summaries-grid > *:nth-child(1) svg {
-  color: rgb(6, 182, 212) !important;
-}
-
-.financial-summaries-grid > *:nth-child(2) .win-card {
-  @apply bg-card !important;
-  border-color: rgba(168, 85, 247, 0.15) !important;
-}
-.financial-summaries-grid > *:nth-child(2) .win-card:hover {
-  border-color: rgba(168, 85, 247, 0.45) !important;
-  box-shadow: 0 10px 30px rgba(168, 85, 247, 0.08) !important;
-}
-.financial-summaries-grid > *:nth-child(2) svg {
-  color: rgb(168, 85, 247) !important;
-}
-
-.financial-summaries-grid > *:nth-child(3) .win-card {
-  @apply bg-card !important;
-  border-color: rgba(16, 185, 129, 0.15) !important;
-}
-.financial-summaries-grid > *:nth-child(3) .win-card:hover {
-  border-color: rgba(16, 185, 129, 0.45) !important;
-  box-shadow: 0 10px 30px rgba(16, 185, 129, 0.08) !important;
-}
-.financial-summaries-grid > *:nth-child(3) svg {
-  color: rgb(16, 185, 129) !important;
-}
-
-.financial-summaries-grid > *:nth-child(4) .win-card {
-  @apply bg-card !important;
-  border-color: rgba(245, 158, 11, 0.15) !important;
-}
-.financial-summaries-grid > *:nth-child(4) .win-card:hover {
-  border-color: rgba(245, 158, 11, 0.45) !important;
-  box-shadow: 0 10px 30px rgba(245, 158, 11, 0.08) !important;
-}
-.financial-summaries-grid > *:nth-child(4) svg {
-  color: rgb(245, 158, 11) !important;
-}
-
-/* 7. Custom Link Styling to Look Like Buttons */
-a:not([class*="flex"]):not([class*="block"]):not([class*="win-card"]):not([class*="button"]):not([class*="btn"]) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.35rem 0.85rem;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  border-radius: 8px;
-  border: 1px solid hsl(var(--primary) / 0.15);
-  background-color: hsl(var(--primary) / 0.06);
-  color: hsl(var(--primary)) !important;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  text-decoration: none;
-  cursor: pointer;
-}
-a:not([class*="flex"]):not([class*="block"]):not([class*="win-card"]):not([class*="button"]):not([class*="btn"]):hover {
-  background-color: hsl(var(--primary));
-  color: hsl(var(--primary-foreground)) !important;
-  border-color: hsl(var(--primary));
-  box-shadow: 0 4px 12px hsl(var(--primary) / 0.15);
-  transform: translateY(-1px);
-}
-a:not([class*="flex"]):not([class*="block"]):not([class*="win-card"]):not([class*="button"]):not([class*="btn"]):active {
-  transform: translateY(0);
+  /* CLASSIC STATUSBAR SEGMENT */
+  .statusbar-segment {
+    background: #e2e8f0 !important;
+    border-top: 1px solid #94a3b8 !important;
+    border-left: 1px solid #94a3b8 !important;
+    border-bottom: 1px solid #ffffff !important;
+    border-right: 1px solid #ffffff !important;
+    padding: 2px 6px !important;
+    font-size: 11px !important;
+    font-family: monospace !important;
+    color: #334155 !important;
+  }
 }
