@@ -378,19 +378,25 @@ export default function AdminPage() {
 
           {/* Employee Roster Data Grid */}
           <div className="space-y-1.5">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              خشتەی ناوی کارمەندان و کۆدەکانی ئامادەبوون (Employee Roster Grid):
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center justify-between">
+              <span>🔑 خشتەی ناوی کارمەندان و کۆدەکانی PIN (Employee Roster & PIN Codes Grid):</span>
+              <span className="text-[10px] font-mono text-blue-900 bg-blue-100 px-1.5 py-0.2 border border-blue-300">
+                PIN LOGIN ACCESS ENABLED
+              </span>
             </h3>
 
             <div className="overflow-x-auto border border-slate-400">
               <table className="table-classic">
                 <thead>
                   <tr>
-                    <th>کۆدی PIN</th>
-                    <th>ناوی سیانی / کورت</th>
+                    <th>کۆدی PIN (پاسۆرد)</th>
+                    <th>کۆدی ID</th>
+                    <th>ناوی سیانی کارمەند</th>
                     <th>پلە / ئەرک</th>
                     <th>ژمارەی مۆبایل</th>
-                    <th>دۆخ</th>
+                    <th>دەست بەکاربوون</th>
+                    <th>وازهێنان</th>
+                    <th>دۆخی دەوام</th>
                     <th>کردارەکان</th>
                   </tr>
                 </thead>
@@ -398,12 +404,25 @@ export default function AdminPage() {
                   {filteredEmployees.length > 0 ? (
                     filteredEmployees.map((emp) => (
                       <tr key={emp.id} className={emp.status === 'resigned' ? 'bg-rose-50' : ''}>
-                        <td className="font-mono font-bold text-blue-900">{emp.password || '1234'}</td>
-                        <td className="font-bold">{emp.fullName3Part || emp.name}</td>
-                        <td className="font-mono text-[11px] text-slate-700">{emp.role || 'Staff'}</td>
-                        <td className="font-mono text-[11px]">{emp.phone || '-'}</td>
+                        {/* PIN Code Highlighted Badge */}
+                        <td className="font-mono font-black text-xs text-blue-950 bg-amber-100/90 text-center border border-amber-400 px-2 py-1 shadow-sm">
+                          🔑 {emp.password || '1234'}
+                        </td>
+                        <td className="font-mono text-[11px] text-slate-600 font-bold">
+                          {emp.employeeId ? `EMP-${emp.employeeId}` : `EMP-${emp.id.slice(-3)}`}
+                        </td>
+                        <td className="font-bold text-slate-900">
+                          {emp.fullName3Part || emp.name}
+                          {emp.name && emp.fullName3Part && emp.name !== emp.fullName3Part && (
+                            <span className="text-[10px] text-slate-500 font-normal block">({emp.name})</span>
+                          )}
+                        </td>
+                        <td className="font-mono text-[11px] text-indigo-900 font-bold">{emp.role || 'Employee'}</td>
+                        <td className="font-mono text-[11px] text-slate-800 dir-ltr text-right">{emp.phone || '---'}</td>
+                        <td className="font-mono text-[10px] text-slate-600">{emp.startDate || emp.employmentStartDate || '---'}</td>
+                        <td className="font-mono text-[10px] text-rose-700">{emp.resignedDate || '---'}</td>
                         <td>
-                          {emp.status === 'resigned' ? (
+                          {emp.status === 'resigned' || emp.isActive === false ? (
                             <span className="px-1.5 py-0.2 bg-rose-200 text-rose-900 font-bold border border-rose-400 text-[10px]">وازهێناو</span>
                           ) : (
                             <span className="px-1.5 py-0.2 bg-emerald-200 text-emerald-900 font-bold border border-emerald-400 text-[10px]">چالاک</span>
@@ -414,6 +433,7 @@ export default function AdminPage() {
                             <button
                               onClick={() => handleOpenEmpModal(emp)}
                               className="btn-classic text-[10px]"
+                              title="دەستکاریکردنی زانیاریەکان"
                             >
                               <Edit className="w-3 h-3 text-blue-700" />
                               <span>دەستکاری</span>
@@ -421,15 +441,16 @@ export default function AdminPage() {
                             <button
                               onClick={() => handleToggleResignation(emp)}
                               className="btn-classic text-[10px]"
+                              title="تۆمارکردنی وازهێنان یان گەڕانەوە"
                             >
-                              <span>🔄 وازهێنان</span>
+                              <span>{emp.status === 'resigned' ? '🔄 گەڕانەوە' : '📁 وازهێنان'}</span>
                             </button>
                             <button
                               onClick={() => handleDeleteEmployee(emp.id)}
                               className="btn-classic text-[10px] text-rose-800"
+                              title="سڕینەوەی یەکجاری"
                             >
                               <Trash2 className="w-3 h-3 text-rose-700" />
-                              <span>سڕینەوە</span>
                             </button>
                           </div>
                         </td>
@@ -437,7 +458,7 @@ export default function AdminPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className="text-center py-4 text-slate-500 font-bold">
+                      <td colSpan={9} className="text-center py-4 text-slate-500 font-bold">
                         هیچ کارمەندێک نەدۆزرایەوە
                       </td>
                     </tr>
@@ -445,8 +466,8 @@ export default function AdminPage() {
                 </tbody>
                 <tfoot>
                   <tr className="grand-total-row">
-                    <td colSpan={2}>کۆی گشتی کارمەندان:</td>
-                    <td colSpan={4} className="font-mono">{filteredEmployees.length} Employee(s)</td>
+                    <td colSpan={3}>کۆی گشتی کارمەندان لە خشتەکەدا:</td>
+                    <td colSpan={6} className="font-mono">{filteredEmployees.length} Employee(s) Registered</td>
                   </tr>
                 </tfoot>
               </table>
