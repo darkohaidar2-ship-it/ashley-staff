@@ -98,7 +98,7 @@ export function useAuth() {
     return {
       user: null,
       loading: false,
-      login: async () => ({ success: false }),
+      login: async (): Promise<{ success: boolean; errorField?: 'username' | 'password' }> => ({ success: false }),
       logout: async () => {},
       hasPermission: () => false,
     };
