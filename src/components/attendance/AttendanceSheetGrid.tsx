@@ -154,23 +154,35 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
             </select>
           </div>
 
-          {/* PRINT & DOWNLOAD BUTTONS */}
+          {/* 🖨️ PRINT, PDF & CSV ACTION BUTTONS */}
           <button
             type="button"
             onClick={handlePrint}
-            className="btn-classic text-xs font-bold flex items-center gap-1 py-1 px-2.5"
-            title="پرێنتکردنی خشتەکە"
+            className="btn-classic text-xs font-bold flex items-center gap-1 py-1 px-2 border border-slate-400 bg-slate-200 hover:bg-slate-300 text-slate-950"
+            title="پرێنتکردنی ناوی لیست و کاتی پرێنت لەسەر کاغەز"
           >
-            <span>🖨️ پرێنتکردن</span>
+            <span>🖨️ پرێنت (Print)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              // Direct PDF generation trigger
+              window.print();
+            }}
+            className="btn-classic text-xs font-bold flex items-center gap-1 py-1 px-2 border border-red-700 bg-rose-700 hover:bg-rose-800 text-white"
+            title="داگرتنی فایلی PDF"
+          >
+            <span>📄 داگرتنی PDF</span>
           </button>
 
           <button
             type="button"
             onClick={handleDownloadCsv}
-            className="btn-classic-primary text-xs font-bold flex items-center gap-1 py-1 px-2.5"
+            className="btn-classic-primary text-xs font-bold flex items-center gap-1 py-1 px-2 border border-blue-900 bg-blue-900 hover:bg-blue-950 text-white"
             title="داگرتنی فایلی Excel / CSV"
           >
-            <span>📥 داگرتن (CSV)</span>
+            <span>📊 داگرتنی CSV</span>
           </button>
         </div>
       </div>

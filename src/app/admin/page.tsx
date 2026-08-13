@@ -390,11 +390,20 @@ export default function AdminPage() {
               <div className="flex items-center gap-1.5 print:hidden">
                 <button
                   onClick={() => window.print()}
-                  className="btn-classic text-[11px] font-bold py-0.5 px-2"
+                  className="btn-classic text-[11px] font-bold py-0.5 px-2 bg-slate-200 hover:bg-slate-300 border border-slate-400 text-slate-950"
                   title="پرێنتکردنی ناوی کارمەندان"
                 >
-                  🖨️ پرێنتکردن
+                  🖨️ پرێنت (Print)
                 </button>
+
+                <button
+                  onClick={() => window.print()}
+                  className="btn-classic text-[11px] font-bold py-0.5 px-2 bg-rose-700 hover:bg-rose-800 border border-red-700 text-white"
+                  title="داگرتنی فایلی PDF"
+                >
+                  📄 داگرتنی PDF
+                </button>
+
                 <button
                   onClick={() => {
                     const printDate = format(new Date(), 'yyyy-MM-dd');
@@ -413,10 +422,10 @@ export default function AdminPage() {
                     link.click();
                     document.body.removeChild(link);
                   }}
-                  className="btn-classic-primary text-[11px] font-bold py-0.5 px-2"
+                  className="btn-classic-primary text-[11px] font-bold py-0.5 px-2 bg-blue-900 hover:bg-blue-950 border border-blue-950 text-white"
                   title="داگرتنی فایلی Excel/CSV"
                 >
-                  📥 داگرتن (CSV)
+                  📊 داگرتنی CSV
                 </button>
               </div>
             </div>

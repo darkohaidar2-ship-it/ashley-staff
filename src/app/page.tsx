@@ -447,10 +447,54 @@ export default function MainPage() {
 
             {/* Model Catalog Grid */}
             <div className="space-y-1.5">
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center justify-between">
-                <span>ئەنجامەکانی گەڕان ({filteredItems.length} مۆدێل):</span>
-                <span className="text-[10px] text-slate-500 font-mono">Real-time Local Inventory</span>
-              </h3>
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-100 p-2 border border-slate-300">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>ئەنجامەکانی گەڕان ({filteredItems.length} مۆدێل):</span>
+                </h3>
+
+                <div className="flex items-center gap-1.5 print:hidden">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="btn-classic text-[11px] font-bold py-0.5 px-2 bg-slate-200 hover:bg-slate-300 border border-slate-400 text-slate-950"
+                    title="پرێنتکردنی لیستی مۆدێلەکان"
+                  >
+                    🖨️ پرێنت (Print)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="btn-classic text-[11px] font-bold py-0.5 px-2 bg-rose-700 hover:bg-rose-800 border border-red-700 text-white"
+                    title="داگرتنی فایلی PDF"
+                  >
+                    📄 داگرتنی PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const printDate = format(new Date(), 'yyyy-MM-dd');
+                      const printTime = format(new Date(), 'HH:mm:ss');
+                      let csvContent = `\uFEFFناوی لیست: کەتەلۆگ و لیستی مۆدێلەکانی کۆگا, بەرواری پرێنت: ${printDate}, کاتی پرێنت: ${printTime}\n\n`;
+                      csvContent += 'کۆدی مۆدێل,ناوی کاڵا,پۆلێن,دۆخ,بڕی ئیستۆک\n';
+                      filteredItems.forEach(item => {
+                        csvContent += `"${item.model || 'MODEL'}","${item.name || 'مۆدێل'}","${item.classification || 'کۆگا'}","${item.modelCondition || 'بەردەست'}","${item.quantity ?? 1}"\n`;
+                      });
+                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.setAttribute('download', `Ashley_Models_Catalog_${printDate}.csv`);
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    className="btn-classic-primary text-[11px] font-bold py-0.5 px-2 bg-blue-900 hover:bg-blue-950 border border-blue-950 text-white"
+                    title="داگرتنی فایلی CSV"
+                  >
+                    📊 داگرتنی CSV
+                  </button>
+                </div>
+              </div>
 
               <div className="overflow-x-auto border border-slate-400">
                 <table className="table-classic">
