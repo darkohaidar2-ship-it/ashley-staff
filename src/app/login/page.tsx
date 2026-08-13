@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useTranslation } from '@/hooks/use-translation';
 import Link from 'next/link';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, ShieldCheck, Lock, User, Sparkles, ArrowRight, ArrowLeft } from 'lucide-react';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -15,7 +15,7 @@ export default function AdminLoginPage() {
 
   const [mounted, setMounted] = useState(false);
   const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState('001122');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -69,43 +69,88 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-[85vh] flex items-center justify-center p-4" dir={isRTL ? 'rtl' : 'ltr'}>
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl p-8 shadow-md">
+    <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-slate-950 text-white font-sans" dir={isRTL ? 'rtl' : 'ltr'}>
+      {/* Ambient background glows */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-gradient-to-tr from-blue-600/20 via-indigo-600/20 to-purple-600/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-10 right-10 w-[300px] h-[300px] bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute top-10 left-10 w-[250px] h-[250px] bg-amber-500/10 rounded-full blur-[90px] pointer-events-none" />
+
+      {/* Main Glass Card */}
+      <div className="relative z-10 w-full max-w-md bg-slate-900/80 backdrop-blur-2xl border border-slate-800/90 rounded-3xl p-8 shadow-2xl shadow-black/80 transition-all duration-300">
         
-        {/* Header */}
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-            {isRTL ? 'داخڵبوونی ئەدمین (Admin)' : 'Admin Login'}
+        {/* Brand Shield & Title Header */}
+        <div className="text-center mb-8 flex flex-col items-center">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 p-0.5 shadow-lg shadow-indigo-500/30 mb-4 flex items-center justify-center">
+            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
+              <ShieldCheck className="w-8 h-8 text-indigo-400" />
+            </div>
+          </div>
+          
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[11px] font-black tracking-wide mb-2">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>ASHLEY ERP SECURITY 2026</span>
+          </div>
+
+          <h1 className="text-2xl font-black tracking-tight text-white">
+            {isRTL ? 'داخڵبوونی بەڕێوەبەر (Admin)' : 'Admin Portal Login'}
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            {isRTL ? 'تکایە زانیارییەکان بنووسە بۆ بەڕێوەبردنی سیستەم' : 'Enter credentials to access full management system'}
+          <p className="text-xs text-slate-400 font-bold mt-1 max-w-xs leading-relaxed">
+            {isRTL ? 'تکایە زانیارییەکان بنووسە بۆ بەڕێوەبردنی سیستەمی سەرەکی' : 'Enter admin credentials to manage Ashley ERP system'}
           </p>
         </div>
 
+        {/* Quick Credential Preset Badge */}
+        <div className="mb-6 p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-slate-400 font-bold">{isRTL ? 'زانیاری تاقیاری:' : 'Demo Admin:'}</span>
+            <code className="text-indigo-300 font-mono font-black">admin / 001122</code>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setUsername('admin');
+              setPassword('001122');
+              setError('');
+            }}
+            className="text-[10px] font-black bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+          >
+            {isRTL ? 'پڕکردنەوە' : 'Autofill'}
+          </button>
+        </div>
+
+        {/* Error Alert Box */}
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-xs font-semibold">
-            {error}
+          <div className="mb-6 p-3.5 bg-rose-950/60 border border-rose-800/80 text-rose-300 rounded-2xl text-xs font-bold flex items-start gap-2 shadow-inner">
+            <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Login Form */}
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Username Input */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              {isRTL ? 'ناوی بەکاربهێنەر (Username):' : 'Username:'}
+            <label className="block text-xs font-black text-slate-300 mb-1.5 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-indigo-400" />
+              <span>{isRTL ? 'ناوی بەکاربهێنەر (Username):' : 'Username:'}</span>
             </label>
-            <input
-              type="text"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 font-bold"
-              placeholder="admin"
-            />
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-4 py-3 border border-slate-800 rounded-2xl bg-slate-950/80 text-white text-sm font-bold placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                placeholder="admin"
+              />
+            </div>
           </div>
 
+          {/* Password Input with Eye Toggle */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              {isRTL ? 'وشەی تێپەڕ (Password):' : 'Password:'}
+            <label className="block text-xs font-black text-slate-300 mb-1.5 flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-indigo-400" />
+              <span>{isRTL ? 'وشەی تێپەڕ (Password):' : 'Password:'}</span>
             </label>
             <div className="relative flex items-center">
               <input
@@ -113,13 +158,13 @@ export default function AdminLoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 font-mono tracking-widest pl-10"
+                className="w-full px-4 py-3 border border-slate-800 rounded-2xl bg-slate-950/80 text-white text-sm font-mono tracking-widest placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all pl-12"
                 placeholder="••••••••"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute left-3 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1"
+                className="absolute left-3.5 text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
                 title={showPassword ? 'شاردنەوەی پاسۆرد' : 'نیشاندانی پاسۆرد'}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -127,18 +172,43 @@ export default function AdminLoginPage() {
             </div>
           </div>
 
+          {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-md text-sm transition-colors cursor-pointer"
+            className="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white font-black rounded-2xl text-sm shadow-lg shadow-indigo-600/30 transition-all transform active:scale-[0.99] cursor-pointer flex items-center justify-center gap-2"
           >
-            {loading ? (isRTL ? 'داخڵبوون...' : 'Logging in...') : (isRTL ? 'چوونە ژوورەوە' : 'Log In')}
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>{isRTL ? 'داخڵبوون...' : 'Authenticating...'}</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                <span>{isRTL ? 'چوونە ژوورەوە بۆ ئەدمین' : 'Log In to Admin Hub'}</span>
+                {isRTL ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
+              </span>
+            )}
           </button>
         </form>
 
-        <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800 text-center">
-          <Link href="/" className="text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
-            {isRTL ? '← گەڕانەوە بۆ لاپەڕەی سەرەکی' : '← Back to Main Page'}
+        {/* Footer Back Link */}
+        <div className="mt-8 pt-5 border-t border-slate-800/80 text-center">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-xs font-black text-slate-400 hover:text-indigo-300 transition-colors"
+          >
+            {isRTL ? (
+              <>
+                <ArrowRight className="w-3.5 h-3.5" />
+                <span>گەڕانەوە بۆ لاپەڕەی سەرەکی</span>
+              </>
+            ) : (
+              <>
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to Home</span>
+              </>
+            )}
           </Link>
         </div>
 
