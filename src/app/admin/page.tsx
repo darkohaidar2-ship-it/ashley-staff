@@ -15,6 +15,7 @@ import {
   Truck, 
   Settings, 
   Plus, 
+  UserPlus,
   MapPin, 
   Download, 
   Upload, 
@@ -33,9 +34,13 @@ import {
   UserCheck, 
   UserX,
   Sparkles,
-  Shield,
+  Edit,
+  Eye,
   Layers,
-  FileText
+  Archive,
+  Camera,
+  FileText,
+  Shield,
 } from 'lucide-react';
 
 function AdminMasterHubPage() {
