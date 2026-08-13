@@ -149,7 +149,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const db = useFirestore();
 
     const [employees, setEmployees, isEmployeesLoading] = useFirestoreCollection<Employee>('employees', initialData.employees);
-    const [attendanceLogs, setAttendanceLogs, isAttLoading] = useFirestoreCollection<AttendanceRecord>('attendanceLogs', []);
+    const [attendanceLogs, setAttendanceLogs, isAttLoading] = useFirestoreCollection<AttendanceRecord>('attendanceLogs', (initialData as any).attendanceLogs || []);
     const [excelFiles, setExcelFiles, isExcelFilesLoading] = useFirestoreCollection<ExcelFile>('excelFiles', initialData.excelFiles);
     const [rawItems, setRawItems, isItemsLoading] = useFirestoreCollection<Item>('items', initialData.items);
     const [locations, setLocations, isLocationsLoading] = useFirestoreCollection<StorageLocation>('locations', initialData.locations);

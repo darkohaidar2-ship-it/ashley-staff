@@ -261,6 +261,13 @@ export const initialData: any = {
       { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', fullName3Part: 'بەهرەمەند ڕزگار عزیز', employeeId: '10', role: 'Employee', startDate: '2026-12-27', employmentStartDate: '2026-12-27', password: '1010', isActive: true, status: 'active' },
       { id: 'emp-11', name: 'شادومان یادگار رحیم', fullName3Part: 'شادومان یادگار رحیم', employeeId: '11', role: 'Employee', startDate: '2024-09-30', employmentStartDate: '2024-09-30', password: '1011', isActive: true, status: 'active' },
     ],
+    attendanceLogs: [
+      { id: 'att-01', employeeId: 'emp-02', name: 'دارکۆ حەیدەر حسێن', type: 'هاتن (Check In)', time: '2026-08-13 08:25:10', distance: 'داخل کۆمپانیا (12m)', status: 'verified', createdAt: '2026-08-13 08:25:10' },
+      { id: 'att-02', employeeId: 'emp-05', name: 'عیماد سەباح نوری', type: 'هاتن (Check In)', time: '2026-08-13 08:30:00', distance: 'داخل کۆمپانیا (18m)', status: 'verified', createdAt: '2026-08-13 08:30:00' },
+      { id: 'att-03', employeeId: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', type: 'هاتن (Check In)', time: '2026-08-13 08:15:00', distance: 'داخل کۆمپانیا (5m)', status: 'verified', createdAt: '2026-08-13 08:15:00' },
+      { id: 'att-04', employeeId: 'emp-02', name: 'دارکۆ حەیدەر حسێن', type: 'دەرچوون (Check Out)', time: '2026-08-13 16:30:00', distance: 'داخل کۆمپانیا (12m)', status: 'verified', createdAt: '2026-08-13 16:30:00' },
+      { id: 'att-05', employeeId: 'emp-05', name: 'عیماد سەباح نوری', type: 'دەرچوون (Check Out)', time: '2026-08-13 16:35:00', distance: 'داخل کۆمپانیا (18m)', status: 'verified', createdAt: '2026-08-13 16:35:00' },
+    ],
     excelFiles: [],
     items: [],
     locations: [],
