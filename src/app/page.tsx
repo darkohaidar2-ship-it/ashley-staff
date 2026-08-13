@@ -463,9 +463,50 @@ export default function MainPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => window.print()}
+                    onClick={async () => {
+                      const tableContainer = document.getElementById('home-model-catalog-table-wrapper');
+                      const printDate = format(new Date(), 'yyyy-MM-dd');
+                      const printTime = format(new Date(), 'HH:mm:ss');
+                      const filename = `Ashley_Models_Catalog_${printDate}.pdf`;
+
+                      if (!tableContainer) {
+                        window.print();
+                        return;
+                      }
+
+                      try {
+                        const html2canvas = (await import('html2canvas')).default;
+                        const jsPDF = (await import('jspdf')).default;
+
+                        const canvas = await html2canvas(tableContainer, {
+                          scale: 2,
+                          useCORS: true,
+                          logging: false,
+                          backgroundColor: '#ffffff'
+                        });
+
+                        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                        const pdf = new jsPDF('portrait', 'mm', 'a4');
+                        const pdfWidth = pdf.internal.pageSize.getWidth();
+                        const pdfHeight = pdf.internal.pageSize.getHeight();
+
+                        pdf.setFontSize(10);
+                        pdf.setTextColor(15, 23, 42);
+                        pdf.text(`ASHLEY ERP - Catalog: Warehouse Models & Inventory`, 10, 8);
+                        pdf.text(`Print Date: ${printDate} | Print Time: ${printTime}`, pdfWidth - 90, 8);
+
+                        const imgWidth = pdfWidth - 20;
+                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+                        pdf.addImage(imgData, 'JPEG', 10, 12, imgWidth, Math.min(imgHeight, pdfHeight - 20));
+                        pdf.save(filename);
+                      } catch (err) {
+                        console.error('PDF export fallback:', err);
+                        window.print();
+                      }
+                    }}
                     className="btn-classic text-[11px] font-bold py-0.5 px-2 bg-rose-700 hover:bg-rose-800 border border-red-700 text-white"
-                    title="داگرتنی فایلی PDF"
+                    title="داگرتنی ڕاستەوخۆی فایلی PDF"
                   >
                     📄 داگرتنی PDF
                   </button>
@@ -496,7 +537,7 @@ export default function MainPage() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto border border-slate-400">
+              <div id="home-model-catalog-table-wrapper" className="overflow-x-auto border border-slate-400 bg-white">
                 <table className="table-classic">
                   <thead>
                     <tr>

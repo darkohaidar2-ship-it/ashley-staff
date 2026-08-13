@@ -93,6 +93,51 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
     document.body.removeChild(link);
   };
 
+  // Handle Direct PDF Export File Download
+  const handleDownloadPdf = async () => {
+    const tableContainer = document.getElementById('attendance-matrix-table-wrapper');
+    const printDate = format(new Date(), 'yyyy-MM-dd');
+    const printTime = format(new Date(), 'HH:mm:ss');
+    const filename = `Ashley_Attendance_Matrix_${selectedMonth}_${printDate}.pdf`;
+
+    if (!tableContainer) {
+      window.print();
+      return;
+    }
+
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const jsPDF = (await import('jspdf')).default;
+
+      const canvas = await html2canvas(tableContainer, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const pdf = new jsPDF('landscape', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      // Top Document Info Header
+      pdf.setFontSize(10);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(`ASHLEY ERP - List: Attendance 31-Day Matrix (${selectedMonth})`, 10, 8);
+      pdf.text(`Print Date: ${printDate} | Print Time: ${printTime}`, pdfWidth - 90, 8);
+
+      const imgWidth = pdfWidth - 20;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      pdf.addImage(imgData, 'JPEG', 10, 12, imgWidth, Math.min(imgHeight, pdfHeight - 20));
+      pdf.save(filename);
+    } catch (err) {
+      console.error('PDF export fallback:', err);
+      window.print();
+    }
+  };
+
   // Handle Printable View Trigger
   const handlePrint = () => {
     window.print();
@@ -101,7 +146,7 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
   return (
     <div className="space-y-3 font-sans select-none dir-rtl" dir="rtl">
       
-      {/* 🖨️ PRINT HEADER DISPLAY (VISIBLE ONLY ON PRINT / PDF OUTPUT) */}
+      {/* 🖨️ PRINT HEADER DISPLAY (VISIBLE ONLY ON PRINT OUTPUT) */}
       <div className="hidden print:block p-4 border-2 border-slate-900 mb-4 bg-slate-50 text-slate-900 text-xs">
         <div className="flex justify-between items-center border-b-2 border-slate-900 pb-2 mb-2">
           <div>
@@ -166,12 +211,9 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
 
           <button
             type="button"
-            onClick={() => {
-              // Direct PDF generation trigger
-              window.print();
-            }}
+            onClick={handleDownloadPdf}
             className="btn-classic text-xs font-bold flex items-center gap-1 py-1 px-2 border border-red-700 bg-rose-700 hover:bg-rose-800 text-white"
-            title="داگرتنی فایلی PDF"
+            title="داگرتنی ڕاستەوخۆی فایلی PDF"
           >
             <span>📄 داگرتنی PDF</span>
           </button>
@@ -188,7 +230,7 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
       </div>
 
       {/* 📊 31-DAY MATRIX GRID TABLE (Employee Rows x 31 Day Columns) */}
-      <div className="overflow-x-auto border border-slate-400 max-h-[550px] overflow-y-auto shadow-sm">
+      <div id="attendance-matrix-table-wrapper" className="overflow-x-auto border border-slate-400 max-h-[550px] overflow-y-auto shadow-sm bg-white">
         <table className="table-classic w-full text-xs">
           <thead className="sticky top-0 bg-slate-300 border-b-2 border-slate-400 z-20">
             <tr>
