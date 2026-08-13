@@ -6,7 +6,7 @@ import type { User } from '@/lib/types';
 interface AuthState {
   user: User | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (username: string, password: string) => Promise<{ success: boolean; errorField?: 'username' | 'password' }>;
   logout: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
 }
@@ -41,13 +41,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = useCallback(async (username: string, password: string): Promise<boolean> => {
-    // Validate credentials (e.g., admin / Darko and valid passwords)
+  const login = useCallback(async (username: string, password: string): Promise<{ success: boolean; errorField?: 'username' | 'password' }> => {
     const validUsername = username.trim().toLowerCase();
     const validPassword = password.trim();
 
-    if (!validUsername || !validPassword) {
-      return false;
+    // Check valid usernames: admin, darko
+    const isAllowedUser = validUsername === 'admin' || validUsername === 'darko';
+    if (!isAllowedUser) {
+      return { success: false, errorField: 'username' };
+    }
+
+    // Check valid passwords: 001122, 123456, 0000, 1234, admin
+    const isAllowedPass = validPassword === '001122' || validPassword === '123456' || validPassword === '0000' || validPassword === '1234' || validPassword === 'admin';
+    if (!isAllowedPass) {
+      return { success: false, errorField: 'password' };
     }
 
     const loggedUser: User = {
@@ -61,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentUser(loggedUser);
     sessionStorage.setItem('ashley_admin_session', JSON.stringify(loggedUser));
     localStorage.setItem('ashley_admin_session', JSON.stringify(loggedUser));
-    return true;
+    return { success: true };
   }, []);
 
   const logout = useCallback(async (): Promise<void> => {

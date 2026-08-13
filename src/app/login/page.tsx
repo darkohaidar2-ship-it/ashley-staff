@@ -12,10 +12,15 @@ export default function AdminLoginPage() {
   const { language } = useTranslation();
   const isRTL = language === 'ku';
 
+  const [mounted, setMounted] = useState(false);
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,9 +28,13 @@ export default function AdminLoginPage() {
     setError('');
 
     try {
-      const success = await login(username, password);
-      if (success) {
+      const res = await login(username, password);
+      if (res.success) {
         window.location.href = '/admin';
+      } else if (res.errorField === 'username') {
+        setError(isRTL ? '⚠️ ناوی بەکاربهێنەر (Username) نادروستە! (تکایە بنووسە: admin یان Darko)' : 'Invalid username');
+      } else if (res.errorField === 'password') {
+        setError(isRTL ? '⚠️ وشەی تێپەڕ (Password) نادروستە! (تکایە بنووسە: 001122)' : 'Invalid password');
       } else {
         setError(isRTL ? 'ناوی بەکاربهێنەر یان وشەی تێپەڕ نادروستە' : 'Invalid username or password');
       }
@@ -35,6 +44,10 @@ export default function AdminLoginPage() {
       setLoading(false);
     }
   };
+
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <div className="min-h-[85vh] flex items-center justify-center p-4" dir={isRTL ? 'rtl' : 'ltr'}>
