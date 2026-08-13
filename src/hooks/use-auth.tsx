@@ -98,7 +98,7 @@ export function useAuth() {
     return {
       user: null,
       loading: false,
-      login: async () => false,
+      login: async () => ({ success: false }),
       logout: async () => {},
       hasPermission: () => false,
     };
