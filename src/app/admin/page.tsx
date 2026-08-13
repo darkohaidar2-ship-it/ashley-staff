@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useAppContext } from '@/context/app-provider';
 import type { Employee } from '@/lib/types';
 import { FactoryMapPicker } from '@/components/maps/FactoryMapPicker';
+import { AttendanceSheetGrid } from '@/components/attendance/AttendanceSheetGrid';
 import { format } from 'date-fns';
 import { 
   Users, 
@@ -474,70 +475,13 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Attendance Photo Selfie Audit Data Grid */}
-          <div className="space-y-1.5 pt-2">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-              <Camera className="w-3.5 h-3.5 text-blue-800" />
-              <span>ئەرشیفی فۆتۆی سێلفی و لۆگەکانی ئامادەبوون (Attendance Selfie Audit Grid):</span>
-            </h3>
-
-            <div className="overflow-x-auto border border-slate-400">
-              <table className="table-classic">
-                <thead>
-                  <tr>
-                    <th>فۆتۆ</th>
-                    <th>ناوی کارمەند</th>
-                    <th>جۆری ئامادەبوون</th>
-                    <th>کاتی تۆمارکراو</th>
-                    <th>دووری لە کۆمپانیا</th>
-                    <th>سڕینەوە</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendanceLogs.length > 0 ? (
-                    attendanceLogs.slice(0, 10).map((log) => (
-                      <tr key={log.id}>
-                        <td>
-                          {log.selfieUrl ? (
-                            <img src={log.selfieUrl} alt="Selfie" className="w-8 h-8 object-cover border border-slate-400" />
-                          ) : (
-                            <span className="text-[10px] text-slate-400 font-mono">No Photo</span>
-                          )}
-                        </td>
-                        <td className="font-bold">{log.name}</td>
-                        <td>
-                          <span className={`px-1.5 py-0.2 text-[10px] font-bold border ${log.type.includes('In') || log.type.includes('هاتن') ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-rose-100 text-rose-900 border-rose-300'}`}>
-                            {log.type}
-                          </span>
-                        </td>
-                        <td className="font-mono text-[11px]">{log.time}</td>
-                        <td className="font-mono text-[11px] text-blue-900">{log.distance || 'داخل کۆمپانیا'}</td>
-                        <td>
-                          <button
-                            onClick={() => handleDeleteAttendanceLog(log.id)}
-                            className="btn-classic text-[10px] text-rose-800"
-                          >
-                            <Trash2 className="w-3 h-3 text-rose-700" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="text-center py-3 text-slate-400 font-bold">
-                        هیچ لۆگێکی فۆتۆ نەدۆزرایەوە
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-                <tfoot>
-                  <tr className="grand-total-row">
-                    <td colSpan={2}>کۆی لۆگەکانی سێلفی:</td>
-                    <td colSpan={4} className="font-mono">{attendanceLogs.length} Log Record(s)</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+          {/* 31-Day Attendance Sheet Component */}
+          <div className="pt-3 border-t border-slate-300">
+            <AttendanceSheetGrid
+              attendanceLogs={attendanceLogs}
+              employees={employees}
+              onDeleteLog={handleDeleteAttendanceLog}
+            />
           </div>
 
         </div>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useAppContext } from '@/context/app-provider';
+import { AttendanceSheetGrid } from '@/components/attendance/AttendanceSheetGrid';
 import { format } from 'date-fns';
 import { 
   Users, 
@@ -168,7 +169,12 @@ export default function MainPage() {
       createdAt: timeNow,
     };
 
-    setAttendanceLogs([newLog, ...attendanceLogs]);
+    const updatedLogs = [newLog, ...attendanceLogs];
+    setAttendanceLogs(updatedLogs);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ashley_local_attendanceLogs', JSON.stringify(updatedLogs));
+      localStorage.setItem('ashley_attendance_logs', JSON.stringify(updatedLogs));
+    }
     setAttMessage({
       text: `ئامادەبوونی (${emp.name}) بە سەرکەوتوویی وەک ${type} تۆمارکرا!`,
       success: true,
@@ -343,43 +349,13 @@ export default function MainPage() {
               </button>
             </div>
 
-            {/* Recent Attendance Logs */}
-            <div className="space-y-1 pt-2">
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                دواین فۆتۆ لۆگەکانی تۆمارکراو:
-              </h3>
-              <div className="overflow-x-auto border border-slate-400">
-                <table className="table-classic">
-                  <thead>
-                    <tr>
-                      <th>فۆتۆ</th>
-                      <th>کارمەند</th>
-                      <th>جۆر</th>
-                      <th>کات</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {attendanceLogs.slice(0, 4).map((log) => (
-                      <tr key={log.id}>
-                        <td>
-                          {log.selfieUrl ? (
-                            <img src={log.selfieUrl} alt="Selfie" className="w-7 h-7 object-cover border border-slate-400" />
-                          ) : (
-                            <span className="text-[9px] text-slate-400 font-mono">No Photo</span>
-                          )}
-                        </td>
-                        <td className="font-bold">{log.name}</td>
-                        <td>
-                          <span className={`px-1 py-0.2 text-[9px] font-bold border ${log.type.includes('In') || log.type.includes('هاتن') ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-rose-100 text-rose-900 border-rose-300'}`}>
-                            {log.type}
-                          </span>
-                        </td>
-                        <td className="font-mono text-[10px]">{log.time}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            {/* 31-Day Attendance Sheet Component */}
+            <div className="pt-2 border-t border-slate-300">
+              <AttendanceSheetGrid
+                attendanceLogs={attendanceLogs}
+                employees={employees}
+                onDeleteLog={(logId) => setAttendanceLogs(attendanceLogs.filter(l => l.id !== logId))}
+              />
             </div>
 
           </div>

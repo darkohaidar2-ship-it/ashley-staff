@@ -414,11 +414,16 @@ export type OvertimeRecord = {
 
 export type AttendanceRecord = {
   id: string;
+  employeeId?: string;
+  userId?: string;
+  userName?: string;
   name: string;
   type: string;
   time: string;
   distance?: string;
   selfieUrl?: string;
+  checkInSelfie?: string;
+  checkOutSelfie?: string;
   createdAt: string;
 };
 
