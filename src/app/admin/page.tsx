@@ -344,17 +344,14 @@ export default function AdminPage() {
           <span className="text-[10px] font-mono bg-blue-900 text-white px-1.5 py-0.2">HR MODULE</span>
         </div>
 
-        <div className="p-3 space-y-4">
+        <div className="p-3.5 space-y-4">
           
-          {/* 🎨 DYNAMIC ENTERPRISE THEME & STYLE SWITCHER */}
-          <ThemeSwitcher />
-
-          {/* Quick Beveled Action Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-100 border border-slate-300">
+          {/* Quick WinUI 3 Action Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-white/80 backdrop-blur-md rounded-xl border border-slate-200 shadow-sm">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleOpenEmpModal()}
-                className="btn-classic-primary"
+                className="btn-fluent-primary text-xs"
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 <span>➕ زیادکردنی کارمەندی نوێ</span>
@@ -362,31 +359,31 @@ export default function AdminPage() {
 
               <button
                 onClick={() => setEmpStatusFilter(empStatusFilter === 'active' ? 'resigned' : 'active')}
-                className="btn-classic"
+                className="btn-fluent text-xs"
               >
                 <span>{empStatusFilter === 'resigned' ? 'نیشاندانی کارمەندە چالاکەکان' : '📜 ئەرشیفی وازهێناوەکان'}</span>
               </button>
             </div>
 
             <div className="flex items-center gap-2 text-xs font-bold">
-              <Link href="/overtime" className="btn-classic text-[11px]">
-                <Clock className="w-3.5 h-3.5 text-blue-700" />
+              <Link href="/overtime" className="btn-fluent text-[11px]">
+                <Clock className="w-3.5 h-3.5 text-blue-600" />
                 <span>سەعاتی زیاده (Overtime)</span>
               </Link>
 
-              <Link href="/ashley-expenses" className="btn-classic text-[11px]">
-                <Receipt className="w-3.5 h-3.5 text-rose-700" />
+              <Link href="/ashley-expenses" className="btn-fluent text-[11px]">
+                <Receipt className="w-3.5 h-3.5 text-rose-600" />
                 <span>مەسروفاتی HR</span>
               </Link>
             </div>
           </div>
 
           {/* Employee Roster Data Grid */}
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-100 p-2 border border-slate-300">
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-white/80 backdrop-blur-md p-2.5 rounded-xl border border-slate-200 shadow-sm">
+              <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
                 <span>🔑 خشتەی ناوی کارمەندان و کۆدەکانی PIN (Employee Roster Grid):</span>
-                <span className="text-[10px] font-mono text-blue-900 bg-blue-100 px-1.5 py-0.2 border border-blue-300">
+                <span className="text-[10px] font-mono text-blue-900 bg-blue-100 px-2 py-0.5 rounded-full border border-blue-300">
                   PIN ACCESS ENABLED
                 </span>
               </h3>

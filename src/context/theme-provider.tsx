@@ -65,13 +65,13 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: 'classic-nav',
+  theme: 'fluent-win11',
   setTheme: () => {},
   themes: ERP_THEMES
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ErpTheme>('classic-nav');
+  const [theme, setThemeState] = useState<ErpTheme>('fluent-win11');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -81,7 +81,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setThemeState(saved);
       document.documentElement.setAttribute('data-theme', saved);
     } else {
-      document.documentElement.setAttribute('data-theme', 'classic-nav');
+      document.documentElement.setAttribute('data-theme', 'fluent-win11');
     }
   }, []);
 

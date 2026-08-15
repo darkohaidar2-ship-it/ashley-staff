@@ -269,7 +269,7 @@ export default function MainPage() {
               </button>
             </div>
           ) : (
-            <Link href="/login" className="btn-classic-primary py-1.5 px-3 text-xs font-black">
+            <Link href="/login" className="btn-fluent-primary py-1.5 px-3 text-xs font-black rounded-lg">
               <Lock className="w-3.5 h-3.5 text-amber-300" />
               <span>🔑 داخڵبوونی ئەدمین (Admin Login)</span>
             </Link>
@@ -283,31 +283,31 @@ export default function MainPage() {
         {/* ----------------------------------------------------------------- */}
         {/* 📸 RIGHT SIDE: ATTENDANCE TERMINAL (پەڕەی ئامادەبوون) */}
         {/* ----------------------------------------------------------------- */}
-        <section className="panel-classic space-y-3">
-          <div className="panel-header-classic flex items-center justify-between">
-            <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-              <Camera className="w-4 h-4 text-blue-800" />
+        <section className="panel-fluent space-y-3">
+          <div className="panel-header-fluent flex items-center justify-between">
+            <h2 className="text-xs font-black text-white flex items-center gap-1.5">
+              <Camera className="w-4 h-4 text-amber-300" />
               <span>پەڕەی ئامادەبوونی کارمەندان (Attendance Selfie Terminal)</span>
             </h2>
-            <span className="text-[10px] font-mono bg-blue-900 text-white px-1.5 py-0.2">HR SYSTEM</span>
+            <span className="text-[10px] font-mono bg-white/20 backdrop-blur-md text-white px-2 py-0.5 rounded-full">HR SYSTEM</span>
           </div>
 
-          <div className="p-3 space-y-3">
+          <div className="p-3.5 space-y-3">
 
             {attMessage && (
-              <div className={`p-2 text-xs font-bold border ${attMessage.success ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-rose-100 text-rose-900 border-rose-300'}`}>
+              <div className={`p-2.5 text-xs font-bold rounded-xl border ${attMessage.success ? 'bg-emerald-50 text-emerald-900 border-emerald-300' : 'bg-rose-50 text-rose-900 border-rose-300'}`}>
                 {attMessage.text}
               </div>
             )}
 
             {/* GPS Geofence Check */}
-            <div className="flex items-center justify-between p-2 bg-slate-100 border border-slate-300 text-xs">
+            <div className="flex items-center justify-between p-2.5 bg-white/80 border border-slate-200 rounded-xl text-xs shadow-sm">
               <div className="flex items-center gap-1.5 font-bold">
-                <MapPin className="w-4 h-4 text-amber-700" />
+                <MapPin className="w-4 h-4 text-amber-600" />
                 <span>شوێنی جی پی ئێسی مۆبایل:</span>
                 <span className="font-mono text-blue-900">{gpsStatus || 'نەپشکنراوە'}</span>
               </div>
-              <button type="button" onClick={requestLocation} className="btn-classic text-[11px]">
+              <button type="button" onClick={requestLocation} className="btn-fluent text-[11px] rounded-lg">
                 <RefreshCw className="w-3 h-3 text-slate-700" />
                 <span>پشکنینی لۆکەیشن</span>
               </button>
@@ -320,7 +320,7 @@ export default function MainPage() {
                 <select
                   value={selectedEmpId}
                   onChange={(e) => setSelectedEmpId(e.target.value)}
-                  className="input-classic w-full font-bold text-slate-900"
+                  className="input-fluent w-full font-bold text-slate-900 rounded-lg"
                 >
                   <option value="">-- ناوی خۆت هەڵبژێرە --</option>
                   {employees.filter(e => e.status !== 'resigned' && e.isActive !== false).map((emp) => (

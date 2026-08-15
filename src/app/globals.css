@@ -2,48 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   WINDOWS 11 FLUENT ENTERPRISE 2.0 (WinUI 3 / Acrylic Glass ERP)
+   ========================================================================== */
+
 @layer base {
   :root {
-    --background: 210 20% 94%; /* Classic Desktop Light Gray */
+    --background: 210 40% 98%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 215 50% 35%; /* Steel Blue */
+    --primary: 221 83% 53%; /* Royal Blue */
     --primary-foreground: 210 40% 98%;
-    --secondary: 210 20% 90%;
+    --secondary: 214 32% 91%;
     --secondary-foreground: 222 47% 11%;
-    --muted: 210 20% 90%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 20% 90%;
-    --accent-foreground: 215 50% 35%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 214 20% 80%;
-    --input: 214 20% 80%;
-    --ring: 215 50% 35%;
-    
-    --radius: 0px !important; /* STRICT SHARP CORNERS ONLY */
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 8px;
 
-    --font-heading: 'Noto Kufi Arabic', 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
-    --font-body: 'Noto Kufi Arabic', 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
-    --font-mono: 'Consolas', 'Courier New', monospace;
-
-    --global-font-size: 12px; /* DENSE COMPACT DESKTOP TEXT */
+    --font-heading: 'Noto Kufi Arabic', 'Vazirmatn', 'Segoe UI Variable', system-ui, sans-serif;
+    --font-body: 'Noto Kufi Arabic', 'Vazirmatn', 'Segoe UI Variable', system-ui, sans-serif;
+    --font-mono: 'Consolas', 'Cascadia Code', monospace;
   }
 }
 
 @layer base {
   * {
-    border-radius: 0px !important; /* STRICT SHARP CORNERS EVERYWHERE */
-    box-shadow: none;
+    border-color: #e2e8f0;
   }
   body {
-    background-color: #dbe2e9 !important; /* Classic Dynamics NAV Steel Gray */
+    background: linear-gradient(135deg, #eef2f6 0%, #e0e7ff 40%, #f1f5f9 100%) !important;
+    background-attachment: fixed !important;
     color: #0f172a;
-    font-size: 12px;
-    font-family: 'Noto Kufi Arabic', 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
+    font-size: 12.5px;
+    font-family: 'Noto Kufi Arabic', 'Vazirmatn', 'Segoe UI Variable', system-ui, sans-serif;
     margin: 0;
     padding: 0;
     min-height: 100vh;
@@ -51,357 +52,189 @@
 }
 
 @layer utilities {
-  /* CLASSIC WIN32 BEVELED DESKTOP BUTTON */
-  .btn-classic {
-    background: linear-gradient(180deg, #ffffff 0%, #e2e8f0 60%, #cbd5e1 100%) !important;
+  /* ==========================================================================
+     WINUI 3 ACRYLIC GLASS PANELS & CARDS
+     ========================================================================== */
+  .panel-fluent, .panel-classic {
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(16px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.8) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 4px 12px -2px rgba(0, 0, 0, 0.03) !important;
+    overflow: hidden !important;
+  }
+
+  .panel-header-fluent, .panel-header-classic {
+    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #2563eb 100%) !important;
+    color: #ffffff !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+    font-weight: 800 !important;
+    font-size: 12px !important;
+    padding: 8px 14px !important;
+    border-radius: 10px 10px 0 0 !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+  }
+
+  /* ==========================================================================
+     WINUI 3 FLUENT BUTTONS
+     ========================================================================== */
+  .btn-fluent, .btn-classic {
+    background: rgba(255, 255, 255, 0.95) !important;
     color: #0f172a !important;
-    border-top: 1.5px solid #ffffff !important;
-    border-left: 1.5px solid #ffffff !important;
-    border-bottom: 1.5px solid #64748b !important;
-    border-right: 1.5px solid #64748b !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
     font-weight: 700 !important;
     font-size: 11.5px !important;
-    padding: 3px 10px !important;
-    border-radius: 0px !important;
+    padding: 5px 12px !important;
     cursor: pointer !important;
     user-select: none !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 4px !important;
+    gap: 6px !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04) !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
   }
 
-  .btn-classic:hover {
-    background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 60%, #e2e8f0 100%) !important;
-    border-bottom-color: #475569 !important;
-    border-right-color: #475569 !important;
+  .btn-fluent:hover, .btn-classic:hover {
+    background: #ffffff !important;
+    border-color: #3b82f6 !important;
+    color: #1d4ed8 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.12) !important;
   }
 
-  .btn-classic:active {
-    background: #cbd5e1 !important;
-    border-top: 1.5px solid #64748b !important;
-    border-left: 1.5px solid #64748b !important;
-    border-bottom: 1.5px solid #ffffff !important;
-    border-right: 1.5px solid #ffffff !important;
+  .btn-fluent:active, .btn-classic:active {
+    transform: translateY(0px) scale(0.98) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
   }
 
-  .btn-classic-primary {
-    background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 60%, #1e40af 100%) !important;
+  .btn-fluent-primary, .btn-classic-primary {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
     color: #ffffff !important;
-    border-top: 1.5px solid #60a5fa !important;
-    border-left: 1.5px solid #60a5fa !important;
-    border-bottom: 1.5px solid #172554 !important;
-    border-right: 1.5px solid #172554 !important;
-    font-weight: 700 !important;
-    font-size: 11.5px !important;
-    padding: 4px 12px !important;
-    border-radius: 0px !important;
-    cursor: pointer !important;
-  }
-
-  .btn-classic-primary:hover {
-    background: linear-gradient(180deg, #3b82f6 0%, #2563eb 60%, #1d4ed8 100%) !important;
-  }
-
-  .btn-classic-danger {
-    background: linear-gradient(180deg, #dc2626 0%, #b91c1c 60%, #991b1b 100%) !important;
-    color: #ffffff !important;
-    border-top: 1.5px solid #fca5a5 !important;
-    border-left: 1.5px solid #fca5a5 !important;
-    border-bottom: 1.5px solid #450a0a !important;
-    border-right: 1.5px solid #450a0a !important;
-    font-weight: 700 !important;
-    font-size: 11.5px !important;
-    padding: 4px 12px !important;
-    border-radius: 0px !important;
-    cursor: pointer !important;
-  }
-
-  /* CLASSIC ERP BORDERED PANEL */
-  .panel-classic {
-    background-color: #ffffff !important;
-    border: 1px solid #94a3b8 !important;
-    border-radius: 0px !important;
-    box-shadow: none !important;
-  }
-
-  .panel-header-classic {
-    background: linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 100%) !important;
-    border-bottom: 1px solid #94a3b8 !important;
-    color: #0f172a !important;
+    border: 1px solid #1e40af !important;
+    border-radius: 8px !important;
     font-weight: 800 !important;
-    font-size: 12px !important;
-    padding: 4px 8px !important;
-    border-radius: 0px !important;
+    font-size: 11.5px !important;
+    padding: 6px 14px !important;
+    cursor: pointer !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
   }
 
-  /* CLASSIC ERP DATA GRID (TABLE) */
-  .table-classic {
+  .btn-fluent-primary:hover, .btn-classic-primary:hover {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35) !important;
+  }
+
+  .btn-fluent-danger, .btn-classic-danger {
+    background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
+    color: #ffffff !important;
+    border: 1px solid #9f1239 !important;
+    border-radius: 8px !important;
+    font-weight: 800 !important;
+    font-size: 11.5px !important;
+    padding: 6px 14px !important;
+    cursor: pointer !important;
+    box-shadow: 0 4px 12px rgba(225, 29, 72, 0.25) !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  .btn-fluent-danger:hover, .btn-classic-danger:hover {
+    background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 16px rgba(225, 29, 72, 0.35) !important;
+  }
+
+  /* ==========================================================================
+     WINUI 3 FLUENT DATA GRID (TABLE)
+     ========================================================================== */
+  .table-fluent, .table-classic {
     width: 100% !important;
-    border-collapse: collapse !important;
-    border: 1px solid #94a3b8 !important;
-    font-size: 11.5px !important;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 10px !important;
+    font-size: 12px !important;
     text-align: right !important;
+    overflow: hidden !important;
   }
 
-  .table-classic th {
-    background: linear-gradient(180deg, #f8fafc 0%, #cbd5e1 100%) !important;
-    color: #0f172a !important;
+  .table-fluent th, .table-classic th {
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+    color: #1e293b !important;
     font-weight: 800 !important;
-    border: 1px solid #94a3b8 !important;
-    padding: 5px 8px !important;
+    border-bottom: 2px solid #cbd5e1 !important;
+    border-left: 1px solid #e2e8f0 !important;
+    padding: 8px 10px !important;
     white-space: nowrap !important;
   }
 
-  .table-classic td {
-    border: 1px solid #cbd5e1 !important;
-    padding: 4px 8px !important;
+  .table-fluent td, .table-classic td {
+    border-bottom: 1px solid #f1f5f9 !important;
+    border-left: 1px solid #f1f5f9 !important;
+    padding: 6px 10px !important;
     color: #0f172a !important;
+    transition: background-color 0.15s ease !important;
   }
 
-  .table-classic tr:nth-child(even) {
-    background-color: #ffffff !important;
+  .table-fluent tr:nth-child(even), .table-classic tr:nth-child(even) {
+    background-color: rgba(255, 255, 255, 0.95) !important;
   }
 
-  .table-classic tr:nth-child(odd) {
-    background-color: #f8fafc !important;
+  .table-fluent tr:nth-child(odd), .table-classic tr:nth-child(odd) {
+    background-color: rgba(248, 250, 252, 0.95) !important;
   }
 
-  .table-classic tr:hover {
-    background-color: #fef08a !important; /* Classic Windows yellow cell highlight */
+  .table-fluent tr:hover, .table-classic tr:hover {
+    background-color: rgba(224, 231, 255, 0.6) !important; /* Soft WinUI 3 indigo highlight */
   }
 
-  .table-classic tr.grand-total-row {
-    background: #1e293b !important;
+  .table-fluent tr.grand-total-row, .table-classic tr.grand-total-row {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
     color: #ffffff !important;
     font-weight: 800 !important;
   }
 
-  .table-classic tr.grand-total-row td {
+  .table-fluent tr.grand-total-row td, .table-classic tr.grand-total-row td {
     border-color: #334155 !important;
     color: #ffffff !important;
   }
 
-  /* CLASSIC INSET INPUT FIELD */
-  .input-classic {
-    background-color: #ffffff !important;
-    border-top: 1.5px solid #64748b !important;
-    border-left: 1.5px solid #64748b !important;
-    border-bottom: 1.5px solid #e2e8f0 !important;
-    border-right: 1.5px solid #e2e8f0 !important;
-    border-radius: 0px !important;
-    padding: 3px 6px !important;
+  /* ==========================================================================
+     WINUI 3 FLUENT INPUT FIELDS
+     ========================================================================== */
+  .input-fluent, .input-classic {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    border: 1.5px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    padding: 5px 10px !important;
     font-size: 12px !important;
     color: #0f172a !important;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+    transition: all 0.2s ease !important;
   }
 
-  .input-classic:focus {
-    outline: 1px solid #2563eb !important;
-    background-color: #ffffea !important; /* Classic NAV yellow input focus */
+  .input-fluent:focus, .input-classic:focus {
+    outline: none !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
+    background-color: #ffffff !important;
   }
 
-  /* CLASSIC STATUSBAR SEGMENT */
+  /* ==========================================================================
+     WINUI 3 STATUSBAR SEGMENT
+     ========================================================================== */
   .statusbar-segment {
-    background: #e2e8f0 !important;
-    border-top: 1px solid #94a3b8 !important;
-    border-left: 1px solid #94a3b8 !important;
-    border-bottom: 1px solid #ffffff !important;
-    border-right: 1px solid #ffffff !important;
-    padding: 2px 6px !important;
+    background: rgba(255, 255, 255, 0.8) !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 6px !important;
+    padding: 3px 8px !important;
     font-size: 11px !important;
     font-family: monospace !important;
     color: #334155 !important;
+    backdrop-filter: blur(8px) !important;
   }
 }
-
-/* ==========================================================================
-   2. MODERN BUSINESS CENTRAL 365 THEME ([data-theme="modern-bc"])
-   ========================================================================== */
-[data-theme="modern-bc"] body {
-  background-color: #f1f5f9 !important;
-}
-
-[data-theme="modern-bc"] * {
-  border-radius: 2px !important;
-}
-
-[data-theme="modern-bc"] .panel-classic {
-  background-color: #ffffff !important;
-  border: 1px solid #cbd5e1 !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
-}
-
-[data-theme="modern-bc"] .panel-header-classic {
-  background: linear-gradient(180deg, #1e3a8a 0%, #1e40af 100%) !important;
-  color: #ffffff !important;
-  border-bottom: 1px solid #1e3a8a !important;
-  font-weight: 700 !important;
-}
-
-[data-theme="modern-bc"] .btn-classic {
-  background: #ffffff !important;
-  color: #0f172a !important;
-  border: 1px solid #cbd5e1 !important;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
-}
-
-[data-theme="modern-bc"] .btn-classic:hover {
-  background: #f8fafc !important;
-  border-color: #94a3b8 !important;
-}
-
-[data-theme="modern-bc"] .btn-classic-primary {
-  background: #1d4ed8 !important;
-  color: #ffffff !important;
-  border: 1px solid #1e40af !important;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
-}
-
-[data-theme="modern-bc"] .btn-classic-primary:hover {
-  background: #1e40af !important;
-}
-
-[data-theme="modern-bc"] .table-classic th {
-  background: #f1f5f9 !important;
-  border-color: #cbd5e1 !important;
-  color: #0f172a !important;
-  font-weight: 700 !important;
-}
-
-[data-theme="modern-bc"] .input-classic {
-  border: 1px solid #cbd5e1 !important;
-  border-radius: 2px !important;
-}
-
-[data-theme="modern-bc"] .input-classic:focus {
-  border-color: #2563eb !important;
-  outline: 2px solid #bfdbfe !important;
-  background-color: #ffffff !important;
-}
-
-/* ==========================================================================
-   3. IBM CARBON ENTERPRISE THEME ([data-theme="ibm-carbon"])
-   ========================================================================== */
-[data-theme="ibm-carbon"] body {
-  background-color: #e2e8f0 !important;
-}
-
-[data-theme="ibm-carbon"] * {
-  border-radius: 0px !important;
-}
-
-[data-theme="ibm-carbon"] .panel-classic {
-  background-color: #ffffff !important;
-  border: 1px solid #64748b !important;
-}
-
-[data-theme="ibm-carbon"] .panel-header-classic {
-  background: #0f172a !important;
-  color: #38bdf8 !important;
-  border-bottom: 2px solid #0284c7 !important;
-  font-family: monospace !important;
-}
-
-[data-theme="ibm-carbon"] .btn-classic {
-  background: #334155 !important;
-  color: #f8fafc !important;
-  border: 1px solid #475569 !important;
-}
-
-[data-theme="ibm-carbon"] .btn-classic:hover {
-  background: #475569 !important;
-}
-
-[data-theme="ibm-carbon"] .btn-classic-primary {
-  background: #0284c7 !important;
-  color: #ffffff !important;
-  border: 1px solid #0369a1 !important;
-}
-
-[data-theme="ibm-carbon"] .btn-classic-primary:hover {
-  background: #0369a1 !important;
-}
-
-[data-theme="ibm-carbon"] .table-classic th {
-  background: #1e293b !important;
-  color: #f8fafc !important;
-  border-color: #334155 !important;
-  font-family: monospace !important;
-}
-
-[data-theme="ibm-carbon"] .input-classic {
-  border: 1px solid #475569 !important;
-  background-color: #f8fafc !important;
-}
-
-[data-theme="ibm-carbon"] .input-classic:focus {
-  border-color: #0284c7 !important;
-  outline: 2px solid #0284c7 !important;
-}
-
-/* ==========================================================================
-   4. WINDOWS 11 FLUENT ERP THEME ([data-theme="fluent-win11"])
-   ========================================================================== */
-[data-theme="fluent-win11"] body {
-  background-color: #eef2f6 !important;
-}
-
-[data-theme="fluent-win11"] * {
-  border-radius: 4px !important;
-}
-
-[data-theme="fluent-win11"] .panel-classic {
-  background-color: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
-}
-
-[data-theme="fluent-win11"] .panel-header-classic {
-  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
-  color: #ffffff !important;
-  border-bottom: 1px solid #2563eb !important;
-  font-weight: 700 !important;
-}
-
-[data-theme="fluent-win11"] .btn-classic {
-  background: #ffffff !important;
-  color: #0f172a !important;
-  border: 1px solid #cbd5e1 !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
-}
-
-[data-theme="fluent-win11"] .btn-classic:hover {
-  background: #f1f5f9 !important;
-  border-color: #3b82f6 !important;
-}
-
-[data-theme="fluent-win11"] .btn-classic-primary {
-  background: #2563eb !important;
-  color: #ffffff !important;
-  border: 1px solid #1d4ed8 !important;
-  box-shadow: 0 2px 4px rgba(37,99,235,0.2) !important;
-}
-
-[data-theme="fluent-win11"] .btn-classic-primary:hover {
-  background: #1d4ed8 !important;
-}
-
-[data-theme="fluent-win11"] .table-classic th {
-  background: #f8fafc !important;
-  border-color: #e2e8f0 !important;
-  color: #0f172a !important;
-  font-weight: 700 !important;
-}
-
-[data-theme="fluent-win11"] .input-classic {
-  border: 1px solid #cbd5e1 !important;
-  border-radius: 4px !important;
-  box-shadow: inset 0 1px 2px rgba(0,0,0,0.04) !important;
-}
-
-[data-theme="fluent-win11"] .input-classic:focus {
-  border-color: #2563eb !important;
-  outline: 2px solid #93c5fd !important;
-  background-color: #ffffff !important;
-}
-

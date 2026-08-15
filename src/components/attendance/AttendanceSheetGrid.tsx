@@ -161,34 +161,36 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
         </div>
       </div>
 
-      {/* 🛠️ SHEET CONTROL BAR */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-100 border border-slate-300 text-xs font-bold shadow-sm print:hidden">
+      {/* 🛠️ SHEET CONTROL BAR (WinUI 3 Fluent Acrylic) */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white/80 backdrop-blur-md border border-slate-200 rounded-xl text-xs font-bold shadow-sm print:hidden">
         <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-blue-900" />
-          <span className="text-slate-900 font-extrabold">
-            شیت ماتریسی مانگانەی ئامادەبوون (Monthly 31-Day Attendance Matrix Sheet):
+          <div className="p-1.5 bg-blue-100 text-blue-800 rounded-lg">
+            <Calendar className="w-4 h-4" />
+          </div>
+          <span className="text-slate-900 font-extrabold text-xs">
+            شیت ماتریسی مانگانەی ئامادەبوونی کارمەندان (31-Day Attendance Matrix Sheet):
           </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Month Picker */}
           <div className="flex items-center gap-1">
-            <label className="text-slate-700 font-bold">مانگ:</label>
+            <label className="text-slate-600 font-bold">مانگ:</label>
             <input
               type="month"
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="input-classic font-mono text-xs font-bold"
+              className="input-fluent font-mono text-xs font-bold rounded-lg"
             />
           </div>
 
           {/* Employee Filter */}
           <div className="flex items-center gap-1">
-            <label className="text-slate-700 font-bold">کارمەند:</label>
+            <label className="text-slate-600 font-bold">کارمەند:</label>
             <select
               value={selectedEmpFilter}
               onChange={(e) => setSelectedEmpFilter(e.target.value)}
-              className="input-classic font-bold text-xs"
+              className="input-fluent font-bold text-xs rounded-lg"
             >
               <option value="all">تێکڕای کارمەندان ({employees.length})</option>
               {employees.filter(e => e.status !== 'resigned').map((emp) => (
@@ -203,7 +205,7 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
           <button
             type="button"
             onClick={handlePrint}
-            className="btn-classic text-xs font-bold flex items-center gap-1 py-1 px-2 border border-slate-400 bg-slate-200 hover:bg-slate-300 text-slate-950"
+            className="btn-fluent text-xs font-bold flex items-center gap-1 py-1.5 px-3 rounded-lg"
             title="پرێنتکردنی ناوی لیست و کاتی پرێنت لەسەر کاغەز"
           >
             <span>🖨️ پرێنت (Print)</span>
@@ -212,7 +214,7 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
           <button
             type="button"
             onClick={handleDownloadPdf}
-            className="btn-classic text-xs font-bold flex items-center gap-1 py-1 px-2 border border-red-700 bg-rose-700 hover:bg-rose-800 text-white"
+            className="btn-fluent-danger text-xs font-bold flex items-center gap-1 py-1.5 px-3 rounded-lg"
             title="داگرتنی ڕاستەوخۆی فایلی PDF"
           >
             <span>📄 داگرتنی PDF</span>
@@ -221,7 +223,7 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
           <button
             type="button"
             onClick={handleDownloadCsv}
-            className="btn-classic-primary text-xs font-bold flex items-center gap-1 py-1 px-2 border border-blue-900 bg-blue-900 hover:bg-blue-950 text-white"
+            className="btn-fluent-primary text-xs font-bold flex items-center gap-1 py-1.5 px-3 rounded-lg"
             title="داگرتنی فایلی Excel / CSV"
           >
             <span>📊 داگرتنی CSV</span>
@@ -229,13 +231,13 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
         </div>
       </div>
 
-      {/* 📊 31-DAY MATRIX GRID TABLE (Employee Rows x 31 Day Columns) */}
-      <div id="attendance-matrix-table-wrapper" className="overflow-x-auto border border-slate-400 max-h-[550px] overflow-y-auto shadow-sm bg-white">
-        <table className="table-classic w-full text-xs">
-          <thead className="sticky top-0 bg-slate-300 border-b-2 border-slate-400 z-20">
+      {/* 📊 31-DAY MATRIX GRID TABLE (WinUI 3 Fluent Glassmorphism) */}
+      <div id="attendance-matrix-table-wrapper" className="overflow-x-auto border border-slate-300 rounded-xl max-h-[550px] overflow-y-auto shadow-sm bg-white/90 backdrop-blur-md">
+        <table className="table-fluent w-full text-xs">
+          <thead className="sticky top-0 bg-slate-100 border-b-2 border-slate-300 z-20">
             <tr>
               {/* Sticky Right Side Column Header: Employee Name */}
-              <th className="sticky right-0 bg-slate-400 text-slate-950 font-black text-right min-w-[170px] px-3 py-2 border-l border-slate-400 z-30 shadow-sm">
+              <th className="sticky right-0 bg-slate-200 text-slate-950 font-black text-right min-w-[180px] px-3 py-2.5 border-l border-slate-300 z-30 shadow-sm">
                 👤 ناوی کارمەند / ڕێکەوت ➔
               </th>
 
@@ -328,28 +330,28 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
         </table>
       </div>
 
-      {/* 🖼️ DETAILED CHECK-IN / CHECK-OUT WIN32 SELFIE MODAL POPUP */}
+      {/* 🖼️ DETAILED CHECK-IN / CHECK-OUT WINUI 3 SELFIE MODAL POPUP */}
       {activeLogModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/75 flex items-center justify-center p-3 dir-rtl" dir="rtl">
-          <div className="bg-slate-200 border-2 border-t-white border-l-white border-b-slate-600 border-r-slate-600 max-w-md w-full shadow-2xl p-1 text-slate-900 space-y-3">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 dir-rtl" dir="rtl">
+          <div className="bg-white/95 backdrop-blur-xl border border-white/80 rounded-2xl max-w-md w-full shadow-2xl p-2 text-slate-900 space-y-3 overflow-hidden">
             
-            {/* Win32 Window Header Bar */}
-            <div className="bg-gradient-to-r from-blue-950 via-blue-900 to-slate-900 text-white px-2.5 py-1.5 text-xs font-bold flex justify-between items-center border-b border-blue-950">
-              <span className="flex items-center gap-1.5">
+            {/* WinUI 3 Header Bar */}
+            <div className="bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white px-3 py-2 text-xs font-extrabold flex justify-between items-center rounded-xl">
+              <span className="flex items-center gap-2">
                 <Camera className="w-4 h-4 text-amber-300" />
-                <span>زانیارییە تەکبەتەکانی ئامادەبوونی: {activeLogModal.name || activeLogModal.userName}</span>
+                <span>زانیارییە سەرەکییەکانی ئامادەبوون: {activeLogModal.name || activeLogModal.userName}</span>
               </span>
               <button
                 type="button"
                 onClick={() => setActiveLogModal(null)}
-                className="w-5 h-4 bg-rose-800 hover:bg-rose-700 text-white flex items-center justify-center border border-rose-600 font-mono text-xs cursor-pointer"
+                className="w-6 h-6 bg-rose-600/90 hover:bg-rose-600 text-white flex items-center justify-center rounded-full font-mono text-xs cursor-pointer transition-transform hover:scale-105"
               >
                 ✕
               </button>
             </div>
 
             {/* Modal Body: Photo & Complete Log Details */}
-            <div className="p-3 space-y-3 bg-white border border-slate-300 text-xs">
+            <div className="p-3 space-y-3 bg-white/80 rounded-xl border border-slate-200 text-xs">
               
               {/* Selfie Image Display Container */}
               <div className="border-2 border-slate-400 p-1 bg-slate-100 flex flex-col items-center justify-center">
