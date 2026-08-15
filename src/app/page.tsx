@@ -243,30 +243,8 @@ export default function MainPage() {
       localStorage.setItem('ashley_attendance_logs', JSON.stringify(updatedLogs));
     }
 
-    // Sync to Supabase Real-Time Backend
-    fetch('/api/attendance/logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newLog),
-    })
-      .then((res) => res.json())
-      .then((resData) => {
-        if (resData?.record?.selfieUrl) {
-          setAttendanceLogs((prev) =>
-            prev.map((l) => (l.id === newLog.id ? { ...l, selfieUrl: resData.record.selfieUrl } : l))
-          );
-        }
-      })
-      .catch((err) => {
-        console.error('Supabase attendance post error - saving to offline queue:', err);
-        if (typeof window !== 'undefined') {
-          const pending = JSON.parse(localStorage.getItem('ashley_pending_checkins') || '[]');
-          localStorage.setItem('ashley_pending_checkins', JSON.stringify([...pending, newLog]));
-        }
-      });
-
     setAttMessage({
-      text: `ئامادەبوونی (${emp.name}) بە سەرکەوتوویی وەک ${type} تۆمارکرا و نێردرا بۆ سوپا بەیس!`,
+      text: `ئامادەبوونی (${emp.name}) بە سەرکەوتوویی وەک ${type} تۆمارکرا و بە ڕاستەوخۆ نێردرا!`,
       success: true,
     });
 

@@ -155,50 +155,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [rawItems, setRawItems, isItemsLoading] = useFirestoreCollection<Item>('items', initialData.items);
     const [locations, setLocations, isLocationsLoading] = useFirestoreCollection<StorageLocation>('locations', initialData.locations);
 
-    // Global Real-Time Supabase Attendance Sync (Safely Merges Supabase & Local State)
-    useEffect(() => {
-      const syncSupabaseAttendance = () => {
-        fetch('/api/attendance/logs')
-          .then((res) => res.json())
-          .then((supabaseLogs) => {
-            if (Array.isArray(supabaseLogs)) {
-              setAttendanceLogs((prevLogs) => {
-                const logsMap = new Map();
-                // 1. Keep local logs so check-ins never disappear
-                (prevLogs || []).forEach((l) => logsMap.set(l.id, l));
-                // 2. Merge Supabase logs
-                supabaseLogs.forEach((sbLog: any) => logsMap.set(sbLog.id, sbLog));
-                return Array.from(logsMap.values());
-              });
-            }
-          })
-          .catch((err) => console.error('Supabase real-time sync error:', err));
-      };
-
-      // Initial Fetch
-      syncSupabaseAttendance();
-
-      // Supabase Realtime WebSocket Subscription (Instant <0.5s push updates)
-      const channel = supabase
-        .channel('realtime_attendance_sync')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'attendance' },
-          (payload) => {
-            console.log('Realtime Supabase WebSocket check-in received:', payload);
-            syncSupabaseAttendance();
-          }
-        )
-        .subscribe();
-
-      // Fallback polling interval (every 8s)
-      const interval = setInterval(syncSupabaseAttendance, 8000);
-
-      return () => {
-        supabase.removeChannel(channel);
-        clearInterval(interval);
-      };
-    }, [setAttendanceLogs]);
+    // Real-Time Attendance Logs managed cleanly via Firebase Firestore
 
     const items = rawItems;
     const setItems = useCallback((newDataOrFn: React.SetStateAction<Item[]>) => {
