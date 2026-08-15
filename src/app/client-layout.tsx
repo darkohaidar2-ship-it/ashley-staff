@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { AppProvider, useAppContext } from '@/context/app-provider';
 import { LanguageProvider } from '@/context/language-provider';
 import { ThemeProvider } from '@/context/theme-provider';
+import { TopNavbar } from '@/components/layout/TopNavbar';
 
 function DynamicFontInjector({ children }: { children: React.ReactNode }) {
   const { settings } = useAppContext();
