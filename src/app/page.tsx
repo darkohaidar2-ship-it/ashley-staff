@@ -659,8 +659,9 @@ export default function MainPage() {
                 <span className="font-bold text-xs">نەخشەی رەفەکانی کۆگا</span>
               </Link>
             </div>
+
           </div>
-        </div>
+        </section>
 
         {/* Sync Button */}
         {typeof window !== 'undefined' && localStorage.getItem('ashley_pending_checkins') && JSON.parse(localStorage.getItem('ashley_pending_checkins') || '[]').length > 0 && (
@@ -674,6 +675,7 @@ export default function MainPage() {
         )}
 
       </div>
+
     </div>
   );
 }
