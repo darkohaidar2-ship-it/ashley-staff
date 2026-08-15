@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useAppContext } from '@/context/app-provider';
-import { AttendanceSheetGrid } from '@/components/attendance/AttendanceSheetGrid';
 import { format } from 'date-fns';
 import { 
   Users, 
@@ -21,7 +20,8 @@ import {
   Eye, 
   RefreshCw, 
   LogOut,
-  Sparkles
+  Sparkles,
+  AlertTriangle
 } from 'lucide-react';
 
 // Haversine formula to compute exact distance in meters between two GPS coordinates
@@ -55,12 +55,12 @@ export default function MainPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Factory Geofence Base Location
+  // Factory Geofence Base Location (100m Radius)
   const factoryLocation = settings?.factoryLocation || {
     name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Company Base)',
     lat: 35.5571,
     lng: 45.4352,
-    radiusMeters: 500,
+    radiusMeters: 100,
   };
 
   // --- Attendance State (Right Side) ---
@@ -87,14 +87,14 @@ export default function MainPage() {
       setGpsStatus('جی پی ئێس لە وێبگەڕ پشتیوانی نەکراوە');
       return;
     }
-    setGpsStatus('پشکنینی لۆکەیشنی مۆبایل لەگەڵ کۆمپانیا...');
+    setGpsStatus('پشکنینی لۆکەیشنی مۆبایل...');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const uLat = pos.coords.latitude;
         const uLng = pos.coords.longitude;
         const dist = calculateDistanceMeters(uLat, uLng, factoryLocation.lat, factoryLocation.lng);
         setDistanceMeters(dist);
-        const inside = dist <= factoryLocation.radiusMeters;
+        const inside = dist <= 100;
         setGpsStatus(inside ? `داخل کۆمپانیا (${dist}m)` : `دەرەوەی کۆمپانیا (${dist}m)`);
       },
       () => {
@@ -103,6 +103,10 @@ export default function MainPage() {
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
+
+  useEffect(() => {
+    requestLocation();
+  }, []);
 
   // Start Camera
   const startCamera = async () => {
@@ -214,7 +218,16 @@ export default function MainPage() {
     }
 
     if (!capturedSelfie) {
-      setAttMessage({ text: 'تکایە فۆتۆ سێلفی لەگەڵ ئامادەبوون بگرە', success: false });
+      setAttMessage({ text: '⚠️ تکایە فۆتۆی سێلفی لەگەڵ ئامادەبوون بگرە بۆ سەلماندن', success: false });
+      return;
+    }
+
+    // 100m Location Geofence check
+    if (distanceMeters !== null && distanceMeters > 100) {
+      setAttMessage({
+        text: `⚠️ ناتوانیت چێک ئین بکەیت! دووریت لە شوێنی دیاریکراوی کۆگا (${distanceMeters} مەتر)ە کە زیاترە لە ١٠٠ مەتر.`,
+        success: false,
+      });
       return;
     }
 
@@ -450,15 +463,6 @@ export default function MainPage() {
               >
                 📤 تۆمارکردنی دەرچوون (Check Out)
               </button>
-            </div>
-
-            {/* 31-Day Attendance Sheet Component */}
-            <div className="pt-2 border-t border-slate-300">
-              <AttendanceSheetGrid
-                attendanceLogs={attendanceLogs}
-                employees={employees}
-                onDeleteLog={(logId) => setAttendanceLogs(attendanceLogs.filter(l => l.id !== logId))}
-              />
             </div>
 
           </div>
