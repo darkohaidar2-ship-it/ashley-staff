@@ -690,6 +690,31 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       return NextResponse.json({ success: true });
     }
 
+    // ----------------------------------------
+    // Biometrics (Fingerprint / Face ID) Endpoints
+    // ----------------------------------------
+    if (pathStr === 'biometrics/register' && method === 'POST') {
+      const { userId, credentialId } = await req.json();
+      if (!userId || !credentialId) return NextResponse.json({ error: 'userId and credentialId required' }, { status: 400 });
+
+      const { error } = await supabase.from('users').update({ biometric_credential_id: credentialId }).eq('id', userId);
+      if (error) {
+        console.warn('Note: biometric_credential_id update in users table:', error.message);
+      }
+      return NextResponse.json({ success: true, credentialId });
+    }
+
+    if (pathStr === 'biometrics/status' && method === 'GET') {
+      const userId = req.nextUrl.searchParams.get('userId');
+      if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
+
+      const { data: userRow } = await supabase.from('users').select('biometric_credential_id').eq('id', userId).maybeSingle();
+      return NextResponse.json({
+        hasBiometrics: !!userRow?.biometric_credential_id,
+        credentialId: userRow?.biometric_credential_id || null,
+      });
+    }
+
     if (pathStr === 'admin/users/update-role' && method === 'POST') {
       const { userId, role } = await req.json();
       if (!userId || !role) return NextResponse.json({ error: 'userId and role required' }, { status: 400 });

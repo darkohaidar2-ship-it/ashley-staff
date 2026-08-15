@@ -21,8 +21,11 @@ import {
   RefreshCw, 
   LogOut,
   Sparkles,
-  AlertTriangle
+  AlertTriangle,
+  Fingerprint,
+  Smartphone
 } from 'lucide-react';
+import { isBiometricSupported, registerBiometric, verifyBiometric } from '@/lib/webauthn';
 
 // Haversine formula to compute exact distance in meters between two GPS coordinates
 function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -69,6 +72,11 @@ export default function MainPage() {
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedSelfie, setCapturedSelfie] = useState<string | null>(null);
   
+  // Biometric (Fingerprint / Face ID) State
+  const [bioSupported, setBioSupported] = useState<boolean>(false);
+  const [hasBiometric, setHasBiometric] = useState<boolean>(false);
+  const [biometricLoading, setBiometricLoading] = useState<boolean>(false);
+
   // GPS Geofence State
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const [gpsStatus, setGpsStatus] = useState<string | null>(null);
@@ -80,6 +88,36 @@ export default function MainPage() {
   // --- Model Search State (Left Side) ---
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');
+
+  useEffect(() => {
+    setBioSupported(isBiometricSupported());
+  }, []);
+
+  // Check biometric pairing status when employee is selected
+  useEffect(() => {
+    if (!selectedEmpId) {
+      setHasBiometric(false);
+      return;
+    }
+    const localBio = typeof window !== 'undefined' ? localStorage.getItem(`ashley_bio_${selectedEmpId}`) : null;
+    if (localBio) {
+      setHasBiometric(true);
+    } else {
+      fetch(`/api/attendance/biometrics/status?userId=${selectedEmpId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.hasBiometrics) {
+            setHasBiometric(true);
+            if (data.credentialId && typeof window !== 'undefined') {
+              localStorage.setItem(`ashley_bio_${selectedEmpId}`, data.credentialId);
+            }
+          } else {
+            setHasBiometric(false);
+          }
+        })
+        .catch(() => setHasBiometric(false));
+    }
+  }, [selectedEmpId]);
 
   // Request GPS Location
   const requestLocation = () => {
@@ -203,7 +241,144 @@ export default function MainPage() {
     };
   }, []);
 
-  // Check-In / Check-Out Submission
+  // Reusable Attendance Submission Helper
+  const submitAttendanceLog = (type: 'Check In' | 'Check Out', emp: any, verificationMethod: string, selfieDataUrl?: string | null) => {
+    const timeNow = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
+    const dateToday = format(new Date(), 'yyyy-MM-dd');
+    const timeStr = format(new Date(), 'HH:mm');
+
+    const newLog = {
+      id: `log-${emp.id}-${Date.now()}`,
+      employeeId: emp.id,
+      employee_id: emp.id,
+      userId: emp.id,
+      userName: emp.fullName3Part || emp.name,
+      employee_name: emp.fullName3Part || emp.name,
+      name: emp.fullName3Part || emp.name,
+      type: type === 'Check In' ? 'هاتن (Check In)' : 'دەرچوون (Check Out)',
+      log_type: type,
+      time: timeNow,
+      log_date: dateToday,
+      log_time_str: timeStr,
+      selfieUrl: selfieDataUrl || undefined,
+      selfie_url: selfieDataUrl || undefined,
+      checkInSelfie: selfieDataUrl || undefined,
+      checkOutSelfie: selfieDataUrl || undefined,
+      distance: distanceMeters !== null ? `${distanceMeters}m` : 'داخل کۆمپانیا (12m)',
+      location_address: distanceMeters !== null ? `${distanceMeters}m` : 'داخل کۆمپانیا',
+      status: verificationMethod,
+      createdAt: timeNow,
+    };
+
+    const updatedLogs = [newLog, ...attendanceLogs];
+    setAttendanceLogs(updatedLogs);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ashley_local_attendanceLogs', JSON.stringify(updatedLogs));
+      localStorage.setItem('ashley_attendance_logs', JSON.stringify(updatedLogs));
+    }
+
+    // Sync to Supabase Real-Time Backend
+    fetch('/api/attendance/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newLog),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Network response was not ok');
+        const resData = await res.json();
+        if (resData?.record?.selfieUrl) {
+          setAttendanceLogs((prev) =>
+            prev.map((l) => (l.id === newLog.id ? { ...l, selfieUrl: resData.record.selfieUrl } : l))
+          );
+        }
+        setAttMessage({
+          text: `🎉 ئامادەبوونی (${emp.name}) بە سەرکەوتوویی وەک ${type} تۆمارکرا (${verificationMethod})!`,
+          success: true,
+        });
+      })
+      .catch((err) => {
+        console.error('Supabase attendance post error - saving to offline queue:', err);
+        if (typeof window !== 'undefined') {
+          const pending = JSON.parse(localStorage.getItem('ashley_pending_checkins') || '[]');
+          localStorage.setItem('ashley_pending_checkins', JSON.stringify([...pending, newLog]));
+        }
+        setAttMessage({
+          text: `ئامادەبوونی (${emp.name}) بە سەرکەوتوویی لە مۆبایلەکە خەزن کرا و کاتی پەیوەستبوون دەنێردرێت.`,
+          success: true,
+        });
+      });
+
+    setCapturedSelfie(null);
+  };
+
+  // Handle Biometric Device Registration (Pair Fingerprint to Employee)
+  const handleRegisterBiometric = async () => {
+    if (!selectedEmpId) {
+      setAttMessage({ text: 'تکایە سەرەتا ناوی خۆت لە لیستەکەدا هەڵبژێرە', success: false });
+      return;
+    }
+    const emp = employees.find((e) => e.id === selectedEmpId);
+    if (!emp) return;
+
+    if (!pinCode.trim() || pinCode.trim() !== (emp.password || '1234')) {
+      setAttMessage({ text: 'تکایە کۆدی PINـی دروست بنووسە بۆ دڵنیابوونەوەی سەرەتایی ناسنامە', success: false });
+      return;
+    }
+
+    try {
+      setBiometricLoading(true);
+      const credentialId = await registerBiometric(emp.id, emp.fullName3Part || emp.name);
+
+      await fetch('/api/attendance/biometrics/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: emp.id, credentialId }),
+      });
+
+      setHasBiometric(true);
+      setAttMessage({
+        text: `🎉 پەنجەمۆر / Face IDـی ئەم مۆبایلە بە سەرکەوتوویی بۆ (${emp.name}) چالاککرا! لەمەودوا بە پەنجەمۆر دەتوانیت چێک‌ئین بکەیت.`,
+        success: true,
+      });
+    } catch (err: any) {
+      setAttMessage({ text: err.message || 'هەڵە لە تۆمارکردنی پەنجەمۆر', success: false });
+    } finally {
+      setBiometricLoading(false);
+    }
+  };
+
+  // Handle Fast Biometric Check-In / Check-Out
+  const handleBiometricAuth = async (type: 'Check In' | 'Check Out') => {
+    if (!selectedEmpId) {
+      setAttMessage({ text: 'تکایە ناوی خۆت لە لیستەکەدا هەڵبژێرە', success: false });
+      return;
+    }
+    const emp = employees.find((e) => e.id === selectedEmpId);
+    if (!emp) return;
+
+    // 100m Location Geofence check
+    if (distanceMeters !== null && distanceMeters > 100) {
+      setAttMessage({
+        text: `⚠️ ناتوانیت چێک ئین بکەیت! دووریت لە شوێنی دیاریکراوی کۆگا (${distanceMeters} مەتر)ە کە زیاترە لە ١٠٠ مەتر.`,
+        success: false,
+      });
+      return;
+    }
+
+    try {
+      setBiometricLoading(true);
+      const verified = await verifyBiometric(emp.id);
+      if (verified) {
+        submitAttendanceLog(type, emp, 'پەنجەمۆر (Biometric Fingerprint)');
+      }
+    } catch (err: any) {
+      setAttMessage({ text: err.message || 'پەنجەمۆر نەناسرا یان هەڵوەشێنرایەوە', success: false });
+    } finally {
+      setBiometricLoading(false);
+    }
+  };
+
+  // Manual Check-In / Check-Out Submission (PIN + Selfie)
   const handleCheckInOrOut = (type: 'Check In' | 'Check Out') => {
     if (!selectedEmpId) {
       setAttMessage({ text: 'تکایە ناوی خۆت لە لیستەکەدا هەڵبژێرە', success: false });
@@ -231,75 +406,7 @@ export default function MainPage() {
       return;
     }
 
-    const timeNow = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
-    const dateToday = format(new Date(), 'yyyy-MM-dd');
-    const timeStr = format(new Date(), 'HH:mm');
-
-    const newLog = {
-      id: `log-${emp.id}-${Date.now()}`,
-      employeeId: emp.id,
-      employee_id: emp.id,
-      userId: emp.id,
-      userName: emp.fullName3Part || emp.name,
-      employee_name: emp.fullName3Part || emp.name,
-      name: emp.fullName3Part || emp.name,
-      type: type === 'Check In' ? 'هاتن (Check In)' : 'دەرچوون (Check Out)',
-      log_type: type,
-      time: timeNow,
-      log_date: dateToday,
-      log_time_str: timeStr,
-      selfieUrl: capturedSelfie,
-      selfie_url: capturedSelfie,
-      checkInSelfie: capturedSelfie,
-      checkOutSelfie: capturedSelfie,
-      distance: distanceMeters !== null ? `${distanceMeters}m` : 'داخل کۆمپانیا (12m)',
-      location_address: distanceMeters !== null ? `${distanceMeters}m` : 'داخل کۆمپانیا',
-      status: 'verified',
-      createdAt: timeNow,
-    };
-
-    const updatedLogs = [newLog, ...attendanceLogs];
-    setAttendanceLogs(updatedLogs);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ashley_local_attendanceLogs', JSON.stringify(updatedLogs));
-      localStorage.setItem('ashley_attendance_logs', JSON.stringify(updatedLogs));
-    }
-
-    // Sync to Supabase Real-Time Backend
-    fetch('/api/attendance/logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newLog),
-    })
-      .then(async (res) => {
-        if (!res.ok) throw new Error('Network response was not ok');
-        const resData = await res.json();
-        if (resData?.record?.selfieUrl) {
-          setAttendanceLogs((prev) =>
-            prev.map((l) => (l.id === newLog.id ? { ...l, selfieUrl: resData.record.selfieUrl } : l))
-          );
-        }
-        setAttMessage({
-          text: `ئامادەبوونی (${emp.name}) بە سەرکەوتوویی وەک ${type} تۆمارکرا و نێردرا بۆ سوپا بەیس!`,
-          success: true,
-        });
-      })
-      .catch((err) => {
-        console.error('Supabase attendance post error - saving to offline queue:', err);
-        if (typeof window !== 'undefined') {
-          const pending = JSON.parse(localStorage.getItem('ashley_pending_checkins') || '[]');
-          localStorage.setItem('ashley_pending_checkins', JSON.stringify([...pending, newLog]));
-        }
-        setAttMessage({
-          text: `ئامادەبوونی (${emp.name}) تەنها لە مۆبایلەکە خەزن بوو! سوپابەیس (Supabase) کار ناکات، تکایە پڕۆژەکەت لە Supabase کارا (Resume) بکەرەوە.`,
-          success: false,
-        });
-      });
-
-    // Reset Form
-    setSelectedEmpId('');
-    setPinCode('');
-    setCapturedSelfie(null);
+    submitAttendanceLog(type, emp, 'سێلفی و PIN', capturedSelfie);
   };
 
   // Filter Catalog Items
@@ -408,6 +515,70 @@ export default function MainPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* 👆 BIOMETRIC FINGERPRINT / FACE ID FAST PASS */}
+              {selectedEmpId && (
+                <div className="p-3 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-100/70 rounded-xl border border-emerald-300 space-y-2.5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-emerald-950 flex items-center gap-1.5">
+                      <Fingerprint className="w-4 h-4 text-emerald-700 animate-pulse" />
+                      <span>چێک‌ئین بە پەنجەمۆر / Face ID</span>
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${hasBiometric ? 'bg-emerald-200 text-emerald-950 border-emerald-400' : 'bg-amber-100 text-amber-900 border-amber-300'}`}>
+                      {hasBiometric ? '✅ پەنجەمۆر کارایە' : '⚠️ نەبەستراوە'}
+                    </span>
+                  </div>
+
+                  {hasBiometric ? (
+                    <div className="space-y-1.5">
+                      <p className="text-[11px] text-emerald-900 font-bold">
+                        پەنجەمۆری مۆبایلەکەت بناسێنە بۆ چێک‌ئینی دەستبەجێ:
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          disabled={biometricLoading}
+                          onClick={() => handleBiometricAuth('Check In')}
+                          className="btn-fluent-primary py-2.5 text-xs font-black flex items-center justify-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white shadow-md transition-transform hover:scale-[1.02]"
+                        >
+                          <Fingerprint className="w-4 h-4 text-amber-300" />
+                          <span>{biometricLoading ? 'چاوەڕێ بە...' : '👆 هاتن (Check In)'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={biometricLoading}
+                          onClick={() => handleBiometricAuth('Check Out')}
+                          className="btn-fluent-danger py-2.5 text-xs font-black flex items-center justify-center gap-1.5 rounded-xl bg-rose-700 hover:bg-rose-800 text-white shadow-md transition-transform hover:scale-[1.02]"
+                        >
+                          <Fingerprint className="w-4 h-4 text-amber-300" />
+                          <span>{biometricLoading ? 'چاوەڕێ بە...' : '👆 دەرچوون (Check Out)'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 bg-white/80 p-2 rounded-lg border border-emerald-200">
+                      <p className="text-[10px] text-emerald-950 font-semibold leading-normal">
+                        بۆ ئەوەی لەم مۆبایلەوە بە پەنجەمۆر یان Face ID چێک‌ئین بکەیت، کۆدی PIN لە خوارەوە بنووسە و کلیک لەم دوگمەیە بکە:
+                      </p>
+                      <button
+                        type="button"
+                        disabled={biometricLoading}
+                        onClick={handleRegisterBiometric}
+                        className="w-full btn-fluent py-2 text-xs font-bold flex items-center justify-center gap-1.5 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white border-emerald-900 shadow-sm"
+                      >
+                        <Smartphone className="w-4 h-4 text-amber-300" />
+                        <span>{biometricLoading ? 'تکایە پەنجە لەسەر مۆبایل دابنێ...' : '🔗 بەستنەوەی پەنجەمۆری ئەم مۆبایلە'}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-slate-300"></div>
+                <span className="flex-shrink mx-2 text-[10px] text-slate-500 font-bold">یان شێوازی ئاسایی (PIN و سێلفی)</span>
+                <div className="flex-grow border-t border-slate-300"></div>
               </div>
 
               <div>
