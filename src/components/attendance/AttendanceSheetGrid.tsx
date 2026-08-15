@@ -11,12 +11,19 @@ interface AttendanceSheetGridProps {
   onDeleteLog?: (logId: string) => void;
 }
 
-export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: AttendanceSheetGridProps) {
+export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, onDeleteLog }: AttendanceSheetGridProps) {
   // Selected Month (default '2026-08')
   const [selectedMonth, setSelectedMonth] = useState<string>('2026-08');
   // Selected Employee filter ('all' or emp.id)
   const [selectedEmpFilter, setSelectedEmpFilter] = useState<string>('all');
   
+  // Realtime Logs state
+  const [gridLogs, setGridLogs] = useState<AttendanceRecord[]>(initialLogs);
+  
+  React.useEffect(() => {
+    setGridLogs(initialLogs);
+  }, [initialLogs]);
+
   // Selected Log for Selfie & Full Details Modal
   const [activeLogModal, setActiveLogModal] = useState<AttendanceRecord | null>(null);
 
@@ -39,7 +46,7 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
     const formattedDay = dayNum.toString().padStart(2, '0');
     const targetDateStr = `${selectedMonth}-${formattedDay}`;
 
-    return attendanceLogs.filter(log => {
+    return gridLogs.filter(log => {
       // Date match
       const logDate = log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || '';
       if (logDate !== targetDateStr) return false;
@@ -209,8 +216,8 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
                 .then((res) => res.json())
                 .then((supabaseLogs) => {
                   if (Array.isArray(supabaseLogs) && supabaseLogs.length > 0) {
-                    setAttendanceLogs((prevLogs) => {
-                      const logsMap = new Map((prevLogs || []).map((l) => [l.id, l]));
+                    setGridLogs((prevLogs: AttendanceRecord[]) => {
+                      const logsMap = new Map((prevLogs || []).map((l: AttendanceRecord) => [l.id, l]));
                       supabaseLogs.forEach((sbLog: any) => {
                         logsMap.set(sbLog.id, sbLog);
                       });
