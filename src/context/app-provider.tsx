@@ -155,21 +155,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [rawItems, setRawItems, isItemsLoading] = useFirestoreCollection<Item>('items', initialData.items);
     const [locations, setLocations, isLocationsLoading] = useFirestoreCollection<StorageLocation>('locations', initialData.locations);
 
-    // Global Real-Time Supabase Attendance Sync (Safely Merges Supabase & Local State)
+    // Global Real-Time Supabase Attendance Sync (Single source of truth from Supabase)
     useEffect(() => {
       const syncSupabaseAttendance = () => {
         fetch('/api/attendance/logs')
           .then((res) => res.json())
           .then((supabaseLogs) => {
             if (Array.isArray(supabaseLogs)) {
-              setAttendanceLogs((prevLogs) => {
-                const logsMap = new Map();
-                // 1. Keep local logs so check-ins never disappear
-                (prevLogs || []).forEach((l) => logsMap.set(l.id, l));
-                // 2. Merge Supabase logs
-                supabaseLogs.forEach((sbLog: any) => logsMap.set(sbLog.id, sbLog));
-                return Array.from(logsMap.values());
-              });
+              setAttendanceLogs(supabaseLogs);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('ashley_local_attendanceLogs', JSON.stringify(supabaseLogs));
+              }
             }
           })
           .catch((err) => console.error('Supabase real-time sync error:', err));
@@ -186,6 +182,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           { event: '*', schema: 'public', table: 'attendance' },
           (payload) => {
             console.log('Realtime Supabase WebSocket check-in received:', payload);
+            syncSupabaseAttendance();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'attendance_logs' },
+          (payload) => {
+            console.log('Realtime Supabase logs change received:', payload);
             syncSupabaseAttendance();
           }
         )

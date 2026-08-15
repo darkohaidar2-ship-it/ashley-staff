@@ -964,15 +964,45 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     if ((params.path || [])[0] === 'logs' && (params.path || [])[1] && method === 'DELETE') {
       try {
         const logId = (params.path || [])[1];
+        const searchParams = req.nextUrl.searchParams;
+        const employeeId = searchParams.get('employeeId');
+        const dateStr = searchParams.get('dateStr');
+        const logType = searchParams.get('logType');
+
+        // 1. Delete from attendance_logs
         await supabase.from('attendance_logs').delete().eq('id', logId);
-        
-        // If it's composite ID from attendance table (e.g. 123-in or 123-out)
+
+        // 2. Also delete/clear from attendance table if employeeId and dateStr are provided
+        if (employeeId && dateStr) {
+          const isCheckOut = logType?.includes('Out') || logType?.includes('دەرچوون');
+          if (isCheckOut) {
+            await supabase.from('attendance_logs').delete().eq('employee_id', employeeId).eq('log_date', dateStr).eq('log_type', 'Check Out');
+            await supabase.from('attendance').update({
+              check_out: null,
+              check_out_time: null,
+              check_out_selfie: null,
+              check_out_original_time: null,
+              check_out_edit_note: null,
+            }).eq('user_id', employeeId).eq('date', dateStr);
+          } else {
+            await supabase.from('attendance_logs').delete().eq('employee_id', employeeId).eq('log_date', dateStr).eq('log_type', 'Check In');
+            await supabase.from('attendance').update({
+              check_in: null,
+              check_in_time: null,
+              check_in_selfie: null,
+              check_in_original_time: null,
+              check_in_edit_note: null,
+            }).eq('user_id', employeeId).eq('date', dateStr);
+          }
+        }
+
+        // 3. Composite ID handling
         if (logId.endsWith('-in')) {
           const rawId = logId.replace('-in', '');
-          await supabase.from('attendance').update({ check_in_time: null, check_in: null }).eq('id', rawId);
+          await supabase.from('attendance').update({ check_in_time: null, check_in: null, check_in_selfie: null }).eq('id', rawId);
         } else if (logId.endsWith('-out')) {
           const rawId = logId.replace('-out', '');
-          await supabase.from('attendance').update({ check_out_time: null, check_out: null }).eq('id', rawId);
+          await supabase.from('attendance').update({ check_out_time: null, check_out: null, check_out_selfie: null }).eq('id', rawId);
         } else {
           await supabase.from('attendance').delete().eq('id', logId);
         }

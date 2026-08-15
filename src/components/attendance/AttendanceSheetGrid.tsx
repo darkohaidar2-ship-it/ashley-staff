@@ -547,21 +547,38 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                   <span>چاککردنی کات</span>
                 </button>
 
-                {onDeleteLog && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (confirm('ئایا دڵنیایت لە سڕینەوەی ئەم تۆمارەی ئامادەبوون؟')) {
-                        onDeleteLog(activeLogModal.id);
-                        setActiveLogModal(null);
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (confirm('ئایا دڵنیایت لە سڕینەوەی ئەم تۆمارەی ئامادەبوون؟')) {
+                      const targetId = activeLogModal.id;
+                      const empId = activeLogModal.employeeId || activeLogModal.userId;
+                      const dateStr = activeLogModal.time ? activeLogModal.time.split(' ')[0] : activeLogModal.createdAt?.split('T')[0] || activeLogModal.date;
+                      const logType = activeLogModal.type;
+
+                      // 1. Immediately remove from local grid state
+                      setGridLogs(prev => prev.filter(l => l.id !== targetId));
+                      setActiveLogModal(null);
+
+                      // 2. Call parent onDeleteLog if available
+                      if (onDeleteLog) {
+                        onDeleteLog(targetId);
                       }
-                    }}
-                    className="btn-classic text-rose-800 hover:bg-rose-100 text-xs font-bold flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-700" />
-                    <span>سڕینەوە</span>
-                  </button>
-                )}
+
+                      // 3. Call DELETE API with query params
+                      try {
+                        const url = `/api/attendance/logs/${targetId}?employeeId=${encodeURIComponent(empId || '')}&dateStr=${encodeURIComponent(dateStr || '')}&logType=${encodeURIComponent(logType || '')}`;
+                        await fetch(url, { method: 'DELETE' });
+                      } catch (err) {
+                        console.error('Delete attendance error:', err);
+                      }
+                    }
+                  }}
+                  className="btn-classic text-rose-800 hover:bg-rose-100 text-xs font-bold flex items-center gap-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-700" />
+                  <span>سڕینەوە</span>
+                </button>
               </div>
 
               <button
