@@ -213,3 +213,195 @@
     color: #334155 !important;
   }
 }
+
+/* ==========================================================================
+   2. MODERN BUSINESS CENTRAL 365 THEME ([data-theme="modern-bc"])
+   ========================================================================== */
+[data-theme="modern-bc"] body {
+  background-color: #f1f5f9 !important;
+}
+
+[data-theme="modern-bc"] * {
+  border-radius: 2px !important;
+}
+
+[data-theme="modern-bc"] .panel-classic {
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+}
+
+[data-theme="modern-bc"] .panel-header-classic {
+  background: linear-gradient(180deg, #1e3a8a 0%, #1e40af 100%) !important;
+  color: #ffffff !important;
+  border-bottom: 1px solid #1e3a8a !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="modern-bc"] .btn-classic {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+}
+
+[data-theme="modern-bc"] .btn-classic:hover {
+  background: #f8fafc !important;
+  border-color: #94a3b8 !important;
+}
+
+[data-theme="modern-bc"] .btn-classic-primary {
+  background: #1d4ed8 !important;
+  color: #ffffff !important;
+  border: 1px solid #1e40af !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+}
+
+[data-theme="modern-bc"] .btn-classic-primary:hover {
+  background: #1e40af !important;
+}
+
+[data-theme="modern-bc"] .table-classic th {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="modern-bc"] .input-classic {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 2px !important;
+}
+
+[data-theme="modern-bc"] .input-classic:focus {
+  border-color: #2563eb !important;
+  outline: 2px solid #bfdbfe !important;
+  background-color: #ffffff !important;
+}
+
+/* ==========================================================================
+   3. IBM CARBON ENTERPRISE THEME ([data-theme="ibm-carbon"])
+   ========================================================================== */
+[data-theme="ibm-carbon"] body {
+  background-color: #e2e8f0 !important;
+}
+
+[data-theme="ibm-carbon"] * {
+  border-radius: 0px !important;
+}
+
+[data-theme="ibm-carbon"] .panel-classic {
+  background-color: #ffffff !important;
+  border: 1px solid #64748b !important;
+}
+
+[data-theme="ibm-carbon"] .panel-header-classic {
+  background: #0f172a !important;
+  color: #38bdf8 !important;
+  border-bottom: 2px solid #0284c7 !important;
+  font-family: monospace !important;
+}
+
+[data-theme="ibm-carbon"] .btn-classic {
+  background: #334155 !important;
+  color: #f8fafc !important;
+  border: 1px solid #475569 !important;
+}
+
+[data-theme="ibm-carbon"] .btn-classic:hover {
+  background: #475569 !important;
+}
+
+[data-theme="ibm-carbon"] .btn-classic-primary {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  border: 1px solid #0369a1 !important;
+}
+
+[data-theme="ibm-carbon"] .btn-classic-primary:hover {
+  background: #0369a1 !important;
+}
+
+[data-theme="ibm-carbon"] .table-classic th {
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+  font-family: monospace !important;
+}
+
+[data-theme="ibm-carbon"] .input-classic {
+  border: 1px solid #475569 !important;
+  background-color: #f8fafc !important;
+}
+
+[data-theme="ibm-carbon"] .input-classic:focus {
+  border-color: #0284c7 !important;
+  outline: 2px solid #0284c7 !important;
+}
+
+/* ==========================================================================
+   4. WINDOWS 11 FLUENT ERP THEME ([data-theme="fluent-win11"])
+   ========================================================================== */
+[data-theme="fluent-win11"] body {
+  background-color: #eef2f6 !important;
+}
+
+[data-theme="fluent-win11"] * {
+  border-radius: 4px !important;
+}
+
+[data-theme="fluent-win11"] .panel-classic {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
+}
+
+[data-theme="fluent-win11"] .panel-header-classic {
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
+  color: #ffffff !important;
+  border-bottom: 1px solid #2563eb !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="fluent-win11"] .btn-classic {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+}
+
+[data-theme="fluent-win11"] .btn-classic:hover {
+  background: #f1f5f9 !important;
+  border-color: #3b82f6 !important;
+}
+
+[data-theme="fluent-win11"] .btn-classic-primary {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border: 1px solid #1d4ed8 !important;
+  box-shadow: 0 2px 4px rgba(37,99,235,0.2) !important;
+}
+
+[data-theme="fluent-win11"] .btn-classic-primary:hover {
+  background: #1d4ed8 !important;
+}
+
+[data-theme="fluent-win11"] .table-classic th {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="fluent-win11"] .input-classic {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 4px !important;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.04) !important;
+}
+
+[data-theme="fluent-win11"] .input-classic:focus {
+  border-color: #2563eb !important;
+  outline: 2px solid #93c5fd !important;
+  background-color: #ffffff !important;
+}
+

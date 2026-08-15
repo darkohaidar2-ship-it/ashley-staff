@@ -8,6 +8,7 @@ import { useAppContext } from '@/context/app-provider';
 import type { Employee } from '@/lib/types';
 import { FactoryMapPicker } from '@/components/maps/FactoryMapPicker';
 import { AttendanceSheetGrid } from '@/components/attendance/AttendanceSheetGrid';
+import { ThemeSwitcher } from '@/components/layout/ThemeSwitcher';
 import { format } from 'date-fns';
 import { 
   Users, 
@@ -345,6 +346,9 @@ export default function AdminPage() {
 
         <div className="p-3 space-y-4">
           
+          {/* 🎨 DYNAMIC ENTERPRISE THEME & STYLE SWITCHER */}
+          <ThemeSwitcher />
+
           {/* Quick Beveled Action Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-100 border border-slate-300">
             <div className="flex items-center gap-2">
