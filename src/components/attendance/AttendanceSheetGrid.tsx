@@ -208,24 +208,11 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
             </select>
           </div>
 
-          {/* 🔄 SUPABASE REAL-TIME REFRESH BUTTON */}
-          <button
-            type="button"
-            onClick={() => {
-              fetch('/api/attendance/logs')
-                .then((res) => res.json())
-                .then((supabaseLogs) => {
-                  if (Array.isArray(supabaseLogs)) {
-                    setGridLogs(supabaseLogs);
-                  }
-                })
-                .catch((err) => console.error('Manual Supabase sync error:', err));
-            }}
-            className="btn-fluent text-xs font-bold flex items-center gap-1 py-1.5 px-3 rounded-lg border-emerald-500 text-emerald-800 bg-emerald-50 hover:bg-emerald-100"
-            title="ڕاکێشان و نوێکردنەوەی ڕاستەوخۆی داتاکانی ئامادەبوون لە سوپا بەیسەوە"
-          >
-            <span>🔄 ڕاکێشانی داتای سوپا بەیس</span>
-          </button>
+          {/* REAL-TIME STATUS BADGE */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-bold shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            سیستەمی ڕاستەوخۆ (Real-Time Live)
+          </div>
 
           {/* 🧹 PURGE ALL DATABASE LOGS BUTTON */}
           <button

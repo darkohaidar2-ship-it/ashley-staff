@@ -138,7 +138,7 @@ export default function MainPage() {
   };
 
   // Process Offline Pending Mobile Check-in Queue
-  const processPendingMobileQueue = () => {
+  const processPendingMobileQueue = async () => {
     if (typeof window === 'undefined' || !navigator.onLine) return;
     try {
       const pendingStr = localStorage.getItem('ashley_pending_checkins');
@@ -147,19 +147,28 @@ export default function MainPage() {
       if (!Array.isArray(pendingList) || pendingList.length === 0) return;
 
       const remaining: any[] = [];
-      pendingList.forEach((logItem) => {
-        fetch('/api/attendance/logs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(logItem),
-        })
-          .then((res) => {
-            if (!res.ok) remaining.push(logItem);
-          })
-          .catch(() => remaining.push(logItem));
-      });
+      for (const logItem of pendingList) {
+        try {
+          const res = await fetch('/api/attendance/logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(logItem),
+          });
+          if (!res.ok) remaining.push(logItem);
+        } catch (err) {
+          remaining.push(logItem);
+        }
+      }
 
       localStorage.setItem('ashley_pending_checkins', JSON.stringify(remaining));
+      
+      if (remaining.length === 0) {
+         setAttMessage({
+           text: `هەموو چێک ئینە هەڵگیراوەکانی مۆبایلەکە بە سەرکەوتوویی نێردران بۆ داتابەیز!`,
+           success: true,
+         });
+         setTimeout(() => setAttMessage(null), 3000);
+      }
     } catch (err) {
       console.error('Pending queue error:', err);
     }
@@ -650,12 +659,21 @@ export default function MainPage() {
                 <span className="font-bold text-xs">نەخشەی رەفەکانی کۆگا</span>
               </Link>
             </div>
-
           </div>
-        </section>
+        </div>
+
+        {/* Sync Button */}
+        {typeof window !== 'undefined' && localStorage.getItem('ashley_pending_checkins') && JSON.parse(localStorage.getItem('ashley_pending_checkins') || '[]').length > 0 && (
+          <button 
+             onClick={processPendingMobileQueue}
+             className="w-full mt-4 bg-orange-100 border border-orange-300 text-orange-700 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm animate-pulse"
+          >
+             <Clock className="w-5 h-5" />
+             ناردنی چێک ئینە هەڵگیراوەکان بۆ سێرڤەر ({JSON.parse(localStorage.getItem('ashley_pending_checkins') || '[]').length})
+          </button>
+        )}
 
       </div>
-
     </div>
   );
 }
