@@ -421,7 +421,6 @@ export type AttendanceRecord = {
   type: string;
   time: string;
   distance?: string;
-  location_address?: string;
   selfieUrl?: string;
   checkInSelfie?: string;
   checkOutSelfie?: string;

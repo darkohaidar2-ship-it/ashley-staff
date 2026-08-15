@@ -867,8 +867,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const logRecordId = `log-${empId}-${dateStr}-${isCheckOut ? 'out' : 'in'}-${Date.now().toString().slice(-4)}`;
 
       // 1. Insert into primary `attendance_logs` table
+      let hasError = false;
+      let errorMsg = '';
       try {
-        await supabase.from('attendance_logs').insert({
+        const { error } = await supabase.from('attendance_logs').insert({
           id: logRecordId,
           employee_id: empId,
           employee_name: empName,
@@ -879,8 +881,11 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           location_address: distance || 'داخل کۆمپانیا',
           created_at: new Date().toISOString()
         });
-      } catch (e) {
-        console.log('Notice inserting to attendance_logs:', e);
+        if (error) throw error;
+      } catch (e: any) {
+        console.error('Notice inserting to attendance_logs:', e);
+        hasError = true;
+        errorMsg = e.message || 'Supabase Insert Error';
       }
 
       // 2. Insert/Upsert into `attendance` table for backward compatibility
@@ -913,9 +918,16 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       }
 
       try {
-        await supabase.from('attendance').upsert(upsertPayload);
-      } catch (e) {
-        console.log('Notice upserting to attendance:', e);
+        const { error } = await supabase.from('attendance').upsert(upsertPayload);
+        if (error) throw error;
+      } catch (e: any) {
+        console.error('Notice upserting to attendance:', e);
+        hasError = true;
+        errorMsg = e.message || 'Supabase Upsert Error';
+      }
+
+      if (hasError) {
+        return NextResponse.json({ success: false, error: errorMsg }, { status: 500 });
       }
 
       return NextResponse.json({ 

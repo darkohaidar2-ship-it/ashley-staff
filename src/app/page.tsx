@@ -243,10 +243,36 @@ export default function MainPage() {
       localStorage.setItem('ashley_attendance_logs', JSON.stringify(updatedLogs));
     }
 
-    setAttMessage({
-      text: `ئامادەبوونی (${emp.name}) بە سەرکەوتوویی وەک ${type} تۆمارکرا و بە ڕاستەوخۆ نێردرا!`,
-      success: true,
-    });
+    // Sync to Supabase Real-Time Backend
+    fetch('/api/attendance/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newLog),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Network response was not ok');
+        const resData = await res.json();
+        if (resData?.record?.selfieUrl) {
+          setAttendanceLogs((prev) =>
+            prev.map((l) => (l.id === newLog.id ? { ...l, selfieUrl: resData.record.selfieUrl } : l))
+          );
+        }
+        setAttMessage({
+          text: `ئامادەبوونی (${emp.name}) بە سەرکەوتوویی وەک ${type} تۆمارکرا و نێردرا بۆ سوپا بەیس!`,
+          success: true,
+        });
+      })
+      .catch((err) => {
+        console.error('Supabase attendance post error - saving to offline queue:', err);
+        if (typeof window !== 'undefined') {
+          const pending = JSON.parse(localStorage.getItem('ashley_pending_checkins') || '[]');
+          localStorage.setItem('ashley_pending_checkins', JSON.stringify([...pending, newLog]));
+        }
+        setAttMessage({
+          text: `ئامادەبوونی (${emp.name}) تەنها لە مۆبایلەکە خەزن بوو! سوپابەیس (Supabase) کار ناکات، تکایە پڕۆژەکەت لە Supabase کارا (Resume) بکەرەوە.`,
+          success: false,
+        });
+      });
 
     // Reset Form
     setSelectedEmpId('');

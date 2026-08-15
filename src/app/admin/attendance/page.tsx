@@ -10,7 +10,6 @@ import {
   Trash2, UserMinus, Plus, Save, Compass, QrCode
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { useAppContext } from '@/context/app-provider';
 
 interface User {
   id: string;
@@ -92,8 +91,6 @@ export default function AdminAttendancePage() {
   const [overrideCheckIn, setOverrideCheckIn] = useState('08:30');
   const [overrideCheckOut, setOverrideCheckOut] = useState('16:30');
 
-  const { attendanceLogs: firebaseLogs } = useAppContext();
-
   useEffect(() => {
     setMounted(true);
     loadReport();
@@ -106,6 +103,7 @@ export default function AdminAttendancePage() {
       if (res.ok) {
         const data = await res.json();
         setUsers(data.users || []);
+        setAttendance(data.attendance || []);
         setWarehouses(data.warehouses || []);
         setHolidays(data.holidays || []);
         if (data.shifts) {
@@ -119,34 +117,6 @@ export default function AdminAttendancePage() {
       setLoading(false);
     }
   };
-
-  // Convert Firebase Logs to the format expected by this page
-  useEffect(() => {
-    const formattedLogs = firebaseLogs.map(r => {
-      const isCheckIn = r.type?.includes('In') || r.type?.includes('هاتن');
-      const timeStr = r.time?.split(' ')[1] || r.createdAt?.split('T')[1]?.slice(0, 8) || '';
-      const dateStr = r.time?.split(' ')[0] || r.createdAt?.split('T')[0] || '';
-      
-      return {
-        id: r.id,
-        userId: r.employeeId || r.userId || '',
-        userName: r.name || r.userName || '',
-        date: dateStr,
-        checkInTime: isCheckIn ? timeStr : '',
-        checkInSelfie: isCheckIn ? (r.selfieUrl || r.checkInSelfie || '') : '',
-        checkInAddress: isCheckIn ? (r.distance || r.location_address || '') : '',
-        checkOutTime: !isCheckIn ? timeStr : '',
-        checkOutSelfie: !isCheckIn ? (r.selfieUrl || r.checkOutSelfie || '') : '',
-        checkOutAddress: !isCheckIn ? (r.distance || r.location_address || '') : '',
-        warehouseName: r.distance?.includes('m') ? 'کۆمپانیا' : (r.distance || 'دەرەوە'),
-        lateMinutes: 0,
-        earlyOutMinutes: 0,
-        overtimeMinutes: 0,
-        status: r.status || 'Present'
-      };
-    });
-    setAttendance(formattedLogs);
-  }, [firebaseLogs]);
 
   if (!mounted) return null;
 
