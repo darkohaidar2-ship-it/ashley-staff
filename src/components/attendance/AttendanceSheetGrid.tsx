@@ -231,8 +231,8 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
         </div>
       </div>
 
-      {/* 📊 31-DAY MATRIX GRID TABLE (WinUI 3 Fluent Glassmorphism) */}
-      <div id="attendance-matrix-table-wrapper" className="overflow-x-auto border border-slate-300 rounded-xl max-h-[550px] overflow-y-auto shadow-sm bg-white/90 backdrop-blur-md">
+      {/* 📊 31-DAY MATRIX GRID TABLE (WinUI 3 Fluent Glassmorphism Widescreen) */}
+      <div id="attendance-matrix-table-wrapper" className="w-full overflow-x-auto border border-slate-300 rounded-xl max-h-[72vh] min-h-[450px] overflow-y-auto shadow-sm bg-white/90 backdrop-blur-md">
         <table className="table-fluent w-full text-xs">
           <thead className="sticky top-0 bg-slate-100 border-b-2 border-slate-300 z-20">
             <tr>

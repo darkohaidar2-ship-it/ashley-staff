@@ -56,8 +56,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
               {/* Classic ERP Enterprise Top Window Header & Ribbon Toolbar */}
               <TopNavbar />
 
-              {/* Main Full Width Classic Content Area */}
-              <main className="flex-1 w-full max-w-7xl mx-auto p-2 md:p-4">
+              {/* Main Fluid Widescreen Content Area (Expands seamlessly on Ultrawide, 4K, 2K & Widescreen displays) */}
+              <main className="flex-1 w-full max-w-[1920px] mx-auto px-3 md:px-6 py-3">
                 {children}
               </main>
 
