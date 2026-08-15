@@ -4,6 +4,7 @@
 import React, { createContext, useContext, ReactNode, useMemo, useEffect, useState, useCallback } from 'react';
 import { useCollection, useMemoFirebase, collection, doc } from '@/firebase';
 import { useFirestore, useUser, useDoc } from '@/firebase';
+import { supabase } from '@/lib/supabase';
 import { 
     Employee, 
     ExcelFile, 
@@ -154,7 +155,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [rawItems, setRawItems, isItemsLoading] = useFirestoreCollection<Item>('items', initialData.items);
     const [locations, setLocations, isLocationsLoading] = useFirestoreCollection<StorageLocation>('locations', initialData.locations);
 
-    // Global Real-Time Supabase Attendance Sync (Syncs all mobile devices every 8 seconds)
+    // Global Real-Time Supabase Attendance Sync (WebSockets + 8s Fallback Poll)
     useEffect(() => {
       const syncSupabaseAttendance = () => {
         fetch('/api/attendance/logs')
@@ -173,9 +174,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
           .catch((err) => console.error('Supabase real-time sync error:', err));
       };
 
+      // Initial Fetch
       syncSupabaseAttendance();
+
+      // Supabase Realtime WebSocket Subscription (Instant <0.5s push updates)
+      const channel = supabase
+        .channel('realtime_attendance_sync')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'attendance' },
+          (payload) => {
+            console.log('Realtime Supabase WebSocket check-in received:', payload);
+            syncSupabaseAttendance();
+          }
+        )
+        .subscribe();
+
+      // Fallback polling interval (every 8s)
       const interval = setInterval(syncSupabaseAttendance, 8000);
-      return () => clearInterval(interval);
+
+      return () => {
+        supabase.removeChannel(channel);
+        clearInterval(interval);
+      };
     }, [setAttendanceLogs]);
 
     const items = rawItems;
