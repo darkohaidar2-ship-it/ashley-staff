@@ -355,7 +355,7 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
             <tr className="grand-total-row">
               <td className="sticky right-0 bg-slate-900 font-bold z-10">کۆی گشتی:</td>
               <td colSpan={31} className="font-mono text-amber-300">
-                {activeEmployees.length} Employee(s) Active | {attendanceLogs.length} Total Attendance Logs Recorded
+                {activeEmployees.length} Employee(s) Active | {gridLogs.length} Total Attendance Logs Recorded
               </td>
             </tr>
           </tfoot>
