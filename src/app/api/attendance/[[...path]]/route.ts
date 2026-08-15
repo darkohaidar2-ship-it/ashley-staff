@@ -880,6 +880,19 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       });
     }
 
+    // ----------------------------------------
+    // DELETE /api/attendance/logs (Purge all attendance logs from Supabase)
+    // ----------------------------------------
+    if (pathStr === 'logs' && method === 'DELETE') {
+      try {
+        const { error } = await supabase.from('attendance').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (error) throw error;
+        return NextResponse.json({ success: true, message: 'All attendance logs purged from Supabase' });
+      } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 500 });
+      }
+    }
+
     // fallback 404
     return NextResponse.json({ error: 'Not Found' }, { status: 404 });
 
