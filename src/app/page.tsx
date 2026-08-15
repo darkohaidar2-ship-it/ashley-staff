@@ -210,18 +210,28 @@ export default function MainPage() {
     }
 
     const timeNow = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
+    const dateToday = format(new Date(), 'yyyy-MM-dd');
+    const timeStr = format(new Date(), 'HH:mm');
+
     const newLog = {
-      id: `log-${Date.now()}`,
+      id: `log-${emp.id}-${Date.now()}`,
       employeeId: emp.id,
+      employee_id: emp.id,
       userId: emp.id,
       userName: emp.fullName3Part || emp.name,
+      employee_name: emp.fullName3Part || emp.name,
       name: emp.fullName3Part || emp.name,
       type: type === 'Check In' ? 'هاتن (Check In)' : 'دەرچوون (Check Out)',
+      log_type: type,
       time: timeNow,
+      log_date: dateToday,
+      log_time_str: timeStr,
       selfieUrl: capturedSelfie,
+      selfie_url: capturedSelfie,
       checkInSelfie: capturedSelfie,
       checkOutSelfie: capturedSelfie,
       distance: distanceMeters !== null ? `${distanceMeters}m` : 'داخل کۆمپانیا (12m)',
+      location_address: distanceMeters !== null ? `${distanceMeters}m` : 'داخل کۆمپانیا',
       status: 'verified',
       createdAt: timeNow,
     };

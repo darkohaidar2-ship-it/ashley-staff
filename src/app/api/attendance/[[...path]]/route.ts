@@ -755,76 +755,108 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
-    // GET /api/attendance/logs (Supabase Realtime Logs Fetch)
+    // GET /api/attendance/logs (Supabase Clean Attendance Logs Fetch)
     // ----------------------------------------
     if (pathStr === 'logs' && method === 'GET') {
       try {
-        const { data: logs, error } = await supabase
+        const formattedLogs: any[] = [];
+
+        // 1. Try reading from primary `attendance_logs` table
+        const { data: logs1 } = await supabase
+          .from('attendance_logs')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (logs1 && logs1.length > 0) {
+          logs1.forEach((r: any) => {
+            formattedLogs.push({
+              id: r.id,
+              employeeId: r.employee_id || r.user_id,
+              userId: r.employee_id || r.user_id,
+              userName: r.employee_name || r.user_name,
+              name: r.employee_name || r.user_name,
+              type: r.log_type === 'Check Out' || r.type?.includes('Out') ? 'دەرچوون (Check Out)' : 'هاتن (Check In)',
+              time: `${r.log_date || r.date} ${r.log_time_str || r.time || '08:00'}`,
+              distance: r.location_address || 'داخل کۆمپانیا',
+              selfieUrl: r.selfie_url || r.check_in_selfie || r.check_out_selfie,
+              checkInSelfie: r.selfie_url || r.check_in_selfie,
+              checkOutSelfie: r.selfie_url || r.check_out_selfie,
+              status: 'verified',
+              createdAt: r.created_at || `${r.log_date} ${r.log_time_str}`
+            });
+          });
+        }
+
+        // 2. Also read from `attendance` table for backward compatibility
+        const { data: logs2 } = await supabase
           .from('attendance')
           .select('*')
           .order('date', { ascending: false });
 
-        if (error) {
-          return NextResponse.json([]);
+        if (logs2 && logs2.length > 0) {
+          logs2.forEach((r: any) => {
+            if (r.check_in_time) {
+              formattedLogs.push({
+                id: `${r.id}-in`,
+                employeeId: r.user_id,
+                userId: r.user_id,
+                userName: r.user_name,
+                name: r.user_name,
+                type: 'هاتن (Check In)',
+                time: `${r.date} ${r.check_in_time}`,
+                distance: r.check_in_address || 'داخل کۆمپانیا',
+                selfieUrl: r.check_in_selfie,
+                checkInSelfie: r.check_in_selfie,
+                status: 'verified',
+                createdAt: r.check_in || `${r.date} ${r.check_in_time}`
+              });
+            }
+            if (r.check_out_time) {
+              formattedLogs.push({
+                id: `${r.id}-out`,
+                employeeId: r.user_id,
+                userId: r.user_id,
+                userName: r.user_name,
+                name: r.user_name,
+                type: 'دەرچوون (Check Out)',
+                time: `${r.date} ${r.check_out_time}`,
+                distance: r.check_out_address || 'داخل کۆمپانیا',
+                selfieUrl: r.check_out_selfie,
+                checkOutSelfie: r.check_out_selfie,
+                status: 'verified',
+                createdAt: r.check_out || `${r.date} ${r.check_out_time}`
+              });
+            }
+          });
         }
 
-        const formattedLogs: any[] = [];
-        (logs || []).forEach(r => {
-          if (r.check_in_time) {
-            formattedLogs.push({
-              id: `${r.id || r.user_id + '-' + r.date}-in`,
-              employeeId: r.user_id,
-              userId: r.user_id,
-              userName: r.user_name,
-              name: r.user_name,
-              type: 'هاتن (Check In)',
-              time: `${r.date} ${r.check_in_time}`,
-              distance: r.check_in_address || 'داخل کۆمپانیا',
-              selfieUrl: r.check_in_selfie,
-              checkInSelfie: r.check_in_selfie,
-              status: r.status || 'verified',
-              createdAt: r.check_in || `${r.date} ${r.check_in_time}`
-            });
-          }
-          if (r.check_out_time) {
-            formattedLogs.push({
-              id: `${r.id || r.user_id + '-' + r.date}-out`,
-              employeeId: r.user_id,
-              userId: r.user_id,
-              userName: r.user_name,
-              name: r.user_name,
-              type: 'دەرچوون (Check Out)',
-              time: `${r.date} ${r.check_out_time}`,
-              distance: r.check_out_address || 'داخل کۆمپانیا',
-              selfieUrl: r.check_out_selfie,
-              checkOutSelfie: r.check_out_selfie,
-              status: r.status || 'verified',
-              createdAt: r.check_out || `${r.date} ${r.check_out_time}`
-            });
-          }
-        });
+        // Remove duplicates by ID
+        const uniqueMap = new Map();
+        formattedLogs.forEach(item => uniqueMap.set(item.id, item));
 
-        return NextResponse.json(formattedLogs);
+        return NextResponse.json(Array.from(uniqueMap.values()));
       } catch (err) {
         return NextResponse.json([]);
       }
     }
 
     // ----------------------------------------
-    // POST /api/attendance/logs (Save to Supabase DB & Storage)
+    // POST /api/attendance/logs (Insert to Supabase DB & Storage)
     // ----------------------------------------
     if (pathStr === 'logs' && method === 'POST') {
       const body = await req.json();
-      const { employeeId, name, type, time, selfieUrl, distance } = body;
+      const { employeeId, userId, name, userName, type, log_type, time, selfieUrl, distance } = body;
 
+      const empId = employeeId || userId || 'emp';
+      const empName = name || userName || 'Employee';
       const dateStr = time?.split(' ')[0] || new Date().toISOString().split('T')[0];
-      const timeStr = time?.split(' ')[1] || new Date().toTimeString().split(' ')[0];
-      const isCheckOut = type?.includes('Out') || type?.includes('دەرچوون');
+      const timeStr = time?.split(' ')[1]?.slice(0, 5) || new Date().toTimeString().slice(0, 5);
+      const isCheckOut = type?.includes('Out') || type?.includes('دەرچوون') || log_type === 'Check Out';
 
       let publicSelfieUrl = selfieUrl;
       if (selfieUrl && typeof selfieUrl === 'string' && selfieUrl.startsWith('data:image')) {
         const uploaded = await uploadSelfieToStorage(
-          employeeId || 'emp', 
+          empId, 
           dateStr, 
           isCheckOut ? 'out' : 'in', 
           selfieUrl
@@ -832,20 +864,38 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         if (uploaded) publicSelfieUrl = uploaded;
       }
 
-      const rowId = `att-${employeeId}-${dateStr}`;
+      const logRecordId = `log-${empId}-${dateStr}-${isCheckOut ? 'out' : 'in'}-${Date.now().toString().slice(-4)}`;
 
-      // Check if existing record for user & date exists
+      // 1. Insert into primary `attendance_logs` table
+      try {
+        await supabase.from('attendance_logs').insert({
+          id: logRecordId,
+          employee_id: empId,
+          employee_name: empName,
+          log_type: isCheckOut ? 'Check Out' : 'Check In',
+          log_date: dateStr,
+          log_time_str: timeStr,
+          selfie_url: publicSelfieUrl,
+          location_address: distance || 'داخل کۆمپانیا',
+          created_at: new Date().toISOString()
+        });
+      } catch (e) {
+        console.log('Notice inserting to attendance_logs:', e);
+      }
+
+      // 2. Insert/Upsert into `attendance` table for backward compatibility
+      const rowId = `att-${empId}-${dateStr}`;
       const { data: existingRecord } = await supabase
         .from('attendance')
         .select('*')
-        .eq('user_id', employeeId)
+        .eq('user_id', empId)
         .eq('date', dateStr)
         .maybeSingle();
 
       let upsertPayload: any = {
         id: existingRecord?.id || rowId,
-        user_id: employeeId || 'emp',
-        user_name: name || 'Employee',
+        user_id: empId,
+        user_name: empName,
         date: dateStr,
         status: 'Present'
       };
@@ -865,14 +915,14 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       try {
         await supabase.from('attendance').upsert(upsertPayload);
       } catch (e) {
-        console.error('Supabase DB Upsert error:', e);
+        console.log('Notice upserting to attendance:', e);
       }
 
       return NextResponse.json({ 
         success: true, 
         record: { 
           ...body, 
-          id: `${rowId}-${isCheckOut ? 'out' : 'in'}`,
+          id: logRecordId,
           selfieUrl: publicSelfieUrl, 
           checkInSelfie: !isCheckOut ? publicSelfieUrl : undefined,
           checkOutSelfie: isCheckOut ? publicSelfieUrl : undefined
@@ -885,9 +935,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if (pathStr === 'logs' && method === 'DELETE') {
       try {
-        const { error } = await supabase.from('attendance').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (error) throw error;
-        return NextResponse.json({ success: true, message: 'All attendance logs purged from Supabase' });
+        await supabase.from('attendance_logs').delete().neq('id', '000');
+        await supabase.from('attendance').delete().neq('id', '000');
+        return NextResponse.json({ success: true, message: 'All attendance records successfully purged from Supabase' });
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
       }

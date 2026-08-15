@@ -215,14 +215,8 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
               fetch('/api/attendance/logs')
                 .then((res) => res.json())
                 .then((supabaseLogs) => {
-                  if (Array.isArray(supabaseLogs) && supabaseLogs.length > 0) {
-                    setGridLogs((prevLogs: AttendanceRecord[]) => {
-                      const logsMap = new Map((prevLogs || []).map((l: AttendanceRecord) => [l.id, l]));
-                      supabaseLogs.forEach((sbLog: any) => {
-                        logsMap.set(sbLog.id, sbLog);
-                      });
-                      return Array.from(logsMap.values());
-                    });
+                  if (Array.isArray(supabaseLogs)) {
+                    setGridLogs(supabaseLogs);
                   }
                 })
                 .catch((err) => console.error('Manual Supabase sync error:', err));
@@ -231,6 +225,31 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
             title="ڕاکێشان و نوێکردنەوەی ڕاستەوخۆی داتاکانی ئامادەبوون لە سوپا بەیسەوە"
           >
             <span>🔄 ڕاکێشانی داتای سوپا بەیس</span>
+          </button>
+
+          {/* 🧹 PURGE ALL DATABASE LOGS BUTTON */}
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm('ئایا دڵنیایت لە سڕینەوەی سەرجەم داتاکانی ئامادەبوونی کۆن لە داتابەیزی سوپا بەیس؟ (دەستپێکردنەوە لە 0 هەموو داتاکان دەسڕێتەوە)')) {
+                fetch('/api/attendance/logs', { method: 'DELETE' })
+                  .then((res) => res.json())
+                  .then(() => {
+                    setGridLogs([]);
+                    if (typeof window !== 'undefined') {
+                      localStorage.removeItem('ashley_local_attendanceLogs');
+                      localStorage.removeItem('ashley_attendance_logs');
+                      localStorage.removeItem('ashley_pending_checkins');
+                    }
+                    alert('سەرجەم داتاکانی ئامادەبوونی کۆن بە سەرکەوتوویی لە داتابەیز سڕدرانەوە!');
+                  })
+                  .catch((err) => alert('هەڵە لە سڕینەوەی داتابەیز: ' + err.message));
+              }
+            }}
+            className="btn-fluent-danger text-xs font-bold flex items-center gap-1 py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white"
+            title="سڕینەوەی تەواوی داتاکانی کۆن بۆ دەستپێکردنەوە لە 0"
+          >
+            <span>🧹 پاککردنەوەی سەرجەم داتابەیز</span>
           </button>
 
           {/* 🖨️ PRINT, PDF & CSV ACTION BUTTONS */}
