@@ -772,7 +772,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         (logs || []).forEach(r => {
           if (r.check_in_time) {
             formattedLogs.push({
-              id: `${r.id}-in`,
+              id: `${r.id || r.user_id + '-' + r.date}-in`,
               employeeId: r.user_id,
               userId: r.user_id,
               userName: r.user_name,
@@ -788,7 +788,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }
           if (r.check_out_time) {
             formattedLogs.push({
-              id: `${r.id}-out`,
+              id: `${r.id || r.user_id + '-' + r.date}-out`,
               employeeId: r.user_id,
               userId: r.user_id,
               userName: r.user_name,
@@ -817,36 +817,66 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const body = await req.json();
       const { employeeId, name, type, time, selfieUrl, distance } = body;
 
+      const dateStr = time?.split(' ')[0] || new Date().toISOString().split('T')[0];
+      const timeStr = time?.split(' ')[1] || new Date().toTimeString().split(' ')[0];
+      const isCheckOut = type?.includes('Out') || type?.includes('دەرچوون');
+
       let publicSelfieUrl = selfieUrl;
       if (selfieUrl && typeof selfieUrl === 'string' && selfieUrl.startsWith('data:image')) {
-        const uploaded = await uploadSelfieToStorage(employeeId || 'emp', time?.split(' ')[0] || 'date', type?.includes('Out') ? 'out' : 'in', selfieUrl);
+        const uploaded = await uploadSelfieToStorage(
+          employeeId || 'emp', 
+          dateStr, 
+          isCheckOut ? 'out' : 'in', 
+          selfieUrl
+        );
         if (uploaded) publicSelfieUrl = uploaded;
       }
 
-      const dateStr = time?.split(' ')[0] || new Date().toISOString().split('T')[0];
-      const timeStr = time?.split(' ')[1] || new Date().toTimeString().split(' ')[0];
+      const rowId = `att-${employeeId}-${dateStr}`;
 
-      const record = {
-        id: `att-${employeeId}-${dateStr}-${Date.now().toString().slice(-4)}`,
+      // Check if existing record for user & date exists
+      const { data: existingRecord } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('user_id', employeeId)
+        .eq('date', dateStr)
+        .maybeSingle();
+
+      let upsertPayload: any = {
+        id: existingRecord?.id || rowId,
         user_id: employeeId || 'emp',
         user_name: name || 'Employee',
         date: dateStr,
-        check_in: new Date().toISOString(),
-        check_in_time: timeStr,
-        check_in_selfie: publicSelfieUrl,
-        check_in_address: distance || 'داخل کۆمپانیا',
         status: 'Present'
       };
 
+      if (isCheckOut) {
+        upsertPayload.check_out = new Date().toISOString();
+        upsertPayload.check_out_time = timeStr;
+        upsertPayload.check_out_selfie = publicSelfieUrl;
+        upsertPayload.check_out_address = distance || 'داخل کۆمپانیا';
+      } else {
+        upsertPayload.check_in = new Date().toISOString();
+        upsertPayload.check_in_time = timeStr;
+        upsertPayload.check_in_selfie = publicSelfieUrl;
+        upsertPayload.check_in_address = distance || 'داخل کۆمپانیا';
+      }
+
       try {
-        await supabase.from('attendance').upsert(record);
+        await supabase.from('attendance').upsert(upsertPayload);
       } catch (e) {
-        console.error('Supabase DB Insert notice:', e);
+        console.error('Supabase DB Upsert error:', e);
       }
 
       return NextResponse.json({ 
         success: true, 
-        record: { ...body, selfieUrl: publicSelfieUrl, checkInSelfie: publicSelfieUrl } 
+        record: { 
+          ...body, 
+          id: `${rowId}-${isCheckOut ? 'out' : 'in'}`,
+          selfieUrl: publicSelfieUrl, 
+          checkInSelfie: !isCheckOut ? publicSelfieUrl : undefined,
+          checkOutSelfie: isCheckOut ? publicSelfieUrl : undefined
+        } 
       });
     }
 

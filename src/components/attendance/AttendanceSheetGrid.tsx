@@ -201,6 +201,31 @@ export function AttendanceSheetGrid({ attendanceLogs, employees, onDeleteLog }: 
             </select>
           </div>
 
+          {/* 🔄 SUPABASE REAL-TIME REFRESH BUTTON */}
+          <button
+            type="button"
+            onClick={() => {
+              fetch('/api/attendance/logs')
+                .then((res) => res.json())
+                .then((supabaseLogs) => {
+                  if (Array.isArray(supabaseLogs) && supabaseLogs.length > 0) {
+                    setAttendanceLogs((prevLogs) => {
+                      const logsMap = new Map((prevLogs || []).map((l) => [l.id, l]));
+                      supabaseLogs.forEach((sbLog: any) => {
+                        logsMap.set(sbLog.id, sbLog);
+                      });
+                      return Array.from(logsMap.values());
+                    });
+                  }
+                })
+                .catch((err) => console.error('Manual Supabase sync error:', err));
+            }}
+            className="btn-fluent text-xs font-bold flex items-center gap-1 py-1.5 px-3 rounded-lg border-emerald-500 text-emerald-800 bg-emerald-50 hover:bg-emerald-100"
+            title="ڕاکێشان و نوێکردنەوەی ڕاستەوخۆی داتاکانی ئامادەبوون لە سوپا بەیسەوە"
+          >
+            <span>🔄 ڕاکێشانی داتای سوپا بەیس</span>
+          </button>
+
           {/* 🖨️ PRINT, PDF & CSV ACTION BUTTONS */}
           <button
             type="button"
