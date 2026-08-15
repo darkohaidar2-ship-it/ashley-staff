@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseUrl, supabaseKey } from '@/lib/supabase';
 import crypto from 'crypto';
 
 // Get current Date and Time in Asia/Baghdad timezone (Kurdish Local Time)
