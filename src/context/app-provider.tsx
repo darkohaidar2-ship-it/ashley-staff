@@ -155,14 +155,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [rawItems, setRawItems, isItemsLoading] = useFirestoreCollection<Item>('items', initialData.items);
     const [locations, setLocations, isLocationsLoading] = useFirestoreCollection<StorageLocation>('locations', initialData.locations);
 
-    // Global Real-Time Supabase Attendance Sync (Supabase DB is 100% Single Source of Truth)
+    // Global Real-Time Supabase Attendance Sync (Safely Merges Supabase & Local State)
     useEffect(() => {
       const syncSupabaseAttendance = () => {
         fetch('/api/attendance/logs')
           .then((res) => res.json())
           .then((supabaseLogs) => {
             if (Array.isArray(supabaseLogs)) {
-              setAttendanceLogs(supabaseLogs);
+              setAttendanceLogs((prevLogs) => {
+                const logsMap = new Map();
+                // 1. Keep local logs so check-ins never disappear
+                (prevLogs || []).forEach((l) => logsMap.set(l.id, l));
+                // 2. Merge Supabase logs
+                supabaseLogs.forEach((sbLog: any) => logsMap.set(sbLog.id, sbLog));
+                return Array.from(logsMap.values());
+              });
             }
           })
           .catch((err) => console.error('Supabase real-time sync error:', err));

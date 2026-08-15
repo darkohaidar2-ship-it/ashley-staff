@@ -943,6 +943,26 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       }
     }
 
+    // ----------------------------------------
+    // GET /api/attendance/status (Supabase DB Diagnostic Endpoint)
+    // ----------------------------------------
+    if (pathStr === 'status' && method === 'GET') {
+      try {
+        const { data: attData, error: attErr } = await supabase.from('attendance').select('id', { count: 'exact' }).limit(1);
+        const { data: logsData, error: logsErr } = await supabase.from('attendance_logs').select('id', { count: 'exact' }).limit(1);
+
+        return NextResponse.json({
+          status: 'online',
+          supabaseUrl,
+          hasAnonKey: !!supabaseKey,
+          attendanceTable: attErr ? `Error: ${attErr.message}` : `OK (${attData?.length || 0} sample rows)`,
+          attendanceLogsTable: logsErr ? `Error: ${logsErr.message}` : `OK (${logsData?.length || 0} sample rows)`,
+        });
+      } catch (err: any) {
+        return NextResponse.json({ status: 'error', message: err.message }, { status: 500 });
+      }
+    }
+
     // fallback 404
     return NextResponse.json({ error: 'Not Found' }, { status: 404 });
 
