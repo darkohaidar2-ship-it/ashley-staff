@@ -70,7 +70,7 @@ async function uploadSelfieToStorage(userId: string, date: string, type: string,
       .getPublicUrl(filename);
 
     return publicUrlData.publicUrl;
-  } catch (err) {
+  } catch (err: any) {
     console.error('Failed to upload selfie:', err);
     return null;
   }
@@ -782,7 +782,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
               checkInSelfie: r.selfie_url || r.check_in_selfie,
               checkOutSelfie: r.selfie_url || r.check_out_selfie,
               status: 'verified',
-              createdAt: r.created_at || `${r.log_date} ${r.log_time_str}`
+              createdAt: r.created_at || `${r.log_date} ${r.log_time_str}`,
+              originalTime: r.original_time || undefined,
+              editNote: r.edit_note || undefined,
             });
           });
         }
@@ -808,7 +810,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 selfieUrl: r.check_in_selfie,
                 checkInSelfie: r.check_in_selfie,
                 status: 'verified',
-                createdAt: r.check_in || `${r.date} ${r.check_in_time}`
+                createdAt: r.check_in || `${r.date} ${r.check_in_time}`,
+                originalTime: r.check_in_original_time || undefined,
+                editNote: r.check_in_edit_note || undefined,
               });
             }
             if (r.check_out_time) {
@@ -824,7 +828,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 selfieUrl: r.check_out_selfie,
                 checkOutSelfie: r.check_out_selfie,
                 status: 'verified',
-                createdAt: r.check_out || `${r.date} ${r.check_out_time}`
+                createdAt: r.check_out || `${r.date} ${r.check_out_time}`,
+                originalTime: r.check_out_original_time || undefined,
+                editNote: r.check_out_edit_note || undefined,
               });
             }
           });
@@ -943,7 +949,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
-    // DELETE /api/attendance/logs (Purge all attendance logs from Supabase)
+    // DELETE /api/attendance/logs/:id OR DELETE /api/attendance/logs (Purge)
     // ----------------------------------------
     if (pathStr === 'logs' && method === 'DELETE') {
       try {
@@ -955,9 +961,72 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       }
     }
 
+    if ((params.path || [])[0] === 'logs' && (params.path || [])[1] && method === 'DELETE') {
+      try {
+        const logId = (params.path || [])[1];
+        await supabase.from('attendance_logs').delete().eq('id', logId);
+        
+        // If it's composite ID from attendance table (e.g. 123-in or 123-out)
+        if (logId.endsWith('-in')) {
+          const rawId = logId.replace('-in', '');
+          await supabase.from('attendance').update({ check_in_time: null, check_in: null }).eq('id', rawId);
+        } else if (logId.endsWith('-out')) {
+          const rawId = logId.replace('-out', '');
+          await supabase.from('attendance').update({ check_out_time: null, check_out: null }).eq('id', rawId);
+        } else {
+          await supabase.from('attendance').delete().eq('id', logId);
+        }
+
+        return NextResponse.json({ success: true, message: 'Attendance record deleted' });
+      } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 500 });
+      }
+    }
+
     // ----------------------------------------
-    // GET /api/attendance/status (Supabase DB Diagnostic Endpoint)
+    // PATCH /api/attendance/logs/:id (Edit Time)
     // ----------------------------------------
+    if ((params.path || [])[0] === 'logs' && (params.path || [])[1] && method === 'PATCH') {
+      try {
+        const logId = (params.path || [])[1];
+        const body = await req.json();
+        const { newTime, note, logType, employeeId, dateStr, oldTime } = body;
+        
+        if (!newTime || !note) {
+           return NextResponse.json({ error: 'newTime and note are required' }, { status: 400 });
+        }
+
+        await supabase.from('attendance_logs').update({
+           original_time: oldTime || '08:00',
+           log_time_str: newTime,
+           edit_note: note
+        }).eq('id', logId);
+
+        if (employeeId && dateStr) {
+           const { data: attRecord } = await supabase.from('attendance').select('*').eq('user_id', employeeId).eq('date', dateStr).maybeSingle();
+           if (attRecord) {
+              const isCheckOut = logType?.includes('Out') || logType?.includes('دەرچوون');
+              if (isCheckOut) {
+                 await supabase.from('attendance').update({
+                   check_out_original_time: attRecord.check_out_original_time || attRecord.check_out_time,
+                   check_out_time: newTime,
+                   check_out_edit_note: note
+                 }).eq('id', attRecord.id);
+              } else {
+                 await supabase.from('attendance').update({
+                   check_in_original_time: attRecord.check_in_original_time || attRecord.check_in_time,
+                   check_in_time: newTime,
+                   check_in_edit_note: note
+                 }).eq('id', attRecord.id);
+              }
+           }
+        }
+        return NextResponse.json({ success: true });
+      } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 500 });
+      }
+    }
+
     if (pathStr === 'status' && method === 'GET') {
       try {
         const { data: attData, error: attErr } = await supabase.from('attendance').select('id', { count: 'exact' }).limit(1);
@@ -987,4 +1056,5 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 export async function GET(req: NextRequest, props: { params: Promise<{ path?: string[] }> }) { return handle(req, props); }
 export async function POST(req: NextRequest, props: { params: Promise<{ path?: string[] }> }) { return handle(req, props); }
 export async function PUT(req: NextRequest, props: { params: Promise<{ path?: string[] }> }) { return handle(req, props); }
+export async function PATCH(req: NextRequest, props: { params: Promise<{ path?: string[] }> }) { return handle(req, props); }
 export async function DELETE(req: NextRequest, props: { params: Promise<{ path?: string[] }> }) { return handle(req, props); }

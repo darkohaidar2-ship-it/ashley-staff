@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import type { AttendanceRecord, Employee } from '@/lib/types';
-import { Camera, Calendar, MapPin, Trash2, CheckCircle, User, FileText } from 'lucide-react';
+import { Camera, Calendar, MapPin, Trash2, CheckCircle, User, FileText, Edit3 } from 'lucide-react';
 import { getDaysInMonth, format } from 'date-fns';
 
 interface AttendanceSheetGridProps {
@@ -61,6 +61,67 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
 
       return isEmpMatch;
     });
+  };
+
+  // Handle editing log time
+  const handleEditTime = async () => {
+    if (!activeLogModal) return;
+    const currentTimeOnly = activeLogModal.time ? (activeLogModal.time.includes(' ') ? activeLogModal.time.split(' ')[1].slice(0, 5) : activeLogModal.time.slice(0, 5)) : '08:30';
+    const newTime = prompt('کاتی نوێی هاتن/چوون دیاری بکە (بۆ نموونە 09:30):', currentTimeOnly);
+    if (!newTime || !newTime.trim()) return;
+
+    const note = prompt('تکایە تێبینی و هۆکاری گۆڕینی کاتەکە بنووسە (بۆ نموونە: لەدەرەوەی کۆمپانیا لە ئەرک بوو):');
+    if (!note || !note.trim()) {
+      alert('تێبینی پێویستە بۆ گۆڕینی کات!');
+      return;
+    }
+
+    try {
+      const dateStr = activeLogModal.time ? activeLogModal.time.split(' ')[0] : activeLogModal.createdAt?.split('T')[0] || activeLogModal.date || selectedMonth + '-01';
+      const oldTime = activeLogModal.originalTime || activeLogModal.checkInOriginalTime || activeLogModal.checkOutOriginalTime || currentTimeOnly;
+
+      const res = await fetch(`/api/attendance/logs/${activeLogModal.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          newTime: newTime.trim(),
+          note: note.trim(),
+          logType: activeLogModal.type,
+          employeeId: activeLogModal.employeeId || activeLogModal.userId,
+          dateStr,
+          oldTime,
+        }),
+      });
+
+      if (res.ok) {
+        const updatedTimeStr = `${dateStr} ${newTime.trim()}`;
+        setGridLogs(prev => prev.map(l => {
+          if (l.id === activeLogModal.id) {
+            return {
+              ...l,
+              time: updatedTimeStr,
+              originalTime: oldTime,
+              editNote: note.trim(),
+            };
+          }
+          return l;
+        }));
+
+        setActiveLogModal(prev => prev ? {
+          ...prev,
+          time: updatedTimeStr,
+          originalTime: oldTime,
+          editNote: note.trim(),
+        } : null);
+
+        alert('کاتی تۆمارەکە بە سەرکەوتوویی چاککرا و تێبینییەکە تۆمارکرا!');
+      } else {
+        const err = await res.json();
+        alert('هەڵە لە گۆڕینی کات: ' + (err.error || 'نەتوانرا'));
+      }
+    } catch (e: any) {
+      alert('هەڵە: ' + e.message);
+    }
   };
 
   // Handle CSV Download
@@ -214,31 +275,6 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
             سیستەمی ڕاستەوخۆ (Real-Time Live)
           </div>
 
-          {/* 🧹 PURGE ALL DATABASE LOGS BUTTON */}
-          <button
-            type="button"
-            onClick={() => {
-              if (window.confirm('ئایا دڵنیایت لە سڕینەوەی سەرجەم داتاکانی ئامادەبوونی کۆن لە داتابەیزی سوپا بەیس؟ (دەستپێکردنەوە لە 0 هەموو داتاکان دەسڕێتەوە)')) {
-                fetch('/api/attendance/logs', { method: 'DELETE' })
-                  .then((res) => res.json())
-                  .then(() => {
-                    setGridLogs([]);
-                    if (typeof window !== 'undefined') {
-                      localStorage.removeItem('ashley_local_attendanceLogs');
-                      localStorage.removeItem('ashley_attendance_logs');
-                      localStorage.removeItem('ashley_pending_checkins');
-                    }
-                    alert('سەرجەم داتاکانی ئامادەبوونی کۆن بە سەرکەوتوویی لە داتابەیز سڕدرانەوە!');
-                  })
-                  .catch((err) => alert('هەڵە لە سڕینەوەی داتابەیز: ' + err.message));
-              }
-            }}
-            className="btn-fluent-danger text-xs font-bold flex items-center gap-1 py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white"
-            title="سڕینەوەی تەواوی داتاکانی کۆن بۆ دەستپێکردنەوە لە 0"
-          >
-            <span>🧹 پاککردنەوەی سەرجەم داتابەیز</span>
-          </button>
-
           {/* 🖨️ PRINT, PDF & CSV ACTION BUTTONS */}
           <button
             type="button"
@@ -316,27 +352,41 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                       <td key={dayNum} className="text-center p-1 border-l border-slate-300 align-middle">
                         {cellLogs.length > 0 ? (
                           <div className="flex flex-col items-center justify-center gap-0.5 font-mono text-[11px] font-bold">
-                            {/* Check-In Link in BLUE */}
+                            {/* Check-In Link */}
                             {checkIn ? (
                               <button
                                 type="button"
                                 onClick={() => setActiveLogModal(checkIn)}
-                                className="text-blue-700 hover:text-blue-950 underline font-mono font-bold cursor-pointer transition-colors block text-center"
-                                title="کرتە بکە بۆ بینینی فۆتۆ و زانیاریەکانی چێک ئین"
+                                className="cursor-pointer transition-colors block text-center"
+                                title={checkIn.editNote ? `تێبینی گۆڕینی کات: ${checkIn.editNote}` : "کرتە بکە بۆ بینینی فۆتۆ و زانیاریەکانی چێک ئین"}
                               >
-                                {checkIn.time?.split(' ')[1]?.slice(0, 5) || '08:00'}
+                                {checkIn.originalTime || checkIn.checkInOriginalTime ? (
+                                  <div className="flex flex-col items-center leading-tight">
+                                    <span className="line-through text-rose-500 text-[9px]">{checkIn.originalTime || checkIn.checkInOriginalTime}</span>
+                                    <span className="text-emerald-700 hover:text-emerald-950 font-black text-[11px] underline bg-emerald-50 px-1 rounded">{checkIn.time?.split(' ')[1]?.slice(0, 5) || '08:00'}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-blue-700 hover:text-blue-950 underline">{checkIn.time?.split(' ')[1]?.slice(0, 5) || '08:00'}</span>
+                                )}
                               </button>
                             ) : null}
 
-                            {/* Check-Out Link in RED */}
+                            {/* Check-Out Link */}
                             {checkOut ? (
                               <button
                                 type="button"
                                 onClick={() => setActiveLogModal(checkOut)}
-                                className="text-rose-700 hover:text-rose-950 underline font-mono font-bold cursor-pointer transition-colors block text-center"
-                                title="کرتە بکە بۆ بینینی فۆتۆ و زانیاریەکانی چێک ئاوت"
+                                className="cursor-pointer transition-colors block text-center"
+                                title={checkOut.editNote ? `تێبینی گۆڕینی کات: ${checkOut.editNote}` : "کرتە بکە بۆ بینینی فۆتۆ و زانیاریەکانی چێک ئاوت"}
                               >
-                                {checkOut.time?.split(' ')[1]?.slice(0, 5) || '16:30'}
+                                {checkOut.originalTime || checkOut.checkOutOriginalTime ? (
+                                  <div className="flex flex-col items-center leading-tight">
+                                    <span className="line-through text-rose-400 text-[9px]">{checkOut.originalTime || checkOut.checkOutOriginalTime}</span>
+                                    <span className="text-emerald-700 hover:text-emerald-950 font-black text-[11px] underline bg-emerald-50 px-1 rounded">{checkOut.time?.split(' ')[1]?.slice(0, 5) || '16:30'}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-rose-700 hover:text-rose-950 underline">{checkOut.time?.split(' ')[1]?.slice(0, 5) || '16:30'}</span>
+                                )}
                               </button>
                             ) : null}
                           </div>
@@ -438,8 +488,32 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
 
                 <div className="flex justify-between border-b border-slate-200 pb-1">
                   <span className="text-slate-600">کات و بەرواری چێک‌ئین:</span>
-                  <span className="font-mono text-slate-900 text-xs font-black">{activeLogModal.time || activeLogModal.createdAt}</span>
+                  <div className="flex flex-col items-end">
+                    {activeLogModal.originalTime || activeLogModal.checkInOriginalTime || activeLogModal.checkOutOriginalTime ? (
+                      <>
+                        <span className="font-mono text-rose-500 line-through text-[11px] font-bold">
+                          {activeLogModal.originalTime || activeLogModal.checkInOriginalTime || activeLogModal.checkOutOriginalTime} (کاتی سەرەتایی)
+                        </span>
+                        <span className="font-mono text-emerald-700 text-xs font-black bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-300">
+                          {activeLogModal.time || activeLogModal.createdAt} (دەستکاری کراوە)
+                        </span>
+                      </>
+                    ) : (
+                      <span className="font-mono text-slate-900 text-xs font-black">{activeLogModal.time || activeLogModal.createdAt}</span>
+                    )}
+                  </div>
                 </div>
+
+                {(activeLogModal.editNote || activeLogModal.checkInEditNote || activeLogModal.checkOutEditNote) && (
+                  <div className="flex flex-col gap-1 border-b border-slate-200 pb-1.5 bg-amber-50/80 p-2 rounded border border-amber-200 text-amber-950">
+                    <span className="text-[11px] font-extrabold text-amber-800 flex items-center gap-1">
+                      <Edit3 className="w-3.5 h-3.5" /> هۆکاری گۆڕینی کات (تێبینی):
+                    </span>
+                    <span className="text-xs font-semibold">
+                      {activeLogModal.editNote || activeLogModal.checkInEditNote || activeLogModal.checkOutEditNote}
+                    </span>
+                  </div>
+                )}
 
                 <div className="flex justify-between border-b border-slate-200 pb-1">
                   <span className="text-slate-600 flex items-center gap-1">
@@ -461,22 +535,34 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
             </div>
 
             {/* Modal Actions Footer */}
-            <div className="flex justify-between items-center p-2 bg-slate-100 border-t border-slate-300">
-              {onDeleteLog && (
+            <div className="flex justify-between items-center p-2 bg-slate-100 border-t border-slate-300 gap-2">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    if (confirm('ئایا دڵنیایت لە سڕینەوەی ئەم تۆمارەی ئامادەبوون؟')) {
-                      onDeleteLog(activeLogModal.id);
-                      setActiveLogModal(null);
-                    }
-                  }}
-                  className="btn-classic text-rose-800 text-xs font-bold"
+                  onClick={handleEditTime}
+                  className="btn-classic text-emerald-800 hover:bg-emerald-100 hover:text-emerald-950 text-xs font-bold flex items-center gap-1 border-emerald-300"
+                  title="چاککردن و نووسینی کاتی ڕاستەقینە"
                 >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-700" />
-                  <span>سڕینەوەی تێپەڕە</span>
+                  <Edit3 className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>چاککردنی کات</span>
                 </button>
-              )}
+
+                {onDeleteLog && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm('ئایا دڵنیایت لە سڕینەوەی ئەم تۆمارەی ئامادەبوون؟')) {
+                        onDeleteLog(activeLogModal.id);
+                        setActiveLogModal(null);
+                      }
+                    }}
+                    className="btn-classic text-rose-800 hover:bg-rose-100 text-xs font-bold flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-700" />
+                    <span>سڕینەوە</span>
+                  </button>
+                )}
+              </div>
 
               <button
                 type="button"

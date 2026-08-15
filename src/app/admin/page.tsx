@@ -201,9 +201,14 @@ export default function AdminPage() {
   };
 
   // Delete Attendance Log
-  const handleDeleteAttendanceLog = (logId: string) => {
+  const handleDeleteAttendanceLog = async (logId: string) => {
     if (confirm('ئایا دڵنیایت لە سڕینەوەی ئەم لۆگە؟')) {
       setAttendanceLogs(attendanceLogs.filter((l) => l.id !== logId));
+      try {
+        await fetch(`/api/attendance/logs/${logId}`, { method: 'DELETE' });
+      } catch (err) {
+        console.error('Error deleting attendance log:', err);
+      }
     }
   };
 

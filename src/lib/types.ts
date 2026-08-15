@@ -420,12 +420,19 @@ export type AttendanceRecord = {
   name: string;
   type: string;
   time: string;
+  date?: string;
   distance?: string;
   selfieUrl?: string;
   checkInSelfie?: string;
   checkOutSelfie?: string;
   status?: string;
   createdAt: string;
+  originalTime?: string;
+  editNote?: string;
+  checkInOriginalTime?: string;
+  checkInEditNote?: string;
+  checkOutOriginalTime?: string;
+  checkOutEditNote?: string;
 };
 
 export type AppConfig = {
