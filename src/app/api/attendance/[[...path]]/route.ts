@@ -720,6 +720,68 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
+    // AI Face Recognition Endpoints (ڕوخسارناسینەوەی زیرەک)
+    // ----------------------------------------
+    if (pathStr === 'face/register' && method === 'POST') {
+      const { userId, descriptor, selfieBase64 } = await req.json();
+      if (!userId || !descriptor) {
+        return NextResponse.json({ error: 'userId and face descriptor required' }, { status: 400 });
+      }
+
+      let photoUrl: string | null = null;
+      if (selfieBase64) {
+        photoUrl = await uploadSelfieToStorage(selfieBase64, userId, getBaghdadDateTime().dateStr, 'FACE_REF');
+      }
+
+      const descriptorJson = JSON.stringify(descriptor);
+      const updateData: any = { face_descriptor: descriptorJson };
+      if (photoUrl) updateData.face_photo_url = photoUrl;
+
+      const { error: updErr } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', userId);
+
+      if (updErr) {
+        console.warn('Note: face_descriptor update in users:', updErr.message);
+      }
+
+      return NextResponse.json({
+        success: true,
+        photoUrl,
+        message: 'ڕوخسار بە سەرکەوتوویی تۆمارکرا',
+      });
+    }
+
+    if (pathStr === 'face/status' && method === 'GET') {
+      const userId = req.nextUrl.searchParams.get('userId');
+      if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
+
+      const { data: userRow } = await supabase
+        .from('users')
+        .select('face_descriptor, face_photo_url')
+        .eq('id', userId)
+        .maybeSingle();
+
+      let descriptor: number[] | null = null;
+      if (userRow?.face_descriptor) {
+        try {
+          descriptor = typeof userRow.face_descriptor === 'string'
+            ? JSON.parse(userRow.face_descriptor)
+            : userRow.face_descriptor;
+        } catch {
+          descriptor = null;
+        }
+      }
+
+      return NextResponse.json({
+        hasFaceRegistered: !!descriptor && descriptor.length > 0,
+        descriptor,
+        photoUrl: userRow?.face_photo_url || null,
+      });
+    }
+
+    // ----------------------------------------
     // Company Geofence Location Sync (Global across all devices)
     // ----------------------------------------
     if (pathStr === 'location' && method === 'GET') {

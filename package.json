@@ -40,6 +40,7 @@
     "@radix-ui/react-toast": "latest",
     "@radix-ui/react-tooltip": "latest",
     "@supabase/supabase-js": "^2.110.1",
+    "@vladmandic/face-api": "^1.7.15",
     "class-variance-authority": "latest",
     "clsx": "latest",
     "date-fns": "latest",

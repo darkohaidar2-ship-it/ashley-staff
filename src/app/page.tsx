@@ -26,6 +26,7 @@ import {
   Smartphone
 } from 'lucide-react';
 import { isBiometricSupported, registerBiometric, verifyBiometric } from '@/lib/webauthn';
+import { extractFaceDescriptor, matchFaceDescriptors, loadFaceModels } from '@/lib/face-recognition';
 
 // Haversine formula to compute exact distance in meters between two GPS coordinates
 function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -42,10 +43,16 @@ function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
   return Math.round(R * c);
 }
 
-export default function MainPage() {
+export default function PublicTerminalPage() {
   const router = useRouter();
   const { user, logout } = useAuth();
-  const { employees, items, settings, attendanceLogs, setAttendanceLogs } = useAppContext();
+  const {
+    employees,
+    attendanceLogs,
+    setAttendanceLogs,
+    items,
+    settings,
+  } = useAppContext();
 
   // Live Desktop Clock for ERP
   const [currentTimeStr, setCurrentTimeStr] = useState('');
@@ -111,6 +118,20 @@ export default function MainPage() {
   const [hasBiometric, setHasBiometric] = useState<boolean>(false);
   const [biometricLoading, setBiometricLoading] = useState<boolean>(false);
 
+  // AI Face Recognition State
+  const [hasFaceRegistered, setHasFaceRegistered] = useState(false);
+  const [faceDescriptor, setFaceDescriptor] = useState<number[] | null>(null);
+  const [facePhotoUrl, setFacePhotoUrl] = useState<string | null>(null);
+  const [isFaceScanning, setIsFaceScanning] = useState(false);
+  const [faceScanMessage, setFaceScanMessage] = useState<string | null>(null);
+  const [faceScanSuccess, setFaceScanSuccess] = useState<boolean | null>(null);
+  const [activeFaceAction, setActiveFaceAction] = useState<'Check In' | 'Check Out' | 'Register' | null>(null);
+
+  // Pre-load AI Face models on mount
+  useEffect(() => {
+    loadFaceModels().catch((e) => console.log('Preloading face models:', e));
+  }, []);
+
   // GPS Geofence State
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const [gpsStatus, setGpsStatus] = useState<string | null>(null);
@@ -128,12 +149,16 @@ export default function MainPage() {
     setBioSupported(isBiometricSupported());
   }, []);
 
-  // Check biometric pairing status when employee is selected
+  // Check biometric & AI Face pairing status when employee is selected
   useEffect(() => {
     if (!selectedEmpId) {
       setHasBiometric(false);
+      setHasFaceRegistered(false);
+      setFaceDescriptor(null);
       return;
     }
+
+    // 1. Biometrics status
     const localBio = typeof window !== 'undefined' ? localStorage.getItem(`ashley_bio_${selectedEmpId}`) : null;
     if (localBio) {
       setHasBiometric(true);
@@ -152,6 +177,22 @@ export default function MainPage() {
         })
         .catch(() => setHasBiometric(false));
     }
+
+    // 2. AI Face status
+    fetch(`/api/attendance/face/status?userId=${selectedEmpId}&_t=${Date.now()}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.hasFaceRegistered && data.descriptor) {
+          setHasFaceRegistered(true);
+          setFaceDescriptor(data.descriptor);
+          setFacePhotoUrl(data.photoUrl);
+        } else {
+          setHasFaceRegistered(false);
+          setFaceDescriptor(null);
+          setFacePhotoUrl(null);
+        }
+      })
+      .catch(() => setHasFaceRegistered(false));
   }, [selectedEmpId]);
 
   // Request GPS Location
@@ -192,14 +233,25 @@ export default function MainPage() {
   const startCamera = async () => {
     try {
       setCameraActive(true);
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 640 } } 
+      });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        await videoRef.current.play();
       }
     } catch {
-      setAttMessage({ text: 'کامیرا نەدۆزرایەوە! ڕێگەپێدانی کامێرا چاودێری بکە', success: false });
+      setAttMessage({ text: 'کامیرا نەدۆزرایەوە! ڕێگەپێدانی کامێرا کارا بکە', success: false });
       setCameraActive(false);
     }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      (videoRef.current.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+      videoRef.current.srcObject = null;
+    }
+    setCameraActive(false);
   };
 
   // Capture Selfie Photo (Compressed to 500x500 ~45KB for 100% Mobile Sync)
@@ -214,10 +266,7 @@ export default function MainPage() {
       ctx.drawImage(video, 0, 0, 500, 500);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
       setCapturedSelfie(dataUrl);
-      if (video.srcObject) {
-        (video.srcObject as MediaStream).getTracks().forEach((track) => track.stop());
-      }
-      setCameraActive(false);
+      stopCamera();
     }
   };
 
@@ -453,6 +502,162 @@ export default function MainPage() {
     }
   };
 
+  // 1. AI Face Registration (Enroll employee's face for the first time)
+  const handleStartFaceRegistration = async () => {
+    if (!selectedEmpId) {
+      setAttMessage({ text: 'تکایە سەرەتا ناوی خۆت لە لیستەکەدا هەڵبژێرە', success: false });
+      return;
+    }
+    const emp = employees.find((e) => e.id === selectedEmpId);
+    if (!emp) return;
+
+    if (!pinCode.trim() || pinCode.trim() !== (emp.password || '1234')) {
+      setAttMessage({ text: 'تکایە کۆدی PINـی دروست بنووسە بۆ دڵنیابوونەوەی سەرەتایی پێش تۆمارکردنی ڕوخسار', success: false });
+      return;
+    }
+
+    setActiveFaceAction('Register');
+    setFaceScanMessage('سەیری ڕاستەوخۆی کامێراکە بکە بۆ ناساندنی ڕوخسار...');
+    setFaceScanSuccess(null);
+    await startCamera();
+  };
+
+  const handleCaptureAndSaveFace = async () => {
+    if (!videoRef.current || !canvasRef.current || !selectedEmpId) return;
+    const emp = employees.find((e) => e.id === selectedEmpId);
+    if (!emp) return;
+
+    try {
+      setIsFaceScanning(true);
+      setFaceScanMessage('پشکنین و کۆدکردنی ڕوخسار بە زیرەکی دەستکرد...');
+      
+      const faceResult = await extractFaceDescriptor(videoRef.current);
+      if (!faceResult) {
+        setFaceScanSuccess(false);
+        setFaceScanMessage('❌ هیچ دەموچاوێک نەدۆزرایەوە! تکایە ڕووناکی ڕێکبخە و ڕاستەوخۆ سەیری کامێرا بکە.');
+        setIsFaceScanning(false);
+        return;
+      }
+
+      // Capture snapshot
+      const canvas = canvasRef.current;
+      canvas.width = 400;
+      canvas.height = 400;
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.drawImage(videoRef.current, 0, 0, 400, 400);
+      const snapshotBase64 = canvas.toDataURL('image/jpeg', 0.8);
+
+      // Save to Supabase backend
+      const res = await fetch('/api/attendance/face/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: emp.id,
+          descriptor: faceResult.descriptor,
+          selfieBase64: snapshotBase64,
+        }),
+      });
+
+      if (res.ok) {
+        setHasFaceRegistered(true);
+        setFaceDescriptor(faceResult.descriptor);
+        setFaceScanSuccess(true);
+        setFaceScanMessage(`🎉 ڕوخساری (${emp.name}) بە سەرکەوتوویی وەک ناسنامەی AI تۆمارکرا!`);
+        stopCamera();
+        setTimeout(() => setActiveFaceAction(null), 3000);
+      } else {
+        setFaceScanSuccess(false);
+        setFaceScanMessage('هەڵە لە پاشەکەوتکردنی ڕوخسار لە سێرڤەر');
+      }
+    } catch (err: any) {
+      setFaceScanSuccess(false);
+      setFaceScanMessage(err.message || 'هەڵە لە سکانکردنی ڕوخسار');
+    } finally {
+      setIsFaceScanning(false);
+    }
+  };
+
+  // 2. AI Live Face Recognition Check-In / Check-Out
+  const handleStartFaceAuth = async (type: 'Check In' | 'Check Out') => {
+    if (!selectedEmpId) {
+      setAttMessage({ text: 'تکایە ناوی خۆت لە لیستەکەدا هەڵبژێرە', success: false });
+      return;
+    }
+    const emp = employees.find((e) => e.id === selectedEmpId);
+    if (!emp) return;
+
+    const radius = syncedLocation.radiusMeters || 50;
+    if (distanceMeters !== null && distanceMeters > radius) {
+      setAttMessage({
+        text: `⚠️ ناتوانیت چێک‌ئین بکەیت! دووریت لە کۆمپانیا (${distanceMeters}m)ە و دەبێت کەمتر لە ${radius}m بێت.`,
+        success: false,
+      });
+      return;
+    }
+
+    if (!faceDescriptor) {
+      setAttMessage({
+        text: `⚠️ هێشتا ڕوخساری (${emp.name}) تۆمار نەکراوە! سەرەتا کلیک لە تۆمارکردنی ڕوخسار بکە.`,
+        success: false,
+      });
+      return;
+    }
+
+    setActiveFaceAction(type);
+    setFaceScanMessage('سەیری کامێراکە بکە و کلیک لە سکانکردنی دەموچاو بکە...');
+    setFaceScanSuccess(null);
+    await startCamera();
+  };
+
+  const handleVerifyLiveFace = async () => {
+    if (!videoRef.current || !canvasRef.current || !selectedEmpId || !faceDescriptor) return;
+    const emp = employees.find((e) => e.id === selectedEmpId);
+    if (!emp || !activeFaceAction || (activeFaceAction !== 'Check In' && activeFaceAction !== 'Check Out')) return;
+
+    try {
+      setIsFaceScanning(true);
+      setFaceScanMessage('پشکنینی هاوتاکردنی دەموچاو بە زیرەکی دەستکرد...');
+
+      const liveResult = await extractFaceDescriptor(videoRef.current);
+      if (!liveResult) {
+        setFaceScanSuccess(false);
+        setFaceScanMessage('❌ دەموچاو نەدۆزرایەوە! تکایە ڕاستەوخۆ سەیری کامێرا بکە.');
+        setIsFaceScanning(false);
+        return;
+      }
+
+      // Match descriptors
+      const match = matchFaceDescriptors(liveResult.descriptor, faceDescriptor);
+      if (match.isMatch) {
+        // Face MATCHED!
+        setFaceScanSuccess(true);
+        setFaceScanMessage(`✅ ناسنامەی (${emp.name}) سەلمێنرا! ڕێژەی هاوتا: ${match.similarityPercent}٪`);
+
+        // Capture snapshot
+        const canvas = canvasRef.current;
+        canvas.width = 400;
+        canvas.height = 400;
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.drawImage(videoRef.current, 0, 0, 400, 400);
+        const snapshotBase64 = canvas.toDataURL('image/jpeg', 0.8);
+
+        submitAttendanceLog(activeFaceAction, emp, `ڕوخسارناسینەوەی AI (${match.similarityPercent}٪)`, snapshotBase64);
+
+        stopCamera();
+        setTimeout(() => setActiveFaceAction(null), 3000);
+      } else {
+        // Face MISMATCH!
+        setFaceScanSuccess(false);
+        setFaceScanMessage(`❌ ئەم ڕوخسارە هی (${emp.name}) نییە! لێکچوون تەنها ${match.similarityPercent}٪ـە. چێک‌ئین ڕەتکرایەوە.`);
+      }
+    } catch (err: any) {
+      setFaceScanSuccess(false);
+      setFaceScanMessage(err.message || 'هەڵە لە خوێندنەوەی دەموچاو');
+    } finally {
+      setIsFaceScanning(false);
+    }
+  };
+
   // Manual Check-In / Check-Out Submission (PIN + Selfie)
   const handleCheckInOrOut = (type: 'Check In' | 'Check Out') => {
     if (!selectedEmpId) {
@@ -515,11 +720,11 @@ export default function MainPage() {
               <span>ASHLEY NEXUS — سیستەمی ئامادەبوونی زیرەک</span>
               <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-300 shadow-sm flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Win11 Fluent</span>
+                <span>AI Face ID + Geofence</span>
               </span>
             </h1>
             <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
-              تۆمارکردنی دەستبەجێ بە پەنجەمۆر / Face ID و چاودێری دووری ٥٠ مەتر
+              ناسینەوەی ڕوخسار بە زیرەکی دەستکرد + پەنجەمۆر و چاودێری دووری {syncedLocation.radiusMeters || 50} مەتر
             </p>
           </div>
         </div>
@@ -527,7 +732,7 @@ export default function MainPage() {
         <div className="flex items-center gap-2.5">
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100/90 border border-slate-200/90 rounded-xl font-mono text-xs font-bold text-slate-800 shadow-inner">
             <Clock className="w-3.5 h-3.5 text-blue-600 animate-spin-slow" />
-            <span>{currentTimeStr || '2026-08-16 | 14:30:00'}</span>
+            <span>{currentTimeStr || '2026-08-16 | 15:30:00'}</span>
           </div>
 
           {user ? (
@@ -563,30 +768,30 @@ export default function MainPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
         {/* ----------------------------------------------------------------- */}
-        {/* 📸 RIGHT SIDE: ATTENDANCE TERMINAL (Windows 11 Biometric Card) */}
+        {/* 📸 RIGHT SIDE: ATTENDANCE TERMINAL (AI Face & Biometrics Card) */}
         {/* ----------------------------------------------------------------- */}
         <section className="lg:col-span-6 bg-white/85 backdrop-blur-2xl border border-slate-200/90 rounded-3xl p-4 sm:p-6 shadow-xl shadow-slate-200/60 space-y-4 relative overflow-hidden">
           
           {/* Subtle Ambient Glow */}
-          <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-emerald-400/10 via-teal-400/5 to-transparent rounded-full pointer-events-none blur-2xl" />
+          <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-indigo-400/10 via-teal-400/5 to-transparent rounded-full pointer-events-none blur-2xl" />
 
           {/* Section Header */}
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
-                <Fingerprint className="w-5 h-5 animate-pulse" />
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-700 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+                <Sparkles className="w-4 h-4 animate-pulse" />
               </div>
               <div>
                 <h2 className="text-sm font-black text-slate-900">
-                  تێرمیناڵی ئامادەبوونی کارمەندان
+                  تێرمیناڵی ناسینەوەی ڕوخسار (AI Face Terminal)
                 </h2>
                 <p className="text-[11px] text-slate-500 font-semibold">
-                  ناسنامەی پەنجەمۆر + پشکنینی ڕاستەوخۆی ٥٠ مەتر
+                  ناسنامەی ڕوخساری تایبەت + پشکنینی دووری {syncedLocation.radiusMeters || 50} مەتر
                 </p>
               </div>
             </div>
             <span className="text-[10px] font-black tracking-wider bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full border border-slate-200 shadow-sm">
-              GEOFENCE 50M
+              GEOFENCE {syncedLocation.radiusMeters || 50}M
             </span>
           </div>
 
@@ -603,10 +808,10 @@ export default function MainPage() {
             </div>
           )}
 
-          {/* 📍 GPS GEOFENCE RADAR PILL (50 METERS) */}
+          {/* 📍 GPS GEOFENCE RADAR PILL (SYNCED METERS) */}
           <div
             className={`p-3.5 rounded-2xl border transition-all duration-300 flex items-center justify-between gap-3 shadow-sm ${
-              distanceMeters !== null && distanceMeters <= 50
+              distanceMeters !== null && distanceMeters <= (syncedLocation.radiusMeters || 50)
                 ? 'bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-100/60 border-emerald-300 text-emerald-950'
                 : distanceMeters !== null
                 ? 'bg-gradient-to-r from-rose-50 via-red-50 to-rose-100/60 border-rose-300 text-rose-950'
@@ -616,7 +821,7 @@ export default function MainPage() {
             <div className="flex items-center gap-2.5">
               <div
                 className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${
-                  distanceMeters !== null && distanceMeters <= 50
+                  distanceMeters !== null && distanceMeters <= (syncedLocation.radiusMeters || 50)
                     ? 'bg-emerald-500 animate-ping'
                     : 'bg-rose-500'
                 }`}
@@ -628,17 +833,17 @@ export default function MainPage() {
                   <MapPin className="w-4 h-4 text-emerald-700" />
                   <span>دۆخی لۆکەیشن لە کۆمپانیا:</span>
                   <span className="font-mono">
-                    {distanceMeters !== null && distanceMeters <= 50
+                    {distanceMeters !== null && distanceMeters <= (syncedLocation.radiusMeters || 50)
                       ? `🟢 لەناو سنووری ڕێگەپێدراو (${distanceMeters}m)`
                       : distanceMeters !== null
-                      ? `🔴 دەرەوەی بازنە (${distanceMeters}m > 50m)`
+                      ? `🔴 دەرەوەی بازنە (${distanceMeters}m > ${syncedLocation.radiusMeters || 50}m)`
                       : gpsStatus || 'نەپشکنراوە'}
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-500 font-bold mt-0.5">
-                  {distanceMeters !== null && distanceMeters <= 50
+                  {distanceMeters !== null && distanceMeters <= (syncedLocation.radiusMeters || 50)
                     ? 'چێک‌ئین کراوەیە و ئامادەیە بۆ تۆمارکردن'
-                    : 'دوگمەکان قوفڵکراون تا دەگەیتە ناو بازنەی ٥٠ مەتری کۆمپانیا'}
+                    : `دوگمەکان قوفڵکراون تا دەگەیتە ناو بازنەی ${syncedLocation.radiusMeters || 50} مەتری کۆمپانیا`}
                 </p>
               </div>
             </div>
@@ -662,7 +867,7 @@ export default function MainPage() {
             <select
               value={selectedEmpId}
               onChange={(e) => setSelectedEmpId(e.target.value)}
-              className="w-full py-3 px-3.5 bg-slate-50/90 hover:bg-white focus:bg-white border border-slate-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 rounded-2xl text-xs font-black text-slate-900 shadow-inner transition-all outline-none"
+              className="w-full py-3 px-3.5 bg-slate-50/90 hover:bg-white focus:bg-white border border-slate-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 rounded-2xl text-xs font-black text-slate-900 shadow-inner transition-all outline-none"
             >
               <option value="">-- ناوی خۆت لەم لیستە هەڵبژێرە --</option>
               {employees
@@ -675,61 +880,152 @@ export default function MainPage() {
             </select>
           </div>
 
-          {/* 👆 STEP 2: HERO BIOMETRIC (FINGERPRINT / FACE ID) ACTIONS */}
+          {/* 🌟 STEP 2: HERO AI FACE RECOGNITION SECTION */}
           {selectedEmpId && (
             <div className="space-y-3 pt-1">
               
-              {/* Biometric Status Header Pill */}
+              {/* AI Face ID Status Header */}
               <div className="flex items-center justify-between px-3 py-2 bg-slate-100/80 rounded-xl border border-slate-200">
                 <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
-                  <Fingerprint className="w-4 h-4 text-emerald-600" />
-                  <span>ناسنامەی پەنجەمۆری مۆبایل:</span>
+                  <Sparkles className="w-4 h-4 text-indigo-600 animate-pulse" />
+                  <span>ناسنامەی ڕوخسار (AI Face ID):</span>
                 </span>
                 <span
                   className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shadow-sm ${
-                    hasBiometric
+                    hasFaceRegistered
                       ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
                       : 'bg-amber-100 text-amber-950 border-amber-300'
                   }`}
                 >
-                  {hasBiometric ? '✅ پەنجەمۆر بەستراوە' : '⚠️ پەنجەمۆر نەبەستراوە'}
+                  {hasFaceRegistered ? '✅ ڕوخسار لە داتابەیز تۆمارکراوە' : '⚠️ ڕوخسار تۆمار نەکراوە'}
                 </span>
               </div>
 
-              {/* ACTION A: IF BIOMETRICS PAIRED -> SHOW HUGE WINDOWS 11 TOUCH BUTTONS */}
-              {hasBiometric ? (
+              {/* 📷 ACTIVE AI FACE SCANNER MODAL / VIEWFINDER */}
+              {activeFaceAction && (
+                <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 shadow-2xl space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black flex items-center gap-1.5 text-amber-300">
+                      <Camera className="w-4 h-4" />
+                      <span>
+                        {activeFaceAction === 'Register'
+                          ? 'تۆمارکردنی ڕوخساری نوێ'
+                          : `ناسینەوەی ڕوخسار بۆ ${activeFaceAction}`}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        stopCamera();
+                        setActiveFaceAction(null);
+                      }}
+                      className="text-xs bg-white/10 hover:bg-white/20 px-2 py-1 rounded-lg text-slate-300"
+                    >
+                      داخستن ✕
+                    </button>
+                  </div>
+
+                  {/* Video Box with Futuristic HUD Target Frame */}
+                  <div className="relative rounded-2xl overflow-hidden bg-black aspect-video flex items-center justify-center border border-indigo-500/40">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
+                    
+                    {/* Face Target Scanner HUD Overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-44 h-44 rounded-3xl border-2 border-dashed border-indigo-400/80 animate-pulse flex items-center justify-center">
+                        <div className="w-40 h-40 rounded-2xl border border-emerald-400/50" />
+                      </div>
+                    </div>
+
+                    {isFaceScanning && (
+                      <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center gap-2">
+                        <RefreshCw className="w-8 h-8 text-amber-300 animate-spin" />
+                        <span className="text-xs font-bold text-white">پشکنینی AI...</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Status & Feedback Message */}
+                  {faceScanMessage && (
+                    <div
+                      className={`p-2.5 rounded-xl text-xs font-black text-center ${
+                        faceScanSuccess === true
+                          ? 'bg-emerald-950 text-emerald-200 border border-emerald-600'
+                          : faceScanSuccess === false
+                          ? 'bg-rose-950 text-rose-200 border border-rose-600'
+                          : 'bg-indigo-950 text-indigo-200 border border-indigo-700'
+                      }`}
+                    >
+                      {faceScanMessage}
+                    </div>
+                  )}
+
+                  {/* Trigger Action Buttons */}
+                  <div className="flex gap-2">
+                    {activeFaceAction === 'Register' ? (
+                      <button
+                        type="button"
+                        disabled={isFaceScanning}
+                        onClick={handleCaptureAndSaveFace}
+                        className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white rounded-xl text-xs font-black shadow-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all"
+                      >
+                        <Camera className="w-4 h-4" />
+                        <span>سکان و پاشەکەوتکردنی ڕوخسار</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isFaceScanning}
+                        onClick={handleVerifyLiveFace}
+                        className="w-full py-3 bg-gradient-to-r from-indigo-600 to-blue-700 hover:from-indigo-500 hover:to-blue-600 text-white rounded-xl text-xs font-black shadow-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all"
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span>پشکنینی دەموچاو و تۆمارکردن</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ACTION A: IF FACE REGISTERED -> SHOW FACE RECOGNITION ACTION BUTTONS */}
+              {hasFaceRegistered ? (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     
-                    {/* HUGE CHECK IN BUTTON */}
+                    {/* HUGE FACE SCAN CHECK IN BUTTON */}
                     <button
                       type="button"
-                      disabled={biometricLoading || (distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50))}
-                      onClick={() => handleBiometricAuth('Check In')}
+                      disabled={isFaceScanning || (distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50))}
+                      onClick={() => handleStartFaceAuth('Check In')}
                       className={`relative group overflow-hidden py-4 px-5 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-white transition-all duration-300 shadow-xl ${
                         distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
                           ? 'bg-slate-300 border border-slate-400 text-slate-500 cursor-not-allowed opacity-60'
-                          : 'bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 shadow-emerald-600/30 hover:shadow-emerald-600/50 hover:scale-[1.02] active:scale-95'
+                          : 'bg-gradient-to-br from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-500 hover:to-blue-600 shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:scale-[1.02] active:scale-95'
                       }`}
                     >
                       <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-                        <Fingerprint className="w-6 h-6 text-white" />
+                        <Camera className="w-6 h-6 text-white" />
                       </div>
                       <span className="text-sm font-black tracking-wide">
-                        {biometricLoading ? 'چاوەڕێی پەنجەمۆر...' : '📥 چێک‌ئین (Check In)'}
+                        👤 چێک‌ئین بە ڕوخسار (Face ID)
                       </span>
-                      <span className="text-[10px] text-emerald-100/90 font-bold">
+                      <span className="text-[10px] text-indigo-100/90 font-bold">
                         {distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
                           ? 'قوفڵە بەهۆی دووری لە کۆمپانیا'
-                          : 'تەنها پەنجە دابنێ لەسەر مۆبایل'}
+                          : 'ناسینەوەی ڕاستەوخۆ بە کامێرا'}
                       </span>
                     </button>
 
-                    {/* HUGE CHECK OUT BUTTON */}
+                    {/* HUGE FACE SCAN CHECK OUT BUTTON */}
                     <button
                       type="button"
-                      disabled={biometricLoading || (distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50))}
-                      onClick={() => handleBiometricAuth('Check Out')}
+                      disabled={isFaceScanning || (distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50))}
+                      onClick={() => handleStartFaceAuth('Check Out')}
                       className={`relative group overflow-hidden py-4 px-5 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-white transition-all duration-300 shadow-xl ${
                         distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
                           ? 'bg-slate-300 border border-slate-400 text-slate-500 cursor-not-allowed opacity-60'
@@ -737,10 +1033,10 @@ export default function MainPage() {
                       }`}
                     >
                       <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-                        <Fingerprint className="w-6 h-6 text-white" />
+                        <Camera className="w-6 h-6 text-white" />
                       </div>
                       <span className="text-sm font-black tracking-wide">
-                        {biometricLoading ? 'چاوەڕێی پەنجەمۆر...' : '📤 چێک‌ئاوت (Check Out)'}
+                        👤 چێک‌ئاوت بە ڕوخسار (Face ID)
                       </span>
                       <span className="text-[10px] text-rose-100/90 font-bold">
                         {distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
@@ -750,26 +1046,17 @@ export default function MainPage() {
                     </button>
 
                   </div>
-
-                  {distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50) && (
-                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-xs font-black flex items-center gap-2">
-                      <Lock className="w-4 h-4 text-rose-600 flex-shrink-0" />
-                      <span>
-                        ⚠️ ناتوانیت چێک‌ئین بکەیت چونكە ({distanceMeters}m) لە چەقی کۆمپانیا دووریت. تکایە وەرە ناو بازنەی {syncedLocation.radiusMeters || 50} مەتر.
-                      </span>
-                    </div>
-                  )}
                 </div>
               ) : (
-                /* ACTION B: IF NOT PAIRED -> SHOW PAIRING REGISTRATION CARD */
-                <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-slate-50 border-2 border-dashed border-emerald-300 p-4 rounded-2xl space-y-3 shadow-sm">
+                /* ACTION B: IF NOT REGISTERED -> SHOW FACE ENROLLMENT CARD */
+                <div className="bg-gradient-to-br from-indigo-50 via-blue-50 to-slate-50 border-2 border-dashed border-indigo-300 p-4 rounded-2xl space-y-3 shadow-sm">
                   <div>
-                    <h3 className="text-xs font-black text-emerald-950 flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-emerald-600" />
-                      <span>بەستنەوەی پەنجەمۆری ئەم مۆبایلە بۆ یەکەمجار</span>
+                    <h3 className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-indigo-600" />
+                      <span>تۆمارکردنی ڕوخساری ئەم کارمەندە بۆ یەکەمجار</span>
                     </h3>
                     <p className="text-[11px] text-slate-600 font-bold mt-1 leading-relaxed">
-                      بۆ ئەوەی مۆبایلەکەت وەک ناسنامەی تایبەتی خۆت بناسرێت، کۆدی PIN بنووسە و پەنجەمۆر یان Face ID لەسەر شاشەکە چالاک بکە:
+                      بۆ ئەوەی ڕوخسارت وەک ناسنامەی تەواو قوفڵکراوی خۆت بناسرێت، کۆدی PIN بنووسە و سەیری کامێرا بکە:
                     </p>
                   </div>
 
@@ -778,26 +1065,24 @@ export default function MainPage() {
                       type="password"
                       value={pinCode}
                       onChange={(e) => setPinCode(e.target.value)}
-                      placeholder="کۆدی نهێنی PINـەکەت لێرە بنووسە..."
-                      className="w-full py-2.5 px-3.5 bg-white border border-emerald-300 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 rounded-xl text-xs font-mono text-center tracking-widest text-slate-900 shadow-inner outline-none font-black"
+                      placeholder="کۆدی نهێنی PIN بنووسە..."
+                      className="w-full py-2.5 px-3.5 bg-white border border-indigo-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 rounded-xl text-xs font-mono text-center tracking-widest text-slate-900 shadow-inner outline-none font-black"
                     />
 
                     <button
                       type="button"
-                      disabled={biometricLoading}
-                      onClick={handleRegisterBiometric}
-                      className="w-full py-3 px-4 bg-gradient-to-r from-emerald-700 to-teal-800 hover:from-emerald-800 hover:to-teal-900 text-white rounded-xl text-xs font-black shadow-lg shadow-emerald-700/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+                      disabled={isFaceScanning}
+                      onClick={handleStartFaceRegistration}
+                      className="w-full py-3 px-4 bg-gradient-to-r from-indigo-700 to-blue-800 hover:from-indigo-800 hover:to-blue-900 text-white rounded-xl text-xs font-black shadow-lg shadow-indigo-700/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
                     >
-                      <Smartphone className="w-4 h-4 text-amber-300" />
-                      <span>
-                        {biometricLoading ? 'تکایە پەنجە دابنێ لەسەر مۆبایل...' : '🔗 بەستنەوە و تۆمارکردنی پەنجەمۆر'}
-                      </span>
+                      <Camera className="w-4 h-4 text-amber-300" />
+                      <span>📸 کردنەوەی کامێرا بۆ ناساندنی ڕوخسار</span>
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* 📷 COLLAPSIBLE ACCORDION FOR MANUAL FALLBACK (PIN + SELFIE) */}
+              {/* 👆 SECONDARY: FINGERPRINT BIOMETRICS OPTION */}
               <div className="pt-2">
                 <button
                   type="button"
@@ -805,66 +1090,104 @@ export default function MainPage() {
                   className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200/80 rounded-xl text-[11px] font-bold text-slate-700 flex items-center justify-between transition-colors"
                 >
                   <span className="flex items-center gap-1.5">
-                    <Camera className="w-3.5 h-3.5 text-slate-600" />
-                    <span>شێوازی پێشووی ئامادەبوون (کۆدی PIN و کامێرای سێلفی)</span>
+                    <Fingerprint className="w-3.5 h-3.5 text-slate-600" />
+                    <span>شێوازی پەنجەمۆر یان کۆدی PIN</span>
                   </span>
                   <span>{showManualFallback ? '▲ داشخستن' : '▼ کردنەوە'}</span>
                 </button>
 
                 {showManualFallback && (
                   <div className="mt-2.5 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 animate-in fade-in">
-                    <div>
-                      <label className="block text-slate-800 mb-1 text-xs font-black">کۆدی PIN:</label>
-                      <input
-                        type="password"
-                        value={pinCode}
-                        onChange={(e) => setPinCode(e.target.value)}
-                        placeholder="کۆدی 1234..."
-                        className="w-full py-2 px-3 bg-white border border-slate-300 rounded-xl font-mono text-center text-xs tracking-widest outline-none font-bold"
-                      />
-                    </div>
-
-                    {/* Camera Area */}
-                    <div className="space-y-1.5 text-center bg-white p-3 rounded-xl border border-slate-200">
-                      <label className="block text-slate-800 text-xs font-black text-right">فۆتۆی سێلفی:</label>
-                      {cameraActive ? (
-                        <div className="space-y-2">
-                          <video ref={videoRef} autoPlay playsInline className="w-full h-40 object-cover rounded-xl border border-slate-300 bg-black" />
-                          <button type="button" onClick={capturePhoto} className="w-full py-2 bg-emerald-700 text-white rounded-xl text-xs font-black">
-                            📸 گرتنی فۆتۆی سێلفی
-                          </button>
-                        </div>
-                      ) : capturedSelfie ? (
-                        <div className="space-y-1.5">
-                          <img src={capturedSelfie} alt="Captured Selfie" className="w-full h-32 object-cover rounded-xl border border-slate-300" />
-                          <button type="button" onClick={startCamera} className="w-full py-1.5 bg-slate-100 text-slate-700 rounded-xl text-[10px] font-bold">
-                            🔄 فۆتۆیەکی تر بگرە
-                          </button>
-                        </div>
-                      ) : (
-                        <button type="button" onClick={startCamera} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold">
-                          📷 بەگەڕخستنی کامێرا
+                    
+                    {/* Fingerprint Quick Actions */}
+                    {hasBiometric ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          disabled={biometricLoading || (distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50))}
+                          onClick={() => handleBiometricAuth('Check In')}
+                          className="py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1"
+                        >
+                          <Fingerprint className="w-3.5 h-3.5" />
+                          <span>هاتن بە پەنجەمۆر</span>
                         </button>
-                      )}
-                      <canvas ref={canvasRef} className="hidden" />
-                    </div>
+                        <button
+                          type="button"
+                          disabled={biometricLoading || (distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50))}
+                          onClick={() => handleBiometricAuth('Check Out')}
+                          className="py-2.5 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1"
+                        >
+                          <Fingerprint className="w-3.5 h-3.5" />
+                          <span>دەرچوون بە پەنجەمۆر</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={biometricLoading}
+                        onClick={handleRegisterBiometric}
+                        className="w-full py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-bold shadow-sm flex items-center justify-center gap-1"
+                      >
+                        <Smartphone className="w-3.5 h-3.5 text-amber-300" />
+                        <span>بەستنەوەی پەنجەمۆری مۆبایل</span>
+                      </button>
+                    )}
 
-                    {/* Fallback Submit Buttons */}
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => handleCheckInOrOut('Check In')}
-                        className="py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black shadow-md"
-                      >
-                        📥 هاتن بە سێلفی
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleCheckInOrOut('Check Out')}
-                        className="py-2.5 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-xs font-black shadow-md"
-                      >
-                        📤 دەرچوون بە سێلفی
-                      </button>
+                    {/* PIN & Manual Camera Fallback */}
+                    <div className="space-y-2 pt-2 border-t border-slate-200">
+                      <div>
+                        <label className="block text-slate-800 mb-1 text-xs font-black">کۆدی PIN:</label>
+                        <input
+                          type="password"
+                          value={pinCode}
+                          onChange={(e) => setPinCode(e.target.value)}
+                          placeholder="کۆدی 1234..."
+                          className="w-full py-2 px-3 bg-white border border-slate-300 rounded-xl font-mono text-center text-xs tracking-widest outline-none font-bold"
+                        />
+                      </div>
+
+                      {/* Manual Camera Area */}
+                      <div className="space-y-1.5 text-center bg-white p-3 rounded-xl border border-slate-200">
+                        <label className="block text-slate-800 text-xs font-black text-right">فۆتۆی سێلفی:</label>
+                        {cameraActive ? (
+                          <div className="space-y-2">
+                            <video ref={videoRef} autoPlay playsInline className="w-full h-40 object-cover rounded-xl border border-slate-300 bg-black" />
+                            <button type="button" onClick={capturePhoto} className="w-full py-2 bg-emerald-700 text-white rounded-xl text-xs font-black">
+                              📸 گرتنی فۆتۆی سێلفی
+                            </button>
+                          </div>
+                        ) : capturedSelfie ? (
+                          <div className="space-y-1.5">
+                            <img src={capturedSelfie} alt="Captured Selfie" className="w-full h-32 object-cover rounded-xl border border-slate-300" />
+                            <button type="button" onClick={startCamera} className="w-full py-1.5 bg-slate-100 text-slate-700 rounded-xl text-[10px] font-bold">
+                              🔄 فۆتۆیەکی تر بگرە
+                            </button>
+                          </div>
+                        ) : (
+                          <button type="button" onClick={startCamera} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold">
+                            📷 بەگەڕخستنی کامێرا
+                          </button>
+                        )}
+                        <canvas ref={canvasRef} className="hidden" />
+                      </div>
+
+                      {/* Fallback Submit Buttons */}
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleCheckInOrOut('Check In')}
+                          className="py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black shadow-md"
+                        >
+                          📥 هاتن بە سێلفی
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCheckInOrOut('Check Out')}
+                          className="py-2.5 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-xs font-black shadow-md"
+                        >
+                          📤 دەرچوون بە سێلفی
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
