@@ -49,7 +49,21 @@ import {
 
 export default function AdminPage() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, loading: authLoading, logout } = useAuth();
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // Security Auth Guard: Redirect unauthenticated users immediately to /login
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session');
+      if (!stored && !user && !authLoading) {
+        router.replace('/login');
+      } else {
+        setAuthChecked(true);
+      }
+    }
+  }, [user, authLoading, router]);
+
   const {
     employees,
     setEmployees,

@@ -57,6 +57,16 @@ export default function AdminAttendancePage() {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   
+  // Security Auth Guard
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session');
+      if (!stored) {
+        window.location.href = '/login';
+      }
+    }
+  }, []);
+  
   // Data State
   const [users, setUsers] = useState<User[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);

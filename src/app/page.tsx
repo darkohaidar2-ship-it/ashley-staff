@@ -726,37 +726,73 @@ export default function PublicTerminalPage() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-950 p-2 sm:p-5 dir-rtl flex flex-col justify-between font-sans selection:bg-indigo-500 selection:text-white" dir="rtl">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white p-3 sm:p-6 lg:p-8 space-y-5 dir-rtl relative overflow-x-hidden" dir="rtl">
       
-      {/* 🌟 1. LUXURIOUS ERP HEADER */}
-      <header className="flex flex-wrap items-center justify-between gap-3 bg-white/90 backdrop-blur-2xl border border-slate-200/80 px-4 sm:px-6 py-3.5 rounded-3xl shadow-xl shadow-slate-200/50 mb-5 transition-all">
+      {/* 🌌 iOS Control Center Ambient Background Blurs */}
+      <div className="fixed top-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-600/15 rounded-full blur-[140px] pointer-events-none -z-10" />
+      <div className="fixed bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-teal-600/15 rounded-full blur-[140px] pointer-events-none -z-10" />
+      <div className="fixed top-[40%] left-[30%] w-[400px] h-[400px] bg-rose-600/10 rounded-full blur-[160px] pointer-events-none -z-10" />
+
+      {/* ========================================================================= */}
+      {/* 🍎 1. iOS CONTROL CENTER TOP STATUS BAR */}
+      {/* ========================================================================= */}
+      <header className="w-full bg-slate-900/70 border border-white/10 backdrop-blur-2xl rounded-3xl p-3 sm:p-4 shadow-2xl flex flex-wrap items-center justify-between gap-3 sticky top-3 z-40 transition-all">
         
-        {/* Brand & Factory Location Indicator */}
+        {/* Brand & Factory Identity */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-slate-900 via-indigo-950 to-slate-900 flex items-center justify-center text-amber-400 font-black text-base shadow-lg shadow-slate-900/20 border border-slate-700">
-            A
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 via-blue-600 to-indigo-700 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 flex-shrink-0">
+            <Sparkles className="w-5 h-5 text-amber-300" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-900">
+              <h1 className="text-sm sm:text-base font-black tracking-tight text-white">
                 سیستەمی کارمەندانی ئاشڵی
               </h1>
-              <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-black px-2 py-0.5 rounded-full">
-                AI SMART
+              <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                CONTROL CENTER
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 font-semibold flex items-center gap-1 mt-0.5">
-              <MapPin className="w-3 h-3 text-emerald-600" />
-              <span>{syncedLocation.name || 'کۆمپانیای سەرەکی ئاشڵی (Ashley Company Base)'}</span>
+            <p className="text-[10px] text-slate-400 font-semibold flex items-center gap-1 mt-0.5">
+              <MapPin className="w-3 h-3 text-emerald-400" />
+              <span>{syncedLocation.name || 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)'}</span>
             </p>
           </div>
         </div>
 
-        {/* Live Baghdad Clock & Admin Controls */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-1.5 bg-slate-100/90 border border-slate-200/80 px-3 py-1.5 rounded-2xl shadow-inner">
-            <Clock className="w-4 h-4 text-indigo-600 animate-pulse" />
-            <span className="font-mono text-xs font-black text-slate-800 tracking-wider">
+        {/* 📍 ULTRA-COMPACT SLEEK LOCATION STATUS PILL (Zero Layout Shift) */}
+        <div 
+          onClick={requestLocation}
+          title="کرتە بکە بۆ نوێکردنەوەی دەستی لۆکەیشن"
+          className={`h-8 px-3 rounded-full border backdrop-blur-xl flex items-center gap-2 text-[11px] font-black transition-all cursor-pointer select-none shadow-sm ${
+            distanceMeters !== null && distanceMeters <= (syncedLocation.radiusMeters || 50)
+              ? 'bg-emerald-500/15 border-emerald-400/30 text-emerald-300 hover:bg-emerald-500/25'
+              : distanceMeters !== null
+              ? 'bg-rose-500/15 border-rose-400/30 text-rose-300 hover:bg-rose-500/25'
+              : 'bg-white/10 border-white/15 text-slate-300 hover:bg-white/15'
+          }`}
+        >
+          <div
+            className={`w-2 h-2 rounded-full ${
+              distanceMeters !== null && distanceMeters <= (syncedLocation.radiusMeters || 50)
+                ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse'
+                : 'bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.9)]'
+            }`}
+          />
+          <span className="font-mono">
+            {distanceMeters !== null && distanceMeters <= (syncedLocation.radiusMeters || 50)
+              ? `لە کۆمپانیا (${distanceMeters}m)`
+              : distanceMeters !== null
+              ? `دەرەوەی سنوور (${distanceMeters}m)`
+              : gpsStatus || 'لۆکەیشن پشکنراو'}
+          </span>
+          <RefreshCw className={`w-3 h-3 opacity-60 ${gpsLoading ? 'animate-spin opacity-100' : ''}`} />
+        </div>
+
+        {/* Live Clock & Admin Control */}
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-1.5 bg-white/5 border border-white/10 px-3 py-1.5 rounded-2xl">
+            <Clock className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="font-mono text-xs font-bold text-slate-200">
               {currentTimeStr || '--:--'}
             </span>
           </div>
@@ -765,301 +801,221 @@ export default function PublicTerminalPage() {
             <div className="flex items-center gap-1.5">
               <Link
                 href="/admin"
-                className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-black py-2 px-3.5 rounded-xl shadow-md shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white text-xs font-black py-1.5 px-3.5 rounded-2xl shadow-lg shadow-indigo-600/30 border border-indigo-400/30 hover:scale-105 active:scale-95 transition-all"
               >
                 <Shield className="w-3.5 h-3.5 text-amber-300" />
-                <span>پەنەری ئەدمین</span>
+                <span>ئەدمین</span>
               </Link>
               <button
                 onClick={() => logout()}
-                className="bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold py-2 px-3 rounded-xl shadow-sm hover:scale-105 active:scale-95 transition-all flex items-center gap-1"
+                className="bg-white/10 hover:bg-rose-500/20 text-rose-300 border border-white/15 text-xs font-bold py-1.5 px-3 rounded-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-1"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>دەرچوون</span>
               </button>
             </div>
           ) : (
             <Link
               href="/login"
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black py-2 px-4 rounded-xl shadow-md hover:scale-105 active:scale-95 transition-all border border-slate-800"
+              className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-black py-1.5 px-3.5 rounded-2xl shadow-md border border-white/15 hover:scale-105 active:scale-95 transition-all"
             >
               <Lock className="w-3.5 h-3.5 text-amber-400" />
-              <span>🔑 چوونەژوورەوەی ئەدمین</span>
+              <span>چوونەژوورەوە</span>
             </Link>
           )}
         </div>
       </header>
 
-      {/* 🌟 2. TWO MAIN SECTIONS GRID: RIGHT = ATTENDANCE, LEFT = MODEL SEARCH */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      {/* 🚀 DYNAMIC ISLAND NOTIFICATION TOAST */}
+      {attMessage && (
+        <div
+          className={`p-4 text-xs sm:text-sm font-black rounded-3xl border shadow-2xl flex items-center gap-3 backdrop-blur-2xl animate-in slide-in-from-top-4 duration-300 ${
+            attMessage.success
+              ? 'bg-emerald-950/80 text-emerald-200 border-emerald-500/50 shadow-emerald-950/50'
+              : 'bg-rose-950/80 text-rose-200 border-rose-500/50 shadow-rose-950/50'
+          }`}
+        >
+          <Sparkles className="w-5 h-5 flex-shrink-0 text-amber-300 animate-pulse" />
+          <span>{attMessage.text}</span>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 📱 2. iOS CONTROL CENTER RESPONSIVE BENTO GRID */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
 
         {/* ----------------------------------------------------------------- */}
-        {/* 📸 RIGHT SIDE: ATTENDANCE TERMINAL (AI Face & Biometrics Card) */}
+        {/* 📸 RIGHT TILE: iOS AI FACE ATTENDANCE CONTROLLER */}
         {/* ----------------------------------------------------------------- */}
-        <section className="lg:col-span-6 bg-white/85 backdrop-blur-2xl border border-slate-200/90 rounded-3xl p-4 sm:p-6 shadow-xl shadow-slate-200/60 space-y-4 relative overflow-hidden">
+        <section className="lg:col-span-5 bg-slate-900/80 border border-white/15 backdrop-blur-2xl rounded-3xl p-5 shadow-2xl space-y-4 relative overflow-hidden">
           
-          {/* Subtle Ambient Glow */}
-          <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-indigo-400/10 via-teal-400/5 to-transparent rounded-full pointer-events-none blur-2xl" />
+          {/* Ambient Corner Flare */}
+          <div className="absolute top-0 right-0 w-36 h-36 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
 
-          {/* Section Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          {/* Widget Header */}
+          <div className="flex items-center justify-between pb-3 border-b border-white/10">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-700 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
-                <Sparkles className="w-4 h-4 animate-pulse" />
+              <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-indigo-600 to-teal-500 flex items-center justify-center text-white shadow-md">
+                <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
               </div>
               <div>
-                <h2 className="text-sm font-black text-slate-900">
-                  تێرمیناڵی ناسینەوەی ڕوخسار (AI Face Terminal)
-                </h2>
-                <p className="text-[11px] text-slate-500 font-semibold">
-                  ناسنامەی ڕوخساری تایبەت + پشکنینی دووری {syncedLocation.radiusMeters || 50} مەتر
-                </p>
+                <h2 className="text-xs font-black text-white">ئامادەبوونی خۆکار بە دەموچاو</h2>
+                <p className="text-[10px] text-slate-400 font-semibold">بێ دەستلێدان (Zero-Touch AI Scan)</p>
               </div>
             </div>
-            <span className="text-[10px] font-black tracking-wider bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full border border-slate-200 shadow-sm">
-              GEOFENCE {syncedLocation.radiusMeters || 50}M
+            <span className="text-[10px] font-black bg-white/10 border border-white/15 text-indigo-200 px-2.5 py-1 rounded-full">
+              {registeredFacesList.length} کارمەند تۆمارە
             </span>
           </div>
 
-          {attMessage && (
-            <div
-              className={`p-3 text-xs font-black rounded-2xl border shadow-sm flex items-center gap-2 animate-in fade-in slide-in-from-top-2 ${
-                attMessage.success
-                  ? 'bg-emerald-50 text-emerald-900 border-emerald-300 shadow-emerald-100'
-                  : 'bg-rose-50 text-rose-900 border-rose-300 shadow-rose-100'
-              }`}
-            >
-              <Sparkles className="w-4 h-4 flex-shrink-0" />
-              <span>{attMessage.text}</span>
+          {/* 📷 ACTIVE CAMERA VIEWFINDER */}
+          {activeFaceAction ? (
+            <div className="p-3 bg-black/70 backdrop-blur-2xl rounded-3xl border border-white/15 space-y-3 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black flex items-center gap-1.5 text-amber-300">
+                  <Camera className="w-4 h-4" />
+                  <span>ناسینەوەی دەموچاو بۆ ({activeFaceAction})</span>
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={toggleFacingMode}
+                    className="bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-xl text-[10px] font-bold text-amber-200 flex items-center gap-1 transition-all"
+                  >
+                    <SwitchCamera className="w-3 h-3" />
+                    <span>{facingMode === 'user' ? 'پشتەوە' : 'پێشەوە'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopCamera();
+                      setActiveFaceAction(null);
+                    }}
+                    className="text-xs bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-xl text-slate-300"
+                  >
+                    داخستن ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Video Viewport with Smooth Human Oval Bezel */}
+              <div className="relative rounded-2xl overflow-hidden bg-black aspect-square max-h-[300px] flex items-center justify-center border border-white/15 shadow-inner">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+                
+                {/* Smooth Oval HUD Overlay */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none p-3">
+                  <div className="w-44 h-56 rounded-[50%/60%] transition-colors duration-300 flex flex-col items-center justify-center relative border-2 border-dashed border-indigo-300/80 shadow-[0_0_20px_rgba(99,102,241,0.3)]">
+                    <div className="absolute top-2 left-4 w-3.5 h-3.5 border-t-2 border-l-2 border-white/70" />
+                    <div className="absolute top-2 right-4 w-3.5 h-3.5 border-t-2 border-r-2 border-white/70" />
+                    <div className="absolute bottom-2 left-4 w-3.5 h-3.5 border-b-2 border-l-2 border-white/70" />
+                    <div className="absolute bottom-2 right-4 w-3.5 h-3.5 border-b-2 border-r-2 border-white/70" />
+                    
+                    <div className="text-center space-y-1">
+                      <User className="w-9 h-9 text-white/40 mx-auto" />
+                      <span className="text-[9px] font-bold text-white/80 bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-xs">
+                        دەموچاو لێرە دابنێ
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black text-amber-200 shadow-md">
+                    ⚡ دەموچاو بخەرە ناو بازنەکە، خۆکارانە دەیناسێتەوە
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* 📱 TWO LARGE iOS CONTROL CENTER ACTION TILES */
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              
+              {/* 📥 iOS Check In Tile */}
+              <button
+                type="button"
+                disabled={isFaceScanning || (distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50))}
+                onClick={() => handleStartUniversalFaceAuth('Check In')}
+                className={`relative group overflow-hidden py-5 px-4 rounded-3xl flex flex-col items-center justify-center gap-2 text-white transition-all duration-300 shadow-xl ${
+                  distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
+                    ? 'bg-slate-800/60 border border-white/5 text-slate-500 cursor-not-allowed opacity-60'
+                    : 'bg-gradient-to-br from-indigo-600 via-teal-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 shadow-teal-500/20 hover:shadow-teal-500/40 hover:scale-[1.02] active:scale-95 border border-white/20'
+                }`}
+              >
+                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
+                  <Camera className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-center">
+                  <span className="text-sm font-black tracking-wide block">
+                    📥 چێک‌ئین (Check In)
+                  </span>
+                  <span className="text-[10px] text-teal-100/90 font-bold block mt-0.5">
+                    {distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
+                      ? 'قوفڵە (لەدەرەوەی سنوور)'
+                      : 'سەیری کامێرا بکە بۆ هاتن'}
+                  </span>
+                </div>
+              </button>
+
+              {/* 📤 iOS Check Out Tile */}
+              <button
+                type="button"
+                disabled={isFaceScanning || (distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50))}
+                onClick={() => handleStartUniversalFaceAuth('Check Out')}
+                className={`relative group overflow-hidden py-5 px-4 rounded-3xl flex flex-col items-center justify-center gap-2 text-white transition-all duration-300 shadow-xl ${
+                  distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
+                    ? 'bg-slate-800/60 border border-white/5 text-slate-500 cursor-not-allowed opacity-60'
+                    : 'bg-gradient-to-br from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 shadow-rose-500/20 hover:shadow-rose-500/40 hover:scale-[1.02] active:scale-95 border border-white/20'
+                }`}
+              >
+                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
+                  <Camera className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-center">
+                  <span className="text-sm font-black tracking-wide block">
+                    📤 چێک‌ئاوت (Check Out)
+                  </span>
+                  <span className="text-[10px] text-rose-100/90 font-bold block mt-0.5">
+                    {distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
+                      ? 'قوفڵە (لەدەرەوەی سنوور)'
+                      : 'سەیری کامێرا بکە بۆ دەرچوون'}
+                  </span>
+                </div>
+              </button>
+
             </div>
           )}
 
-          {/* 📍 GPS GEOFENCE RADAR PILL (SYNCED METERS) */}
-          <div
-            className={`p-3.5 rounded-2xl border transition-all duration-300 flex items-center justify-between gap-3 shadow-sm ${
-              distanceMeters !== null && distanceMeters <= (syncedLocation.radiusMeters || 50)
-                ? 'bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-100/60 border-emerald-300 text-emerald-950'
-                : distanceMeters !== null
-                ? 'bg-gradient-to-r from-rose-50 via-red-50 to-rose-100/60 border-rose-300 text-rose-950'
-                : 'bg-slate-50 border-slate-200 text-slate-800'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <div
-                className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${
-                  distanceMeters !== null && distanceMeters <= (syncedLocation.radiusMeters || 50)
-                    ? 'bg-emerald-500 animate-ping'
-                    : 'bg-rose-500'
-                }`}
-              >
-                <div className="w-2 h-2 rounded-full bg-white" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5 text-xs font-black">
-                  <MapPin className="w-4 h-4 text-emerald-700" />
-                  <span>دۆخی لۆکەیشن لە کۆمپانیا:</span>
-                  <span className="font-mono">
-                    {distanceMeters !== null && distanceMeters <= (syncedLocation.radiusMeters || 50)
-                      ? `🟢 لەناو سنووری ڕێگەپێدراو (${distanceMeters}m)`
-                      : distanceMeters !== null
-                      ? `🔴 دەرەوەی بازنە (${distanceMeters}m > ${syncedLocation.radiusMeters || 50}m)`
-                      : gpsStatus || 'نەپشکنراوە'}
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-500 font-bold mt-0.5">
-                  {distanceMeters !== null && distanceMeters <= (syncedLocation.radiusMeters || 50)
-                    ? 'چێک‌ئین کراوەیە و ئامادەیە بۆ تۆمارکردن'
-                    : `دوگمەکان قوفڵکراون تا دەگەیتە ناو بازنەی ${syncedLocation.radiusMeters || 50} مەتری کۆمپانیا`}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              disabled={gpsLoading}
-              onClick={requestLocation}
-              className="px-3 py-1.5 bg-white/90 hover:bg-white border border-slate-300/80 rounded-xl text-[11px] font-bold text-slate-800 shadow-sm hover:scale-105 active:scale-95 transition-all flex items-center gap-1 flex-shrink-0"
-            >
-              <RefreshCw className={`w-3 h-3 text-slate-600 ${gpsLoading ? 'animate-spin' : ''}`} />
-              <span>{gpsLoading ? 'چاوەڕێ...' : 'نوێکردنەوە'}</span>
-            </button>
-          </div>
-
-          {/* 🌟 1. HERO UNIVERSAL ZERO-TOUCH AI FACE TERMINAL */}
-          <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-950 p-5 rounded-3xl text-white shadow-2xl border border-indigo-500/30 space-y-4 relative overflow-hidden">
-            
-            {/* Ambient Background Lights */}
-            <div className="absolute top-0 right-0 w-36 h-36 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-36 h-36 bg-teal-500/20 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" />
-                <div>
-                  <h3 className="text-xs font-black text-white">ئامادەبوونی خۆکار بە ناسینەوەی ڕوخسار</h3>
-                  <p className="text-[10px] text-indigo-200">دەموچاو بخەرە ناو بازنەکەوە، خۆی دەیناسێتەوە</p>
-                </div>
-              </div>
-
-              <span className="text-[10px] font-black bg-indigo-500/30 border border-indigo-400/40 text-indigo-200 px-2.5 py-1 rounded-full">
-                {registeredFacesList.length} کارمەند تۆمارکراوە
-              </span>
-            </div>
-
-            {/* 📷 ACTIVE AI FACE SCANNER MODAL / VIEWFINDER */}
-            {activeFaceAction ? (
-              <div className="p-3 bg-black/60 backdrop-blur-md rounded-2xl border border-indigo-500/40 space-y-3 animate-in fade-in zoom-in-95 duration-200">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black flex items-center gap-1.5 text-amber-300">
-                    <Camera className="w-4 h-4" />
-                    <span>ناسینەوەی دەموچاو بۆ ({activeFaceAction})</span>
-                  </span>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={toggleFacingMode}
-                      className="bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-xl text-[10px] font-bold text-amber-200 flex items-center gap-1 transition-all"
-                    >
-                      <SwitchCamera className="w-3 h-3" />
-                      <span>{facingMode === 'user' ? 'کامێرای پشتەوە' : 'کامێرای پێشەوە'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        stopCamera();
-                        setActiveFaceAction(null);
-                      }}
-                      className="text-xs bg-white/10 hover:bg-white/20 px-2 py-1 rounded-lg text-slate-300"
-                    >
-                      داخستن ✕
-                    </button>
-                  </div>
-                </div>
-
-                {/* Video Box with Human Face Oval Frame */}
-                <div className="relative rounded-3xl overflow-hidden bg-black aspect-square max-h-[320px] flex items-center justify-center border-2 border-indigo-500/50 shadow-inner">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
-                  
-                  {/* 🌟 HUMAN FACE OVAL TARGET HUD (Silky smooth, no flickering) */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none p-3">
-                    
-                    {/* The Head Oval Guide Circle */}
-                    <div
-                      className="w-48 h-60 rounded-[50%/60%] transition-colors duration-300 flex flex-col items-center justify-center relative border-2 border-dashed border-indigo-300/80 shadow-[0_0_20px_rgba(99,102,241,0.3)]"
-                    >
-                      {/* Corner brackets */}
-                      <div className="absolute top-2 left-5 w-3.5 h-3.5 border-t-2 border-l-2 border-white/60" />
-                      <div className="absolute top-2 right-5 w-3.5 h-3.5 border-t-2 border-r-2 border-white/60" />
-                      <div className="absolute bottom-2 left-5 w-3.5 h-3.5 border-b-2 border-l-2 border-white/60" />
-                      <div className="absolute bottom-2 right-5 w-3.5 h-3.5 border-b-2 border-r-2 border-white/60" />
-
-                      {/* Center Silhouette Hint */}
-                      <div className="text-center space-y-1">
-                        <User className="w-10 h-10 text-white/40 mx-auto" />
-                        <span className="text-[9px] font-bold text-white/80 bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-xs">
-                          دەموچاو لەم بازنەیە دابنێ
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Bottom guide text */}
-                    <div className="mt-2 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black text-amber-200 shadow-md">
-                      ⚡ دەموچاو بخەرە ناو بازنەکە، خۆکارانە تۆمار دەبێت
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* HUGE ZERO-TOUCH ACTION BUTTONS */
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                
-                {/* HUGE CHECK IN BUTTON */}
-                <button
-                  type="button"
-                  disabled={isFaceScanning || (distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50))}
-                  onClick={() => handleStartUniversalFaceAuth('Check In')}
-                  className={`relative group overflow-hidden py-4 px-5 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-white transition-all duration-300 shadow-xl ${
-                    distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
-                      ? 'bg-slate-800 border border-slate-700 text-slate-500 cursor-not-allowed opacity-60'
-                      : 'bg-gradient-to-br from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-500 hover:to-blue-600 shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:scale-[1.02] active:scale-95 border border-indigo-400/30'
-                  }`}
-                >
-                  <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-                    <Camera className="w-6 h-6 text-white" />
-                  </div>
-                  <span className="text-sm font-black tracking-wide">
-                    📥 چێک‌ئین بە ڕوخسار (Check In)
-                  </span>
-                  <span className="text-[10px] text-indigo-200 font-bold">
-                    {distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
-                      ? 'قوفڵە بەهۆی دووری لە کۆمپانیا'
-                      : 'سەیری کامێرا بکە بۆ هاتنەژوور'}
-                  </span>
-                </button>
-
-                {/* HUGE CHECK OUT BUTTON */}
-                <button
-                  type="button"
-                  disabled={isFaceScanning || (distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50))}
-                  onClick={() => handleStartUniversalFaceAuth('Check Out')}
-                  className={`relative group overflow-hidden py-4 px-5 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-white transition-all duration-300 shadow-xl ${
-                    distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
-                      ? 'bg-slate-800 border border-slate-700 text-slate-500 cursor-not-allowed opacity-60'
-                      : 'bg-gradient-to-br from-rose-600 via-red-600 to-pink-700 hover:from-rose-500 hover:to-red-600 shadow-rose-600/30 hover:shadow-rose-600/50 hover:scale-[1.02] active:scale-95 border border-rose-400/30'
-                  }`}
-                >
-                  <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-                    <Camera className="w-6 h-6 text-white" />
-                  </div>
-                  <span className="text-sm font-black tracking-wide">
-                    📤 چێک‌ئاوت بە ڕوخسار (Check Out)
-                  </span>
-                  <span className="text-[10px] text-rose-200 font-bold">
-                    {distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
-                      ? 'قوفڵە بەهۆی دووری لە کۆمپانیا'
-                      : 'سەیری کامێرا بکە بۆ دەرچوون'}
-                  </span>
-                </button>
-
-              </div>
-            )}
-          </div>
-
-          {/* 👆 2. OPTIONAL MANUAL / PIN / BIOMETRIC FALLBACK ACCORDION */}
+          {/* 👆 iOS Collapsible PIN / Biometrics Accordion */}
           <div className="pt-2">
             <button
               type="button"
               onClick={() => setShowManualFallback(!showManualFallback)}
-              className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200/80 rounded-2xl text-xs font-bold text-slate-700 flex items-center justify-between transition-colors border border-slate-200 shadow-sm"
+              className="w-full py-2.5 px-4 bg-white/5 hover:bg-white/10 rounded-2xl text-xs font-bold text-slate-300 flex items-center justify-between transition-colors border border-white/10"
             >
               <span className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-slate-600" />
-                <span>شێوازی هەڵبژاردنی دەستی، پەنجەمۆر یان کۆدی PIN</span>
+                <Users className="w-4 h-4 text-indigo-400" />
+                <span>شێوازی دەستی یان کۆدی PIN</span>
               </span>
-              <span className="text-xs font-mono">{showManualFallback ? '▲ داخستن' : '▼ کردنەوە'}</span>
+              <span className="text-xs font-mono text-slate-400">{showManualFallback ? '▲' : '▼'}</span>
             </button>
 
             {showManualFallback && (
-              <div className="mt-3 p-4 bg-slate-50 border border-slate-200 rounded-3xl space-y-3.5 animate-in fade-in">
-                
-                {/* Employee Selection */}
+              <div className="mt-3 p-4 bg-black/40 border border-white/10 rounded-3xl space-y-3 animate-in fade-in">
                 <div>
-                  <label className="block text-xs font-black text-slate-800 mb-1">
-                    ناوی خۆت هەڵبژێرە:
+                  <label className="block text-xs font-black text-slate-300 mb-1">
+                    ناوی کارمەند هەڵبژێرە:
                   </label>
                   <select
                     value={selectedEmpId}
                     onChange={(e) => setSelectedEmpId(e.target.value)}
-                    className="w-full py-2.5 px-3 bg-white border border-slate-300 rounded-xl text-xs font-black text-slate-900 outline-none"
+                    className="w-full py-2.5 px-3 bg-slate-900 border border-white/20 rounded-xl text-xs font-black text-white outline-none"
                   >
-                    <option value="">-- ناوی خۆت لەم لیستە هەڵبژێرە --</option>
+                    <option value="">-- ناوی خۆت هەڵبژێرە --</option>
                     {employees
                       .filter((e) => e.status !== 'resigned' && e.isActive !== false)
                       .map((emp) => (
@@ -1070,92 +1026,99 @@ export default function PublicTerminalPage() {
                   </select>
                 </div>
 
-                {/* PIN Code */}
                 <div>
-                  <label className="block text-xs font-black text-slate-800 mb-1">کۆدی PIN:</label>
+                  <label className="block text-xs font-black text-slate-300 mb-1">کۆدی PIN:</label>
                   <input
                     type="password"
                     value={pinCode}
                     onChange={(e) => setPinCode(e.target.value)}
                     placeholder="کۆدی 1234..."
-                    className="w-full py-2.5 px-3 bg-white border border-slate-300 rounded-xl font-mono text-center text-xs tracking-widest outline-none font-bold"
+                    className="w-full py-2.5 px-3 bg-slate-900 border border-white/20 rounded-xl font-mono text-center text-xs tracking-widest text-white outline-none font-bold"
                   />
                 </div>
 
-                {/* Fingerprint & PIN Buttons */}
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => handleCheckInOrOut('Check In')}
-                    className="py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black shadow-md"
+                    className="py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
                   >
                     📥 هاتن بە PIN
                   </button>
                   <button
                     type="button"
                     onClick={() => handleCheckInOrOut('Check Out')}
-                    className="py-2.5 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-xs font-black shadow-md"
+                    className="py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
                   >
                     📤 دەرچوون بە PIN
                   </button>
                 </div>
-
               </div>
             )}
           </div>
-
         </section>
 
         {/* ----------------------------------------------------------------- */}
-        {/* 🔍 LEFT SIDE: MODEL SEARCH CATALOG (Windows 11 Catalog Panel) */}
+        {/* 🔍 LEFT TILE: PROMINENT MASSIVE iOS SEARCH & CATALOG ENGINE */}
         {/* ----------------------------------------------------------------- */}
-        <section className="lg:col-span-6 bg-white/85 backdrop-blur-2xl border border-slate-200/90 rounded-3xl p-4 sm:p-6 shadow-xl shadow-slate-200/60 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <section className="lg:col-span-7 bg-slate-900/80 border border-white/15 backdrop-blur-2xl rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 relative overflow-hidden">
+          
+          {/* Header */}
+          <div className="flex items-center justify-between pb-3 border-b border-white/10">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+              <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white shadow-md">
                 <Search className="w-4 h-4 text-white" />
               </div>
               <div>
-                <h2 className="text-sm font-black text-slate-900">
-                  گەڕان بۆ مۆدێل و کاڵاکانی کۆگا
+                <h2 className="text-sm font-black text-white">
+                  گەڕانی مۆدێل و کاڵاکانی کۆگا (iOS Inventory Search)
                 </h2>
-                <p className="text-[11px] text-slate-500 font-semibold">
-                  بەردەستبوونی مۆدێلەکان و کۆگای سەرەکی
+                <p className="text-[10px] text-slate-400 font-semibold">
+                  بەردەستبوونی مۆدێلەکان و پشکنینی خێرای ئیستۆک
                 </p>
               </div>
             </div>
-            <span className="text-[10px] font-black bg-blue-50 text-blue-800 px-2.5 py-1 rounded-full border border-blue-200">
-              {filteredItems.length} دانە
+            <span className="text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 px-3 py-1 rounded-full">
+              {filteredItems.length} مۆدێل دۆزراوەتەوە
             </span>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
 
-            {/* Search Controls */}
-            <div className="p-3 bg-slate-50/90 border border-slate-200/90 rounded-2xl space-y-2.5 shadow-inner">
-              <div className="flex items-center gap-2.5 bg-white p-2.5 rounded-xl border border-slate-300/80 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10 shadow-sm transition-all">
-                <Search className="w-4 h-4 text-slate-500 flex-shrink-0" />
+            {/* 🌟 PROMINENT EXPANSIVE iOS SEARCH BAR (سێرچی گەورە) */}
+            <div className="space-y-3">
+              <div className="relative flex items-center bg-white/10 hover:bg-white/15 focus-within:bg-white/15 border border-white/20 focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-500/20 rounded-2xl px-4 py-3.5 shadow-xl transition-all">
+                <Search className="w-5 h-5 text-indigo-300 flex-shrink-0 ml-2.5" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="ناوی مۆدێل، کۆدی کاڵا، یان پۆلێن بنووسە..."
-                  className="w-full text-xs font-bold text-slate-900 bg-transparent outline-none"
+                  placeholder="ناوی مۆدێل، کۆدی کاڵا، یان ناوی پۆلێن لێرە بنووسە..."
+                  className="w-full text-sm font-bold text-white bg-transparent outline-none placeholder:text-slate-400"
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="text-xs bg-white/20 hover:bg-white/30 text-white rounded-full w-5 h-5 flex items-center justify-center"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
 
-              {/* Category Filter Pills */}
+              {/* iOS Category Filter Pills */}
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                <span className="text-slate-500 font-bold ml-1 text-[11px]">پۆلێن:</span>
+                <span className="text-slate-400 font-bold ml-1 text-[11px]">پۆلێن:</span>
                 {['all', 'نەخشەی رەفە', 'مۆدێلی ئاشڵی', 'مەواد', 'کاڵای فرۆشراو'].map((cat) => (
                   <button
                     key={cat}
                     type="button"
                     onClick={() => setSelectedCategoryFilter(cat)}
-                    className={`px-2.5 py-1 text-[11px] font-black rounded-xl border transition-all ${
+                    className={`px-3 py-1 text-[11px] font-black rounded-full border transition-all ${
                       selectedCategoryFilter === cat
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                        : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15'
                     }`}
                   >
                     {cat === 'all' ? 'تێکڕا' : cat}
@@ -1164,128 +1127,120 @@ export default function PublicTerminalPage() {
               </div>
             </div>
 
-            {/* Model Catalog Grid */}
-            <div className="space-y-1.5">
-              <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-100 p-2 border border-slate-300">
-                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <span>ئەنجامەکانی گەڕان ({filteredItems.length} مۆدێل):</span>
-                </h3>
+            {/* Results Header & Export Tools */}
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-white/5 p-2.5 rounded-2xl border border-white/10">
+              <h3 className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <span>ئەنجامەکان ({filteredItems.length} دانە):</span>
+              </h3>
 
-                <div className="flex items-center gap-1.5 print:hidden">
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="btn-classic text-[11px] font-bold py-0.5 px-2 bg-slate-200 hover:bg-slate-300 border border-slate-400 text-slate-950"
-                    title="پرێنتکردنی لیستی مۆدێلەکان"
-                  >
-                    🖨️ پرێنت (Print)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const tableContainer = document.getElementById('home-model-catalog-table-wrapper');
-                      const printDate = format(new Date(), 'yyyy-MM-dd');
-                      const printTime = format(new Date(), 'HH:mm:ss');
-                      const filename = `Ashley_Models_Catalog_${printDate}.pdf`;
+              <div className="flex items-center gap-1.5 print:hidden">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="text-[11px] font-bold py-1 px-2.5 bg-white/10 hover:bg-white/20 border border-white/15 rounded-xl text-slate-200 transition-all"
+                  title="پرێنتکردنی لیست"
+                >
+                  🖨️ پرێنت
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const tableContainer = document.getElementById('home-model-catalog-table-wrapper');
+                    const printDate = format(new Date(), 'yyyy-MM-dd');
+                    const printTime = format(new Date(), 'HH:mm:ss');
+                    const filename = `Ashley_Models_Catalog_${printDate}.pdf`;
 
-                      if (!tableContainer) {
-                        window.print();
-                        return;
-                      }
+                    if (!tableContainer) {
+                      window.print();
+                      return;
+                    }
 
-                      try {
-                        const html2canvas = (await import('html2canvas')).default;
-                        const jsPDF = (await import('jspdf')).default;
+                    try {
+                      const html2canvas = (await import('html2canvas')).default;
+                      const jsPDF = (await import('jspdf')).default;
 
-                        const canvas = await html2canvas(tableContainer, {
-                          scale: 2,
-                          useCORS: true,
-                          logging: false,
-                          backgroundColor: '#ffffff'
-                        });
-
-                        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-                        const pdf = new jsPDF('portrait', 'mm', 'a4');
-                        const pdfWidth = pdf.internal.pageSize.getWidth();
-                        const pdfHeight = pdf.internal.pageSize.getHeight();
-
-                        pdf.setFontSize(10);
-                        pdf.setTextColor(15, 23, 42);
-                        pdf.text(`ASHLEY ERP - Catalog: Warehouse Models & Inventory`, 10, 8);
-                        pdf.text(`Print Date: ${printDate} | Print Time: ${printTime}`, pdfWidth - 90, 8);
-
-                        const imgWidth = pdfWidth - 20;
-                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-                        pdf.addImage(imgData, 'JPEG', 10, 12, imgWidth, Math.min(imgHeight, pdfHeight - 20));
-                        pdf.save(filename);
-                      } catch (err) {
-                        console.error('PDF export fallback:', err);
-                        window.print();
-                      }
-                    }}
-                    className="btn-classic text-[11px] font-bold py-0.5 px-2 bg-rose-700 hover:bg-rose-800 border border-red-700 text-white"
-                    title="داگرتنی ڕاستەوخۆی فایلی PDF"
-                  >
-                    📄 داگرتنی PDF
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const printDate = format(new Date(), 'yyyy-MM-dd');
-                      const printTime = format(new Date(), 'HH:mm:ss');
-                      let csvContent = `\uFEFFناوی لیست: کەتەلۆگ و لیستی مۆدێلەکانی کۆگا, بەرواری پرێنت: ${printDate}, کاتی پرێنت: ${printTime}\n\n`;
-                      csvContent += 'کۆدی مۆدێل,ناوی کاڵا,پۆلێن,دۆخ,بڕی ئیستۆک\n';
-                      filteredItems.forEach(item => {
-                        csvContent += `"${item.model || 'MODEL'}","${item.name || 'مۆدێل'}","${item.classification || 'کۆگا'}","${item.modelCondition || 'بەردەست'}","${item.quantity ?? 1}"\n`;
+                      const canvas = await html2canvas(tableContainer, {
+                        scale: 2,
+                        useCORS: true,
+                        logging: false,
+                        backgroundColor: '#0f172a'
                       });
-                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                      const url = URL.createObjectURL(blob);
-                      const link = document.createElement('a');
-                      link.href = url;
-                      link.setAttribute('download', `Ashley_Models_Catalog_${printDate}.csv`);
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                    }}
-                    className="btn-classic-primary text-[11px] font-bold py-0.5 px-2 bg-blue-900 hover:bg-blue-950 border border-blue-950 text-white"
-                    title="داگرتنی فایلی CSV"
-                  >
-                    📊 داگرتنی CSV
-                  </button>
-                </div>
-              </div>
 
-              <div id="home-model-catalog-table-wrapper" className="overflow-x-auto border border-slate-400 bg-white">
-                <table className="table-classic">
-                  <thead>
-                    <tr>
-                      <th>کۆدی مۆدێل</th>
-                      <th>ناوی کاڵا</th>
-                      <th>پۆلێن</th>
-                      <th>دۆخ</th>
-                      <th>بڕی بەردەست</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredItems.length > 0 ? (
-                      filteredItems.map((item) => (
-                        <tr key={item.id}>
-                          <td className="font-mono font-bold text-emerald-900">{item.model || 'MODEL-01'}</td>
-                          <td className="font-bold">{item.name || 'مۆدێلی ئاشڵی'}</td>
-                          <td className="text-[11px] text-slate-700">{item.classification || 'کۆگا'}</td>
-                          <td>
-                            <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-bold">
-                              {item.modelCondition || 'بەردەستە'}
-                            </span>
-                          </td>
-                          <td className="font-mono font-bold text-slate-900">{item.quantity ?? 1} ئیستۆک</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={5} className="text-center py-6 text-slate-400 font-bold">
-                          هیچ مۆدێلێک بەم گەڕانە نەدۆزرایەوە
+                      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                      const pdf = new jsPDF('portrait', 'mm', 'a4');
+                      const pdfWidth = pdf.internal.pageSize.getWidth();
+                      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+                      pdf.setFontSize(10);
+                      pdf.setTextColor(15, 23, 42);
+                      pdf.text(`ASHLEY ERP - Catalog: Warehouse Models & Inventory`, 10, 8);
+                      pdf.text(`Print Date: ${printDate} | Print Time: ${printTime}`, pdfWidth - 90, 8);
+
+                      const imgWidth = pdfWidth - 20;
+                      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+                      pdf.addImage(imgData, 'JPEG', 10, 12, imgWidth, Math.min(imgHeight, pdfHeight - 20));
+                      pdf.save(filename);
+                    } catch (err) {
+                      console.error('PDF export fallback:', err);
+                      window.print();
+                    }
+                  }}
+                  className="text-[11px] font-bold py-1 px-2.5 bg-rose-600/80 hover:bg-rose-600 border border-rose-400/30 rounded-xl text-white transition-all"
+                  title="داگرتنی PDF"
+                >
+                  📄 داگرتنی PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const printDate = format(new Date(), 'yyyy-MM-dd');
+                    const printTime = format(new Date(), 'HH:mm:ss');
+                    let csvContent = `\uFEFFناوی لیست: کەتەلۆگ و لیستی مۆدێلەکانی کۆگا, بەرواری پرێنت: ${printDate}, کاتی پرێنت: ${printTime}\n\n`;
+                    csvContent += 'کۆدی مۆدێل,ناوی کاڵا,پۆلێن,دۆخ,بڕی ئیستۆک\n';
+                    filteredItems.forEach(item => {
+                      csvContent += `"${item.model || 'MODEL'}","${item.name || 'مۆدێل'}","${item.classification || 'کۆگا'}","${item.modelCondition || 'بەردەست'}","${item.quantity ?? 1}"\n`;
+                    });
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.setAttribute('download', `Ashley_Models_Catalog_${printDate}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="text-[11px] font-bold py-1 px-2.5 bg-blue-600/80 hover:bg-blue-600 border border-blue-400/30 rounded-xl text-white transition-all"
+                  title="داگرتنی CSV"
+                >
+                  📊 داگرتنی CSV
+                </button>
+              </div>
+            </div>
+
+            {/* Model Catalog Table Wrapper */}
+            <div id="home-model-catalog-table-wrapper" className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/60 max-h-[380px] overflow-y-auto">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-white/5 border-b border-white/10 text-slate-300 font-black sticky top-0 backdrop-blur-md">
+                  <tr>
+                    <th className="py-2.5 px-3">کۆدی مۆدێل</th>
+                    <th className="py-2.5 px-3">ناوی کاڵا</th>
+                    <th className="py-2.5 px-3">پۆلێن</th>
+                    <th className="py-2.5 px-3">دۆخ</th>
+                    <th className="py-2.5 px-3">ئیستۆک</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {filteredItems.length > 0 ? (
+                    filteredItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-white/5 transition-colors">
+                        <td className="py-2.5 px-3 font-mono font-black text-indigo-300">{item.model || 'MODEL-01'}</td>
+                        <td className="py-2.5 px-3 font-bold text-white">{item.name || 'مۆدێلی ئاشڵی'}</td>
+                        <td className="py-2.5 px-3 text-[11px] text-slate-400">{item.classification || 'کۆگا'}</td>
+                        <td className="py-2.5 px-3">
+                          <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-black">
+                            {item.modelCondition || 'بەردەستە'}
+                          </span>
                         </td>
                       </tr>
                     )}
