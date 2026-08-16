@@ -95,11 +95,21 @@ export default function AdminPage() {
   // Fetch list of employees who have already enrolled their faces
   const fetchRegisteredFaces = useCallback(async () => {
     try {
+      let localIds: string[] = [];
+      try {
+        const localDb = JSON.parse(localStorage.getItem('ashley_face_registry_local') || '{}');
+        localIds = Object.keys(localDb);
+        if (localIds.length > 0) {
+          setRegisteredFaceIds((prev) => Array.from(new Set([...prev, ...localIds])));
+        }
+      } catch {}
+
       const res = await fetch(`/api/attendance/face/all?_t=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         if (data?.employees) {
-          setRegisteredFaceIds(data.employees.map((e: any) => e.id));
+          const apiIds = data.employees.map((e: any) => e.id);
+          setRegisteredFaceIds(Array.from(new Set([...localIds, ...apiIds])));
         }
       }
     } catch (err) {
@@ -564,8 +574,8 @@ export default function AdminPage() {
                                 <span>ڕوخسار ناسێنراوە ✅</span>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-300">
-                                <span>بێ ڕوخسار</span>
+                              <span className="text-slate-400 text-xs px-1" title="ڕوخسار تۆمار نەکراوە">
+                                👤
                               </span>
                             )}
                           </div>
