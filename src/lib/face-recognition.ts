@@ -1,10 +1,19 @@
-// AI Face Recognition Engine for Ashley ERP (Client-Side Neural Network)
-import * as faceapi from '@vladmandic/face-api';
+// AI Face Recognition Engine for Ashley ERP (Pure Client-Side Dynamic Import)
 
+let faceapiModule: any = null;
 const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
 
 let modelsLoaded = false;
 let modelLoadPromise: Promise<boolean> | null = null;
+
+// Dynamically load faceapi only in browser
+async function getFaceApi() {
+  if (typeof window === 'undefined') return null;
+  if (!faceapiModule) {
+    faceapiModule = await import('@vladmandic/face-api');
+  }
+  return faceapiModule;
+}
 
 // 1. Load Neural Network Models
 export async function loadFaceModels(): Promise<boolean> {
@@ -14,7 +23,10 @@ export async function loadFaceModels(): Promise<boolean> {
 
   modelLoadPromise = (async () => {
     try {
-      // Load SSD MobileNet or TinyFaceDetector for high precision
+      const faceapi = await getFaceApi();
+      if (!faceapi) return false;
+
+      // Load TinyFaceDetector, Landmarks and FaceRecognition models
       await Promise.all([
         faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
         faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
@@ -23,8 +35,10 @@ export async function loadFaceModels(): Promise<boolean> {
       modelsLoaded = true;
       return true;
     } catch (err) {
-      console.error('Error loading face models from CDN, retrying with fallback:', err);
+      console.warn('Face-api models primary CDN warning, trying fallback:', err);
       try {
+        const faceapi = await getFaceApi();
+        if (!faceapi) return false;
         await Promise.all([
           faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
           faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
@@ -33,7 +47,7 @@ export async function loadFaceModels(): Promise<boolean> {
         modelsLoaded = true;
         return true;
       } catch (fallbackErr) {
-        console.error('Fatal error loading face recognition models:', fallbackErr);
+        console.error('Fatal error loading face models:', fallbackErr);
         return false;
       }
     }
@@ -46,6 +60,10 @@ export async function loadFaceModels(): Promise<boolean> {
 export async function extractFaceDescriptor(
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<{ descriptor: number[]; detection: any } | null> {
+  if (typeof window === 'undefined') return null;
+  const faceapi = await getFaceApi();
+  if (!faceapi) return null;
+
   await loadFaceModels();
 
   const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
@@ -66,16 +84,21 @@ export async function extractFaceDescriptor(
 }
 
 // 3. Match Two Face Descriptors (Euclidean Distance)
-// Distance < 0.45 means identical person with > 95% confidence
 export function matchFaceDescriptors(
   descriptor1: number[] | Float32Array,
   descriptor2: number[] | Float32Array,
   threshold = 0.48
 ): { isMatch: boolean; distance: number; similarityPercent: number } {
-  const d1 = descriptor1 instanceof Float32Array ? descriptor1 : new Float32Array(descriptor1);
-  const d2 = descriptor2 instanceof Float32Array ? descriptor2 : new Float32Array(descriptor2);
+  const d1 = Array.from(descriptor1);
+  const d2 = Array.from(descriptor2);
 
-  const distance = faceapi.euclideanDistance(d1, d2);
+  // Pure Euclidean Distance calculation (works identically on client and server without dependencies)
+  let sum = 0;
+  for (let i = 0; i < Math.min(d1.length, d2.length); i++) {
+    const diff = d1[i] - d2[i];
+    sum += diff * diff;
+  }
+  const distance = Math.sqrt(sum);
   const isMatch = distance <= threshold;
 
   // Convert Euclidean distance to confidence percentage (0 distance = 100%, 0.6 = 0%)
