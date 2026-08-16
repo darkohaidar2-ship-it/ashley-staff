@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
@@ -71,17 +71,33 @@ export default function MainPage() {
     radiusMeters: settings?.factoryLocation?.radiusMeters || 50,
   });
 
-  // Global Realtime Location Sync from Supabase
-  useEffect(() => {
-    fetch('/api/attendance/location')
-      .then((res) => res.json())
-      .then((loc) => {
+  // Global Realtime Location Sync from Supabase (Live polling & anti-cache)
+  const syncCompanyLocation = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/attendance/location?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (res.ok) {
+        const loc = await res.json();
         if (loc?.lat && loc?.lng) {
           setSyncedLocation(loc);
         }
-      })
-      .catch((err) => console.error('Error fetching company location:', err));
+      }
+    } catch (err) {
+      console.error('Error fetching company location:', err);
+    }
   }, []);
+
+  useEffect(() => {
+    syncCompanyLocation();
+    const interval = setInterval(syncCompanyLocation, 3000);
+    window.addEventListener('focus', syncCompanyLocation);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', syncCompanyLocation);
+    };
+  }, [syncCompanyLocation]);
 
   // --- Attendance State (Right Side) ---
   const [selectedEmpId, setSelectedEmpId] = useState('');

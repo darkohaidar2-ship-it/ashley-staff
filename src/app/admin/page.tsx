@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
@@ -91,13 +91,41 @@ export default function AdminPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
 
-  // Factory Location Config
-  const factoryLocation = settings?.factoryLocation || {
-    name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Company Base)',
-    lat: 35.5571,
-    lng: 45.4352,
-    radiusMeters: 500,
-  };
+  // Factory Location Config (Synced with Supabase)
+  const [syncedFactoryLocation, setSyncedFactoryLocation] = useState<{
+    name: string;
+    lat: number;
+    lng: number;
+    radiusMeters: number;
+  }>({
+    name: settings?.factoryLocation?.name || 'کۆمپانیای سەرەکی ئاشڵی (Ashley Company Base)',
+    lat: settings?.factoryLocation?.lat || 35.5571,
+    lng: settings?.factoryLocation?.lng || 45.4352,
+    radiusMeters: settings?.factoryLocation?.radiusMeters || 50,
+  });
+
+  const fetchGlobalLocation = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/attendance/location?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (res.ok) {
+        const loc = await res.json();
+        if (loc?.lat && loc?.lng) {
+          setSyncedFactoryLocation(loc);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching global company location in admin:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchGlobalLocation();
+  }, [fetchGlobalLocation]);
+
+  const factoryLocation = syncedFactoryLocation;
 
   // Open Employee Modal (Add / Edit)
   const handleOpenEmpModal = (emp?: Employee) => {
@@ -887,7 +915,8 @@ export default function AdminPage() {
           initialRadius={factoryLocation.radiusMeters}
           factoryName={factoryLocation.name}
           isRTL={true}
-          onSave={(newLoc) => {
+          onSave={async (newLoc) => {
+            setSyncedFactoryLocation(newLoc);
             if (setSettings) {
               setSettings({
                 ...settings,
@@ -895,15 +924,19 @@ export default function AdminPage() {
               });
             }
 
-            // Sync globally to Supabase backend across all mobile devices
-            fetch('/api/attendance/location', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(newLoc),
-            }).catch((err) => console.error('Failed to sync location to Supabase:', err));
+            try {
+              // Sync globally to Supabase backend across all mobile devices
+              await fetch(`/api/attendance/location?_t=${Date.now()}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+                body: JSON.stringify(newLoc),
+              });
+            } catch (err) {
+              console.error('Failed to sync location to Supabase:', err);
+            }
 
             setShowMapPicker(false);
-            alert('🎉 شوێنی کۆمپانیا بە سەرکەوتوویی لەسەر سێرڤەری سەرەکی پاشەکەوت کرا و بۆ هەموو کارمەندان نوێ بووەوە!');
+            alert('🎉 شوێنی کۆمپانیا بە سەرکەوتوویی لەسەر سێرڤەری سەرەکی پاشەکەوت کرا و بۆ هەموو مۆبایل و کۆمپیوتەرێک نوێ بووەوە!');
           }}
           onClose={() => setShowMapPicker(false)}
         />

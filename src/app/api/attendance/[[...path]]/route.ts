@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, supabaseUrl, supabaseKey } from '@/lib/supabase';
 import crypto from 'crypto';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
 // Get current Date and Time in Asia/Baghdad timezone (Kurdish Local Time)
 function getBaghdadDateTime() {
   const now = new Date();
@@ -719,56 +723,93 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // Company Geofence Location Sync (Global across all devices)
     // ----------------------------------------
     if (pathStr === 'location' && method === 'GET') {
-      const { data: wh } = await supabase
+      // 1. Try to get main designated factory warehouse
+      let { data: wh } = await supabase
         .from('warehouses')
         .select('*')
-        .order('id', { ascending: true })
-        .limit(1)
+        .eq('id', 'main-company-location')
         .maybeSingle();
 
-      if (wh) {
-        return NextResponse.json({
-          name: wh.name || 'کۆمپانیای سەرەکی ئاشڵی',
-          lat: parseFloat(wh.lat) || 35.5571,
-          lng: parseFloat(wh.lng) || 45.4352,
-          radiusMeters: parseInt(wh.radius) || 50,
-        });
+      // 2. Fallback to any warehouse
+      if (!wh) {
+        const { data: firstWh } = await supabase
+          .from('warehouses')
+          .select('*')
+          .limit(1)
+          .maybeSingle();
+        wh = firstWh;
       }
 
-      return NextResponse.json({
-        name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Company Base)',
-        lat: 35.5571,
-        lng: 45.4352,
-        radiusMeters: 50,
-      });
+      const noCacheHeaders = {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Vercel-CDN-Cache-Control': 'no-store',
+      };
+
+      if (wh && wh.lat && wh.lng) {
+        return NextResponse.json(
+          {
+            name: wh.name || 'کۆمپانیای سەرەکی ئاشڵی',
+            lat: parseFloat(wh.lat) || 35.5571,
+            lng: parseFloat(wh.lng) || 45.4352,
+            radiusMeters: parseInt(wh.radius) || 50,
+          },
+          { headers: noCacheHeaders }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Company Base)',
+          lat: 35.5571,
+          lng: 45.4352,
+          radiusMeters: 50,
+        },
+        { headers: noCacheHeaders }
+      );
     }
 
     if (pathStr === 'location' && method === 'POST') {
       const { name, lat, lng, radiusMeters } = await req.json();
       if (!lat || !lng) return NextResponse.json({ error: 'lat and lng required' }, { status: 400 });
 
-      const { data: existing } = await supabase.from('warehouses').select('id').limit(1).maybeSingle();
-      if (existing) {
-        await supabase
-          .from('warehouses')
-          .update({
-            name: name || 'کۆمپانیای سەرەکی ئاشڵی',
-            lat: parseFloat(lat),
-            lng: parseFloat(lng),
-            radius: parseInt(radiusMeters) || 50,
-          })
-          .eq('id', existing.id);
-      } else {
-        await supabase.from('warehouses').insert({
-          id: 'main-factory-location',
-          name: name || 'کۆمپانیای سەرەکی ئاشڵی',
-          lat: parseFloat(lat),
-          lng: parseFloat(lng),
-          radius: parseInt(radiusMeters) || 50,
-        });
+      const parsedLat = parseFloat(lat);
+      const parsedLng = parseFloat(lng);
+      const parsedRadius = parseInt(radiusMeters) || 50;
+      const parsedName = name || 'کۆمپانیای سەرەکی ئاشڵی';
+
+      // Upsert designated warehouse
+      const { error: upsertErr } = await supabase.from('warehouses').upsert({
+        id: 'main-company-location',
+        name: parsedName,
+        lat: parsedLat,
+        lng: parsedLng,
+        radius: parsedRadius,
+        qr_code: 'https://ashley-staff.vercel.app',
+      });
+
+      if (upsertErr) {
+        console.error('Error upserting main warehouse location:', upsertErr);
+        // Fallback update all existing rows
+        await supabase.from('warehouses').update({
+          name: parsedName,
+          lat: parsedLat,
+          lng: parsedLng,
+          radius: parsedRadius,
+        }).neq('id', '___none___');
       }
 
-      return NextResponse.json({ success: true, location: { name, lat, lng, radiusMeters: radiusMeters || 50 } });
+      const noCacheHeaders = {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+      };
+
+      return NextResponse.json(
+        {
+          success: true,
+          location: { name: parsedName, lat: parsedLat, lng: parsedLng, radiusMeters: parsedRadius },
+        },
+        { headers: noCacheHeaders }
+      );
     }
 
     if (pathStr === 'admin/users/update-role' && method === 'POST') {
