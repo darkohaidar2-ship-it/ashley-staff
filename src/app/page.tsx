@@ -58,12 +58,12 @@ export default function MainPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Factory Geofence Base Location (100m Radius)
+  // Factory Geofence Base Location (50m Radius)
   const factoryLocation = settings?.factoryLocation || {
     name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Company Base)',
     lat: 35.5571,
     lng: 45.4352,
-    radiusMeters: 100,
+    radiusMeters: 50,
   };
 
   // --- Attendance State (Right Side) ---
@@ -71,6 +71,7 @@ export default function MainPage() {
   const [pinCode, setPinCode] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedSelfie, setCapturedSelfie] = useState<string | null>(null);
+  const [showManualFallback, setShowManualFallback] = useState(false);
   
   // Biometric (Fingerprint / Face ID) State
   const [bioSupported, setBioSupported] = useState<boolean>(false);
@@ -80,6 +81,7 @@ export default function MainPage() {
   // GPS Geofence State
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const [gpsStatus, setGpsStatus] = useState<string | null>(null);
+  const [gpsLoading, setGpsLoading] = useState<boolean>(false);
   const [attMessage, setAttMessage] = useState<{ text: string; success: boolean } | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -125,18 +127,21 @@ export default function MainPage() {
       setGpsStatus('جی پی ئێس لە وێبگەڕ پشتیوانی نەکراوە');
       return;
     }
-    setGpsStatus('پشکنینی لۆکەیشنی مۆبایل...');
+    setGpsLoading(true);
+    setGpsStatus('پشکنینی دووری لە کۆمپانیا...');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const uLat = pos.coords.latitude;
         const uLng = pos.coords.longitude;
         const dist = calculateDistanceMeters(uLat, uLng, factoryLocation.lat, factoryLocation.lng);
         setDistanceMeters(dist);
-        const inside = dist <= 100;
-        setGpsStatus(inside ? `داخل کۆمپانیا (${dist}m)` : `دەرەوەی کۆمپانیا (${dist}m)`);
+        const inside = dist <= 50;
+        setGpsStatus(inside ? `ناو سنووری کۆمپانیا (${dist}m)` : `دەرەوەی کۆمپانیا (${dist}m)`);
+        setGpsLoading(false);
       },
       () => {
-        setGpsStatus('نەتوانرا لۆکەیشنی جی پی ئێس وەربگیرێت');
+        setGpsStatus('تکایە ڕێگەپێدانی لۆکەیشن (GPS) لە مۆبایل کارا بکە');
+        setGpsLoading(false);
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -356,10 +361,10 @@ export default function MainPage() {
     const emp = employees.find((e) => e.id === selectedEmpId);
     if (!emp) return;
 
-    // 100m Location Geofence check
-    if (distanceMeters !== null && distanceMeters > 100) {
+    // 50m Location Geofence check
+    if (distanceMeters !== null && distanceMeters > 50) {
       setAttMessage({
-        text: `⚠️ ناتوانیت چێک ئین بکەیت! دووریت لە شوێنی دیاریکراوی کۆگا (${distanceMeters} مەتر)ە کە زیاترە لە ١٠٠ مەتر.`,
+        text: `⚠️ ناتوانیت چێک ئین بکەیت! دووریت لە کۆمپانیا (${distanceMeters} مەتر)ە و دەبێت کەمتر لە ٥٠ مەتر بێت.`,
         success: false,
       });
       return;
@@ -397,10 +402,10 @@ export default function MainPage() {
       return;
     }
 
-    // 100m Location Geofence check
-    if (distanceMeters !== null && distanceMeters > 100) {
+    // 50m Location Geofence check
+    if (distanceMeters !== null && distanceMeters > 50) {
       setAttMessage({
-        text: `⚠️ ناتوانیت چێک ئین بکەیت! دووریت لە شوێنی دیاریکراوی کۆگا (${distanceMeters} مەتر)ە کە زیاترە لە ١٠٠ مەتر.`,
+        text: `⚠️ ناتوانیت چێک ئین بکەیت! دووریت لە کۆمپانیا (${distanceMeters} مەتر)ە و دەبێت کەمتر لە ٥٠ مەتر بێت.`,
         success: false,
       });
       return;
@@ -427,257 +432,428 @@ export default function MainPage() {
   return (
     <div className="space-y-4 text-slate-900 font-sans dir-rtl select-none pb-12 p-2 sm:p-4" dir="rtl">
 
-      {/* 🌟 1. TOP HEADER WITH LOGIN BUTTON & LIVE CLOCK */}
-      <header className="panel-classic p-2.5 flex flex-wrap items-center justify-between gap-2 shadow-sm">
-        <div>
-          <h1 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
-            <span>🏛️ ASHLEY ERP — پەنەری ڕاستەوخۆی سەرەکی</span>
-          </h1>
-          <p className="text-[11px] text-slate-600 font-bold mt-0.5">
-            سیستەمی گشتی تۆمارکردنی ئامادەبوونی کارمەندان و گەڕان بۆ کاڵا و مۆدێلەکانی کۆگا
-          </p>
+      {/* 🌟 1. TOP WINDOWS 11 MICA HEADER WITH LOGIN BUTTON & LIVE CLOCK */}
+      <header className="bg-white/80 backdrop-blur-xl border border-slate-200/80 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-md shadow-slate-200/50 transition-all">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shadow-md overflow-hidden relative group">
+            <img src="/icon.png" alt="Ashley Logo" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+          <div>
+            <h1 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <span>ASHLEY NEXUS — سیستەمی ئامادەبوونی زیرەک</span>
+              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-300 shadow-sm flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Win11 Fluent</span>
+              </span>
+            </h1>
+            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+              تۆمارکردنی دەستبەجێ بە پەنجەمۆر / Face ID و چاودێری دووری ٥٠ مەتر
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="statusbar-segment font-mono text-[11px] font-bold text-blue-900 bg-slate-100">
-            ⏰ {currentTimeStr || '2026-08-13 | 15:50'}
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100/90 border border-slate-200/90 rounded-xl font-mono text-xs font-bold text-slate-800 shadow-inner">
+            <Clock className="w-3.5 h-3.5 text-blue-600 animate-spin-slow" />
+            <span>{currentTimeStr || '2026-08-16 | 14:30:00'}</span>
           </div>
 
           {user ? (
             <div className="flex items-center gap-1.5">
-              <Link href="/admin" className="btn-classic-primary text-xs font-black">
-                <Shield className="w-3.5 h-3.5" />
-                <span>🛡️ چوون بۆ پەنەری ئەدمین</span>
+              <Link
+                href="/admin"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-black py-2 px-3.5 rounded-xl shadow-md shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all"
+              >
+                <Shield className="w-3.5 h-3.5 text-amber-300" />
+                <span>پەنەری ئەدمین</span>
               </Link>
-              <button onClick={() => logout()} className="btn-classic text-rose-800 text-xs">
+              <button
+                onClick={() => logout()}
+                className="bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold py-2 px-3 rounded-xl shadow-sm hover:scale-105 active:scale-95 transition-all flex items-center gap-1"
+              >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>دەرچوون</span>
               </button>
             </div>
           ) : (
-            <Link href="/login" className="btn-fluent-primary py-1.5 px-3 text-xs font-black rounded-lg">
-              <Lock className="w-3.5 h-3.5 text-amber-300" />
-              <span>🔑 داخڵبوونی ئەدمین (Admin Login)</span>
+            <Link
+              href="/login"
+              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black py-2 px-4 rounded-xl shadow-md hover:scale-105 active:scale-95 transition-all border border-slate-800"
+            >
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              <span>🔑 چوونەژوورەوەی ئەدمین</span>
             </Link>
           )}
         </div>
       </header>
 
       {/* 🌟 2. TWO MAIN SECTIONS GRID: RIGHT = ATTENDANCE, LEFT = MODEL SEARCH */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
         {/* ----------------------------------------------------------------- */}
-        {/* 📸 RIGHT SIDE: ATTENDANCE TERMINAL (پەڕەی ئامادەبوون) */}
+        {/* 📸 RIGHT SIDE: ATTENDANCE TERMINAL (Windows 11 Biometric Card) */}
         {/* ----------------------------------------------------------------- */}
-        <section className="panel-fluent space-y-3">
-          <div className="panel-header-fluent flex items-center justify-between">
-            <h2 className="text-xs font-black text-white flex items-center gap-1.5">
-              <Camera className="w-4 h-4 text-amber-300" />
-              <span>پەڕەی ئامادەبوونی کارمەندان (Attendance Selfie Terminal)</span>
-            </h2>
-            <span className="text-[10px] font-mono bg-white/20 backdrop-blur-md text-white px-2 py-0.5 rounded-full">HR SYSTEM</span>
+        <section className="lg:col-span-6 bg-white/85 backdrop-blur-2xl border border-slate-200/90 rounded-3xl p-4 sm:p-6 shadow-xl shadow-slate-200/60 space-y-4 relative overflow-hidden">
+          
+          {/* Subtle Ambient Glow */}
+          <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-emerald-400/10 via-teal-400/5 to-transparent rounded-full pointer-events-none blur-2xl" />
+
+          {/* Section Header */}
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+                <Fingerprint className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h2 className="text-sm font-black text-slate-900">
+                  تێرمیناڵی ئامادەبوونی کارمەندان
+                </h2>
+                <p className="text-[11px] text-slate-500 font-semibold">
+                  ناسنامەی پەنجەمۆر + پشکنینی ڕاستەوخۆی ٥٠ مەتر
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-black tracking-wider bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full border border-slate-200 shadow-sm">
+              GEOFENCE 50M
+            </span>
           </div>
 
-          <div className="p-3.5 space-y-3">
+          {attMessage && (
+            <div
+              className={`p-3 text-xs font-black rounded-2xl border shadow-sm flex items-center gap-2 animate-in fade-in slide-in-from-top-2 ${
+                attMessage.success
+                  ? 'bg-emerald-50 text-emerald-900 border-emerald-300 shadow-emerald-100'
+                  : 'bg-rose-50 text-rose-900 border-rose-300 shadow-rose-100'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 flex-shrink-0" />
+              <span>{attMessage.text}</span>
+            </div>
+          )}
 
-            {attMessage && (
-              <div className={`p-2.5 text-xs font-bold rounded-xl border ${attMessage.success ? 'bg-emerald-50 text-emerald-900 border-emerald-300' : 'bg-rose-50 text-rose-900 border-rose-300'}`}>
-                {attMessage.text}
+          {/* 📍 GPS GEOFENCE RADAR PILL (50 METERS) */}
+          <div
+            className={`p-3.5 rounded-2xl border transition-all duration-300 flex items-center justify-between gap-3 shadow-sm ${
+              distanceMeters !== null && distanceMeters <= 50
+                ? 'bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-100/60 border-emerald-300 text-emerald-950'
+                : distanceMeters !== null
+                ? 'bg-gradient-to-r from-rose-50 via-red-50 to-rose-100/60 border-rose-300 text-rose-950'
+                : 'bg-slate-50 border-slate-200 text-slate-800'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${
+                  distanceMeters !== null && distanceMeters <= 50
+                    ? 'bg-emerald-500 animate-ping'
+                    : 'bg-rose-500'
+                }`}
+              >
+                <div className="w-2 h-2 rounded-full bg-white" />
               </div>
-            )}
-
-            {/* GPS Geofence Check */}
-            <div className="flex items-center justify-between p-2.5 bg-white/80 border border-slate-200 rounded-xl text-xs shadow-sm">
-              <div className="flex items-center gap-1.5 font-bold">
-                <MapPin className="w-4 h-4 text-amber-600" />
-                <span>شوێنی جی پی ئێسی مۆبایل:</span>
-                <span className="font-mono text-blue-900">{gpsStatus || 'نەپشکنراوە'}</span>
+              <div>
+                <div className="flex items-center gap-1.5 text-xs font-black">
+                  <MapPin className="w-4 h-4 text-emerald-700" />
+                  <span>دۆخی لۆکەیشن لە کۆمپانیا:</span>
+                  <span className="font-mono">
+                    {distanceMeters !== null && distanceMeters <= 50
+                      ? `🟢 لەناو سنووری ڕێگەپێدراو (${distanceMeters}m)`
+                      : distanceMeters !== null
+                      ? `🔴 دەرەوەی بازنە (${distanceMeters}m > 50m)`
+                      : gpsStatus || 'نەپشکنراوە'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+                  {distanceMeters !== null && distanceMeters <= 50
+                    ? 'چێک‌ئین کراوەیە و ئامادەیە بۆ تۆمارکردن'
+                    : 'دوگمەکان قوفڵکراون تا دەگەیتە ناو بازنەی ٥٠ مەتری کۆمپانیا'}
+                </p>
               </div>
-              <button type="button" onClick={requestLocation} className="btn-fluent text-[11px] rounded-lg">
-                <RefreshCw className="w-3 h-3 text-slate-700" />
-                <span>پشکنینی لۆکەیشن</span>
-              </button>
             </div>
 
-            {/* Form Fields */}
-            <div className="space-y-3 text-xs font-bold">
-              <div>
-                <label className="block text-slate-800 mb-1">١. ناوی سیانی خۆت هەڵبژێرە:</label>
-                <select
-                  value={selectedEmpId}
-                  onChange={(e) => setSelectedEmpId(e.target.value)}
-                  className="input-fluent w-full font-bold text-slate-900 rounded-lg"
+            <button
+              type="button"
+              disabled={gpsLoading}
+              onClick={requestLocation}
+              className="px-3 py-1.5 bg-white/90 hover:bg-white border border-slate-300/80 rounded-xl text-[11px] font-bold text-slate-800 shadow-sm hover:scale-105 active:scale-95 transition-all flex items-center gap-1 flex-shrink-0"
+            >
+              <RefreshCw className={`w-3 h-3 text-slate-600 ${gpsLoading ? 'animate-spin' : ''}`} />
+              <span>{gpsLoading ? 'چاوەڕێ...' : 'نوێکردنەوە'}</span>
+            </button>
+          </div>
+
+          {/* 👤 STEP 1: EMPLOYEE SELECTION */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-black text-slate-800">
+              ١. ناوی سیانی خۆت هەڵبژێرە:
+            </label>
+            <select
+              value={selectedEmpId}
+              onChange={(e) => setSelectedEmpId(e.target.value)}
+              className="w-full py-3 px-3.5 bg-slate-50/90 hover:bg-white focus:bg-white border border-slate-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 rounded-2xl text-xs font-black text-slate-900 shadow-inner transition-all outline-none"
+            >
+              <option value="">-- ناوی خۆت لەم لیستە هەڵبژێرە --</option>
+              {employees
+                .filter((e) => e.status !== 'resigned' && e.isActive !== false)
+                .map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.fullName3Part || emp.name} ({emp.role || 'کارمەند'})
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          {/* 👆 STEP 2: HERO BIOMETRIC (FINGERPRINT / FACE ID) ACTIONS */}
+          {selectedEmpId && (
+            <div className="space-y-3 pt-1">
+              
+              {/* Biometric Status Header Pill */}
+              <div className="flex items-center justify-between px-3 py-2 bg-slate-100/80 rounded-xl border border-slate-200">
+                <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                  <Fingerprint className="w-4 h-4 text-emerald-600" />
+                  <span>ناسنامەی پەنجەمۆری مۆبایل:</span>
+                </span>
+                <span
+                  className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shadow-sm ${
+                    hasBiometric
+                      ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
+                      : 'bg-amber-100 text-amber-950 border-amber-300'
+                  }`}
                 >
-                  <option value="">-- ناوی خۆت هەڵبژێرە --</option>
-                  {employees.filter(e => e.status !== 'resigned' && e.isActive !== false).map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.fullName3Part || emp.name} ({emp.role || 'کارمەند'})
-                    </option>
-                  ))}
-                </select>
+                  {hasBiometric ? '✅ پەنجەمۆر بەستراوە' : '⚠️ پەنجەمۆر نەبەستراوە'}
+                </span>
               </div>
 
-              {/* 👆 BIOMETRIC FINGERPRINT / FACE ID FAST PASS */}
-              {selectedEmpId && (
-                <div className="p-3 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-100/70 rounded-xl border border-emerald-300 space-y-2.5 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-emerald-950 flex items-center gap-1.5">
-                      <Fingerprint className="w-4 h-4 text-emerald-700 animate-pulse" />
-                      <span>چێک‌ئین بە پەنجەمۆر / Face ID</span>
-                    </span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${hasBiometric ? 'bg-emerald-200 text-emerald-950 border-emerald-400' : 'bg-amber-100 text-amber-900 border-amber-300'}`}>
-                      {hasBiometric ? '✅ پەنجەمۆر کارایە' : '⚠️ نەبەستراوە'}
-                    </span>
+              {/* ACTION A: IF BIOMETRICS PAIRED -> SHOW HUGE WINDOWS 11 TOUCH BUTTONS */}
+              {hasBiometric ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    
+                    {/* HUGE CHECK IN BUTTON */}
+                    <button
+                      type="button"
+                      disabled={biometricLoading || (distanceMeters !== null && distanceMeters > 50)}
+                      onClick={() => handleBiometricAuth('Check In')}
+                      className={`relative group overflow-hidden py-4 px-5 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-white transition-all duration-300 shadow-xl ${
+                        distanceMeters !== null && distanceMeters > 50
+                          ? 'bg-slate-300 border border-slate-400 text-slate-500 cursor-not-allowed opacity-60'
+                          : 'bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 shadow-emerald-600/30 hover:shadow-emerald-600/50 hover:scale-[1.02] active:scale-95'
+                      }`}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
+                        <Fingerprint className="w-6 h-6 text-white" />
+                      </div>
+                      <span className="text-sm font-black tracking-wide">
+                        {biometricLoading ? 'چاوەڕێی پەنجەمۆر...' : '📥 چێک‌ئین (Check In)'}
+                      </span>
+                      <span className="text-[10px] text-emerald-100/90 font-bold">
+                        {distanceMeters !== null && distanceMeters > 50
+                          ? 'قوفڵە بەهۆی دووری لە کۆمپانیا'
+                          : 'تەنها پەنجە دابنێ لەسەر مۆبایل'}
+                      </span>
+                    </button>
+
+                    {/* HUGE CHECK OUT BUTTON */}
+                    <button
+                      type="button"
+                      disabled={biometricLoading || (distanceMeters !== null && distanceMeters > 50)}
+                      onClick={() => handleBiometricAuth('Check Out')}
+                      className={`relative group overflow-hidden py-4 px-5 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-white transition-all duration-300 shadow-xl ${
+                        distanceMeters !== null && distanceMeters > 50
+                          ? 'bg-slate-300 border border-slate-400 text-slate-500 cursor-not-allowed opacity-60'
+                          : 'bg-gradient-to-br from-rose-600 via-red-600 to-pink-700 hover:from-rose-500 hover:to-red-600 shadow-rose-600/30 hover:shadow-rose-600/50 hover:scale-[1.02] active:scale-95'
+                      }`}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
+                        <Fingerprint className="w-6 h-6 text-white" />
+                      </div>
+                      <span className="text-sm font-black tracking-wide">
+                        {biometricLoading ? 'چاوەڕێی پەنجەمۆر...' : '📤 چێک‌ئاوت (Check Out)'}
+                      </span>
+                      <span className="text-[10px] text-rose-100/90 font-bold">
+                        {distanceMeters !== null && distanceMeters > 50
+                          ? 'قوفڵە بەهۆی دووری لە کۆمپانیا'
+                          : 'تۆمارکردنی کاتی دەرچوون'}
+                      </span>
+                    </button>
+
                   </div>
 
-                  {hasBiometric ? (
-                    <div className="space-y-1.5">
-                      <p className="text-[11px] text-emerald-900 font-bold">
-                        پەنجەمۆری مۆبایلەکەت بناسێنە بۆ چێک‌ئینی دەستبەجێ:
-                      </p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          disabled={biometricLoading}
-                          onClick={() => handleBiometricAuth('Check In')}
-                          className="btn-fluent-primary py-2.5 text-xs font-black flex items-center justify-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white shadow-md transition-transform hover:scale-[1.02]"
-                        >
-                          <Fingerprint className="w-4 h-4 text-amber-300" />
-                          <span>{biometricLoading ? 'چاوەڕێ بە...' : '👆 هاتن (Check In)'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={biometricLoading}
-                          onClick={() => handleBiometricAuth('Check Out')}
-                          className="btn-fluent-danger py-2.5 text-xs font-black flex items-center justify-center gap-1.5 rounded-xl bg-rose-700 hover:bg-rose-800 text-white shadow-md transition-transform hover:scale-[1.02]"
-                        >
-                          <Fingerprint className="w-4 h-4 text-amber-300" />
-                          <span>{biometricLoading ? 'چاوەڕێ بە...' : '👆 دەرچوون (Check Out)'}</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5 bg-white/80 p-2 rounded-lg border border-emerald-200">
-                      <p className="text-[10px] text-emerald-950 font-semibold leading-normal">
-                        بۆ ئەوەی لەم مۆبایلەوە بە پەنجەمۆر یان Face ID چێک‌ئین بکەیت، کۆدی PIN لە خوارەوە بنووسە و کلیک لەم دوگمەیە بکە:
-                      </p>
-                      <button
-                        type="button"
-                        disabled={biometricLoading}
-                        onClick={handleRegisterBiometric}
-                        className="w-full btn-fluent py-2 text-xs font-bold flex items-center justify-center gap-1.5 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white border-emerald-900 shadow-sm"
-                      >
-                        <Smartphone className="w-4 h-4 text-amber-300" />
-                        <span>{biometricLoading ? 'تکایە پەنجە لەسەر مۆبایل دابنێ...' : '🔗 بەستنەوەی پەنجەمۆری ئەم مۆبایلە'}</span>
-                      </button>
+                  {distanceMeters !== null && distanceMeters > 50 && (
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-xs font-black flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                      <span>
+                        ⚠️ ناتوانیت چێک‌ئین بکەیت چونكە ({distanceMeters}m) لە چەقی کۆمپانیا دووریت. تکایە وەرە ناو بازنەی ٥٠ مەتر.
+                      </span>
                     </div>
                   )}
                 </div>
+              ) : (
+                /* ACTION B: IF NOT PAIRED -> SHOW PAIRING REGISTRATION CARD */
+                <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-slate-50 border-2 border-dashed border-emerald-300 p-4 rounded-2xl space-y-3 shadow-sm">
+                  <div>
+                    <h3 className="text-xs font-black text-emerald-950 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-emerald-600" />
+                      <span>بەستنەوەی پەنجەمۆری ئەم مۆبایلە بۆ یەکەمجار</span>
+                    </h3>
+                    <p className="text-[11px] text-slate-600 font-bold mt-1 leading-relaxed">
+                      بۆ ئەوەی مۆبایلەکەت وەک ناسنامەی تایبەتی خۆت بناسرێت، کۆدی PIN بنووسە و پەنجەمۆر یان Face ID لەسەر شاشەکە چالاک بکە:
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <input
+                      type="password"
+                      value={pinCode}
+                      onChange={(e) => setPinCode(e.target.value)}
+                      placeholder="کۆدی نهێنی PINـەکەت لێرە بنووسە..."
+                      className="w-full py-2.5 px-3.5 bg-white border border-emerald-300 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 rounded-xl text-xs font-mono text-center tracking-widest text-slate-900 shadow-inner outline-none font-black"
+                    />
+
+                    <button
+                      type="button"
+                      disabled={biometricLoading}
+                      onClick={handleRegisterBiometric}
+                      className="w-full py-3 px-4 bg-gradient-to-r from-emerald-700 to-teal-800 hover:from-emerald-800 hover:to-teal-900 text-white rounded-xl text-xs font-black shadow-lg shadow-emerald-700/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Smartphone className="w-4 h-4 text-amber-300" />
+                      <span>
+                        {biometricLoading ? 'تکایە پەنجە دابنێ لەسەر مۆبایل...' : '🔗 بەستنەوە و تۆمارکردنی پەنجەمۆر'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
               )}
 
-              <div className="relative flex py-1 items-center">
-                <div className="flex-grow border-t border-slate-300"></div>
-                <span className="flex-shrink mx-2 text-[10px] text-slate-500 font-bold">یان شێوازی ئاسایی (PIN و سێلفی)</span>
-                <div className="flex-grow border-t border-slate-300"></div>
-              </div>
+              {/* 📷 COLLAPSIBLE ACCORDION FOR MANUAL FALLBACK (PIN + SELFIE) */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowManualFallback(!showManualFallback)}
+                  className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200/80 rounded-xl text-[11px] font-bold text-slate-700 flex items-center justify-between transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-slate-600" />
+                    <span>شێوازی پێشووی ئامادەبوون (کۆدی PIN و کامێرای سێلفی)</span>
+                  </span>
+                  <span>{showManualFallback ? '▲ داشخستن' : '▼ کردنەوە'}</span>
+                </button>
 
-              <div>
-                <label className="block text-slate-800 mb-1">٢. کۆدی PIN (پاسۆرد):</label>
-                <input
-                  type="password"
-                  value={pinCode}
-                  onChange={(e) => setPinCode(e.target.value)}
-                  placeholder="کۆدی 1234..."
-                  className="input-classic w-full font-mono text-center tracking-widest text-sm"
-                />
-              </div>
+                {showManualFallback && (
+                  <div className="mt-2.5 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 animate-in fade-in">
+                    <div>
+                      <label className="block text-slate-800 mb-1 text-xs font-black">کۆدی PIN:</label>
+                      <input
+                        type="password"
+                        value={pinCode}
+                        onChange={(e) => setPinCode(e.target.value)}
+                        placeholder="کۆدی 1234..."
+                        className="w-full py-2 px-3 bg-white border border-slate-300 rounded-xl font-mono text-center text-xs tracking-widest outline-none font-bold"
+                      />
+                    </div>
 
-              {/* Camera Area */}
-              <div className="space-y-1 text-center bg-slate-50 p-3 border border-slate-300">
-                <label className="block text-slate-800 mb-1 text-right">٣. فۆتۆی سێلفی ئامادەبوون:</label>
-                {cameraActive ? (
-                  <div className="space-y-2">
-                    <video ref={videoRef} autoPlay playsInline className="w-full h-44 object-cover border border-slate-400 bg-black" />
-                    <button type="button" onClick={capturePhoto} className="btn-classic-primary w-full py-1.5 text-xs font-black">
-                      📸 گرتنی فۆتۆی سێلفی
-                    </button>
+                    {/* Camera Area */}
+                    <div className="space-y-1.5 text-center bg-white p-3 rounded-xl border border-slate-200">
+                      <label className="block text-slate-800 text-xs font-black text-right">فۆتۆی سێلفی:</label>
+                      {cameraActive ? (
+                        <div className="space-y-2">
+                          <video ref={videoRef} autoPlay playsInline className="w-full h-40 object-cover rounded-xl border border-slate-300 bg-black" />
+                          <button type="button" onClick={capturePhoto} className="w-full py-2 bg-emerald-700 text-white rounded-xl text-xs font-black">
+                            📸 گرتنی فۆتۆی سێلفی
+                          </button>
+                        </div>
+                      ) : capturedSelfie ? (
+                        <div className="space-y-1.5">
+                          <img src={capturedSelfie} alt="Captured Selfie" className="w-full h-32 object-cover rounded-xl border border-slate-300" />
+                          <button type="button" onClick={startCamera} className="w-full py-1.5 bg-slate-100 text-slate-700 rounded-xl text-[10px] font-bold">
+                            🔄 فۆتۆیەکی تر بگرە
+                          </button>
+                        </div>
+                      ) : (
+                        <button type="button" onClick={startCamera} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold">
+                          📷 بەگەڕخستنی کامێرا
+                        </button>
+                      )}
+                      <canvas ref={canvasRef} className="hidden" />
+                    </div>
+
+                    {/* Fallback Submit Buttons */}
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleCheckInOrOut('Check In')}
+                        className="py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black shadow-md"
+                      >
+                        📥 هاتن بە سێلفی
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCheckInOrOut('Check Out')}
+                        className="py-2.5 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-xs font-black shadow-md"
+                      >
+                        📤 دەرچوون بە سێلفی
+                      </button>
+                    </div>
                   </div>
-                ) : capturedSelfie ? (
-                  <div className="space-y-1">
-                    <img src={capturedSelfie} alt="Captured Selfie" className="w-full h-36 object-cover border border-slate-400" />
-                    <button type="button" onClick={startCamera} className="btn-classic w-full text-[10px]">
-                      🔄 فۆتۆیەکی تر بگرە
-                    </button>
-                  </div>
-                ) : (
-                  <button type="button" onClick={startCamera} className="btn-classic w-full text-xs py-2.5 font-bold">
-                    📷 بەگەڕخستنی کامیرای مۆبایل / کۆمپیوتەر
-                  </button>
                 )}
-                <canvas ref={canvasRef} className="hidden" />
               </div>
-            </div>
 
-            {/* Attendance Submit Buttons */}
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-300">
-              <button
-                type="button"
-                onClick={() => handleCheckInOrOut('Check In')}
-                className="btn-classic-primary py-2 px-4 text-xs font-black"
-              >
-                📥 تۆمارکردنی هاتن (Check In)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleCheckInOrOut('Check Out')}
-                className="btn-classic-danger py-2 px-4 text-xs font-black"
-              >
-                📤 تۆمارکردنی دەرچوون (Check Out)
-              </button>
             </div>
+          )}
 
-          </div>
         </section>
 
         {/* ----------------------------------------------------------------- */}
-        {/* 🔍 LEFT SIDE: MODEL SEARCH CATALOG (پەڕەی گەڕان بۆ مۆدێل) */}
+        {/* 🔍 LEFT SIDE: MODEL SEARCH CATALOG (Windows 11 Catalog Panel) */}
         {/* ----------------------------------------------------------------- */}
-        <section className="panel-classic space-y-3">
-          <div className="panel-header-classic flex items-center justify-between">
-            <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-              <Search className="w-4 h-4 text-emerald-800" />
-              <span>پەڕەی گەڕان بۆ مۆدێل و کاڵاکانی کۆگا (Model & Stock Search)</span>
-            </h2>
-            <span className="text-[10px] font-mono bg-emerald-800 text-white px-1.5 py-0.2">CATALOG</span>
+        <section className="lg:col-span-6 bg-white/85 backdrop-blur-2xl border border-slate-200/90 rounded-3xl p-4 sm:p-6 shadow-xl shadow-slate-200/60 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+                <Search className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h2 className="text-sm font-black text-slate-900">
+                  گەڕان بۆ مۆدێل و کاڵاکانی کۆگا
+                </h2>
+                <p className="text-[11px] text-slate-500 font-semibold">
+                  بەردەستبوونی مۆدێلەکان و کۆگای سەرەکی
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-black bg-blue-50 text-blue-800 px-2.5 py-1 rounded-full border border-blue-200">
+              {filteredItems.length} دانە
+            </span>
           </div>
 
-          <div className="p-3 space-y-3">
+          <div className="space-y-3">
 
             {/* Search Controls */}
-            <div className="p-2 bg-slate-100 border border-slate-300 space-y-2">
-              <div className="flex items-center gap-2">
-                <Search className="w-4 h-4 text-slate-600" />
+            <div className="p-3 bg-slate-50/90 border border-slate-200/90 rounded-2xl space-y-2.5 shadow-inner">
+              <div className="flex items-center gap-2.5 bg-white p-2.5 rounded-xl border border-slate-300/80 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10 shadow-sm transition-all">
+                <Search className="w-4 h-4 text-slate-500 flex-shrink-0" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="ناوی مۆدێل، کۆدی کاڵا، یان پۆلێن بنووسە..."
-                  className="input-classic w-full font-bold text-xs"
+                  className="w-full text-xs font-bold text-slate-900 bg-transparent outline-none"
                 />
               </div>
 
               {/* Category Filter Pills */}
-              <div className="flex flex-wrap items-center gap-1 text-[11px]">
-                <span className="text-slate-600 font-bold ml-1">پۆلێن:</span>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-slate-500 font-bold ml-1 text-[11px]">پۆلێن:</span>
                 {['all', 'نەخشەی رەفە', 'مۆدێلی ئاشڵی', 'مەواد', 'کاڵای فرۆشراو'].map((cat) => (
                   <button
                     key={cat}
                     type="button"
                     onClick={() => setSelectedCategoryFilter(cat)}
-                    className={`px-2 py-0.5 text-[10px] font-bold border cursor-pointer ${
+                    className={`px-2.5 py-1 text-[11px] font-black rounded-xl border transition-all ${
                       selectedCategoryFilter === cat
-                        ? 'bg-emerald-800 text-white border-emerald-900'
-                        : 'bg-white text-slate-800 border-slate-300 hover:bg-slate-50'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
                     {cat === 'all' ? 'تێکڕا' : cat}
