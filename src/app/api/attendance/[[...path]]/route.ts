@@ -1146,12 +1146,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if (pathStr === 'logs' && method === 'POST') {
       const body = await req.json();
-      const { employeeId, userId, name, userName, type, log_type, time, selfieUrl, distance } = body;
+      const { employeeId, userId, name, userName, date, log_date, time, log_time_str, type, log_type, selfieUrl, distance } = body;
 
       const empId = employeeId || userId || 'emp';
       const empName = name || userName || 'Employee';
-      const dateStr = time?.split(' ')[0] || new Date().toISOString().split('T')[0];
-      const timeStr = time?.split(' ')[1]?.slice(0, 5) || new Date().toTimeString().slice(0, 5);
+      const dateStr = date || log_date || (time && time.includes(' ') ? time.split(' ')[0] : null) || new Date().toISOString().split('T')[0];
+      const timeStr = log_time_str || (time && time.includes(' ') ? time.split(' ')[1]?.slice(0, 5) : time?.slice(0, 5)) || new Date().toTimeString().slice(0, 5);
       const isCheckOut = type?.includes('Out') || type?.includes('دەرچوون') || log_type === 'Check Out';
 
       let publicSelfieUrl = selfieUrl;
@@ -1167,44 +1167,72 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
       const logRecordId = `log-${empId}-${dateStr}-${isCheckOut ? 'out' : 'in'}-${Date.now().toString().slice(-4)}`;
 
-      // 1. Insert/Upsert into `attendance` table in Supabase (Primary Guaranteed Table)
+      // 1. Fetch existing record for this employee on this date
       const rowId = `att-${empId}-${dateStr}`;
+      const { data: existingRecord } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('user_id', empId)
+        .eq('date', dateStr)
+        .maybeSingle();
+
+      // Enforce Rule: Only ONE Check-In and ONE Check-Out per day
+      if (!isCheckOut) {
+        if (existingRecord?.check_in_time) {
+          return NextResponse.json({
+            success: false,
+            alreadyChecked: true,
+            message: `⚠️ تۆ پێشتر چێک‌ئین (هاتن)ت بۆ ئەمڕۆ لە کاتژمێر (${existingRecord.check_in_time}) تۆمار کردووە! تەنها ڕۆژی ١ جار دەتوانیت چێک‌ئین بکەیت.`,
+            error: `⚠️ تۆ پێشتر چێک‌ئینت بۆ ئەمڕۆ تۆمار کردووە (${existingRecord.check_in_time})`
+          }, { status: 400 });
+        }
+      } else {
+        if (!existingRecord?.check_in_time) {
+          return NextResponse.json({
+            success: false,
+            message: '⚠️ ناتوانیت چێک‌ئاوت بکەیت پێش ئەوەی چێک‌ئین (هاتن) بکەیت!',
+            error: '⚠️ سەرەتا دەبێت چێک‌ئین بکەیت پێش چێک‌ئاوت'
+          }, { status: 400 });
+        }
+        if (existingRecord?.check_out_time) {
+          return NextResponse.json({
+            success: false,
+            alreadyChecked: true,
+            message: `⚠️ تۆ پێشتر چێک‌ئاوت (دەرچوون)ت بۆ ئەمڕۆ لە کاتژمێر (${existingRecord.check_out_time}) تۆمار کردووە! تەنها ڕۆژی ١ جار دەتوانیت چێک‌ئاوت بکەیت.`,
+            error: `⚠️ تۆ پێشتر چێک‌ئاوتت بۆ ئەمڕۆ تۆمار کردووە (${existingRecord.check_out_time})`
+          }, { status: 400 });
+        }
+      }
+
+      // 2. Insert/Upsert into `attendance` table in Supabase (Primary Guaranteed Table)
       let upsertPayload: any = {
-        id: rowId,
+        id: existingRecord?.id || rowId,
         user_id: empId,
         user_name: empName,
         date: dateStr,
         status: 'Present'
       };
 
+      if (existingRecord) {
+        if (existingRecord.check_in) upsertPayload.check_in = existingRecord.check_in;
+        if (existingRecord.check_in_time) upsertPayload.check_in_time = existingRecord.check_in_time;
+        if (existingRecord.check_in_selfie) upsertPayload.check_in_selfie = existingRecord.check_in_selfie;
+        if (existingRecord.check_in_address) upsertPayload.check_in_address = existingRecord.check_in_address;
+      }
+
+      if (isCheckOut) {
+        upsertPayload.check_out = new Date().toISOString();
+        upsertPayload.check_out_time = timeStr;
+        upsertPayload.check_out_selfie = publicSelfieUrl || null;
+        upsertPayload.check_out_address = distance || 'داخل کۆمپانیا';
+      } else {
+        upsertPayload.check_in = new Date().toISOString();
+        upsertPayload.check_in_time = timeStr;
+        upsertPayload.check_in_selfie = publicSelfieUrl || null;
+        upsertPayload.check_in_address = distance || 'داخل کۆمپانیا';
+      }
+
       try {
-        const { data: existingRecord } = await supabase
-          .from('attendance')
-          .select('*')
-          .eq('user_id', empId)
-          .eq('date', dateStr)
-          .maybeSingle();
-
-        if (existingRecord?.id) {
-          upsertPayload.id = existingRecord.id;
-          if (existingRecord.check_in) upsertPayload.check_in = existingRecord.check_in;
-          if (existingRecord.check_in_time) upsertPayload.check_in_time = existingRecord.check_in_time;
-          if (existingRecord.check_in_selfie) upsertPayload.check_in_selfie = existingRecord.check_in_selfie;
-          if (existingRecord.check_in_address) upsertPayload.check_in_address = existingRecord.check_in_address;
-        }
-
-        if (isCheckOut) {
-          upsertPayload.check_out = new Date().toISOString();
-          upsertPayload.check_out_time = timeStr;
-          upsertPayload.check_out_selfie = publicSelfieUrl || null;
-          upsertPayload.check_out_address = distance || 'داخل کۆمپانیا';
-        } else {
-          upsertPayload.check_in = new Date().toISOString();
-          upsertPayload.check_in_time = timeStr;
-          upsertPayload.check_in_selfie = publicSelfieUrl || null;
-          upsertPayload.check_in_address = distance || 'داخل کۆمپانیا';
-        }
-
         const { error: attErr } = await supabase.from('attendance').upsert(upsertPayload);
         if (attErr) {
           console.error('Error upserting to attendance table:', attErr);
@@ -1213,7 +1241,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         console.error('Exception upserting to attendance:', attEx);
       }
 
-      // 2. Also try inserting into `attendance_logs` table if it exists
+      // 3. Also try inserting into `attendance_logs` table if it exists
       try {
         await supabase.from('attendance_logs').insert({
           id: logRecordId,
@@ -1227,7 +1255,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           created_at: new Date().toISOString()
         });
       } catch (logEx) {
-        // Safe catch if attendance_logs table doesn't exist
         console.warn('attendance_logs table insert skipped:', logEx);
       }
 
@@ -1236,6 +1263,8 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         record: { 
           ...body, 
           id: logRecordId,
+          date: dateStr,
+          time: `${dateStr} ${timeStr}`,
           selfieUrl: publicSelfieUrl, 
           checkInSelfie: !isCheckOut ? publicSelfieUrl : undefined,
           checkOutSelfie: isCheckOut ? publicSelfieUrl : undefined

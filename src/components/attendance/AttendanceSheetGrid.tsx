@@ -12,8 +12,8 @@ interface AttendanceSheetGridProps {
 }
 
 export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, onDeleteLog }: AttendanceSheetGridProps) {
-  // Selected Month (default '2026-08')
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-08');
+  // Selected Month (default to current dynamic month)
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'));
   // Selected Employee filter ('all' or emp.id)
   const [selectedEmpFilter, setSelectedEmpFilter] = useState<string>('all');
   
@@ -48,16 +48,18 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
 
     return gridLogs.filter(log => {
       // Date match
-      const logDate = log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || '';
+      const logDate = log.date || (log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || '');
       if (logDate !== targetDateStr) return false;
 
       // Employee match
       const isEmpMatch = 
         log.employeeId === emp.id || 
         log.userId === emp.id || 
+        (emp.employeeId && log.employeeId === `EMP-${emp.employeeId}`) ||
         log.name === emp.fullName3Part || 
         log.name === emp.name ||
-        log.userName === emp.name;
+        log.userName === emp.name ||
+        log.userName === emp.fullName3Part;
 
       return isEmpMatch;
     });

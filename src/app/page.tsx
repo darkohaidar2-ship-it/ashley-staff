@@ -451,7 +451,15 @@ export default function PublicTerminalPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newLog),
     })
-      .then(() => {
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) {
+          setAttMessage({
+            text: data.message || data.error || '⚠️ ناتوانرێت ئەم ئامادەبوونە دووبارە تۆمار بکرێت',
+            success: false,
+          });
+          return;
+        }
         setAttMessage({
           text: thankMsg,
           success: true,
