@@ -715,6 +715,62 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       });
     }
 
+    // ----------------------------------------
+    // Company Geofence Location Sync (Global across all devices)
+    // ----------------------------------------
+    if (pathStr === 'location' && method === 'GET') {
+      const { data: wh } = await supabase
+        .from('warehouses')
+        .select('*')
+        .order('id', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (wh) {
+        return NextResponse.json({
+          name: wh.name || 'کۆمپانیای سەرەکی ئاشڵی',
+          lat: parseFloat(wh.lat) || 35.5571,
+          lng: parseFloat(wh.lng) || 45.4352,
+          radiusMeters: parseInt(wh.radius) || 50,
+        });
+      }
+
+      return NextResponse.json({
+        name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Company Base)',
+        lat: 35.5571,
+        lng: 45.4352,
+        radiusMeters: 50,
+      });
+    }
+
+    if (pathStr === 'location' && method === 'POST') {
+      const { name, lat, lng, radiusMeters } = await req.json();
+      if (!lat || !lng) return NextResponse.json({ error: 'lat and lng required' }, { status: 400 });
+
+      const { data: existing } = await supabase.from('warehouses').select('id').limit(1).maybeSingle();
+      if (existing) {
+        await supabase
+          .from('warehouses')
+          .update({
+            name: name || 'کۆمپانیای سەرەکی ئاشڵی',
+            lat: parseFloat(lat),
+            lng: parseFloat(lng),
+            radius: parseInt(radiusMeters) || 50,
+          })
+          .eq('id', existing.id);
+      } else {
+        await supabase.from('warehouses').insert({
+          id: 'main-factory-location',
+          name: name || 'کۆمپانیای سەرەکی ئاشڵی',
+          lat: parseFloat(lat),
+          lng: parseFloat(lng),
+          radius: parseInt(radiusMeters) || 50,
+        });
+      }
+
+      return NextResponse.json({ success: true, location: { name, lat, lng, radiusMeters: radiusMeters || 50 } });
+    }
+
     if (pathStr === 'admin/users/update-role' && method === 'POST') {
       const { userId, role } = await req.json();
       if (!userId || !role) return NextResponse.json({ error: 'userId and role required' }, { status: 400 });

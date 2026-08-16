@@ -58,13 +58,30 @@ export default function MainPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Factory Geofence Base Location (50m Radius)
-  const factoryLocation = settings?.factoryLocation || {
-    name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Company Base)',
-    lat: 35.5571,
-    lng: 45.4352,
-    radiusMeters: 50,
-  };
+  // Factory Geofence Base Location (Synced from Supabase)
+  const [syncedLocation, setSyncedLocation] = useState<{
+    name: string;
+    lat: number;
+    lng: number;
+    radiusMeters: number;
+  }>({
+    name: settings?.factoryLocation?.name || 'کۆمپانیای سەرەکی ئاشڵی (Ashley Company Base)',
+    lat: settings?.factoryLocation?.lat || 35.5571,
+    lng: settings?.factoryLocation?.lng || 45.4352,
+    radiusMeters: settings?.factoryLocation?.radiusMeters || 50,
+  });
+
+  // Global Realtime Location Sync from Supabase
+  useEffect(() => {
+    fetch('/api/attendance/location')
+      .then((res) => res.json())
+      .then((loc) => {
+        if (loc?.lat && loc?.lng) {
+          setSyncedLocation(loc);
+        }
+      })
+      .catch((err) => console.error('Error fetching company location:', err));
+  }, []);
 
   // --- Attendance State (Right Side) ---
   const [selectedEmpId, setSelectedEmpId] = useState('');
@@ -133,9 +150,13 @@ export default function MainPage() {
       (pos) => {
         const uLat = pos.coords.latitude;
         const uLng = pos.coords.longitude;
-        const dist = calculateDistanceMeters(uLat, uLng, factoryLocation.lat, factoryLocation.lng);
+        const targetLat = syncedLocation.lat || 35.5571;
+        const targetLng = syncedLocation.lng || 45.4352;
+        const radius = syncedLocation.radiusMeters || 50;
+
+        const dist = calculateDistanceMeters(uLat, uLng, targetLat, targetLng);
         setDistanceMeters(dist);
-        const inside = dist <= 50;
+        const inside = dist <= radius;
         setGpsStatus(inside ? `ناو سنووری کۆمپانیا (${dist}m)` : `دەرەوەی کۆمپانیا (${dist}m)`);
         setGpsLoading(false);
       },
@@ -149,7 +170,7 @@ export default function MainPage() {
 
   useEffect(() => {
     requestLocation();
-  }, []);
+  }, [syncedLocation]);
 
   // Start Camera
   const startCamera = async () => {
@@ -361,10 +382,23 @@ export default function MainPage() {
     const emp = employees.find((e) => e.id === selectedEmpId);
     if (!emp) return;
 
-    // 50m Location Geofence check
-    if (distanceMeters !== null && distanceMeters > 50) {
+    // Strict 1 Phone = 1 Employee Check
+    if (typeof window !== 'undefined') {
+      const registeredUser = localStorage.getItem('ashley_bio_registered_user');
+      if (registeredUser && registeredUser !== emp.id) {
+        setAttMessage({
+          text: `❌ ناتوانیت بۆ کارمەندێکی تر چێک‌ئین بکەیت! ئەم مۆبایلە تەنها تایبەتە بە هەژماری ئەو کارمەندەی پەنجەمۆری لەسەر چالاککراوە.`,
+          success: false,
+        });
+        return;
+      }
+    }
+
+    const radius = syncedLocation.radiusMeters || 50;
+    // Location Geofence check
+    if (distanceMeters !== null && distanceMeters > radius) {
       setAttMessage({
-        text: `⚠️ ناتوانیت چێک ئین بکەیت! دووریت لە کۆمپانیا (${distanceMeters} مەتر)ە و دەبێت کەمتر لە ٥٠ مەتر بێت.`,
+        text: `⚠️ ناتوانیت چێک ئین بکەیت! دووریت لە کۆمپانیا (${distanceMeters} مەتر)ە و دەبێت کەمتر لە ${radius} مەتر بێت.`,
         success: false,
       });
       return;
@@ -372,12 +406,32 @@ export default function MainPage() {
 
     try {
       setBiometricLoading(true);
-      const verified = await verifyBiometric(emp.id);
+
+      let credId = typeof window !== 'undefined' ? localStorage.getItem(`ashley_bio_${emp.id}`) : null;
+      if (!credId) {
+        const res = await fetch(`/api/attendance/biometrics/status?userId=${emp.id}`);
+        const data = await res.json();
+        credId = data?.credentialId || null;
+      }
+
+      if (!credId) {
+        setAttMessage({
+          text: `⚠️ تۆ هێشتا پەنجەمۆری ئەم مۆبایلەت بۆ (${emp.name}) نەبەستووەتەوە! تکایە سەرەتا بەستنەوەی پەنجەمۆر بکە.`,
+          success: false,
+        });
+        return;
+      }
+
+      // Strict Biometric Hardware Verification
+      const verified = await verifyBiometric(emp.id, credId);
       if (verified) {
-        submitAttendanceLog(type, emp, 'پەنجەمۆر (Biometric Fingerprint)');
+        submitAttendanceLog(type, emp, 'پەنجەمۆری تایبەتی مۆبایل (Hardware Biometrics)');
       }
     } catch (err: any) {
-      setAttMessage({ text: err.message || 'پەنجەمۆر نەناسرا یان هەڵوەشێنرایەوە', success: false });
+      setAttMessage({
+        text: err.message || '❌ پەنجەمۆر نەناسرا یان ئەم پەنجەمۆرە هی ئەم کارمەندە نییە!',
+        success: false,
+      });
     } finally {
       setBiometricLoading(false);
     }
@@ -402,10 +456,11 @@ export default function MainPage() {
       return;
     }
 
-    // 50m Location Geofence check
-    if (distanceMeters !== null && distanceMeters > 50) {
+    const radius = syncedLocation.radiusMeters || 50;
+    // Location Geofence check
+    if (distanceMeters !== null && distanceMeters > radius) {
       setAttMessage({
-        text: `⚠️ ناتوانیت چێک ئین بکەیت! دووریت لە کۆمپانیا (${distanceMeters} مەتر)ە و دەبێت کەمتر لە ٥٠ مەتر بێت.`,
+        text: `⚠️ ناتوانیت چێک ئین بکەیت! دووریت لە کۆمپانیا (${distanceMeters} مەتر)ە و دەبێت کەمتر لە ${radius} مەتر بێت.`,
         success: false,
       });
       return;
@@ -633,10 +688,10 @@ export default function MainPage() {
                     {/* HUGE CHECK IN BUTTON */}
                     <button
                       type="button"
-                      disabled={biometricLoading || (distanceMeters !== null && distanceMeters > 50)}
+                      disabled={biometricLoading || (distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50))}
                       onClick={() => handleBiometricAuth('Check In')}
                       className={`relative group overflow-hidden py-4 px-5 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-white transition-all duration-300 shadow-xl ${
-                        distanceMeters !== null && distanceMeters > 50
+                        distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
                           ? 'bg-slate-300 border border-slate-400 text-slate-500 cursor-not-allowed opacity-60'
                           : 'bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 shadow-emerald-600/30 hover:shadow-emerald-600/50 hover:scale-[1.02] active:scale-95'
                       }`}
@@ -648,7 +703,7 @@ export default function MainPage() {
                         {biometricLoading ? 'چاوەڕێی پەنجەمۆر...' : '📥 چێک‌ئین (Check In)'}
                       </span>
                       <span className="text-[10px] text-emerald-100/90 font-bold">
-                        {distanceMeters !== null && distanceMeters > 50
+                        {distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
                           ? 'قوفڵە بەهۆی دووری لە کۆمپانیا'
                           : 'تەنها پەنجە دابنێ لەسەر مۆبایل'}
                       </span>
@@ -657,10 +712,10 @@ export default function MainPage() {
                     {/* HUGE CHECK OUT BUTTON */}
                     <button
                       type="button"
-                      disabled={biometricLoading || (distanceMeters !== null && distanceMeters > 50)}
+                      disabled={biometricLoading || (distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50))}
                       onClick={() => handleBiometricAuth('Check Out')}
                       className={`relative group overflow-hidden py-4 px-5 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-white transition-all duration-300 shadow-xl ${
-                        distanceMeters !== null && distanceMeters > 50
+                        distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
                           ? 'bg-slate-300 border border-slate-400 text-slate-500 cursor-not-allowed opacity-60'
                           : 'bg-gradient-to-br from-rose-600 via-red-600 to-pink-700 hover:from-rose-500 hover:to-red-600 shadow-rose-600/30 hover:shadow-rose-600/50 hover:scale-[1.02] active:scale-95'
                       }`}
@@ -672,7 +727,7 @@ export default function MainPage() {
                         {biometricLoading ? 'چاوەڕێی پەنجەمۆر...' : '📤 چێک‌ئاوت (Check Out)'}
                       </span>
                       <span className="text-[10px] text-rose-100/90 font-bold">
-                        {distanceMeters !== null && distanceMeters > 50
+                        {distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
                           ? 'قوفڵە بەهۆی دووری لە کۆمپانیا'
                           : 'تۆمارکردنی کاتی دەرچوون'}
                       </span>
@@ -680,11 +735,11 @@ export default function MainPage() {
 
                   </div>
 
-                  {distanceMeters !== null && distanceMeters > 50 && (
+                  {distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50) && (
                     <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-xs font-black flex items-center gap-2">
                       <Lock className="w-4 h-4 text-rose-600 flex-shrink-0" />
                       <span>
-                        ⚠️ ناتوانیت چێک‌ئین بکەیت چونكە ({distanceMeters}m) لە چەقی کۆمپانیا دووریت. تکایە وەرە ناو بازنەی ٥٠ مەتر.
+                        ⚠️ ناتوانیت چێک‌ئین بکەیت چونكە ({distanceMeters}m) لە چەقی کۆمپانیا دووریت. تکایە وەرە ناو بازنەی {syncedLocation.radiusMeters || 50} مەتر.
                       </span>
                     </div>
                   )}

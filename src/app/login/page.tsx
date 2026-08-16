@@ -14,8 +14,8 @@ export default function AdminLoginPage() {
   const isRTL = language === 'ku';
 
   const [mounted, setMounted] = useState(false);
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('001122');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,8 +44,8 @@ export default function AdminLoginPage() {
     try {
       const loggedUser = {
         id: 'admin-1',
-        username: username.trim() || 'admin',
-        password: password.trim() || '001122',
+        username: username.trim(),
+        password: password.trim(),
         fullName: 'بەڕێوەبەری سەرەکی (Super Admin)',
         roleId: 'role-admin',
       };
@@ -102,27 +102,6 @@ export default function AdminLoginPage() {
                 {isRTL ? 'زانیارییەکان بنووسە بۆ چوونە ژوورەوە' : 'Enter credentials for Win32 ERP access'}
               </p>
             </div>
-          </div>
-
-          {/* Quick Credential Preset Section */}
-          <div className="p-2.5 bg-amber-50 border border-amber-300 text-[11px] font-bold text-amber-900 flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <span>🔑 {isRTL ? 'ناوی تاقیکاری:' : 'Demo Admin:'}</span>
-              <code className="bg-amber-100 px-1.5 py-0.5 border border-amber-400 font-mono text-slate-900">
-                admin / 001122
-              </code>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setUsername('admin');
-                setPassword('001122');
-                setError('');
-              }}
-              className="btn-classic text-[10px]"
-            >
-              {isRTL ? 'پڕکردنەوە' : 'Autofill'}
-            </button>
           </div>
 
           {/* Error Alert Box */}

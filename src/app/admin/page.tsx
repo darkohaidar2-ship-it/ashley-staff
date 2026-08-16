@@ -894,8 +894,16 @@ export default function AdminPage() {
                 factoryLocation: newLoc,
               });
             }
+
+            // Sync globally to Supabase backend across all mobile devices
+            fetch('/api/attendance/location', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newLoc),
+            }).catch((err) => console.error('Failed to sync location to Supabase:', err));
+
             setShowMapPicker(false);
-            alert('شوێنی کۆمپانیا لەسەر نەخشە بە سەرکەوتوویی پاشەکەوت کرا!');
+            alert('🎉 شوێنی کۆمپانیا بە سەرکەوتوویی لەسەر سێرڤەری سەرەکی پاشەکەوت کرا و بۆ هەموو کارمەندان نوێ بووەوە!');
           }}
           onClose={() => setShowMapPicker(false)}
         />

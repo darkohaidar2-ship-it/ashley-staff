@@ -30,7 +30,15 @@ export function base64ToBuffer(base64: string): ArrayBuffer {
 // 1. Register Biometrics on Device
 export async function registerBiometric(userId: string, userName: string): Promise<string> {
   if (!isBiometricSupported()) {
-    throw new Error('?????? ??? ?????????? ??????? ?? ???????? ? Face ID ?????.');
+    throw new Error('مۆبایل یان وێبگەڕەکەت پشتگیری لە پەنجەمۆر و Face ID ناکات.');
+  }
+
+  // Check if device is already registered to someone else
+  if (typeof window !== 'undefined') {
+    const existingOwner = localStorage.getItem('ashley_bio_registered_user');
+    if (existingOwner && existingOwner !== userId) {
+      throw new Error(`⚠️ ئەم مۆبایلە پێشتر بە ناوی کارمەندێکی تر تۆمارکراوە! ناکرێت یەک مۆبایل بۆ چەند کەس بەکاربێت.`);
+    }
   }
 
   const challenge = new Uint8Array(32);
@@ -42,7 +50,7 @@ export async function registerBiometric(userId: string, userName: string): Promi
     publicKey: {
       challenge,
       rp: {
-        name: 'Ashley ERP',
+        name: 'Ashley ERP Staff System',
         id: window.location.hostname,
       },
       user: {
@@ -55,9 +63,9 @@ export async function registerBiometric(userId: string, userName: string): Promi
         { alg: -257, type: 'public-key' }, // RS256
       ],
       authenticatorSelection: {
-        authenticatorAttachment: 'platform', // Face ID, Touch ID, Fingerprint
+        authenticatorAttachment: 'platform', // Enforce on-device hardware biometrics
         userVerification: 'required',
-        residentKey: 'preferred',
+        residentKey: 'required',
       },
       timeout: 60000,
       attestation: 'none',
@@ -65,26 +73,31 @@ export async function registerBiometric(userId: string, userName: string): Promi
   })) as PublicKeyCredential;
 
   if (!credential) {
-    throw new Error('???????? ???????? ????? ?????.');
+    throw new Error('نەتوانرا پەنجەمۆر تۆمار بکرێت.');
   }
 
   const credentialIdBase64 = bufferToBase64(credential.rawId);
   
-  // Cache in localStorage for offline availability
+  // Cache in localStorage for device binding
   if (typeof window !== 'undefined') {
     localStorage.setItem('ashley_bio_' + userId, credentialIdBase64);
+    localStorage.setItem('ashley_bio_registered_user', userId);
   }
 
   return credentialIdBase64;
 }
 
-// 2. Verify Biometrics on Check-In / Check-Out
+// 2. Strict Biometric Verification on Check-In / Check-Out
 export async function verifyBiometric(userId: string, savedCredentialId?: string | null): Promise<boolean> {
   if (!isBiometricSupported()) {
     throw new Error('پەنجەمۆر لەم ئامێرە کار ناکات یان پشتگیری نەکراوە.');
   }
 
   const credId = savedCredentialId || (typeof window !== 'undefined' ? localStorage.getItem('ashley_bio_' + userId) : null);
+
+  if (!credId) {
+    throw new Error('⚠️ ئەم کارمەندە هێشتا پەنجەمۆری لەم مۆبایلەدا نەبەستووەتەوە! سەرەتا پەنجەمۆری ئەم مۆبایلە ببەستەوە.');
+  }
 
   const challenge = new Uint8Array(32);
   window.crypto.getRandomValues(challenge);
@@ -93,25 +106,25 @@ export async function verifyBiometric(userId: string, savedCredentialId?: string
     challenge,
     rpId: window.location.hostname,
     userVerification: 'required',
+    allowCredentials: [
+      {
+        id: base64ToBuffer(credId),
+        type: 'public-key',
+        transports: ['internal'],
+      },
+    ],
     timeout: 60000,
   };
 
-  if (credId) {
-    try {
-      options.allowCredentials = [
-        {
-          id: base64ToBuffer(credId),
-          type: 'public-key',
-        },
-      ];
-    } catch (e) {
-      console.warn('Error decoding credential ID, attempting discovery:', e);
+  try {
+    const assertion = await navigator.credentials.get({
+      publicKey: options,
+    });
+    return !!assertion;
+  } catch (err: any) {
+    if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+      throw new Error('❌ پەنجەمۆر نەناسرا یان ڕەتکرایەوە! تکایە تەنها خاوەنی هەژمارەکە پەنجەی خۆی دابنێت.');
     }
+    throw err;
   }
-
-  const assertion = await navigator.credentials.get({
-    publicKey: options,
-  });
-
-  return !!assertion;
 }
