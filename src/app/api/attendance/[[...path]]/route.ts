@@ -781,6 +781,31 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       });
     }
 
+    if (pathStr === 'face/all' && method === 'GET') {
+      const { data: usersList } = await supabase
+        .from('users')
+        .select('id, name, full_name, face_descriptor')
+        .not('face_descriptor', 'is', null);
+
+      const registered = (usersList || []).map((u: any) => {
+        let descriptor: number[] | null = null;
+        try {
+          descriptor = typeof u.face_descriptor === 'string'
+            ? JSON.parse(u.face_descriptor)
+            : u.face_descriptor;
+        } catch {
+          descriptor = null;
+        }
+        return {
+          id: u.id,
+          name: u.full_name || u.name,
+          descriptor,
+        };
+      }).filter((u: any) => u.descriptor && u.descriptor.length > 0);
+
+      return NextResponse.json({ success: true, count: registered.length, employees: registered });
+    }
+
     // ----------------------------------------
     // Company Geofence Location Sync (Global across all devices)
     // ----------------------------------------

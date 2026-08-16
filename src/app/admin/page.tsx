@@ -8,6 +8,7 @@ import { useAppContext } from '@/context/app-provider';
 import type { Employee } from '@/lib/types';
 import { FactoryMapPicker } from '@/components/maps/FactoryMapPicker';
 import { AttendanceSheetGrid } from '@/components/attendance/AttendanceSheetGrid';
+import { AdminFaceEnrollModal } from '@/components/attendance/AdminFaceEnrollModal';
 import { ThemeSwitcher } from '@/components/layout/ThemeSwitcher';
 import { format } from 'date-fns';
 import { 
@@ -86,6 +87,9 @@ export default function AdminPage() {
 
   // Factory Geofence Map Picker Modal State
   const [showMapPicker, setShowMapPicker] = useState(false);
+
+  // Admin Face Enrollment Modal State
+  const [faceEnrollEmp, setFaceEnrollEmp] = useState<Employee | null>(null);
 
   // Restore JSON File Input Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -551,6 +555,14 @@ export default function AdminPage() {
                         <td>
                           <div className="flex items-center gap-1">
                             <button
+                              onClick={() => setFaceEnrollEmp(emp)}
+                              className="btn-classic text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-300 font-bold"
+                              title="تۆمارکردن یان نوێکردنەوەی ڕوخساری ئەم کارمەندە بە کامێرا"
+                            >
+                              <Camera className="w-3 h-3 text-indigo-600" />
+                              <span>📸 ناساندنی ڕوخسار</span>
+                            </button>
+                            <button
                               onClick={() => handleOpenEmpModal(emp)}
                               className="btn-classic text-[10px]"
                               title="دەستکاریکردنی زانیاریەکان"
@@ -939,6 +951,18 @@ export default function AdminPage() {
             alert('🎉 شوێنی کۆمپانیا بە سەرکەوتوویی لەسەر سێرڤەری سەرەکی پاشەکەوت کرا و بۆ هەموو مۆبایل و کۆمپیوتەرێک نوێ بووەوە!');
           }}
           onClose={() => setShowMapPicker(false)}
+        />
+      )}
+
+      {/* ADMIN EMPLOYEE AI FACE ENROLLMENT MODAL */}
+      {faceEnrollEmp && (
+        <AdminFaceEnrollModal
+          employee={faceEnrollEmp}
+          isOpen={!!faceEnrollEmp}
+          onClose={() => setFaceEnrollEmp(null)}
+          onSuccess={() => {
+            alert(`🎉 ڕوخساری (${faceEnrollEmp.fullName3Part || faceEnrollEmp.name}) بە سەرکەوتوویی وەک ناسنامەی AI لە سێرڤەر تۆمارکرا!`);
+          }}
         />
       )}
 
