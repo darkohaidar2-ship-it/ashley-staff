@@ -579,26 +579,16 @@ export default function PublicTerminalPage() {
   };
 
   const handleVerifyUniversalFace = useCallback(async () => {
-    if (!videoRef.current || !activeFaceAction || isProcessingScanRef.current) return;
+    if (!videoRef.current || !activeFaceAction) return;
     if (activeFaceAction !== 'Check In' && activeFaceAction !== 'Check Out') return;
     const actionType: 'Check In' | 'Check Out' = activeFaceAction;
 
     try {
-      isProcessingScanRef.current = true;
-      setIsFaceScanning(true);
-      setFaceScanMessage('پشکنین و ناسینەوەی دەموچاو بە زیرەکی دەستکرد...');
-
       const liveResult = await extractFaceDescriptor(videoRef.current);
       if (!liveResult) {
         isProcessingScanRef.current = false;
-        setIsFaceScanning(false);
-        setFaceInsideOval(false);
-        setFaceScanSuccess(false);
-        setFaceScanMessage('❌ دەموچاو لە ناو بازنەکە نەدۆزرایەوە! سەیری ناو بازنەکە بکە.');
         return;
       }
-
-      setFaceInsideOval(true);
 
       // If specific employee selected -> match that employee directly
       if (selectedEmpId && faceDescriptor) {
@@ -612,9 +602,6 @@ export default function PublicTerminalPage() {
           return;
         } else {
           isProcessingScanRef.current = false;
-          setIsFaceScanning(false);
-          setFaceScanSuccess(false);
-          setFaceScanMessage(`❌ ئەم دەموچاوە هی (${emp?.name || 'ئەم کارمەندە'}) نییە!`);
           return;
         }
       }
@@ -641,7 +628,7 @@ export default function PublicTerminalPage() {
           name: bestMatch.emp.name,
         };
 
-        // Immediately close camera tab and stop camera!
+        // Immediately stop camera and close camera viewfinder tab!
         stopCamera();
         setActiveFaceAction(null);
 
@@ -649,21 +636,13 @@ export default function PublicTerminalPage() {
         submitAttendanceLog(actionType, matchedEmp, `ڕوخسارناسینەوەی AI (${bestMatch.similarity}٪)`);
       } else {
         isProcessingScanRef.current = false;
-        setIsFaceScanning(false);
-        setFaceScanSuccess(false);
-        setFaceScanMessage('❌ ئەم ڕوخسارە لە سیستەمدا تۆمار نەکراوە! تکایە لە ئەدمین ڕوخسارت تۆمار بکە.');
       }
-    } catch (err: any) {
+    } catch {
       isProcessingScanRef.current = false;
-      setIsFaceScanning(false);
-      setFaceScanSuccess(false);
-      setFaceScanMessage(err.message || 'هەڵە لە خوێندنەوەی دەموچاو');
-    } finally {
-      setIsFaceScanning(false);
     }
-  }, [activeFaceAction, selectedEmpId, faceDescriptor, employees, registeredFacesList]);
+  }, [activeFaceAction, selectedEmpId, faceDescriptor, employees, registeredFacesList, submitAttendanceLog]);
 
-  // Live Auto-Scanning loop for Zero-Selection Face Check-In
+  // Live Auto-Scanning loop for Zero-Selection Face Check-In (silky smooth, non-blocking)
   useEffect(() => {
     if (!activeFaceAction || !cameraActive) {
       if (autoScanTimerRef.current) {
@@ -960,18 +939,12 @@ export default function PublicTerminalPage() {
                     className="w-full h-full object-cover"
                   />
                   
-                  {/* 🌟 HUMAN FACE OVAL TARGET HUD */}
+                  {/* 🌟 HUMAN FACE OVAL TARGET HUD (Silky smooth, no flickering) */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none p-3">
                     
                     {/* The Head Oval Guide Circle */}
                     <div
-                      className={`w-48 h-60 rounded-[50%/60%] transition-all duration-300 flex flex-col items-center justify-center relative ${
-                        faceScanSuccess === true
-                          ? 'border-4 border-emerald-400 bg-emerald-500/20 shadow-[0_0_40px_rgba(52,211,153,0.9)] animate-pulse'
-                          : faceInsideOval
-                          ? 'border-4 border-emerald-400 bg-emerald-500/10 shadow-[0_0_30px_rgba(52,211,153,0.7)]'
-                          : 'border-2 border-dashed border-indigo-300/80 shadow-[0_0_20px_rgba(99,102,241,0.4)] animate-pulse'
-                      }`}
+                      className="w-48 h-60 rounded-[50%/60%] transition-colors duration-300 flex flex-col items-center justify-center relative border-2 border-dashed border-indigo-300/80 shadow-[0_0_20px_rgba(99,102,241,0.3)]"
                     >
                       {/* Corner brackets */}
                       <div className="absolute top-2 left-5 w-3.5 h-3.5 border-t-2 border-l-2 border-white/60" />
@@ -980,65 +953,20 @@ export default function PublicTerminalPage() {
                       <div className="absolute bottom-2 right-5 w-3.5 h-3.5 border-b-2 border-r-2 border-white/60" />
 
                       {/* Center Silhouette Hint */}
-                      {!faceInsideOval && !faceScanSuccess && (
-                        <div className="text-center space-y-1">
-                          <User className="w-10 h-10 text-white/30 mx-auto animate-bounce" />
-                          <span className="text-[9px] font-bold text-white/70 bg-black/50 px-2 py-0.5 rounded-full backdrop-blur-xs">
-                            دەموچاو لەم بازنەیە دابنێ
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Success Badge Inside Oval */}
-                      {faceScanSuccess === true && (
-                        <div className="text-center space-y-1 animate-in zoom-in-75 duration-200">
-                          <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto" />
-                          <span className="text-xs font-black text-emerald-300 bg-black/60 px-3 py-1 rounded-full backdrop-blur-sm">
-                            ✅ ناسرایەوە!
-                          </span>
-                        </div>
-                      )}
+                      <div className="text-center space-y-1">
+                        <User className="w-10 h-10 text-white/40 mx-auto" />
+                        <span className="text-[9px] font-bold text-white/80 bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-xs">
+                          دەموچاو لەم بازنەیە دابنێ
+                        </span>
+                      </div>
                     </div>
 
                     {/* Bottom guide text */}
-                    <div className="mt-2 bg-black/60 backdrop-blur-md px-3 py-0.5 rounded-full text-[9px] font-black text-amber-200 shadow-md">
-                      {faceInsideOval ? '🟢 دەموچاو لە بازنەکەیە - ناسینەوە...' : '⚡ دەموچاو بخەرە ناو بازنەکە، خۆی دەیناسێتەوە'}
+                    <div className="mt-2 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black text-amber-200 shadow-md">
+                      ⚡ دەموچاو بخەرە ناو بازنەکە، خۆکارانە تۆمار دەبێت
                     </div>
                   </div>
-
-                  {isFaceScanning && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center gap-2 z-20">
-                      <RefreshCw className="w-8 h-8 text-amber-300 animate-spin" />
-                      <span className="text-xs font-bold text-white">پشکنینی AI...</span>
-                    </div>
-                  )}
                 </div>
-
-                {/* Status & Feedback Message */}
-                {faceScanMessage && (
-                  <div
-                    className={`p-2.5 rounded-xl text-xs font-black text-center ${
-                      faceScanSuccess === true
-                        ? 'bg-emerald-950 text-emerald-200 border border-emerald-600 shadow-lg shadow-emerald-900/50'
-                        : faceScanSuccess === false
-                        ? 'bg-rose-950 text-rose-200 border border-rose-600 shadow-lg shadow-rose-900/50'
-                        : 'bg-indigo-950 text-indigo-200 border border-indigo-700'
-                    }`}
-                  >
-                    {faceScanMessage}
-                  </div>
-                )}
-
-                {/* Trigger Action Buttons */}
-                <button
-                  type="button"
-                  disabled={isFaceScanning || faceScanSuccess === true}
-                  onClick={handleVerifyUniversalFace}
-                  className="w-full py-3 bg-gradient-to-r from-indigo-500 via-blue-600 to-teal-500 hover:from-indigo-400 hover:to-teal-400 text-white rounded-xl text-xs font-black shadow-xl flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-300" />
-                  <span>📸 پشکنین و تۆمارکردنی دەستی</span>
-                </button>
               </div>
             ) : (
               /* HUGE ZERO-TOUCH ACTION BUTTONS */

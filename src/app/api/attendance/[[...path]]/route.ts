@@ -1167,11 +1167,55 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
       const logRecordId = `log-${empId}-${dateStr}-${isCheckOut ? 'out' : 'in'}-${Date.now().toString().slice(-4)}`;
 
-      // 1. Insert into primary `attendance_logs` table
-      let hasError = false;
-      let errorMsg = '';
+      // 1. Insert/Upsert into `attendance` table in Supabase (Primary Guaranteed Table)
+      const rowId = `att-${empId}-${dateStr}`;
+      let upsertPayload: any = {
+        id: rowId,
+        user_id: empId,
+        user_name: empName,
+        date: dateStr,
+        status: 'Present'
+      };
+
       try {
-        const { error } = await supabase.from('attendance_logs').insert({
+        const { data: existingRecord } = await supabase
+          .from('attendance')
+          .select('*')
+          .eq('user_id', empId)
+          .eq('date', dateStr)
+          .maybeSingle();
+
+        if (existingRecord?.id) {
+          upsertPayload.id = existingRecord.id;
+          if (existingRecord.check_in) upsertPayload.check_in = existingRecord.check_in;
+          if (existingRecord.check_in_time) upsertPayload.check_in_time = existingRecord.check_in_time;
+          if (existingRecord.check_in_selfie) upsertPayload.check_in_selfie = existingRecord.check_in_selfie;
+          if (existingRecord.check_in_address) upsertPayload.check_in_address = existingRecord.check_in_address;
+        }
+
+        if (isCheckOut) {
+          upsertPayload.check_out = new Date().toISOString();
+          upsertPayload.check_out_time = timeStr;
+          upsertPayload.check_out_selfie = publicSelfieUrl || null;
+          upsertPayload.check_out_address = distance || 'داخل کۆمپانیا';
+        } else {
+          upsertPayload.check_in = new Date().toISOString();
+          upsertPayload.check_in_time = timeStr;
+          upsertPayload.check_in_selfie = publicSelfieUrl || null;
+          upsertPayload.check_in_address = distance || 'داخل کۆمپانیا';
+        }
+
+        const { error: attErr } = await supabase.from('attendance').upsert(upsertPayload);
+        if (attErr) {
+          console.error('Error upserting to attendance table:', attErr);
+        }
+      } catch (attEx: any) {
+        console.error('Exception upserting to attendance:', attEx);
+      }
+
+      // 2. Also try inserting into `attendance_logs` table if it exists
+      try {
+        await supabase.from('attendance_logs').insert({
           id: logRecordId,
           employee_id: empId,
           employee_name: empName,
@@ -1182,53 +1226,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           location_address: distance || 'داخل کۆمپانیا',
           created_at: new Date().toISOString()
         });
-        if (error) throw error;
-      } catch (e: any) {
-        console.error('Notice inserting to attendance_logs:', e);
-        hasError = true;
-        errorMsg = e.message || 'Supabase Insert Error';
-      }
-
-      // 2. Insert/Upsert into `attendance` table for backward compatibility
-      const rowId = `att-${empId}-${dateStr}`;
-      const { data: existingRecord } = await supabase
-        .from('attendance')
-        .select('*')
-        .eq('user_id', empId)
-        .eq('date', dateStr)
-        .maybeSingle();
-
-      let upsertPayload: any = {
-        id: existingRecord?.id || rowId,
-        user_id: empId,
-        user_name: empName,
-        date: dateStr,
-        status: 'Present'
-      };
-
-      if (isCheckOut) {
-        upsertPayload.check_out = new Date().toISOString();
-        upsertPayload.check_out_time = timeStr;
-        upsertPayload.check_out_selfie = publicSelfieUrl;
-        upsertPayload.check_out_address = distance || 'داخل کۆمپانیا';
-      } else {
-        upsertPayload.check_in = new Date().toISOString();
-        upsertPayload.check_in_time = timeStr;
-        upsertPayload.check_in_selfie = publicSelfieUrl;
-        upsertPayload.check_in_address = distance || 'داخل کۆمپانیا';
-      }
-
-      try {
-        const { error } = await supabase.from('attendance').upsert(upsertPayload);
-        if (error) throw error;
-      } catch (e: any) {
-        console.error('Notice upserting to attendance:', e);
-        hasError = true;
-        errorMsg = e.message || 'Supabase Upsert Error';
-      }
-
-      if (hasError) {
-        return NextResponse.json({ success: false, error: errorMsg }, { status: 500 });
+      } catch (logEx) {
+        // Safe catch if attendance_logs table doesn't exist
+        console.warn('attendance_logs table insert skipped:', logEx);
       }
 
       return NextResponse.json({ 

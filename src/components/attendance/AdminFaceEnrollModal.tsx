@@ -308,13 +308,6 @@ export function AdminFaceEnrollModal({
             <SwitchCamera className="w-3.5 h-3.5 text-amber-300" />
             <span>{facingMode === 'user' ? '🔄 کامێرای پشتەوە' : '🔄 کامێرای پێشەوە'}</span>
           </button>
-
-          {isScanning && (
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center gap-2 z-20">
-              <RefreshCw className="w-8 h-8 text-amber-300 animate-spin" />
-              <span className="text-xs font-black text-white">پشکنینی ئەندازەی ڕوخسار...</span>
-            </div>
-          )}
         </div>
 
         {/* Status Message Display */}
