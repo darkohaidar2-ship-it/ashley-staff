@@ -88,8 +88,28 @@ export default function AdminPage() {
   // Factory Geofence Map Picker Modal State
   const [showMapPicker, setShowMapPicker] = useState(false);
 
-  // Admin Face Enrollment Modal State
+  // Admin Face Enrollment Modal State & Registered Face IDs
   const [faceEnrollEmp, setFaceEnrollEmp] = useState<Employee | null>(null);
+  const [registeredFaceIds, setRegisteredFaceIds] = useState<string[]>([]);
+
+  // Fetch list of employees who have already enrolled their faces
+  const fetchRegisteredFaces = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/attendance/face/all?_t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.employees) {
+          setRegisteredFaceIds(data.employees.map((e: any) => e.id));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching registered faces in admin:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRegisteredFaces();
+  }, [fetchRegisteredFaces]);
 
   // Restore JSON File Input Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -536,7 +556,19 @@ export default function AdminPage() {
                           {emp.employeeId ? `EMP-${emp.employeeId}` : `EMP-${emp.id.slice(-3)}`}
                         </td>
                         <td className="font-bold text-slate-900">
-                          {emp.fullName3Part || emp.name}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span>{emp.fullName3Part || emp.name}</span>
+                            {registeredFaceIds.includes(emp.id) ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-950 border border-emerald-400 shadow-xs">
+                                <CheckCircle className="w-3 h-3 text-emerald-600" />
+                                <span>ڕوخسار ناسێنراوە ✅</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-300">
+                                <span>بێ ڕوخسار</span>
+                              </span>
+                            )}
+                          </div>
                           {emp.name && emp.fullName3Part && emp.name !== emp.fullName3Part && (
                             <span className="text-[10px] text-slate-500 font-normal block">({emp.name})</span>
                           )}
@@ -556,11 +588,15 @@ export default function AdminPage() {
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => setFaceEnrollEmp(emp)}
-                              className="btn-classic text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-300 font-bold"
+                              className={`btn-classic text-[10px] font-bold border ${
+                                registeredFaceIds.includes(emp.id)
+                                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border-emerald-400'
+                                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border-indigo-300'
+                              }`}
                               title="تۆمارکردن یان نوێکردنەوەی ڕوخساری ئەم کارمەندە بە کامێرا"
                             >
-                              <Camera className="w-3 h-3 text-indigo-600" />
-                              <span>📸 ناساندنی ڕوخسار</span>
+                              <Camera className={`w-3 h-3 ${registeredFaceIds.includes(emp.id) ? 'text-emerald-700' : 'text-indigo-600'}`} />
+                              <span>{registeredFaceIds.includes(emp.id) ? '✅ نوێکردنەوەی ڕوخسار' : '📸 ناساندنی ڕوخسار'}</span>
                             </button>
                             <button
                               onClick={() => handleOpenEmpModal(emp)}
@@ -961,6 +997,7 @@ export default function AdminPage() {
           isOpen={!!faceEnrollEmp}
           onClose={() => setFaceEnrollEmp(null)}
           onSuccess={() => {
+            fetchRegisteredFaces();
             alert(`🎉 ڕوخساری (${faceEnrollEmp.fullName3Part || faceEnrollEmp.name}) بە سەرکەوتوویی وەک ناسنامەی AI لە سێرڤەر تۆمارکرا!`);
           }}
         />

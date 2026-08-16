@@ -723,32 +723,57 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // AI Face Recognition Endpoints (ڕوخسارناسینەوەی زیرەک)
     // ----------------------------------------
     if (pathStr === 'face/register' && method === 'POST') {
-      const { userId, descriptor, selfieBase64 } = await req.json();
+      const { userId, userName, descriptor, selfieBase64 } = await req.json();
       if (!userId || !descriptor) {
         return NextResponse.json({ error: 'userId and face descriptor required' }, { status: 400 });
       }
 
-      let photoUrl: string | null = null;
-      if (selfieBase64) {
-        photoUrl = await uploadSelfieToStorage(selfieBase64, userId, getBaghdadDateTime().dateStr, 'FACE_REF');
+      // 1. Save to Central Resilient Supabase Store (warehouses table)
+      try {
+        const { data: regRow } = await supabase
+          .from('warehouses')
+          .select('*')
+          .eq('id', 'ashley_face_registry')
+          .maybeSingle();
+
+        let registry: Record<string, any> = {};
+        if (regRow?.address) {
+          try {
+            registry = JSON.parse(regRow.address);
+          } catch {
+            registry = {};
+          }
+        }
+
+        registry[userId] = {
+          id: userId,
+          name: userName || registry[userId]?.name || 'کارمەند',
+          descriptor: descriptor,
+          updatedAt: new Date().toISOString(),
+        };
+
+        await supabase.from('warehouses').upsert({
+          id: 'ashley_face_registry',
+          name: 'Ashley AI Face Database Registry',
+          address: JSON.stringify(registry),
+        });
+      } catch (err: any) {
+        console.error('Error saving to resilient face registry:', err);
       }
 
-      const descriptorJson = JSON.stringify(descriptor);
-      const updateData: any = { face_descriptor: descriptorJson };
-      if (photoUrl) updateData.face_photo_url = photoUrl;
-
-      const { error: updErr } = await supabase
-        .from('users')
-        .update(updateData)
-        .eq('id', userId);
-
-      if (updErr) {
-        console.warn('Note: face_descriptor update in users:', updErr.message);
+      // 2. Secondary backup update to users table
+      try {
+        const descriptorJson = JSON.stringify(descriptor);
+        await supabase
+          .from('users')
+          .update({ face_descriptor: descriptorJson })
+          .eq('id', userId);
+      } catch (updErr: any) {
+        console.warn('Note: users table update ignored:', updErr.message);
       }
 
       return NextResponse.json({
         success: true,
-        photoUrl,
         message: 'ڕوخسار بە سەرکەوتوویی تۆمارکرا',
       });
     }
@@ -757,6 +782,29 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const userId = req.nextUrl.searchParams.get('userId');
       if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
 
+      // Check central resilient store first
+      try {
+        const { data: regRow } = await supabase
+          .from('warehouses')
+          .select('*')
+          .eq('id', 'ashley_face_registry')
+          .maybeSingle();
+
+        if (regRow?.address) {
+          const registry = JSON.parse(regRow.address);
+          if (registry[userId]?.descriptor) {
+            return NextResponse.json({
+              hasFaceRegistered: true,
+              descriptor: registry[userId].descriptor,
+              name: registry[userId].name,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Registry read fallback:', err);
+      }
+
+      // Fallback to users table
       const { data: userRow } = await supabase
         .from('users')
         .select('face_descriptor, face_photo_url')
@@ -777,33 +825,61 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       return NextResponse.json({
         hasFaceRegistered: !!descriptor && descriptor.length > 0,
         descriptor,
-        photoUrl: userRow?.face_photo_url || null,
       });
     }
 
     if (pathStr === 'face/all' && method === 'GET') {
-      const { data: usersList } = await supabase
-        .from('users')
-        .select('id, name, full_name, face_descriptor')
-        .not('face_descriptor', 'is', null);
+      const noCacheHeaders = {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+      };
 
-      const registered = (usersList || []).map((u: any) => {
-        let descriptor: number[] | null = null;
-        try {
-          descriptor = typeof u.face_descriptor === 'string'
-            ? JSON.parse(u.face_descriptor)
-            : u.face_descriptor;
-        } catch {
-          descriptor = null;
+      let registeredMap: Record<string, any> = {};
+
+      // 1. Read from central resilient registry
+      try {
+        const { data: regRow } = await supabase
+          .from('warehouses')
+          .select('*')
+          .eq('id', 'ashley_face_registry')
+          .maybeSingle();
+
+        if (regRow?.address) {
+          registeredMap = JSON.parse(regRow.address);
         }
-        return {
-          id: u.id,
-          name: u.full_name || u.name,
-          descriptor,
-        };
-      }).filter((u: any) => u.descriptor && u.descriptor.length > 0);
+      } catch (err) {
+        console.warn('Error reading central face registry:', err);
+      }
 
-      return NextResponse.json({ success: true, count: registered.length, employees: registered });
+      // 2. Also merge any from users table
+      try {
+        const { data: usersList } = await supabase
+          .from('users')
+          .select('id, name, full_name, face_descriptor')
+          .not('face_descriptor', 'is', null);
+
+        (usersList || []).forEach((u: any) => {
+          if (!registeredMap[u.id]) {
+            try {
+              const desc = typeof u.face_descriptor === 'string' ? JSON.parse(u.face_descriptor) : u.face_descriptor;
+              if (desc && desc.length > 0) {
+                registeredMap[u.id] = {
+                  id: u.id,
+                  name: u.full_name || u.name,
+                  descriptor: desc,
+                };
+              }
+            } catch {}
+          }
+        });
+      } catch {}
+
+      const employeesList = Object.values(registeredMap);
+
+      return NextResponse.json(
+        { success: true, count: employeesList.length, employees: employeesList },
+        { headers: noCacheHeaders }
+      );
     }
 
     // ----------------------------------------

@@ -122,6 +122,7 @@ export function AdminFaceEnrollModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: employee.id,
+          userName: employee.fullName3Part || employee.name,
           descriptor: faceResult.descriptor,
         }),
       });

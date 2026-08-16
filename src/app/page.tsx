@@ -521,6 +521,7 @@ export default function PublicTerminalPage() {
 
   // Universal Instant AI Face Check-In & Check-Out (Identifies Employee Automatically)
   const handleStartUniversalFaceAuth = async (type: 'Check In' | 'Check Out') => {
+    fetchAllFaces(); // Ensure latest registered face database is loaded
     const radius = syncedLocation.radiusMeters || 50;
     if (distanceMeters !== null && distanceMeters > radius) {
       setAttMessage({

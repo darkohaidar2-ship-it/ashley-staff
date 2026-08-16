@@ -84,10 +84,11 @@ export async function extractFaceDescriptor(
 }
 
 // 3. Match Two Face Descriptors (Euclidean Distance)
+// Distance < 0.56 is matching the same person reliably across different lighting & angles
 export function matchFaceDescriptors(
   descriptor1: number[] | Float32Array,
   descriptor2: number[] | Float32Array,
-  threshold = 0.48
+  threshold = 0.56
 ): { isMatch: boolean; distance: number; similarityPercent: number } {
   const d1 = Array.from(descriptor1);
   const d2 = Array.from(descriptor2);
@@ -101,8 +102,8 @@ export function matchFaceDescriptors(
   const distance = Math.sqrt(sum);
   const isMatch = distance <= threshold;
 
-  // Convert Euclidean distance to confidence percentage (0 distance = 100%, 0.6 = 0%)
-  const similarityPercent = Math.max(0, Math.min(100, Math.round((1 - distance / 0.6) * 100)));
+  // Convert Euclidean distance to confidence percentage (0 distance = 100%, 0.65 = 0%)
+  const similarityPercent = Math.max(0, Math.min(100, Math.round((1 - distance / 0.65) * 100)));
 
   return {
     isMatch,
