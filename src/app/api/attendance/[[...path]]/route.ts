@@ -723,12 +723,13 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // AI Face Recognition Endpoints (ڕوخسارناسینەوەی زیرەک)
     // ----------------------------------------
     if (pathStr === 'face/register' && method === 'POST') {
-      const { userId, userName, descriptor, selfieBase64 } = await req.json();
+      const { userId, userName, descriptor } = await req.json();
       if (!userId || !descriptor) {
         return NextResponse.json({ error: 'userId and face descriptor required' }, { status: 400 });
       }
 
-      // 1. Save to Central Resilient Supabase Store (warehouses table)
+      // 1. Save to Central Resilient Supabase Store (warehouses table -> qr_code column)
+      let registry: Record<string, any> = {};
       try {
         const { data: regRow } = await supabase
           .from('warehouses')
@@ -736,10 +737,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .eq('id', 'ashley_face_registry')
           .maybeSingle();
 
-        let registry: Record<string, any> = {};
-        if (regRow?.address) {
+        if (regRow?.qr_code) {
           try {
-            registry = JSON.parse(regRow.address);
+            registry = JSON.parse(regRow.qr_code);
           } catch {
             registry = {};
           }
@@ -752,11 +752,20 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           updatedAt: new Date().toISOString(),
         };
 
-        await supabase.from('warehouses').upsert({
+        const registryJson = JSON.stringify(registry);
+
+        const { error: upsertErr } = await supabase.from('warehouses').upsert({
           id: 'ashley_face_registry',
           name: 'Ashley AI Face Database Registry',
-          address: JSON.stringify(registry),
+          qr_code: registryJson,
+          lat: 0,
+          lng: 0,
+          radius: 0,
         });
+
+        if (upsertErr) {
+          console.error('Supabase face upsert error:', upsertErr);
+        }
       } catch (err: any) {
         console.error('Error saving to resilient face registry:', err);
       }
@@ -774,7 +783,8 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
       return NextResponse.json({
         success: true,
-        message: 'ڕوخسار بە سەرکەوتوویی تۆمارکرا',
+        message: 'ڕوخسار بە سەرکەوتوویی لە سیستەم و سێرڤەر تۆمارکرا',
+        totalRegistered: Object.keys(registry).length,
       });
     }
 
@@ -790,8 +800,8 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .eq('id', 'ashley_face_registry')
           .maybeSingle();
 
-        if (regRow?.address) {
-          const registry = JSON.parse(regRow.address);
+        if (regRow?.qr_code) {
+          const registry = JSON.parse(regRow.qr_code);
           if (registry[userId]?.descriptor) {
             return NextResponse.json({
               hasFaceRegistered: true,
@@ -805,38 +815,33 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       }
 
       // Fallback to users table
-      const { data: userRow } = await supabase
-        .from('users')
-        .select('face_descriptor, face_photo_url')
-        .eq('id', userId)
-        .maybeSingle();
+      try {
+        const { data: userRow } = await supabase
+          .from('users')
+          .select('face_descriptor')
+          .eq('id', userId)
+          .maybeSingle();
 
-      let descriptor: number[] | null = null;
-      if (userRow?.face_descriptor) {
-        try {
+        let descriptor: number[] | null = null;
+        if (userRow?.face_descriptor) {
           descriptor = typeof userRow.face_descriptor === 'string'
             ? JSON.parse(userRow.face_descriptor)
             : userRow.face_descriptor;
-        } catch {
-          descriptor = null;
         }
-      }
 
-      return NextResponse.json({
-        hasFaceRegistered: !!descriptor && descriptor.length > 0,
-        descriptor,
-      });
+        return NextResponse.json({
+          hasFaceRegistered: !!descriptor && descriptor.length > 0,
+          descriptor,
+        });
+      } catch {
+        return NextResponse.json({ hasFaceRegistered: false });
+      }
     }
 
     if (pathStr === 'face/all' && method === 'GET') {
-      const noCacheHeaders = {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-        'CDN-Cache-Control': 'no-store',
-      };
-
       let registeredMap: Record<string, any> = {};
 
-      // 1. Read from central resilient registry
+      // 1. Read from central resilient registry (warehouses table -> qr_code)
       try {
         const { data: regRow } = await supabase
           .from('warehouses')
@@ -844,8 +849,8 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .eq('id', 'ashley_face_registry')
           .maybeSingle();
 
-        if (regRow?.address) {
-          registeredMap = JSON.parse(regRow.address);
+        if (regRow?.qr_code) {
+          registeredMap = JSON.parse(regRow.qr_code);
         }
       } catch (err) {
         console.warn('Error reading central face registry:', err);
@@ -859,10 +864,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .not('face_descriptor', 'is', null);
 
         (usersList || []).forEach((u: any) => {
-          if (!registeredMap[u.id]) {
+          if (!registeredMap[u.id] && u.face_descriptor) {
             try {
               const desc = typeof u.face_descriptor === 'string' ? JSON.parse(u.face_descriptor) : u.face_descriptor;
-              if (desc && desc.length > 0) {
+              if (Array.isArray(desc) && desc.length > 0) {
                 registeredMap[u.id] = {
                   id: u.id,
                   name: u.full_name || u.name,
@@ -878,7 +883,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
       return NextResponse.json(
         { success: true, count: employeesList.length, employees: employeesList },
-        { headers: noCacheHeaders }
+        {
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            'CDN-Cache-Control': 'no-store',
+          },
+        }
       );
     }
 

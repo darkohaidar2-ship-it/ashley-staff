@@ -403,7 +403,7 @@ export default function PublicTerminalPage() {
     };
   }, []);
 
-  // Submit attendance log without storing heavy image blobs
+  // Submit Attendance Log to Local + Central Supabase Server
   const submitAttendanceLog = (
     type: 'Check In' | 'Check Out',
     emp: { id: string; name: string },
@@ -411,6 +411,11 @@ export default function PublicTerminalPage() {
   ) => {
     const timeNow = format(new Date(), 'HH:mm');
     const dateNow = format(new Date(), 'yyyy-MM-dd');
+
+    const thankMsg =
+      type === 'Check In'
+        ? `🎉 سوپاس بۆ چێک ئین! (هاتنی ${emp.name} بە سەرکەوتوویی لە سیستەم تۆمارکرا ✅)`
+        : `🎉 سوپاس بۆ چێک ئاوت! (دەرچوونی ${emp.name} بە سەرکەوتوویی لە سیستەم تۆمارکرا ✅)`;
 
     const newLog: any = {
       id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -423,7 +428,9 @@ export default function PublicTerminalPage() {
       time: timeNow,
       log_time_str: timeNow,
       type: type,
+      log_type: type,
       status: verificationMethod,
+      distance: distanceMeters !== null ? `${distanceMeters}m لە کۆمپانیا` : 'ناو کۆمپانیا',
       createdAt: timeNow,
     };
 
@@ -433,6 +440,11 @@ export default function PublicTerminalPage() {
       localStorage.setItem('ashley_local_attendanceLogs', JSON.stringify(updatedLogs));
     }
 
+    setAttMessage({
+      text: thankMsg,
+      success: true,
+    });
+
     // Sync to Supabase Real-Time Backend
     fetch('/api/attendance/logs', {
       method: 'POST',
@@ -441,7 +453,7 @@ export default function PublicTerminalPage() {
     })
       .then(() => {
         setAttMessage({
-          text: `🎉 ئامادەبوونی (${emp.name}) بە سەرکەوتوویی وەک ${type} تۆمارکرا (${verificationMethod})!`,
+          text: thankMsg,
           success: true,
         });
       })
@@ -451,13 +463,13 @@ export default function PublicTerminalPage() {
           const pending = JSON.parse(localStorage.getItem('ashley_pending_checkins') || '[]');
           localStorage.setItem('ashley_pending_checkins', JSON.stringify([...pending, newLog]));
         }
-        setAttMessage({
-          text: `ئامادەبوونی (${emp.name}) بە سەرکەوتوویی لە مۆبایلەکە خەزن کرا و کاتی پەیوەستبوون دەنێردرێت.`,
-          success: true,
-        });
       });
 
     setCapturedSelfie(null);
+
+    setTimeout(() => {
+      setAttMessage((prev) => (prev?.text === thankMsg ? null : prev));
+    }, 6000);
   };
 
   // Handle Biometric Device Registration (Pair Fingerprint to Employee)
@@ -593,13 +605,10 @@ export default function PublicTerminalPage() {
         const emp = employees.find((e) => e.id === selectedEmpId);
         const match = matchFaceDescriptors(liveResult.descriptor, faceDescriptor);
         if (match.isMatch && emp) {
-          setFaceScanSuccess(true);
-          setFaceScanMessage(`✅ ناسنامەی (${emp.name}) سەلمێنرا! (${match.similarityPercent}٪ هاوتا)`);
+          // Immediately close camera tab!
+          stopCamera();
+          setActiveFaceAction(null);
           submitAttendanceLog(actionType, emp, `ڕوخسارناسینەوەی AI (${match.similarityPercent}٪)`);
-          setTimeout(() => {
-            stopCamera();
-            setActiveFaceAction(null);
-          }, 2000);
           return;
         } else {
           isProcessingScanRef.current = false;
@@ -632,13 +641,12 @@ export default function PublicTerminalPage() {
           name: bestMatch.emp.name,
         };
 
-        setFaceScanSuccess(true);
-        setFaceScanMessage(`✅ بەخێربێیت (${bestMatch.emp.name})! چێک‌ئینەکەت تۆمارکرا (${bestMatch.similarity}٪ هاوتا).`);
+        // Immediately close camera tab and stop camera!
+        stopCamera();
+        setActiveFaceAction(null);
+
+        // Submit log to Supabase system database and show Thank You banner!
         submitAttendanceLog(actionType, matchedEmp, `ڕوخسارناسینەوەی AI (${bestMatch.similarity}٪)`);
-        setTimeout(() => {
-          stopCamera();
-          setActiveFaceAction(null);
-        }, 2000);
       } else {
         isProcessingScanRef.current = false;
         setIsFaceScanning(false);
