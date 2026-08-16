@@ -1242,29 +1242,42 @@ export default function PublicTerminalPage() {
                             {item.modelCondition || 'بەردەستە'}
                           </span>
                         </td>
+                        <td className="py-2.5 px-3 font-mono font-black text-amber-300">{item.quantity ?? 1} دانە</td>
                       </tr>
-                    )}
-                  </tbody>
-                  <tfoot>
-                    <tr className="grand-total-row">
-                      <td colSpan={2}>کۆی گشتی کاڵا دۆزراوەکان:</td>
-                      <td colSpan={3} className="font-mono">{filteredItems.length} Item(s) Cataloged</td>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="text-center py-8 text-slate-400 font-bold">
+                        هیچ مۆدێلێک بەم گەڕانە نەدۆزرایەوە
+                      </td>
                     </tr>
-                  </tfoot>
-                </table>
-              </div>
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-white/5 text-slate-300 font-bold border-t border-white/10">
+                    <td colSpan={2} className="py-2.5 px-3">کۆی گشتی کاڵا دۆزراوەکان:</td>
+                    <td colSpan={3} className="py-2.5 px-3 font-mono text-left">{filteredItems.length} Item(s) Cataloged</td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
 
-            {/* Quick Catalog Feature Cards */}
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              <Link href="/items" className="btn-classic py-2 flex items-center gap-2">
-                <Package className="w-4 h-4 text-emerald-800" />
-                <span className="font-bold text-xs">کاتالۆگی تەواوی کۆگا</span>
+            {/* iOS Quick Action Tiles */}
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <Link
+                href="/items"
+                className="py-3 px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-white transition-all hover:scale-[1.02] active:scale-95"
+              >
+                <Package className="w-4 h-4 text-emerald-400" />
+                <span>کاتالۆگی تەواوی کۆگا</span>
               </Link>
 
-              <Link href="/warehouse-map" className="btn-classic py-2 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-emerald-800" />
-                <span className="font-bold text-xs">نەخشەی رەفەکانی کۆگا</span>
+              <Link
+                href="/warehouse-map"
+                className="py-3 px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-white transition-all hover:scale-[1.02] active:scale-95"
+              >
+                <Layers className="w-4 h-4 text-indigo-400" />
+                <span>نەخشەی رەفەکانی کۆگا</span>
               </Link>
             </div>
 
