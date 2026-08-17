@@ -348,6 +348,14 @@ export default function AdminAttendancePage() {
     }
   };
 
+  // Filter logic
+  const filteredAttendance = attendance.filter((r) => {
+    const matchesDate = !filterDate || r.date === filterDate;
+    const matchesEmployee = !filterEmployee || r.userId === filterEmployee;
+    const matchesWarehouse = !filterWarehouse || r.warehouseName.includes(filterWarehouse);
+    return matchesDate && matchesEmployee && matchesWarehouse;
+  });
+
   // Export to CSV helper
   const handleExportCSV = () => {
     const headers = 'کۆد,ناو,بەروار,هاتن,ڕۆشتن,کۆگا,دواکەوتن (خولەک),ئیزافە (خولەک),حاڵەت\n';
