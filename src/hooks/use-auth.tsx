@@ -27,12 +27,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      const storedUser = sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session');
-      if (storedUser) {
-        const parsedUser: User = JSON.parse(storedUser);
-        setCurrentUser(parsedUser);
-      } else {
-        setCurrentUser(null);
+      // Clear persistent storage to prevent eternal logins
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('ashley_admin_session');
+        const storedUser = sessionStorage.getItem('ashley_admin_session');
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          // Check if session token exists
+          if (parsedUser && parsedUser.token) {
+            setCurrentUser(parsedUser);
+          } else {
+            setCurrentUser(null);
+            sessionStorage.removeItem('ashley_admin_session');
+          }
+        } else {
+          setCurrentUser(null);
+        }
       }
     } catch {
       setCurrentUser(null);
@@ -53,24 +63,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, errorField: 'password' };
     }
 
-    const loggedUser: User = {
-      id: 'admin-1',
+    const sessionToken = 'adm_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
+    const loggedUser = {
+      id: 'admin-super',
       username: username.trim(),
       password: password.trim(),
       fullName: username ? `بەڕێوەبەر (${username})` : 'بەڕێوەبەری سەرەکی (Super Admin)',
       roleId: 'role-admin',
+      token: sessionToken,
+      loginTime: Date.now(),
     };
 
     setCurrentUser(loggedUser);
-    sessionStorage.setItem('ashley_admin_session', JSON.stringify(loggedUser));
-    localStorage.setItem('ashley_admin_session', JSON.stringify(loggedUser));
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('ashley_admin_session', JSON.stringify(loggedUser));
+      localStorage.removeItem('ashley_admin_session');
+    }
     return { success: true };
   }, []);
 
   const logout = useCallback(async (): Promise<void> => {
     setCurrentUser(null);
-    sessionStorage.removeItem('ashley_admin_session');
-    localStorage.removeItem('ashley_admin_session');
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('ashley_admin_session');
+      localStorage.removeItem('ashley_admin_session');
+    }
   }, []);
 
   const hasPermission = useCallback((permission: string): boolean => {

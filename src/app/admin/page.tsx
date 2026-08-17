@@ -55,17 +55,32 @@ export default function AdminPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
-  // Security Auth Guard: Redirect unauthenticated users immediately to /adminpanel
+  // Security Auth Guard: Check session strictly from sessionStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const stored = sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session');
-      if (!stored && !user && !authLoading) {
+      // Clear any legacy localStorage session
+      localStorage.removeItem('ashley_admin_session');
+      const stored = sessionStorage.getItem('ashley_admin_session');
+      if (!stored) {
+        setAuthChecked(false);
         router.replace('/adminpanel');
       } else {
-        setAuthChecked(true);
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.token) {
+            setAuthChecked(true);
+          } else {
+            setAuthChecked(false);
+            sessionStorage.removeItem('ashley_admin_session');
+            router.replace('/adminpanel');
+          }
+        } catch {
+          setAuthChecked(false);
+          router.replace('/adminpanel');
+        }
       }
     }
-  }, [user, authLoading, router]);
+  }, [router]);
 
   // 🛡️ 30-Minute Inactivity Auto-Logout Security Guard
   useEffect(() => {
@@ -78,8 +93,8 @@ export default function AdminPage() {
         alert('⚠️ سێشنەکەت بەسەرچوو بەهۆی بێدەنگی بۆ ماوەی ٣٠ خولەک! تکایە دووبارە لۆگین بکەرەوە.');
         await logout();
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('ashley_admin_session');
           sessionStorage.removeItem('ashley_admin_session');
+          localStorage.removeItem('ashley_admin_session');
         }
         router.replace('/adminpanel');
       }, 30 * 60 * 1000);
@@ -377,6 +392,19 @@ export default function AdminPage() {
     if (empStatusFilter === 'resigned') return emp.status === 'resigned' || emp.isActive === false;
     return true;
   });
+
+  // Strict Security Gate: Never render admin panel content if not authenticated
+  if (!authChecked || !user) {
+    return (
+      <div className="min-h-screen w-screen flex items-center justify-center bg-slate-900 text-white font-sans dir-rtl" dir="rtl">
+        <div className="text-center space-y-3 p-6 bg-slate-800/80 border border-slate-700 rounded-3xl shadow-2xl">
+          <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm font-bold text-slate-300">پشکنینی دەسەڵاتی بەڕێوەبەر... (پارێزراو)</p>
+          <p className="text-xs text-slate-500">تکایە لە ڕێگەی دەروازەی /adminpanel لۆگین بکە</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 text-slate-900 font-sans dir-rtl select-none pb-12 p-2 sm:p-4" dir="rtl">

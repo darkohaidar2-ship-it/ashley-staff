@@ -55,14 +55,34 @@ interface Holiday {
 
 export default function AdminAttendancePage() {
   const [mounted, setMounted] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const [loading, setLoading] = useState(true);
   
   // Security Auth Guard & 30-Minute Inactivity Auto-Logout
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const stored = sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session');
+      localStorage.removeItem('ashley_admin_session');
+      const stored = sessionStorage.getItem('ashley_admin_session');
       if (!stored) {
+        setAuthChecked(false);
         window.location.href = '/adminpanel';
+        return;
+      } else {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.token) {
+            setAuthChecked(true);
+          } else {
+            setAuthChecked(false);
+            sessionStorage.removeItem('ashley_admin_session');
+            window.location.href = '/adminpanel';
+            return;
+          }
+        } catch {
+          setAuthChecked(false);
+          window.location.href = '/adminpanel';
+          return;
+        }
       }
     }
 
@@ -72,8 +92,8 @@ export default function AdminAttendancePage() {
       timeoutId = setTimeout(() => {
         alert('⚠️ سێشنەکەت بەسەرچوو بەهۆی بێدەنگی بۆ ماوەی ٣٠ خولەک! تکایە دووبارە لۆگین بکەرەوە.');
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('ashley_admin_session');
           sessionStorage.removeItem('ashley_admin_session');
+          localStorage.removeItem('ashley_admin_session');
           window.location.href = '/adminpanel';
         }
       }, 30 * 60 * 1000);
@@ -344,13 +364,18 @@ export default function AdminAttendancePage() {
     document.body.removeChild(link);
   };
 
-  // Filter logic
-  const filteredAttendance = attendance.filter(r => {
-    const matchesDate = !filterDate || r.date === filterDate;
-    const matchesEmployee = !filterEmployee || r.userId === filterEmployee;
-    const matchesWarehouse = !filterWarehouse || r.warehouseName.includes(filterWarehouse);
-    return matchesDate && matchesEmployee && matchesWarehouse;
-  });
+  // Strict Security Gate: Never render content if unauthenticated
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen w-screen flex items-center justify-center bg-slate-900 text-white font-sans dir-rtl" dir="rtl">
+        <div className="text-center space-y-3 p-6 bg-slate-800/80 border border-slate-700 rounded-3xl shadow-2xl">
+          <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm font-bold text-slate-300">پشکنینی دەسەڵاتی بەڕێوەبەر... (پارێزراو)</p>
+          <p className="text-xs text-slate-500">تکایە لە ڕێگەی دەروازەی /adminpanel لۆگین بکە</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 w-full pb-24 text-right" dir="rtl">
