@@ -260,6 +260,7 @@ export const initialData: any = {
       { id: 'emp-09', name: 'ڕێبین سەباح نوری', fullName3Part: 'ڕێبین سەباح نوری', employeeId: '09', role: 'Employee', startDate: '2024-06-22', employmentStartDate: '2024-06-22', password: '1009', isActive: true, status: 'active' },
       { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', fullName3Part: 'بەهرەمەند ڕزگار عزیز', employeeId: '10', role: 'Employee', startDate: '2026-12-27', employmentStartDate: '2026-12-27', password: '1010', isActive: true, status: 'active' },
       { id: 'emp-11', name: 'شادومان یادگار رحیم', fullName3Part: 'شادومان یادگار رحیم', employeeId: '11', role: 'Employee', startDate: '2024-09-30', employmentStartDate: '2024-09-30', password: '1011', isActive: true, status: 'active' },
+      { id: 'emp-12', name: 'سەروەت قادر', fullName3Part: 'سەروەت قادر', employeeId: '12', role: 'Employee', startDate: '2025-01-01', employmentStartDate: '2025-01-01', password: '1012', isActive: true, status: 'active' },
     ],
     attendanceLogs: [],
     excelFiles: [],

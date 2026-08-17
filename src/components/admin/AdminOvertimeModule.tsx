@@ -17,10 +17,18 @@ import {
   Edit3,
   Save,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  RefreshCw,
+  Edit,
+  X
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { exportToPDF, exportToCSV, formatTime12H, type ExportTableColumn } from '@/lib/export-utils';
+import { 
+  generateAugust2026AdminNotes, 
+  generateAugust2026OvertimeList, 
+  GOOGLE_SHEET_OVERTIME_DATA 
+} from '@/lib/attendance-seed-data';
 
 interface AdminOvertimeModuleProps {
   employees: Employee[];
@@ -29,8 +37,8 @@ interface AdminOvertimeModuleProps {
 export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
   const { overtime, setOvertime, attendanceLogs } = useAppContext();
   
-  const [selectedDate, setSelectedDate] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'));
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'));
+  const [selectedDate, setSelectedDate] = useState<string>(() => '2026-08-01');
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => '2026-08');
   const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
   const [expandedEmpId, setExpandedEmpId] = useState<string | null>(null);
 
@@ -38,23 +46,45 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
   const [shiftEndTime, setShiftEndTime] = useState('17:00');
   const [hourlyRate, setHourlyRate] = useState<number>(5000);
 
-  // Admin Notes stored in localStorage
-  const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
+  // Admin Notes stored in localStorage (initialized with August 2026 Google Sheet notes)
+  const [adminNotes, setAdminNotes] = useState<Record<string, string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ashley_admin_notes_2026-08');
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return generateAugust2026AdminNotes(employees);
+  });
+
   const [editingNoteKey, setEditingNoteKey] = useState<string | null>(null);
   const [tempNoteText, setTempNoteText] = useState('');
 
+  // Edit Overtime Modal State
+  const [editingRecord, setEditingRecord] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<{ hours: string; rate: string; note: string }>({
+    hours: '',
+    rate: '5000',
+    note: ''
+  });
+
+  // Keep notes synchronized with localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem(`ashley_admin_notes_${selectedMonth}`);
         if (stored) {
           setAdminNotes(JSON.parse(stored));
+        } else if (selectedMonth === '2026-08') {
+          const defaultNotes = generateAugust2026AdminNotes(employees);
+          setAdminNotes(defaultNotes);
+          localStorage.setItem('ashley_admin_notes_2026-08', JSON.stringify(defaultNotes));
         } else {
           setAdminNotes({});
         }
       } catch {}
     }
-  }, [selectedMonth]);
+  }, [selectedMonth, employees]);
 
   const handleSaveNote = (key: string) => {
     const updated = { ...adminNotes, [key]: tempNoteText.trim() };
@@ -88,9 +118,9 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
 
   const shiftEndMins = useMemo(() => timeToMinutes(shiftEndTime), [shiftEndTime]);
 
-  // Generate combined overtime records dynamically from Attendance Logs + Manual Entries
+  // Generate combined overtime records dynamically from Attendance Logs + Manual Entries + Google Sheet
   const allOvertimeRecords = useMemo(() => {
-    const records: Array<{
+    const recordsMap = new Map<string, {
       id: string;
       employeeId: string;
       employeeName: string;
@@ -102,11 +132,10 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       rate: number;
       totalAmount: number;
       note: string;
-      source: 'attendance' | 'manual';
-    }> = [];
+      source: 'attendance' | 'manual' | 'sheet';
+    }>();
 
     // 1. Process Attendance Logs
-    // Group logs by date and employee
     const dateEmpGroups: Record<string, typeof attendanceLogs> = {};
     (attendanceLogs || []).forEach(log => {
       const logDate = log.date || (log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || '');
@@ -115,7 +144,6 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       const logEmpId = (log.employeeId || log.userId || '').toString().trim().toLowerCase();
       const logName = (log.name || log.userName || (log as any).employeeName || '').toString().trim().toLowerCase();
 
-      // Find matching employee
       const matchedEmp = activeEmployees.find(emp => {
         const targetEmpId = (emp.id || '').toString().trim().toLowerCase();
         const empCode = emp.employeeId ? `emp-${emp.employeeId}`.toLowerCase() : '';
@@ -137,7 +165,6 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       }
     });
 
-    // Check each employee-date group for overtime after shiftEnd
     Object.entries(dateEmpGroups).forEach(([groupKey, logs]) => {
       const [empId, dateStr] = groupKey.split('_');
       const emp = activeEmployees.find(e => e.id === empId);
@@ -154,7 +181,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
 
       const checkInTimeStr = checkInLog?.time 
         ? (checkInLog.time.includes(' ') ? checkInLog.time.split(' ')[1]?.slice(0, 5) : checkInLog.time.slice(0, 5))
-        : (checkInLog as any)?.checkInTime?.slice(0, 5) || null;
+        : (checkInLog as any)?.checkInTime?.slice(0, 5) || '08:00';
 
       const checkOutTimeStr = checkOutLog?.time 
         ? (checkOutLog.time.includes(' ') ? checkOutLog.time.split(' ')[1]?.slice(0, 5) : checkOutLog.time.slice(0, 5))
@@ -168,7 +195,8 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
           const noteKey = `${emp.id}_${dateStr}`;
           const savedNote = adminNotes[noteKey] || (logs[0] as any)?.notes || '';
 
-          records.push({
+          const recKey = `${emp.id}_${dateStr}`;
+          recordsMap.set(recKey, {
             id: `att_${emp.id}_${dateStr}`,
             employeeId: emp.id,
             employeeName: emp.fullName3Part || emp.name || 'کارمەند',
@@ -186,32 +214,31 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       }
     });
 
-    // 2. Process Manual Overtime Entries
+    // 2. Process Manual / Stored Overtime Entries
     (overtime || []).forEach((r: any) => {
       if (!r.date) return;
       const emp = employees.find(e => e.id === (r.employeeId || r.userId));
-      
-      // Avoid exact duplicate if already captured by attendance
-      const alreadyCaptured = records.some(rec => rec.employeeId === (r.employeeId || r.userId) && rec.date === r.date);
-      if (!alreadyCaptured) {
-        const hoursNum = parseFloat(r.hours || 0);
-        const rateNum = parseFloat(r.rate || hourlyRate);
-        records.push({
-          id: r.id || `manual_${Date.now()}_${Math.random()}`,
-          employeeId: r.employeeId || r.userId || 'manual',
-          employeeName: r.employeeName || emp?.fullName3Part || emp?.name || 'کارمەند',
-          employeeRole: emp?.role || 'کارمەند',
-          date: r.date,
-          hours: hoursNum,
-          rate: rateNum,
-          totalAmount: Number(r.totalAmount || (hoursNum * rateNum)),
-          note: r.note || r.notes || '',
-          source: 'manual',
-        });
-      }
+      const hoursNum = parseFloat(r.hours || 0);
+      const rateNum = parseFloat(r.rate || hourlyRate);
+      const noteKey = `${r.employeeId || r.userId}_${r.date}`;
+      const savedNote = adminNotes[noteKey] || r.note || r.notes || '';
+
+      const recKey = `${r.employeeId || r.userId}_${r.date}`;
+      recordsMap.set(recKey, {
+        id: r.id || `manual_${Date.now()}_${Math.random()}`,
+        employeeId: r.employeeId || r.userId || 'manual',
+        employeeName: r.employeeName || emp?.fullName3Part || emp?.name || 'کارمەند',
+        employeeRole: emp?.role || 'کارمەند',
+        date: r.date,
+        hours: hoursNum,
+        rate: rateNum,
+        totalAmount: Number(r.totalAmount || (hoursNum * rateNum)),
+        note: savedNote,
+        source: 'manual',
+      });
     });
 
-    return records.sort((a, b) => b.date.localeCompare(a.date));
+    return Array.from(recordsMap.values()).sort((a, b) => b.date.localeCompare(a.date));
   }, [attendanceLogs, activeEmployees, overtime, shiftEndMins, hourlyRate, adminNotes, employees]);
 
   // Daily records on selected date
@@ -255,7 +282,6 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       summaryMap[id].records.push(r);
     });
 
-    // Filter to ONLY employees with overtime > 0
     return Object.values(summaryMap)
       .filter(s => s.totalHours > 0)
       .sort((a, b) => b.totalHours - a.totalHours);
@@ -291,15 +317,95 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
     };
 
     setOvertime((prev: any) => [newRecord, ...(prev || [])]);
+
+    if (manualNote.trim()) {
+      const noteKey = `${selectedEmpId}_${selectedDate}`;
+      const updatedNotes = { ...adminNotes, [noteKey]: manualNote.trim() };
+      setAdminNotes(updatedNotes);
+      localStorage.setItem(`ashley_admin_notes_${selectedMonth}`, JSON.stringify(updatedNotes));
+    }
+
     setManualHours('');
     setManualNote('');
     alert(`🎉 کاتی زیادە (${parsedHours} کاتژمێر) بۆ (${newRecord.employeeName}) تۆمارکرا!`);
+  };
+
+  // Open Edit Modal for a Record
+  const handleOpenEditModal = (rec: any) => {
+    setEditingRecord(rec);
+    const noteKey = `${rec.employeeId}_${rec.date}`;
+    setEditForm({
+      hours: rec.hours.toString(),
+      rate: (rec.rate || hourlyRate).toString(),
+      note: adminNotes[noteKey] || rec.note || ''
+    });
+  };
+
+  // Save Edit Modal
+  const handleSaveEditModal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRecord) return;
+
+    const parsedHours = parseFloat(editForm.hours);
+    const parsedRate = parseFloat(editForm.rate) || hourlyRate;
+    if (isNaN(parsedHours) || parsedHours <= 0) return alert('تکایە کاتژمێری دروست بنووسە');
+
+    const noteKey = `${editingRecord.employeeId}_${editingRecord.date}`;
+    const updatedNotes = { ...adminNotes, [noteKey]: editForm.note.trim() };
+    setAdminNotes(updatedNotes);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`ashley_admin_notes_${selectedMonth}`, JSON.stringify(updatedNotes));
+    }
+
+    // Update or add in overtime state
+    setOvertime((prev: any[]) => {
+      const existing = (prev || []).find(r => r.id === editingRecord.id || (r.employeeId === editingRecord.employeeId && r.date === editingRecord.date));
+      if (existing) {
+        return (prev || []).map(r => (r.id === existing.id ? {
+          ...r,
+          hours: parsedHours,
+          rate: parsedRate,
+          totalAmount: parsedHours * parsedRate,
+          note: editForm.note.trim()
+        } : r));
+      } else {
+        return [
+          {
+            id: editingRecord.id || `ot_edited_${Date.now()}`,
+            employeeId: editingRecord.employeeId,
+            employeeName: editingRecord.employeeName,
+            date: editingRecord.date,
+            hours: parsedHours,
+            rate: parsedRate,
+            totalAmount: parsedHours * parsedRate,
+            note: editForm.note.trim(),
+            createdAt: new Date().toISOString()
+          },
+          ...(prev || [])
+        ];
+      }
+    });
+
+    setEditingRecord(null);
+    alert('✅ دەستکارییەکە بە سەرکەوتوویی پاشەکەوت کرا!');
   };
 
   const handleDelete = (id: string) => {
     if (confirm('ئایا دڵنیایت لە سڕینەوەی ئەم کاتە زیادەیە؟')) {
       setOvertime((prev: any) => (prev || []).filter((r: any) => r.id !== id));
     }
+  };
+
+  // Reset / Sync with Google Sheet
+  const handleSyncGoogleSheet = () => {
+    const defaultNotes = generateAugust2026AdminNotes(employees);
+    const defaultOvertime = generateAugust2026OvertimeList(employees);
+    setAdminNotes(defaultNotes);
+    setOvertime(defaultOvertime);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ashley_admin_notes_2026-08', JSON.stringify(defaultNotes));
+    }
+    alert(`🎉 سەرجەم داتاکانی گووگڵ شیت (${GOOGLE_SHEET_OVERTIME_DATA.length} تۆمار) لەگەڵ کاتژمێری هاتن 08:00 و دەرچوونی نوێ بە سەرکەوتوویی هاوردە کران!`);
   };
 
   // PDF & CSV Export Handlers
@@ -311,7 +417,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         { header: 'کاتی دەرچوون', key: 'checkOutTime', align: 'center' },
         { header: 'ژمارەی کاتژمێر', key: 'hours', align: 'center' },
         { header: 'بڕی پارە (IQD)', key: 'amount', align: 'center' },
-        { header: 'تێبینی / هۆکار و وردەکاری', key: 'note', align: 'right' },
+        { header: 'تێبینی و جۆری ئیش', key: 'note', align: 'right' },
       ];
       const data = dailyRecords.map(r => ({
         name: r.employeeName,
@@ -407,7 +513,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
     <div className="space-y-4 text-xs font-bold text-slate-900 dir-rtl" dir="rtl">
       
       {/* 🏷️ LARGE PROMINENT SECTION TITLE (ACTIVE & SYNCED) */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-3.5 bg-gradient-to-r from-orange-950 via-amber-950 to-slate-950 text-white rounded-xl shadow-lg border border-orange-700">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-orange-950 via-amber-950 to-slate-950 text-white rounded-xl shadow-lg border border-orange-700">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-orange-800/90 rounded-xl border border-orange-600 shadow-inner">
             <Clock className="w-6 h-6 text-orange-200" />
@@ -420,36 +526,21 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
               </span>
             </h2>
             <p className="text-[11px] text-orange-200/90 font-medium mt-0.5">
-              ئاماری ڕۆژانە و مانگانەی کاتی زیادەی کارمەندان، هەژمارکراو لە چێک‌ئاوت و تۆماری دەستی، حازر بۆ چاپکردن (PDF/CSV)
+              ئاماری ڕۆژانە و مانگانەی کاتی زیادەی کارمەندان لە گووگڵ شیت، هەژمارکراو لە چێک‌ئاوت و دەستی، حازر بۆ چاپکردن
             </p>
           </div>
         </div>
 
-        {/* ⚙️ DYNAMIC SHIFT & RATE SETTINGS */}
-        <div className="flex flex-wrap items-center gap-3 text-xs bg-slate-900/90 p-2 px-3 rounded-xl border border-slate-700 shadow-inner">
-          <div className="flex items-center gap-1.5">
-            <Clock className="w-4 h-4 text-orange-400" />
-            <span className="text-slate-300 font-bold">کۆتایی دەوام:</span>
-            <input
-              type="time"
-              value={shiftEndTime}
-              onChange={(e) => setShiftEndTime(e.target.value)}
-              className="bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white text-xs font-mono font-bold text-center"
-            />
-          </div>
-
-          <div className="flex items-center gap-1.5 border-r border-slate-700 pr-2.5">
-            <DollarSign className="w-4 h-4 text-emerald-400" />
-            <span className="text-slate-300 font-bold">نرخی کاتژمێر:</span>
-            <input
-              type="number"
-              step="500"
-              value={hourlyRate}
-              onChange={(e) => setHourlyRate(parseInt(e.target.value, 10) || 5000)}
-              className="bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white text-xs font-mono font-bold w-20 text-center"
-            />
-            <span className="text-[11px] text-slate-400">IQD</span>
-          </div>
+        {/* 🔄 ACTIONS & SYNC BUTTON */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleSyncGoogleSheet}
+            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 border-amber-300 shadow-md cursor-pointer px-3 py-1.5 rounded-lg"
+            title="هاوردەکردن و نوێکردنەوەی سەرجەم کاتی زیادە و تێبینیەکانی گووگڵ شیت"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-slate-950 animate-spin-slow" />
+            <span>📥 هاوردەکردنی داتاکانی Google Sheets</span>
+          </button>
         </div>
       </div>
 
@@ -503,7 +594,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
             className="btn-classic text-xs font-black flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-900 border-red-300 shadow-sm cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5 text-red-700" />
-            <span>📄 هەناردەی PDF (چاپکردن)</span>
+            <span>📄 هەناردەی PDF</span>
           </button>
 
           <button
@@ -511,7 +602,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
             className="btn-classic text-xs font-black flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300 shadow-sm cursor-pointer"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-            <span>📊 هەناردەی CSV (Excel)</span>
+            <span>📊 هەناردەی CSV</span>
           </button>
         </div>
       </div>
@@ -546,9 +637,9 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         </div>
 
         <div className="panel-classic p-2.5 text-center bg-purple-50/80 border-2 border-purple-200 shadow-sm rounded-xl">
-          <span className="text-[10px] text-purple-900 block font-bold">سەرچاوەی داتاکان</span>
+          <span className="text-[10px] text-purple-900 block font-bold">دۆخی گووگڵ شیت</span>
           <p className="text-xs font-black text-purple-950 mt-1">
-            ⚡ ئۆتۆماتیک لە چێک‌ئاوت + دەستی
+            ✅ {GOOGLE_SHEET_OVERTIME_DATA.length} تۆمار ئامادەیە
           </p>
         </div>
       </div>
@@ -614,12 +705,12 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
           </div>
 
           <div>
-            <label className="block text-amber-950 mb-1 text-[11px] font-bold">تێبینی و هۆکار (Notes):</label>
+            <label className="block text-amber-950 mb-1 text-[11px] font-bold">تێبینی، جۆری ئیش و هۆکار:</label>
             <input
               type="text"
               value={manualNote}
               onChange={(e) => setManualNote(e.target.value)}
-              placeholder="ئەرکی زیادە، داگرتنی بار، چاککردنەوە..."
+              placeholder="نقڵی ماڵان، چاککردنەوە، کارکردنی شەوان..."
               className="input-classic w-full font-bold bg-white border-amber-300"
             />
           </div>
@@ -628,7 +719,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         <div className="flex justify-end pt-1">
           <button type="submit" className="btn-classic text-xs font-black flex items-center gap-1.5 bg-amber-700 hover:bg-amber-800 text-white border-amber-900 shadow-sm cursor-pointer px-4 py-1 rounded">
             <Plus className="w-3.5 h-3.5" />
-            <span>تۆمارکردنی ئیزافە</span>
+            <span>تۆمارکردنی ئەم ئیزافەیە</span>
           </button>
         </div>
       </form>
@@ -650,7 +741,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
 
         <div className="overflow-x-auto">
           {viewMode === 'daily' ? (
-            /* 📅 DAILY OVERTIME TABLE WITH NOTES & DETAILS */
+            /* 📅 DAILY OVERTIME TABLE WITH DIRECT EDIT & NOTES */
             <table className="w-full text-right text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-200 border-b-2 border-slate-300 text-slate-900 font-black">
@@ -660,9 +751,9 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                   <th className="p-2.5 border-l border-slate-300 text-center">کاتی دەرچوون</th>
                   <th className="p-2.5 border-l border-slate-300 text-center">ژمارەی کاتژمێر</th>
                   <th className="p-2.5 border-l border-slate-300 text-center">بڕی شایستەی پارە (IQD)</th>
-                  <th className="p-2.5 border-l border-slate-300 bg-amber-50 text-amber-950">تێبینی و وردەکاری</th>
+                  <th className="p-2.5 border-l border-slate-300 bg-amber-50 text-amber-950">تێبینی و جۆری ئیش</th>
                   <th className="p-2.5 border-l border-slate-300 text-center w-24">سەرچاوە</th>
-                  <th className="p-2.5 text-center w-16">کردار</th>
+                  <th className="p-2.5 text-center w-24">کردارەکان</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -754,17 +845,24 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                             )}
                           </td>
                           <td className="p-2.5 text-center">
-                            {rec.source === 'manual' ? (
+                            <div className="flex items-center justify-center gap-1">
                               <button
-                                onClick={() => handleDelete(rec.id)}
-                                className="text-rose-700 hover:text-rose-950 p-1 hover:bg-rose-100 rounded transition-all"
-                                title="سڕینەوە"
+                                onClick={() => handleOpenEditModal(rec)}
+                                className="text-blue-700 hover:text-blue-950 p-1 hover:bg-blue-100 rounded transition-all"
+                                title="دەستکاریکردنی ژمارەی کاتژمێر و نرخ و تێبینی"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Edit className="w-3.5 h-3.5" />
                               </button>
-                            ) : (
-                              <span className="text-slate-300 text-[10px]">-</span>
-                            )}
+                              {rec.source === 'manual' && (
+                                <button
+                                  onClick={() => handleDelete(rec.id)}
+                                  className="text-rose-700 hover:text-rose-950 p-1 hover:bg-rose-100 rounded transition-all"
+                                  title="سڕینەوە"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -782,7 +880,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                         +{totalDailyCost.toLocaleString()} IQD
                       </td>
                       <td colSpan={3} className="p-2.5 text-slate-600 font-normal">
-                        ({dailyRecords.length} کارمەندی بەشداربوو)
+                        ({dailyRecords.length} کارمەندی خاوەن ئیزافە)
                       </td>
                     </tr>
                   </>
@@ -857,8 +955,8 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                                         <th className="p-1.5 border-l border-slate-200 text-center">دەرچوون</th>
                                         <th className="p-1.5 border-l border-slate-200 text-center">کاتژمێر</th>
                                         <th className="p-1.5 border-l border-slate-200 text-center">کۆی پارە</th>
-                                        <th className="p-1.5 border-l border-slate-200">تێبینی و هۆکار</th>
-                                        <th className="p-1.5 text-center w-20">سەرچاوە</th>
+                                        <th className="p-1.5 border-l border-slate-200">تێبینی و جۆری ئیش</th>
+                                        <th className="p-1.5 text-center w-20">دەستکاری</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 font-bold">
@@ -871,8 +969,17 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                                             +{r.totalAmount.toLocaleString()} IQD
                                           </td>
                                           <td className="p-1.5 border-l border-slate-200 text-slate-800">{r.note || '-'}</td>
-                                          <td className="p-1.5 text-center text-[10px]">
-                                            {r.source === 'attendance' ? '⚡ سیستەم' : '✍️ دەستی'}
+                                          <td className="p-1.5 text-center">
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleOpenEditModal(r);
+                                              }}
+                                              className="text-blue-700 hover:text-blue-900 p-0.5 rounded hover:bg-blue-100"
+                                              title="دەستکاری"
+                                            >
+                                              <Edit className="w-3 h-3" />
+                                            </button>
                                           </td>
                                         </tr>
                                       ))}
@@ -911,6 +1018,91 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
           )}
         </div>
       </div>
+
+      {/* ✏️ MODAL: EDIT OVERTIME RECORD */}
+      {editingRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl border-2 border-orange-400 shadow-2xl max-w-md w-full p-5 space-y-4 text-right">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                <Edit className="w-4 h-4 text-orange-600" />
+                <span>دەستکاریکردنی تۆماری ئیزافە ({editingRecord.employeeName})</span>
+              </h3>
+              <button
+                onClick={() => setEditingRecord(null)}
+                className="text-slate-400 hover:text-slate-700 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditModal} className="space-y-3">
+              <div>
+                <label className="block text-slate-700 text-xs font-bold mb-1">بەروار:</label>
+                <input
+                  type="text"
+                  value={editingRecord.date}
+                  disabled
+                  className="input-classic w-full bg-slate-100 font-mono text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 text-xs font-bold mb-1">ژمارەی کاتژمێری ئیزافە:</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  max="24"
+                  value={editForm.hours}
+                  onChange={(e) => setEditForm({ ...editForm, hours: e.target.value })}
+                  className="input-classic w-full font-mono font-bold text-xs bg-white border-orange-300"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 text-xs font-bold mb-1">نرخی کاتژمێر (IQD):</label>
+                <input
+                  type="number"
+                  step="500"
+                  value={editForm.rate}
+                  onChange={(e) => setEditForm({ ...editForm, rate: e.target.value })}
+                  className="input-classic w-full font-mono font-bold text-xs bg-white border-orange-300"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 text-xs font-bold mb-1">تێبینی و جۆری ئیش:</label>
+                <input
+                  type="text"
+                  value={editForm.note}
+                  onChange={(e) => setEditForm({ ...editForm, note: e.target.value })}
+                  placeholder="جۆری ئیش، هۆکار، وردەکاری..."
+                  className="input-classic w-full text-xs font-bold bg-white border-orange-300"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingRecord(null)}
+                  className="btn-classic text-xs px-3 py-1.5"
+                >
+                  پاشگەزبوونەوە
+                </button>
+                <button
+                  type="submit"
+                  className="btn-classic-primary text-xs px-4 py-1.5 flex items-center gap-1.5 bg-orange-700 hover:bg-orange-800 text-white"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>پاشەکەوتکردنی گۆڕانکاری</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );
