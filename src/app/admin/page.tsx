@@ -529,7 +529,7 @@ export default function AdminPage() {
           >
             <Clock className="w-3.5 h-3.5 text-orange-600" />
             <span>٢. کاتی زیادە (Overtime)</span>
-            <span className="bg-rose-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black animate-pulse">🔴 بەم زووانە</span>
+            <span className="bg-emerald-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">🟢 چالاکە</span>
           </button>
 
           <button
