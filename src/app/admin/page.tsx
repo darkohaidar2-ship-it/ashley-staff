@@ -45,7 +45,8 @@ import {
   Shield,
   Search,
   RefreshCw,
-  KeyRound
+  KeyRound,
+  BarChart3
 } from 'lucide-react';
 import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChangeModal';
 import { AdminOvertimeModule } from '@/components/admin/AdminOvertimeModule';
