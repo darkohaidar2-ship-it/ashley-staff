@@ -57,7 +57,7 @@ export default function AdminAttendancePage() {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   
-  // Security Auth Guard
+  // Security Auth Guard & 30-Minute Inactivity Auto-Logout
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const stored = sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session');
@@ -65,6 +65,28 @@ export default function AdminAttendancePage() {
         window.location.href = '/login';
       }
     }
+
+    let timeoutId: NodeJS.Timeout;
+    const resetInactivityTimer = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        alert('⚠️ سێشنەکەت بەسەرچوو بەهۆی بێدەنگی بۆ ماوەی ٣٠ خولەک! تکایە دووبارە لۆگین بکەرەوە.');
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('ashley_admin_session');
+          sessionStorage.removeItem('ashley_admin_session');
+          window.location.href = '/login';
+        }
+      }, 30 * 60 * 1000);
+    };
+
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach((ev) => window.addEventListener(ev, resetInactivityTimer));
+    resetInactivityTimer();
+
+    return () => {
+      clearTimeout(timeoutId);
+      activityEvents.forEach((ev) => window.removeEventListener(ev, resetInactivityTimer));
+    };
   }, []);
   
   // Data State

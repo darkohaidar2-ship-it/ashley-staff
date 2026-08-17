@@ -44,13 +44,16 @@ import {
   FileText,
   Shield,
   Search,
-  RefreshCw
+  RefreshCw,
+  KeyRound
 } from 'lucide-react';
+import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChangeModal';
 
 export default function AdminPage() {
   const router = useRouter();
   const { user, loading: authLoading, logout } = useAuth();
   const [authChecked, setAuthChecked] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   // Security Auth Guard: Redirect unauthenticated users immediately to /login
   useEffect(() => {
@@ -63,6 +66,34 @@ export default function AdminPage() {
       }
     }
   }, [user, authLoading, router]);
+
+  // 🛡️ 30-Minute Inactivity Auto-Logout Security Guard
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
+    const resetInactivityTimer = () => {
+      clearTimeout(timeoutId);
+      // 30 minutes
+      timeoutId = setTimeout(async () => {
+        alert('⚠️ سێشنەکەت بەسەرچوو بەهۆی بێدەنگی بۆ ماوەی ٣٠ خولەک! تکایە دووبارە لۆگین بکەرەوە.');
+        await logout();
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('ashley_admin_session');
+          sessionStorage.removeItem('ashley_admin_session');
+        }
+        router.replace('/login');
+      }, 30 * 60 * 1000);
+    };
+
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach((ev) => window.addEventListener(ev, resetInactivityTimer));
+    resetInactivityTimer();
+
+    return () => {
+      clearTimeout(timeoutId);
+      activityEvents.forEach((ev) => window.removeEventListener(ev, resetInactivityTimer));
+    };
+  }, [logout, router]);
 
   const {
     employees,
@@ -366,6 +397,11 @@ export default function AdminPage() {
           <div className="statusbar-segment text-blue-900 font-bold bg-slate-100 hidden sm:block">
             ⏰ {currentTimeStr || '2026-08-13 | 15:50'}
           </div>
+
+          <button onClick={() => setShowPasswordModal(true)} className="btn-classic text-indigo-900 font-bold bg-indigo-50 hover:bg-indigo-100 border-indigo-300">
+            <KeyRound className="w-3.5 h-3.5 text-indigo-700" />
+            <span>گۆڕینی پاسۆرد</span>
+          </button>
 
           <button onClick={() => setShowMapPicker(true)} className="btn-classic">
             <MapPin className="w-3.5 h-3.5 text-amber-700" />
@@ -1052,6 +1088,12 @@ export default function AdminPage() {
           }}
         />
       )}
+
+      {/* ADMIN PASSWORD CHANGE MODAL */}
+      <AdminPasswordChangeModal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+      />
 
     </div>
   );
