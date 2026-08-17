@@ -66,19 +66,30 @@ export function AdminWeeklyMonthlyStatsModule({
   const employeeStats = useMemo(() => {
     return activeEmployees.map(emp => {
       const empLogs = filteredLogs.filter(log => {
+        const logEmpId = (log.employeeId || log.userId || '').toString().trim().toLowerCase();
+        const targetEmpId = (emp.id || '').toString().trim().toLowerCase();
+        const empCode = emp.employeeId ? `emp-${emp.employeeId}`.toLowerCase() : '';
+
+        const logName = (log.name || log.userName || (log as any).employeeName || '').toString().trim().toLowerCase();
+        const empName1 = (emp.fullName3Part || '').toString().trim().toLowerCase();
+        const empName2 = (emp.name || '').toString().trim().toLowerCase();
+
         return (
-          log.employeeId === emp.id ||
-          log.userId === emp.id ||
-          (emp.employeeId && log.employeeId === `EMP-${emp.employeeId}`) ||
-          log.name === emp.fullName3Part ||
-          log.name === emp.name ||
-          log.userName === emp.name ||
-          log.userName === emp.fullName3Part
+          (logEmpId && logEmpId === targetEmpId) ||
+          (empCode && logEmpId === empCode) ||
+          (logName && empName1 && (logName === empName1 || logName.includes(empName1) || empName1.includes(logName))) ||
+          (logName && empName2 && (logName === empName2 || logName.includes(empName2) || empName2.includes(logName)))
         );
       });
 
-      const checkInLogs = empLogs.filter(l => l.type === 'Check In' || (l as any).checkInTime);
-      const checkOutLogs = empLogs.filter(l => l.type === 'Check Out' || (l as any).checkOutTime);
+      const checkInLogs = empLogs.filter(l => {
+        const t = (l.type || '').toLowerCase();
+        return t.includes('in') || t.includes('هاتن') || !!(l as any).checkInTime;
+      });
+      const checkOutLogs = empLogs.filter(l => {
+        const t = (l.type || '').toLowerCase();
+        return t.includes('out') || t.includes('دەرچوون') || t.includes('ڕۆشتن') || !!(l as any).checkOutTime;
+      });
 
       let lateCount = 0;
       let totalLateMins = 0;
@@ -86,7 +97,7 @@ export function AdminWeeklyMonthlyStatsModule({
       let totalOvertimeMins = 0;
 
       checkInLogs.forEach(l => {
-        const timeStr = l.time ? (l.time.includes(' ') ? l.time.split(' ')[1] : l.time) : (l as any).checkInTime;
+        const timeStr = l.time ? (l.time.includes(' ') ? l.time.split(' ')[1]?.slice(0, 5) : l.time.slice(0, 5)) : (l as any).checkInTime?.slice(0, 5);
         if (timeStr) {
           const parts = timeStr.split(':');
           const mins = (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
@@ -98,7 +109,7 @@ export function AdminWeeklyMonthlyStatsModule({
       });
 
       checkOutLogs.forEach(l => {
-        const timeStr = l.time ? (l.time.includes(' ') ? l.time.split(' ')[1] : l.time) : (l as any).checkOutTime;
+        const timeStr = l.time ? (l.time.includes(' ') ? l.time.split(' ')[1]?.slice(0, 5) : l.time.slice(0, 5)) : (l as any).checkOutTime?.slice(0, 5);
         if (timeStr) {
           const parts = timeStr.split(':');
           const mins = (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);

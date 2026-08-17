@@ -228,27 +228,38 @@ export function AttendanceAnalyticsReport({
           const logDate = log.date || (log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || '');
           if (logDate !== targetDate) return false;
 
+          const logEmpId = (log.employeeId || log.userId || '').toString().trim().toLowerCase();
+          const targetEmpId = (emp.id || '').toString().trim().toLowerCase();
+          const empCode = emp.employeeId ? `emp-${emp.employeeId}`.toLowerCase() : '';
+
+          const logName = (log.name || log.userName || (log as any).employeeName || '').toString().trim().toLowerCase();
+          const empName1 = (emp.fullName3Part || '').toString().trim().toLowerCase();
+          const empName2 = (emp.name || '').toString().trim().toLowerCase();
+
           return (
-            log.employeeId === emp.id ||
-            log.userId === emp.id ||
-            (emp.employeeId && log.employeeId === `EMP-${emp.employeeId}`) ||
-            log.name === emp.fullName3Part ||
-            log.name === emp.name ||
-            log.userName === emp.name ||
-            log.userName === emp.fullName3Part
+            (logEmpId && logEmpId === targetEmpId) ||
+            (empCode && logEmpId === empCode) ||
+            (logName && empName1 && (logName === empName1 || logName.includes(empName1) || empName1.includes(logName))) ||
+            (logName && empName2 && (logName === empName2 || logName.includes(empName2) || empName2.includes(logName)))
           );
         });
 
-        const checkInLog = dayLogs.find(l => l.type === 'Check In' || (l as any).checkInTime);
-        const checkOutLog = dayLogs.find(l => l.type === 'Check Out' || (l as any).checkOutTime);
+        const checkInLog = dayLogs.find(l => {
+          const t = (l.type || '').toLowerCase();
+          return t.includes('in') || t.includes('هاتن') || !!(l as any).checkInTime;
+        });
+        const checkOutLog = dayLogs.find(l => {
+          const t = (l.type || '').toLowerCase();
+          return t.includes('out') || t.includes('دەرچوون') || t.includes('ڕۆشتن') || !!(l as any).checkOutTime;
+        });
 
         const checkInTimeStr = checkInLog?.time 
-          ? (checkInLog.time.includes(' ') ? checkInLog.time.split(' ')[1] : checkInLog.time)
-          : (checkInLog as any)?.checkInTime || null;
+          ? (checkInLog.time.includes(' ') ? checkInLog.time.split(' ')[1]?.slice(0, 5) : checkInLog.time.slice(0, 5))
+          : (checkInLog as any)?.checkInTime?.slice(0, 5) || null;
 
         const checkOutTimeStr = checkOutLog?.time 
-          ? (checkOutLog.time.includes(' ') ? checkOutLog.time.split(' ')[1] : checkOutLog.time)
-          : (checkOutLog as any)?.checkOutTime || null;
+          ? (checkOutLog.time.includes(' ') ? checkOutLog.time.split(' ')[1]?.slice(0, 5) : checkOutLog.time.slice(0, 5))
+          : (checkOutLog as any)?.checkOutTime?.slice(0, 5) || null;
 
         const isPresent = !!(checkInTimeStr || checkOutTimeStr);
 
