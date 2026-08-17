@@ -5,7 +5,7 @@ import type { AttendanceRecord, Employee } from '@/lib/types';
 import { Camera, Calendar, MapPin, Trash2, CheckCircle, User, FileText, Edit3 } from 'lucide-react';
 import { getDaysInMonth, format } from 'date-fns';
 import { AttendanceAnalyticsReport } from './AttendanceAnalyticsReport';
-import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
+import { exportToPDF, exportToCSV, formatTime12H, type ExportTableColumn } from '@/lib/export-utils';
 
 interface AttendanceSheetGridProps {
   attendanceLogs: AttendanceRecord[];
@@ -349,7 +349,11 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
           <tbody>
             {activeEmployees.length > 0 ? (
               activeEmployees.map((emp, idx) => (
-                <tr key={emp.id} className={idx % 2 === 0 ? 'bg-white hover:bg-slate-100' : 'bg-slate-50 hover:bg-slate-100'}>
+                <tr 
+                  key={emp.id} 
+                  id={`sheet-row-emp-${emp.id}`}
+                  className={`transition-all duration-300 ${idx % 2 === 0 ? 'bg-white hover:bg-slate-100' : 'bg-slate-50 hover:bg-slate-100'}`}
+                >
                   
                   {/* Sticky Right Column: Employee Name & PIN */}
                   <td className="sticky right-0 bg-slate-100 font-bold text-slate-900 px-2 py-1.5 border-l border-slate-400 z-10 shadow-sm">
@@ -373,7 +377,7 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                       <td key={dayNum} className="text-center p-1 border-l border-slate-300 align-middle">
                         {cellLogs.length > 0 ? (
                           <div className="flex flex-col items-center justify-center gap-0.5 font-mono text-[11px] font-bold">
-                            {/* Check-In Link */}
+                            {/* Check-In Link (12H Format) */}
                             {checkIn ? (
                               <button
                                 type="button"
@@ -383,16 +387,16 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                               >
                                 {checkIn.originalTime || checkIn.checkInOriginalTime ? (
                                   <div className="flex flex-col items-center leading-tight">
-                                    <span className="line-through text-rose-500 text-[9px]">{checkIn.originalTime || checkIn.checkInOriginalTime}</span>
-                                    <span className="text-emerald-700 hover:text-emerald-950 font-black text-[11px] underline bg-emerald-50 px-1 rounded">{checkIn.time?.split(' ')[1]?.slice(0, 5) || '08:00'}</span>
+                                    <span className="line-through text-rose-500 text-[9px]">{formatTime12H(checkIn.originalTime || checkIn.checkInOriginalTime)}</span>
+                                    <span className="text-emerald-700 hover:text-emerald-950 font-black text-[10px] underline bg-emerald-50 px-1 rounded">{formatTime12H(checkIn.time)}</span>
                                   </div>
                                 ) : (
-                                  <span className="text-blue-700 hover:text-blue-950 underline">{checkIn.time?.split(' ')[1]?.slice(0, 5) || '08:00'}</span>
+                                  <span className="text-blue-700 hover:text-blue-950 underline text-[10px]">{formatTime12H(checkIn.time)}</span>
                                 )}
                               </button>
                             ) : null}
 
-                            {/* Check-Out Link */}
+                            {/* Check-Out Link (12H Format) */}
                             {checkOut ? (
                               <button
                                 type="button"
@@ -402,11 +406,11 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                               >
                                 {checkOut.originalTime || checkOut.checkOutOriginalTime ? (
                                   <div className="flex flex-col items-center leading-tight">
-                                    <span className="line-through text-rose-400 text-[9px]">{checkOut.originalTime || checkOut.checkOutOriginalTime}</span>
-                                    <span className="text-emerald-700 hover:text-emerald-950 font-black text-[11px] underline bg-emerald-50 px-1 rounded">{checkOut.time?.split(' ')[1]?.slice(0, 5) || '16:30'}</span>
+                                    <span className="line-through text-rose-400 text-[9px]">{formatTime12H(checkOut.originalTime || checkOut.checkOutOriginalTime)}</span>
+                                    <span className="text-emerald-700 hover:text-emerald-950 font-black text-[10px] underline bg-emerald-50 px-1 rounded">{formatTime12H(checkOut.time)}</span>
                                   </div>
                                 ) : (
-                                  <span className="text-rose-700 hover:text-rose-950 underline">{checkOut.time?.split(' ')[1]?.slice(0, 5) || '16:30'}</span>
+                                  <span className="text-rose-700 hover:text-rose-950 underline text-[10px]">{formatTime12H(checkOut.time)}</span>
                                 )}
                               </button>
                             ) : null}

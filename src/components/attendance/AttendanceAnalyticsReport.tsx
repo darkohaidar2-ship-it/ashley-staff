@@ -24,7 +24,7 @@ import {
   CalendarDays
 } from 'lucide-react';
 import { getDaysInMonth, format, getDay } from 'date-fns';
-import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
+import { exportToPDF, exportToCSV, formatTime12H, type ExportTableColumn } from '@/lib/export-utils';
 
 interface AttendanceAnalyticsReportProps {
   attendanceLogs: AttendanceRecord[];
@@ -792,17 +792,35 @@ export function AttendanceAnalyticsReport({
                       </span>
                     </td>
 
-                    {/* Total Late */}
+                    {/* Total Late (Clickable Link to 31-Day Sheet Grid Row) */}
                     <td className="p-2.5 border-l border-slate-200 text-center bg-rose-50/40">
                       {hasLate ? (
-                        <div className="space-y-0.5">
-                          <span className="px-2 py-0.5 rounded bg-rose-600 text-white font-mono font-black text-xs inline-block">
-                            {formatMinutesHuman(row.totalLateMinutes)}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const targetRow = document.getElementById(`sheet-row-emp-${row.employee.id}`);
+                            if (targetRow) {
+                              targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              targetRow.classList.add('bg-amber-300', 'ring-4', 'ring-amber-500', 'shadow-2xl', 'scale-[1.01]', 'animate-pulse');
+                              setTimeout(() => {
+                                targetRow.classList.remove('animate-pulse');
+                              }, 3500);
+                            } else {
+                              const sheetSection = document.getElementById('attendance-sheet-grid-section');
+                              if (sheetSection) sheetSection.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="space-y-0.5 group cursor-pointer w-full text-center hover:scale-105 transition-all p-1 rounded hover:bg-rose-100"
+                          title="کرتە بکە بۆ بازدان بۆ سەر خشتەی ۳۱ ڕۆژەی ئامادەبوون و هایلایتکردنی کارمەند"
+                        >
+                          <span className="px-2.5 py-1 rounded-lg bg-rose-600 group-hover:bg-rose-700 text-white font-mono font-black text-xs inline-flex items-center gap-1.5 shadow-md">
+                            <span>⏰ {formatMinutesHuman(row.totalLateMinutes)}</span>
+                            <span className="text-[11px] bg-rose-800 px-1 rounded">↗</span>
                           </span>
-                          <span className="text-[10px] text-rose-800 block font-bold">
+                          <span className="text-[10px] text-rose-900 block font-bold group-hover:underline mt-0.5">
                             {row.lateDaysCount} ڕۆژ ({formatMinutesDigital(row.totalLateMinutes)} ک)
                           </span>
-                        </div>
+                        </button>
                       ) : (
                         <span className="text-emerald-700 text-xs font-bold">
                           ✓ بێ دواکەوتن
@@ -865,7 +883,7 @@ export function AttendanceAnalyticsReport({
                               <div key={noteKey} className="p-1.5 rounded border border-amber-300 bg-amber-100/60 text-xs space-y-1">
                                 <div className="flex items-center justify-between gap-1">
                                   <span className="font-mono font-black text-amber-950 text-[10px]">
-                                    📅 {otLog.date} (دەرچوون: {otLog.checkOutTime})
+                                    📅 {otLog.date} (دەرچوون: {formatTime12H(otLog.checkOutTime)})
                                   </span>
                                   <span className="px-1 py-0.2 rounded bg-amber-700 text-white font-mono text-[9px] font-black">
                                     +{formatMinutesHuman(otLog.overtimeMinutes)}

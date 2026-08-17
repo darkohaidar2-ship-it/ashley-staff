@@ -23,6 +23,39 @@ export interface ExportReportOptions {
 }
 
 /**
+ * Convert 24-hour timestamp into 12-hour format with Kurdish indicators (ب.ن / پ.ن)
+ * Example: '08:30:00' -> '08:30 ب.ن', '17:15' -> '05:15 پ.ن'
+ */
+export function formatTime12H(timeStr?: string | null): string {
+  if (!timeStr) return '-';
+  let timePart = String(timeStr).trim();
+  if (timePart.includes('T')) {
+    const splitT = timePart.split('T')[1];
+    if (splitT) timePart = splitT.split('.')[0] || splitT;
+  } else if (timePart.includes(' ')) {
+    const parts = timePart.split(' ');
+    timePart = parts[parts.length - 1] || timePart;
+  }
+
+  const chunks = timePart.split(':');
+  if (chunks.length < 2) return timeStr;
+
+  let hour = parseInt(chunks[0], 10);
+  const minute = chunks[1].slice(0, 2);
+
+  if (isNaN(hour)) return timeStr;
+
+  const isPM = hour >= 12;
+  hour = hour % 12;
+  if (hour === 0) hour = 12;
+
+  const hourStr = hour.toString().padStart(2, '0');
+  const periodStr = isPM ? 'پ.ن' : 'ب.ن';
+
+  return `${hourStr}:${minute} ${periodStr}`;
+}
+
+/**
  * Export data as clean UTF-8 CSV with BOM for Microsoft Excel
  */
 export function exportToCSV(

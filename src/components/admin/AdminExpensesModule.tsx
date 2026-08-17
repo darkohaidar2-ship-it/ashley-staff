@@ -269,9 +269,11 @@ export function AdminExpensesModule({ employees }: AdminExpensesModuleProps) {
             </p>
           </div>
         </div>
-        <span className="text-xs font-mono font-black bg-emerald-500/30 text-emerald-100 border border-emerald-400 px-3 py-1 rounded-full">
-          FINANCE SYSTEM
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-mono font-black bg-rose-600 text-white border-2 border-white px-3 py-1 rounded-full shadow-md animate-pulse">
+            🔴 بەم زووانە (Coming Soon)
+          </span>
+        </div>
       </div>
 
       {/* 🛠️ TOP CONTROLS & TABS */}

@@ -516,6 +516,7 @@ export default function AdminPage() {
           >
             <Users className="w-3.5 h-3.5 text-blue-700" />
             <span>١. کارمەندان و ئامادەبوون (HR)</span>
+            <span className="bg-emerald-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">🟢 ئامادەیە</span>
           </button>
 
           <button
@@ -528,6 +529,7 @@ export default function AdminPage() {
           >
             <Clock className="w-3.5 h-3.5 text-orange-600" />
             <span>٢. کاتی زیادە (Overtime)</span>
+            <span className="bg-rose-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black animate-pulse">🔴 بەم زووانە</span>
           </button>
 
           <button
@@ -540,6 +542,7 @@ export default function AdminPage() {
           >
             <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
             <span>٣. مەسروفات و دارایی (Expenses)</span>
+            <span className="bg-rose-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black animate-pulse">🔴 بەم زووانە</span>
           </button>
 
           <button
@@ -552,6 +555,7 @@ export default function AdminPage() {
           >
             <Truck className="w-3.5 h-3.5 text-amber-700" />
             <span>٤. بارداگرتن و گواستنەوە (Unloading)</span>
+            <span className="bg-rose-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black animate-pulse">🔴 بەم زووانە</span>
           </button>
 
           <button
@@ -564,6 +568,7 @@ export default function AdminPage() {
           >
             <BarChart3 className="w-3.5 h-3.5 text-purple-600" />
             <span>٥. ئاماری هەفتانە و مانگانە (HR Analytics)</span>
+            <span className="bg-emerald-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">🟢 ئامادەیە</span>
           </button>
         </div>
       </div>
@@ -853,8 +858,9 @@ export default function AdminPage() {
       <>
         {adminActiveSection === 'all' && (
           <div className="my-8 border-t-4 border-orange-300 relative flex items-center justify-center">
-            <span className="bg-orange-100 text-orange-950 px-4 py-1 rounded-full text-xs font-black border-2 border-orange-400 -mt-3.5 shadow-sm">
-              بەشی دووەم: کاتی زیادەی کارمەندان (OVERTIME SECTION)
+            <span className="bg-gradient-to-r from-rose-600 to-red-600 text-white px-5 py-1.5 rounded-full text-xs font-black border-2 border-white -mt-4 shadow-lg flex items-center gap-2 animate-pulse">
+              <span>🔴 بەم زووانە (Coming Soon)</span>
+              <span className="text-orange-200">| بەشی دووەم: کاتی زیادەی کارمەندان</span>
             </span>
           </div>
         )}
@@ -873,8 +879,9 @@ export default function AdminPage() {
       <>
         {adminActiveSection === 'all' && (
           <div className="my-8 border-t-4 border-emerald-300 relative flex items-center justify-center">
-            <span className="bg-emerald-100 text-emerald-950 px-4 py-1 rounded-full text-xs font-black border-2 border-emerald-400 -mt-3.5 shadow-sm">
-              بەشی سێیەم: مەسروفات و دارایی (EXPENSES & FINANCE SECTION)
+            <span className="bg-gradient-to-r from-rose-600 to-red-600 text-white px-5 py-1.5 rounded-full text-xs font-black border-2 border-white -mt-4 shadow-lg flex items-center gap-2 animate-pulse">
+              <span>🔴 بەم زووانە (Coming Soon)</span>
+              <span className="text-emerald-200">| بەشی سێیەم: مەسروفات و دارایی</span>
             </span>
           </div>
         )}
@@ -893,8 +900,9 @@ export default function AdminPage() {
       <>
         {adminActiveSection === 'all' && (
           <div className="my-8 border-t-4 border-amber-300 relative flex items-center justify-center">
-            <span className="bg-amber-100 text-amber-950 px-4 py-1 rounded-full text-xs font-black border-2 border-amber-400 -mt-3.5 shadow-sm">
-              بەشی چوارەم: بارداگرتن و گواستنەوە (LOGISTICS & UNLOADING SECTION)
+            <span className="bg-gradient-to-r from-rose-600 to-red-600 text-white px-5 py-1.5 rounded-full text-xs font-black border-2 border-white -mt-4 shadow-lg flex items-center gap-2 animate-pulse">
+              <span>🔴 بەم زووانە (Coming Soon)</span>
+              <span className="text-amber-200">| بەشی چوارەم: بارداگرتن و گواستنەوە</span>
             </span>
           </div>
         )}

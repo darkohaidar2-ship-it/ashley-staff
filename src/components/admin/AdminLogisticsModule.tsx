@@ -204,9 +204,11 @@ export function AdminLogisticsModule({ employees }: AdminLogisticsModuleProps) {
             </p>
           </div>
         </div>
-        <span className="text-xs font-mono font-black bg-amber-500/30 text-amber-100 border border-amber-400 px-3 py-1 rounded-full">
-          LOGISTICS HUB
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-mono font-black bg-rose-600 text-white border-2 border-white px-3 py-1 rounded-full shadow-md animate-pulse">
+            🔴 بەم زووانە (Coming Soon)
+          </span>
+        </div>
       </div>
 
       {/* 🛠️ TOP CONTROLS */}
