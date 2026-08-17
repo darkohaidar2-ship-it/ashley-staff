@@ -1132,6 +1132,23 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       });
     }
 
+    if (pathStr === 'admin/overtime-notes' && method === 'POST') {
+      const { month, noteKey, note } = await req.json();
+      const settingsKey = `ot_notes_${month || 'global'}`;
+      try {
+        const { data: existing } = await supabase.from('attendance_settings').select('*').eq('id', settingsKey).maybeSingle();
+        const currentNotes = existing?.settings || {};
+        currentNotes[noteKey] = note;
+        await supabase.from('attendance_settings').upsert({
+          id: settingsKey,
+          settings: currentNotes,
+        });
+        return NextResponse.json({ success: true });
+      } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 500 });
+      }
+    }
+
     if (pathStr === 'admin/users/update-role' && method === 'POST') {
       const { userId, role } = await req.json();
       if (!userId || !role) return NextResponse.json({ error: 'userId and role required' }, { status: 400 });

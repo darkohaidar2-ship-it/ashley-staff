@@ -583,9 +583,9 @@ export default function PublicTerminalLightPage() {
             <button
               type="button"
               onClick={() => handleOpenFaceTerminal('Check In')}
-              disabled={isInsideGeofence === false}
+              disabled={gpsLoading || isInsideGeofence !== true}
               className={`group relative p-4 sm:p-5 rounded-2xl border text-right transition-all flex flex-col justify-between min-h-[115px] sm:min-h-[135px] shadow-md ${
-                isInsideGeofence === false
+                gpsLoading || isInsideGeofence !== true
                   ? 'bg-slate-100 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
                   : 'bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white border-emerald-400/40 shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:scale-[1.02] active:scale-98 cursor-pointer'
               }`}
@@ -604,7 +604,11 @@ export default function PublicTerminalLightPage() {
                   📥 تۆمارکردنی هاتن
                 </span>
                 <span className="text-[11px] font-bold text-emerald-100/90 block mt-0.5">
-                  {isInsideGeofence === false ? 'قوفڵە (لە دەرەوەی سنوور)' : 'سەیری کامێرا بکە بۆ دەستپێکردن'}
+                  {gpsLoading
+                    ? '📍 لە پشکنینی لۆکەیشندایە...'
+                    : isInsideGeofence !== true
+                    ? '🔒 قوفڵە (لە دەرەوەی سنوور)'
+                    : 'سەیری کامێرا بکە بۆ دەستپێکردن'}
                 </span>
               </div>
             </button>
@@ -613,9 +617,9 @@ export default function PublicTerminalLightPage() {
             <button
               type="button"
               onClick={() => handleOpenFaceTerminal('Check Out')}
-              disabled={isInsideGeofence === false}
+              disabled={gpsLoading || isInsideGeofence !== true}
               className={`group relative p-4 sm:p-5 rounded-2xl border text-right transition-all flex flex-col justify-between min-h-[115px] sm:min-h-[135px] shadow-md ${
-                isInsideGeofence === false
+                gpsLoading || isInsideGeofence !== true
                   ? 'bg-slate-100 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
                   : 'bg-gradient-to-br from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white border-rose-400/40 shadow-rose-500/25 hover:shadow-rose-500/40 hover:scale-[1.02] active:scale-98 cursor-pointer'
               }`}
@@ -634,7 +638,11 @@ export default function PublicTerminalLightPage() {
                   📤 تۆمارکردنی دەرچوون
                 </span>
                 <span className="text-[11px] font-bold text-rose-100/90 block mt-0.5">
-                  {isInsideGeofence === false ? 'قوفڵە (لە دەرەوەی سنوور)' : 'سەیری کامێرا بکە بۆ تەواوکردنی کار'}
+                  {gpsLoading
+                    ? '📍 لە پشکنینی لۆکەیشندایە...'
+                    : isInsideGeofence !== true
+                    ? '🔒 قوفڵە (لە دەرەوەی سنوور)'
+                    : 'سەیری کامێرا بکە بۆ تەواوکردنی کار'}
                 </span>
               </div>
             </button>

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import type { AttendanceRecord, Employee } from '@/lib/types';
 import { Camera, Calendar, MapPin, Trash2, CheckCircle, User, FileText, Edit3 } from 'lucide-react';
 import { getDaysInMonth, format } from 'date-fns';
+import { AttendanceAnalyticsReport } from './AttendanceAnalyticsReport';
 
 interface AttendanceSheetGridProps {
   attendanceLogs: AttendanceRecord[];
@@ -419,6 +420,13 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
           </tfoot>
         </table>
       </div>
+
+      {/* 📊 HR STATISTICS & ANALYTICS REPORT TABLE */}
+      <AttendanceAnalyticsReport
+        attendanceLogs={gridLogs}
+        employees={employees}
+        selectedMonth={selectedMonth}
+      />
 
       {/* 🖼️ DETAILED CHECK-IN / CHECK-OUT WINUI 3 SELFIE MODAL POPUP */}
       {activeLogModal && (
