@@ -1,8 +1,16 @@
 
-import { type Metadata } from "next";
+import { type Metadata, type Viewport } from "next";
 import './globals.css';
 import '@carbon/styles/css/styles.css';
 import { ClientLayout } from './client-layout';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+};
 
 export const metadata: Metadata = {
   title: "Ashley Nexus Hub | سیستەمی ئاشڵی",

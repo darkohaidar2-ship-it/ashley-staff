@@ -428,36 +428,36 @@ export default function PublicTerminalLightPage() {
   }, [cameraActive, activeFaceAction, registeredFacesList]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-indigo-50/40 text-slate-900 font-sans flex flex-col justify-between select-none dir-rtl" dir="rtl">
+    <div className="h-[100dvh] max-h-[100dvh] w-screen overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-indigo-50/40 text-slate-900 font-sans flex flex-col justify-between p-3 sm:p-5 select-none touch-manipulation dir-rtl" dir="rtl">
       
-      {/* 🌟 ULTRA-CLEAN LIGHT HEADER */}
-      <header className="w-full max-w-5xl mx-auto px-4 py-4 sm:py-6 flex items-center justify-between">
+      {/* 🌟 ULTRA-CLEAN LIGHT HEADER (FIXED TOP) */}
+      <header className="w-full max-w-4xl mx-auto flex-shrink-0 flex items-center justify-between pb-1">
         
         {/* Brand Logo & Name */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-slate-900 to-indigo-900 flex items-center justify-center text-white shadow-md shadow-slate-900/10">
-            <Building2 className="w-5 h-5 text-white" />
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-slate-900 to-indigo-900 flex items-center justify-center text-white shadow-md shadow-slate-900/10 flex-shrink-0">
+            <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
                 ASHLEY ENTERPRISE
               </h1>
-              <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-full border border-indigo-200">
+              <span className="text-[9px] sm:text-[10px] font-black uppercase px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-full border border-indigo-200">
                 AI Face Terminal
               </span>
             </div>
-            <p className="text-xs text-slate-500 font-bold">
+            <p className="text-[10px] sm:text-xs text-slate-500 font-bold">
               سیستەمی فەرمیی چێک‌ئین و ئامادەبوونی کارمەندان
             </p>
           </div>
         </div>
 
         {/* Compact Geofence Status Pill */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <div 
             onClick={checkCurrentLocation}
-            className={`h-9 px-3.5 rounded-full border shadow-sm flex items-center gap-2 cursor-pointer transition-all ${
+            className={`h-8 sm:h-9 px-3 rounded-full border shadow-xs flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-all ${
               isInsideGeofence === true
                 ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100/80'
                 : isInsideGeofence === false
@@ -466,7 +466,7 @@ export default function PublicTerminalLightPage() {
             }`}
             title="کلیک بکە بۆ نوێکردنەوەی لۆکەیشن"
           >
-            <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+            <span className={`w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full flex-shrink-0 ${
               isInsideGeofence === true
                 ? 'bg-emerald-500 animate-pulse'
                 : isInsideGeofence === false
@@ -474,88 +474,88 @@ export default function PublicTerminalLightPage() {
                 : 'bg-amber-500'
             }`} />
             
-            <span className="text-xs font-bold whitespace-nowrap">
-              {gpsLoading ? 'پشکنینی GPS...' : gpsStatus}
+            <span className="text-[10px] sm:text-xs font-bold whitespace-nowrap">
+              {gpsLoading ? 'پشکنین...' : gpsStatus}
             </span>
           </div>
         </div>
 
       </header>
 
-      {/* 🌟 MAIN TERMINAL BODY */}
-      <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-6 flex flex-col items-center justify-center">
+      {/* 🌟 MAIN TERMINAL BODY (PERFECT VIEWPORT FIT - NO SCROLL) */}
+      <main className="flex-1 w-full max-w-3xl mx-auto my-auto flex flex-col items-center justify-center min-h-0 py-1">
         
         {/* Center Crystal Card */}
-        <div className="w-full bg-white/95 backdrop-blur-2xl border border-slate-200/90 rounded-[2.5rem] p-6 sm:p-10 shadow-2xl shadow-slate-300/40 text-center space-y-8 relative overflow-hidden">
+        <div className="w-full bg-white/95 backdrop-blur-2xl border border-slate-200/90 rounded-3xl p-5 sm:p-7 shadow-xl shadow-slate-300/30 text-center space-y-4 sm:space-y-5 relative overflow-hidden flex flex-col justify-center">
           
           {/* Subtle Ambient Light Glow */}
           <div className="absolute -top-24 -right-24 w-60 h-60 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-24 -left-24 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
           {/* Clock & Date Badge */}
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-black shadow-inner">
-              <Clock className="w-3.5 h-3.5 text-indigo-600" />
+          <div className="space-y-1 sm:space-y-1.5">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-black shadow-inner">
+              <Clock className="w-3 h-3 text-indigo-600" />
               <span>{currentDateStr || '2026-08-17'}</span>
             </div>
 
-            <div className="text-4xl sm:text-6xl font-black font-mono tracking-tight text-slate-900">
+            <div className="text-3xl sm:text-5xl font-black font-mono tracking-tight text-slate-900">
               {currentTimeStr || '09:00:00'}
             </div>
             
-            <p className="text-xs sm:text-sm font-bold text-slate-500 max-w-md mx-auto">
+            <p className="text-[11px] sm:text-xs font-bold text-slate-500 max-w-md mx-auto">
               تەنها سەیری کامێرا بکە، سیستەمەکە ڕاستەوخۆ دەتبینێت و کاتی هاتن و دەرچوونت تۆمار دەکات.
             </p>
           </div>
 
           {/* Notification Alert Message Banner */}
           {attMessage && (
-            <div className={`p-4 rounded-2xl border text-xs sm:text-sm font-black flex items-center justify-between gap-3 shadow-md animate-in fade-in slide-in-from-top-2 ${
+            <div className={`p-3 rounded-xl border text-xs font-black flex items-center justify-between gap-2 shadow-md animate-in fade-in slide-in-from-top-2 ${
               attMessage.success 
                 ? 'bg-emerald-500 text-white border-emerald-600' 
                 : 'bg-rose-500 text-white border-rose-600'
             }`}>
               <div className="flex items-center gap-2">
-                {attMessage.success ? <CheckCircle2 className="w-5 h-5 flex-shrink-0" /> : <AlertTriangle className="w-5 h-5 flex-shrink-0" />}
+                {attMessage.success ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
                 <span>{attMessage.text}</span>
               </div>
               <button 
                 onClick={() => setAttMessage(null)}
                 className="p-1 hover:bg-white/20 rounded-lg text-white"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
 
           {/* 🌟 TWO PROMINENT ACTION TILES: CHECK IN & CHECK OUT */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-1">
             
             {/* 📥 CHECK IN BUTTON */}
             <button
               type="button"
               onClick={() => handleOpenFaceTerminal('Check In')}
               disabled={isInsideGeofence === false}
-              className={`group relative p-6 sm:p-8 rounded-3xl border text-right transition-all flex flex-col justify-between min-h-[160px] sm:min-h-[180px] shadow-lg ${
+              className={`group relative p-4 sm:p-5 rounded-2xl border text-right transition-all flex flex-col justify-between min-h-[115px] sm:min-h-[135px] shadow-md ${
                 isInsideGeofence === false
                   ? 'bg-slate-100 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
                   : 'bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white border-emerald-400/40 shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:scale-[1.02] active:scale-98 cursor-pointer'
               }`}
             >
               <div className="flex items-center justify-between w-full">
-                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner">
-                  <UserCheck className="w-6 h-6" />
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner">
+                  <UserCheck className="w-5 h-5" />
                 </div>
-                <span className="text-[11px] font-black px-3 py-1 rounded-full bg-white/20 border border-white/20 text-white">
+                <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-white/20 border border-white/20 text-white">
                   چێک‌ئین
                 </span>
               </div>
 
               <div>
-                <span className="text-xl sm:text-2xl font-black block text-white tracking-tight">
+                <span className="text-base sm:text-xl font-black block text-white tracking-tight">
                   📥 تۆمارکردنی هاتن
                 </span>
-                <span className="text-xs font-bold text-emerald-100/90 block mt-1">
+                <span className="text-[11px] font-bold text-emerald-100/90 block mt-0.5">
                   {isInsideGeofence === false ? 'قوفڵە (لە دەرەوەی سنوور)' : 'سەیری کامێرا بکە بۆ دەستپێکردن'}
                 </span>
               </div>
@@ -566,26 +566,26 @@ export default function PublicTerminalLightPage() {
               type="button"
               onClick={() => handleOpenFaceTerminal('Check Out')}
               disabled={isInsideGeofence === false}
-              className={`group relative p-6 sm:p-8 rounded-3xl border text-right transition-all flex flex-col justify-between min-h-[160px] sm:min-h-[180px] shadow-lg ${
+              className={`group relative p-4 sm:p-5 rounded-2xl border text-right transition-all flex flex-col justify-between min-h-[115px] sm:min-h-[135px] shadow-md ${
                 isInsideGeofence === false
                   ? 'bg-slate-100 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
                   : 'bg-gradient-to-br from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white border-rose-400/40 shadow-rose-500/25 hover:shadow-rose-500/40 hover:scale-[1.02] active:scale-98 cursor-pointer'
               }`}
             >
               <div className="flex items-center justify-between w-full">
-                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner">
-                  <Clock className="w-6 h-6" />
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner">
+                  <Clock className="w-5 h-5" />
                 </div>
-                <span className="text-[11px] font-black px-3 py-1 rounded-full bg-white/20 border border-white/20 text-white">
+                <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-white/20 border border-white/20 text-white">
                   چێک‌ئاوت
                 </span>
               </div>
 
               <div>
-                <span className="text-xl sm:text-2xl font-black block text-white tracking-tight">
+                <span className="text-base sm:text-xl font-black block text-white tracking-tight">
                   📤 تۆمارکردنی دەرچوون
                 </span>
-                <span className="text-xs font-bold text-rose-100/90 block mt-1">
+                <span className="text-[11px] font-bold text-rose-100/90 block mt-0.5">
                   {isInsideGeofence === false ? 'قوفڵە (لە دەرەوەی سنوور)' : 'سەیری کامێرا بکە بۆ تەواوکردنی کار'}
                 </span>
               </div>
@@ -594,8 +594,8 @@ export default function PublicTerminalLightPage() {
           </div>
 
           {/* Active Registered Faces Info */}
-          <div className="pt-2 flex items-center justify-center gap-2 text-xs font-bold text-slate-500">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+          <div className="pt-1 flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-500">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             <span>{registeredFacesList.length} کارمەند بە ڕوخسار تۆمار کراون و ئامادەن</span>
           </div>
 
@@ -603,8 +603,8 @@ export default function PublicTerminalLightPage() {
 
       </main>
 
-      {/* 🌟 FOOTER */}
-      <footer className="w-full max-w-5xl mx-auto px-4 py-4 text-center text-xs font-bold text-slate-400">
+      {/* 🌟 FOOTER (FIXED BOTTOM) */}
+      <footer className="w-full max-w-4xl mx-auto flex-shrink-0 py-1 text-center text-[10px] font-bold text-slate-400">
         ASHLEY ENTERPRISE ERP SYSTEM © 2026 — هەموو مافەکان پارێزراون
       </footer>
 
