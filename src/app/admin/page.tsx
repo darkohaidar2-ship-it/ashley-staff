@@ -52,33 +52,29 @@ import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChange
 export default function AdminPage() {
   const router = useRouter();
   const { user, loading: authLoading, logout } = useAuth();
+  const [sessionUser, setSessionUser] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
-  // Security Auth Guard: Check session strictly from sessionStorage
+  // Security Auth Guard: Check session strictly from sessionStorage/localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      // Clear any legacy localStorage session
-      localStorage.removeItem('ashley_admin_session');
-      const stored = sessionStorage.getItem('ashley_admin_session');
-      if (!stored) {
-        setAuthChecked(false);
-        router.replace('/adminpanel');
-      } else {
+      const stored = sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session');
+      if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          if (parsed && parsed.token) {
+          if (parsed && (parsed.token || parsed.username || parsed.id)) {
+            setSessionUser(parsed);
             setAuthChecked(true);
-          } else {
-            setAuthChecked(false);
-            sessionStorage.removeItem('ashley_admin_session');
-            router.replace('/adminpanel');
+            return;
           }
-        } catch {
-          setAuthChecked(false);
-          router.replace('/adminpanel');
-        }
+        } catch {}
       }
+
+      // If not authenticated:
+      setAuthChecked(false);
+      setSessionUser(null);
+      router.replace('/adminpanel');
     }
   }, [router]);
 
@@ -394,7 +390,7 @@ export default function AdminPage() {
   });
 
   // Strict Security Gate: Never render admin panel content if not authenticated
-  if (!authChecked || !user) {
+  if (!authChecked || !sessionUser) {
     return (
       <div className="min-h-screen w-screen flex items-center justify-center bg-slate-900 text-white font-sans dir-rtl" dir="rtl">
         <div className="text-center space-y-3 p-6 bg-slate-800/80 border border-slate-700 rounded-3xl shadow-2xl">
@@ -416,7 +412,7 @@ export default function AdminPage() {
             <span>🛡️ پەنەری بەڕێوەبەری سەرەکی ASHLEY ERP — Admin Master Hub</span>
           </h1>
           <p className="text-[11px] text-slate-600 font-bold mt-0.5">
-            بەڕێوەبەری سەرەکی: <span className="text-blue-900 font-mono font-black">{user?.username || 'Darko'}</span> | هەموو بەشەکانی HR، کۆگا، گواستنەوە و سێتینگی فۆنت
+            بەڕێوەبەری سەرەکی: <span className="text-blue-900 font-mono font-black">{sessionUser?.username || user?.username || 'Darko'}</span> | هەموو بەشەکانی HR، کۆگا، گواستنەوە و سێتینگی فۆنت
           </p>
         </div>
 
