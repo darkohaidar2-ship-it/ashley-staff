@@ -1310,13 +1310,22 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if (pathStr === 'logs' && method === 'POST') {
       const body = await req.json();
-      const { employeeId, userId, name, userName, date, log_date, time, log_time_str, type, log_type, selfieUrl, distance } = body;
+      const { employeeId, userId, name, userName, date, log_date, time, log_time_str, type, log_type, action, selfieUrl, distance } = body;
 
       const empId = employeeId || userId || 'emp';
       const empName = name || userName || 'Employee';
       const dateStr = date || log_date || (time && time.includes(' ') ? time.split(' ')[0] : null) || new Date().toISOString().split('T')[0];
       const timeStr = log_time_str || (time && time.includes(' ') ? time.split(' ')[1]?.slice(0, 5) : time?.slice(0, 5)) || new Date().toTimeString().slice(0, 5);
-      const isCheckOut = type?.includes('Out') || type?.includes('دەرچوون') || log_type === 'Check Out';
+      
+      const isCheckOut = Boolean(
+        type?.toLowerCase().includes('out') ||
+        type?.includes('دەرچوون') ||
+        log_type?.toLowerCase().includes('out') ||
+        log_type?.includes('دەرچوون') ||
+        action?.toLowerCase().includes('out') ||
+        action?.includes('دەرچوون') ||
+        action === 'Check Out'
+      );
 
       let publicSelfieUrl = selfieUrl;
       if (selfieUrl && typeof selfieUrl === 'string' && selfieUrl.startsWith('data:image')) {
@@ -1351,13 +1360,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }, { status: 400 });
         }
       } else {
-        if (!existingRecord?.check_in_time) {
-          return NextResponse.json({
-            success: false,
-            message: '⚠️ ناتوانیت چێک‌ئاوت بکەیت پێش ئەوەی چێک‌ئین (هاتن) بکەیت!',
-            error: '⚠️ سەرەتا دەبێت چێک‌ئین بکەیت پێش چێک‌ئاوت'
-          }, { status: 400 });
-        }
         if (existingRecord?.check_out_time) {
           return NextResponse.json({
             success: false,
