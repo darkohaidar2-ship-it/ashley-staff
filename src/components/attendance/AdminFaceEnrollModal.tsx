@@ -18,7 +18,7 @@ export function AdminFaceEnrollModal({
   onClose,
   onSuccess,
 }: AdminFaceEnrollModalProps) {
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [isScanning, setIsScanning] = useState(false);
   const [faceInsideOval, setFaceInsideOval] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -250,7 +250,7 @@ export function AdminFaceEnrollModal({
             autoPlay
             playsInline
             muted
-            className="w-full h-full object-cover"
+            className={`w-full h-full object-cover ${facingMode === 'user' ? 'transform scale-x-[-1]' : ''}`}
           />
 
           {/* 🌟 HUMAN FACE OVAL TARGET HUD */}

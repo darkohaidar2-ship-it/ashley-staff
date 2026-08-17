@@ -118,6 +118,7 @@ export default function PublicTerminalLightPage() {
   // AI Face Recognition State
   const [registeredFacesList, setRegisteredFacesList] = useState<Array<{ id: string; name: string; descriptor: number[] }>>([]);
   const [cameraActive, setCameraActive] = useState(false);
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [activeFaceAction, setActiveFaceAction] = useState<'Check In' | 'Check Out' | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [isFaceScanning, setIsFaceScanning] = useState(false);
@@ -136,6 +137,14 @@ export default function PublicTerminalLightPage() {
   useEffect(() => {
     loadFaceModels().catch((e) => console.log('Preloading face models:', e));
   }, []);
+
+  // Ensure Video element attaches and plays stream as soon as modal mounts
+  useEffect(() => {
+    if (cameraActive && mediaStream && videoRef.current) {
+      videoRef.current.srcObject = mediaStream;
+      videoRef.current.play().catch((err) => console.log('Video play caught:', err));
+    }
+  }, [cameraActive, mediaStream]);
 
   // Fetch all registered employees with face descriptors
   const fetchAllFaces = useCallback(async () => {
@@ -200,33 +209,42 @@ export default function PublicTerminalLightPage() {
           return;
         }
 
-        // Calculate distance to each defined location
-        const distanceResults = companyLocations.map((loc) => {
+        // Calculate distance to each branch
+        const distances = companyLocations.map((loc) => {
           const d = calculateDistanceMeters(userLat, userLng, loc.lat, loc.lng);
           return {
-            ...loc,
-            distance: Math.round(d),
+            id: loc.id,
+            name: loc.name,
+            distance: d,
+            radiusMeters: loc.radiusMeters || 50,
             isInside: d <= (loc.radiusMeters || 50),
           };
         });
 
-        setBranchDistanceList(distanceResults);
+        setBranchDistanceList(distances);
 
-        // Check if inside ANY location
-        const matched = distanceResults.find((r) => r.isInside);
-        const closest = [...distanceResults].sort((a, b) => a.distance - b.distance)[0];
+        // Find closest branch inside radius
+        const insideBranch = distances.find((d) => d.isInside);
 
-        if (matched) {
-          setIsInsideGeofence(true);
+        if (insideBranch) {
+          const matched = companyLocations.find((l) => l.id === insideBranch.id) || null;
           setCurrentMatchedLocation(matched);
-          setDistanceMeters(matched.distance);
-          setGpsStatus(`🟢 لە سنووری (${matched.name})یت (${matched.distance}m)`);
-        } else if (closest) {
+          setIsInsideGeofence(true);
+          setDistanceMeters(insideBranch.distance);
+          setGpsStatus(`لەناو سنووری: ${insideBranch.name} (${insideBranch.distance}m)`);
+        } else {
+          // Closest branch
+          const sorted = [...distances].sort((a, b) => a.distance - b.distance);
+          const closest = sorted[0];
+          setCurrentMatchedLocation(null);
           setIsInsideGeofence(false);
-          setCurrentMatchedLocation(closest);
-          setDistanceMeters(closest.distance);
+          setDistanceMeters(closest ? closest.distance : null);
           setGpsStatus(
-            `🔴 دەرەوەی لقەکان (${closest.distance}m > ${closest.radiusMeters}m لە ${closest.name})`
+            closest
+              ? `لە دەرەوەی کۆمپانیایت! نزیکترین لق (${closest.name}) بە دووری ${
+                  closest.distance < 1000 ? `${closest.distance}m` : `${(closest.distance / 1000).toFixed(1)}km`
+                }`
+              : 'لە دەرەوەی سنووری دیاریکراویت'
           );
         }
 
@@ -248,30 +266,44 @@ export default function PublicTerminalLightPage() {
     return () => clearInterval(interval);
   }, [checkCurrentLocation]);
 
-  // Start Camera Stream
-  const startCamera = async () => {
+  // Start Front Selfie Camera Stream Instantly
+  const startCamera = async (overrideFacingMode?: 'user' | 'environment') => {
+    const targetFacing = overrideFacingMode || facingMode || 'user';
     try {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: facingMode,
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-        },
-      });
+      let stream: MediaStream | null = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: targetFacing },
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+          },
+          audio: false,
+        });
+      } catch (firstErr) {
+        console.warn('Front camera constraint fallback:', firstErr);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
 
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
+      setMediaStream(stream);
       setCameraActive(true);
+
+      if (videoRef.current && stream) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
     } catch (err) {
       console.error('Camera error:', err);
-      alert('نەتوانرا کامێرا بکرێتەوە. تکایە لە سێتینگی وێبگەڕ ڕێگە بە کامێرا بدە.');
+      alert('نەتوانرا کامێرا بکرێتەوە. تکایە لە سێتینگی وێبگەڕ ڕێگە بە کامێرای سێڵفی بدە.');
     }
   };
 
@@ -285,6 +317,10 @@ export default function PublicTerminalLightPage() {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+    setMediaStream(null);
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     setCameraActive(false);
     setIsFaceScanning(false);
     setFaceInsideOval(false);
@@ -297,13 +333,8 @@ export default function PublicTerminalLightPage() {
   const toggleCameraFacing = () => {
     const nextMode = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(nextMode);
+    startCamera(nextMode);
   };
-
-  useEffect(() => {
-    if (cameraActive) {
-      startCamera();
-    }
-  }, [facingMode]);
 
   // Process Attendance Check-In / Check-Out
   const saveAttendanceLog = async (empId: string, empName: string, actionType: 'Check In' | 'Check Out') => {
@@ -352,7 +383,7 @@ export default function PublicTerminalLightPage() {
     }
   };
 
-  // Open Camera for Face Check-In or Check-Out
+  // Open Camera for Face Check-In or Check-Out Instantly
   const handleOpenFaceTerminal = (action: 'Check In' | 'Check Out') => {
     if (isInsideGeofence === false) {
       alert(
@@ -362,10 +393,12 @@ export default function PublicTerminalLightPage() {
     }
 
     setActiveFaceAction(action);
-    setFaceScanMessage('سەیری کامێرا بکە... ڕوخسارت بخەرە ناو بازنەکە');
+    setFacingMode('user');
+    setFaceScanMessage('سەیری کامێرای پێشەوە (سێڵفی) بکە... ڕوخسارت بخەرە ناو بازنەکە');
     setFaceScanSuccess(null);
     setFaceInsideOval(false);
-    startCamera();
+    setCameraActive(true);
+    startCamera('user');
   };
 
   // Automated Facial Scanning Loop
