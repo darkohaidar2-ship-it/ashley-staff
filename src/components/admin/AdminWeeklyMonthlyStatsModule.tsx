@@ -93,8 +93,12 @@ export function AdminWeeklyMonthlyStatsModule({
 
       let lateCount = 0;
       let totalLateMins = 0;
+      let earlyLeaveCount = 0;
+      let totalEarlyLeaveMins = 0;
       let overtimeCount = 0;
       let totalOvertimeMins = 0;
+      let overtime30Mins = 0;
+      let overtime30Count = 0;
 
       checkInLogs.forEach(l => {
         const timeStr = l.time ? (l.time.includes(' ') ? l.time.split(' ')[1]?.slice(0, 5) : l.time.slice(0, 5)) : (l as any).checkInTime?.slice(0, 5);
@@ -113,13 +117,22 @@ export function AdminWeeklyMonthlyStatsModule({
         if (timeStr) {
           const parts = timeStr.split(':');
           const mins = (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
-          if (mins > 17 * 60) { // After 17:00
+          if (mins < 17 * 60) { // Before 17:00
+            earlyLeaveCount++;
+            totalEarlyLeaveMins += (1020 - mins);
+          } else if (mins > 17 * 60) { // After 17:00
             overtimeCount++;
-            totalOvertimeMins += (mins - 1020);
+            const ot = mins - 1020;
+            totalOvertimeMins += ot;
+            if (ot >= 30) {
+              overtime30Count++;
+              overtime30Mins += ot;
+            }
           }
         }
       });
 
+      const netBalanceMins = totalOvertimeMins - (totalLateMins + totalEarlyLeaveMins);
       const daysPresent = new Set(empLogs.map(l => l.date || (l.time ? l.time.split(' ')[0] : ''))).size;
       const expectedDays = timeframe === 'weekly' ? 6 : 26;
       const attendanceScore = expectedDays > 0 ? Math.min(100, Math.round((daysPresent / expectedDays) * 100)) : 100;
@@ -129,8 +142,13 @@ export function AdminWeeklyMonthlyStatsModule({
         daysPresent,
         lateCount,
         totalLateMins,
+        earlyLeaveCount,
+        totalEarlyLeaveMins,
         overtimeCount,
         totalOvertimeMins,
+        netBalanceMins,
+        overtime30Count,
+        overtime30Mins,
         attendanceScore,
       };
     });
@@ -138,7 +156,9 @@ export function AdminWeeklyMonthlyStatsModule({
 
   // Aggregates
   const totalLateMinutes = employeeStats.reduce((sum, e) => sum + e.totalLateMins, 0);
+  const totalEarlyLeaveMinutes = employeeStats.reduce((sum, e) => sum + e.totalEarlyLeaveMins, 0);
   const totalOvertimeMinutes = employeeStats.reduce((sum, e) => sum + e.totalOvertimeMins, 0);
+  const totalNetBalanceMinutes = employeeStats.reduce((sum, e) => sum + e.netBalanceMins, 0);
   const totalDaysPresentAll = employeeStats.reduce((sum, e) => sum + e.daysPresent, 0);
   const avgAttendanceRate = employeeStats.length > 0
     ? Math.round(employeeStats.reduce((sum, e) => sum + e.attendanceScore, 0) / employeeStats.length)
@@ -149,7 +169,10 @@ export function AdminWeeklyMonthlyStatsModule({
       { header: 'ناوی کارمەند', key: 'name', align: 'right' },
       { header: 'پۆست / ئەرک', key: 'role', align: 'right' },
       { header: 'ڕۆژانی دەوام', key: 'daysPresent', align: 'center' },
-      { header: 'کاتی دواکەوتن', key: 'lateTime', align: 'center' },
+      { header: 'کاتی دواکەوتن (+)', key: 'lateTime', align: 'center' },
+      { header: 'زوو دەرچوون (-)', key: 'earlyLeaveTime', align: 'center' },
+      { header: 'هاوسەنگی کات (+/-)', key: 'netBalance', align: 'center' },
+      { header: 'ئیزافەی >٣٠خ', key: 'ot30', align: 'center' },
       { header: 'کاتی ئیزافە', key: 'overtime', align: 'center' },
       { header: 'ڕێژەی پابەندبوون', key: 'score', align: 'center' },
     ];
@@ -157,7 +180,10 @@ export function AdminWeeklyMonthlyStatsModule({
       name: s.employee.fullName3Part || s.employee.name,
       role: s.employee.role || 'کارمەند',
       daysPresent: `${s.daysPresent} ڕۆژ`,
-      lateTime: s.totalLateMins > 0 ? `${Math.floor(s.totalLateMins / 60)} ک و ${s.totalLateMins % 60} خ` : 'بێ دواکەوتن',
+      lateTime: s.totalLateMins > 0 ? `+${Math.floor(s.totalLateMins / 60)} ک و ${s.totalLateMins % 60} خ` : 'بێ دواکەوتن',
+      earlyLeaveTime: s.totalEarlyLeaveMins > 0 ? `-${Math.floor(s.totalEarlyLeaveMins / 60)} ک و ${s.totalEarlyLeaveMins % 60} خ` : 'تەواو',
+      netBalance: s.netBalanceMins > 0 ? `+${Math.floor(s.netBalanceMins / 60)}ک ${s.netBalanceMins % 60}خ` : s.netBalanceMins < 0 ? `-${Math.floor(Math.abs(s.netBalanceMins) / 60)}ک ${Math.abs(s.netBalanceMins) % 60}خ` : '0:00',
+      ot30: s.overtime30Count > 0 ? `+${Math.floor(s.overtime30Mins / 60)}ک ${s.overtime30Mins % 60}خ (${s.overtime30Count}جار)` : '-',
       overtime: s.totalOvertimeMins > 0 ? `+${Math.floor(s.totalOvertimeMins / 60)} ک و ${s.totalOvertimeMins % 60} خ` : '-',
       score: `${s.attendanceScore}%`,
     }));
@@ -174,9 +200,10 @@ export function AdminWeeklyMonthlyStatsModule({
       fileName: `Ashley_HR_Stats_${timeframe}_${selectedMonth}`,
       summaryCards: [
         { label: 'تێکڕای ڕێژەی ئامادەبوون', value: `${avgAttendanceRate}%`, color: '#047857' },
-        { label: 'کۆی کاتی دواکەوتن', value: `${Math.floor(totalLateMinutes / 60)} ک و ${totalLateMinutes % 60} خ`, color: '#be123c' },
+        { label: 'کۆی دواکەوتن (+)', value: `+${Math.floor(totalLateMinutes / 60)} ک و ${totalLateMinutes % 60} خ`, color: '#be123c' },
+        { label: 'کۆی زوو دەرچوون (-)', value: `-${Math.floor(totalEarlyLeaveMinutes / 60)} ک و ${totalEarlyLeaveMinutes % 60} خ`, color: '#c2410c' },
+        { label: 'هاوسەنگی گشتی (Net)', value: totalNetBalanceMinutes >= 0 ? `+${Math.floor(totalNetBalanceMinutes / 60)}ک` : `-${Math.floor(Math.abs(totalNetBalanceMinutes) / 60)}ک`, color: totalNetBalanceMinutes >= 0 ? '#047857' : '#be123c' },
         { label: 'کۆی کاتی ئیزافە', value: `${Math.floor(totalOvertimeMinutes / 60)} ک و ${totalOvertimeMinutes % 60} خ`, color: '#1e40af' },
-        { label: 'کۆی ڕۆژانی دەوامکراو', value: `${totalDaysPresentAll} ڕۆژ`, color: '#6b21a8' },
       ],
     });
   };
@@ -186,8 +213,11 @@ export function AdminWeeklyMonthlyStatsModule({
       { header: 'ناوی کارمەند', key: 'name' },
       { header: 'پۆست', key: 'role' },
       { header: 'ڕۆژانی دەوام', key: 'daysPresent' },
-      { header: 'کاتی دواکەوتن (خولەک)', key: 'lateMinutes' },
-      { header: 'کاتی ئیزافە (خولەک)', key: 'overtimeMinutes' },
+      { header: 'دواکەوتن (+ خولەک)', key: 'lateMinutes' },
+      { header: 'زوو دەرچوون (- خولەک)', key: 'earlyLeaveMinutes' },
+      { header: 'هاوسەنگی (+/- خولەک)', key: 'netBalanceMinutes' },
+      { header: 'ئیزافەی >٣٠خ (خولەک)', key: 'ot30Minutes' },
+      { header: 'کۆی ئیزافە (خولەک)', key: 'overtimeMinutes' },
       { header: 'ڕێژەی پابەندبوون', key: 'score' },
     ];
     const data = employeeStats.map(s => ({
@@ -195,6 +225,9 @@ export function AdminWeeklyMonthlyStatsModule({
       role: s.employee.role || 'کارمەند',
       daysPresent: s.daysPresent,
       lateMinutes: s.totalLateMins,
+      earlyLeaveMinutes: s.totalEarlyLeaveMins,
+      netBalanceMinutes: s.netBalanceMins,
+      ot30Minutes: s.overtime30Mins,
       overtimeMinutes: s.totalOvertimeMins,
       score: `${s.attendanceScore}%`,
     }));
@@ -219,9 +252,11 @@ export function AdminWeeklyMonthlyStatsModule({
             </p>
           </div>
         </div>
-        <span className="text-xs font-mono font-black bg-purple-500/30 text-purple-100 border border-purple-400 px-3 py-1 rounded-full">
-          HR ANALYTICS
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] bg-purple-500/30 text-purple-200 border border-purple-400/50 px-2.5 py-1 rounded-full font-bold">
+            💡 ئاماری هاوسەنگی کات (+/-) و زوو دەرچوون
+          </span>
+        </div>
       </div>
 
       {/* 🛠️ TOP CONTROLS */}
@@ -284,26 +319,36 @@ export function AdminWeeklyMonthlyStatsModule({
       </div>
 
       {/* 📊 SUMMARY KPI CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         <div className="panel-classic p-2.5 text-center bg-blue-50/80 border-2 border-blue-200 shadow-sm rounded-xl">
           <span className="text-[10px] text-blue-900 block font-bold">تێکڕای ڕێژەی ئامادەبوون</span>
           <p className="text-base font-black text-blue-950 font-mono mt-0.5">{avgAttendanceRate}%</p>
         </div>
         <div className="panel-classic p-2.5 text-center bg-rose-50/80 border-2 border-rose-200 shadow-sm rounded-xl">
-          <span className="text-[10px] text-rose-900 block font-bold">کۆی کاتی دواکەوتن</span>
+          <span className="text-[10px] text-rose-900 block font-bold">کۆی دواکەوتن (+)</span>
           <p className="text-base font-black text-rose-950 font-mono mt-0.5">
-            {Math.floor(totalLateMinutes / 60)} ک و {totalLateMinutes % 60} خولەک
+            +{Math.floor(totalLateMinutes / 60)} ک و {totalLateMinutes % 60} خ
+          </p>
+        </div>
+        <div className="panel-classic p-2.5 text-center bg-orange-50/80 border-2 border-orange-200 shadow-sm rounded-xl">
+          <span className="text-[10px] text-orange-900 block font-bold">کۆی زوو دەرچوون (-)</span>
+          <p className="text-base font-black text-orange-950 font-mono mt-0.5">
+            -{Math.floor(totalEarlyLeaveMinutes / 60)} ک و {totalEarlyLeaveMinutes % 60} خ
+          </p>
+        </div>
+        <div className="panel-classic p-2.5 text-center bg-indigo-50/80 border-2 border-indigo-200 shadow-sm rounded-xl">
+          <span className="text-[10px] text-indigo-900 block font-bold">هاوسەنگی کات (+/-)</span>
+          <p className={`text-base font-black font-mono mt-0.5 ${totalNetBalanceMinutes >= 0 ? 'text-emerald-950' : 'text-rose-950'}`}>
+            {totalNetBalanceMinutes >= 0 
+              ? `+${Math.floor(totalNetBalanceMinutes / 60)}ک ${totalNetBalanceMinutes % 60}خ` 
+              : `-${Math.floor(Math.abs(totalNetBalanceMinutes) / 60)}ک ${Math.abs(totalNetBalanceMinutes) % 60}خ`}
           </p>
         </div>
         <div className="panel-classic p-2.5 text-center bg-emerald-50/80 border-2 border-emerald-200 shadow-sm rounded-xl">
-          <span className="text-[10px] text-emerald-900 block font-bold">کۆی کاتی ئیزافە</span>
+          <span className="text-[10px] text-emerald-900 block font-bold">کۆی ئیزافە</span>
           <p className="text-base font-black text-emerald-950 font-mono mt-0.5">
-            {Math.floor(totalOvertimeMinutes / 60)} ک و {totalOvertimeMinutes % 60} خولەک
+            +{Math.floor(totalOvertimeMinutes / 60)} ک و {totalOvertimeMinutes % 60} خ
           </p>
-        </div>
-        <div className="panel-classic p-2.5 text-center bg-purple-50/80 border-2 border-purple-200 shadow-sm rounded-xl">
-          <span className="text-[10px] text-purple-900 block font-bold">کۆی ڕۆژانی دەوامکراو</span>
-          <p className="text-base font-black text-purple-950 font-mono mt-0.5">{totalDaysPresentAll} ڕۆژ</p>
         </div>
       </div>
 
@@ -322,9 +367,12 @@ export function AdminWeeklyMonthlyStatsModule({
             <tr className="bg-slate-200 border-b border-slate-400 text-slate-900 font-black">
               <th className="p-2 border-l border-slate-300 w-10 text-center">#</th>
               <th className="p-2 border-l border-slate-300">ناوی کارمەند و پۆست</th>
-              <th className="p-2 border-l border-slate-300 text-center">ڕۆژانی ئامادەبوون</th>
-              <th className="p-2 border-l border-slate-300 text-center">کاتی دواکەوتن</th>
-              <th className="p-2 border-l border-slate-300 text-center">کاتی ئیزافە</th>
+              <th className="p-2 border-l border-slate-300 text-center">ڕۆژانی دەوام</th>
+              <th className="p-2 border-l border-slate-300 text-center bg-rose-100/70">دواکەوتن (+)</th>
+              <th className="p-2 border-l border-slate-300 text-center bg-orange-100/70">زوو دەرچوون (-)</th>
+              <th className="p-2 border-l border-slate-300 text-center bg-indigo-100/70">هاوسەنگی (+/-)</th>
+              <th className="p-2 border-l border-slate-300 text-center bg-amber-100/70">ئیزافەی &gt;٣٠خ</th>
+              <th className="p-2 border-l border-slate-300 text-center bg-emerald-100/70">کۆی ئیزافە</th>
               <th className="p-2 text-center">ڕێژەی پایبەندی</th>
             </tr>
           </thead>
@@ -344,10 +392,41 @@ export function AdminWeeklyMonthlyStatsModule({
                 <td className="p-2 border-l border-slate-200 text-center font-mono">
                   {st.totalLateMins > 0 ? (
                     <span className="px-2 py-0.5 rounded bg-rose-600 text-white font-black text-[11px]">
-                      {Math.floor(st.totalLateMins / 60)} ک و {st.totalLateMins % 60} خولەک
+                      +{Math.floor(st.totalLateMins / 60)}ک {st.totalLateMins % 60}خ
                     </span>
                   ) : (
                     <span className="text-emerald-700 text-xs">✓ بە کات</span>
+                  )}
+                </td>
+                <td className="p-2 border-l border-slate-200 text-center font-mono">
+                  {st.totalEarlyLeaveMins > 0 ? (
+                    <span className="px-2 py-0.5 rounded bg-orange-600 text-white font-black text-[11px]">
+                      -{Math.floor(st.totalEarlyLeaveMins / 60)}ک {st.totalEarlyLeaveMins % 60}خ
+                    </span>
+                  ) : (
+                    <span className="text-emerald-700 text-xs">✓ تەواو</span>
+                  )}
+                </td>
+                <td className="p-2 border-l border-slate-200 text-center font-mono">
+                  {st.netBalanceMins > 0 ? (
+                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-950 border border-emerald-400 font-black text-[11px]">
+                      +{Math.floor(st.netBalanceMins / 60)}ک {st.netBalanceMins % 60}خ
+                    </span>
+                  ) : st.netBalanceMins < 0 ? (
+                    <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-950 border border-rose-400 font-black text-[11px]">
+                      -{Math.floor(Math.abs(st.netBalanceMins) / 60)}ک {Math.abs(st.netBalanceMins) % 60}خ
+                    </span>
+                  ) : (
+                    <span className="text-slate-400 text-xs">0:00</span>
+                  )}
+                </td>
+                <td className="p-2 border-l border-slate-200 text-center font-mono">
+                  {st.overtime30Count > 0 ? (
+                    <span className="px-2 py-0.5 rounded bg-amber-700 text-white font-black text-[11px]">
+                      +{Math.floor(st.overtime30Mins / 60)}ک ({st.overtime30Count}جار)
+                    </span>
+                  ) : (
+                    <span className="text-slate-400 text-xs">-</span>
                   )}
                 </td>
                 <td className="p-2 border-l border-slate-200 text-center font-mono">
