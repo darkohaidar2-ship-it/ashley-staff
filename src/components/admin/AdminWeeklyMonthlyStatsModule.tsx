@@ -204,26 +204,56 @@ export function AdminWeeklyMonthlyStatsModule({
   return (
     <div className="space-y-4 text-xs font-bold text-slate-900 dir-rtl" dir="rtl">
       
-      {/* Header Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-100 border border-slate-300 rounded">
+      {/* 🏷️ LARGE PROMINENT SECTION TITLE */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-950 text-white rounded-xl shadow-md border border-purple-800">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 bg-purple-800/80 rounded-lg border border-purple-600 shadow-inner">
+            <BarChart3 className="w-5 h-5 text-purple-200" />
+          </div>
+          <div>
+            <h2 className="text-base sm:text-lg font-black tracking-wide text-purple-50">
+              ئاماری هەفتانە و مانگانەی کارمەندان (HR Performance & Attendance Analytics)
+            </h2>
+            <p className="text-[11px] text-purple-200/90 font-medium">
+              هەڵسەنگاندنی ڕێژەی ئامادەبوون، ڕۆژانی دەوام، کاتی دواکەوتن و ئیزافەی تەواوی کارمەندان
+            </p>
+          </div>
+        </div>
+        <span className="text-xs font-mono font-black bg-purple-500/30 text-purple-100 border border-purple-400 px-3 py-1 rounded-full">
+          HR ANALYTICS
+        </span>
+      </div>
+
+      {/* 🛠️ TOP CONTROLS */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-100 border-2 border-slate-300 rounded-xl shadow-sm">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setTimeframe('weekly')}
-            className={`btn-classic ${timeframe === 'weekly' ? 'bg-blue-900 text-white font-black' : ''}`}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer font-black ${
+              timeframe === 'weekly' 
+                ? 'bg-purple-900 text-white shadow-md border border-purple-950 scale-102' 
+                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+            }`}
           >
-            📅 ئاماری ئەم هەفتەیە (Weekly Report)
+            <Calendar className="w-3.5 h-3.5" />
+            <span>📅 ئاماری ئەم هەفتەیە (Weekly Report)</span>
           </button>
           <button
             onClick={() => setTimeframe('monthly')}
-            className={`btn-classic ${timeframe === 'monthly' ? 'bg-blue-900 text-white font-black' : ''}`}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer font-black ${
+              timeframe === 'monthly' 
+                ? 'bg-purple-900 text-white shadow-md border border-purple-950 scale-102' 
+                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+            }`}
           >
-            📊 ئاماری تەواوی مانگ (Monthly Report)
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>📊 ئاماری تەواوی مانگ (Monthly Report)</span>
           </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 font-mono">
           {timeframe === 'weekly' ? (
-            <span className="text-[11px] bg-blue-100 text-blue-900 border border-blue-300 px-2 py-1 rounded font-bold">
+            <span className="text-[11px] bg-purple-100 text-purple-950 border border-purple-300 px-2.5 py-1 rounded-lg font-bold">
               شەممە ({format(currentWeekStart, 'MM/dd')}) تا پێنجشەممە ({format(currentWeekEnd, 'MM/dd')})
             </span>
           ) : (
@@ -231,7 +261,7 @@ export function AdminWeeklyMonthlyStatsModule({
               type="month"
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="input-classic font-bold"
+              className="input-classic font-bold bg-white"
             />
           )}
 
@@ -253,32 +283,40 @@ export function AdminWeeklyMonthlyStatsModule({
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* 📊 SUMMARY KPI CARDS */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="panel-classic p-2 text-center bg-blue-50 border-blue-200">
+        <div className="panel-classic p-2.5 text-center bg-blue-50/80 border-2 border-blue-200 shadow-sm rounded-xl">
           <span className="text-[10px] text-blue-900 block font-bold">تێکڕای ڕێژەی ئامادەبوون</span>
           <p className="text-base font-black text-blue-950 font-mono mt-0.5">{avgAttendanceRate}%</p>
         </div>
-        <div className="panel-classic p-2 text-center bg-rose-50 border-rose-200">
+        <div className="panel-classic p-2.5 text-center bg-rose-50/80 border-2 border-rose-200 shadow-sm rounded-xl">
           <span className="text-[10px] text-rose-900 block font-bold">کۆی کاتی دواکەوتن</span>
           <p className="text-base font-black text-rose-950 font-mono mt-0.5">
             {Math.floor(totalLateMinutes / 60)} ک و {totalLateMinutes % 60} خولەک
           </p>
         </div>
-        <div className="panel-classic p-2 text-center bg-emerald-50 border-emerald-200">
+        <div className="panel-classic p-2.5 text-center bg-emerald-50/80 border-2 border-emerald-200 shadow-sm rounded-xl">
           <span className="text-[10px] text-emerald-900 block font-bold">کۆی کاتی ئیزافە</span>
           <p className="text-base font-black text-emerald-950 font-mono mt-0.5">
             {Math.floor(totalOvertimeMinutes / 60)} ک و {totalOvertimeMinutes % 60} خولەک
           </p>
         </div>
-        <div className="panel-classic p-2 text-center bg-purple-50 border-purple-200">
+        <div className="panel-classic p-2.5 text-center bg-purple-50/80 border-2 border-purple-200 shadow-sm rounded-xl">
           <span className="text-[10px] text-purple-900 block font-bold">کۆی ڕۆژانی دەوامکراو</span>
           <p className="text-base font-black text-purple-950 font-mono mt-0.5">{totalDaysPresentAll} ڕۆژ</p>
         </div>
       </div>
 
-      {/* Detailed Analytics Table */}
-      <div className="border border-slate-400 bg-white rounded overflow-x-auto shadow-sm">
+      {/* 📊 ANALYTICS DATA TABLE CONTAINER */}
+      <div className="border-2 border-slate-300 bg-white rounded-xl shadow-md overflow-hidden">
+        <div className="bg-slate-800 text-white p-2 px-3 flex items-center justify-between">
+          <h3 className="text-xs font-black flex items-center gap-2">
+            <span>📋 خشتەی هەڵسەنگاندن و ئاماری پابەندبوونی کارمەندان ({timeframe === 'weekly' ? 'هەفتانە' : `مانگانە - ${selectedMonth}`})</span>
+          </h3>
+          <span className="text-[10px] font-mono text-slate-300">
+            {employeeStats.length} کارمەند
+          </span>
+        </div>
         <table className="w-full text-right text-xs border-collapse">
           <thead>
             <tr className="bg-slate-200 border-b border-slate-400 text-slate-900 font-black">

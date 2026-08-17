@@ -189,20 +189,40 @@ export function AdminLogisticsModule({ employees }: AdminLogisticsModuleProps) {
   return (
     <div className="space-y-4 text-xs font-bold text-slate-900 dir-rtl" dir="rtl">
       
-      {/* Header & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-100 border border-slate-300 rounded">
+      {/* 🏷️ LARGE PROMINENT SECTION TITLE */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-gradient-to-r from-amber-950 via-amber-900 to-yellow-950 text-white rounded-xl shadow-md border border-amber-700">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 bg-amber-800/80 rounded-lg border border-amber-600 shadow-inner">
+            <Truck className="w-5 h-5 text-amber-200" />
+          </div>
+          <div>
+            <h2 className="text-base sm:text-lg font-black tracking-wide text-amber-50">
+              لیستی بارداگرتن و گواستنەوەی کەلوپەل (Cargo Unloading & Logistics)
+            </h2>
+            <p className="text-[11px] text-amber-200/90 font-medium">
+              بەدواداچوونی بارە هاتووەکان، شۆفێرەکان، تابلۆی ئۆتۆمبێل، دەستەی داگرتن و ژمارەی پارچەکان
+            </p>
+          </div>
+        </div>
+        <span className="text-xs font-mono font-black bg-amber-500/30 text-amber-100 border border-amber-400 px-3 py-1 rounded-full">
+          LOGISTICS HUB
+        </span>
+      </div>
+
+      {/* 🛠️ TOP CONTROLS */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-100 border-2 border-slate-300 rounded-xl shadow-sm">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowAddModal(true)}
-            className="btn-classic-primary text-xs flex items-center gap-1.5"
+            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-amber-700 hover:bg-amber-800 text-white border-amber-950 shadow-md cursor-pointer px-3.5 py-1.5 rounded-lg"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>تۆمارکردنی باری نوێ (New Cargo / Unloading)</span>
+            <Plus className="w-4 h-4" />
+            <span>➕ تۆمارکردنی باری نوێ (New Cargo Entry)</span>
           </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-slate-600">
-          <span>کۆی بارەکان: <span className="text-blue-900 font-black">{shipments.length}</span></span>
+          <span className="text-slate-800 font-bold">کۆی بارەکان: <span className="text-blue-900 font-black">{shipments.length}</span></span>
 
           <button
             onClick={handleExportPDF}
@@ -222,25 +242,25 @@ export function AdminLogisticsModule({ employees }: AdminLogisticsModuleProps) {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* 📊 SUMMARY KPI CARDS */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="panel-classic p-2 text-center bg-blue-50 border-blue-200">
+        <div className="panel-classic p-2.5 text-center bg-blue-50/80 border-2 border-blue-200 shadow-sm rounded-xl">
           <span className="text-[10px] text-blue-900 block font-bold">کۆی بارەکان</span>
           <p className="text-base font-black text-blue-950 font-mono mt-0.5">{shipments.length} بار</p>
         </div>
-        <div className="panel-classic p-2 text-center bg-emerald-50 border-emerald-200">
+        <div className="panel-classic p-2.5 text-center bg-emerald-50/80 border-2 border-emerald-200 shadow-sm rounded-xl">
           <span className="text-[10px] text-emerald-900 block font-bold">داگیراو و تەواوبوو</span>
           <p className="text-base font-black text-emerald-950 font-mono mt-0.5">
             {shipments.filter(s => s.status === 'completed').length} بار
           </p>
         </div>
-        <div className="panel-classic p-2 text-center bg-amber-50 border-amber-200">
+        <div className="panel-classic p-2.5 text-center bg-amber-50/80 border-2 border-amber-200 shadow-sm rounded-xl">
           <span className="text-[10px] text-amber-900 block font-bold">لە کاتی داگرتندا</span>
           <p className="text-base font-black text-amber-950 font-mono mt-0.5">
             {shipments.filter(s => s.status === 'in_progress').length} بار
           </p>
         </div>
-        <div className="panel-classic p-2 text-center bg-purple-50 border-purple-200">
+        <div className="panel-classic p-2.5 text-center bg-purple-50/80 border-2 border-purple-200 shadow-sm rounded-xl">
           <span className="text-[10px] text-purple-900 block font-bold">کۆی کاڵای داگیراو</span>
           <p className="text-base font-black text-purple-950 font-mono mt-0.5">
             {shipments.reduce((acc, curr) => acc + (curr.itemCount || 0), 0).toLocaleString()} پارچە
@@ -248,8 +268,16 @@ export function AdminLogisticsModule({ employees }: AdminLogisticsModuleProps) {
         </div>
       </div>
 
-      {/* Shipments Table */}
-      <div className="border border-slate-400 bg-white rounded overflow-x-auto shadow-sm">
+      {/* 📊 SHIPMENTS DATA TABLE CONTAINER */}
+      <div className="border-2 border-slate-300 bg-white rounded-xl shadow-md overflow-hidden">
+        <div className="bg-slate-800 text-white p-2 px-3 flex items-center justify-between">
+          <h3 className="text-xs font-black flex items-center gap-2">
+            <span>📋 لیستی بارە تۆمارکراوەکانی کۆگا و کارگە</span>
+          </h3>
+          <span className="text-[10px] font-mono text-slate-300">
+            {shipments.length} بار
+          </span>
+        </div>
         <table className="w-full text-right text-xs border-collapse">
           <thead>
             <tr className="bg-slate-200 border-b border-slate-400 text-slate-900 font-black">

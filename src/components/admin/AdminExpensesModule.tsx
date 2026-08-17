@@ -254,36 +254,71 @@ export function AdminExpensesModule({ employees }: AdminExpensesModuleProps) {
   return (
     <div className="space-y-4 text-xs font-bold text-slate-900 dir-rtl" dir="rtl">
       
-      {/* Header & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-100 border border-slate-300 rounded">
-        <div className="flex items-center gap-1.5">
+      {/* 🏷️ LARGE PROMINENT SECTION TITLE */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-gradient-to-r from-emerald-950 via-emerald-900 to-teal-900 text-white rounded-xl shadow-md border border-emerald-700">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 bg-emerald-800/80 rounded-lg border border-emerald-600 shadow-inner">
+            <DollarSign className="w-5 h-5 text-emerald-200" />
+          </div>
+          <div>
+            <h2 className="text-base sm:text-lg font-black tracking-wide text-emerald-50">
+              لیستی مەسروفات، پاداشت و پێشینەی دارایی (Expenses & Finance Ledger)
+            </h2>
+            <p className="text-[11px] text-emerald-200/90 font-medium">
+              تۆمارکردنی پسوولەکانی کارگە، بەخششی کارمەندان و ڕاکێشانی پێشینە لەگەڵ ئاماری گشتی
+            </p>
+          </div>
+        </div>
+        <span className="text-xs font-mono font-black bg-emerald-500/30 text-emerald-100 border border-emerald-400 px-3 py-1 rounded-full">
+          FINANCE SYSTEM
+        </span>
+      </div>
+
+      {/* 🛠️ TOP CONTROLS & TABS */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-100 border-2 border-slate-300 rounded-xl shadow-sm">
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => setActiveTab('expenses')}
-            className={`btn-classic ${activeTab === 'expenses' ? 'bg-blue-900 text-white font-black' : ''}`}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer font-black ${
+              activeTab === 'expenses' 
+                ? 'bg-rose-800 text-white shadow-md border border-rose-950 scale-102' 
+                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+            }`}
           >
-            💸 مەسروفات ({monthlyExpenses.length})
+            <TrendingDown className="w-3.5 h-3.5" />
+            <span>💸 مەسروفاتی کارگە ({monthlyExpenses.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('bonuses')}
-            className={`btn-classic ${activeTab === 'bonuses' ? 'bg-blue-900 text-white font-black' : ''}`}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer font-black ${
+              activeTab === 'bonuses' 
+                ? 'bg-emerald-800 text-white shadow-md border border-emerald-950 scale-102' 
+                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+            }`}
           >
-            🎁 پاداشت و بەخشش ({monthlyBonuses.length})
+            <Gift className="w-3.5 h-3.5" />
+            <span>🎁 پاداشت و بەخشش ({monthlyBonuses.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('withdrawals')}
-            className={`btn-classic ${activeTab === 'withdrawals' ? 'bg-blue-900 text-white font-black' : ''}`}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer font-black ${
+              activeTab === 'withdrawals' 
+                ? 'bg-amber-800 text-white shadow-md border border-amber-950 scale-102' 
+                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+            }`}
           >
-            🏧 ڕاکێشانی پێشینە ({monthlyWithdrawals.length})
+            <Banknote className="w-3.5 h-3.5" />
+            <span>🏧 ڕاکێشانی پێشینە ({monthlyWithdrawals.length})</span>
           </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 font-mono">
-          <span className="text-slate-600">مانگ:</span>
+          <span className="text-slate-600 font-bold text-xs">مانگ:</span>
           <input
             type="month"
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
-            className="input-classic font-bold"
+            className="input-classic font-bold bg-white"
           />
 
           <button
@@ -304,60 +339,76 @@ export function AdminExpensesModule({ employees }: AdminExpensesModuleProps) {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* 📊 SUMMARY KPI CARDS */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="panel-classic p-2 text-center bg-rose-50 border-rose-200">
+        <div className="panel-classic p-2.5 text-center bg-rose-50/80 border-2 border-rose-200 shadow-sm rounded-xl">
           <span className="text-[10px] text-rose-900 block font-bold">کۆی مەسروفات</span>
           <p className="text-base font-black text-rose-950 font-mono mt-0.5">{totalExp.toLocaleString()} IQD</p>
         </div>
-        <div className="panel-classic p-2 text-center bg-emerald-50 border-emerald-200">
+        <div className="panel-classic p-2.5 text-center bg-emerald-50/80 border-2 border-emerald-200 shadow-sm rounded-xl">
           <span className="text-[10px] text-emerald-900 block font-bold">کۆی پاداشتەکان</span>
           <p className="text-base font-black text-emerald-950 font-mono mt-0.5">{totalBon.toLocaleString()} IQD</p>
         </div>
-        <div className="panel-classic p-2 text-center bg-amber-50 border-amber-200">
+        <div className="panel-classic p-2.5 text-center bg-amber-50/80 border-2 border-amber-200 shadow-sm rounded-xl">
           <span className="text-[10px] text-amber-900 block font-bold">کۆی پێشینە و سەحب</span>
           <p className="text-base font-black text-amber-950 font-mono mt-0.5">{totalWth.toLocaleString()} IQD</p>
         </div>
-        <div className="panel-classic p-2 text-center bg-purple-50 border-purple-200">
+        <div className="panel-classic p-2.5 text-center bg-purple-50/80 border-2 border-purple-200 shadow-sm rounded-xl">
           <span className="text-[10px] text-purple-900 block font-bold">کۆی گشتی خەرجی مانگ</span>
           <p className="text-base font-black text-purple-950 font-mono mt-0.5">{grandTotal.toLocaleString()} IQD</p>
         </div>
       </div>
 
-      {/* Form: Add Record */}
-      <form onSubmit={handleAddRecord} className="panel-classic p-3 bg-white space-y-3 shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-300 pb-1.5">
-          <h3 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-            <Plus className="w-3.5 h-3.5 text-blue-900" />
-            <span>
-              {activeTab === 'expenses' && 'تۆمارکردنی مەسروفاتی نوێ (Add Expense)'}
-              {activeTab === 'bonuses' && 'تۆمارکردنی پاداشتی کارمەند (Add Bonus)'}
-              {activeTab === 'withdrawals' && 'تۆمارکردنی ڕاکێشانی پێشینە (Cash Withdrawal)'}
+      {/* 📝 DISTINCT FORM / DATA ENTRY PANEL (COLOR THEMED PER TAB) */}
+      <form 
+        onSubmit={handleAddRecord} 
+        className={`p-3.5 border-2 rounded-xl shadow-md space-y-3 ${
+          activeTab === 'expenses'
+            ? 'bg-gradient-to-r from-rose-50/90 via-red-50/70 to-rose-50/90 border-rose-300'
+            : activeTab === 'bonuses'
+            ? 'bg-gradient-to-r from-emerald-50/90 via-teal-50/70 to-emerald-50/90 border-emerald-300'
+            : 'bg-gradient-to-r from-amber-50/90 via-orange-50/70 to-amber-50/90 border-amber-300'
+        }`}
+      >
+        <div className="flex items-center justify-between border-b pb-2 border-slate-300/80">
+          <div className="flex items-center gap-2">
+            <span className={`p-1 text-white rounded-md ${
+              activeTab === 'expenses' ? 'bg-rose-600' : activeTab === 'bonuses' ? 'bg-emerald-600' : 'bg-amber-600'
+            }`}>
+              <Plus className="w-3.5 h-3.5" />
             </span>
-          </h3>
+            <h3 className="text-xs font-black text-slate-900">
+              {activeTab === 'expenses' && 'فۆرمی تۆمارکردنی مەسروفاتی نوێ (New Expense Form)'}
+              {activeTab === 'bonuses' && 'فۆرمی تۆمارکردنی پاداشتی کارمەند (New Bonus Form)'}
+              {activeTab === 'withdrawals' && 'فۆرمی تۆمارکردنی ڕاکێشانی پێشینە (New Cash Withdrawal Form)'}
+            </h3>
+          </div>
+          <span className="text-[10px] bg-white/90 border border-slate-300 px-2 py-0.5 rounded font-mono font-bold text-slate-800">
+            تۆمار لە: {date}
+          </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
           {activeTab === 'expenses' ? (
             <>
               <div>
-                <label className="block text-slate-700 mb-1 text-[11px]">ناونیشانی مەسروفات:</label>
+                <label className="block text-slate-800 mb-1 text-[11px] font-bold">ناونیشانی مەسروفات:</label>
                 <input
                   type="text"
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="بۆ نموونە: کڕینی پێداویستی کارگە"
-                  className="input-classic w-full font-bold"
+                  className="input-classic w-full font-bold bg-white"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-700 mb-1 text-[11px]">پۆلێن (Category):</label>
+                <label className="block text-slate-800 mb-1 text-[11px] font-bold">پۆلێن (Category):</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="input-classic w-full font-bold"
+                  className="input-classic w-full font-bold bg-white"
                 >
                   <option value="مەسروفاتی گشتی">مەسروفاتی گشتی</option>
                   <option value="خواردن و میوانداری">خواردن و میوانداری</option>
@@ -370,11 +421,11 @@ export function AdminExpensesModule({ employees }: AdminExpensesModuleProps) {
             </>
           ) : (
             <div>
-              <label className="block text-slate-700 mb-1 text-[11px]">کارمەند:</label>
+              <label className="block text-slate-800 mb-1 text-[11px] font-bold">کارمەند:</label>
               <select
                 value={selectedEmpId}
                 onChange={(e) => setSelectedEmpId(e.target.value)}
-                className="input-classic w-full font-bold"
+                className="input-classic w-full font-bold bg-white"
                 required
               >
                 <option value="">-- هەڵبژاردنی کارمەند --</option>
@@ -388,7 +439,7 @@ export function AdminExpensesModule({ employees }: AdminExpensesModuleProps) {
           )}
 
           <div>
-            <label className="block text-slate-700 mb-1 text-[11px]">بڕی پارە (IQD):</label>
+            <label className="block text-slate-800 mb-1 text-[11px] font-bold">بڕی پارە (IQD):</label>
             <input
               type="number"
               required
@@ -396,139 +447,175 @@ export function AdminExpensesModule({ employees }: AdminExpensesModuleProps) {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="50,000"
-              className="input-classic w-full font-mono font-bold"
+              className="input-classic w-full font-mono font-bold bg-white"
             />
           </div>
 
           <div>
-            <label className="block text-slate-700 mb-1 text-[11px]">بەروار:</label>
+            <label className="block text-slate-800 mb-1 text-[11px] font-bold">بەرواری پسوولە/تۆمار:</label>
             <input
               type="date"
               required
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="input-classic w-full font-mono font-bold"
+              className="input-classic w-full font-mono font-bold bg-white"
             />
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-1">
-          <div className="flex-1 ml-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <div className="flex-1 min-w-[200px]">
             <input
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="تێبینی زیاتر (ئارەزوومەندانە)..."
-              className="input-classic w-full font-bold"
+              placeholder="تێبینی و هۆکاری پسوولەکە یان وردەکاری زیادە..."
+              className="input-classic w-full font-bold bg-white"
             />
           </div>
-          <button type="submit" className="btn-classic-primary text-xs flex items-center gap-1 flex-shrink-0">
-            <Plus className="w-3.5 h-3.5" />
-            <span>پاشەکەوتکردن</span>
+          <button 
+            type="submit" 
+            className={`btn-classic text-xs font-black flex items-center gap-1.5 text-white shadow-sm cursor-pointer px-4 py-1.5 rounded flex-shrink-0 ${
+              activeTab === 'expenses' ? 'bg-rose-700 hover:bg-rose-800 border-rose-900' :
+              activeTab === 'bonuses' ? 'bg-emerald-700 hover:bg-emerald-800 border-emerald-900' :
+              'bg-amber-700 hover:bg-amber-800 border-amber-900'
+            }`}
+          >
+            <Plus className="w-4 h-4" />
+            <span>پاشەکەوتکردنی ئەم تۆمارە</span>
           </button>
         </div>
       </form>
 
-      {/* Tables based on active tab */}
-      <div className="border border-slate-400 bg-white rounded overflow-x-auto shadow-sm">
-        <table className="w-full text-right text-xs border-collapse">
-          <thead>
-            <tr className="bg-slate-200 border-b border-slate-400 text-slate-900 font-black">
-              <th className="p-2 border-l border-slate-300 w-10 text-center">#</th>
-              <th className="p-2 border-l border-slate-300">
-                {activeTab === 'expenses' ? 'ناونیشان / پۆلێن' : 'ناوی کارمەند'}
-              </th>
-              <th className="p-2 border-l border-slate-300 text-center">بەروار</th>
-              <th className="p-2 border-l border-slate-300 text-center">بڕی پارە (IQD)</th>
-              <th className="p-2 border-l border-slate-300">تێبینی / هۆکار</th>
-              <th className="p-2 text-center w-16">کردار</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-300 font-bold">
-            {activeTab === 'expenses' && (
-              monthlyExpenses.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-6 text-center text-slate-500 font-bold">
-                    هیچ مەسروفاتێک بۆ مانگی ({selectedMonth}) تۆمار نەکراوە.
-                  </td>
-                </tr>
-              ) : (
-                monthlyExpenses.map((e: any, idx: number) => (
-                  <tr key={e.id} className="hover:bg-slate-50">
-                    <td className="p-2 border-l border-slate-200 text-center font-mono text-slate-500">{idx + 1}</td>
-                    <td className="p-2 border-l border-slate-200 text-slate-900 font-black">
-                      {e.title} <span className="text-[10px] text-slate-500 font-normal">({e.category || 'گشتی'})</span>
-                    </td>
-                    <td className="p-2 border-l border-slate-200 text-center font-mono">{e.date}</td>
-                    <td className="p-2 border-l border-slate-200 text-center font-mono text-rose-900 font-black">
-                      {Number(e.amount || 0).toLocaleString()} IQD
-                    </td>
-                    <td className="p-2 border-l border-slate-200 text-slate-700">{e.note || '-'}</td>
-                    <td className="p-2 text-center">
-                      <button onClick={() => handleDeleteRecord(e.id, 'expenses')} className="text-rose-700 hover:text-rose-950 p-1">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )
-            )}
+      {/* 📊 ANALYTICS & DATA TABLE CONTAINER */}
+      <div className="border-2 border-slate-300 bg-white rounded-xl shadow-md overflow-hidden">
+        <div className="bg-slate-800 text-white p-2 px-3 flex items-center justify-between">
+          <h3 className="text-xs font-black flex items-center gap-2">
+            <span>
+              📋 {activeTab === 'expenses' && `لیستی تەواوی مەسروفاتەکانی مانگی (${selectedMonth})`}
+              {activeTab === 'bonuses' && `لیستی پاداشتەکانی مانگی (${selectedMonth})`}
+              {activeTab === 'withdrawals' && `لیستی پێشینەی ڕاکێشراوی مانگی (${selectedMonth})`}
+            </span>
+          </h3>
+          <span className="text-[10px] font-mono text-slate-300">
+            {activeTab === 'expenses' ? `${monthlyExpenses.length} پسوولە` :
+             activeTab === 'bonuses' ? `${monthlyBonuses.length} کارمەند` :
+             `${monthlyWithdrawals.length} تۆمار`}
+          </span>
+        </div>
 
-            {activeTab === 'bonuses' && (
-              monthlyBonuses.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-6 text-center text-slate-500 font-bold">
-                    هیچ پاداشتێک بۆ مانگی ({selectedMonth}) تۆمار نەکراوە.
-                  </td>
-                </tr>
-              ) : (
-                monthlyBonuses.map((b: any, idx: number) => (
-                  <tr key={b.id} className="hover:bg-slate-50">
-                    <td className="p-2 border-l border-slate-200 text-center font-mono text-slate-500">{idx + 1}</td>
-                    <td className="p-2 border-l border-slate-200 text-slate-900 font-black">{b.employeeName}</td>
-                    <td className="p-2 border-l border-slate-200 text-center font-mono">{b.date}</td>
-                    <td className="p-2 border-l border-slate-200 text-center font-mono text-emerald-900 font-black">
-                      {Number(b.totalAmount || b.amount || 0).toLocaleString()} IQD
-                    </td>
-                    <td className="p-2 border-l border-slate-200 text-slate-700">{b.reason || b.note || '-'}</td>
-                    <td className="p-2 text-center">
-                      <button onClick={() => handleDeleteRecord(b.id, 'bonuses')} className="text-rose-700 hover:text-rose-950 p-1">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+        <div className="overflow-x-auto">
+          <table className="w-full text-right text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-200 border-b-2 border-slate-300 text-slate-900 font-black">
+                <th className="p-2.5 border-l border-slate-300 w-10 text-center">#</th>
+                <th className="p-2.5 border-l border-slate-300">
+                  {activeTab === 'expenses' ? 'ناونیشانی خەرجی / پۆلێن' : 'ناوی کارمەند'}
+                </th>
+                <th className="p-2.5 border-l border-slate-300 text-center">بەروار</th>
+                <th className="p-2.5 border-l border-slate-300 text-center">بڕی پارە (IQD)</th>
+                <th className="p-2.5 border-l border-slate-300">تێبینی / هۆکار</th>
+                <th className="p-2.5 text-center w-16">کردار</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 font-bold">
+              {activeTab === 'expenses' && (
+                monthlyExpenses.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-500 font-bold">
+                      هیچ مەسروفاتێک بۆ مانگی ({selectedMonth}) تۆمار نەکراوە.
                     </td>
                   </tr>
-                ))
-              )
-            )}
+                ) : (
+                  monthlyExpenses.map((e: any, idx: number) => (
+                    <tr key={e.id} className="hover:bg-rose-50/40 transition-all">
+                      <td className="p-2.5 border-l border-slate-200 text-center font-mono text-slate-500">{idx + 1}</td>
+                      <td className="p-2.5 border-l border-slate-200 text-slate-950 font-black">
+                        {e.title} <span className="text-[10px] text-rose-800 font-bold bg-rose-100 px-1.5 py-0.5 rounded mr-1">({e.category || 'گشتی'})</span>
+                      </td>
+                      <td className="p-2.5 border-l border-slate-200 text-center font-mono font-bold text-slate-800">{e.date}</td>
+                      <td className="p-2.5 border-l border-slate-200 text-center font-mono text-rose-900 font-black">
+                        {Number(e.amount || 0).toLocaleString()} IQD
+                      </td>
+                      <td className="p-2.5 border-l border-slate-200 text-slate-700 font-medium">{e.note || '-'}</td>
+                      <td className="p-2.5 text-center">
+                        <button 
+                          onClick={() => handleDeleteRecord(e.id, 'expenses')} 
+                          className="text-rose-700 hover:text-rose-950 p-1 hover:bg-rose-100 rounded transition-all"
+                          title="سڕینەوە"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )
+              )}
 
-            {activeTab === 'withdrawals' && (
-              monthlyWithdrawals.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-6 text-center text-slate-500 font-bold">
-                    هیچ ڕاکێشانێکی پێشینە بۆ مانگی ({selectedMonth}) تۆمار نەکراوە.
-                  </td>
-                </tr>
-              ) : (
-                monthlyWithdrawals.map((w: any, idx: number) => (
-                  <tr key={w.id} className="hover:bg-slate-50">
-                    <td className="p-2 border-l border-slate-200 text-center font-mono text-slate-500">{idx + 1}</td>
-                    <td className="p-2 border-l border-slate-200 text-slate-900 font-black">{w.employeeName}</td>
-                    <td className="p-2 border-l border-slate-200 text-center font-mono">{w.date}</td>
-                    <td className="p-2 border-l border-slate-200 text-center font-mono text-amber-900 font-black">
-                      {Number(w.amount || 0).toLocaleString()} IQD
-                    </td>
-                    <td className="p-2 border-l border-slate-200 text-slate-700">{w.note || '-'}</td>
-                    <td className="p-2 text-center">
-                      <button onClick={() => handleDeleteRecord(w.id, 'withdrawals')} className="text-rose-700 hover:text-rose-950 p-1">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+              {activeTab === 'bonuses' && (
+                monthlyBonuses.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-500 font-bold">
+                      هیچ پاداشتێک بۆ مانگی ({selectedMonth}) تۆمار نەکراوە.
                     </td>
                   </tr>
-                ))
-              )
-            )}
-          </tbody>
-        </table>
+                ) : (
+                  monthlyBonuses.map((b: any, idx: number) => (
+                    <tr key={b.id} className="hover:bg-emerald-50/40 transition-all">
+                      <td className="p-2.5 border-l border-slate-200 text-center font-mono text-slate-500">{idx + 1}</td>
+                      <td className="p-2.5 border-l border-slate-200 text-slate-950 font-black">{b.employeeName}</td>
+                      <td className="p-2.5 border-l border-slate-200 text-center font-mono font-bold text-slate-800">{b.date}</td>
+                      <td className="p-2.5 border-l border-slate-200 text-center font-mono text-emerald-900 font-black">
+                        {Number(b.totalAmount || b.amount || 0).toLocaleString()} IQD
+                      </td>
+                      <td className="p-2.5 border-l border-slate-200 text-slate-700 font-medium">{b.reason || b.note || '-'}</td>
+                      <td className="p-2.5 text-center">
+                        <button 
+                          onClick={() => handleDeleteRecord(b.id, 'bonuses')} 
+                          className="text-rose-700 hover:text-rose-950 p-1 hover:bg-rose-100 rounded transition-all"
+                          title="سڕینەوە"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )
+              )}
+
+              {activeTab === 'withdrawals' && (
+                monthlyWithdrawals.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-500 font-bold">
+                      هیچ ڕاکێشانێکی پێشینە بۆ مانگی ({selectedMonth}) تۆمار نەکراوە.
+                    </td>
+                  </tr>
+                ) : (
+                  monthlyWithdrawals.map((w: any, idx: number) => (
+                    <tr key={w.id} className="hover:bg-amber-50/40 transition-all">
+                      <td className="p-2.5 border-l border-slate-200 text-center font-mono text-slate-500">{idx + 1}</td>
+                      <td className="p-2.5 border-l border-slate-200 text-slate-950 font-black">{w.employeeName}</td>
+                      <td className="p-2.5 border-l border-slate-200 text-center font-mono font-bold text-slate-800">{w.date}</td>
+                      <td className="p-2.5 border-l border-slate-200 text-center font-mono text-amber-900 font-black">
+                        {Number(w.amount || 0).toLocaleString()} IQD
+                      </td>
+                      <td className="p-2.5 border-l border-slate-200 text-slate-700 font-medium">{w.note || '-'}</td>
+                      <td className="p-2.5 text-center">
+                        <button 
+                          onClick={() => handleDeleteRecord(w.id, 'withdrawals')} 
+                          className="text-rose-700 hover:text-rose-950 p-1 hover:bg-rose-100 rounded transition-all"
+                          title="سڕینەوە"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
     </div>

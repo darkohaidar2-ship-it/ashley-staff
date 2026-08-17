@@ -834,7 +834,7 @@ export default function AdminPage() {
           </div>
 
           {/* 31-Day Attendance Sheet Component */}
-          <div className="pt-3 border-t border-slate-300">
+          <div className="pt-6 border-t-4 border-slate-300">
             <AttendanceSheetGrid
               attendanceLogs={attendanceLogs}
               employees={employees}
@@ -850,76 +850,80 @@ export default function AdminPage() {
       {/* ⏰ SECTION 2: EMPLOYEE OVERTIME MANAGEMENT */}
       {/* ========================================================================= */}
       {(adminActiveSection === 'all' || adminActiveSection === 'overtime') && (
-      <section className="panel-classic space-y-3">
-        <div className="panel-header-classic flex items-center justify-between">
-          <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-            <Clock className="w-4 h-4 text-orange-700" />
-            <span>بەشی دووەم: کاتی زیادەی کارمەندان (Employee Overtime Management)</span>
-          </h2>
-          <span className="text-[10px] font-mono bg-orange-800 text-white px-1.5 py-0.2 font-bold">OVERTIME MODULE</span>
-        </div>
-
-        <div className="p-3">
-          <AdminOvertimeModule employees={employees} />
-        </div>
-      </section>
+      <>
+        {adminActiveSection === 'all' && (
+          <div className="my-8 border-t-4 border-orange-300 relative flex items-center justify-center">
+            <span className="bg-orange-100 text-orange-950 px-4 py-1 rounded-full text-xs font-black border-2 border-orange-400 -mt-3.5 shadow-sm">
+              بەشی دووەم: کاتی زیادەی کارمەندان (OVERTIME SECTION)
+            </span>
+          </div>
+        )}
+        <section className="panel-classic space-y-3 shadow-md">
+          <div className="p-3">
+            <AdminOvertimeModule employees={employees} />
+          </div>
+        </section>
+      </>
       )}
 
       {/* ========================================================================= */}
       {/* 💸 SECTION 3: ASHLEY EXPENSES & FINANCIAL LEDGER */}
       {/* ========================================================================= */}
       {(adminActiveSection === 'all' || adminActiveSection === 'expenses') && (
-      <section className="panel-classic space-y-3">
-        <div className="panel-header-classic flex items-center justify-between">
-          <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-            <DollarSign className="w-4 h-4 text-emerald-800" />
-            <span>بەشی سێیەم: مەسروفات، پاداشت و ڕاکێشانی پێشینە (Expenses & Finance)</span>
-          </h2>
-          <span className="text-[10px] font-mono bg-emerald-800 text-white px-1.5 py-0.2 font-bold">FINANCE MODULE</span>
-        </div>
-
-        <div className="p-3">
-          <AdminExpensesModule employees={employees} />
-        </div>
-      </section>
+      <>
+        {adminActiveSection === 'all' && (
+          <div className="my-8 border-t-4 border-emerald-300 relative flex items-center justify-center">
+            <span className="bg-emerald-100 text-emerald-950 px-4 py-1 rounded-full text-xs font-black border-2 border-emerald-400 -mt-3.5 shadow-sm">
+              بەشی سێیەم: مەسروفات و دارایی (EXPENSES & FINANCE SECTION)
+            </span>
+          </div>
+        )}
+        <section className="panel-classic space-y-3 shadow-md">
+          <div className="p-3">
+            <AdminExpensesModule employees={employees} />
+          </div>
+        </section>
+      </>
       )}
 
       {/* ========================================================================= */}
       {/* 🚚 SECTION 4: CARGO UNLOADING & LOGISTICS */}
       {/* ========================================================================= */}
       {(adminActiveSection === 'all' || adminActiveSection === 'logistics') && (
-      <section className="panel-classic space-y-3">
-        <div className="panel-header-classic flex items-center justify-between">
-          <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-            <Truck className="w-4 h-4 text-amber-800" />
-            <span>بەشی چوارەم: بارداگرتن و گواستنەوە (Cargo Unloading & Logistics)</span>
-          </h2>
-          <span className="text-[10px] font-mono bg-amber-800 text-white px-1.5 py-0.2 font-bold">LOGISTICS MODULE</span>
-        </div>
-
-        <div className="p-3">
-          <AdminLogisticsModule employees={employees} />
-        </div>
-      </section>
+      <>
+        {adminActiveSection === 'all' && (
+          <div className="my-8 border-t-4 border-amber-300 relative flex items-center justify-center">
+            <span className="bg-amber-100 text-amber-950 px-4 py-1 rounded-full text-xs font-black border-2 border-amber-400 -mt-3.5 shadow-sm">
+              بەشی چوارەم: بارداگرتن و گواستنەوە (LOGISTICS & UNLOADING SECTION)
+            </span>
+          </div>
+        )}
+        <section className="panel-classic space-y-3 shadow-md">
+          <div className="p-3">
+            <AdminLogisticsModule employees={employees} />
+          </div>
+        </section>
+      </>
       )}
 
       {/* ========================================================================= */}
       {/* 📊 SECTION 5: WEEKLY & MONTHLY HR ANALYTICS */}
       {/* ========================================================================= */}
       {(adminActiveSection === 'all' || adminActiveSection === 'stats') && (
-      <section className="panel-classic space-y-3">
-        <div className="panel-header-classic flex items-center justify-between">
-          <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-            <BarChart3 className="w-4 h-4 text-purple-800" />
-            <span>بەشی پێنجەم: ئاماری هەفتانە و مانگانەی کارمەندان (HR Analytics)</span>
-          </h2>
-          <span className="text-[10px] font-mono bg-purple-800 text-white px-1.5 py-0.2 font-bold">ANALYTICS MODULE</span>
-        </div>
-
-        <div className="p-3">
-          <AdminWeeklyMonthlyStatsModule employees={employees} attendanceLogs={attendanceLogs} />
-        </div>
-      </section>
+      <>
+        {adminActiveSection === 'all' && (
+          <div className="my-8 border-t-4 border-purple-300 relative flex items-center justify-center">
+            <span className="bg-purple-100 text-purple-950 px-4 py-1 rounded-full text-xs font-black border-2 border-purple-400 -mt-3.5 shadow-sm">
+              بەشی پێنجەم: ئاماری هەفتانە و مانگانە (HR PERFORMANCE ANALYTICS)
+            </span>
+          </div>
+        )}
+        <section className="panel-classic space-y-3 shadow-md">
+          <div className="p-3">
+            <AdminWeeklyMonthlyStatsModule employees={employees} attendanceLogs={attendanceLogs} />
+          </div>
+        </section>
+      </>
       )}
 
       {/* ========================================================================= */}

@@ -467,60 +467,60 @@ export function AttendanceAnalyticsReport({
   };
 
   return (
-    <div className="space-y-4 pt-6 border-t-2 border-slate-300 font-sans dir-rtl text-slate-900" dir="rtl">
+    <div className="space-y-4 pt-8 border-t-4 border-slate-300 font-sans dir-rtl text-slate-900" dir="rtl">
       
-      {/* 📊 SECTION HEADER BANNER WITH CONFIG CONTROLS */}
-      <div className="panel-classic p-3 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex flex-wrap items-center justify-between gap-3 shadow-md rounded-lg">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
-            <BarChart3 className="w-5 h-5" />
+      {/* 🏷️ LARGE PROMINENT SECTION TITLE */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-3.5 bg-gradient-to-r from-slate-950 via-blue-950 to-indigo-950 text-white rounded-xl shadow-lg border border-blue-800">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-blue-800/80 rounded-xl border border-blue-600 shadow-inner">
+            <BarChart3 className="w-6 h-6 text-blue-200" />
           </div>
           <div>
-            <h2 className="text-sm font-black tracking-wide flex items-center gap-2">
-              <span>لیستی ئامار و ڕاپۆرتی کاتەکان (HR Analytics & Overtime Report)</span>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/30 border border-indigo-400/40 text-indigo-200 font-mono">
-                {selectedMonth}
+            <h2 className="text-base sm:text-lg font-black tracking-wide text-white flex items-center gap-2">
+              <span>لیستی ئامار و ڕاپۆرتی کاتەکان (HR Analytics & Overtime Master)</span>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/30 border border-blue-400 text-blue-200 font-mono font-black">
+                مانگی {selectedMonth}
               </span>
             </h2>
-            <p className="text-[11px] text-slate-300 font-bold mt-0.5">
-              ئاماری تەواوی کاتژمێری ئیشکراو، دواکەوتن، ئیزافە، غیابات، پارەی ئیزافە و تێبینی ڕەزامەندیی ئەدمین
+            <p className="text-[11px] text-blue-200/90 font-medium mt-0.5">
+              ئاماری تەواوی کاتژمێری ئیشکراو، دواکەوتن، ئیزافە، غیابات، شایستەی پارەی ئیزافە بە IQD و تێبینی ئەدمین
             </p>
           </div>
         </div>
 
-        {/* Dynamic Shift & Overtime Pay Settings */}
-        <div className="flex flex-wrap items-center gap-3 text-xs bg-slate-800/90 px-3 py-1.5 rounded-lg border border-slate-700">
-          <div className="flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="text-slate-300 font-bold">کاتی دەوام:</span>
-            <div className="flex items-center gap-1 font-mono font-bold" dir="ltr">
+        {/* ⚙️ DYNAMIC SHIFT & OVERTIME PAY SETTINGS */}
+        <div className="flex flex-wrap items-center gap-3 text-xs bg-slate-900/90 p-2 px-3 rounded-xl border border-slate-700 shadow-inner">
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-4 h-4 text-blue-400" />
+            <span className="text-slate-300 font-bold">دیاریکردنی کاتی دەوام:</span>
+            <div className="flex items-center gap-1.5 font-mono font-bold" dir="ltr">
               <input
                 type="time"
                 value={shiftStartTime}
                 onChange={(e) => setShiftStartTime(e.target.value)}
-                className="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-white text-xs font-bold text-center"
+                className="bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white text-xs font-bold text-center"
               />
               <span className="text-slate-400">تا</span>
               <input
                 type="time"
                 value={shiftEndTime}
                 onChange={(e) => setShiftEndTime(e.target.value)}
-                className="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-white text-xs font-bold text-center"
+                className="bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white text-xs font-bold text-center"
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 border-r border-slate-700 pr-2">
-            <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="flex items-center gap-1.5 border-r border-slate-700 pr-2.5">
+            <DollarSign className="w-4 h-4 text-emerald-400" />
             <span className="text-slate-300 font-bold">نرخی ئیزافە/ک:</span>
             <input
               type="number"
               step="500"
               value={hourlyRate}
               onChange={(e) => setHourlyRate(parseInt(e.target.value, 10) || 5000)}
-              className="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-white text-xs font-mono font-bold w-20 text-center"
+              className="bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white text-xs font-mono font-bold w-24 text-center"
             />
-            <span className="text-[10px] text-slate-400">IQD</span>
+            <span className="text-[11px] text-slate-400">IQD</span>
           </div>
         </div>
       </div>
