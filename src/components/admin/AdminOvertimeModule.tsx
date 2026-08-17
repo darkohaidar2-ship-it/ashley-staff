@@ -22,7 +22,7 @@ import {
   Edit,
   X
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, getDaysInMonth, getDay } from 'date-fns';
 import { exportToPDF, exportToCSV, formatTime12H, type ExportTableColumn } from '@/lib/export-utils';
 import { 
   generateAugust2026AdminNotes, 
@@ -241,6 +241,41 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
     return Array.from(recordsMap.values()).sort((a, b) => b.date.localeCompare(a.date));
   }, [attendanceLogs, activeEmployees, overtime, shiftEndMins, hourlyRate, adminNotes, employees]);
 
+  // Days in selected month for 1-31 Calendar bar
+  const monthDaysList = useMemo(() => {
+    const [yStr, mStr] = selectedMonth.split('-');
+    const y = parseInt(yStr || '2026', 10);
+    const m = parseInt(mStr || '08', 10);
+    const totalDays = getDaysInMonth(new Date(y, m - 1, 1));
+    const days: Array<{
+      dayNum: number;
+      dateStr: string;
+      dayName: string;
+      isFriday: boolean;
+      overtimeCount: number;
+    }> = [];
+
+    const dayNamesKurdish = ['یەکشەممە', 'دووشەممە', 'سێشەممە', 'چوارشەممە', 'پێنجشەممە', 'هەینی', 'شەممە'];
+
+    for (let d = 1; d <= totalDays; d++) {
+      const dStr = d.toString().padStart(2, '0');
+      const fullDate = `${selectedMonth}-${dStr}`;
+      const dateObj = new Date(y, m - 1, d);
+      const dayOfWeek = getDay(dateObj);
+      const otCount = allOvertimeRecords.filter(r => r.date === fullDate).length;
+
+      days.push({
+        dayNum: d,
+        dateStr: fullDate,
+        dayName: dayNamesKurdish[dayOfWeek] || '',
+        isFriday: dayOfWeek === 5,
+        overtimeCount: otCount,
+      });
+    }
+
+    return days;
+  }, [selectedMonth, allOvertimeRecords]);
+
   // Daily records on selected date
   const dailyRecords = useMemo(() => {
     return allOvertimeRecords.filter(r => r.date === selectedDate);
@@ -259,7 +294,6 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       role: string; 
       totalHours: number; 
       totalAmount: number; 
-      count: number; 
       records: typeof allOvertimeRecords 
     }> = {};
     
@@ -272,13 +306,11 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
           role: r.employeeRole, 
           totalHours: 0, 
           totalAmount: 0, 
-          count: 0, 
           records: [] 
         };
       }
       summaryMap[id].totalHours += Number(r.hours || 0);
       summaryMap[id].totalAmount += Number(r.totalAmount || 0);
-      summaryMap[id].count += 1;
       summaryMap[id].records.push(r);
     });
 
@@ -357,7 +389,6 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       localStorage.setItem(`ashley_admin_notes_${selectedMonth}`, JSON.stringify(updatedNotes));
     }
 
-    // Update or add in overtime state
     setOvertime((prev: any[]) => {
       const existing = (prev || []).find(r => r.id === editingRecord.id || (r.employeeId === editingRecord.employeeId && r.date === editingRecord.date));
       if (existing) {
@@ -415,7 +446,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         { header: 'ناوی کارمەند', key: 'name', align: 'right' },
         { header: 'پۆست / ئەرک', key: 'role', align: 'right' },
         { header: 'کاتی دەرچوون', key: 'checkOutTime', align: 'center' },
-        { header: 'ژمارەی کاتژمێر', key: 'hours', align: 'center' },
+        { header: 'کاتی زیادەی کارکردن', key: 'hours', align: 'center' },
         { header: 'بڕی پارە (IQD)', key: 'amount', align: 'center' },
         { header: 'تێبینی و جۆری ئیش', key: 'note', align: 'right' },
       ];
@@ -444,14 +475,12 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       const cols: ExportTableColumn[] = [
         { header: 'ناوی کارمەند', key: 'name', align: 'right' },
         { header: 'پۆست / ئەرک', key: 'role', align: 'right' },
-        { header: 'ژمارەی ڕۆژەکان', key: 'count', align: 'center' },
-        { header: 'کۆی کاتژمێری ئیزافە', key: 'hours', align: 'center' },
-        { header: 'کۆی گشتی پارە (IQD)', key: 'amount', align: 'center' },
+        { header: 'کاتی زیادەی کارکردن', key: 'hours', align: 'center' },
+        { header: 'کۆی شایستەی پارە (IQD)', key: 'amount', align: 'center' },
       ];
       const data = monthlySummary.map(s => ({
         name: s.name,
         role: s.role,
-        count: `${s.count} ڕۆژ`,
         hours: `${s.totalHours.toFixed(1)} کاتژمێر`,
         amount: `${s.totalAmount.toLocaleString()} IQD`,
       }));
@@ -477,7 +506,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         { header: 'ناوی کارمەند', key: 'name' },
         { header: 'پۆست', key: 'role' },
         { header: 'کاتی دەرچوون', key: 'checkOutTime' },
-        { header: 'ژمارەی کاتژمێر', key: 'hours' },
+        { header: 'کاتی زیادەی کارکردن', key: 'hours' },
         { header: 'بڕی پارە (IQD)', key: 'amount' },
         { header: 'تێبینی و هۆکار', key: 'note' },
       ];
@@ -494,14 +523,12 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       const cols: ExportTableColumn[] = [
         { header: 'ناوی کارمەند', key: 'name' },
         { header: 'پۆست', key: 'role' },
-        { header: 'ژمارەی ڕۆژەکان', key: 'count' },
-        { header: 'کۆی کاتژمێر', key: 'hours' },
-        { header: 'کۆی پارە (IQD)', key: 'amount' },
+        { header: 'کاتی زیادەی کارکردن', key: 'hours' },
+        { header: 'کۆی شایستەی پارە (IQD)', key: 'amount' },
       ];
       const data = monthlySummary.map(s => ({
         name: s.name,
         role: s.role,
-        count: s.count,
         hours: s.totalHours.toFixed(1),
         amount: s.totalAmount,
       }));
@@ -526,7 +553,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
               </span>
             </h2>
             <p className="text-[11px] text-orange-200/90 font-medium mt-0.5">
-              ئاماری ڕۆژانە و مانگانەی کاتی زیادەی کارمەندان لە گووگڵ شیت، هەژمارکراو لە چێک‌ئاوت و دەستی، حازر بۆ چاپکردن
+              کالێندەری ۱ تا ۳۱ی مانگی 8ی 2026، ئاماری ڕۆژانە و کاتی زیادەی مانگانە، حازر بۆ چاپکردن
             </p>
           </div>
         </div>
@@ -538,7 +565,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
             className="btn-classic text-xs font-black flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 border-amber-300 shadow-md cursor-pointer px-3 py-1.5 rounded-lg"
             title="هاوردەکردن و نوێکردنەوەی سەرجەم کاتی زیادە و تێبینیەکانی گووگڵ شیت"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-slate-950 animate-spin-slow" />
+            <RefreshCw className="w-3.5 h-3.5 text-slate-950" />
             <span>📥 هاوردەکردنی داتاکانی Google Sheets</span>
           </button>
         </div>
@@ -556,7 +583,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
             }`}
           >
             <Calendar className="w-3.5 h-3.5" />
-            <span>📅 تۆمار و ئاماری ڕۆژانە (Daily List)</span>
+            <span>📅 تۆمار و ئاماری ڕۆژانە (Daily Calendar 1-31)</span>
           </button>
           <button
             onClick={() => setViewMode('monthly')}
@@ -567,27 +594,18 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
-            <span>📊 ئاماری مانگانەی کاتی زیادە (تەنها خاوەن ئیزافەکان)</span>
+            <span>📊 ئاماری مانگانەی کاتی زیادە (تەنها کاتی زیادە و پارە)</span>
           </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 font-mono">
-          <span className="text-slate-600 text-xs font-bold">دیاریکردنی کات:</span>
-          {viewMode === 'daily' ? (
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="input-classic font-bold bg-white"
-            />
-          ) : (
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="input-classic font-bold bg-white"
-            />
-          )}
+          <span className="text-slate-600 text-xs font-bold">مانگ:</span>
+          <input
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="input-classic font-bold bg-white"
+          />
 
           <button
             onClick={handleExportPDF}
@@ -606,6 +624,58 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
           </button>
         </div>
       </div>
+
+      {/* 📅 1-31 INTERACTIVE CALENDAR DAY SELECTOR BAR (FOR DAILY VIEW) */}
+      {viewMode === 'daily' && (
+        <div className="bg-white border-2 border-orange-300/80 rounded-xl p-2.5 shadow-sm space-y-2">
+          <div className="flex items-center justify-between border-b border-orange-100 pb-1.5">
+            <span className="text-xs font-black text-orange-950 flex items-center gap-1.5">
+              <Calendar className="w-4 h-4 text-orange-600" />
+              <span>کالێندەری ۱ تا ۳۱ی مانگی ({selectedMonth}) - ڕۆژ دیاری بکە:</span>
+            </span>
+            <span className="text-[11px] font-mono font-bold bg-orange-100 text-orange-900 border border-orange-300 px-2 py-0.5 rounded">
+              ڕۆژی هەڵبژێردراو: {selectedDate}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-7 sm:grid-cols-10 md:grid-cols-16 lg:grid-cols-31 gap-1">
+            {monthDaysList.map((day) => {
+              const isSelected = selectedDate === day.dateStr;
+              const hasOt = day.overtimeCount > 0;
+
+              return (
+                <button
+                  key={day.dayNum}
+                  type="button"
+                  onClick={() => setSelectedDate(day.dateStr)}
+                  className={`relative p-1.5 rounded-lg border text-center transition-all flex flex-col items-center justify-center cursor-pointer ${
+                    isSelected
+                      ? 'bg-orange-800 text-white border-orange-950 font-black shadow-md scale-105 z-10'
+                      : hasOt
+                      ? 'bg-amber-100/80 text-amber-950 border-amber-300 hover:bg-amber-200'
+                      : day.isFriday
+                      ? 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                  title={`${day.dateStr} - ${day.dayName} ${hasOt ? `(${day.overtimeCount} ئیزافە)` : ''}`}
+                >
+                  <span className="text-xs font-mono font-black">{day.dayNum}</span>
+                  <span className="text-[8px] font-medium opacity-80 truncate max-w-full">
+                    {day.dayName.slice(0, 3)}
+                  </span>
+                  {hasOt && (
+                    <span className={`text-[8px] font-bold px-1 rounded-full mt-0.5 ${
+                      isSelected ? 'bg-amber-400 text-slate-950' : 'bg-amber-600 text-white'
+                    }`}>
+                      {day.overtimeCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 📊 SUMMARY KPI BADGES */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
@@ -731,7 +801,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
             <span>
               📋 {viewMode === 'daily' 
                 ? `خشتەی کاتی زیادەی ڕۆژی (${selectedDate}) - لەگەڵ تێبینی و وردەکارییەکان` 
-                : `ئاماری مانگانەی کاتی زیادە (${selectedMonth}) - تەنها کارمەندانی خاوەن ئیزافە`}
+                : `ئاماری مانگانەی کاتی زیادە (${selectedMonth}) - تەنها کاتی زیادە و بڕی پارە`}
             </span>
           </h3>
           <span className="text-[10px] font-mono text-slate-300">
@@ -749,7 +819,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                   <th className="p-2.5 border-l border-slate-300">ناوی کارمەند</th>
                   <th className="p-2.5 border-l border-slate-300">پۆست / ئەرک</th>
                   <th className="p-2.5 border-l border-slate-300 text-center">کاتی دەرچوون</th>
-                  <th className="p-2.5 border-l border-slate-300 text-center">ژمارەی کاتژمێر</th>
+                  <th className="p-2.5 border-l border-slate-300 text-center">کاتی زیادەی کارکردن</th>
                   <th className="p-2.5 border-l border-slate-300 text-center">بڕی شایستەی پارە (IQD)</th>
                   <th className="p-2.5 border-l border-slate-300 bg-amber-50 text-amber-950">تێبینی و جۆری ئیش</th>
                   <th className="p-2.5 border-l border-slate-300 text-center w-24">سەرچاوە</th>
@@ -888,15 +958,14 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
               </tbody>
             </table>
           ) : (
-            /* 📊 MONTHLY OVERTIME SUMMARY TABLE (ONLY EMPLOYEES WITH OVERTIME) */
+            /* 📊 MONTHLY OVERTIME SUMMARY TABLE (OVERTIME HOURS & PAYOUT ONLY) */
             <table className="w-full text-right text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-200 border-b-2 border-slate-300 text-slate-900 font-black">
                   <th className="p-2.5 border-l border-slate-300 w-10 text-center">#</th>
                   <th className="p-2.5 border-l border-slate-300">ناوی کارمەند</th>
                   <th className="p-2.5 border-l border-slate-300">پۆست / ئەرک</th>
-                  <th className="p-2.5 border-l border-slate-300 text-center">ژمارەی ڕۆژەکانی ئیزافە</th>
-                  <th className="p-2.5 border-l border-slate-300 text-center bg-amber-50 text-amber-950">کۆی کاتژمێری ئیزافە</th>
+                  <th className="p-2.5 border-l border-slate-300 text-center bg-amber-50 text-amber-950">کاتی زیادەی کارکردن</th>
                   <th className="p-2.5 border-l border-slate-300 text-center bg-emerald-50 text-emerald-950">کۆی شایستەی پارە (IQD)</th>
                   <th className="p-2.5 text-center w-36">وردەکاری ڕۆژەکان</th>
                 </tr>
@@ -904,7 +973,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
               <tbody className="divide-y divide-slate-200 font-bold">
                 {monthlySummary.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-500 font-bold">
+                    <td colSpan={6} className="p-8 text-center text-slate-500 font-bold">
                       هیچ کارمەندێک لە مانگی ({selectedMonth}) کاتی زیادەی نەبووە.
                     </td>
                   </tr>
@@ -921,7 +990,6 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                             <td className="p-2.5 border-l border-slate-200 text-center font-mono text-slate-500">{idx + 1}</td>
                             <td className="p-2.5 border-l border-slate-200 text-slate-950 font-black">{sum.name}</td>
                             <td className="p-2.5 border-l border-slate-200 text-slate-600">{sum.role}</td>
-                            <td className="p-2.5 border-l border-slate-200 text-center font-mono">{sum.count} ڕۆژ</td>
                             <td className="p-2.5 border-l border-slate-200 text-center font-mono text-blue-900 font-black bg-amber-50/40">
                               +{sum.totalHours.toFixed(1)} کاتژمێر
                             </td>
@@ -943,7 +1011,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                           {/* 🔍 EXPANDED DAILY RECORDS FOR THIS EMPLOYEE */}
                           {isExpanded && (
                             <tr className="bg-orange-50/50 border-y-2 border-orange-300">
-                              <td colSpan={7} className="p-3">
+                              <td colSpan={6} className="p-3">
                                 <div className="bg-white border border-orange-200 rounded-lg p-3 shadow-inner space-y-2">
                                   <h4 className="text-[11px] font-black text-orange-950 flex items-center gap-1.5 border-b border-orange-100 pb-1">
                                     <span>📅 وردەکاری ڕۆژانی ئیزافەی ({sum.name}) بۆ مانگی ({selectedMonth}):</span>
@@ -953,7 +1021,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                                       <tr className="bg-slate-100 text-slate-800 font-black text-[11px]">
                                         <th className="p-1.5 border-l border-slate-200 text-center">بەروار</th>
                                         <th className="p-1.5 border-l border-slate-200 text-center">دەرچوون</th>
-                                        <th className="p-1.5 border-l border-slate-200 text-center">کاتژمێر</th>
+                                        <th className="p-1.5 border-l border-slate-200 text-center">کاتی زیادەی کارکردن</th>
                                         <th className="p-1.5 border-l border-slate-200 text-center">کۆی پارە</th>
                                         <th className="p-1.5 border-l border-slate-200">تێبینی و جۆری ئیش</th>
                                         <th className="p-1.5 text-center w-20">دەستکاری</th>
@@ -998,9 +1066,6 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                       <td colSpan={3} className="p-2.5 text-left border-l border-slate-300">
                         کۆی گشتی مانگی ({selectedMonth}):
                       </td>
-                      <td className="p-2.5 border-l border-slate-300 text-center font-mono">
-                        {monthlySummary.length} کارمەند
-                      </td>
                       <td className="p-2.5 border-l border-slate-300 text-center font-mono text-blue-950 bg-amber-100/50">
                         +{totalMonthlyHours.toFixed(1)} کاتژمێر
                       </td>
@@ -1008,7 +1073,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                         +{totalMonthlyCost.toLocaleString()} IQD
                       </td>
                       <td className="p-2.5 text-center text-slate-500 font-normal">
-                        تەواو
+                        ({monthlySummary.length} کارمەند)
                       </td>
                     </tr>
                   </>
@@ -1048,7 +1113,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
               </div>
 
               <div>
-                <label className="block text-slate-700 text-xs font-bold mb-1">ژمارەی کاتژمێری ئیزافە:</label>
+                <label className="block text-slate-700 text-xs font-bold mb-1">کاتی زیادەی کارکردن (Hours):</label>
                 <input
                   type="number"
                   step="0.5"

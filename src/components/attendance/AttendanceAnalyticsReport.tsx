@@ -454,7 +454,6 @@ export function AttendanceAnalyticsReport({
     { header: 'کۆی ئیزافە', key: 'overtime', align: 'center' },
     { header: 'پارەی ئیزافە (IQD)', key: 'overtimePay', align: 'center' },
     { header: 'ڕێژەی پابەندبوون', key: 'score', align: 'center' },
-    { header: 'تێبینیەکانی ئیزافە', key: 'notes', align: 'right' },
   ];
 
   const getExportData = () => {
@@ -818,16 +817,13 @@ export function AttendanceAnalyticsReport({
                 پارەی ئیزافە (IQD)
               </th>
               <th className="p-2.5 border-l border-slate-300 text-center">پابەندبوون</th>
-              <th className="p-2.5 border-l border-slate-300 bg-amber-100/70 text-amber-950">
-                تێبینی ئیزافەی &gt;٣٠ خولەک
-              </th>
               <th className="p-2.5 text-center w-20">کردار</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-300 font-bold">
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={14} className="p-8 text-center text-slate-500 font-bold text-xs bg-slate-50">
+                <td colSpan={13} className="p-8 text-center text-slate-500 font-bold text-xs bg-slate-50">
                   هیچ تۆمارێک بۆ ئەم فلتەرە نەدۆزرایەوە.
                 </td>
               </tr>
@@ -1029,85 +1025,6 @@ export function AttendanceAnalyticsReport({
                       }`}>
                         {row.attendanceScore}%
                       </span>
-                    </td>
-
-                    {/* Overtime > 30 Mins & Admin Notes */}
-                    <td className="p-2.5 border-l border-slate-200 bg-amber-50/30">
-                      {ot30Logs.length === 0 ? (
-                        <span className="text-[11px] text-slate-400">نییە</span>
-                      ) : (
-                        <div className="space-y-1.5">
-                          {ot30Logs.map((otLog) => {
-                            const noteKey = otLog.noteKey;
-                            const isEditing = editingNoteKey === noteKey;
-                            const savedNote = adminNotes[noteKey] || '';
-
-                            return (
-                              <div key={noteKey} className="p-1.5 rounded border border-amber-300 bg-amber-100/60 text-xs space-y-1">
-                                <div className="flex items-center justify-between gap-1">
-                                  <span className="font-mono font-black text-amber-950 text-[10px]">
-                                    📅 {otLog.date} (دەرچوون: {formatTime12H(otLog.checkOutTime)})
-                                  </span>
-                                  <span className="px-1 py-0.2 rounded bg-amber-700 text-white font-mono text-[9px] font-black">
-                                    +{formatMinutesHuman(otLog.overtimeMinutes)}
-                                  </span>
-                                </div>
-
-                                {/* Admin Note Box */}
-                                <div className="pt-0.5">
-                                  {isEditing ? (
-                                    <div className="flex items-center gap-1">
-                                      <input
-                                        type="text"
-                                        placeholder="تێبینی / هۆکاری ئیزافە..."
-                                        value={tempNoteText}
-                                        onChange={(e) => setTempNoteText(e.target.value)}
-                                        className="input-classic flex-1 text-xs bg-white font-bold py-0.5"
-                                        autoFocus
-                                      />
-                                      <button
-                                        onClick={() => handleSaveNote(noteKey)}
-                                        disabled={savingNote}
-                                        className="btn-classic-primary text-[10px] px-1.5 py-0.5 flex items-center gap-1"
-                                      >
-                                        <Save className="w-2.5 h-2.5" />
-                                        <span>پاشەکەوت</span>
-                                      </button>
-                                      <button
-                                        onClick={() => setEditingNoteKey(null)}
-                                        className="btn-classic text-[10px] px-1.5 py-0.5"
-                                      >
-                                        ✕
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center justify-between gap-1 bg-white/80 p-1 rounded border border-amber-200">
-                                      <div className="text-[10px] text-slate-800 font-bold truncate">
-                                        <span className="text-amber-900 font-black">تێبینی: </span>
-                                        {savedNote ? (
-                                          <span className="text-slate-900">{savedNote}</span>
-                                        ) : (
-                                          <span className="text-rose-700 italic">⚠️ پێویستە</span>
-                                        )}
-                                      </div>
-                                      <button
-                                        onClick={() => {
-                                          setEditingNoteKey(noteKey);
-                                          setTempNoteText(savedNote);
-                                        }}
-                                        className="text-amber-900 hover:text-amber-950 p-0.5 rounded flex items-center gap-0.5 text-[9px] font-black border border-amber-300"
-                                      >
-                                        <Edit3 className="w-2.5 h-2.5" />
-                                        <span>{savedNote ? 'دەستکاری' : 'نووسین'}</span>
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
                     </td>
 
                     {/* Actions: View Daily First-In/Last-Out & Manage Leaves */}
