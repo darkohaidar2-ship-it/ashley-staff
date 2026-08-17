@@ -48,6 +48,10 @@ import {
   KeyRound
 } from 'lucide-react';
 import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChangeModal';
+import { AdminOvertimeModule } from '@/components/admin/AdminOvertimeModule';
+import { AdminExpensesModule } from '@/components/admin/AdminExpensesModule';
+import { AdminLogisticsModule } from '@/components/admin/AdminLogisticsModule';
+import { AdminWeeklyMonthlyStatsModule } from '@/components/admin/AdminWeeklyMonthlyStatsModule';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -55,6 +59,7 @@ export default function AdminPage() {
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [adminActiveSection, setAdminActiveSection] = useState<'all' | 'hr' | 'overtime' | 'expenses' | 'logistics' | 'stats'>('all');
 
   // Security Auth Guard: Check session strictly from sessionStorage/localStorage
   useEffect(() => {
@@ -486,9 +491,86 @@ export default function AdminPage() {
         </div>
       </div>
 
+      {/* 🧭 MASTER ADMIN MODULE NAVIGATION TABS */}
+      <div className="panel-classic p-2 bg-slate-200/90 flex flex-wrap items-center justify-between gap-2 shadow-sm rounded-lg">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs font-black">
+          <button
+            onClick={() => setAdminActiveSection('all')}
+            className={`px-3 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer ${
+              adminActiveSection === 'all'
+                ? 'bg-blue-900 text-white shadow font-black border border-blue-950'
+                : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-300'
+            }`}
+          >
+            <span>🌐 هەموو بەشەکان (All Open)</span>
+          </button>
+
+          <button
+            onClick={() => setAdminActiveSection('hr')}
+            className={`px-3 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer ${
+              adminActiveSection === 'hr'
+                ? 'bg-blue-900 text-white shadow font-black border border-blue-950'
+                : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-300'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-blue-700" />
+            <span>١. کارمەندان و ئامادەبوون (HR)</span>
+          </button>
+
+          <button
+            onClick={() => setAdminActiveSection('overtime')}
+            className={`px-3 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer ${
+              adminActiveSection === 'overtime'
+                ? 'bg-orange-700 text-white shadow font-black border border-orange-900'
+                : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-300'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5 text-orange-600" />
+            <span>٢. کاتی زیادە (Overtime)</span>
+          </button>
+
+          <button
+            onClick={() => setAdminActiveSection('expenses')}
+            className={`px-3 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer ${
+              adminActiveSection === 'expenses'
+                ? 'bg-emerald-800 text-white shadow font-black border border-emerald-950'
+                : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-300'
+            }`}
+          >
+            <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+            <span>٣. مەسروفات و دارایی (Expenses)</span>
+          </button>
+
+          <button
+            onClick={() => setAdminActiveSection('logistics')}
+            className={`px-3 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer ${
+              adminActiveSection === 'logistics'
+                ? 'bg-amber-800 text-white shadow font-black border border-amber-950'
+                : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-300'
+            }`}
+          >
+            <Truck className="w-3.5 h-3.5 text-amber-700" />
+            <span>٤. بارداگرتن و گواستنەوە (Unloading)</span>
+          </button>
+
+          <button
+            onClick={() => setAdminActiveSection('stats')}
+            className={`px-3 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer ${
+              adminActiveSection === 'stats'
+                ? 'bg-purple-800 text-white shadow font-black border border-purple-950'
+                : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-300'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-purple-600" />
+            <span>٥. ئاماری هەفتانە و مانگانە (HR Analytics)</span>
+          </button>
+        </div>
+      </div>
+
       {/* ========================================================================= */}
       {/* 👥 SECTION 1: HR & STAFF OPERATIONS CLASSIC PANEL */}
       {/* ========================================================================= */}
+      {(adminActiveSection === 'all' || adminActiveSection === 'hr') && (
       <section className="panel-classic space-y-3">
         <div className="panel-header-classic flex items-center justify-between">
           <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
@@ -761,101 +843,83 @@ export default function AdminPage() {
 
         </div>
       </section>
+      )}
 
       {/* ========================================================================= */}
-      {/* 📦 SECTION 2: INVENTORY & WAREHOUSE CLASSIC PANEL */}
+      {/* ⏰ SECTION 2: EMPLOYEE OVERTIME MANAGEMENT */}
       {/* ========================================================================= */}
-      <section className="panel-classic space-y-3 relative overflow-hidden">
-        <div className="panel-header-classic flex items-center justify-between opacity-60">
+      {(adminActiveSection === 'all' || adminActiveSection === 'overtime') && (
+      <section className="panel-classic space-y-3">
+        <div className="panel-header-classic flex items-center justify-between">
           <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-            <Package className="w-4 h-4 text-emerald-800" />
-            <span>بەشی دووەم: بەشی کۆگا و عەمبار (Inventory & Warehouse Management)</span>
+            <Clock className="w-4 h-4 text-orange-700" />
+            <span>بەشی دووەم: کاتی زیادەی کارمەندان (Employee Overtime Management)</span>
           </h2>
-          <span className="text-[10px] font-mono bg-emerald-800 text-white px-1.5 py-0.2">STOCK MODULE</span>
+          <span className="text-[10px] font-mono bg-orange-800 text-white px-1.5 py-0.2 font-bold">OVERTIME MODULE</span>
         </div>
 
-        <div className="p-3 opacity-30 grayscale-[40%] blur-[0.4px] pointer-events-none">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-            <div className="btn-classic py-3 flex-col text-center">
-              <Package className="w-5 h-5 text-emerald-800 mb-1" />
-              <span className="font-bold">کاتالۆگی ئایتمەکان</span>
-            </div>
-
-            <div className="btn-classic py-3 flex-col text-center">
-              <Layers className="w-5 h-5 text-emerald-800 mb-1" />
-              <span className="font-bold">نەخشەی ڕەفەی کۆگا</span>
-            </div>
-
-            <div className="btn-classic py-3 flex-col text-center">
-              <FileSpreadsheet className="w-5 h-5 text-emerald-800 mb-1" />
-              <span className="font-bold">هێنانی اکسل</span>
-            </div>
-
-            <div className="btn-classic py-3 flex-col text-center">
-              <Archive className="w-5 h-5 text-emerald-800 mb-1" />
-              <span className="font-bold">ئەرشیفی جەردەکان</span>
-            </div>
-
-            <div className="btn-classic py-3 flex-col text-center">
-              <Eye className="w-5 h-5 text-emerald-800 mb-1" />
-              <span className="font-bold">جەردی ڕاستەوخۆ</span>
-            </div>
-
-            <div className="btn-classic py-3 flex-col text-center">
-              <Layers className="w-5 h-5 text-emerald-800 mb-1" />
-              <span className="font-bold">کاڵا فرۆشراوەکان</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 🚧 Construction Sticker Badge */}
-        <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
-          <div className="bg-amber-400 text-amber-950 border-2 border-amber-500 shadow-xl px-5 py-2 rounded-full font-black text-xs flex items-center gap-2 transform -rotate-1 animate-pulse">
-            <span className="text-base">🚧</span>
-            <span>لە ژێر کارکردندایە (Under Construction)</span>
-          </div>
+        <div className="p-3">
+          <AdminOvertimeModule employees={employees} />
         </div>
       </section>
+      )}
 
       {/* ========================================================================= */}
-      {/* 🚚 SECTION 3: LOGISTICS & TRANSMIT CLASSIC PANEL */}
+      {/* 💸 SECTION 3: ASHLEY EXPENSES & FINANCIAL LEDGER */}
       {/* ========================================================================= */}
-      <section className="panel-classic space-y-3 relative overflow-hidden">
-        <div className="panel-header-classic flex items-center justify-between opacity-60">
+      {(adminActiveSection === 'all' || adminActiveSection === 'expenses') && (
+      <section className="panel-classic space-y-3">
+        <div className="panel-header-classic flex items-center justify-between">
+          <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+            <DollarSign className="w-4 h-4 text-emerald-800" />
+            <span>بەشی سێیەم: مەسروفات، پاداشت و ڕاکێشانی پێشینە (Expenses & Finance)</span>
+          </h2>
+          <span className="text-[10px] font-mono bg-emerald-800 text-white px-1.5 py-0.2 font-bold">FINANCE MODULE</span>
+        </div>
+
+        <div className="p-3">
+          <AdminExpensesModule employees={employees} />
+        </div>
+      </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🚚 SECTION 4: CARGO UNLOADING & LOGISTICS */}
+      {/* ========================================================================= */}
+      {(adminActiveSection === 'all' || adminActiveSection === 'logistics') && (
+      <section className="panel-classic space-y-3">
+        <div className="panel-header-classic flex items-center justify-between">
           <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
             <Truck className="w-4 h-4 text-amber-800" />
-            <span>بەشی سێیەم: بەشی گواستنەوە و لۆجیستیک (Logistics & Transmit)</span>
+            <span>بەشی چوارەم: بارداگرتن و گواستنەوە (Cargo Unloading & Logistics)</span>
           </h2>
-          <span className="text-[10px] font-mono bg-amber-800 text-white px-1.5 py-0.2">LOGISTICS</span>
+          <span className="text-[10px] font-mono bg-amber-800 text-white px-1.5 py-0.2 font-bold">LOGISTICS MODULE</span>
         </div>
 
-        <div className="p-3 opacity-30 grayscale-[40%] blur-[0.4px] pointer-events-none">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <div className="btn-classic py-3 flex-col text-center">
-              <Truck className="w-5 h-5 text-amber-800 mb-1" />
-              <span className="font-bold">تۆمارکردنی باری نوێ</span>
-            </div>
-
-            <div className="btn-classic py-3 flex-col text-center">
-              <FileText className="w-5 h-5 text-amber-800 mb-1" />
-              <span className="font-bold">ئەرشیفی PDFی بارەکان</span>
-            </div>
-
-            <div className="btn-classic py-3 flex-col text-center">
-              <FileSpreadsheet className="w-5 h-5 text-amber-800 mb-1" />
-              <span className="font-bold">دروستکەری ڕاپۆرت</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 🚧 Construction Sticker Badge */}
-        <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
-          <div className="bg-amber-400 text-amber-950 border-2 border-amber-500 shadow-xl px-5 py-2 rounded-full font-black text-xs flex items-center gap-2 transform rotate-1 animate-pulse">
-            <span className="text-base">🚧</span>
-            <span>لە ژێر کارکردندایە (Under Construction)</span>
-          </div>
+        <div className="p-3">
+          <AdminLogisticsModule employees={employees} />
         </div>
       </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 📊 SECTION 5: WEEKLY & MONTHLY HR ANALYTICS */}
+      {/* ========================================================================= */}
+      {(adminActiveSection === 'all' || adminActiveSection === 'stats') && (
+      <section className="panel-classic space-y-3">
+        <div className="panel-header-classic flex items-center justify-between">
+          <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+            <BarChart3 className="w-4 h-4 text-purple-800" />
+            <span>بەشی پێنجەم: ئاماری هەفتانە و مانگانەی کارمەندان (HR Analytics)</span>
+          </h2>
+          <span className="text-[10px] font-mono bg-purple-800 text-white px-1.5 py-0.2 font-bold">ANALYTICS MODULE</span>
+        </div>
+
+        <div className="p-3">
+          <AdminWeeklyMonthlyStatsModule employees={employees} attendanceLogs={attendanceLogs} />
+        </div>
+      </section>
+      )}
 
       {/* ========================================================================= */}
       {/* ⚙️ SECTION 4: SETTINGS & UI FONT CUSTOMIZATION CLASSIC PANEL */}
