@@ -73,6 +73,9 @@ export default function PublicTerminalLightPage() {
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const [gpsStatus, setGpsStatus] = useState<string>('پشکنینی لۆکەیشن...');
   const [gpsLoading, setGpsLoading] = useState<boolean>(false);
+  const [branchDistanceList, setBranchDistanceList] = useState<
+    Array<{ id: string; name: string; distance: number; radiusMeters: number; isInside: boolean }>
+  >([]);
 
   // Sync Locations from Supabase
   const syncCompanyLocations = useCallback(async () => {
@@ -139,34 +142,40 @@ export default function PublicTerminalLightPage() {
     try {
       const combinedMap: Record<string, any> = {};
 
-      // 1. Read local cache first
       try {
         const localDb = JSON.parse(localStorage.getItem('ashley_face_registry_local') || '{}');
-        Object.values(localDb).forEach((u: any) => {
-          if (u?.id && u?.descriptor) combinedMap[u.id] = u;
+        Object.entries(localDb).forEach(([id, val]: [string, any]) => {
+          if (val && val.descriptor) {
+            combinedMap[id] = { id, name: val.name || id, descriptor: val.descriptor };
+          }
         });
       } catch {}
 
-      // 2. Fetch from Supabase
-      const res = await fetch(`/api/attendance/face/all?_t=${Date.now()}`, { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.employees) {
-          data.employees.forEach((u: any) => {
-            if (u?.id && u?.descriptor) combinedMap[u.id] = u;
-          });
+      try {
+        const res = await fetch(`/api/attendance/logs?type=faces&_t=${Date.now()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.faces && Array.isArray(data.faces)) {
+            data.faces.forEach((f: any) => {
+              if (f.id && f.descriptor) {
+                combinedMap[f.id] = { id: f.id, name: f.name || f.id, descriptor: f.descriptor };
+              }
+            });
+          }
         }
-      }
+      } catch {}
 
-      const list = Object.values(combinedMap);
-      setRegisteredFacesList(list);
+      const finalList = Object.values(combinedMap);
+      setRegisteredFacesList(finalList);
     } catch (err) {
-      console.error('Error loading face database:', err);
+      console.error('Error fetching face database:', err);
     }
   }, []);
 
   useEffect(() => {
     fetchAllFaces();
+    const interval = setInterval(fetchAllFaces, 30000);
+    return () => clearInterval(interval);
   }, [fetchAllFaces]);
 
   // Check Geofence Distance against ALL active company branches
@@ -196,10 +205,12 @@ export default function PublicTerminalLightPage() {
           const d = calculateDistanceMeters(userLat, userLng, loc.lat, loc.lng);
           return {
             ...loc,
-            distance: d,
+            distance: Math.round(d),
             isInside: d <= (loc.radiusMeters || 50),
           };
         });
+
+        setBranchDistanceList(distanceResults);
 
         // Check if inside ANY location
         const matched = distanceResults.find((r) => r.isInside);
@@ -215,7 +226,7 @@ export default function PublicTerminalLightPage() {
           setCurrentMatchedLocation(closest);
           setDistanceMeters(closest.distance);
           setGpsStatus(
-            `🔴 دەرەوەی بازنەی لقەکان (${closest.distance}m > ${closest.radiusMeters}m لە ${closest.name})`
+            `🔴 دەرەوەی لقەکان (${closest.distance}m > ${closest.radiusMeters}m لە ${closest.name})`
           );
         }
 
@@ -472,33 +483,62 @@ export default function PublicTerminalLightPage() {
           <div className="absolute -bottom-24 -left-24 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
           {/* 📍 GEOFENCE STATUS PILL INSIDE CARD (STABLE & NEVER JUMPS) */}
-          <div className="flex justify-center">
-            <button
-              type="button"
-              onClick={checkCurrentLocation}
-              className={`h-8 sm:h-9 px-3.5 max-w-full rounded-full border shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 ${
-                isInsideGeofence === true
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
-                  : isInsideGeofence === false
-                  ? 'bg-rose-50 border-rose-300 text-rose-800 hover:bg-rose-100'
-                  : 'bg-slate-100 border-slate-300 text-slate-700'
-              }`}
-              title="کلیک بکە بۆ دووبارە پشکنینی لۆکەیشن"
-            >
-              <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                isInsideGeofence === true
-                  ? 'bg-emerald-500 animate-pulse'
-                  : isInsideGeofence === false
-                  ? 'bg-rose-500'
-                  : 'bg-amber-500'
-              }`} />
-              
-              <span className="text-[11px] sm:text-xs font-bold truncate max-w-[260px] sm:max-w-[420px]">
-                {gpsLoading ? 'پشکنینی لۆکەیشن...' : gpsStatus}
-              </span>
+          <div className="space-y-1.5">
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={checkCurrentLocation}
+                className={`h-8 sm:h-9 px-3.5 max-w-full rounded-full border shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 ${
+                  isInsideGeofence === true
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
+                    : isInsideGeofence === false
+                    ? 'bg-rose-50 border-rose-300 text-rose-800 hover:bg-rose-100'
+                    : 'bg-slate-100 border-slate-300 text-slate-700'
+                }`}
+                title="کلیک بکە بۆ دووبارە پشکنینی لۆکەیشن"
+              >
+                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                  isInsideGeofence === true
+                    ? 'bg-emerald-500 animate-pulse'
+                    : isInsideGeofence === false
+                    ? 'bg-rose-500'
+                    : 'bg-amber-500'
+                }`} />
+                
+                <span className="text-[11px] sm:text-xs font-bold truncate max-w-[260px] sm:max-w-[420px]">
+                  {gpsLoading ? 'پشکنینی لۆکەیشن...' : gpsStatus}
+                </span>
 
-              <span className="text-[10px] text-slate-400 font-normal">🔄 نوێکردنەوە</span>
-            </button>
+                <span className="text-[10px] text-slate-400 font-normal">🔄 نوێکردنەوە</span>
+              </button>
+            </div>
+
+            {/* 🏢 ALL BRANCH LOCATIONS LIVE DISTANCES (SHOWN CLEARLY) */}
+            {branchDistanceList.length > 1 && (
+              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-0.5">
+                {branchDistanceList.map((branch) => (
+                  <div
+                    key={branch.id}
+                    className={`px-2.5 py-0.5 rounded-full border text-[10px] sm:text-[11px] font-bold flex items-center gap-1.5 transition-all ${
+                      branch.isInside
+                        ? 'bg-emerald-100 border-emerald-400 text-emerald-950 shadow-xs ring-1 ring-emerald-400/50 font-black'
+                        : 'bg-slate-100/90 border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${branch.isInside ? 'bg-emerald-500 animate-pulse' : 'bg-rose-400'}`} />
+                    <span>{branch.name}</span>
+                    <span className="font-mono text-[9px] text-slate-500">
+                      ({branch.distance < 1000 ? `${branch.distance}m` : `${(branch.distance / 1000).toFixed(1)}km`})
+                    </span>
+                    {branch.isInside ? (
+                      <span className="text-emerald-700 font-black">✅ لەناو سنوورە</span>
+                    ) : (
+                      <span className="text-slate-400 text-[9px]">دەرەوە</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Clock & Date Badge */}
