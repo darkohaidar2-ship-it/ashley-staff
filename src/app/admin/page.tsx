@@ -139,8 +139,17 @@ export default function AdminPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
 
-  // Factory Location Config (Synced with Supabase)
+  // Company Multi-Location Config (Synced with Supabase)
+  const [companyLocations, setCompanyLocations] = useState<Array<{
+    id: string;
+    name: string;
+    lat: number;
+    lng: number;
+    radiusMeters: number;
+  }>>([]);
+
   const [syncedFactoryLocation, setSyncedFactoryLocation] = useState<{
+    id?: string;
     name: string;
     lat: number;
     lng: number;
@@ -159,9 +168,13 @@ export default function AdminPage() {
         headers: { 'Cache-Control': 'no-cache' },
       });
       if (res.ok) {
-        const loc = await res.json();
-        if (loc?.lat && loc?.lng) {
-          setSyncedFactoryLocation(loc);
+        const data = await res.json();
+        if (data?.locations && Array.isArray(data.locations) && data.locations.length > 0) {
+          setCompanyLocations(data.locations);
+          setSyncedFactoryLocation(data.locations[0]);
+        } else if (data?.lat && data?.lng) {
+          setSyncedFactoryLocation(data);
+          setCompanyLocations([data]);
         }
       }
     } catch (err) {
@@ -429,13 +442,24 @@ export default function AdminPage() {
           
           {/* Quick WinUI 3 Action Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-white/80 backdrop-blur-md rounded-xl border border-slate-200 shadow-sm">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => handleOpenEmpModal()}
                 className="btn-fluent-primary text-xs"
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 <span>➕ زیادکردنی کارمەندی نوێ</span>
+              </button>
+
+              <button
+                onClick={() => setShowMapPicker(true)}
+                className="btn-fluent text-xs bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-900 font-black flex items-center gap-1.5 shadow-sm"
+              >
+                <MapPin className="w-3.5 h-3.5 text-emerald-700" />
+                <span>🗺️ دیاریکردنی فرە-لۆکەیشنی لقەکان (Geofence)</span>
+                <span className="bg-emerald-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+                  {companyLocations.length || 1} لق
+                </span>
               </button>
 
               <button
@@ -681,8 +705,8 @@ export default function AdminPage() {
       {/* ========================================================================= */}
       {/* 📦 SECTION 2: INVENTORY & WAREHOUSE CLASSIC PANEL */}
       {/* ========================================================================= */}
-      <section className="panel-classic space-y-3">
-        <div className="panel-header-classic flex items-center justify-between">
+      <section className="panel-classic space-y-3 relative overflow-hidden">
+        <div className="panel-header-classic flex items-center justify-between opacity-60">
           <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
             <Package className="w-4 h-4 text-emerald-800" />
             <span>بەشی دووەم: بەشی کۆگا و عەمبار (Inventory & Warehouse Management)</span>
@@ -690,37 +714,45 @@ export default function AdminPage() {
           <span className="text-[10px] font-mono bg-emerald-800 text-white px-1.5 py-0.2">STOCK MODULE</span>
         </div>
 
-        <div className="p-3">
+        <div className="p-3 opacity-30 grayscale-[40%] blur-[0.4px] pointer-events-none">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-            <Link href="/items" className="btn-classic py-3 flex-col text-center">
+            <div className="btn-classic py-3 flex-col text-center">
               <Package className="w-5 h-5 text-emerald-800 mb-1" />
               <span className="font-bold">کاتالۆگی ئایتمەکان</span>
-            </Link>
+            </div>
 
-            <Link href="/warehouse-map" className="btn-classic py-3 flex-col text-center">
+            <div className="btn-classic py-3 flex-col text-center">
               <Layers className="w-5 h-5 text-emerald-800 mb-1" />
               <span className="font-bold">نەخشەی ڕەفەی کۆگا</span>
-            </Link>
+            </div>
 
-            <Link href="/import" className="btn-classic py-3 flex-col text-center">
+            <div className="btn-classic py-3 flex-col text-center">
               <FileSpreadsheet className="w-5 h-5 text-emerald-800 mb-1" />
               <span className="font-bold">هێنانی اکسل</span>
-            </Link>
+            </div>
 
-            <Link href="/archive" className="btn-classic py-3 flex-col text-center">
+            <div className="btn-classic py-3 flex-col text-center">
               <Archive className="w-5 h-5 text-emerald-800 mb-1" />
               <span className="font-bold">ئەرشیفی جەردەکان</span>
-            </Link>
+            </div>
 
-            <Link href="/public-inventory" className="btn-classic py-3 flex-col text-center">
+            <div className="btn-classic py-3 flex-col text-center">
               <Eye className="w-5 h-5 text-emerald-800 mb-1" />
               <span className="font-bold">جەردی ڕاستەوخۆ</span>
-            </Link>
+            </div>
 
-            <Link href="/sold-items" className="btn-classic py-3 flex-col text-center">
+            <div className="btn-classic py-3 flex-col text-center">
               <Layers className="w-5 h-5 text-emerald-800 mb-1" />
               <span className="font-bold">کاڵا فرۆشراوەکان</span>
-            </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* 🚧 Construction Sticker Badge */}
+        <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+          <div className="bg-amber-400 text-amber-950 border-2 border-amber-500 shadow-xl px-5 py-2 rounded-full font-black text-xs flex items-center gap-2 transform -rotate-1 animate-pulse">
+            <span className="text-base">🚧</span>
+            <span>لە ژێر کارکردندایە (Under Construction)</span>
           </div>
         </div>
       </section>
@@ -728,8 +760,8 @@ export default function AdminPage() {
       {/* ========================================================================= */}
       {/* 🚚 SECTION 3: LOGISTICS & TRANSMIT CLASSIC PANEL */}
       {/* ========================================================================= */}
-      <section className="panel-classic space-y-3">
-        <div className="panel-header-classic flex items-center justify-between">
+      <section className="panel-classic space-y-3 relative overflow-hidden">
+        <div className="panel-header-classic flex items-center justify-between opacity-60">
           <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
             <Truck className="w-4 h-4 text-amber-800" />
             <span>بەشی سێیەم: بەشی گواستنەوە و لۆجیستیک (Logistics & Transmit)</span>
@@ -737,22 +769,30 @@ export default function AdminPage() {
           <span className="text-[10px] font-mono bg-amber-800 text-white px-1.5 py-0.2">LOGISTICS</span>
         </div>
 
-        <div className="p-3">
+        <div className="p-3 opacity-30 grayscale-[40%] blur-[0.4px] pointer-events-none">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <Link href="/public-transmit" className="btn-classic py-3 flex-col text-center">
+            <div className="btn-classic py-3 flex-col text-center">
               <Truck className="w-5 h-5 text-amber-800 mb-1" />
               <span className="font-bold">تۆمارکردنی باری نوێ</span>
-            </Link>
+            </div>
 
-            <Link href="/pdf-archive" className="btn-classic py-3 flex-col text-center">
+            <div className="btn-classic py-3 flex-col text-center">
               <FileText className="w-5 h-5 text-amber-800 mb-1" />
               <span className="font-bold">ئەرشیفی PDFی بارەکان</span>
-            </Link>
+            </div>
 
-            <Link href="/report-designer" className="btn-classic py-3 flex-col text-center">
+            <div className="btn-classic py-3 flex-col text-center">
               <FileSpreadsheet className="w-5 h-5 text-amber-800 mb-1" />
               <span className="font-bold">دروستکەری ڕاپۆرت</span>
-            </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* 🚧 Construction Sticker Badge */}
+        <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+          <div className="bg-amber-400 text-amber-950 border-2 border-amber-500 shadow-xl px-5 py-2 rounded-full font-black text-xs flex items-center gap-2 transform rotate-1 animate-pulse">
+            <span className="text-base">🚧</span>
+            <span>لە ژێر کارکردندایە (Under Construction)</span>
           </div>
         </div>
       </section>
@@ -760,8 +800,8 @@ export default function AdminPage() {
       {/* ========================================================================= */}
       {/* ⚙️ SECTION 4: SETTINGS & UI FONT CUSTOMIZATION CLASSIC PANEL */}
       {/* ========================================================================= */}
-      <section className="panel-classic space-y-3">
-        <div className="panel-header-classic flex items-center justify-between">
+      <section className="panel-classic space-y-3 relative overflow-hidden">
+        <div className="panel-header-classic flex items-center justify-between opacity-60">
           <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
             <Settings className="w-4 h-4 text-purple-800" />
             <span>بەشی چوارەم: سێتینگ، ئەدمین پانێڵ و گۆڕینی فۆنت (Settings & Font Customization)</span>
@@ -769,7 +809,7 @@ export default function AdminPage() {
           <span className="text-[10px] font-mono bg-purple-800 text-white px-1.5 py-0.2 font-bold">LIVE FONT ENGINE</span>
         </div>
 
-        <div className="p-3 space-y-4">
+        <div className="p-3 opacity-30 grayscale-[40%] blur-[0.4px] pointer-events-none space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             
             {/* Live UI Font Engine Panel */}
@@ -786,16 +826,7 @@ export default function AdminPage() {
                   <label className="block text-slate-700 mb-1">فۆنتی ئامادەکراو (Preset Font):</label>
                   <select
                     value={settings?.fontFamily || 'Inter'}
-                    onChange={(e) => {
-                      const newFont = e.target.value;
-                      if (setSettings && settings) {
-                        setSettings({
-                          ...settings,
-                          fontFamily: newFont,
-                          customFont: null,
-                        });
-                      }
-                    }}
+                    disabled
                     className="input-classic w-full font-bold"
                   >
                     <option value="Noto Kufi Arabic">Noto Kufi Arabic (کووفی نایاب)</option>
@@ -811,19 +842,12 @@ export default function AdminPage() {
                   <label className="block text-slate-700 mb-1">ئاپلۆدکردنی فۆنت (.ttf / .woff / .woff2):</label>
                   <button
                     type="button"
-                    onClick={() => fontInputRef.current?.click()}
+                    disabled
                     className="btn-classic w-full text-purple-900 font-bold"
                   >
                     <Upload className="w-3.5 h-3.5 text-purple-700" />
-                    <span>{settings?.customFont ? 'فۆنتی تایبەت بارکراوە (گۆڕین)' : 'بارکردنی فۆنت لە کۆمپیوتەر'}</span>
+                    <span>بارکردنی فۆنت لە کۆمپیوتەر</span>
                   </button>
-                  <input
-                    ref={fontInputRef}
-                    type="file"
-                    accept=".ttf,.woff,.woff2"
-                    onChange={handleFontUpload}
-                    className="hidden"
-                  />
                 </div>
               </div>
 
@@ -840,33 +864,36 @@ export default function AdminPage() {
             {/* Admin System Options */}
             <div className="space-y-2">
               <button
-                onClick={() => setShowMapPicker(true)}
+                disabled
                 className="btn-classic w-full justify-between py-2 text-[11px]"
               >
-                <div className="flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-purple-700" />
-                  <span>شوێنی کۆمپانیا لەسەر نەخشە</span>
-                </div>
-                <span className="font-mono text-[9px] bg-slate-300 px-1 border border-slate-400">GEOFENCE</span>
-              </button>
-
-              <Link href="/account" className="btn-classic w-full justify-between py-2 text-[11px]">
                 <div className="flex items-center gap-1.5">
                   <Shield className="w-3.5 h-3.5 text-purple-700" />
                   <span>ئەکاونتی ئەدمین</span>
                 </div>
                 <span className="font-mono text-[9px] bg-slate-300 px-1 border border-slate-400">SUPERADMIN</span>
-              </Link>
+              </button>
 
-              <Link href="/settings" className="btn-classic w-full justify-between py-2 text-[11px]">
+              <button
+                disabled
+                className="btn-classic w-full justify-between py-2 text-[11px]"
+              >
                 <div className="flex items-center gap-1.5">
                   <Settings className="w-3.5 h-3.5 text-purple-700" />
                   <span>دەسەڵاتەکان</span>
                 </div>
                 <span className="font-mono text-[9px] bg-slate-300 px-1 border border-slate-400">ROLES</span>
-              </Link>
+              </button>
             </div>
 
+          </div>
+        </div>
+
+        {/* 🚧 Construction Sticker Badge */}
+        <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+          <div className="bg-amber-400 text-amber-950 border-2 border-amber-500 shadow-xl px-5 py-2 rounded-full font-black text-xs flex items-center gap-2 transform -rotate-1 animate-pulse">
+            <span className="text-base">🚧</span>
+            <span>لە ژێر کارکردندایە (Under Construction)</span>
           </div>
         </div>
       </section>
@@ -875,8 +902,7 @@ export default function AdminPage() {
       {showEmpModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4" dir="rtl">
           <div className="bg-slate-200 border-2 border-t-white border-l-white border-b-slate-600 border-r-slate-600 max-w-md w-full shadow-2xl p-1 text-slate-900">
-            
-            <div className="bg-blue-900 text-white px-2 py-1 text-xs font-bold flex justify-between items-center border-b border-blue-950">
+            <div className="bg-blue-900 text-white p-1.5 px-3 flex items-center justify-between text-xs font-bold font-mono">
               <span>{editingEmp ? `دەستکاریکردنی کارمەند: ${editingEmp.name}` : '➕ زیادکردنی کارمەندی نوێ'}</span>
               <button
                 type="button"
@@ -949,17 +975,17 @@ export default function AdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-slate-800 mb-1">کەی وازی هێناوە:</label>
+                  <label className="block text-slate-800 mb-1">کۆدی PIN:</label>
                   <input
-                    type="date"
-                    value={empResignDate}
-                    onChange={(e) => setEmpResignDate(e.target.value)}
-                    className="input-classic w-full font-mono text-rose-800"
+                    type="text"
+                    disabled
+                    value={editingEmp ? (editingEmp.password || '1234') : '1234'}
+                    className="input-classic w-full font-mono bg-slate-300 text-slate-700"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-300">
+              <div className="p-2 border-t border-slate-300 flex justify-end gap-2 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowEmpModal(false)}
@@ -979,36 +1005,36 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* FACTORY LOCATION GEOFENCE MAP PICKER MODAL */}
+      {/* MULTI-LOCATION GEOFENCE MAP PICKER MODAL */}
       {showMapPicker && (
         <FactoryMapPicker
+          initialLocations={companyLocations}
           initialLat={factoryLocation.lat}
           initialLng={factoryLocation.lng}
           initialRadius={factoryLocation.radiusMeters}
           factoryName={factoryLocation.name}
           isRTL={true}
-          onSave={async (newLoc) => {
-            setSyncedFactoryLocation(newLoc);
-            if (setSettings) {
-              setSettings({
-                ...settings,
-                factoryLocation: newLoc,
-              });
+          onSave={async (savedLocations) => {
+            setCompanyLocations(savedLocations);
+            if (savedLocations.length > 0) {
+              setSyncedFactoryLocation(savedLocations[0]);
             }
 
             try {
-              // Sync globally to Supabase backend across all mobile devices
-              await fetch(`/api/attendance/location?_t=${Date.now()}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
-                body: JSON.stringify(newLoc),
-              });
+              // Sync each location to Supabase backend
+              for (const loc of savedLocations) {
+                await fetch(`/api/attendance/location?_t=${Date.now()}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+                  body: JSON.stringify(loc),
+                });
+              }
             } catch (err) {
-              console.error('Failed to sync location to Supabase:', err);
+              console.error('Failed to sync locations to Supabase:', err);
             }
 
             setShowMapPicker(false);
-            alert('🎉 شوێنی کۆمپانیا بە سەرکەوتوویی لەسەر سێرڤەری سەرەکی پاشەکەوت کرا و بۆ هەموو مۆبایل و کۆمپیوتەرێک نوێ بووەوە!');
+            alert(`🎉 ${savedLocations.length} لۆکەیشنی کۆمپانیا بە سەرکەوتوویی لەسەر سێرڤەر پاشەکەوت کران!`);
           }}
           onClose={() => setShowMapPicker(false)}
         />

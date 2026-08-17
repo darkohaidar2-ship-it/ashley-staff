@@ -1,33 +1,21 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/use-auth';
-import { useAppContext } from '@/context/app-provider';
 import { format } from 'date-fns';
 import { 
-  Users, 
   Camera, 
-  Search, 
-  Lock, 
-  Shield, 
   MapPin, 
-  CheckCircle, 
+  CheckCircle2, 
   Clock, 
-  Package, 
-  Layers, 
-  Eye, 
-  RefreshCw, 
-  LogOut,
-  Sparkles,
   AlertTriangle,
-  Fingerprint,
-  Smartphone,
   SwitchCamera,
-  User
+  UserCheck,
+  ShieldCheck,
+  Building2,
+  Sparkles,
+  UserX,
+  X
 } from 'lucide-react';
-import { isBiometricSupported, registerBiometric, verifyBiometric } from '@/lib/webauthn';
 import { extractFaceDescriptor, matchFaceDescriptors, loadFaceModels } from '@/lib/face-recognition';
 
 // Haversine formula to compute exact distance in meters between two GPS coordinates
@@ -45,93 +33,99 @@ function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
   return Math.round(R * c);
 }
 
-export default function PublicTerminalPage() {
-  const router = useRouter();
-  const { user, logout } = useAuth();
-  const {
-    employees,
-    attendanceLogs,
-    setAttendanceLogs,
-    items,
-    settings,
-  } = useAppContext();
+interface CompanyLocation {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radiusMeters: number;
+}
 
+export default function PublicTerminalLightPage() {
   // Live Desktop Clock for ERP
   const [currentTimeStr, setCurrentTimeStr] = useState('');
+  const [currentDateStr, setCurrentDateStr] = useState('');
+
   useEffect(() => {
     const updateTime = () => {
-      setCurrentTimeStr(format(new Date(), 'yyyy-MM-dd | HH:mm:ss'));
+      const now = new Date();
+      setCurrentTimeStr(format(now, 'HH:mm:ss'));
+      setCurrentDateStr(format(now, 'yyyy-MM-dd (EEEE)'));
     };
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Factory Geofence Base Location (Synced from Supabase)
-  const [syncedLocation, setSyncedLocation] = useState<{
-    name: string;
-    lat: number;
-    lng: number;
-    radiusMeters: number;
-  }>({
-    name: settings?.factoryLocation?.name || 'کۆمپانیای سەرەکی ئاشڵی (Ashley Company Base)',
-    lat: settings?.factoryLocation?.lat || 35.5571,
-    lng: settings?.factoryLocation?.lng || 45.4352,
-    radiusMeters: settings?.factoryLocation?.radiusMeters || 50,
-  });
+  // Multi-Company Locations (Synced from Supabase)
+  const [companyLocations, setCompanyLocations] = useState<CompanyLocation[]>([
+    {
+      id: 'main-company-location',
+      name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
+      lat: 35.5571,
+      lng: 45.4352,
+      radiusMeters: 50,
+    },
+  ]);
 
-  // Global Realtime Location Sync from Supabase (Live polling & anti-cache)
-  const syncCompanyLocation = useCallback(async () => {
+  const [currentMatchedLocation, setCurrentMatchedLocation] = useState<CompanyLocation | null>(null);
+  const [isInsideGeofence, setIsInsideGeofence] = useState<boolean | null>(null);
+  const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<string>('پشکنینی لۆکەیشن...');
+  const [gpsLoading, setGpsLoading] = useState<boolean>(false);
+
+  // Sync Locations from Supabase
+  const syncCompanyLocations = useCallback(async () => {
     try {
       const res = await fetch(`/api/attendance/location?_t=${Date.now()}`, {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' },
       });
       if (res.ok) {
-        const loc = await res.json();
-        if (loc?.lat && loc?.lng) {
-          setSyncedLocation(loc);
+        const data = await res.json();
+        if (data?.locations && Array.isArray(data.locations) && data.locations.length > 0) {
+          setCompanyLocations(data.locations);
+        } else if (data?.lat && data?.lng) {
+          setCompanyLocations([
+            {
+              id: 'main-company-location',
+              name: data.name || 'کۆمپانیای سەرەکی ئاشڵی',
+              lat: data.lat,
+              lng: data.lng,
+              radiusMeters: data.radiusMeters || 50,
+            },
+          ]);
         }
       }
     } catch (err) {
-      console.error('Error fetching company location:', err);
+      console.error('Error fetching company locations:', err);
     }
   }, []);
 
   useEffect(() => {
-    syncCompanyLocation();
-    const interval = setInterval(syncCompanyLocation, 3000);
-    window.addEventListener('focus', syncCompanyLocation);
+    syncCompanyLocations();
+    const interval = setInterval(syncCompanyLocations, 15000);
+    window.addEventListener('focus', syncCompanyLocations);
     return () => {
       clearInterval(interval);
-      window.removeEventListener('focus', syncCompanyLocation);
+      window.removeEventListener('focus', syncCompanyLocations);
     };
-  }, [syncCompanyLocation]);
-
-  // --- Attendance State (Right Side) ---
-  const [selectedEmpId, setSelectedEmpId] = useState('');
-  const [pinCode, setPinCode] = useState('');
-  const [cameraActive, setCameraActive] = useState(false);
-  const [capturedSelfie, setCapturedSelfie] = useState<string | null>(null);
-  const [showManualFallback, setShowManualFallback] = useState(false);
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
-  
-  // Biometric (Fingerprint / Face ID) State
-  const [bioSupported, setBioSupported] = useState<boolean>(false);
-  const [hasBiometric, setHasBiometric] = useState<boolean>(false);
-  const [biometricLoading, setBiometricLoading] = useState<boolean>(false);
+  }, [syncCompanyLocations]);
 
   // AI Face Recognition State
-  const [hasFaceRegistered, setHasFaceRegistered] = useState(false);
-  const [faceDescriptor, setFaceDescriptor] = useState<number[] | null>(null);
-  const [facePhotoUrl, setFacePhotoUrl] = useState<string | null>(null);
   const [registeredFacesList, setRegisteredFacesList] = useState<Array<{ id: string; name: string; descriptor: number[] }>>([]);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [activeFaceAction, setActiveFaceAction] = useState<'Check In' | 'Check Out' | null>(null);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [isFaceScanning, setIsFaceScanning] = useState(false);
   const [faceInsideOval, setFaceInsideOval] = useState(false);
   const [faceScanMessage, setFaceScanMessage] = useState<string | null>(null);
   const [faceScanSuccess, setFaceScanSuccess] = useState<boolean | null>(null);
-  const [activeFaceAction, setActiveFaceAction] = useState<'Check In' | 'Check Out' | 'Register' | null>(null);
+  const [attMessage, setAttMessage] = useState<{ text: string; success: boolean } | null>(null);
 
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const autoScanTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isProcessingScanRef = useRef(false);
 
@@ -140,10 +134,10 @@ export default function PublicTerminalPage() {
     loadFaceModels().catch((e) => console.log('Preloading face models:', e));
   }, []);
 
-  // Fetch all registered employees with face descriptors for Instant Zero-Selection Auto-Identification
+  // Fetch all registered employees with face descriptors
   const fetchAllFaces = useCallback(async () => {
     try {
-      let combinedMap: Record<string, any> = {};
+      const combinedMap: Record<string, any> = {};
 
       // 1. Read local cache first
       try {
@@ -175,1060 +169,539 @@ export default function PublicTerminalPage() {
     fetchAllFaces();
   }, [fetchAllFaces]);
 
-  // GPS Geofence State
-  const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
-  const [gpsStatus, setGpsStatus] = useState<string | null>(null);
-  const [gpsLoading, setGpsLoading] = useState<boolean>(false);
-  const [attMessage, setAttMessage] = useState<{ text: string; success: boolean } | null>(null);
-  
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // --- Model Search State (Left Side) ---
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');
-
-  useEffect(() => {
-    setBioSupported(isBiometricSupported());
-  }, []);
-
-  // Check biometric & AI Face pairing status when employee is selected
-  useEffect(() => {
-    if (!selectedEmpId) {
-      setHasBiometric(false);
-      setHasFaceRegistered(false);
-      setFaceDescriptor(null);
-      return;
-    }
-
-    // 1. Biometrics status
-    const localBio = typeof window !== 'undefined' ? localStorage.getItem(`ashley_bio_${selectedEmpId}`) : null;
-    if (localBio) {
-      setHasBiometric(true);
-    } else {
-      fetch(`/api/attendance/biometrics/status?userId=${selectedEmpId}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.hasBiometrics) {
-            setHasBiometric(true);
-            if (data.credentialId && typeof window !== 'undefined') {
-              localStorage.setItem(`ashley_bio_${selectedEmpId}`, data.credentialId);
-            }
-          } else {
-            setHasBiometric(false);
-          }
-        })
-        .catch(() => setHasBiometric(false));
-    }
-
-    // 2. AI Face status for selected user
-    const matched = registeredFacesList.find((f) => f.id === selectedEmpId);
-    if (matched && matched.descriptor) {
-      setHasFaceRegistered(true);
-      setFaceDescriptor(matched.descriptor);
-    } else {
-      fetch(`/api/attendance/face/status?userId=${selectedEmpId}&_t=${Date.now()}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.hasFaceRegistered && data.descriptor) {
-            setHasFaceRegistered(true);
-            setFaceDescriptor(data.descriptor);
-            setFacePhotoUrl(data.photoUrl);
-          } else {
-            setHasFaceRegistered(false);
-            setFaceDescriptor(null);
-            setFacePhotoUrl(null);
-          }
-        })
-        .catch(() => setHasFaceRegistered(false));
-    }
-  }, [selectedEmpId, registeredFacesList]);
-
-  // Request GPS Location
-  const requestLocation = () => {
+  // Check Geofence Distance against ALL active company branches
+  const checkCurrentLocation = useCallback(() => {
     if (!navigator.geolocation) {
-      setGpsStatus('جی پی ئێس لە وێبگەڕ پشتیوانی نەکراوە');
+      setGpsStatus('GPS لەم وێبگەڕەدا بەردەست نییە');
+      setIsInsideGeofence(false);
       return;
     }
+
     setGpsLoading(true);
-    setGpsStatus('پشکنینی دووری لە کۆمپانیا...');
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const uLat = pos.coords.latitude;
-        const uLng = pos.coords.longitude;
-        const targetLat = syncedLocation.lat || 35.5571;
-        const targetLng = syncedLocation.lng || 45.4352;
-        const radius = syncedLocation.radiusMeters || 50;
+        const userLat = pos.coords.latitude;
+        const userLng = pos.coords.longitude;
 
-        const dist = calculateDistanceMeters(uLat, uLng, targetLat, targetLng);
-        setDistanceMeters(dist);
-        const inside = dist <= radius;
-        setGpsStatus(inside ? `ناو سنووری کۆمپانیا (${dist}m)` : `دەرەوەی کۆمپانیا (${dist}m)`);
+        if (companyLocations.length === 0) {
+          setIsInsideGeofence(true);
+          setGpsStatus('لۆکەیشن دیاری نەکراوە');
+          setGpsLoading(false);
+          return;
+        }
+
+        // Calculate distance to each defined location
+        const distanceResults = companyLocations.map((loc) => {
+          const d = calculateDistanceMeters(userLat, userLng, loc.lat, loc.lng);
+          return {
+            ...loc,
+            distance: d,
+            isInside: d <= (loc.radiusMeters || 50),
+          };
+        });
+
+        // Check if inside ANY location
+        const matched = distanceResults.find((r) => r.isInside);
+        const closest = [...distanceResults].sort((a, b) => a.distance - b.distance)[0];
+
+        if (matched) {
+          setIsInsideGeofence(true);
+          setCurrentMatchedLocation(matched);
+          setDistanceMeters(matched.distance);
+          setGpsStatus(`🟢 لە سنووری (${matched.name})یت (${matched.distance}m)`);
+        } else if (closest) {
+          setIsInsideGeofence(false);
+          setCurrentMatchedLocation(closest);
+          setDistanceMeters(closest.distance);
+          setGpsStatus(
+            `🔴 دەرەوەی بازنەی لقەکان (${closest.distance}m > ${closest.radiusMeters}m لە ${closest.name})`
+          );
+        }
+
         setGpsLoading(false);
       },
-      () => {
-        setGpsStatus('تکایە ڕێگەپێدانی لۆکەیشن (GPS) لە مۆبایل کارا بکە');
+      (err) => {
+        console.warn('GPS position error:', err);
+        setGpsStatus('تکایە ڕێگە بدە بە GPS ی مۆبایلەکەت');
+        setIsInsideGeofence(false);
         setGpsLoading(false);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
-  };
+  }, [companyLocations]);
 
   useEffect(() => {
-    requestLocation();
-  }, [syncedLocation]);
+    checkCurrentLocation();
+    const interval = setInterval(checkCurrentLocation, 30000);
+    return () => clearInterval(interval);
+  }, [checkCurrentLocation]);
 
-  // Start Camera with Front / Back selection
-  const startCamera = async (mode = facingMode) => {
+  // Start Camera Stream
+  const startCamera = async () => {
     try {
-      setCameraActive(true);
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current.getTracks().forEach((track) => track.stop());
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: { ideal: mode }, width: { ideal: 640 }, height: { ideal: 640 } } 
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: facingMode,
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
       });
+
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        videoRef.current.play();
       }
-    } catch {
-      setAttMessage({ text: 'کامیرا نەدۆزرایەوە! ڕێگەپێدانی کامێرا کارا بکە', success: false });
-      setCameraActive(false);
+      setCameraActive(true);
+    } catch (err) {
+      console.error('Camera error:', err);
+      alert('نەتوانرا کامێرا بکرێتەوە. تکایە لە سێتینگی وێبگەڕ ڕێگە بە کامێرا بدە.');
     }
   };
 
+  // Stop Camera Stream
   const stopCamera = () => {
     if (autoScanTimerRef.current) {
       clearInterval(autoScanTimerRef.current);
       autoScanTimerRef.current = null;
     }
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    isProcessingScanRef.current = false;
-    setFaceInsideOval(false);
     setCameraActive(false);
+    setIsFaceScanning(false);
+    setFaceInsideOval(false);
+    setActiveFaceAction(null);
+    setFaceScanMessage(null);
+    setFaceScanSuccess(null);
+    isProcessingScanRef.current = false;
   };
 
-  const toggleFacingMode = () => {
+  const toggleCameraFacing = () => {
     const nextMode = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(nextMode);
-    if (cameraActive) {
-      startCamera(nextMode);
-    }
   };
 
-  // Capture Selfie Photo (Compressed to 500x500 ~45KB for 100% Mobile Sync)
-  const capturePhoto = () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    canvas.width = 500;
-    canvas.height = 500;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(video, 0, 0, 500, 500);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-      setCapturedSelfie(dataUrl);
-      stopCamera();
-    }
-  };
-
-  // Process Offline Pending Mobile Check-in Queue
-  const processPendingMobileQueue = async () => {
-    if (typeof window === 'undefined' || !navigator.onLine) return;
-    try {
-      const pendingStr = localStorage.getItem('ashley_pending_checkins');
-      if (!pendingStr) return;
-      const pendingList: any[] = JSON.parse(pendingStr);
-      if (!Array.isArray(pendingList) || pendingList.length === 0) return;
-
-      const remaining: any[] = [];
-      for (const logItem of pendingList) {
-        try {
-          const res = await fetch('/api/attendance/logs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(logItem),
-          });
-          if (!res.ok) remaining.push(logItem);
-        } catch (err) {
-          remaining.push(logItem);
-        }
-      }
-
-      localStorage.setItem('ashley_pending_checkins', JSON.stringify(remaining));
-      
-      if (remaining.length === 0) {
-         setAttMessage({
-           text: `هەموو چێک ئینە هەڵگیراوەکانی مۆبایلەکە بە سەرکەوتوویی نێردران بۆ داتابەیز!`,
-           success: true,
-         });
-         setTimeout(() => setAttMessage(null), 3000);
-      }
-    } catch (err) {
-      console.error('Pending queue error:', err);
-    }
-  };
-
-  // Fetch Supabase attendance logs on mount & setup offline sync listeners
   useEffect(() => {
-    fetch('/api/attendance/logs')
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setAttendanceLogs((prev) => {
-            const existingIds = new Set(prev.map((p) => p.id));
-            const newLogs = data.filter((d: any) => !existingIds.has(d.id));
-            return [...newLogs, ...prev];
-          });
-        }
-      })
-      .catch((err) => console.error('Supabase logs fetch error:', err));
-
-    processPendingMobileQueue();
-    window.addEventListener('online', processPendingMobileQueue);
-    const queueInterval = setInterval(processPendingMobileQueue, 5000);
-
-    return () => {
-      window.removeEventListener('online', processPendingMobileQueue);
-      clearInterval(queueInterval);
-    };
-  }, []);
-
-  // Submit Attendance Log to Local + Central Supabase Server
-  const submitAttendanceLog = (
-    type: 'Check In' | 'Check Out',
-    emp: { id: string; name: string },
-    verificationMethod: string
-  ) => {
-    const timeNow = format(new Date(), 'HH:mm');
-    const dateNow = format(new Date(), 'yyyy-MM-dd');
-
-    const thankMsg =
-      type === 'Check In'
-        ? `🎉 سوپاس بۆ چێک ئین! (هاتنی ${emp.name} بە سەرکەوتوویی لە سیستەم تۆمارکرا ✅)`
-        : `🎉 سوپاس بۆ چێک ئاوت! (دەرچوونی ${emp.name} بە سەرکەوتوویی لە سیستەم تۆمارکرا ✅)`;
-
-    const newLog: any = {
-      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      employeeId: emp.id,
-      employeeName: emp.name,
-      name: emp.name,
-      userName: emp.name,
-      date: dateNow,
-      log_date: dateNow,
-      time: timeNow,
-      log_time_str: timeNow,
-      type: type,
-      log_type: type,
-      status: verificationMethod,
-      distance: distanceMeters !== null ? `${distanceMeters}m لە کۆمپانیا` : 'ناو کۆمپانیا',
-      createdAt: timeNow,
-    };
-
-    const updatedLogs = [newLog, ...attendanceLogs];
-    setAttendanceLogs(updatedLogs);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ashley_local_attendanceLogs', JSON.stringify(updatedLogs));
+    if (cameraActive) {
+      startCamera();
     }
+  }, [facingMode]);
 
-    setAttMessage({
-      text: thankMsg,
-      success: true,
-    });
-
-    // Sync to Supabase Real-Time Backend
-    fetch('/api/attendance/logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newLog),
-    })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) {
-          setAttMessage({
-            text: data.message || data.error || '⚠️ ناتوانرێت ئەم ئامادەبوونە دووبارە تۆمار بکرێت',
-            success: false,
-          });
-          return;
-        }
-        setAttMessage({
-          text: thankMsg,
-          success: true,
-        });
-      })
-      .catch((err) => {
-        console.error('Supabase attendance post error - saving to offline queue:', err);
-        if (typeof window !== 'undefined') {
-          const pending = JSON.parse(localStorage.getItem('ashley_pending_checkins') || '[]');
-          localStorage.setItem('ashley_pending_checkins', JSON.stringify([...pending, newLog]));
-        }
-      });
-
-    setCapturedSelfie(null);
-
-    setTimeout(() => {
-      setAttMessage((prev) => (prev?.text === thankMsg ? null : prev));
-    }, 6000);
-  };
-
-  // Handle Biometric Device Registration (Pair Fingerprint to Employee)
-  const handleRegisterBiometric = async () => {
-    if (!selectedEmpId) {
-      setAttMessage({ text: 'تکایە سەرەتا ناوی خۆت لە لیستەکەدا هەڵبژێرە', success: false });
-      return;
-    }
-    const emp = employees.find((e) => e.id === selectedEmpId);
-    if (!emp) return;
-
-    if (!pinCode.trim() || pinCode.trim() !== (emp.password || '1234')) {
-      setAttMessage({ text: 'تکایە کۆدی PINـی دروست بنووسە بۆ دڵنیابوونەوەی سەرەتایی ناسنامە', success: false });
-      return;
-    }
+  // Process Attendance Check-In / Check-Out
+  const saveAttendanceLog = async (empId: string, empName: string, actionType: 'Check In' | 'Check Out') => {
+    const dateStr = format(new Date(), 'yyyy-MM-dd');
+    const timeStr = format(new Date(), 'HH:mm:ss');
+    const locName = currentMatchedLocation?.name || 'کۆمپانیای ئاشڵی';
 
     try {
-      setBiometricLoading(true);
-      const credentialId = await registerBiometric(emp.id, emp.fullName3Part || emp.name);
-
-      await fetch('/api/attendance/biometrics/register', {
+      const res = await fetch('/api/attendance/logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: emp.id, credentialId }),
+        body: JSON.stringify({
+          employeeId: empId,
+          name: empName,
+          action: actionType,
+          type: actionType === 'Check In' ? 'in' : 'out',
+          date: dateStr,
+          time: timeStr,
+          address: locName,
+          coords: {
+            lat: currentMatchedLocation?.lat || 35.5571,
+            lng: currentMatchedLocation?.lng || 45.4352,
+          },
+          status: 'success',
+          notes: `Automatic Face Recognition at ${locName}`,
+        }),
       });
 
-      setHasBiometric(true);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'هەڵەیەک ڕوویدا لە کاتی پاشەکەوتکردن');
+      }
+
       setAttMessage({
-        text: `🎉 پەنجەمۆر / Face IDـی ئەم مۆبایلە بە سەرکەوتوویی بۆ (${emp.name}) چالاککرا! لەمەودوا بە پەنجەمۆر دەتوانیت چێک‌ئین بکەیت.`,
+        text:
+          actionType === 'Check In'
+            ? `✅ سوپاس بۆ چێک‌ئین! هاتنەکەت لە کاتژمێر (${format(new Date(), 'HH:mm')}) تۆمار کرا، ${empName}.`
+            : `👋 سوپاس بۆ چێک‌ئاوت! دەرچوونەکەت لە کاتژمێر (${format(new Date(), 'HH:mm')}) تۆمار کرا، ${empName}.`,
         success: true,
       });
     } catch (err: any) {
-      setAttMessage({ text: err.message || 'هەڵە لە تۆمارکردنی پەنجەمۆر', success: false });
-    } finally {
-      setBiometricLoading(false);
+      setAttMessage({
+        text: err.message || 'هەڵەیەک ڕوویدا لە تۆمارکردنی ئامادەبوون',
+        success: false,
+      });
     }
   };
 
-  // Handle Fast Biometric Check-In / Check-Out
-  const handleBiometricAuth = async (type: 'Check In' | 'Check Out') => {
-    if (!selectedEmpId) {
-      setAttMessage({ text: 'تکایە ناوی خۆت لە لیستەکەدا هەڵبژێرە', success: false });
-      return;
-    }
-    const emp = employees.find((e) => e.id === selectedEmpId);
-    if (!emp) return;
-
-    const radius = syncedLocation.radiusMeters || 50;
-    if (distanceMeters !== null && distanceMeters > radius) {
-      setAttMessage({
-        text: `⚠️ ناتوانیت چێک ئین بکەیت! دووریت لە کۆمپانیا (${distanceMeters} مەتر)ە و دەبێت کەمتر لە ${radius} مەتر بێت.`,
-        success: false,
-      });
+  // Open Camera for Face Check-In or Check-Out
+  const handleOpenFaceTerminal = (action: 'Check In' | 'Check Out') => {
+    if (isInsideGeofence === false) {
+      alert(
+        `⚠️ ناتوانیت چێک‌ئین یان چێک‌ئاوت بکەیت!\nتۆ لە دەرەوەی بازنەی ڕێگەپێدراوی لقەکانی کۆمپانیایت.\n\n${gpsStatus}`
+      );
       return;
     }
 
-    try {
-      setBiometricLoading(true);
-
-      let credId = typeof window !== 'undefined' ? localStorage.getItem(`ashley_bio_${emp.id}`) : null;
-      if (!credId) {
-        const res = await fetch(`/api/attendance/biometrics/status?userId=${emp.id}`);
-        const data = await res.json();
-        credId = data?.credentialId || null;
-      }
-
-      if (!credId) {
-        setAttMessage({
-          text: `⚠️ تۆ هێشتا پەنجەمۆری ئەم مۆبایلەت بۆ (${emp.name}) نەبەستووەتەوە!`,
-          success: false,
-        });
-        return;
-      }
-
-      const verified = await verifyBiometric(emp.id, credId);
-      if (verified) {
-        submitAttendanceLog(type, emp, 'پەنجەمۆری مۆبایل');
-      }
-    } catch (err: any) {
-      setAttMessage({
-        text: err.message || '❌ پەنجەمۆر نەناسرا!',
-        success: false,
-      });
-    } finally {
-      setBiometricLoading(false);
-    }
-  };
-
-  // Universal Instant AI Face Check-In & Check-Out (Identifies Employee Automatically)
-  const handleStartUniversalFaceAuth = async (type: 'Check In' | 'Check Out') => {
-    fetchAllFaces(); // Ensure latest registered face database is loaded
-    const radius = syncedLocation.radiusMeters || 50;
-    if (distanceMeters !== null && distanceMeters > radius) {
-      setAttMessage({
-        text: `⚠️ ناتوانیت چێک‌ئین بکەیت! دووریت لە کۆمپانیا (${distanceMeters}m)ە و دەبێت کەمتر لە ${radius}m بێت.`,
-        success: false,
-      });
-      return;
-    }
-
-    setActiveFaceAction(type);
-    setFaceScanMessage('دەموچاو بخەرە ناو بازنەکەوە بۆ ناسینەوەی خۆکار...');
+    setActiveFaceAction(action);
+    setFaceScanMessage('سەیری کامێرا بکە... ڕوخسارت بخەرە ناو بازنەکە');
     setFaceScanSuccess(null);
     setFaceInsideOval(false);
-    isProcessingScanRef.current = false;
-    await startCamera();
+    startCamera();
   };
 
-  const handleVerifyUniversalFace = useCallback(async () => {
-    if (!videoRef.current || !activeFaceAction) return;
-    if (activeFaceAction !== 'Check In' && activeFaceAction !== 'Check Out') return;
-    const actionType: 'Check In' | 'Check Out' = activeFaceAction;
+  // Automated Facial Scanning Loop
+  useEffect(() => {
+    if (!cameraActive || !activeFaceAction || !videoRef.current) return;
 
-    try {
-      const liveResult = await extractFaceDescriptor(videoRef.current);
-      if (!liveResult) {
-        isProcessingScanRef.current = false;
+    const interval = setInterval(async () => {
+      if (isProcessingScanRef.current || !videoRef.current || videoRef.current.readyState < 2) {
         return;
       }
 
-      // If specific employee selected -> match that employee directly
-      if (selectedEmpId && faceDescriptor) {
-        const emp = employees.find((e) => e.id === selectedEmpId);
-        const match = matchFaceDescriptors(liveResult.descriptor, faceDescriptor);
-        if (match.isMatch && emp) {
-          // Immediately close camera tab!
-          stopCamera();
-          setActiveFaceAction(null);
-          submitAttendanceLog(actionType, emp, `ڕوخسارناسینەوەی AI (${match.similarityPercent}٪)`);
-          return;
-        } else {
-          isProcessingScanRef.current = false;
-          return;
-        }
-      }
-
-      // Zero-Selection Auto-Identification across ALL employees in database
-      let bestMatch: { emp: any; score: number; similarity: number } | null = null;
-      let lowestDist = 999;
-
-      for (const reg of registeredFacesList) {
-        const match = matchFaceDescriptors(liveResult.descriptor, reg.descriptor);
-        if (match.isMatch && match.distance < lowestDist) {
-          lowestDist = match.distance;
-          bestMatch = {
-            emp: reg,
-            score: match.distance,
-            similarity: match.similarityPercent,
-          };
-        }
-      }
-
-      if (bestMatch && bestMatch.emp) {
-        const matchedEmp = employees.find((e) => e.id === bestMatch.emp.id) || {
-          id: bestMatch.emp.id,
-          name: bestMatch.emp.name,
-        };
-
-        // Immediately stop camera and close camera viewfinder tab!
-        stopCamera();
-        setActiveFaceAction(null);
-
-        // Submit log to Supabase system database and show Thank You banner!
-        submitAttendanceLog(actionType, matchedEmp, `ڕوخسارناسینەوەی AI (${bestMatch.similarity}٪)`);
-      } else {
-        isProcessingScanRef.current = false;
-      }
-    } catch {
-      isProcessingScanRef.current = false;
-    }
-  }, [activeFaceAction, selectedEmpId, faceDescriptor, employees, registeredFacesList, submitAttendanceLog]);
-
-  // Live Auto-Scanning loop for Zero-Selection Face Check-In (silky smooth, non-blocking)
-  useEffect(() => {
-    if (!activeFaceAction || !cameraActive) {
-      if (autoScanTimerRef.current) {
-        clearInterval(autoScanTimerRef.current);
-        autoScanTimerRef.current = null;
-      }
-      return;
-    }
-
-    autoScanTimerRef.current = setInterval(async () => {
-      if (!videoRef.current || isProcessingScanRef.current || videoRef.current.readyState < 2) return;
+      isProcessingScanRef.current = true;
+      setIsFaceScanning(true);
 
       try {
-        const liveResult = await extractFaceDescriptor(videoRef.current);
-        if (liveResult && !isProcessingScanRef.current) {
-          setFaceInsideOval(true);
-          // Auto trigger verify & attendance registration!
-          handleVerifyUniversalFace();
-        } else {
+        const liveDescriptor = await extractFaceDescriptor(videoRef.current);
+
+        if (!liveDescriptor) {
           setFaceInsideOval(false);
+          setFaceScanMessage('سەیری ناو بازنەکە بکە...');
+          isProcessingScanRef.current = false;
+          setIsFaceScanning(false);
+          return;
         }
-      } catch {}
-    }, 400);
+
+        // Face is inside oval!
+        setFaceInsideOval(true);
+        setFaceScanMessage('ڕوخسار لەناو بازنەیە... پشکنینی ناسینەوە');
+
+        // Match against database
+        const matchResult = matchFaceDescriptors(liveDescriptor, registeredFacesList, 0.58);
+
+        if (matchResult && matchResult.employee) {
+          const emp = matchResult.employee;
+          setFaceScanSuccess(true);
+          setFaceScanMessage(`سەرکەوتوو بوو! بەخێربێیت ${emp.name}`);
+
+          // Save Attendance
+          await saveAttendanceLog(emp.id, emp.name, activeFaceAction);
+
+          // Close modal smoothly after 2.5s
+          setTimeout(() => {
+            stopCamera();
+          }, 2500);
+        } else {
+          setFaceScanSuccess(false);
+          setFaceScanMessage('ڕوخسار نەناسرایەوە! دەتوانیت لە ڕێگەی ئەدمین تۆماری بکەیت.');
+          isProcessingScanRef.current = false;
+          setIsFaceScanning(false);
+        }
+      } catch (err) {
+        console.error('Scan error:', err);
+        isProcessingScanRef.current = false;
+        setIsFaceScanning(false);
+      }
+    }, 650);
+
+    autoScanTimerRef.current = interval;
 
     return () => {
-      if (autoScanTimerRef.current) {
-        clearInterval(autoScanTimerRef.current);
-        autoScanTimerRef.current = null;
-      }
+      clearInterval(interval);
     };
-  }, [activeFaceAction, cameraActive, handleVerifyUniversalFace]);
-
-  // Manual Check-In / Check-Out Submission (PIN + Selfie)
-  const handleCheckInOrOut = (type: 'Check In' | 'Check Out') => {
-    if (!selectedEmpId) {
-      setAttMessage({ text: 'تکایە ناوی خۆت لە لیستەکەدا هەڵبژێرە', success: false });
-      return;
-    }
-    const emp = employees.find((e) => e.id === selectedEmpId);
-    if (!emp) return;
-
-    if (pinCode.trim() !== (emp.password || '1234')) {
-      setAttMessage({ text: 'کۆدی PIN هەڵەیە! (تکایە کۆدە دروستەکەت بنووسە)', success: false });
-      return;
-    }
-
-    const radius = syncedLocation.radiusMeters || 50;
-    // Location Geofence check
-    if (distanceMeters !== null && distanceMeters > radius) {
-      setAttMessage({
-        text: `⚠️ ناتوانیت چێک ئین بکەیت! دووریت لە کۆمپانیا (${distanceMeters} مەتر)ە و دەبێت کەمتر لە ${radius} مەتر بێت.`,
-        success: false,
-      });
-      return;
-    }
-
-    submitAttendanceLog(type, emp, 'کۆدی PIN');
-  };
-
-  // Filter Catalog Items
-  const filteredItems = items.filter((item) => {
-    const q = searchQuery.toLowerCase().trim();
-    const matchesSearch =
-      !q ||
-      (item.model && item.model.toLowerCase().includes(q)) ||
-      (item.name && item.name.toLowerCase().includes(q)) ||
-      (item.classification && item.classification.toLowerCase().includes(q));
-
-    const matchesCategory =
-      selectedCategoryFilter === 'all' || item.classification === selectedCategoryFilter;
-
-    return matchesSearch && matchesCategory;
-  });
+  }, [cameraActive, activeFaceAction, registeredFacesList]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white p-3 sm:p-6 lg:p-8 space-y-5 dir-rtl relative overflow-x-hidden" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-indigo-50/40 text-slate-900 font-sans flex flex-col justify-between select-none dir-rtl" dir="rtl">
       
-      {/* 🌌 iOS Control Center Ambient Background Blurs */}
-      <div className="fixed top-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-600/15 rounded-full blur-[140px] pointer-events-none -z-10" />
-      <div className="fixed bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-teal-600/15 rounded-full blur-[140px] pointer-events-none -z-10" />
-      <div className="fixed top-[40%] left-[30%] w-[400px] h-[400px] bg-rose-600/10 rounded-full blur-[160px] pointer-events-none -z-10" />
-
-      {/* ========================================================================= */}
-      {/* 🍎 1. iOS CONTROL CENTER TOP STATUS BAR */}
-      {/* ========================================================================= */}
-      <header className="w-full bg-slate-900/70 border border-white/10 backdrop-blur-2xl rounded-3xl p-3 sm:p-4 shadow-2xl flex flex-wrap items-center justify-between gap-3 sticky top-3 z-40 transition-all">
+      {/* 🌟 ULTRA-CLEAN LIGHT HEADER */}
+      <header className="w-full max-w-5xl mx-auto px-4 py-4 sm:py-6 flex items-center justify-between">
         
-        {/* Brand & Factory Identity */}
+        {/* Brand Logo & Name */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 via-blue-600 to-indigo-700 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 flex-shrink-0">
-            <Sparkles className="w-5 h-5 text-amber-300" />
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-slate-900 to-indigo-900 flex items-center justify-center text-white shadow-md shadow-slate-900/10">
+            <Building2 className="w-5 h-5 text-white" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-sm sm:text-base font-black tracking-tight text-white">
-                سیستەمی کارمەندانی ئاشڵی
+              <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                ASHLEY ENTERPRISE
               </h1>
-              <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
-                CONTROL CENTER
+              <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-full border border-indigo-200">
+                AI Face Terminal
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 font-semibold flex items-center gap-1 mt-0.5">
-              <MapPin className="w-3 h-3 text-emerald-400" />
-              <span>{syncedLocation.name || 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)'}</span>
+            <p className="text-xs text-slate-500 font-bold">
+              سیستەمی فەرمیی چێک‌ئین و ئامادەبوونی کارمەندان
             </p>
           </div>
         </div>
 
-        {/* 📍 ULTRA-COMPACT SLEEK LOCATION STATUS PILL (Zero Layout Shift) */}
-        <div 
-          onClick={requestLocation}
-          title="کرتە بکە بۆ نوێکردنەوەی دەستی لۆکەیشن"
-          className={`h-8 px-3 rounded-full border backdrop-blur-xl flex items-center gap-2 text-[11px] font-black transition-all cursor-pointer select-none shadow-sm ${
-            distanceMeters !== null && distanceMeters <= (syncedLocation.radiusMeters || 50)
-              ? 'bg-emerald-500/15 border-emerald-400/30 text-emerald-300 hover:bg-emerald-500/25'
-              : distanceMeters !== null
-              ? 'bg-rose-500/15 border-rose-400/30 text-rose-300 hover:bg-rose-500/25'
-              : 'bg-white/10 border-white/15 text-slate-300 hover:bg-white/15'
-          }`}
-        >
-          <div
-            className={`w-2 h-2 rounded-full ${
-              distanceMeters !== null && distanceMeters <= (syncedLocation.radiusMeters || 50)
-                ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse'
-                : 'bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.9)]'
-            }`}
-          />
-          <span className="font-mono">
-            {distanceMeters !== null && distanceMeters <= (syncedLocation.radiusMeters || 50)
-              ? `لە کۆمپانیا (${distanceMeters}m)`
-              : distanceMeters !== null
-              ? `دەرەوەی سنوور (${distanceMeters}m)`
-              : gpsStatus || 'لۆکەیشن پشکنراو'}
-          </span>
-          <RefreshCw className={`w-3 h-3 opacity-60 ${gpsLoading ? 'animate-spin opacity-100' : ''}`} />
-        </div>
-
-        {/* Live Clock & Admin Control */}
+        {/* Compact Geofence Status Pill */}
         <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center gap-1.5 bg-white/5 border border-white/10 px-3 py-1.5 rounded-2xl">
-            <Clock className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="font-mono text-xs font-bold text-slate-200">
-              {currentTimeStr || '--:--'}
+          <div 
+            onClick={checkCurrentLocation}
+            className={`h-9 px-3.5 rounded-full border shadow-sm flex items-center gap-2 cursor-pointer transition-all ${
+              isInsideGeofence === true
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100/80'
+                : isInsideGeofence === false
+                ? 'bg-rose-50 border-rose-300 text-rose-800 hover:bg-rose-100/80'
+                : 'bg-white border-slate-300 text-slate-700'
+            }`}
+            title="کلیک بکە بۆ نوێکردنەوەی لۆکەیشن"
+          >
+            <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+              isInsideGeofence === true
+                ? 'bg-emerald-500 animate-pulse'
+                : isInsideGeofence === false
+                ? 'bg-rose-500'
+                : 'bg-amber-500'
+            }`} />
+            
+            <span className="text-xs font-bold whitespace-nowrap">
+              {gpsLoading ? 'پشکنینی GPS...' : gpsStatus}
             </span>
           </div>
-
-          {user ? (
-            <div className="flex items-center gap-1.5">
-              <Link
-                href="/admin"
-                className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white text-xs font-black py-1.5 px-3.5 rounded-2xl shadow-lg shadow-indigo-600/30 border border-indigo-400/30 hover:scale-105 active:scale-95 transition-all"
-              >
-                <Shield className="w-3.5 h-3.5 text-amber-300" />
-                <span>ئەدمین</span>
-              </Link>
-              <button
-                onClick={() => logout()}
-                className="bg-white/10 hover:bg-rose-500/20 text-rose-300 border border-white/15 text-xs font-bold py-1.5 px-3 rounded-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-1"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            <Link
-              href="/login"
-              className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-black py-1.5 px-3.5 rounded-2xl shadow-md border border-white/15 hover:scale-105 active:scale-95 transition-all"
-            >
-              <Lock className="w-3.5 h-3.5 text-amber-400" />
-              <span>چوونەژوورەوە</span>
-            </Link>
-          )}
         </div>
+
       </header>
 
-      {/* 🚀 DYNAMIC ISLAND NOTIFICATION TOAST */}
-      {attMessage && (
-        <div
-          className={`p-4 text-xs sm:text-sm font-black rounded-3xl border shadow-2xl flex items-center gap-3 backdrop-blur-2xl animate-in slide-in-from-top-4 duration-300 ${
-            attMessage.success
-              ? 'bg-emerald-950/80 text-emerald-200 border-emerald-500/50 shadow-emerald-950/50'
-              : 'bg-rose-950/80 text-rose-200 border-rose-500/50 shadow-rose-950/50'
-          }`}
-        >
-          <Sparkles className="w-5 h-5 flex-shrink-0 text-amber-300 animate-pulse" />
-          <span>{attMessage.text}</span>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 📱 2. iOS CONTROL CENTER RESPONSIVE BENTO GRID */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-
-        {/* ----------------------------------------------------------------- */}
-        {/* 📸 RIGHT TILE: iOS AI FACE ATTENDANCE CONTROLLER */}
-        {/* ----------------------------------------------------------------- */}
-        <section className="lg:col-span-5 bg-slate-900/80 border border-white/15 backdrop-blur-2xl rounded-3xl p-5 shadow-2xl space-y-4 relative overflow-hidden">
+      {/* 🌟 MAIN TERMINAL BODY */}
+      <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-6 flex flex-col items-center justify-center">
+        
+        {/* Center Crystal Card */}
+        <div className="w-full bg-white/95 backdrop-blur-2xl border border-slate-200/90 rounded-[2.5rem] p-6 sm:p-10 shadow-2xl shadow-slate-300/40 text-center space-y-8 relative overflow-hidden">
           
-          {/* Ambient Corner Flare */}
-          <div className="absolute top-0 right-0 w-36 h-36 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
+          {/* Subtle Ambient Light Glow */}
+          <div className="absolute -top-24 -right-24 w-60 h-60 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-24 -left-24 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          {/* Widget Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-white/10">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-indigo-600 to-teal-500 flex items-center justify-center text-white shadow-md">
-                <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
-              </div>
-              <div>
-                <h2 className="text-xs font-black text-white">ئامادەبوونی خۆکار بە دەموچاو</h2>
-                <p className="text-[10px] text-slate-400 font-semibold">بێ دەستلێدان (Zero-Touch AI Scan)</p>
-              </div>
+          {/* Clock & Date Badge */}
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-black shadow-inner">
+              <Clock className="w-3.5 h-3.5 text-indigo-600" />
+              <span>{currentDateStr || '2026-08-17'}</span>
             </div>
-            <span className="text-[10px] font-black bg-white/10 border border-white/15 text-indigo-200 px-2.5 py-1 rounded-full">
-              {registeredFacesList.length} کارمەند تۆمارە
-            </span>
+
+            <div className="text-4xl sm:text-6xl font-black font-mono tracking-tight text-slate-900">
+              {currentTimeStr || '09:00:00'}
+            </div>
+            
+            <p className="text-xs sm:text-sm font-bold text-slate-500 max-w-md mx-auto">
+              تەنها سەیری کامێرا بکە، سیستەمەکە ڕاستەوخۆ دەتبینێت و کاتی هاتن و دەرچوونت تۆمار دەکات.
+            </p>
           </div>
 
-          {/* 📷 ACTIVE CAMERA VIEWFINDER */}
-          {activeFaceAction ? (
-            <div className="p-3 bg-black/70 backdrop-blur-2xl rounded-3xl border border-white/15 space-y-3 animate-in fade-in zoom-in-95 duration-200">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black flex items-center gap-1.5 text-amber-300">
-                  <Camera className="w-4 h-4" />
-                  <span>ناسینەوەی دەموچاو بۆ ({activeFaceAction})</span>
-                </span>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={toggleFacingMode}
-                    className="bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-xl text-[10px] font-bold text-amber-200 flex items-center gap-1 transition-all"
-                  >
-                    <SwitchCamera className="w-3 h-3" />
-                    <span>{facingMode === 'user' ? 'پشتەوە' : 'پێشەوە'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      stopCamera();
-                      setActiveFaceAction(null);
-                    }}
-                    className="text-xs bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-xl text-slate-300"
-                  >
-                    داخستن ✕
-                  </button>
-                </div>
+          {/* Notification Alert Message Banner */}
+          {attMessage && (
+            <div className={`p-4 rounded-2xl border text-xs sm:text-sm font-black flex items-center justify-between gap-3 shadow-md animate-in fade-in slide-in-from-top-2 ${
+              attMessage.success 
+                ? 'bg-emerald-500 text-white border-emerald-600' 
+                : 'bg-rose-500 text-white border-rose-600'
+            }`}>
+              <div className="flex items-center gap-2">
+                {attMessage.success ? <CheckCircle2 className="w-5 h-5 flex-shrink-0" /> : <AlertTriangle className="w-5 h-5 flex-shrink-0" />}
+                <span>{attMessage.text}</span>
               </div>
-
-              {/* Video Viewport with Smooth Human Oval Bezel */}
-              <div className="relative rounded-2xl overflow-hidden bg-black aspect-square max-h-[300px] flex items-center justify-center border border-white/15 shadow-inner">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                />
-                
-                {/* Smooth Oval HUD Overlay */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none p-3">
-                  <div className="w-44 h-56 rounded-[50%/60%] transition-colors duration-300 flex flex-col items-center justify-center relative border-2 border-dashed border-indigo-300/80 shadow-[0_0_20px_rgba(99,102,241,0.3)]">
-                    <div className="absolute top-2 left-4 w-3.5 h-3.5 border-t-2 border-l-2 border-white/70" />
-                    <div className="absolute top-2 right-4 w-3.5 h-3.5 border-t-2 border-r-2 border-white/70" />
-                    <div className="absolute bottom-2 left-4 w-3.5 h-3.5 border-b-2 border-l-2 border-white/70" />
-                    <div className="absolute bottom-2 right-4 w-3.5 h-3.5 border-b-2 border-r-2 border-white/70" />
-                    
-                    <div className="text-center space-y-1">
-                      <User className="w-9 h-9 text-white/40 mx-auto" />
-                      <span className="text-[9px] font-bold text-white/80 bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-xs">
-                        دەموچاو لێرە دابنێ
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black text-amber-200 shadow-md">
-                    ⚡ دەموچاو بخەرە ناو بازنەکە، خۆکارانە دەیناسێتەوە
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* 📱 TWO LARGE iOS CONTROL CENTER ACTION TILES */
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              
-              {/* 📥 iOS Check In Tile */}
-              <button
-                type="button"
-                disabled={isFaceScanning || (distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50))}
-                onClick={() => handleStartUniversalFaceAuth('Check In')}
-                className={`relative group overflow-hidden py-5 px-4 rounded-3xl flex flex-col items-center justify-center gap-2 text-white transition-all duration-300 shadow-xl ${
-                  distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
-                    ? 'bg-slate-800/60 border border-white/5 text-slate-500 cursor-not-allowed opacity-60'
-                    : 'bg-gradient-to-br from-indigo-600 via-teal-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 shadow-teal-500/20 hover:shadow-teal-500/40 hover:scale-[1.02] active:scale-95 border border-white/20'
-                }`}
+              <button 
+                onClick={() => setAttMessage(null)}
+                className="p-1 hover:bg-white/20 rounded-lg text-white"
               >
-                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-                  <Camera className="w-6 h-6 text-white" />
-                </div>
-                <div className="text-center">
-                  <span className="text-sm font-black tracking-wide block">
-                    📥 چێک‌ئین (Check In)
-                  </span>
-                  <span className="text-[10px] text-teal-100/90 font-bold block mt-0.5">
-                    {distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
-                      ? 'قوفڵە (لەدەرەوەی سنوور)'
-                      : 'سەیری کامێرا بکە بۆ هاتن'}
-                  </span>
-                </div>
+                <X className="w-4 h-4" />
               </button>
-
-              {/* 📤 iOS Check Out Tile */}
-              <button
-                type="button"
-                disabled={isFaceScanning || (distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50))}
-                onClick={() => handleStartUniversalFaceAuth('Check Out')}
-                className={`relative group overflow-hidden py-5 px-4 rounded-3xl flex flex-col items-center justify-center gap-2 text-white transition-all duration-300 shadow-xl ${
-                  distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
-                    ? 'bg-slate-800/60 border border-white/5 text-slate-500 cursor-not-allowed opacity-60'
-                    : 'bg-gradient-to-br from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 shadow-rose-500/20 hover:shadow-rose-500/40 hover:scale-[1.02] active:scale-95 border border-white/20'
-                }`}
-              >
-                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-                  <Camera className="w-6 h-6 text-white" />
-                </div>
-                <div className="text-center">
-                  <span className="text-sm font-black tracking-wide block">
-                    📤 چێک‌ئاوت (Check Out)
-                  </span>
-                  <span className="text-[10px] text-rose-100/90 font-bold block mt-0.5">
-                    {distanceMeters !== null && distanceMeters > (syncedLocation.radiusMeters || 50)
-                      ? 'قوفڵە (لەدەرەوەی سنوور)'
-                      : 'سەیری کامێرا بکە بۆ دەرچوون'}
-                  </span>
-                </div>
-              </button>
-
             </div>
           )}
-        </section>
 
-        {/* ----------------------------------------------------------------- */}
-        {/* 🔍 LEFT TILE: PROMINENT MASSIVE iOS SEARCH & CATALOG ENGINE */}
-        {/* ----------------------------------------------------------------- */}
-        <section className="lg:col-span-7 bg-slate-900/80 border border-white/15 backdrop-blur-2xl rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 relative overflow-hidden">
-          
-          {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-white/10">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white shadow-md">
-                <Search className="w-4 h-4 text-white" />
+          {/* 🌟 TWO PROMINENT ACTION TILES: CHECK IN & CHECK OUT */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-2">
+            
+            {/* 📥 CHECK IN BUTTON */}
+            <button
+              type="button"
+              onClick={() => handleOpenFaceTerminal('Check In')}
+              disabled={isInsideGeofence === false}
+              className={`group relative p-6 sm:p-8 rounded-3xl border text-right transition-all flex flex-col justify-between min-h-[160px] sm:min-h-[180px] shadow-lg ${
+                isInsideGeofence === false
+                  ? 'bg-slate-100 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
+                  : 'bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white border-emerald-400/40 shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:scale-[1.02] active:scale-98 cursor-pointer'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner">
+                  <UserCheck className="w-6 h-6" />
+                </div>
+                <span className="text-[11px] font-black px-3 py-1 rounded-full bg-white/20 border border-white/20 text-white">
+                  چێک‌ئین
+                </span>
               </div>
+
               <div>
-                <h2 className="text-sm font-black text-white">
-                  گەڕانی مۆدێل و کاڵاکانی کۆگا (iOS Inventory Search)
-                </h2>
-                <p className="text-[10px] text-slate-400 font-semibold">
-                  بەردەستبوونی مۆدێلەکان و پشکنینی خێرای ئیستۆک
-                </p>
+                <span className="text-xl sm:text-2xl font-black block text-white tracking-tight">
+                  📥 تۆمارکردنی هاتن
+                </span>
+                <span className="text-xs font-bold text-emerald-100/90 block mt-1">
+                  {isInsideGeofence === false ? 'قوفڵە (لە دەرەوەی سنوور)' : 'سەیری کامێرا بکە بۆ دەستپێکردن'}
+                </span>
               </div>
-            </div>
-            <span className="text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 px-3 py-1 rounded-full">
-              {filteredItems.length} مۆدێل دۆزراوەتەوە
-            </span>
+            </button>
+
+            {/* 📤 CHECK OUT BUTTON */}
+            <button
+              type="button"
+              onClick={() => handleOpenFaceTerminal('Check Out')}
+              disabled={isInsideGeofence === false}
+              className={`group relative p-6 sm:p-8 rounded-3xl border text-right transition-all flex flex-col justify-between min-h-[160px] sm:min-h-[180px] shadow-lg ${
+                isInsideGeofence === false
+                  ? 'bg-slate-100 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
+                  : 'bg-gradient-to-br from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white border-rose-400/40 shadow-rose-500/25 hover:shadow-rose-500/40 hover:scale-[1.02] active:scale-98 cursor-pointer'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner">
+                  <Clock className="w-6 h-6" />
+                </div>
+                <span className="text-[11px] font-black px-3 py-1 rounded-full bg-white/20 border border-white/20 text-white">
+                  چێک‌ئاوت
+                </span>
+              </div>
+
+              <div>
+                <span className="text-xl sm:text-2xl font-black block text-white tracking-tight">
+                  📤 تۆمارکردنی دەرچوون
+                </span>
+                <span className="text-xs font-bold text-rose-100/90 block mt-1">
+                  {isInsideGeofence === false ? 'قوفڵە (لە دەرەوەی سنوور)' : 'سەیری کامێرا بکە بۆ تەواوکردنی کار'}
+                </span>
+              </div>
+            </button>
+
           </div>
 
-          <div className="space-y-4">
+          {/* Active Registered Faces Info */}
+          <div className="pt-2 flex items-center justify-center gap-2 text-xs font-bold text-slate-500">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>{registeredFacesList.length} کارمەند بە ڕوخسار تۆمار کراون و ئامادەن</span>
+          </div>
 
-            {/* 🌟 PROMINENT EXPANSIVE iOS SEARCH BAR (سێرچی گەورە) */}
-            <div className="space-y-3">
-              <div className="relative flex items-center bg-white/10 hover:bg-white/15 focus-within:bg-white/15 border border-white/20 focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-500/20 rounded-2xl px-4 py-3.5 shadow-xl transition-all">
-                <Search className="w-5 h-5 text-indigo-300 flex-shrink-0 ml-2.5" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="ناوی مۆدێل، کۆدی کاڵا، یان ناوی پۆلێن لێرە بنووسە..."
-                  className="w-full text-sm font-bold text-white bg-transparent outline-none placeholder:text-slate-400"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="text-xs bg-white/20 hover:bg-white/30 text-white rounded-full w-5 h-5 flex items-center justify-center"
-                  >
-                    ✕
-                  </button>
+        </div>
+
+      </main>
+
+      {/* 🌟 FOOTER */}
+      <footer className="w-full max-w-5xl mx-auto px-4 py-4 text-center text-xs font-bold text-slate-400">
+        ASHLEY ENTERPRISE ERP SYSTEM © 2026 — هەموو مافەکان پارێزراون
+      </footer>
+
+      {/* ========================================================================= */}
+      {/* 🎥 AI FACE RECOGNITION CAMERA MODAL OVERLAY */}
+      {/* ========================================================================= */}
+      {cameraActive && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Camera className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-black">
+                  {activeFaceAction === 'Check In' ? '📥 چێک‌ئین بە ڕوخسار (Check In)' : '📤 چێک‌ئاوت بە ڕوخسار (Check Out)'}
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={toggleCameraFacing}
+                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold"
+                  title="گۆڕینی کامێرای پێشەوە/پشتەوە"
+                >
+                  <SwitchCamera className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Camera Viewport with Biometric Oval HUD */}
+            <div className="relative aspect-[3/4] bg-black flex items-center justify-center overflow-hidden">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover transform scale-x-[-1]"
+              />
+              <canvas ref={canvasRef} className="hidden" />
+
+              {/* 🟢 Apple Biometric Scanning Oval Guide HUD */}
+              <div
+                className={`absolute w-52 h-72 rounded-[50%] border-4 transition-all duration-300 pointer-events-none flex flex-col items-center justify-between py-4 ${
+                  faceScanSuccess === true
+                    ? 'border-emerald-500 shadow-[0_0_40px_rgba(16,185,129,0.8)] bg-emerald-500/10'
+                    : faceScanSuccess === false
+                    ? 'border-rose-500 shadow-[0_0_40px_rgba(244,63,94,0.8)] bg-rose-500/10'
+                    : faceInsideOval
+                    ? 'border-emerald-400 shadow-[0_0_30px_rgba(52,211,153,0.6)] animate-pulse'
+                    : 'border-dashed border-white/70 shadow-[0_0_20px_rgba(255,255,255,0.3)]'
+                }`}
+              >
+                <span className="text-[11px] font-black text-white px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md">
+                  {faceInsideOval ? '🟢 ڕوخسار لە ناو بازنەیە' : 'ڕوخسارت لێرە دابنێ'}
+                </span>
+
+                {faceScanSuccess === true && (
+                  <CheckCircle2 className="w-12 h-12 text-emerald-400 animate-bounce" />
                 )}
-              </div>
 
-              {/* iOS Category Filter Pills */}
-              <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                <span className="text-slate-400 font-bold ml-1 text-[11px]">پۆلێن:</span>
-                {['all', 'نەخشەی رەفە', 'مۆدێلی ئاشڵی', 'مەواد', 'کاڵای فرۆشراو'].map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setSelectedCategoryFilter(cat)}
-                    className={`px-3 py-1 text-[11px] font-black rounded-full border transition-all ${
-                      selectedCategoryFilter === cat
-                        ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
-                        : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15'
-                    }`}
-                  >
-                    {cat === 'all' ? 'تێکڕا' : cat}
-                  </button>
-                ))}
+                {faceScanSuccess === false && (
+                  <UserX className="w-12 h-12 text-rose-400 animate-pulse" />
+                )}
+
+                <span className="text-[10px] font-black text-white/90 bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-md">
+                  {activeFaceAction === 'Check In' ? 'چێک‌ئین' : 'چێک‌ئاوت'}
+                </span>
               </div>
             </div>
 
-            {/* Results Header & Export Tools */}
-            <div className="flex flex-wrap items-center justify-between gap-2 bg-white/5 p-2.5 rounded-2xl border border-white/10">
-              <h3 className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                <span>ئەنجامەکان ({filteredItems.length} دانە):</span>
-              </h3>
-
-              <div className="flex items-center gap-1.5 print:hidden">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="text-[11px] font-bold py-1 px-2.5 bg-white/10 hover:bg-white/20 border border-white/15 rounded-xl text-slate-200 transition-all"
-                  title="پرێنتکردنی لیست"
-                >
-                  🖨️ پرێنت
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const tableContainer = document.getElementById('home-model-catalog-table-wrapper');
-                    const printDate = format(new Date(), 'yyyy-MM-dd');
-                    const printTime = format(new Date(), 'HH:mm:ss');
-                    const filename = `Ashley_Models_Catalog_${printDate}.pdf`;
-
-                    if (!tableContainer) {
-                      window.print();
-                      return;
-                    }
-
-                    try {
-                      const html2canvas = (await import('html2canvas')).default;
-                      const jsPDF = (await import('jspdf')).default;
-
-                      const canvas = await html2canvas(tableContainer, {
-                        scale: 2,
-                        useCORS: true,
-                        logging: false,
-                        backgroundColor: '#0f172a'
-                      });
-
-                      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-                      const pdf = new jsPDF('portrait', 'mm', 'a4');
-                      const pdfWidth = pdf.internal.pageSize.getWidth();
-                      const pdfHeight = pdf.internal.pageSize.getHeight();
-
-                      pdf.setFontSize(10);
-                      pdf.setTextColor(15, 23, 42);
-                      pdf.text(`ASHLEY ERP - Catalog: Warehouse Models & Inventory`, 10, 8);
-                      pdf.text(`Print Date: ${printDate} | Print Time: ${printTime}`, pdfWidth - 90, 8);
-
-                      const imgWidth = pdfWidth - 20;
-                      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-                      pdf.addImage(imgData, 'JPEG', 10, 12, imgWidth, Math.min(imgHeight, pdfHeight - 20));
-                      pdf.save(filename);
-                    } catch (err) {
-                      console.error('PDF export fallback:', err);
-                      window.print();
-                    }
-                  }}
-                  className="text-[11px] font-bold py-1 px-2.5 bg-rose-600/80 hover:bg-rose-600 border border-rose-400/30 rounded-xl text-white transition-all"
-                  title="داگرتنی PDF"
-                >
-                  📄 داگرتنی PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const printDate = format(new Date(), 'yyyy-MM-dd');
-                    const printTime = format(new Date(), 'HH:mm:ss');
-                    let csvContent = `\uFEFFناوی لیست: کەتەلۆگ و لیستی مۆدێلەکانی کۆگا, بەرواری پرێنت: ${printDate}, کاتی پرێنت: ${printTime}\n\n`;
-                    csvContent += 'کۆدی مۆدێل,ناوی کاڵا,پۆلێن,دۆخ,بڕی ئیستۆک\n';
-                    filteredItems.forEach(item => {
-                      csvContent += `"${item.model || 'MODEL'}","${item.name || 'مۆدێل'}","${item.classification || 'کۆگا'}","${item.modelCondition || 'بەردەست'}","${item.quantity ?? 1}"\n`;
-                    });
-                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.setAttribute('download', `Ashley_Models_Catalog_${printDate}.csv`);
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                  }}
-                  className="text-[11px] font-bold py-1 px-2.5 bg-blue-600/80 hover:bg-blue-600 border border-blue-400/30 rounded-xl text-white transition-all"
-                  title="داگرتنی CSV"
-                >
-                  📊 داگرتنی CSV
-                </button>
-              </div>
-            </div>
-
-            {/* Model Catalog Table Wrapper */}
-            <div id="home-model-catalog-table-wrapper" className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/60 max-h-[380px] overflow-y-auto">
-              <table className="w-full text-right text-xs">
-                <thead className="bg-white/5 border-b border-white/10 text-slate-300 font-black sticky top-0 backdrop-blur-md">
-                  <tr>
-                    <th className="py-2.5 px-3">کۆدی مۆدێل</th>
-                    <th className="py-2.5 px-3">ناوی کاڵا</th>
-                    <th className="py-2.5 px-3">پۆلێن</th>
-                    <th className="py-2.5 px-3">دۆخ</th>
-                    <th className="py-2.5 px-3">ئیستۆک</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {filteredItems.length > 0 ? (
-                    filteredItems.map((item) => (
-                      <tr key={item.id} className="hover:bg-white/5 transition-colors">
-                        <td className="py-2.5 px-3 font-mono font-black text-indigo-300">{item.model || 'MODEL-01'}</td>
-                        <td className="py-2.5 px-3 font-bold text-white">{item.name || 'مۆدێلی ئاشڵی'}</td>
-                        <td className="py-2.5 px-3 text-[11px] text-slate-400">{item.classification || 'کۆگا'}</td>
-                        <td className="py-2.5 px-3">
-                          <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-black">
-                            {item.modelCondition || 'بەردەستە'}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 font-mono font-black text-amber-300">{item.quantity ?? 1} دانە</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="text-center py-8 text-slate-400 font-bold">
-                        هیچ مۆدێلێک بەم گەڕانە نەدۆزرایەوە
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-white/5 text-slate-300 font-bold border-t border-white/10">
-                    <td colSpan={2} className="py-2.5 px-3">کۆی گشتی کاڵا دۆزراوەکان:</td>
-                    <td colSpan={3} className="py-2.5 px-3 font-mono text-left">{filteredItems.length} Item(s) Cataloged</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            {/* iOS Quick Action Tiles */}
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <Link
-                href="/items"
-                className="py-3 px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-white transition-all hover:scale-[1.02] active:scale-95"
+            {/* Status Message Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 text-center space-y-2">
+              <p
+                className={`text-xs font-black transition-colors ${
+                  faceScanSuccess === true
+                    ? 'text-emerald-700 text-sm'
+                    : faceScanSuccess === false
+                    ? 'text-rose-700'
+                    : 'text-slate-800'
+                }`}
               >
-                <Package className="w-4 h-4 text-emerald-400" />
-                <span>کاتالۆگی تەواوی کۆگا</span>
-              </Link>
-
-              <Link
-                href="/warehouse-map"
-                className="py-3 px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-white transition-all hover:scale-[1.02] active:scale-95"
+                {faceScanMessage || 'سەیری کامێرا بکە...'}
+              </p>
+              
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl"
               >
-                <Layers className="w-4 h-4 text-indigo-400" />
-                <span>نەخشەی رەفەکانی کۆگا</span>
-              </Link>
+                پاشگەزبوونەوە و داخستن
+              </button>
             </div>
 
           </div>
-        </section>
-
-        {/* Sync Button */}
-        {typeof window !== 'undefined' && localStorage.getItem('ashley_pending_checkins') && JSON.parse(localStorage.getItem('ashley_pending_checkins') || '[]').length > 0 && (
-          <button 
-             onClick={processPendingMobileQueue}
-             className="w-full mt-4 bg-orange-100 border border-orange-300 text-orange-700 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm animate-pulse"
-          >
-             <Clock className="w-5 h-5" />
-             ناردنی چێک ئینە هەڵگیراوەکان بۆ سێرڤەر ({JSON.parse(localStorage.getItem('ashley_pending_checkins') || '[]').length})
-          </button>
-        )}
-
-      </div>
+        </div>
+      )}
 
     </div>
   );

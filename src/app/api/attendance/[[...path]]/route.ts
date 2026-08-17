@@ -893,67 +893,63 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
-    // Company Geofence Location Sync (Global across all devices)
+    // GET /api/attendance/location (Multi-Location Support)
     // ----------------------------------------
     if (pathStr === 'location' && method === 'GET') {
-      // 1. Try to get main designated factory warehouse
-      let { data: wh } = await supabase
-        .from('warehouses')
-        .select('*')
-        .eq('id', 'main-company-location')
-        .maybeSingle();
-
-      // 2. Fallback to any warehouse
-      if (!wh) {
-        const { data: firstWh } = await supabase
-          .from('warehouses')
-          .select('*')
-          .limit(1)
-          .maybeSingle();
-        wh = firstWh;
-      }
-
       const noCacheHeaders = {
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
         'CDN-Cache-Control': 'no-store',
         'Vercel-CDN-Cache-Control': 'no-store',
       };
 
-      if (wh && wh.lat && wh.lng) {
-        return NextResponse.json(
-          {
-            name: wh.name || 'کۆمپانیای سەرەکی ئاشڵی',
-            lat: parseFloat(wh.lat) || 35.5571,
-            lng: parseFloat(wh.lng) || 45.4352,
-            radiusMeters: parseInt(wh.radius) || 50,
-          },
-          { headers: noCacheHeaders }
-        );
-      }
+      const { data: allWarehouses } = await supabase
+        .from('warehouses')
+        .select('*')
+        .neq('id', 'ashley_face_registry');
+
+      const locations = (allWarehouses || [])
+        .filter((wh: any) => wh.lat && wh.lng)
+        .map((wh: any) => ({
+          id: wh.id,
+          name: wh.name || 'لقی کۆمپانیا',
+          lat: parseFloat(wh.lat),
+          lng: parseFloat(wh.lng),
+          radiusMeters: parseInt(wh.radius) || 50,
+        }));
+
+      const primary = locations.find((l: any) => l.id === 'main-company-location') || locations[0] || {
+        id: 'main-company-location',
+        name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
+        lat: 35.5571,
+        lng: 45.4352,
+        radiusMeters: 50,
+      };
 
       return NextResponse.json(
         {
-          name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Company Base)',
-          lat: 35.5571,
-          lng: 45.4352,
-          radiusMeters: 50,
+          success: true,
+          locations: locations.length > 0 ? locations : [primary],
+          name: primary.name,
+          lat: primary.lat,
+          lng: primary.lng,
+          radiusMeters: primary.radiusMeters,
         },
         { headers: noCacheHeaders }
       );
     }
 
     if (pathStr === 'location' && method === 'POST') {
-      const { name, lat, lng, radiusMeters } = await req.json();
+      const { id, name, lat, lng, radiusMeters } = await req.json();
       if (!lat || !lng) return NextResponse.json({ error: 'lat and lng required' }, { status: 400 });
 
+      const locationId = id || `loc-${Date.now().toString().slice(-6)}`;
       const parsedLat = parseFloat(lat);
       const parsedLng = parseFloat(lng);
       const parsedRadius = parseInt(radiusMeters) || 50;
-      const parsedName = name || 'کۆمپانیای سەرەکی ئاشڵی';
+      const parsedName = name || 'لقی کۆمپانیا';
 
-      // Upsert designated warehouse
       const { error: upsertErr } = await supabase.from('warehouses').upsert({
-        id: 'main-company-location',
+        id: locationId,
         name: parsedName,
         lat: parsedLat,
         lng: parsedLng,
@@ -962,14 +958,8 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       });
 
       if (upsertErr) {
-        console.error('Error upserting main warehouse location:', upsertErr);
-        // Fallback update all existing rows
-        await supabase.from('warehouses').update({
-          name: parsedName,
-          lat: parsedLat,
-          lng: parsedLng,
-          radius: parsedRadius,
-        }).neq('id', '___none___');
+        console.error('Error upserting location:', upsertErr);
+        return NextResponse.json({ error: upsertErr.message }, { status: 500 });
       }
 
       const noCacheHeaders = {
@@ -979,7 +969,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       return NextResponse.json(
         {
           success: true,
-          location: { name: parsedName, lat: parsedLat, lng: parsedLng, radiusMeters: parsedRadius },
+          location: { id: locationId, name: parsedName, lat: parsedLat, lng: parsedLng, radiusMeters: parsedRadius },
         },
         { headers: noCacheHeaders }
       );
