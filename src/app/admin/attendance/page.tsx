@@ -62,7 +62,7 @@ export default function AdminAttendancePage() {
     if (typeof window !== 'undefined') {
       const stored = sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session');
       if (!stored) {
-        window.location.href = '/login';
+        window.location.href = '/adminpanel';
       }
     }
 
@@ -74,7 +74,7 @@ export default function AdminAttendancePage() {
         if (typeof window !== 'undefined') {
           localStorage.removeItem('ashley_admin_session');
           sessionStorage.removeItem('ashley_admin_session');
-          window.location.href = '/login';
+          window.location.href = '/adminpanel';
         }
       }, 30 * 60 * 1000);
     };

@@ -55,12 +55,12 @@ export default function AdminPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
-  // Security Auth Guard: Redirect unauthenticated users immediately to /login
+  // Security Auth Guard: Redirect unauthenticated users immediately to /adminpanel
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const stored = sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session');
       if (!stored && !user && !authLoading) {
-        router.replace('/login');
+        router.replace('/adminpanel');
       } else {
         setAuthChecked(true);
       }
@@ -81,7 +81,7 @@ export default function AdminPage() {
           localStorage.removeItem('ashley_admin_session');
           sessionStorage.removeItem('ashley_admin_session');
         }
-        router.replace('/login');
+        router.replace('/adminpanel');
       }, 30 * 60 * 1000);
     };
 
@@ -425,7 +425,7 @@ export default function AdminPage() {
             onClick={async () => {
               if (confirm('ئایا دڵنیایت لە دەرچوون لە ئەکاونتی ئەدمین؟')) {
                 await logout();
-                router.replace('/login');
+                router.replace('/adminpanel');
               }
             }}
             className="btn-classic-danger py-1 px-2.5 text-xs font-black flex items-center gap-1 cursor-pointer"
