@@ -370,9 +370,9 @@ export default function PublicTerminalLightPage() {
       setIsFaceScanning(true);
 
       try {
-        const liveDescriptor = await extractFaceDescriptor(videoRef.current);
+        const liveResult = await extractFaceDescriptor(videoRef.current);
 
-        if (!liveDescriptor) {
+        if (!liveResult || !liveResult.descriptor) {
           setFaceInsideOval(false);
           setFaceScanMessage('سەیری ناو بازنەکە بکە...');
           isProcessingScanRef.current = false;
@@ -385,15 +385,23 @@ export default function PublicTerminalLightPage() {
         setFaceScanMessage('ڕوخسار لەناو بازنەیە... پشکنینی ناسینەوە');
 
         // Match against database
-        const matchResult = matchFaceDescriptors(liveDescriptor, registeredFacesList, 0.58);
+        let matchedEmp: { id: string; name: string } | null = null;
+        for (const registeredUser of registeredFacesList) {
+          if (registeredUser.descriptor && registeredUser.descriptor.length > 0) {
+            const match = matchFaceDescriptors(liveResult.descriptor, registeredUser.descriptor, 0.58);
+            if (match.isMatch) {
+              matchedEmp = registeredUser;
+              break;
+            }
+          }
+        }
 
-        if (matchResult && matchResult.employee) {
-          const emp = matchResult.employee;
+        if (matchedEmp) {
           setFaceScanSuccess(true);
-          setFaceScanMessage(`سەرکەوتوو بوو! بەخێربێیت ${emp.name}`);
+          setFaceScanMessage(`سەرکەوتوو بوو! بەخێربێیت ${matchedEmp.name}`);
 
           // Save Attendance
-          await saveAttendanceLog(emp.id, emp.name, activeFaceAction);
+          await saveAttendanceLog(matchedEmp.id, matchedEmp.name, activeFaceAction);
 
           // Close modal smoothly after 2.5s
           setTimeout(() => {
