@@ -15,9 +15,15 @@ import {
   Search, 
   Calendar,
   Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  UserX,
+  DollarSign,
+  Coffee,
+  Eye,
+  Info,
+  CalendarDays
 } from 'lucide-react';
-import { getDaysInMonth, format } from 'date-fns';
+import { getDaysInMonth, format, getDay } from 'date-fns';
 
 interface AttendanceAnalyticsReportProps {
   attendanceLogs: AttendanceRecord[];
@@ -30,13 +36,28 @@ export function AttendanceAnalyticsReport({
   employees,
   selectedMonth,
 }: AttendanceAnalyticsReportProps) {
-  // Working Hours (Default: 08:00 to 17:00)
+  // Working Hours & Rates (Admin Configurable)
   const [shiftStartTime, setShiftStartTime] = useState<string>('08:00');
   const [shiftEndTime, setShiftEndTime] = useState<string>('17:00');
-  
+  const [hourlyRate, setHourlyRate] = useState<number>(5000); // 5,000 IQD per overtime hour
+  const [lateDeductionRate, setLateDeductionRate] = useState<number>(5000); // 5,000 IQD per late hour
+  const [applyLateDeduction, setApplyLateDeduction] = useState<boolean>(false);
+
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [filterType, setFilterType] = useState<'all' | 'late' | 'overtime' | 'overtime30'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'late' | 'overtime' | 'absent' | 'overtime30'>('all');
+
+  // Employee Off-Days / Excused Leaves State per month (e.g. { "empId_2026-08-15": true })
+  const [employeeLeaves, setEmployeeLeaves] = useState<Record<string, { type: 'off' | 'excused' | 'sick'; note?: string }>>(() => {
+    try {
+      const saved = localStorage.getItem(`ashley_leaves_${selectedMonth}`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {};
+  });
+
+  // Selected Employee for Daily First-In / Last-Out Logs Drawer Modal
+  const [activeEmpDrawer, setActiveEmpDrawer] = useState<any | null>(null);
 
   // Overtime Admin Notes stored locally / DB
   const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
@@ -44,13 +65,19 @@ export function AttendanceAnalyticsReport({
   const [tempNoteText, setTempNoteText] = useState<string>('');
   const [savingNote, setSavingNote] = useState(false);
 
-  // Load saved admin notes
+  // Off Day / Leave Editor Modal
+  const [leaveModalEmp, setLeaveModalEmp] = useState<Employee | null>(null);
+  const [leaveDate, setLeaveDate] = useState<string>(() => `${selectedMonth}-01`);
+  const [leaveType, setLeaveType] = useState<'off' | 'excused' | 'sick'>('off');
+  const [leaveNote, setLeaveNote] = useState<string>('');
+
+  // Load saved admin notes & leaves
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(`ashley_ot_notes_${selectedMonth}`);
-      if (saved) {
-        setAdminNotes(JSON.parse(saved));
-      }
+      const savedNotes = localStorage.getItem(`ashley_ot_notes_${selectedMonth}`);
+      if (savedNotes) setAdminNotes(JSON.parse(savedNotes));
+      const savedLeaves = localStorage.getItem(`ashley_leaves_${selectedMonth}`);
+      if (savedLeaves) setEmployeeLeaves(JSON.parse(savedLeaves));
     } catch {}
   }, [selectedMonth]);
 
@@ -63,7 +90,6 @@ export function AttendanceAnalyticsReport({
       localStorage.setItem(`ashley_ot_notes_${selectedMonth}`, JSON.stringify(updated));
     }
     
-    // Also try to persist to settings API
     try {
       await fetch('/api/attendance/admin/overtime-notes', {
         method: 'POST',
@@ -78,6 +104,32 @@ export function AttendanceAnalyticsReport({
 
     setEditingNoteKey(null);
     setSavingNote(false);
+  };
+
+  // Save Leave / Off Day for employee
+  const handleSaveLeave = () => {
+    if (!leaveModalEmp) return;
+    const key = `${leaveModalEmp.id}_${leaveDate}`;
+    const updated = {
+      ...employeeLeaves,
+      [key]: { type: leaveType, note: leaveNote.trim() },
+    };
+    setEmployeeLeaves(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`ashley_leaves_${selectedMonth}`, JSON.stringify(updated));
+    }
+    alert(`🎉 ڕۆژی پشوو/مۆڵەت بۆ (${leaveModalEmp.fullName3Part || leaveModalEmp.name}) تۆمارکرا!`);
+    setLeaveModalEmp(null);
+    setLeaveNote('');
+  };
+
+  const handleRemoveLeave = (key: string) => {
+    const updated = { ...employeeLeaves };
+    delete updated[key];
+    setEmployeeLeaves(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`ashley_leaves_${selectedMonth}`, JSON.stringify(updated));
+    }
   };
 
   // Convert time "HH:MM" to total minutes from midnight
@@ -97,7 +149,7 @@ export function AttendanceAnalyticsReport({
     const hours = Math.floor(totalMinutes / 60);
     const mins = totalMinutes % 60;
     if (hours > 0 && mins > 0) {
-      return `${hours} کاتژمێر و ${mins} خولەک`;
+      return `${hours} ک و ${mins} خ`;
     }
     if (hours > 0) {
       return `${hours} کاتژمێر`;
@@ -121,34 +173,54 @@ export function AttendanceAnalyticsReport({
     return employees.filter(e => e.status !== 'resigned' && e.isActive !== false);
   }, [employees]);
 
+  // Days in month calculation
+  const [yearStr, monthStr] = selectedMonth.split('-');
+  const year = parseInt(yearStr || '2026', 10);
+  const month = parseInt(monthStr || '08', 10);
+  const totalDaysInMonth = getDaysInMonth(new Date(year, month - 1, 1));
+
   // Compute detailed analytics for each employee
   const employeeAnalytics = useMemo(() => {
-    const [yearStr, monthStr] = selectedMonth.split('-');
-    const year = parseInt(yearStr || '2026', 10);
-    const month = parseInt(monthStr || '08', 10);
-    const totalDays = getDaysInMonth(new Date(year, month - 1, 1));
-
     return activeEmployees.map(emp => {
       let daysPresent = 0;
       let totalLateMinutes = 0;
       let totalOvertimeMinutes = 0;
+      let totalWorkedMinutes = 0;
       let lateDaysCount = 0;
       let overtimeDaysCount = 0;
       let overtime30DaysCount = 0;
+      let officialOffDaysCount = 0;
+      let absentDaysCount = 0;
+
       const dailyDetails: Array<{
         date: string;
         dayNum: number;
+        dayOfWeek: string;
+        isFriday: boolean;
+        isOffDay: boolean;
+        leaveInfo?: { type: string; note?: string };
         checkInTime: string | null;
         checkOutTime: string | null;
+        workedMinutes: number;
         lateMinutes: number;
         overtimeMinutes: number;
         isOvertime30: boolean;
         noteKey: string;
       }> = [];
 
-      for (let d = 1; d <= totalDays; d++) {
+      for (let d = 1; d <= totalDaysInMonth; d++) {
         const dayStr = d.toString().padStart(2, '0');
         const targetDate = `${selectedMonth}-${dayStr}`;
+        const dateObj = new Date(year, month - 1, d);
+        const dayOfWeekIndex = getDay(dateObj); // 5 is Friday
+        const isFriday = dayOfWeekIndex === 5;
+        const leaveKey = `${emp.id}_${targetDate}`;
+        const customLeave = employeeLeaves[leaveKey];
+        const isOff = isFriday || !!customLeave;
+
+        if (isOff) {
+          officialOffDaysCount++;
+        }
 
         // Find check-in and check-out logs for this employee on this day
         const dayLogs = attendanceLogs.filter(log => {
@@ -177,8 +249,27 @@ export function AttendanceAnalyticsReport({
           ? (checkOutLog.time.includes(' ') ? checkOutLog.time.split(' ')[1] : checkOutLog.time)
           : (checkOutLog as any)?.checkOutTime || null;
 
-        if (checkInTimeStr || checkOutTimeStr) {
+        const isPresent = !!(checkInTimeStr || checkOutTimeStr);
+
+        if (isPresent) {
           daysPresent++;
+        } else if (!isOff) {
+          absentDaysCount++;
+        }
+
+        // Work Hours calculation
+        let dayWorkedMins = 0;
+        if (checkInTimeStr && checkOutTimeStr) {
+          const inM = timeToMinutes(checkInTimeStr);
+          const outM = timeToMinutes(checkOutTimeStr);
+          if (outM > inM) {
+            dayWorkedMins = outM - inM;
+            totalWorkedMinutes += dayWorkedMins;
+          }
+        } else if (checkInTimeStr && !checkOutTimeStr) {
+          // If only checked in, count default shift duration (e.g. 8 hours)
+          dayWorkedMins = Math.max(0, shiftEndMins - shiftStartMins);
+          totalWorkedMinutes += dayWorkedMins;
         }
 
         // Late calculation (Check In > Shift Start e.g. 08:00)
@@ -208,34 +299,56 @@ export function AttendanceAnalyticsReport({
           }
         }
 
-        if (checkInTimeStr || checkOutTimeStr) {
-          dailyDetails.push({
-            date: targetDate,
-            dayNum: d,
-            checkInTime: checkInTimeStr ? checkInTimeStr.slice(0, 5) : null,
-            checkOutTime: checkOutTimeStr ? checkOutTimeStr.slice(0, 5) : null,
-            lateMinutes: dayLateMins,
-            overtimeMinutes: dayOvertimeMins,
-            isOvertime30: isOt30,
-            noteKey: `${emp.id}_${targetDate}`,
-          });
-        }
+        dailyDetails.push({
+          date: targetDate,
+          dayNum: d,
+          dayOfWeek: format(dateObj, 'EEE'),
+          isFriday,
+          isOffDay: isOff,
+          leaveInfo: customLeave,
+          checkInTime: checkInTimeStr ? checkInTimeStr.slice(0, 5) : null,
+          checkOutTime: checkOutTimeStr ? checkOutTimeStr.slice(0, 5) : null,
+          workedMinutes: dayWorkedMins,
+          lateMinutes: dayLateMins,
+          overtimeMinutes: dayOvertimeMins,
+          isOvertime30: isOt30,
+          noteKey: `${emp.id}_${targetDate}`,
+        });
       }
+
+      // Overtime Financial Pay & Late Deduction
+      const overtimePayIQD = Math.round((totalOvertimeMinutes / 60) * hourlyRate);
+      const lateDeductionIQD = Math.round((totalLateMinutes / 60) * lateDeductionRate);
+
+      // Total expected working days in month (excluding fridays & leaves)
+      const expectedWorkingDays = Math.max(1, totalDaysInMonth - officialOffDaysCount);
+      const attendanceScore = Math.min(100, Math.round((daysPresent / expectedWorkingDays) * 100));
 
       return {
         employee: emp,
         daysPresent,
+        absentDaysCount,
+        officialOffDaysCount,
+        expectedWorkingDays,
+        totalWorkedMinutes,
         totalLateMinutes,
         totalOvertimeMinutes,
+        overtimePayIQD,
+        lateDeductionIQD,
         lateDaysCount,
         overtimeDaysCount,
         overtime30DaysCount,
+        attendanceScore,
         dailyDetails,
       };
     });
-  }, [activeEmployees, attendanceLogs, selectedMonth, shiftStartMins, shiftEndMins]);
+  }, [activeEmployees, attendanceLogs, selectedMonth, shiftStartMins, shiftEndMins, hourlyRate, lateDeductionRate, totalDaysInMonth, year, month, employeeLeaves]);
 
   // Overall KPI aggregates
+  const totalCompanyWorkedHours = useMemo(() => {
+    return employeeAnalytics.reduce((acc, curr) => acc + curr.totalWorkedMinutes, 0) / 60;
+  }, [employeeAnalytics]);
+
   const totalCompanyLateMins = useMemo(() => {
     return employeeAnalytics.reduce((acc, curr) => acc + curr.totalLateMinutes, 0);
   }, [employeeAnalytics]);
@@ -244,8 +357,12 @@ export function AttendanceAnalyticsReport({
     return employeeAnalytics.reduce((acc, curr) => acc + curr.totalOvertimeMinutes, 0);
   }, [employeeAnalytics]);
 
-  const totalCompanyOvertime30Count = useMemo(() => {
-    return employeeAnalytics.reduce((acc, curr) => acc + curr.overtime30DaysCount, 0);
+  const totalCompanyOvertimePay = useMemo(() => {
+    return employeeAnalytics.reduce((acc, curr) => acc + curr.overtimePayIQD, 0);
+  }, [employeeAnalytics]);
+
+  const totalCompanyAbsentDays = useMemo(() => {
+    return employeeAnalytics.reduce((acc, curr) => acc + curr.absentDaysCount, 0);
   }, [employeeAnalytics]);
 
   // Filtered rows
@@ -261,6 +378,7 @@ export function AttendanceAnalyticsReport({
 
       if (filterType === 'late' && item.totalLateMinutes <= 0) return false;
       if (filterType === 'overtime' && item.totalOvertimeMinutes <= 0) return false;
+      if (filterType === 'absent' && item.absentDaysCount <= 0) return false;
       if (filterType === 'overtime30' && item.overtime30DaysCount <= 0) return false;
 
       return true;
@@ -269,26 +387,25 @@ export function AttendanceAnalyticsReport({
 
   // Export CSV
   const handleExportCSV = () => {
-    const headers = 'کۆدی کارمەند,ناوی کارمەند,پۆست,ڕۆژانی ئامادەبوون,کۆی دواکەوتن (خولەک),کۆی دواکەوتن (کاتژمێر),کۆی ئیزافە (خولەک),کۆی ئیزافە (کاتژمێر),ڕۆژانی ئیزافەی سەروو ۳۰ خولەک,تێبینی ئەدمین\n';
+    const headers = 'کۆدی کارمەند,ناوی کارمەند,پۆست,ڕۆژانی ئامادەبوون,ڕۆژانی غیاب,ڕۆژانی پشوو,کۆی کاتژمێری ئیشکراو,کۆی دواکەوتن (خولەک),کۆی دواکەوتن (دیجیتاڵ),کۆی ئیزافە (خولەک),کۆی ئیزافە (دیجیتاڵ),شایستەی پارەی ئیزافە (IQD),لێبڕینی دواکەوتن (IQD),ڕێژەی پابەندبوون,تێبینیەکانی ئیزافەی ئەدمین\n';
     const rows = filteredRows.map(r => {
       const notes = r.dailyDetails
         .filter(d => d.isOvertime30 && adminNotes[d.noteKey])
         .map(d => `${d.date}: ${adminNotes[d.noteKey]}`)
         .join(' | ');
 
-      return `"${r.employee.employeeId || r.employee.id}","${r.employee.fullName3Part || r.employee.name}","${r.employee.role || '-'}","${r.daysPresent}","${r.totalLateMinutes}","${formatMinutesDigital(r.totalLateMinutes)}","${r.totalOvertimeMinutes}","${formatMinutesDigital(r.totalOvertimeMinutes)}","${r.overtime30DaysCount}","${notes}"`;
+      return `"${r.employee.employeeId || r.employee.id}","${r.employee.fullName3Part || r.employee.name}","${r.employee.role || '-'}","${r.daysPresent}","${r.absentDaysCount}","${r.officialOffDaysCount}","${(r.totalWorkedMinutes / 60).toFixed(1)}","${r.totalLateMinutes}","${formatMinutesDigital(r.totalLateMinutes)}","${r.totalOvertimeMinutes}","${formatMinutesDigital(r.totalOvertimeMinutes)}","${r.overtimePayIQD}","${r.lateDeductionIQD}","${r.attendanceScore}%","${notes}"`;
     }).join('\n');
 
     const blob = new Blob(['\uFEFF' + headers + rows], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.setAttribute('download', `ashley-attendance-analytics-${selectedMonth}.csv`);
+    link.setAttribute('download', `ashley-comprehensive-hr-analytics-${selectedMonth}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // Print Report
   const handlePrint = () => {
     window.print();
   };
@@ -296,7 +413,7 @@ export function AttendanceAnalyticsReport({
   return (
     <div className="space-y-4 pt-6 border-t-2 border-slate-300 font-sans dir-rtl text-slate-900" dir="rtl">
       
-      {/* 📊 SECTION HEADER BANNER */}
+      {/* 📊 SECTION HEADER BANNER WITH CONFIG CONTROLS */}
       <div className="panel-classic p-3 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex flex-wrap items-center justify-between gap-3 shadow-md rounded-lg">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-lg bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
@@ -304,112 +421,144 @@ export function AttendanceAnalyticsReport({
           </div>
           <div>
             <h2 className="text-sm font-black tracking-wide flex items-center gap-2">
-              <span>لیستی ئامار و ڕاپۆرتی کاتەکانی کارمەندان (Statistics & HR Analytics)</span>
+              <span>لیستی ئامار و ڕاپۆرتی کاتەکان (HR Analytics & Overtime Report)</span>
               <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/30 border border-indigo-400/40 text-indigo-200 font-mono">
                 {selectedMonth}
               </span>
             </h2>
             <p className="text-[11px] text-slate-300 font-bold mt-0.5">
-              ئاماری دواکەوتنی هاتن (دوای 08:00) و کاتی ئیزافەی دەرچوون (دوای 17:00) لەگەڵ تێبینی ئەدمین بۆ ئیزافەی سەروو ٣٠ خولەک
+              ئاماری تەواوی کاتژمێری ئیشکراو، دواکەوتن، ئیزافە، غیابات، پارەی ئیزافە و تێبینی ڕەزامەندیی ئەدمین
             </p>
           </div>
         </div>
 
-        {/* Quick Shift Working Hours Adjuster */}
-        <div className="flex items-center gap-3 text-xs bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
-          <span className="text-slate-300 font-bold flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-indigo-400" /> کاتی فەرمی دەوام:
-          </span>
-          <div className="flex items-center gap-1 font-mono font-bold" dir="ltr">
+        {/* Dynamic Shift & Overtime Pay Settings */}
+        <div className="flex flex-wrap items-center gap-3 text-xs bg-slate-800/90 px-3 py-1.5 rounded-lg border border-slate-700">
+          <div className="flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="text-slate-300 font-bold">کاتی دەوام:</span>
+            <div className="flex items-center gap-1 font-mono font-bold" dir="ltr">
+              <input
+                type="time"
+                value={shiftStartTime}
+                onChange={(e) => setShiftStartTime(e.target.value)}
+                className="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-white text-xs font-bold text-center"
+              />
+              <span className="text-slate-400">تا</span>
+              <input
+                type="time"
+                value={shiftEndTime}
+                onChange={(e) => setShiftEndTime(e.target.value)}
+                className="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-white text-xs font-bold text-center"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 border-r border-slate-700 pr-2">
+            <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-slate-300 font-bold">نرخی ئیزافە/ک:</span>
             <input
-              type="time"
-              value={shiftStartTime}
-              onChange={(e) => setShiftStartTime(e.target.value)}
-              className="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-white text-xs font-bold text-center"
+              type="number"
+              step="500"
+              value={hourlyRate}
+              onChange={(e) => setHourlyRate(parseInt(e.target.value, 10) || 5000)}
+              className="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-white text-xs font-mono font-bold w-20 text-center"
             />
-            <span className="text-slate-400">بۆ</span>
-            <input
-              type="time"
-              value={shiftEndTime}
-              onChange={(e) => setShiftEndTime(e.target.value)}
-              className="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-white text-xs font-bold text-center"
-            />
+            <span className="text-[10px] text-slate-400">IQD</span>
           </div>
         </div>
       </div>
 
-      {/* 🌟 FOUR SUMMARY KPI STAT CARDS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* 🌟 5 SUMMARY KPI STAT CARDS */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5">
         
-        {/* Total Late Time */}
-        <div className="p-3.5 rounded-xl border-2 border-rose-300 bg-rose-50/80 shadow-sm flex items-center justify-between">
+        {/* Total Worked Hours */}
+        <div className="p-3 rounded-xl border-2 border-blue-300 bg-blue-50/80 shadow-sm flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[11px] font-extrabold text-rose-800 uppercase flex items-center gap-1">
+            <span className="text-[10px] font-extrabold text-blue-900 uppercase flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-blue-700" /> کۆی کاتژمێری کارکردن
+            </span>
+            <div className="text-base font-black font-mono text-blue-950">
+              {totalCompanyWorkedHours.toFixed(1)} <span className="text-xs font-bold">کاتژمێر</span>
+            </div>
+            <span className="text-[10px] text-blue-800 font-bold block">
+              تێکڕای دەوامی تەواوی ستاف
+            </span>
+          </div>
+          <div className="w-9 h-9 rounded-xl bg-blue-200/80 text-blue-900 flex items-center justify-center font-black">
+            💼
+          </div>
+        </div>
+
+        {/* Total Late Time */}
+        <div className="p-3 rounded-xl border-2 border-rose-300 bg-rose-50/80 shadow-sm flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-[10px] font-extrabold text-rose-800 uppercase flex items-center gap-1">
               <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> کۆی کاتی دواکەوتن
             </span>
-            <div className="text-lg font-black font-mono text-rose-950">
+            <div className="text-base font-black font-mono text-rose-950">
               {formatMinutesHuman(totalCompanyLateMins)}
             </div>
             <span className="text-[10px] text-rose-700 font-bold block">
               دیجیتاڵ: <span className="font-mono font-black">{formatMinutesDigital(totalCompanyLateMins)}</span> کاتژمێر
             </span>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-rose-200/80 text-rose-800 flex items-center justify-center font-black">
+          <div className="w-9 h-9 rounded-xl bg-rose-200/80 text-rose-800 flex items-center justify-center font-black">
             ⏰
           </div>
         </div>
 
-        {/* Total Overtime */}
-        <div className="p-3.5 rounded-xl border-2 border-emerald-300 bg-emerald-50/80 shadow-sm flex items-center justify-between">
+        {/* Total Overtime & Pay */}
+        <div className="p-3 rounded-xl border-2 border-emerald-300 bg-emerald-50/80 shadow-sm flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[11px] font-extrabold text-emerald-800 uppercase flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> کۆی کاتی ئیزافە
+            <span className="text-[10px] font-extrabold text-emerald-800 uppercase flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> کۆی ئیزافە و پارە
             </span>
-            <div className="text-lg font-black font-mono text-emerald-950">
+            <div className="text-base font-black font-mono text-emerald-950">
               {formatMinutesHuman(totalCompanyOvertimeMins)}
             </div>
-            <span className="text-[10px] text-emerald-700 font-bold block">
-              دیجیتاڵ: <span className="font-mono font-black">{formatMinutesDigital(totalCompanyOvertimeMins)}</span> کاتژمێر
+            <span className="text-[10px] text-emerald-800 font-bold block font-mono">
+              شایستە: <span className="font-black">{totalCompanyOvertimePay.toLocaleString()}</span> IQD
             </span>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-emerald-200/80 text-emerald-800 flex items-center justify-center font-black">
+          <div className="w-9 h-9 rounded-xl bg-emerald-200/80 text-emerald-800 flex items-center justify-center font-black">
             ⚡
           </div>
         </div>
 
-        {/* Overtime > 30 Mins Needing Admin Review */}
-        <div className="p-3.5 rounded-xl border-2 border-amber-300 bg-amber-50/80 shadow-sm flex items-center justify-between">
+        {/* Total Absent Days */}
+        <div className="p-3 rounded-xl border-2 border-red-300 bg-red-50/80 shadow-sm flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[11px] font-extrabold text-amber-900 uppercase flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-700" /> ئیزافەی سەروو ٣٠ خولەک
+            <span className="text-[10px] font-extrabold text-red-900 uppercase flex items-center gap-1">
+              <UserX className="w-3.5 h-3.5 text-red-700" /> کۆی ڕۆژانی غیاب
             </span>
-            <div className="text-lg font-black font-mono text-amber-950">
-              {totalCompanyOvertime30Count} <span className="text-xs font-bold text-amber-800">حاڵەت</span>
+            <div className="text-base font-black font-mono text-red-950">
+              {totalCompanyAbsentDays} <span className="text-xs font-bold">ڕۆژ</span>
             </div>
-            <span className="text-[10px] text-amber-800 font-bold block">
-              پێویستی بە تێبینی و ڕەزامەندیی ئەدمینە
+            <span className="text-[10px] text-red-800 font-bold block">
+              نەهاتنی بێ پشوو لە مانگدا
             </span>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-200/80 text-amber-800 flex items-center justify-center font-black">
-            📝
+          <div className="w-9 h-9 rounded-xl bg-red-200/80 text-red-800 flex items-center justify-center font-black">
+            ❌
           </div>
         </div>
 
-        {/* Active Staff Monitored */}
-        <div className="p-3.5 rounded-xl border-2 border-blue-300 bg-blue-50/80 shadow-sm flex items-center justify-between">
+        {/* Overtime > 30 Mins Needing Admin Review */}
+        <div className="p-3 rounded-xl border-2 border-amber-300 bg-amber-50/80 shadow-sm flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[11px] font-extrabold text-blue-900 uppercase flex items-center gap-1">
-              <UserCheck className="w-3.5 h-3.5 text-blue-700" /> کارمەندانی بەشداربوو
+            <span className="text-[10px] font-extrabold text-amber-900 uppercase flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-700" /> ئیزافەی &gt;٣٠ خولەک
             </span>
-            <div className="text-lg font-black font-mono text-blue-950">
-              {filteredRows.length} <span className="text-xs font-bold text-blue-800">کارمەند</span>
+            <div className="text-base font-black font-mono text-amber-950">
+              {employeeAnalytics.reduce((acc, curr) => acc + curr.overtime30DaysCount, 0)} <span className="text-xs font-bold">حاڵەت</span>
             </div>
-            <span className="text-[10px] text-blue-800 font-bold block">
-              لەم مانگەدا تۆماریان هەبووە
+            <span className="text-[10px] text-amber-800 font-bold block">
+              تێبینی و ڕەزامەندیی ئەدمین
             </span>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-blue-200/80 text-blue-800 flex items-center justify-center font-black">
-            👥
+          <div className="w-9 h-9 rounded-xl bg-amber-200/80 text-amber-800 flex items-center justify-center font-black">
+            📝
           </div>
         </div>
 
@@ -428,7 +577,7 @@ export function AttendanceAnalyticsReport({
               placeholder="گەڕان بەپێی ناوی کارمەند..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-classic pr-8 text-xs w-48 sm:w-60 font-bold"
+              className="input-classic pr-8 text-xs w-48 sm:w-56 font-bold"
             />
           </div>
 
@@ -436,7 +585,7 @@ export function AttendanceAnalyticsReport({
           <div className="flex items-center gap-1 bg-slate-200 p-0.5 rounded border border-slate-300 text-xs font-bold">
             <button
               onClick={() => setFilterType('all')}
-              className={`px-2.5 py-1 rounded transition-all ${
+              className={`px-2 py-1 rounded transition-all ${
                 filterType === 'all' ? 'bg-white text-slate-900 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -444,7 +593,7 @@ export function AttendanceAnalyticsReport({
             </button>
             <button
               onClick={() => setFilterType('late')}
-              className={`px-2.5 py-1 rounded transition-all ${
+              className={`px-2 py-1 rounded transition-all ${
                 filterType === 'late' ? 'bg-rose-600 text-white shadow-sm font-black' : 'text-rose-800 hover:bg-rose-100'
               }`}
             >
@@ -452,15 +601,23 @@ export function AttendanceAnalyticsReport({
             </button>
             <button
               onClick={() => setFilterType('overtime')}
-              className={`px-2.5 py-1 rounded transition-all ${
+              className={`px-2 py-1 rounded transition-all ${
                 filterType === 'overtime' ? 'bg-emerald-600 text-white shadow-sm font-black' : 'text-emerald-800 hover:bg-emerald-100'
               }`}
             >
               ئیزافەکان ({employeeAnalytics.filter(e => e.totalOvertimeMinutes > 0).length})
             </button>
             <button
+              onClick={() => setFilterType('absent')}
+              className={`px-2 py-1 rounded transition-all ${
+                filterType === 'absent' ? 'bg-red-600 text-white shadow-sm font-black' : 'text-red-800 hover:bg-red-100'
+              }`}
+            >
+              غیابات ({employeeAnalytics.filter(e => e.absentDaysCount > 0).length})
+            </button>
+            <button
               onClick={() => setFilterType('overtime30')}
-              className={`px-2.5 py-1 rounded transition-all ${
+              className={`px-2 py-1 rounded transition-all ${
                 filterType === 'overtime30' ? 'bg-amber-600 text-white shadow-sm font-black' : 'text-amber-800 hover:bg-amber-100'
               }`}
             >
@@ -490,29 +647,36 @@ export function AttendanceAnalyticsReport({
 
       </div>
 
-      {/* 📋 DETAILED ANALYTICS TABLE */}
+      {/* 📋 COMPREHENSIVE DETAILED ANALYTICS TABLE */}
       <div className="border border-slate-400 bg-white rounded-lg shadow-sm overflow-x-auto">
         <table className="w-full text-right text-xs border-collapse">
           <thead>
             <tr className="bg-slate-200 border-b-2 border-slate-400 text-slate-800 font-black">
-              <th className="p-2.5 border-l border-slate-300 text-center w-12">#</th>
+              <th className="p-2.5 border-l border-slate-300 text-center w-10">#</th>
               <th className="p-2.5 border-l border-slate-300">ناوی کارمەند و پۆست</th>
-              <th className="p-2.5 border-l border-slate-300 text-center">ڕۆژانی ئامادەبوون</th>
+              <th className="p-2.5 border-l border-slate-300 text-center">ڕۆژانی دەوام</th>
+              <th className="p-2.5 border-l border-slate-300 text-center bg-red-50 text-red-950">غیاب</th>
+              <th className="p-2.5 border-l border-slate-300 text-center bg-blue-50 text-blue-950">کاتی ئیشکراو</th>
               <th className="p-2.5 border-l border-slate-300 text-center bg-rose-100/70 text-rose-950">
-                کۆی کاتی دواکەوتن (Late)
+                کۆی دواکەوتن (Late)
               </th>
               <th className="p-2.5 border-l border-slate-300 text-center bg-emerald-100/70 text-emerald-950">
-                کۆی کاتی ئیزافە (Overtime)
+                کۆی ئیزافە (Overtime)
               </th>
+              <th className="p-2.5 border-l border-slate-300 text-center bg-emerald-50 text-emerald-950">
+                پارەی ئیزافە (IQD)
+              </th>
+              <th className="p-2.5 border-l border-slate-300 text-center">پابەندبوون</th>
               <th className="p-2.5 border-l border-slate-300 bg-amber-100/70 text-amber-950">
-                ئیزافەی سەروو ٣٠ خولەک و تێبینی ئەدمین
+                تێبینی ئیزافەی &gt;٣٠ خولەک
               </th>
+              <th className="p-2.5 text-center w-20">کردار</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-300 font-bold">
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-slate-500 font-bold text-xs bg-slate-50">
+                <td colSpan={11} className="p-8 text-center text-slate-500 font-bold text-xs bg-slate-50">
                   هیچ تۆمارێک بۆ ئەم فلتەرە نەدۆزرایەوە.
                 </td>
               </tr>
@@ -554,6 +718,24 @@ export function AttendanceAnalyticsReport({
                       </span>
                     </td>
 
+                    {/* Absent Days */}
+                    <td className="p-2.5 border-l border-slate-200 text-center font-mono text-xs bg-red-50/30">
+                      {row.absentDaysCount > 0 ? (
+                        <span className="px-1.5 py-0.5 rounded bg-red-600 text-white font-black">
+                          {row.absentDaysCount} ڕۆژ غیاب
+                        </span>
+                      ) : (
+                        <span className="text-emerald-700 text-xs font-bold">0</span>
+                      )}
+                    </td>
+
+                    {/* Total Worked Hours */}
+                    <td className="p-2.5 border-l border-slate-200 text-center font-mono text-xs bg-blue-50/30">
+                      <span className="font-black text-slate-900">
+                        {(row.totalWorkedMinutes / 60).toFixed(1)} ک
+                      </span>
+                    </td>
+
                     {/* Total Late */}
                     <td className="p-2.5 border-l border-slate-200 text-center bg-rose-50/40">
                       {hasLate ? (
@@ -562,12 +744,12 @@ export function AttendanceAnalyticsReport({
                             {formatMinutesHuman(row.totalLateMinutes)}
                           </span>
                           <span className="text-[10px] text-rose-800 block font-bold">
-                            {row.lateDaysCount} ڕۆژ دواکەوتووە ({formatMinutesDigital(row.totalLateMinutes)} ک)
+                            {row.lateDaysCount} ڕۆژ ({formatMinutesDigital(row.totalLateMinutes)} ک)
                           </span>
                         </div>
                       ) : (
                         <span className="text-emerald-700 text-xs font-bold">
-                          ✓ هیچ دواکەوتنێک نییە
+                          ✓ بێ دواکەوتن
                         </span>
                       )}
                     </td>
@@ -580,7 +762,7 @@ export function AttendanceAnalyticsReport({
                             {formatMinutesHuman(row.totalOvertimeMinutes)}
                           </span>
                           <span className="text-[10px] text-emerald-800 block font-bold">
-                            {row.overtimeDaysCount} ڕۆژ ئیزافە ({formatMinutesDigital(row.totalOvertimeMinutes)} ک)
+                            {row.overtimeDaysCount} ڕۆژ ({formatMinutesDigital(row.totalOvertimeMinutes)} ک)
                           </span>
                         </div>
                       ) : (
@@ -590,63 +772,85 @@ export function AttendanceAnalyticsReport({
                       )}
                     </td>
 
+                    {/* Overtime Pay IQD */}
+                    <td className="p-2.5 border-l border-slate-200 text-center font-mono font-black text-emerald-950 bg-emerald-50/30">
+                      {row.overtimePayIQD > 0 ? (
+                        <span>+{row.overtimePayIQD.toLocaleString()} IQD</span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
+
+                    {/* Attendance Punctuality Score */}
+                    <td className="p-2.5 border-l border-slate-200 text-center font-mono font-black">
+                      <span className={`px-2 py-0.5 rounded border text-xs ${
+                        row.attendanceScore >= 90
+                          ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
+                          : row.attendanceScore >= 75
+                          ? 'bg-amber-100 text-amber-950 border-amber-300'
+                          : 'bg-rose-100 text-rose-950 border-rose-300'
+                      }`}>
+                        {row.attendanceScore}%
+                      </span>
+                    </td>
+
                     {/* Overtime > 30 Mins & Admin Notes */}
                     <td className="p-2.5 border-l border-slate-200 bg-amber-50/30">
                       {ot30Logs.length === 0 ? (
-                        <span className="text-[11px] text-slate-400">ئیزافەی سەروو ٣٠ خولەک تۆمار نەکراوە</span>
+                        <span className="text-[11px] text-slate-400">نییە</span>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {ot30Logs.map((otLog) => {
                             const noteKey = otLog.noteKey;
                             const isEditing = editingNoteKey === noteKey;
                             const savedNote = adminNotes[noteKey] || '';
 
                             return (
-                              <div key={noteKey} className="p-2 rounded border border-amber-300 bg-amber-100/60 text-xs space-y-1">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="font-mono font-black text-amber-950 flex items-center gap-1 text-[11px]">
+                              <div key={noteKey} className="p-1.5 rounded border border-amber-300 bg-amber-100/60 text-xs space-y-1">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="font-mono font-black text-amber-950 text-[10px]">
                                     📅 {otLog.date} (دەرچوون: {otLog.checkOutTime})
                                   </span>
-                                  <span className="px-1.5 py-0.5 rounded bg-amber-700 text-white font-mono text-[10px] font-black">
-                                    +{formatMinutesHuman(otLog.overtimeMinutes)} ئیزافە
+                                  <span className="px-1 py-0.2 rounded bg-amber-700 text-white font-mono text-[9px] font-black">
+                                    +{formatMinutesHuman(otLog.overtimeMinutes)}
                                   </span>
                                 </div>
 
                                 {/* Admin Note Box */}
-                                <div className="pt-1">
+                                <div className="pt-0.5">
                                   {isEditing ? (
-                                    <div className="flex items-center gap-1.5">
+                                    <div className="flex items-center gap-1">
                                       <input
                                         type="text"
-                                        placeholder="تێبینی / هۆکاری پەسەندکردنی ئیزافە..."
+                                        placeholder="تێبینی / هۆکاری ئیزافە..."
                                         value={tempNoteText}
                                         onChange={(e) => setTempNoteText(e.target.value)}
-                                        className="input-classic flex-1 text-xs bg-white font-bold"
+                                        className="input-classic flex-1 text-xs bg-white font-bold py-0.5"
                                         autoFocus
                                       />
                                       <button
                                         onClick={() => handleSaveNote(noteKey)}
                                         disabled={savingNote}
-                                        className="btn-classic-primary text-xs px-2 py-1 flex items-center gap-1"
+                                        className="btn-classic-primary text-[10px] px-1.5 py-0.5 flex items-center gap-1"
                                       >
-                                        <Save className="w-3 h-3" />
+                                        <Save className="w-2.5 h-2.5" />
                                         <span>پاشەکەوت</span>
                                       </button>
                                       <button
                                         onClick={() => setEditingNoteKey(null)}
-                                        className="btn-classic text-xs px-2 py-1"
+                                        className="btn-classic text-[10px] px-1.5 py-0.5"
                                       >
-                                        پەشیمان
+                                        ✕
                                       </button>
                                     </div>
                                   ) : (
-                                    <div className="flex items-center justify-between gap-2 bg-white/80 p-1.5 rounded border border-amber-200">
-                                      <div className="text-[11px] text-slate-800 font-bold">
-                                        <span className="text-amber-800 font-extrabold">تێبینی ئەدمین: </span>
+                                    <div className="flex items-center justify-between gap-1 bg-white/80 p-1 rounded border border-amber-200">
+                                      <div className="text-[10px] text-slate-800 font-bold truncate">
+                                        <span className="text-amber-900 font-black">تێبینی: </span>
                                         {savedNote ? (
                                           <span className="text-slate-900">{savedNote}</span>
                                         ) : (
-                                          <span className="text-rose-700 italic">⚠️ هێشتا تێبینی نەنووسراوە (پێویستە)</span>
+                                          <span className="text-rose-700 italic">⚠️ پێویستە</span>
                                         )}
                                       </div>
                                       <button
@@ -654,10 +858,10 @@ export function AttendanceAnalyticsReport({
                                           setEditingNoteKey(noteKey);
                                           setTempNoteText(savedNote);
                                         }}
-                                        className="text-amber-800 hover:text-amber-950 p-1 rounded hover:bg-amber-100 flex items-center gap-1 text-[10px] font-black border border-amber-300"
+                                        className="text-amber-900 hover:text-amber-950 p-0.5 rounded flex items-center gap-0.5 text-[9px] font-black border border-amber-300"
                                       >
-                                        <Edit3 className="w-3 h-3" />
-                                        <span>{savedNote ? 'دەستکاری' : 'نووسینی تێبینی'}</span>
+                                        <Edit3 className="w-2.5 h-2.5" />
+                                        <span>{savedNote ? 'دەستکاری' : 'نووسین'}</span>
                                       </button>
                                     </div>
                                   )}
@@ -669,6 +873,32 @@ export function AttendanceAnalyticsReport({
                       )}
                     </td>
 
+                    {/* Actions: View Daily First-In/Last-Out & Manage Leaves */}
+                    <td className="p-2.5 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => setActiveEmpDrawer(row)}
+                          className="btn-classic text-[10px] px-1.5 py-1 text-blue-900 hover:bg-blue-50 flex items-center gap-1"
+                          title="بینینی کاتی هاتن و دەرچوونی ڕۆژانە"
+                        >
+                          <Eye className="w-3 h-3 text-blue-700" />
+                          <span>تۆمارەکان</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setLeaveModalEmp(row.employee);
+                            setLeaveDate(`${selectedMonth}-01`);
+                          }}
+                          className="btn-classic text-[10px] px-1.5 py-1 text-purple-900 hover:bg-purple-50 flex items-center gap-1"
+                          title="دیاریکردنی پشوو یان مۆڵەتی فەرمی"
+                        >
+                          <Coffee className="w-3 h-3 text-purple-700" />
+                          <span>پشوو</span>
+                        </button>
+                      </div>
+                    </td>
+
                   </tr>
                 );
               })
@@ -677,15 +907,169 @@ export function AttendanceAnalyticsReport({
         </table>
       </div>
 
-      {/* Footer Info */}
-      <div className="p-2.5 bg-slate-100 border border-slate-300 rounded text-[11px] text-slate-600 font-bold flex items-center justify-between">
-        <span>
-          💡 ئەگەر کاتی فەرمی دەوام بگۆڕدرێت (بۆ نموونە 09:00 یان 16:30)، ئامار و ژماردنی دواکەوتن و ئیزافەکان دەستبەجێ بەپێی کاتی نوێ نوێ دەبنەوە.
-        </span>
-        <span className="font-mono font-bold text-slate-800">
-          ASHLEY HR Analytics Engine v2.0
-        </span>
-      </div>
+      {/* 🖼️ MODAL 1: DAILY FIRST-IN / LAST-OUT DRAWER */}
+      {activeEmpDrawer && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-slate-200 border-2 border-t-white border-l-white border-b-slate-600 border-r-slate-600 max-w-2xl w-full shadow-2xl p-1 text-slate-900 font-sans">
+            <div className="bg-blue-900 text-white p-2 px-3 flex items-center justify-between text-xs font-bold font-mono">
+              <span className="flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-blue-300" />
+                <span>کاتی یەکەم هاتن و کۆتا دەرچوون: {activeEmpDrawer.employee.fullName3Part || activeEmpDrawer.employee.name} ({selectedMonth})</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveEmpDrawer(null)}
+                className="w-4 h-3.5 bg-rose-800 text-white flex items-center justify-center border border-rose-600 font-mono text-[10px]"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3 bg-white max-h-[70vh] overflow-y-auto space-y-2 text-xs">
+              <table className="w-full text-right border-collapse">
+                <thead>
+                  <tr className="bg-slate-200 border-b border-slate-400 text-slate-900 font-black">
+                    <th className="p-2 border-l border-slate-300 text-center w-12">ڕۆژ</th>
+                    <th className="p-2 border-l border-slate-300 text-center">بەروار</th>
+                    <th className="p-2 border-l border-slate-300 text-center bg-emerald-50 text-emerald-950">یەکەم هاتن (Check In)</th>
+                    <th className="p-2 border-l border-slate-300 text-center bg-rose-50 text-rose-950">کۆتا دەرچوون (Check Out)</th>
+                    <th className="p-2 border-l border-slate-300 text-center">دواکەوتن</th>
+                    <th className="p-2 text-center">ئیزافە</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-300 font-bold">
+                  {activeEmpDrawer.dailyDetails.map((day: any) => (
+                    <tr key={day.date} className={`hover:bg-slate-50 ${day.isFriday ? 'bg-amber-50/50' : ''}`}>
+                      <td className="p-2 border-l border-slate-200 text-center font-mono font-black">{day.dayNum}</td>
+                      <td className="p-2 border-l border-slate-200 text-center font-mono">
+                        {day.date} <span className="text-[10px] text-slate-500">({day.dayOfWeek})</span>
+                      </td>
+                      <td className="p-2 border-l border-slate-200 text-center font-mono">
+                        {day.checkInTime ? (
+                          <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 font-black">
+                            📥 {day.checkInTime}
+                          </span>
+                        ) : day.isOffDay ? (
+                          <span className="text-amber-800 text-[11px] font-bold">پشوو / ئۆف</span>
+                        ) : (
+                          <span className="text-red-600 font-bold">غایب</span>
+                        )}
+                      </td>
+                      <td className="p-2 border-l border-slate-200 text-center font-mono">
+                        {day.checkOutTime ? (
+                          <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 font-black">
+                            📤 {day.checkOutTime}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="p-2 border-l border-slate-200 text-center font-mono">
+                        {day.lateMinutes > 0 ? (
+                          <span className="text-rose-700 font-black">+{day.lateMinutes} خولەک</span>
+                        ) : (
+                          <span className="text-emerald-700 text-xs">✓</span>
+                        )}
+                      </td>
+                      <td className="p-2 text-center font-mono">
+                        {day.overtimeMinutes > 0 ? (
+                          <span className="text-emerald-700 font-black">+{day.overtimeMinutes} خولەک</span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="p-2 bg-slate-200 border-t border-slate-300 flex justify-end">
+              <button
+                onClick={() => setActiveEmpDrawer(null)}
+                className="btn-classic-primary text-xs px-4 py-1"
+              >
+                داخستن
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🖼️ MODAL 2: ASSIGN OFF-DAY / EXCUSED LEAVE FOR EMPLOYEE */}
+      {leaveModalEmp && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-slate-200 border-2 border-t-white border-l-white border-b-slate-600 border-r-slate-600 max-w-md w-full shadow-2xl p-1 text-slate-900 font-sans">
+            <div className="bg-purple-900 text-white p-2 px-3 flex items-center justify-between text-xs font-bold font-mono">
+              <span className="flex items-center gap-2">
+                <Coffee className="w-4 h-4 text-purple-300" />
+                <span>دیاریکردنی پشوو یان مۆڵەت: {leaveModalEmp.fullName3Part || leaveModalEmp.name}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setLeaveModalEmp(null)}
+                className="w-4 h-3.5 bg-rose-800 text-white flex items-center justify-center border border-rose-600 font-mono text-[10px]"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 bg-white text-xs font-bold">
+              <div>
+                <label className="block text-slate-800 mb-1">بەرواری پشوو / مۆڵەت:</label>
+                <input
+                  type="date"
+                  value={leaveDate}
+                  onChange={(e) => setLeaveDate(e.target.value)}
+                  className="input-classic w-full font-mono font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-800 mb-1">جۆری پشوو:</label>
+                <select
+                  value={leaveType}
+                  onChange={(e) => setLeaveType(e.target.value as any)}
+                  className="input-classic w-full font-bold"
+                >
+                  <option value="off">پشووی هەفتانە (Weekly Off)</option>
+                  <option value="excused">مۆڵەتی بەمۆڵەت / فەرمی (Excused Leave)</option>
+                  <option value="sick">مۆڵەتی نەخۆشی (Sick Leave)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-800 mb-1">تێبینی یان هۆکار:</label>
+                <input
+                  type="text"
+                  value={leaveNote}
+                  onChange={(e) => setLeaveNote(e.target.value)}
+                  placeholder="بۆ نموونە: گەشت، مۆڵەتی نەخۆشخانە..."
+                  className="input-classic w-full font-bold"
+                />
+              </div>
+
+              <div className="pt-2 border-t border-slate-300 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLeaveModalEmp(null)}
+                  className="btn-classic text-xs"
+                >
+                  پاشگەزبوونەوە
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveLeave}
+                  className="btn-classic-primary text-xs flex items-center gap-1"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>تۆمارکردنی پشوو</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
