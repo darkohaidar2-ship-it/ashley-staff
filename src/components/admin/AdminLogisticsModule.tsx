@@ -17,6 +17,7 @@ import {
   MapPin
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
 
 interface AdminLogisticsModuleProps {
   employees: Employee[];
@@ -126,6 +127,65 @@ export function AdminLogisticsModule({ employees }: AdminLogisticsModuleProps) {
     saveShipments(updated);
   };
 
+  const handleExportPDF = () => {
+    const cols: ExportTableColumn[] = [
+      { header: 'ناونیشانی بار', key: 'cargoTitle', align: 'right' },
+      { header: 'دابینکەر', key: 'supplier', align: 'right' },
+      { header: 'شۆفێر و ژمارەی ئۆتۆمبێل', key: 'driverInfo', align: 'right' },
+      { header: 'کۆگای مەبەست', key: 'warehouse', align: 'right' },
+      { header: 'ژمارەی کاڵا', key: 'itemCount', align: 'center' },
+      { header: 'حاڵەت', key: 'status', align: 'center' },
+      { header: 'بەروار', key: 'date', align: 'center' },
+    ];
+    const data = shipments.map(s => ({
+      cargoTitle: s.cargoTitle,
+      supplier: s.supplier,
+      driverInfo: `${s.driverName} (${s.truckPlate})`,
+      warehouse: s.destinationWarehouse,
+      itemCount: `${s.itemCount.toLocaleString()} پارچە`,
+      status: s.status === 'completed' ? 'تەواو بوو' : 'لە کاتی داگرتندایە',
+      date: s.date,
+    }));
+    exportToPDF({
+      title: 'ڕاپۆرتی بارداگرتن و گواستنەوەی کەلوپەل (Cargo Unloading & Logistics)',
+      subtitle: 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی',
+      columns: cols,
+      data,
+      fileName: 'Ashley_Cargo_Logistics_Report',
+      summaryCards: [
+        { label: 'کۆی گشتی بارەکان', value: `${shipments.length} بار`, color: '#1e40af' },
+        { label: 'بارە داگیراوەکان', value: `${shipments.filter(s => s.status === 'completed').length} بار`, color: '#047857' },
+        { label: 'کۆی پارچەکان', value: `${shipments.reduce((acc, curr) => acc + (curr.itemCount || 0), 0).toLocaleString()} دانە`, color: '#6b21a8' },
+      ],
+    });
+  };
+
+  const handleExportCSV = () => {
+    const cols: ExportTableColumn[] = [
+      { header: 'ناونیشانی بار', key: 'cargoTitle' },
+      { header: 'دابینکەر', key: 'supplier' },
+      { header: 'شۆفێر', key: 'driverName' },
+      { header: 'تابلۆ', key: 'truckPlate' },
+      { header: 'کۆگا', key: 'destinationWarehouse' },
+      { header: 'دەستەی کارمەندان', key: 'team' },
+      { header: 'ژمارەی کاڵا', key: 'itemCount' },
+      { header: 'حاڵەت', key: 'status' },
+      { header: 'بەروار', key: 'date' },
+    ];
+    const data = shipments.map(s => ({
+      cargoTitle: s.cargoTitle,
+      supplier: s.supplier,
+      driverName: s.driverName,
+      truckPlate: s.truckPlate,
+      destinationWarehouse: s.destinationWarehouse,
+      team: Array.isArray(s.unloadingTeam) ? s.unloadingTeam.join(' - ') : s.unloadingTeam,
+      itemCount: s.itemCount,
+      status: s.status === 'completed' ? 'تەواو بوو' : 'لە داگرتندایە',
+      date: s.date,
+    }));
+    exportToCSV(cols, data, 'Ashley_Cargo_Logistics_Report');
+  };
+
   return (
     <div className="space-y-4 text-xs font-bold text-slate-900 dir-rtl" dir="rtl">
       
@@ -141,8 +201,24 @@ export function AdminLogisticsModule({ employees }: AdminLogisticsModuleProps) {
           </button>
         </div>
 
-        <div className="flex items-center gap-2 font-mono text-[11px] text-slate-600">
-          <span>کۆی بارەکانی تۆمارکراو: <span className="text-blue-900 font-black">{shipments.length}</span></span>
+        <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-slate-600">
+          <span>کۆی بارەکان: <span className="text-blue-900 font-black">{shipments.length}</span></span>
+
+          <button
+            onClick={handleExportPDF}
+            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-900 border-red-300 shadow-sm cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5 text-red-700" />
+            <span>📄 PDF</span>
+          </button>
+
+          <button
+            onClick={handleExportCSV}
+            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300 shadow-sm cursor-pointer"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+            <span>📊 CSV</span>
+          </button>
         </div>
       </div>
 

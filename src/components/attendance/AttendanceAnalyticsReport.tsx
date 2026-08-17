@@ -24,6 +24,7 @@ import {
   CalendarDays
 } from 'lucide-react';
 import { getDaysInMonth, format, getDay } from 'date-fns';
+import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
 
 interface AttendanceAnalyticsReportProps {
   attendanceLogs: AttendanceRecord[];
@@ -385,29 +386,73 @@ export function AttendanceAnalyticsReport({
     });
   }, [employeeAnalytics, searchQuery, filterType]);
 
-  // Export CSV
-  const handleExportCSV = () => {
-    const headers = 'کۆدی کارمەند,ناوی کارمەند,پۆست,ڕۆژانی ئامادەبوون,ڕۆژانی غیاب,ڕۆژانی پشوو,کۆی کاتژمێری ئیشکراو,کۆی دواکەوتن (خولەک),کۆی دواکەوتن (دیجیتاڵ),کۆی ئیزافە (خولەک),کۆی ئیزافە (دیجیتاڵ),شایستەی پارەی ئیزافە (IQD),لێبڕینی دواکەوتن (IQD),ڕێژەی پابەندبوون,تێبینیەکانی ئیزافەی ئەدمین\n';
-    const rows = filteredRows.map(r => {
+  // Columns definition for PDF & CSV
+  const reportColumns: ExportTableColumn[] = [
+    { header: 'کۆدی کارمەند', key: 'empCode', width: '70px', align: 'center' },
+    { header: 'ناوی کارمەند', key: 'name', align: 'right' },
+    { header: 'پۆست / ئەرک', key: 'role', align: 'right' },
+    { header: 'ڕۆژانی دەوام', key: 'daysPresent', align: 'center' },
+    { header: 'غیاب', key: 'absentDays', align: 'center' },
+    { header: 'کاتی کارکردن', key: 'workedHours', align: 'center' },
+    { header: 'کۆی دواکەوتن', key: 'lateTime', align: 'center' },
+    { header: 'کۆی ئیزافە', key: 'overtime', align: 'center' },
+    { header: 'پارەی ئیزافە (IQD)', key: 'overtimePay', align: 'center' },
+    { header: 'ڕێژەی پابەندبوون', key: 'score', align: 'center' },
+    { header: 'تێبینیەکانی ئیزافە', key: 'notes', align: 'right' },
+  ];
+
+  const getExportData = () => {
+    return filteredRows.map(r => {
       const notes = r.dailyDetails
         .filter(d => d.isOvertime30 && adminNotes[d.noteKey])
         .map(d => `${d.date}: ${adminNotes[d.noteKey]}`)
         .join(' | ');
 
-      return `"${r.employee.employeeId || r.employee.id}","${r.employee.fullName3Part || r.employee.name}","${r.employee.role || '-'}","${r.daysPresent}","${r.absentDaysCount}","${r.officialOffDaysCount}","${(r.totalWorkedMinutes / 60).toFixed(1)}","${r.totalLateMinutes}","${formatMinutesDigital(r.totalLateMinutes)}","${r.totalOvertimeMinutes}","${formatMinutesDigital(r.totalOvertimeMinutes)}","${r.overtimePayIQD}","${r.lateDeductionIQD}","${r.attendanceScore}%","${notes}"`;
-    }).join('\n');
+      return {
+        empCode: r.employee.employeeId || r.employee.id,
+        name: r.employee.fullName3Part || r.employee.name,
+        role: r.employee.role || '-',
+        daysPresent: `${r.daysPresent} ڕۆژ`,
+        absentDays: `${r.absentDaysCount} ڕۆژ`,
+        workedHours: `${(r.totalWorkedMinutes / 60).toFixed(1)} کاتژمێر`,
+        lateTime: r.totalLateMinutes > 0 ? formatMinutesHuman(r.totalLateMinutes) : 'بێ دواکەوتن',
+        overtime: r.totalOvertimeMinutes > 0 ? formatMinutesHuman(r.totalOvertimeMinutes) : '-',
+        overtimePay: r.overtimePayIQD > 0 ? `${r.overtimePayIQD.toLocaleString()} IQD` : '0 IQD',
+        score: `${r.attendanceScore}%`,
+        notes: notes || '-',
+      };
+    });
+  };
 
-    const blob = new Blob(['\uFEFF' + headers + rows], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute('download', `ashley-comprehensive-hr-analytics-${selectedMonth}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Export CSV
+  const handleExportCSV = () => {
+    const data = getExportData();
+    exportToCSV(reportColumns, data, `Ashley_HR_Analytics_${selectedMonth}`);
+  };
+
+  // Export PDF (Full Width Multi-Page)
+  const handleExportPDF = () => {
+    const data = getExportData();
+    exportToPDF({
+      title: 'ڕاپۆرت و ئاماری گشتگیری ئامادەبوون و کاتەکان (HR Attendance & Overtime Report)',
+      subtitle: 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی - لقی سەرەکی و لقەکان',
+      period: `مانگی ${selectedMonth}`,
+      columns: reportColumns,
+      data,
+      orientation: 'landscape',
+      fileName: `Ashley_HR_Analytics_${selectedMonth}`,
+      summaryCards: [
+        { label: 'کۆی کاتژمێری ئیشکراو', value: `${totalCompanyWorkedHours.toFixed(1)} کاتژمێر`, color: '#1e40af' },
+        { label: 'کۆی کاتی دواکەوتن', value: formatMinutesHuman(totalCompanyLateMins), color: '#be123c' },
+        { label: 'کۆی کاتی ئیزافە', value: formatMinutesHuman(totalCompanyOvertimeMins), color: '#047857' },
+        { label: 'کۆی پارەی ئیزافە', value: `${totalCompanyOvertimePay.toLocaleString()} IQD`, color: '#065f46' },
+        { label: 'کۆی ڕۆژانی غیاب', value: `${totalCompanyAbsentDays} ڕۆژ`, color: '#991b1b' },
+      ],
+    });
   };
 
   const handlePrint = () => {
-    window.print();
+    handleExportPDF();
   };
 
   return (
@@ -626,22 +671,22 @@ export function AttendanceAnalyticsReport({
           </div>
         </div>
 
-        {/* Print & CSV Export */}
+        {/* PDF & CSV Export */}
         <div className="flex items-center gap-2">
           <button
-            onClick={handleExportCSV}
-            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300"
+            onClick={handleExportPDF}
+            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-900 border-red-300 shadow-sm cursor-pointer"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-            <span>هەناردەکردنی Excel / CSV</span>
+            <Printer className="w-3.5 h-3.5 text-red-700" />
+            <span>📄 هەناردەکردنی PDF (Full Width)</span>
           </button>
 
           <button
-            onClick={handlePrint}
-            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border-blue-300"
+            onClick={handleExportCSV}
+            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300 shadow-sm cursor-pointer"
           >
-            <Printer className="w-3.5 h-3.5 text-blue-700" />
-            <span>🖨️ پرینتی ڕاپۆرت</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+            <span>📊 هەناردەکردنی CSV (Excel)</span>
           </button>
         </div>
 

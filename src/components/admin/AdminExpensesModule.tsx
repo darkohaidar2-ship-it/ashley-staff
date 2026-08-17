@@ -17,6 +17,7 @@ import {
   Search
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
 
 interface AdminExpensesModuleProps {
   employees: Employee[];
@@ -121,6 +122,135 @@ export function AdminExpensesModule({ employees }: AdminExpensesModuleProps) {
     if (type === 'withdrawals') setWithdrawals((prev: any) => (prev || []).filter((w: any) => w.id !== id));
   };
 
+  const handleExportPDF = () => {
+    if (activeTab === 'expenses') {
+      const cols: ExportTableColumn[] = [
+        { header: 'ناونیشانی مەسروفات', key: 'title', align: 'right' },
+        { header: 'پۆلێن (Category)', key: 'category', align: 'right' },
+        { header: 'بەروار', key: 'date', align: 'center' },
+        { header: 'بڕی پارە (IQD)', key: 'amount', align: 'center' },
+        { header: 'تێبینی', key: 'note', align: 'right' },
+      ];
+      const data = monthlyExpenses.map((e: any) => ({
+        title: e.title || e.expenseType || 'مەسروفات',
+        category: e.category || e.expenseSubType || 'گشتی',
+        date: e.date,
+        amount: `${Number(e.amount || 0).toLocaleString()} IQD`,
+        note: e.note || e.notes || '-',
+      }));
+      exportToPDF({
+        title: 'ڕاپۆرتی مەسروفات و خەرجییەکانی کارگە (Ashley Expenses Ledger)',
+        subtitle: 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی',
+        period: `مانگی ${selectedMonth}`,
+        columns: cols,
+        data,
+        fileName: `Ashley_Expenses_${selectedMonth}`,
+        summaryCards: [
+          { label: 'کۆی خەرجی مەسروفات', value: `${totalExp.toLocaleString()} IQD`, color: '#be123c' },
+          { label: 'ژمارەی پسوولەکان', value: `${monthlyExpenses.length} دانە` },
+        ],
+      });
+    } else if (activeTab === 'bonuses') {
+      const cols: ExportTableColumn[] = [
+        { header: 'ناوی کارمەند', key: 'empName', align: 'right' },
+        { header: 'بەروار', key: 'date', align: 'center' },
+        { header: 'بڕی پاداشت (IQD)', key: 'amount', align: 'center' },
+        { header: 'هۆکار و تێبینی', key: 'reason', align: 'right' },
+      ];
+      const data = monthlyBonuses.map((b: any) => ({
+        empName: b.employeeName || employees.find(e => e.id === b.employeeId)?.fullName3Part || 'کارمەند',
+        date: b.date,
+        amount: `${Number(b.totalAmount || b.amount || 0).toLocaleString()} IQD`,
+        reason: b.reason || b.note || b.notes || '-',
+      }));
+      exportToPDF({
+        title: 'ڕاپۆرتی پاداشت و بەخششی کارمەندان (Employee Bonuses Report)',
+        subtitle: 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی',
+        period: `مانگی ${selectedMonth}`,
+        columns: cols,
+        data,
+        fileName: `Ashley_Bonuses_${selectedMonth}`,
+        summaryCards: [
+          { label: 'کۆی پاداشتەکان', value: `${totalBon.toLocaleString()} IQD`, color: '#047857' },
+          { label: 'کارمەندانی وەرگر', value: `${monthlyBonuses.length} کەس` },
+        ],
+      });
+    } else {
+      const cols: ExportTableColumn[] = [
+        { header: 'ناوی کارمەند', key: 'empName', align: 'right' },
+        { header: 'بەروار', key: 'date', align: 'center' },
+        { header: 'بڕی پارەی ڕاکێشراو (IQD)', key: 'amount', align: 'center' },
+        { header: 'تێبینی', key: 'note', align: 'right' },
+      ];
+      const data = monthlyWithdrawals.map((w: any) => ({
+        empName: w.employeeName || employees.find(e => e.id === w.employeeId)?.fullName3Part || 'کارمەند',
+        date: w.date,
+        amount: `${Number(w.amount || 0).toLocaleString()} IQD`,
+        note: w.note || w.notes || '-',
+      }));
+      exportToPDF({
+        title: 'ڕاپۆرتی ڕاکێشانی پێشینەی کارمەندان (Cash Withdrawals Report)',
+        subtitle: 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی',
+        period: `مانگی ${selectedMonth}`,
+        columns: cols,
+        data,
+        fileName: `Ashley_Withdrawals_${selectedMonth}`,
+        summaryCards: [
+          { label: 'کۆی ڕاکێشانی پێشینە', value: `${totalWth.toLocaleString()} IQD`, color: '#b45309' },
+          { label: 'تۆمارەکان', value: `${monthlyWithdrawals.length} جار` },
+        ],
+      });
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (activeTab === 'expenses') {
+      const cols: ExportTableColumn[] = [
+        { header: 'ناونیشانی مەسروفات', key: 'title' },
+        { header: 'پۆلێن', key: 'category' },
+        { header: 'بەروار', key: 'date' },
+        { header: 'بڕی پارە (IQD)', key: 'amount' },
+        { header: 'تێبینی', key: 'note' },
+      ];
+      const data = monthlyExpenses.map((e: any) => ({
+        title: e.title || e.expenseType || 'مەسروفات',
+        category: e.category || e.expenseSubType || 'گشتی',
+        date: e.date,
+        amount: e.amount || 0,
+        note: e.note || e.notes || '-',
+      }));
+      exportToCSV(cols, data, `Ashley_Expenses_${selectedMonth}`);
+    } else if (activeTab === 'bonuses') {
+      const cols: ExportTableColumn[] = [
+        { header: 'ناوی کارمەند', key: 'empName' },
+        { header: 'بەروار', key: 'date' },
+        { header: 'بڕی پاداشت (IQD)', key: 'amount' },
+        { header: 'هۆکار', key: 'reason' },
+      ];
+      const data = monthlyBonuses.map((b: any) => ({
+        empName: b.employeeName || employees.find(e => e.id === b.employeeId)?.fullName3Part || 'کارمەند',
+        date: b.date,
+        amount: b.totalAmount || b.amount || 0,
+        reason: b.reason || b.note || b.notes || '-',
+      }));
+      exportToCSV(cols, data, `Ashley_Bonuses_${selectedMonth}`);
+    } else {
+      const cols: ExportTableColumn[] = [
+        { header: 'ناوی کارمەند', key: 'empName' },
+        { header: 'بەروار', key: 'date' },
+        { header: 'بڕی پارە (IQD)', key: 'amount' },
+        { header: 'تێبینی', key: 'note' },
+      ];
+      const data = monthlyWithdrawals.map((w: any) => ({
+        empName: w.employeeName || employees.find(e => e.id === w.employeeId)?.fullName3Part || 'کارمەند',
+        date: w.date,
+        amount: w.amount || 0,
+        note: w.note || w.notes || '-',
+      }));
+      exportToCSV(cols, data, `Ashley_Withdrawals_${selectedMonth}`);
+    }
+  };
+
   return (
     <div className="space-y-4 text-xs font-bold text-slate-900 dir-rtl" dir="rtl">
       
@@ -147,7 +277,7 @@ export function AdminExpensesModule({ employees }: AdminExpensesModuleProps) {
           </button>
         </div>
 
-        <div className="flex items-center gap-2 font-mono">
+        <div className="flex flex-wrap items-center gap-2 font-mono">
           <span className="text-slate-600">مانگ:</span>
           <input
             type="month"
@@ -155,6 +285,22 @@ export function AdminExpensesModule({ employees }: AdminExpensesModuleProps) {
             onChange={(e) => setSelectedMonth(e.target.value)}
             className="input-classic font-bold"
           />
+
+          <button
+            onClick={handleExportPDF}
+            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-900 border-red-300 shadow-sm cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5 text-red-700" />
+            <span>📄 PDF</span>
+          </button>
+
+          <button
+            onClick={handleExportCSV}
+            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300 shadow-sm cursor-pointer"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+            <span>📊 CSV</span>
+          </button>
         </div>
       </div>
 

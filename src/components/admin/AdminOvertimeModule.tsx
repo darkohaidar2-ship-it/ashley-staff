@@ -17,6 +17,7 @@ import {
   Unlock 
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { exportToPDF, exportToCSV } from '@/lib/export-utils';
 
 interface AdminOvertimeModuleProps {
   employees: Employee[];
@@ -105,6 +106,95 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
   const totalMonthlyHours = monthlyRecords.reduce((acc: number, curr: any) => acc + Number(curr.hours || 0), 0);
   const totalMonthlyCost = monthlyRecords.reduce((acc: number, curr: any) => acc + Number(curr.totalAmount || (Number(curr.hours || 0) * 5000)), 0);
 
+  // PDF & CSV Export Handlers
+  const handleExportPDF = () => {
+    if (viewMode === 'daily') {
+      const cols = [
+        { header: 'ناوی کارمەند', key: 'name', align: 'right' as const },
+        { header: 'ژمارەی کاتژمێر', key: 'hours', align: 'center' as const },
+        { header: 'بڕی شایستەی پارە (IQD)', key: 'amount', align: 'center' as const },
+        { header: 'تێبینی / هۆکار', key: 'note', align: 'right' as const },
+      ];
+      const data = dailyRecords.map((r: any) => ({
+        name: r.employeeName || employees.find(e => e.id === r.employeeId)?.fullName3Part || 'کارمەند',
+        hours: `${r.hours} کاتژمێر`,
+        amount: `${(r.totalAmount || (r.hours * (r.rate || 5000))).toLocaleString()} IQD`,
+        note: r.note || r.notes || '-',
+      }));
+      exportToPDF({
+        title: 'ڕاپۆرتی کاتی زیادەی ڕۆژانەی کارمەندان (Daily Overtime Report)',
+        subtitle: 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی',
+        period: selectedDate,
+        columns: cols,
+        data,
+        fileName: `Ashley_Daily_Overtime_${selectedDate}`,
+        summaryCards: [
+          { label: 'کۆی کارمەندان', value: `${dailyRecords.length} کارمەند` },
+          { label: 'کۆی کاتژمێر', value: `${dailyRecords.reduce((s: number, c: any) => s + (c.hours || 0), 0)} کاتژمێر`, color: '#1e40af' },
+          { label: 'کۆی پارەی شایستە', value: `${dailyRecords.reduce((s: number, c: any) => s + (c.totalAmount || (c.hours * 5000)), 0).toLocaleString()} IQD`, color: '#047857' },
+        ],
+      });
+    } else {
+      const cols = [
+        { header: 'ناوی کارمەند', key: 'name', align: 'right' as const },
+        { header: 'ژمارەی ڕۆژەکان', key: 'count', align: 'center' as const },
+        { header: 'کۆی کاتژمێر', key: 'hours', align: 'center' as const },
+        { header: 'کۆی شایستەی پارە (IQD)', key: 'amount', align: 'center' as const },
+      ];
+      const data = monthlySummary.map(s => ({
+        name: s.name,
+        count: `${s.count} جار`,
+        hours: `${s.totalHours.toFixed(1)} کاتژمێر`,
+        amount: `${s.totalAmount.toLocaleString()} IQD`,
+      }));
+      exportToPDF({
+        title: 'ڕاپۆرتی کاتی زیادەی مانگانەی کارمەندان (Monthly Overtime Report)',
+        subtitle: 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی',
+        period: `مانگی ${selectedMonth}`,
+        columns: cols,
+        data,
+        fileName: `Ashley_Monthly_Overtime_${selectedMonth}`,
+        summaryCards: [
+          { label: 'کۆی کاتژمێری مانگ', value: `${totalMonthlyHours.toFixed(1)} کاتژمێر`, color: '#1e40af' },
+          { label: 'کۆی بڕی پارەی ئیزافە', value: `${totalMonthlyCost.toLocaleString()} IQD`, color: '#047857' },
+          { label: 'کارمەندانی بەشداربوو', value: `${monthlySummary.length} کارمەند` },
+        ],
+      });
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (viewMode === 'daily') {
+      const cols = [
+        { header: 'ناوی کارمەند', key: 'name' },
+        { header: 'ژمارەی کاتژمێر', key: 'hours' },
+        { header: 'بڕی شایستەی پارە (IQD)', key: 'amount' },
+        { header: 'تێبینی', key: 'note' },
+      ];
+      const data = dailyRecords.map((r: any) => ({
+        name: r.employeeName || employees.find(e => e.id === r.employeeId)?.fullName3Part || 'کارمەند',
+        hours: `${r.hours}`,
+        amount: `${r.totalAmount || (r.hours * (r.rate || 5000))}`,
+        note: r.note || r.notes || '-',
+      }));
+      exportToCSV(cols, data, `Ashley_Daily_Overtime_${selectedDate}`);
+    } else {
+      const cols = [
+        { header: 'ناوی کارمەند', key: 'name' },
+        { header: 'ژمارەی ڕۆژەکان', key: 'count' },
+        { header: 'کۆی کاتژمێر', key: 'hours' },
+        { header: 'کۆی شایستەی پارە (IQD)', key: 'amount' },
+      ];
+      const data = monthlySummary.map(s => ({
+        name: s.name,
+        count: `${s.count}`,
+        hours: `${s.totalHours.toFixed(1)}`,
+        amount: `${s.totalAmount}`,
+      }));
+      exportToCSV(cols, data, `Ashley_Monthly_Overtime_${selectedMonth}`);
+    }
+  };
+
   return (
     <div className="space-y-4 text-xs font-bold text-slate-900 dir-rtl" dir="rtl">
       
@@ -125,7 +215,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
           </button>
         </div>
 
-        <div className="flex items-center gap-2 font-mono">
+        <div className="flex flex-wrap items-center gap-2 font-mono">
           {viewMode === 'daily' ? (
             <input
               type="date"
@@ -141,6 +231,22 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
               className="input-classic font-bold"
             />
           )}
+
+          <button
+            onClick={handleExportPDF}
+            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-900 border-red-300 shadow-sm cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5 text-red-700" />
+            <span>📄 PDF</span>
+          </button>
+
+          <button
+            onClick={handleExportCSV}
+            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300 shadow-sm cursor-pointer"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+            <span>📊 CSV</span>
+          </button>
         </div>
       </div>
 

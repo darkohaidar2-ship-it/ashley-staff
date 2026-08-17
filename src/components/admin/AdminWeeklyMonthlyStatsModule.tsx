@@ -17,6 +17,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, isWithinInterval, parseISO, subDays } from 'date-fns';
+import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
 
 interface AdminWeeklyMonthlyStatsModuleProps {
   employees: Employee[];
@@ -132,6 +133,63 @@ export function AdminWeeklyMonthlyStatsModule({
     ? Math.round(employeeStats.reduce((sum, e) => sum + e.attendanceScore, 0) / employeeStats.length)
     : 100;
 
+  const handleExportPDF = () => {
+    const cols: ExportTableColumn[] = [
+      { header: 'ناوی کارمەند', key: 'name', align: 'right' },
+      { header: 'پۆست / ئەرک', key: 'role', align: 'right' },
+      { header: 'ڕۆژانی دەوام', key: 'daysPresent', align: 'center' },
+      { header: 'کاتی دواکەوتن', key: 'lateTime', align: 'center' },
+      { header: 'کاتی ئیزافە', key: 'overtime', align: 'center' },
+      { header: 'ڕێژەی پابەندبوون', key: 'score', align: 'center' },
+    ];
+    const data = employeeStats.map(s => ({
+      name: s.employee.fullName3Part || s.employee.name,
+      role: s.employee.role || 'کارمەند',
+      daysPresent: `${s.daysPresent} ڕۆژ`,
+      lateTime: s.totalLateMins > 0 ? `${Math.floor(s.totalLateMins / 60)} ک و ${s.totalLateMins % 60} خ` : 'بێ دواکەوتن',
+      overtime: s.totalOvertimeMins > 0 ? `+${Math.floor(s.totalOvertimeMins / 60)} ک و ${s.totalOvertimeMins % 60} خ` : '-',
+      score: `${s.attendanceScore}%`,
+    }));
+    exportToPDF({
+      title: timeframe === 'weekly' 
+        ? 'ڕاپۆرتی ئاماری هەفتانەی کارمەندان (Weekly HR Performance Report)' 
+        : 'ڕاپۆرتی ئاماری مانگانەی کارمەندان (Monthly HR Performance Report)',
+      subtitle: 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی',
+      period: timeframe === 'weekly' 
+        ? `شەممە (${format(currentWeekStart, 'yyyy-MM-dd')}) تا پێنجشەممە (${format(currentWeekEnd, 'yyyy-MM-dd')})`
+        : `مانگی ${selectedMonth}`,
+      columns: cols,
+      data,
+      fileName: `Ashley_HR_Stats_${timeframe}_${selectedMonth}`,
+      summaryCards: [
+        { label: 'تێکڕای ڕێژەی ئامادەبوون', value: `${avgAttendanceRate}%`, color: '#047857' },
+        { label: 'کۆی کاتی دواکەوتن', value: `${Math.floor(totalLateMinutes / 60)} ک و ${totalLateMinutes % 60} خ`, color: '#be123c' },
+        { label: 'کۆی کاتی ئیزافە', value: `${Math.floor(totalOvertimeMinutes / 60)} ک و ${totalOvertimeMinutes % 60} خ`, color: '#1e40af' },
+        { label: 'کۆی ڕۆژانی دەوامکراو', value: `${totalDaysPresentAll} ڕۆژ`, color: '#6b21a8' },
+      ],
+    });
+  };
+
+  const handleExportCSV = () => {
+    const cols: ExportTableColumn[] = [
+      { header: 'ناوی کارمەند', key: 'name' },
+      { header: 'پۆست', key: 'role' },
+      { header: 'ڕۆژانی دەوام', key: 'daysPresent' },
+      { header: 'کاتی دواکەوتن (خولەک)', key: 'lateMinutes' },
+      { header: 'کاتی ئیزافە (خولەک)', key: 'overtimeMinutes' },
+      { header: 'ڕێژەی پابەندبوون', key: 'score' },
+    ];
+    const data = employeeStats.map(s => ({
+      name: s.employee.fullName3Part || s.employee.name,
+      role: s.employee.role || 'کارمەند',
+      daysPresent: s.daysPresent,
+      lateMinutes: s.totalLateMins,
+      overtimeMinutes: s.totalOvertimeMins,
+      score: `${s.attendanceScore}%`,
+    }));
+    exportToCSV(cols, data, `Ashley_HR_Stats_${timeframe}_${selectedMonth}`);
+  };
+
   return (
     <div className="space-y-4 text-xs font-bold text-slate-900 dir-rtl" dir="rtl">
       
@@ -152,7 +210,7 @@ export function AdminWeeklyMonthlyStatsModule({
           </button>
         </div>
 
-        <div className="flex items-center gap-2 font-mono">
+        <div className="flex flex-wrap items-center gap-2 font-mono">
           {timeframe === 'weekly' ? (
             <span className="text-[11px] bg-blue-100 text-blue-900 border border-blue-300 px-2 py-1 rounded font-bold">
               شەممە ({format(currentWeekStart, 'MM/dd')}) تا پێنجشەممە ({format(currentWeekEnd, 'MM/dd')})
@@ -165,6 +223,22 @@ export function AdminWeeklyMonthlyStatsModule({
               className="input-classic font-bold"
             />
           )}
+
+          <button
+            onClick={handleExportPDF}
+            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-900 border-red-300 shadow-sm cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5 text-red-700" />
+            <span>📄 PDF</span>
+          </button>
+
+          <button
+            onClick={handleExportCSV}
+            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300 shadow-sm cursor-pointer"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+            <span>📊 CSV</span>
+          </button>
         </div>
       </div>
 

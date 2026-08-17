@@ -5,6 +5,7 @@ import type { AttendanceRecord, Employee } from '@/lib/types';
 import { Camera, Calendar, MapPin, Trash2, CheckCircle, User, FileText, Edit3 } from 'lucide-react';
 import { getDaysInMonth, format } from 'date-fns';
 import { AttendanceAnalyticsReport } from './AttendanceAnalyticsReport';
+import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
 
 interface AttendanceSheetGridProps {
   attendanceLogs: AttendanceRecord[];
@@ -164,54 +165,71 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
     document.body.removeChild(link);
   };
 
-  // Handle Direct PDF Export File Download
-  const handleDownloadPdf = async () => {
-    const tableContainer = document.getElementById('attendance-matrix-table-wrapper');
-    const printDate = format(new Date(), 'yyyy-MM-dd');
-    const printTime = format(new Date(), 'HH:mm:ss');
-    const filename = `Ashley_Attendance_Matrix_${selectedMonth}_${printDate}.pdf`;
+  // Handle Direct PDF Export File Download (Full Width Multi-Page)
+  const handleDownloadPdf = () => {
+    const cols: ExportTableColumn[] = [
+      { header: 'ناوی کارمەند', key: 'name', align: 'right', width: '130px' },
+      { header: 'پلە / ئەرک', key: 'role', align: 'right', width: '80px' },
+      { header: 'ئامادەبوون', key: 'totalPresent', align: 'center', width: '60px' },
+      ...daysArray.map(d => ({
+        header: `${d.toString().padStart(2, '0')}`,
+        key: `day_${d}`,
+        align: 'center' as const,
+        width: '32px',
+      })),
+    ];
 
-    if (!tableContainer) {
-      window.print();
-      return;
-    }
+    const data = activeEmployees.map(emp => {
+      const rowData: Record<string, any> = {
+        name: emp.fullName3Part || emp.name,
+        role: emp.role || 'Staff',
+      };
+      let presentCount = 0;
 
-    try {
-      const html2canvas = (await import('html2canvas')).default;
-      const jsPDF = (await import('jspdf')).default;
-
-      const canvas = await html2canvas(tableContainer, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
+      daysArray.forEach(dayNum => {
+        const cellLogs = getLogsForEmpAndDay(emp, dayNum);
+        if (cellLogs.length > 0) {
+          presentCount++;
+          const inLog = cellLogs.find(l => l.type?.includes('In') || l.type?.includes('هاتن'));
+          const outLog = cellLogs.find(l => l.type?.includes('Out') || l.type?.includes('دەرچوون'));
+          const inTime = inLog?.time ? (inLog.time.includes(' ') ? inLog.time.split(' ')[1] : inLog.time).slice(0, 5) : '';
+          const outTime = outLog?.time ? (outLog.time.includes(' ') ? outLog.time.split(' ')[1] : outLog.time).slice(0, 5) : '';
+          if (inTime && outTime) {
+            rowData[`day_${dayNum}`] = `${inTime} | ${outTime}`;
+          } else if (inTime) {
+            rowData[`day_${dayNum}`] = inTime;
+          } else if (outTime) {
+            rowData[`day_${dayNum}`] = outTime;
+          } else {
+            rowData[`day_${dayNum}`] = '✓';
+          }
+        } else {
+          rowData[`day_${dayNum}`] = '-';
+        }
       });
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const pdf = new jsPDF('landscape', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
+      rowData.totalPresent = `${presentCount} ڕۆژ`;
+      return rowData;
+    });
 
-      // Top Document Info Header
-      pdf.setFontSize(10);
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(`ASHLEY ERP - List: Attendance 31-Day Matrix (${selectedMonth})`, 10, 8);
-      pdf.text(`Print Date: ${printDate} | Print Time: ${printTime}`, pdfWidth - 90, 8);
-
-      const imgWidth = pdfWidth - 20;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      pdf.addImage(imgData, 'JPEG', 10, 12, imgWidth, Math.min(imgHeight, pdfHeight - 20));
-      pdf.save(filename);
-    } catch (err) {
-      console.error('PDF export fallback:', err);
-      window.print();
-    }
+    exportToPDF({
+      title: 'شیت ماتریسی مانگانەی ئامادەبوونی کارمەندان (31-Day Attendance Matrix Sheet)',
+      subtitle: 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی',
+      period: `مانگی ${selectedMonth}`,
+      columns: cols,
+      data,
+      orientation: 'landscape',
+      fileName: `Ashley_Attendance_Matrix_${selectedMonth}`,
+      summaryCards: [
+        { label: 'کۆی کارمەندان', value: `${activeEmployees.length} کەس` },
+        { label: 'ڕۆژانی مانگ', value: `${totalDays} ڕۆژ` },
+      ],
+    });
   };
 
   // Handle Printable View Trigger
   const handlePrint = () => {
-    window.print();
+    handleDownloadPdf();
   };
 
   return (
