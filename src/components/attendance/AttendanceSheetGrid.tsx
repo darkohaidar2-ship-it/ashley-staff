@@ -235,6 +235,18 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
   return (
     <div className="space-y-3 font-sans select-none dir-rtl" dir="rtl">
       
+      {/* 🎨 Clean Soft Yellow Highlight Styles without stroke */}
+      <style jsx global>{`
+        .emp-sheet-row-highlight {
+          background-color: #fef08a !important; /* soft pure yellow-200 */
+          transition: background-color 0.4s ease;
+        }
+        .emp-sheet-row-highlight > td {
+          background-color: #fef08a !important;
+          transition: background-color 0.4s ease;
+        }
+      `}</style>
+      
       {/* 🖨️ PRINT HEADER DISPLAY (VISIBLE ONLY ON PRINT OUTPUT) */}
       <div className="hidden print:block p-4 border-2 border-slate-900 mb-4 bg-slate-50 text-slate-900 text-xs">
         <div className="flex justify-between items-center border-b-2 border-slate-900 pb-2 mb-2">

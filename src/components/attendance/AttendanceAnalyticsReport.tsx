@@ -801,10 +801,28 @@ export function AttendanceAnalyticsReport({
                             const targetRow = document.getElementById(`sheet-row-emp-${row.employee.id}`);
                             if (targetRow) {
                               targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                              targetRow.classList.add('bg-amber-300', 'ring-4', 'ring-amber-500', 'shadow-2xl', 'scale-[1.01]', 'animate-pulse');
+                              
+                              // Remove highlight from any other rows first
+                              document.querySelectorAll('.emp-sheet-row-highlight').forEach(el => {
+                                el.classList.remove('emp-sheet-row-highlight');
+                              });
+                              
+                              // Add clean yellow highlight (No stroke/ring)
+                              targetRow.classList.add('emp-sheet-row-highlight');
+                              
+                              // Clear on next click anywhere
+                              const clearHighlight = () => {
+                                targetRow.classList.remove('emp-sheet-row-highlight');
+                                window.removeEventListener('click', clearHighlight);
+                              };
                               setTimeout(() => {
-                                targetRow.classList.remove('animate-pulse');
-                              }, 3500);
+                                window.addEventListener('click', clearHighlight, { once: true });
+                              }, 150);
+
+                              // Auto-remove after 4 seconds
+                              setTimeout(() => {
+                                targetRow.classList.remove('emp-sheet-row-highlight');
+                              }, 4000);
                             } else {
                               const sheetSection = document.getElementById('attendance-sheet-grid-section');
                               if (sheetSection) sheetSection.scrollIntoView({ behavior: 'smooth' });
