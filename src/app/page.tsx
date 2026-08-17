@@ -453,31 +453,10 @@ export default function PublicTerminalLightPage() {
           </div>
         </div>
 
-        {/* Compact Geofence Status Pill */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <div 
-            onClick={checkCurrentLocation}
-            className={`h-8 sm:h-9 px-3 rounded-full border shadow-xs flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-all ${
-              isInsideGeofence === true
-                ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100/80'
-                : isInsideGeofence === false
-                ? 'bg-rose-50 border-rose-300 text-rose-800 hover:bg-rose-100/80'
-                : 'bg-white border-slate-300 text-slate-700'
-            }`}
-            title="کلیک بکە بۆ نوێکردنەوەی لۆکەیشن"
-          >
-            <span className={`w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full flex-shrink-0 ${
-              isInsideGeofence === true
-                ? 'bg-emerald-500 animate-pulse'
-                : isInsideGeofence === false
-                ? 'bg-rose-500'
-                : 'bg-amber-500'
-            }`} />
-            
-            <span className="text-[10px] sm:text-xs font-bold whitespace-nowrap">
-              {gpsLoading ? 'پشکنین...' : gpsStatus}
-            </span>
-          </div>
+        {/* Header Live Clock Badge */}
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 border border-slate-200 text-slate-700 text-xs font-mono font-black shadow-xs">
+          <Clock className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
+          <span>{currentTimeStr || '09:00:00'}</span>
         </div>
 
       </header>
@@ -486,24 +465,53 @@ export default function PublicTerminalLightPage() {
       <main className="flex-1 w-full max-w-3xl mx-auto my-auto flex flex-col items-center justify-center min-h-0 py-1">
         
         {/* Center Crystal Card */}
-        <div className="w-full bg-white/95 backdrop-blur-2xl border border-slate-200/90 rounded-3xl p-5 sm:p-7 shadow-xl shadow-slate-300/30 text-center space-y-4 sm:space-y-5 relative overflow-hidden flex flex-col justify-center">
+        <div className="w-full bg-white/95 backdrop-blur-2xl border border-slate-200/90 rounded-3xl p-5 sm:p-7 shadow-xl shadow-slate-300/30 text-center space-y-3.5 sm:space-y-4 relative overflow-hidden flex flex-col justify-center">
           
           {/* Subtle Ambient Light Glow */}
           <div className="absolute -top-24 -right-24 w-60 h-60 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-24 -left-24 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          {/* Clock & Date Badge */}
-          <div className="space-y-1 sm:space-y-1.5">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-black shadow-inner">
-              <Clock className="w-3 h-3 text-indigo-600" />
-              <span>{currentDateStr || '2026-08-17'}</span>
-            </div>
+          {/* 📍 GEOFENCE STATUS PILL INSIDE CARD (STABLE & NEVER JUMPS) */}
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={checkCurrentLocation}
+              className={`h-8 sm:h-9 px-3.5 max-w-full rounded-full border shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 ${
+                isInsideGeofence === true
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
+                  : isInsideGeofence === false
+                  ? 'bg-rose-50 border-rose-300 text-rose-800 hover:bg-rose-100'
+                  : 'bg-slate-100 border-slate-300 text-slate-700'
+              }`}
+              title="کلیک بکە بۆ دووبارە پشکنینی لۆکەیشن"
+            >
+              <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                isInsideGeofence === true
+                  ? 'bg-emerald-500 animate-pulse'
+                  : isInsideGeofence === false
+                  ? 'bg-rose-500'
+                  : 'bg-amber-500'
+              }`} />
+              
+              <span className="text-[11px] sm:text-xs font-bold truncate max-w-[260px] sm:max-w-[420px]">
+                {gpsLoading ? 'پشکنینی لۆکەیشن...' : gpsStatus}
+              </span>
 
+              <span className="text-[10px] text-slate-400 font-normal">🔄 نوێکردنەوە</span>
+            </button>
+          </div>
+
+          {/* Clock & Date Badge */}
+          <div className="space-y-1">
             <div className="text-3xl sm:text-5xl font-black font-mono tracking-tight text-slate-900">
               {currentTimeStr || '09:00:00'}
             </div>
             
-            <p className="text-[11px] sm:text-xs font-bold text-slate-500 max-w-md mx-auto">
+            <div className="text-[11px] sm:text-xs font-black text-indigo-700 font-mono">
+              📅 {currentDateStr || '2026-08-17'}
+            </div>
+
+            <p className="text-[10px] sm:text-xs font-bold text-slate-500 max-w-md mx-auto pt-0.5">
               تەنها سەیری کامێرا بکە، سیستەمەکە ڕاستەوخۆ دەتبینێت و کاتی هاتن و دەرچوونت تۆمار دەکات.
             </p>
           </div>
