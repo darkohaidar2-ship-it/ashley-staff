@@ -266,10 +266,11 @@ export function AttendanceAnalyticsReport({
           : (checkOutLog as any)?.checkOutTime?.slice(0, 5) || null;
 
         const isPresent = !!(checkInTimeStr || checkOutTimeStr);
+        const isFutureDay = targetDate > '2026-08-15' && selectedMonth === '2026-08';
 
         if (isPresent) {
           daysPresent++;
-        } else if (!isOff) {
+        } else if (!isOff && !isFutureDay) {
           absentDaysCount++;
         }
 

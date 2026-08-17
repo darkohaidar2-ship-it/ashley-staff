@@ -1307,7 +1307,16 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           });
         }
 
-        return NextResponse.json(Array.from(uniqueMap.values()));
+        const allLogs = Array.from(uniqueMap.values()).filter((item: any) => {
+          const itemDate = item.date || (item.time ? item.time.split(' ')[0] : '');
+          if (itemDate && itemDate.startsWith('2026-08-')) {
+            const dayNum = parseInt(itemDate.split('-')[2], 10);
+            return !isNaN(dayNum) && dayNum <= 15;
+          }
+          return true;
+        });
+
+        return NextResponse.json(allLogs);
       } catch (err) {
         return NextResponse.json(generateAugust2026AttendanceRecords());
       }
