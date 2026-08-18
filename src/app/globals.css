@@ -283,26 +283,21 @@
     display: table-footer-group !important;
   }
 
-  /* 🌟 ASHLEY 15-MINUTE SMART COLOR TOLERANCE BADGES */
-  .badge-ontime, [data-status="on_time"] {
+  /* 🌟 TWO DISTINCT 24-HOUR COLORS (GREEN IN, BLUE OUT) */
+  .badge-in-time, .badge-in, [data-type*="in"], [data-type*="هاتن"] {
     background: #ecfdf5 !important;
     color: #065f46 !important;
     border: 1.5px solid #10b981 !important;
     font-weight: 900 !important;
+    font-family: Consolas, monospace !important;
   }
 
-  .badge-late, .badge-early, [data-status="late"], [data-status="early_leave"] {
-    background: #fef2f2 !important;
-    color: #991b1b !important;
-    border: 1.5px solid #f87171 !important;
+  .badge-out-time, .badge-out, [data-type*="out"], [data-type*="دەرچوون"], [data-type*="چون"], [data-type*="ڕۆشتن"] {
+    background: #f0f9ff !important;
+    color: #0369a1 !important;
+    border: 1.5px solid #0284c7 !important;
     font-weight: 900 !important;
-  }
-
-  .badge-overtime, [data-status="overtime"] {
-    background: #f5f3ff !important;
-    color: #581c87 !important;
-    border: 1.5px solid #a855f7 !important;
-    font-weight: 900 !important;
+    font-family: Consolas, monospace !important;
   }
 
   .badge-edited, .badge-modified, [data-is-edited="true"] {
@@ -310,8 +305,10 @@
     color: #1e40af !important;
     border: 1.5px solid #60a5fa !important;
     font-weight: 900 !important;
+    font-family: Consolas, monospace !important;
   }
 }
+
 
 
 
