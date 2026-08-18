@@ -116,7 +116,6 @@ export default function PublicTerminalLightPage() {
 
   const syncRegisteredFaces = useCallback(async () => {
     try {
-      // 1. First read from local database fallback
       const localMap: Record<string, { name: string; descriptor: number[] }> = {};
       try {
         const stored = localStorage.getItem('ashley_face_registry_local');
@@ -126,7 +125,6 @@ export default function PublicTerminalLightPage() {
         }
       } catch {}
 
-      // 2. Fetch from Supabase API
       const res = await fetch(`/api/attendance/face/all?_t=${Date.now()}`, {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' },
@@ -149,7 +147,6 @@ export default function PublicTerminalLightPage() {
         }
       }
 
-      // Add local ones if not in remote
       Object.entries(localMap).forEach(([empId, item]) => {
         if (!combined.some((c) => c.id === empId)) {
           combined.push({
@@ -177,10 +174,9 @@ export default function PublicTerminalLightPage() {
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
 
-  // Biometric Detection 2-Second Hold State
+  // Biometric Detection 2-Second Hold State (Stable, Non-pulsing)
   const [scanProgress, setScanProgress] = useState(0); // 0 to 100%
-  const [isFaceScanning, setIsFaceScanning] = useState(false);
-  const [faceScanMessage, setFaceScanMessage] = useState<string | null>(null);
+  const [faceScanMessage, setFaceScanMessage] = useState<string>('سەیری کامێرای پێشەوە بکە و بۆ ٢ چرکە جێگیربە...');
   const [faceScanSuccess, setFaceScanSuccess] = useState<boolean | null>(null);
   const [recognizedEmployeeName, setRecognizedEmployeeName] = useState<string | null>(null);
 
@@ -191,7 +187,6 @@ export default function PublicTerminalLightPage() {
   const streamRef = useRef<MediaStream | null>(null);
   const isProcessingScanRef = useRef(false);
   const holdTimerRef = useRef<number>(0);
-  const currentCandidateRef = useRef<{ id: string; name: string } | null>(null);
 
   // Check Geofence & Location Accuracy
   const checkCurrentLocation = useCallback(() => {
@@ -214,7 +209,6 @@ export default function PublicTerminalLightPage() {
           return;
         }
 
-        // Calculate distance to each branch
         const distances = companyLocations.map((loc) => {
           const d = calculateDistanceMeters(userLat, userLng, loc.lat, loc.lng);
           return {
@@ -227,8 +221,6 @@ export default function PublicTerminalLightPage() {
         });
 
         setBranchDistanceList(distances);
-
-        // Find closest branch inside radius
         const insideBranch = distances.find((d) => d.isInside);
 
         if (insideBranch) {
@@ -238,7 +230,6 @@ export default function PublicTerminalLightPage() {
           setDistanceMeters(insideBranch.distance);
           setGpsStatus(`لەناو سنووری: ${insideBranch.name} (${insideBranch.distance}m)`);
         } else {
-          // Closest branch
           const sorted = [...distances].sort((a, b) => a.distance - b.distance);
           const closest = sorted[0];
           setCurrentMatchedLocation(null);
@@ -271,7 +262,7 @@ export default function PublicTerminalLightPage() {
     return () => clearInterval(interval);
   }, [checkCurrentLocation]);
 
-  // Start Front Selfie Camera Stream - Optimized for iPhone Without Zoom
+  // Start Front Selfie Camera Stream
   const startCamera = async (overrideFacingMode?: 'user' | 'environment') => {
     const targetFacing = overrideFacingMode || facingMode || 'user';
     try {
@@ -291,19 +282,14 @@ export default function PublicTerminalLightPage() {
           audio: false,
         });
       } catch (firstErr) {
-        console.warn('High resolution constraint fallback:', firstErr);
+        console.warn('High resolution fallback:', firstErr);
         try {
           stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: targetFacing === 'environment' ? 'environment' : 'user',
-            },
+            video: { facingMode: targetFacing === 'environment' ? 'environment' : 'user' },
             audio: false,
           });
         } catch {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false,
-          });
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         }
       }
 
@@ -332,14 +318,12 @@ export default function PublicTerminalLightPage() {
       videoRef.current.srcObject = null;
     }
     setCameraActive(false);
-    setIsFaceScanning(false);
     setActiveFaceAction(null);
-    setFaceScanMessage(null);
+    setFaceScanMessage('سەیری کامێرای پێشەوە بکە و بۆ ٢ چرکە جێگیربە...');
     setFaceScanSuccess(null);
     setRecognizedEmployeeName(null);
     setScanProgress(0);
     holdTimerRef.current = 0;
-    currentCandidateRef.current = null;
     isProcessingScanRef.current = false;
   };
 
@@ -408,17 +392,16 @@ export default function PublicTerminalLightPage() {
 
     setActiveFaceAction(action);
     setFacingMode('user');
-    setFaceScanMessage('سەیری کامێرای پێشەوە بکە و ڕوخسارت جێگیر بکە...');
+    setFaceScanMessage('سەیری کامێرای پێشەوە بکە و بۆ ٢ چرکە جێگیربە...');
     setFaceScanSuccess(null);
     setScanProgress(0);
     holdTimerRef.current = 0;
-    currentCandidateRef.current = null;
     setRecognizedEmployeeName(null);
     setCameraActive(true);
     startCamera('user');
   };
 
-  // 🌟 2-SECOND STEADY HOLD SCANNING LOOP (ZERO FLICKER)
+  // 🌟 2-SECOND STEADY HOLD SCANNING LOOP (CALM, STEADY NOTIFICATIONS)
   useEffect(() => {
     if (!cameraActive || !activeFaceAction) return;
 
@@ -447,15 +430,11 @@ export default function PublicTerminalLightPage() {
           }
 
           if (matchedEmp) {
-            currentCandidateRef.current = matchedEmp;
             holdTimerRef.current += 150;
-
             const pct = Math.min(100, Math.round((holdTimerRef.current / 2000) * 100));
             setScanProgress(pct);
 
-            if (pct < 100) {
-              setFaceScanMessage(`سڵاو ${matchedEmp.name}... جێگیربە بۆ دڵنیابوونەوە (${Math.round((2000 - holdTimerRef.current) / 1000 * 10) / 10} چ)`);
-            } else if (pct >= 100 && !isProcessingScanRef.current) {
+            if (pct >= 100 && !isProcessingScanRef.current) {
               isProcessingScanRef.current = true;
               clearInterval(interval);
 
@@ -477,7 +456,6 @@ export default function PublicTerminalLightPage() {
               holdTimerRef.current = Math.max(0, holdTimerRef.current - 200);
               setScanProgress(Math.round((holdTimerRef.current / 2000) * 100));
             }
-            setFaceScanMessage('ڕوخسار لەناو سیستم تۆمار نەکراوە! دەتوانیت لە ڕێگەی ئەدمین تۆماری بکەیت.');
           }
         } else {
           // Face moved out of frame
@@ -485,7 +463,6 @@ export default function PublicTerminalLightPage() {
             holdTimerRef.current = Math.max(0, holdTimerRef.current - 300);
             setScanProgress(Math.round((holdTimerRef.current / 2000) * 100));
           }
-          setFaceScanMessage('سەیری کامێرا بکە و دەموچاوت لە ناو بازنەکە ڕابگرە...');
         }
       } catch (err) {
         console.error('Scan error:', err);
@@ -504,8 +481,6 @@ export default function PublicTerminalLightPage() {
       
       {/* 🌟 ULTRA-CLEAN LIGHT HEADER (FIXED TOP) */}
       <header className="w-full max-w-4xl mx-auto flex-shrink-0 flex items-center justify-between pb-1">
-        
-        {/* Brand Logo & Name */}
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-slate-900 to-indigo-900 flex items-center justify-center text-white shadow-md shadow-slate-900/10 flex-shrink-0">
             <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
@@ -525,21 +500,16 @@ export default function PublicTerminalLightPage() {
           </div>
         </div>
 
-        {/* Header Live Clock Badge */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 border border-slate-200 text-slate-700 text-xs font-mono font-black shadow-xs">
           <Clock className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
           <span>{currentTimeStr || '09:00:00'}</span>
         </div>
-
       </header>
 
-      {/* 🌟 MAIN TERMINAL BODY (PERFECT VIEWPORT FIT - NO SCROLL) */}
+      {/* 🌟 MAIN TERMINAL BODY */}
       <main className="flex-1 w-full max-w-3xl mx-auto my-auto flex flex-col items-center justify-center min-h-0 py-1">
-        
-        {/* Center Crystal Card */}
         <div className="w-full bg-white/95 backdrop-blur-2xl border border-slate-200/90 rounded-3xl p-5 sm:p-7 shadow-xl shadow-slate-300/30 text-center space-y-3.5 sm:space-y-4 relative overflow-hidden flex flex-col justify-center">
           
-          {/* Subtle Ambient Light Glow */}
           <div className="absolute -top-24 -right-24 w-60 h-60 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-24 -left-24 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -599,10 +569,8 @@ export default function PublicTerminalLightPage() {
             </div>
           )}
 
-          {/* 🌟 TWO PROMINENT ACTION TILES: CHECK IN & CHECK OUT */}
+          {/* TWO PROMINENT TILES: CHECK IN & CHECK OUT */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-1">
-            
-            {/* 📥 CHECK IN BUTTON */}
             <button
               type="button"
               onClick={() => handleOpenFaceTerminal('Check In')}
@@ -636,7 +604,6 @@ export default function PublicTerminalLightPage() {
               </div>
             </button>
 
-            {/* 📤 CHECK OUT BUTTON */}
             <button
               type="button"
               onClick={() => handleOpenFaceTerminal('Check Out')}
@@ -669,34 +636,27 @@ export default function PublicTerminalLightPage() {
                 </span>
               </div>
             </button>
-
           </div>
 
-          {/* Active Registered Faces Info */}
           <div className="pt-1 flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-500">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             <span>{registeredFacesList.length} کارمەند بە ڕوخسار تۆمار کراون و ئامادەن</span>
           </div>
-
         </div>
-
       </main>
 
-      {/* 🌟 FOOTER */}
       <footer className="w-full max-w-4xl mx-auto flex-shrink-0 py-1 text-center text-[10px] font-bold text-slate-400">
         ASHLEY ENTERPRISE ERP SYSTEM © 2026 — هەموو مافەکان پارێزراون
       </footer>
 
       {/* ========================================================================= */}
-      {/* 🎥 IMMERSIVE FULL-SCREEN AI FACE RECOGNITION CAMERA MODAL (IPHONE OPTIMIZED) */}
+      {/* 🎥 IMMERSIVE FULL-SCREEN AI FACE TERMINAL WITH LARGE 2-SECOND RING */}
       {/* ========================================================================= */}
       {cameraActive && (
         <div className="fixed inset-0 z-50 bg-black flex flex-col justify-between overflow-hidden select-none touch-none">
           
-          {/* 🌟 TOP FLOATING MINIMAL CONTROLS BAR */}
-          <div className="absolute top-0 inset-x-0 z-30 p-4 pt-6 flex items-center justify-between bg-gradient-to-b from-black/80 via-black/40 to-transparent">
-            
-            {/* Action Title Badge */}
+          {/* 🌟 TOP FLOATING CONTROLS */}
+          <div className="absolute top-0 inset-x-0 z-30 p-4 pt-6 flex items-center justify-between bg-gradient-to-b from-black/80 via-black/40 to-transparent pointer-events-auto">
             <div className="px-3.5 py-1.5 rounded-full bg-black/50 backdrop-blur-xl border border-white/20 text-white text-xs font-black flex items-center gap-2">
               <Camera className="w-4 h-4 text-emerald-400" />
               <span>
@@ -704,7 +664,6 @@ export default function PublicTerminalLightPage() {
               </span>
             </div>
 
-            {/* Switch Camera & Close Buttons Only */}
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -726,7 +685,7 @@ export default function PublicTerminalLightPage() {
             </div>
           </div>
 
-          {/* 🌟 FULL SCREEN CAMERA FEED (STATIC ISOLATED ELEMENT - ZERO SHAKE) */}
+          {/* 🌟 FULL SCREEN CAMERA FEED WITH EXPANDED LARGE OVAL HUD */}
           <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
             <video
               ref={videoRef}
@@ -739,53 +698,53 @@ export default function PublicTerminalLightPage() {
               }`}
             />
 
-            {/* 🟢 2-SECOND FILLING BIOMETRIC SVG OVAL HUD */}
+            {/* 🟢 EXPANDED LARGE BIOMETRIC SVG OVAL HUD */}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <div className="relative w-64 h-80 sm:w-72 sm:h-96 flex items-center justify-center">
+              <div className="relative w-[86vw] max-w-[360px] h-[64vh] max-h-[490px] flex items-center justify-center">
                 
-                {/* SVG Ellipse Progress Ring */}
-                <svg className="w-full h-full drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]" viewBox="0 0 280 360">
-                  {/* Background Track */}
+                {/* Large SVG Ellipse Progress Ring */}
+                <svg className="w-full h-full drop-shadow-[0_0_25px_rgba(0,0,0,0.85)]" viewBox="0 0 340 460">
+                  {/* Outer Dashed Track */}
                   <ellipse
-                    cx="140"
-                    cy="180"
-                    rx="120"
-                    ry="160"
+                    cx="170"
+                    cy="230"
+                    rx="155"
+                    ry="215"
                     fill="none"
                     stroke="rgba(255, 255, 255, 0.25)"
-                    strokeWidth="4"
-                    strokeDasharray="8 6"
+                    strokeWidth="4.5"
+                    strokeDasharray="10 7"
                   />
 
-                  {/* Glowing Smooth Progress Stroke (Fills in 2 Seconds) */}
+                  {/* Smooth 2-Second Progress Stroke */}
                   <ellipse
-                    cx="140"
-                    cy="180"
-                    rx="120"
-                    ry="160"
+                    cx="170"
+                    cy="230"
+                    rx="155"
+                    ry="215"
                     fill="none"
                     stroke={faceScanSuccess ? '#10b981' : scanProgress > 0 ? '#38bdf8' : 'transparent'}
-                    strokeWidth="6"
+                    strokeWidth="7"
                     strokeLinecap="round"
                     style={{
-                      strokeDasharray: 890,
-                      strokeDashoffset: 890 - (890 * scanProgress) / 100,
+                      strokeDasharray: 1170,
+                      strokeDashoffset: 1170 - (1170 * scanProgress) / 100,
                       transition: 'stroke-dashoffset 0.15s linear, stroke 0.3s ease',
                     }}
                   />
                 </svg>
 
-                {/* Center Live Guidance Badge */}
+                {/* Center Badge Indicator */}
                 <div className="absolute inset-x-0 bottom-6 text-center">
-                  <span className={`text-xs font-black px-3.5 py-1 rounded-full backdrop-blur-md border shadow-lg transition-colors ${
+                  <span className={`text-xs font-black px-4 py-1.5 rounded-full backdrop-blur-md border shadow-lg transition-colors ${
                     scanProgress >= 100
                       ? 'bg-emerald-500 text-white border-emerald-300'
                       : scanProgress > 0
                       ? 'bg-sky-600/90 text-white border-sky-400 font-mono'
-                      : 'bg-black/70 text-white border-white/20'
+                      : 'bg-black/75 text-white border-white/20'
                   }`}>
                     {scanProgress >= 100
-                      ? `✅ ${recognizedEmployeeName || 'سەرکەوتوو بوو'}`
+                      ? `✅ ${recognizedEmployeeName || 'دڵنیابووەوە'}`
                       : scanProgress > 0
                       ? `⏳ ${scanProgress}% جێگیربە`
                       : 'ڕوخسارت بخەرە ناو بازنەکە'}
@@ -811,17 +770,17 @@ export default function PublicTerminalLightPage() {
             )}
           </div>
 
-          {/* 🌟 BOTTOM STATUS BAR */}
+          {/* 🌟 BOTTOM STEADY NOTIFICATION STATUS */}
           <div className="absolute bottom-0 inset-x-0 z-30 p-6 pb-8 flex flex-col items-center justify-center bg-gradient-to-t from-black/90 via-black/50 to-transparent pointer-events-none">
-            <div className={`px-5 py-2.5 rounded-full backdrop-blur-2xl border text-center shadow-xl transition-all ${
+            <div className={`px-6 py-2.5 rounded-full backdrop-blur-2xl border text-center shadow-xl transition-all ${
               faceScanSuccess === true
                 ? 'bg-emerald-600/90 text-white border-emerald-400'
                 : faceScanSuccess === false
                 ? 'bg-rose-600/90 text-white border-rose-400'
-                : 'bg-black/70 text-white border-white/20'
+                : 'bg-black/75 text-white border-white/20'
             }`}>
               <p className="text-xs sm:text-sm font-black">
-                {faceScanMessage || 'سەیری کامێرای پێشەوە بکە و بۆ ٢ چرکە جێگیربە...'}
+                {faceScanMessage}
               </p>
             </div>
           </div>

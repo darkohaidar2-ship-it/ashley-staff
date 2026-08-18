@@ -21,7 +21,7 @@ export function AdminFaceEnrollModal({
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [scanProgress, setScanProgress] = useState(0); // 0 to 100%
   const [isScanning, setIsScanning] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string>('سەیری کامێرای پێشەوە بکە و بۆ ٢ چرکە جێگیربە...');
   const [isSuccess, setIsSuccess] = useState<boolean | null>(null);
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
 
@@ -34,7 +34,7 @@ export function AdminFaceEnrollModal({
   // Check if employee already has face registered
   useEffect(() => {
     if (!employee?.id || !isOpen) return;
-    setStatusMessage('سەیری کامێرای پێشەوە بکە و ڕوخسارت جێگیر بکە...');
+    setStatusMessage('سەیری کامێرای پێشەوە بکە و بۆ ٢ چرکە جێگیربە...');
     setIsSuccess(null);
     setScanProgress(0);
     isEnrollingRef.current = false;
@@ -116,6 +116,7 @@ export function AdminFaceEnrollModal({
     }
     isEnrollingRef.current = false;
     setIsScanning(false);
+    setStatusMessage('سەیری کامێرای پێشەوە بکە و بۆ ٢ چرکە جێگیربە...');
     setScanProgress(0);
     holdTimerRef.current = 0;
   };
@@ -178,7 +179,7 @@ export function AdminFaceEnrollModal({
     }
   }, [employee, onSuccess, onClose]);
 
-  // 🌟 2-SECOND STEADY HOLD SCANNING LOOP (ZERO FLICKER)
+  // 🌟 2-SECOND STEADY HOLD SCANNING LOOP (CALM, STEADY NOTIFICATIONS)
   useEffect(() => {
     if (!isOpen) return;
 
@@ -198,14 +199,12 @@ export function AdminFaceEnrollModal({
 
         if (liveResult && liveResult.descriptor) {
           lastDescriptorRef.current = liveResult.descriptor;
-          holdTimerRef.current += 150; // Progress increment per tick
+          holdTimerRef.current += 150;
 
           const pct = Math.min(100, Math.round((holdTimerRef.current / 2000) * 100));
           setScanProgress(pct);
 
-          if (pct < 100) {
-            setStatusMessage(`جێگیربە... پڕبوونەوەی بازنە (${Math.round((2000 - holdTimerRef.current) / 1000 * 10) / 10} چرکە)`);
-          } else if (pct >= 100 && !isEnrollingRef.current) {
+          if (pct >= 100 && !isEnrollingRef.current) {
             clearInterval(interval);
             await saveFaceDescriptor(lastDescriptorRef.current);
           }
@@ -215,7 +214,6 @@ export function AdminFaceEnrollModal({
             holdTimerRef.current = Math.max(0, holdTimerRef.current - 300);
             setScanProgress(Math.round((holdTimerRef.current / 2000) * 100));
           }
-          setStatusMessage('سەیری کامێرا بکە و دەموچاوت لە ناو بازنەکە ڕابگرە...');
         }
       } catch (err) {
         console.error('Detection frame error:', err);
@@ -283,7 +281,7 @@ export function AdminFaceEnrollModal({
         </div>
       </div>
 
-      {/* 🌟 FULL SCREEN CAMERA FEED (STATIC ISOLATED ELEMENT - ZERO SHAKE) */}
+      {/* 🌟 FULL SCREEN CAMERA FEED WITH EXPANDED LARGE OVAL HUD */}
       <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
         <video
           ref={videoRef}
@@ -296,37 +294,37 @@ export function AdminFaceEnrollModal({
           }`}
         />
 
-        {/* 🌟 2-SECOND FILLING BIOMETRIC SVG OVAL HUD */}
+        {/* 🌟 EXPANDED LARGE 2-SECOND BIOMETRIC SVG OVAL HUD */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <div className="relative w-64 h-80 sm:w-72 sm:h-96 flex items-center justify-center">
+          <div className="relative w-[86vw] max-w-[360px] h-[64vh] max-h-[490px] flex items-center justify-center">
             
             {/* SVG Ellipse Progress Ring */}
-            <svg className="w-full h-full drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]" viewBox="0 0 280 360">
+            <svg className="w-full h-full drop-shadow-[0_0_25px_rgba(0,0,0,0.85)]" viewBox="0 0 340 460">
               {/* Background Track */}
               <ellipse
-                cx="140"
-                cy="180"
-                rx="120"
-                ry="160"
+                cx="170"
+                cy="230"
+                rx="155"
+                ry="215"
                 fill="none"
                 stroke="rgba(255, 255, 255, 0.25)"
-                strokeWidth="4"
-                strokeDasharray="8 6"
+                strokeWidth="4.5"
+                strokeDasharray="10 7"
               />
 
               {/* Glowing Smooth Progress Stroke (Fills in 2 Seconds) */}
               <ellipse
-                cx="140"
-                cy="180"
-                rx="120"
-                ry="160"
+                cx="170"
+                cy="230"
+                rx="155"
+                ry="215"
                 fill="none"
                 stroke={isSuccess ? '#10b981' : scanProgress > 0 ? '#38bdf8' : 'transparent'}
-                strokeWidth="6"
+                strokeWidth="7"
                 strokeLinecap="round"
                 style={{
-                  strokeDasharray: 890,
-                  strokeDashoffset: 890 - (890 * scanProgress) / 100,
+                  strokeDasharray: 1170,
+                  strokeDashoffset: 1170 - (1170 * scanProgress) / 100,
                   transition: 'stroke-dashoffset 0.15s linear, stroke 0.3s ease',
                 }}
               />
@@ -334,12 +332,12 @@ export function AdminFaceEnrollModal({
 
             {/* Center Live Percentage / Guidance */}
             <div className="absolute inset-x-0 bottom-6 text-center">
-              <span className={`text-xs font-black px-3.5 py-1 rounded-full backdrop-blur-md border shadow-lg transition-colors ${
+              <span className={`text-xs font-black px-4 py-1.5 rounded-full backdrop-blur-md border shadow-lg transition-colors ${
                 scanProgress >= 100
                   ? 'bg-emerald-500 text-white border-emerald-300'
                   : scanProgress > 0
                   ? 'bg-sky-600/90 text-white border-sky-400 font-mono'
-                  : 'bg-black/70 text-white border-white/20'
+                  : 'bg-black/75 text-white border-white/20'
               }`}>
                 {scanProgress >= 100
                   ? '✅ تەواو بوو'
@@ -368,9 +366,9 @@ export function AdminFaceEnrollModal({
         )}
       </div>
 
-      {/* 🌟 BOTTOM STATUS BAR & INSTANT SNAP FALLBACK */}
+      {/* 🌟 BOTTOM STEADY STATUS BAR & INSTANT SNAP FALLBACK */}
       <div className="absolute bottom-0 inset-x-0 z-30 p-6 pb-8 flex flex-col items-center justify-center gap-3 bg-gradient-to-t from-black/90 via-black/50 to-transparent pointer-events-auto">
-        <div className={`px-5 py-2 rounded-full backdrop-blur-2xl border text-center shadow-xl transition-all ${
+        <div className={`px-6 py-2.5 rounded-full backdrop-blur-2xl border text-center shadow-xl transition-all ${
           isSuccess === true
             ? 'bg-emerald-600/90 text-white border-emerald-400'
             : isSuccess === false
@@ -379,7 +377,7 @@ export function AdminFaceEnrollModal({
         }`}>
           <p className="text-xs sm:text-sm font-black flex items-center gap-2">
             {isScanning && <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-300" />}
-            <span>{statusMessage || 'سەیری کامێرای پێشەوە بکە و بۆ ٢ چرکە جێگیربە...'}</span>
+            <span>{statusMessage}</span>
           </p>
         </div>
 
