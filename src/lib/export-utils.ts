@@ -285,42 +285,72 @@ export function exportToPDF(options: ExportReportOptions) {
       background-color: #ffffff !important;
     }
 
-    /* Highlight Badges */
+    /* 🌟 STRICT USER-REQUESTED COLOR HIGHLIGHT BADGES:
+       - هاتن (Check In): شین (Blue)
+       - ڕۆیشتوو / دەرچوون (Check Out): سوور (Red)
+       - گۆڕاو / دەستکاریکراو (Modified / Edited): سەوز (Green)
+    */
     .badge-in {
-      background: #ecfdf5 !important;
-      color: #065f46 !important;
-      border: 1px solid #a7f3d0 !important;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-weight: 800;
+      background: #eff6ff !important;
+      color: #1d4ed8 !important;
+      border: 1.5px solid #60a5fa !important;
+      padding: 2.5px 8px;
+      border-radius: 5px;
+      font-weight: 900;
       display: inline-block;
+      white-space: nowrap;
     }
     .badge-out {
-      background: #eff6ff !important;
-      color: #1e40af !important;
-      border: 1px solid #bfdbfe !important;
+      background: #fef2f2 !important;
+      color: #dc2626 !important;
+      border: 1.5px solid #f87171 !important;
+      padding: 2.5px 8px;
+      border-radius: 5px;
+      font-weight: 900;
+      display: inline-block;
+      white-space: nowrap;
+    }
+    .badge-edited {
+      background: #f0fdf4 !important;
+      color: #15803d !important;
+      border: 1.5px solid #4ade80 !important;
+      padding: 2.5px 8px;
+      border-radius: 5px;
+      font-weight: 900;
+      display: inline-block;
+      white-space: nowrap;
+    }
+    .badge-date {
+      background: #f8fafc !important;
+      color: #0f172a !important;
+      border: 1px solid #94a3b8 !important;
       padding: 2px 6px;
       border-radius: 4px;
       font-weight: 800;
+      font-family: Consolas, monospace;
       display: inline-block;
+      white-space: nowrap;
     }
     .badge-ot {
       background: #fffbeb !important;
-      color: #92400e !important;
-      border: 1px solid #fde68a !important;
-      padding: 2px 6px;
-      border-radius: 4px;
+      color: #b45309 !important;
+      border: 1.5px solid #f59e0b !important;
+      padding: 2.5px 8px;
+      border-radius: 5px;
       font-weight: 900;
       display: inline-block;
+      white-space: nowrap;
     }
     .badge-money {
-      background: #f0fdf4 !important;
-      color: #166534 !important;
-      border: 1px solid #bbf7d0 !important;
-      padding: 2px 6px;
-      border-radius: 4px;
+      background: #ecfdf5 !important;
+      color: #065f46 !important;
+      border: 1.5px solid #10b981 !important;
+      padding: 2.5px 8px;
+      border-radius: 5px;
       font-weight: 900;
+      font-family: Consolas, monospace;
       display: inline-block;
+      white-space: nowrap;
     }
 
     /* Footer & Signatures */
@@ -450,16 +480,29 @@ export function exportToPDF(options: ExportReportOptions) {
               .map(col => {
                 const val = row[col.key] !== undefined && row[col.key] !== null ? String(row[col.key]) : '-';
                 
-                // Smart color highlights for numbers, hours, and amounts
+                // Smart color highlights for dates, times, check-in (blue), check-out (red), modified (green)
                 let formattedCell = val;
-                if (col.key.toLowerCase().includes('amount') || col.key.toLowerCase().includes('cost') || val.includes('IQD')) {
+                const lowerKey = col.key.toLowerCase();
+                const lowerVal = val.toLowerCase();
+
+                if (lowerVal.includes('گۆڕاو') || lowerVal.includes('دەستکاریکراو') || lowerVal.includes('edited') || lowerVal.includes('modified') || lowerKey.includes('edit')) {
+                  // گۆڕاو سەوز
+                  formattedCell = `<span class="badge-edited">✏️ ${val}</span>`;
+                } else if (lowerKey.includes('in') || lowerKey.includes('هاتن') || lowerVal.includes('📥') || lowerVal.includes('هاتن') || lowerVal.includes('check in')) {
+                  // هاتن شین
+                  formattedCell = `<span class="badge-in">📥 ${val.replace('📥', '').trim()}</span>`;
+                } else if (lowerKey.includes('out') || lowerKey.includes('ڕۆشتن') || lowerKey.includes('دەرچوون') || lowerVal.includes('📤') || lowerVal.includes('ڕۆیشتوو') || lowerVal.includes('check out')) {
+                  // ڕۆیشتوو سوور
+                  formattedCell = `<span class="badge-out">📤 ${val.replace('📤', '').trim()}</span>`;
+                } else if (lowerKey.includes('date') || lowerKey.includes('بەروار') || /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                  // بەروار
+                  formattedCell = `<span class="badge-date">📅 ${val}</span>`;
+                } else if (lowerKey.includes('amount') || lowerKey.includes('cost') || lowerKey.includes('pay') || lowerVal.includes('iqd')) {
+                  // پارە
                   formattedCell = `<span class="badge-money">${val}</span>`;
-                } else if (col.key.toLowerCase().includes('hour') || val.includes('کاتژمێر')) {
+                } else if (lowerKey.includes('hour') || lowerKey.includes('overtime') || lowerVal.includes('کاتژمێر')) {
+                  // ئیزافە
                   formattedCell = `<span class="badge-ot">${val}</span>`;
-                } else if (col.key.toLowerCase().includes('in') || val.includes('📥')) {
-                  formattedCell = `<span class="badge-in">${val}</span>`;
-                } else if (col.key.toLowerCase().includes('out') || val.includes('📤')) {
-                  formattedCell = `<span class="badge-out">${val}</span>`;
                 }
 
                 return `
