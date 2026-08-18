@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Camera, RefreshCw, CheckCircle2, SwitchCamera, X, Sparkles } from 'lucide-react';
+import { Camera, RefreshCw, CheckCircle2, SwitchCamera, X } from 'lucide-react';
 import { extractFaceDescriptor, loadFaceModels } from '@/lib/face-recognition';
 import type { Employee } from '@/lib/types';
 
@@ -31,7 +31,15 @@ export function AdminFaceEnrollModal({
   const holdTimerRef = useRef<number>(0);
   const lastDescriptorRef = useRef<number[] | null>(null);
 
-  // Check if employee already has face registered
+  // Store stable refs for props to prevent re-renders from restarting the camera
+  const employeeRef = useRef(employee);
+  employeeRef.current = employee;
+  const onSuccessRef = useRef(onSuccess);
+  onSuccessRef.current = onSuccess;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Check if employee already has face registered on modal open
   useEffect(() => {
     if (!employee?.id || !isOpen) return;
     setStatusMessage('سەیری کامێرای پێشەوە بکە و بۆ ٢ چرکە جێگیربە...');
@@ -59,10 +67,10 @@ export function AdminFaceEnrollModal({
         }
       })
       .catch(() => setAlreadyRegistered(false));
-  }, [employee, isOpen]);
+  }, [employee?.id, isOpen]);
 
   // Start camera (Hardware-accelerated, zero-shake, natural wide resolution)
-  const startCamera = async (mode: 'user' | 'environment') => {
+  const startCameraStream = useCallback(async (mode: 'user' | 'environment') => {
     try {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
@@ -104,9 +112,9 @@ export function AdminFaceEnrollModal({
       setStatusMessage('هەڵە لە کردنەوەی کامێرا: ' + (err.message || 'تکایە لە Safari ڕێگە بدە'));
       setIsSuccess(false);
     }
-  };
+  }, []);
 
-  const stopCamera = () => {
+  const stopCameraStream = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
@@ -119,7 +127,7 @@ export function AdminFaceEnrollModal({
     setStatusMessage('سەیری کامێرای پێشەوە بکە و بۆ ٢ چرکە جێگیربە...');
     setScanProgress(0);
     holdTimerRef.current = 0;
-  };
+  }, []);
 
   // Perform Final Face Save to Supabase and LocalStorage
   const saveFaceDescriptor = useCallback(async (descriptor: number[]) => {
@@ -128,13 +136,15 @@ export function AdminFaceEnrollModal({
     setIsScanning(true);
     setStatusMessage('تۆمارکردنی ئەندازەی دەموچاو...');
 
+    const currentEmp = employeeRef.current;
+
     try {
       // 1. Save locally immediately
       try {
         const localDb = JSON.parse(localStorage.getItem('ashley_face_registry_local') || '{}');
-        localDb[employee.id] = {
-          id: employee.id,
-          name: employee.fullName3Part || employee.name,
+        localDb[currentEmp.id] = {
+          id: currentEmp.id,
+          name: currentEmp.fullName3Part || currentEmp.name,
           descriptor,
         };
         localStorage.setItem('ashley_face_registry_local', JSON.stringify(localDb));
@@ -145,8 +155,8 @@ export function AdminFaceEnrollModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: employee.id,
-          userName: employee.fullName3Part || employee.name,
+          userId: currentEmp.id,
+          userName: currentEmp.fullName3Part || currentEmp.name,
           descriptor,
           createdAt: new Date().toISOString(),
         }),
@@ -158,14 +168,14 @@ export function AdminFaceEnrollModal({
 
       setIsSuccess(true);
       setScanProgress(100);
-      setStatusMessage(`✅ ڕوخساری (${employee.fullName3Part || employee.name}) بە سەرکەوتوویی تۆمارکرا!`);
+      setStatusMessage(`✅ ڕوخساری (${currentEmp.fullName3Part || currentEmp.name}) بە سەرکەوتوویی تۆمارکرا!`);
       setAlreadyRegistered(true);
 
       // Smooth auto-close after 1.2s
       setTimeout(() => {
-        stopCamera();
-        onSuccess();
-        onClose();
+        stopCameraStream();
+        onSuccessRef.current();
+        onCloseRef.current();
       }, 1200);
     } catch (err: any) {
       console.error('Face registration error:', err);
@@ -177,14 +187,23 @@ export function AdminFaceEnrollModal({
     } finally {
       setIsScanning(false);
     }
-  }, [employee, onSuccess, onClose]);
+  }, [stopCameraStream]);
 
-  // 🌟 2-SECOND STEADY HOLD SCANNING LOOP (CALM, STEADY NOTIFICATIONS)
+  // 🌟 CAMERA LIFECYCLE: Starts ONLY on Modal Open, Never Re-triggers on Re-renders
   useEffect(() => {
     if (!isOpen) return;
 
     loadFaceModels();
-    startCamera(facingMode);
+    startCameraStream(facingMode);
+
+    return () => {
+      stopCameraStream();
+    };
+  }, [isOpen, facingMode, startCameraStream, stopCameraStream]);
+
+  // 🌟 2-SECOND STEADY HOLD SCANNING INTERVAL (Completely independent of render cycles)
+  useEffect(() => {
+    if (!isOpen) return;
 
     let isDetecting = false;
 
@@ -224,15 +243,14 @@ export function AdminFaceEnrollModal({
 
     return () => {
       clearInterval(interval);
-      stopCamera();
     };
-  }, [isOpen, facingMode, saveFaceDescriptor]);
+  }, [isOpen, saveFaceDescriptor]);
 
   // Switch camera
   const handleToggleCamera = () => {
     const nextMode = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(nextMode);
-    startCamera(nextMode);
+    startCameraStream(nextMode);
   };
 
   if (!isOpen) return null;
@@ -270,7 +288,7 @@ export function AdminFaceEnrollModal({
           <button
             type="button"
             onClick={() => {
-              stopCamera();
+              stopCameraStream();
               onClose();
             }}
             className="w-11 h-11 rounded-full bg-rose-600/80 hover:bg-rose-600 backdrop-blur-xl border border-white/30 text-white flex items-center justify-center shadow-lg transition-transform active:scale-90 cursor-pointer"
