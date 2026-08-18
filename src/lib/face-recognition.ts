@@ -85,11 +85,11 @@ export async function extractFaceDescriptor(
 }
 
 // 3. Match Two Face Descriptors (Euclidean Distance)
-// Standard threshold for mobile facial recognition is 0.60
+// Strict High-Precision threshold for reliable multi-person biometric facial recognition (0.48)
 export function matchFaceDescriptors(
   descriptor1: number[] | Float32Array,
   descriptor2: number[] | Float32Array,
-  threshold = 0.60
+  threshold = 0.48
 ): { isMatch: boolean; distance: number; similarityPercent: number } {
   const d1 = Array.from(descriptor1);
   const d2 = Array.from(descriptor2);
@@ -100,7 +100,7 @@ export function matchFaceDescriptors(
     sum += diff * diff;
   }
   const distance = Math.sqrt(sum);
-  const similarityPercent = Math.max(0, Math.min(100, Math.round((1 - distance / 1.2) * 100)));
+  const similarityPercent = Math.max(0, Math.min(100, Math.round((1 - distance / 0.9) * 100)));
 
   return {
     isMatch: distance <= threshold,
@@ -108,3 +108,4 @@ export function matchFaceDescriptors(
     similarityPercent,
   };
 }
+

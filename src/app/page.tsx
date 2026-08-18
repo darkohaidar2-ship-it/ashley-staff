@@ -187,6 +187,7 @@ export default function PublicTerminalLightPage() {
   const streamRef = useRef<MediaStream | null>(null);
   const isProcessingScanRef = useRef(false);
   const holdTimerRef = useRef<number>(0);
+  const lastDetectedEmpIdRef = useRef<string | null>(null);
 
   // Check Geofence & Location Accuracy
   const checkCurrentLocation = useCallback(() => {
@@ -396,12 +397,13 @@ export default function PublicTerminalLightPage() {
     setFaceScanSuccess(null);
     setScanProgress(0);
     holdTimerRef.current = 0;
+    lastDetectedEmpIdRef.current = null;
     setRecognizedEmployeeName(null);
     setCameraActive(true);
     startCamera('user');
   };
 
-  // 🌟 2-SECOND STEADY HOLD SCANNING LOOP (CALM, STEADY NOTIFICATIONS)
+  // 🌟 2-SECOND STEADY HOLD SCANNING LOOP (CALM, STEADY NOTIFICATIONS WITH GLOBAL BEST MATCH)
   useEffect(() => {
     if (!cameraActive || !activeFaceAction) return;
 
@@ -417,33 +419,44 @@ export default function PublicTerminalLightPage() {
         const liveResult = await extractFaceDescriptor(videoRef.current);
 
         if (liveResult && liveResult.descriptor) {
-          // Match against database
-          let matchedEmp: { id: string; name: string } | null = null;
+          // 🎯 Global Minimum Distance Best-Match across ALL registered faces
+          let bestMatchedEmp: { id: string; name: string } | null = null;
+          let minDistance = Infinity;
+          const STRICT_THRESHOLD = 0.48; // High precision threshold
+
           for (const registeredUser of registeredFacesList) {
             if (registeredUser.descriptor && registeredUser.descriptor.length > 0) {
-              const match = matchFaceDescriptors(liveResult.descriptor, registeredUser.descriptor, 0.60);
-              if (match.isMatch) {
-                matchedEmp = registeredUser;
-                break;
+              const match = matchFaceDescriptors(liveResult.descriptor, registeredUser.descriptor, STRICT_THRESHOLD);
+              if (match.isMatch && match.distance < minDistance) {
+                minDistance = match.distance;
+                bestMatchedEmp = registeredUser;
               }
             }
           }
 
-          if (matchedEmp) {
-            holdTimerRef.current += 150;
+          if (bestMatchedEmp) {
+            // Track if it's the SAME continuous person
+            if (lastDetectedEmpIdRef.current === bestMatchedEmp.id) {
+              holdTimerRef.current += 150;
+            } else {
+              lastDetectedEmpIdRef.current = bestMatchedEmp.id;
+              holdTimerRef.current = 150;
+            }
+
             const pct = Math.min(100, Math.round((holdTimerRef.current / 2000) * 100));
             setScanProgress(pct);
+            setFaceScanMessage(`ناسراوە: ${bestMatchedEmp.name} (بۆ ٢ چرکە جێگیربە...)`);
 
             if (pct >= 100 && !isProcessingScanRef.current) {
               isProcessingScanRef.current = true;
               clearInterval(interval);
 
               setFaceScanSuccess(true);
-              setRecognizedEmployeeName(matchedEmp.name);
-              setFaceScanMessage(`سەرکەوتوو بوو! بەخێربێیت ${matchedEmp.name}`);
+              setRecognizedEmployeeName(bestMatchedEmp.name);
+              setFaceScanMessage(`سەرکەوتوو بوو! بەخێربێیت ${bestMatchedEmp.name}`);
 
               // Save Attendance immediately
-              await saveAttendanceLog(matchedEmp.id, matchedEmp.name, activeFaceAction);
+              await saveAttendanceLog(bestMatchedEmp.id, bestMatchedEmp.name, activeFaceAction);
 
               // Automatically close smoothly after 1.2s
               setTimeout(() => {
@@ -451,18 +464,22 @@ export default function PublicTerminalLightPage() {
               }, 1200);
             }
           } else {
-            // Face in frame but not registered
+            // Face in frame but does not match any registered employee closely
+            lastDetectedEmpIdRef.current = null;
             if (holdTimerRef.current > 0) {
               holdTimerRef.current = Math.max(0, holdTimerRef.current - 200);
               setScanProgress(Math.round((holdTimerRef.current / 2000) * 100));
             }
+            setFaceScanMessage('ڕوخسار لە کۆگای داتا نەدۆزرایەوە');
           }
         } else {
           // Face moved out of frame
+          lastDetectedEmpIdRef.current = null;
           if (holdTimerRef.current > 0) {
             holdTimerRef.current = Math.max(0, holdTimerRef.current - 300);
             setScanProgress(Math.round((holdTimerRef.current / 2000) * 100));
           }
+          setFaceScanMessage('سەیری ناو بازنەکە بکە...');
         }
       } catch (err) {
         console.error('Scan error:', err);

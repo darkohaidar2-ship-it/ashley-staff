@@ -789,6 +789,59 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       });
     }
 
+    // ----------------------------------------
+    // POST /api/attendance/face/delete
+    // ----------------------------------------
+    if (pathStr === 'face/delete' && method === 'POST') {
+      const { userId } = await req.json();
+      if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
+
+      let registry: Record<string, any> = {};
+
+      try {
+        const { data: regRow } = await supabase
+          .from('warehouses')
+          .select('*')
+          .eq('id', 'ashley_face_registry')
+          .maybeSingle();
+
+        if (regRow?.qr_code) {
+          try {
+            registry = JSON.parse(regRow.qr_code);
+          } catch {}
+        }
+
+        if (registry[userId]) {
+          delete registry[userId];
+          const registryJson = JSON.stringify(registry);
+
+          await supabase.from('warehouses').upsert({
+            id: 'ashley_face_registry',
+            name: 'Ashley AI Face Database Registry',
+            qr_code: registryJson,
+            lat: 0,
+            lng: 0,
+            radius: 0,
+          });
+        }
+      } catch (err: any) {
+        console.error('Error deleting from face registry:', err);
+      }
+
+      // Clear from users table
+      try {
+        await supabase
+          .from('users')
+          .update({ face_descriptor: null })
+          .eq('id', userId);
+      } catch {}
+
+      return NextResponse.json({
+        success: true,
+        message: 'ناسنامەی دەموچاو بە سەرکەوتوویی سڕایەوە',
+      });
+    }
+
     if (pathStr === 'face/status' && method === 'GET') {
       const userId = req.nextUrl.searchParams.get('userId');
       if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });

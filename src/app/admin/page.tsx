@@ -390,6 +390,38 @@ export default function AdminPage() {
     }
   };
 
+  const handleDeleteFace = async (emp: Employee) => {
+    const empName = emp.fullName3Part || emp.name;
+    if (!confirm(`ئایا دڵنیایت لە سڕینەوە و پاککردنەوەی ناسنامەی دەموچاوی (${empName}) لە تەواوی سیستەم؟`)) {
+      return;
+    }
+
+    try {
+      // 1. Delete locally
+      try {
+        const stored = localStorage.getItem('ashley_face_registry_local');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          delete parsed[emp.id];
+          localStorage.setItem('ashley_face_registry_local', JSON.stringify(parsed));
+        }
+      } catch {}
+
+      // 2. Delete on server
+      await fetch('/api/attendance/face/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: emp.id }),
+      });
+
+      // 3. Update registeredFaceIds
+      setRegisteredFaceIds(prev => prev.filter(id => id !== emp.id));
+      alert(`✅ ناسنامەی دەموچاوی (${empName}) بە سەرکەوتوویی سڕایەوە.`);
+    } catch (err: any) {
+      alert(`هەڵەیەک ڕوویدا لە سڕینەوە: ${err.message}`);
+    }
+  };
+
   const filteredEmployees = employees.filter((emp) => {
     const matchQuery = (emp.fullName3Part || emp.name || '').toLowerCase().includes(empSearch.toLowerCase()) ||
       (emp.role || '').toLowerCase().includes(empSearch.toLowerCase());
@@ -1030,7 +1062,16 @@ export default function AdminPage() {
                                 title="دووبارە ناساندنەوە و گۆڕینی وێنەی ڕوخساری کارمەند"
                               >
                                 <RefreshCw className="w-2.5 h-2.5" />
-                                <span>دووبارە ناساندنەوە</span>
+                                <span>نوێکردنەوە</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteFace(emp)}
+                                className="px-1.5 py-0.5 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-950 border border-rose-300 text-[10px] font-black cursor-pointer flex items-center gap-0.5 shadow-xs transition-all"
+                                title="سڕینەوەی ناسنامەی دەموچاوی ئەم کارمەندە"
+                              >
+                                <Trash2 className="w-2.5 h-2.5 text-rose-700" />
+                                <span>سڕینەوە</span>
                               </button>
                             </div>
                           ) : (
@@ -1131,6 +1172,8 @@ export default function AdminPage() {
           adminNotes={adminNotes}
           onClose={() => setSelectedEmp360(null)}
           onEnrollFace={(emp) => setFaceEnrollEmp(emp)}
+          onDeleteFace={handleDeleteFace}
+          hasFaceRegistered={registeredFaceIds.includes(selectedEmp360.id)}
         />
       )}
 
