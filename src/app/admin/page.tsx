@@ -51,7 +51,8 @@ import {
   TrendingUp,
   LayoutDashboard,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Printer
 } from 'lucide-react';
 import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChangeModal';
 import { AdminOvertimeModule } from '@/components/admin/AdminOvertimeModule';
@@ -62,7 +63,7 @@ import {
   generateAugust2026AdminNotes, 
   GOOGLE_SHEET_OVERTIME_DATA 
 } from '@/lib/attendance-seed-data';
-import { formatTime12H } from '@/lib/export-utils';
+import { formatTime12H, formatTime24H, exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
 
 function formatMinutesHuman(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -862,18 +863,97 @@ export default function AdminPage() {
       {/* ========================================================================= */}
       {adminActiveSection === 'hr' && (
         <section className="panel-classic space-y-3">
-          <div className="panel-header-classic flex items-center justify-between">
+          <div className="panel-header-classic flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
               <Users className="w-4 h-4 text-blue-800" />
               <span>بەشی کارمەندان HR و خشتەی ئامادەبوونی ۳۱ ڕۆژە</span>
             </h2>
-            <button
-              onClick={() => handleOpenEmpModal()}
-              className="btn-classic-primary text-xs flex items-center gap-1"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>زیادکردنی کارمەندی نوێ</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const cols: ExportTableColumn[] = [
+                    { header: '#', key: 'index', width: '35px', align: 'center' },
+                    { header: 'ناوی تەواوی سێ قۆڵی', key: 'fullName', align: 'right' },
+                    { header: 'پۆست / ئەرک', key: 'role', align: 'right' },
+                    { header: 'ژمارەی مۆبایل', key: 'phone', align: 'center' },
+                    { header: 'بەرواری دەستبەکاربوون', key: 'startDate', align: 'center' },
+                    { header: 'ناسنامەی دەموچاو (AI Face)', key: 'faceStatus', align: 'center' },
+                    { header: 'دۆخی کارمەند', key: 'status', align: 'center' },
+                  ];
+
+                  const data = filteredEmployees.map((emp, idx) => ({
+                    index: idx + 1,
+                    fullName: emp.fullName3Part || emp.name,
+                    role: emp.role || 'کارمەند',
+                    phone: emp.phone || '-',
+                    startDate: emp.startDate || '-',
+                    faceStatus: registeredFaceIds.includes(emp.id) ? '✅ تۆمارکراوە' : '❌ تۆمارنەکراوە',
+                    status: emp.status === 'resigned' ? 'وازهێناو' : 'چالاک',
+                  }));
+
+                  exportToPDF({
+                    title: 'لیستی فەرمیی سەرجەم کارمەندانی کۆمپانیای ئاشڵی (Ashley Staff Directory)',
+                    subtitle: 'بەشی سەرچاوە مرۆییەکان و ئیدارەی گشتی (HR Department)',
+                    period: `بەرواری تۆمار: ${format(new Date(), 'yyyy-MM-dd')}`,
+                    columns: cols,
+                    data,
+                    fileName: `Ashley_Staff_Directory_${format(new Date(), 'yyyy-MM-dd')}`,
+                    summaryCards: [
+                      { label: 'کۆی گشتی کارمەندان', value: `${employees.length} کارمەند`, color: '#2563eb' },
+                      { label: 'کارمەندانی چالاک', value: `${activeEmployees.length} کارمەند`, color: '#059669' },
+                      { label: 'وازهێناوەکان', value: `${employees.length - activeEmployees.length} کارمەند`, color: '#be123c' },
+                      { label: 'خاوەن ناسنامەی ڕوخسار', value: `${registeredFaceIds.length} کارمەند`, color: '#7c3aed' },
+                    ],
+                  });
+                }}
+                className="btn-classic text-xs font-bold px-2.5 py-1 bg-blue-700 hover:bg-blue-800 text-white rounded-lg flex items-center gap-1 cursor-pointer shadow-xs"
+                title="پرێنتکردنی تەواوی لیستی کارمەندان وەک PDF"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>🖨️ پرێنت (PDF)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const cols: ExportTableColumn[] = [
+                    { header: 'ژمارە', key: 'index' },
+                    { header: 'ناوی تەواو', key: 'fullName' },
+                    { header: 'پۆست', key: 'role' },
+                    { header: 'ژمارەی مۆبایل', key: 'phone' },
+                    { header: 'بەرواری دەستپێک', key: 'startDate' },
+                    { header: 'ناسنامەی دەموچاو', key: 'faceStatus' },
+                    { header: 'دۆخ', key: 'status' },
+                  ];
+
+                  const data = filteredEmployees.map((emp, idx) => ({
+                    index: idx + 1,
+                    fullName: emp.fullName3Part || emp.name,
+                    role: emp.role || 'کارمەند',
+                    phone: emp.phone || '',
+                    startDate: emp.startDate || '',
+                    faceStatus: registeredFaceIds.includes(emp.id) ? 'ناسراوە' : 'تۆمارنەکراوە',
+                    status: emp.status === 'resigned' ? 'وازهێناو' : 'چالاک',
+                  }));
+
+                  exportToCSV(cols, data, `Ashley_Staff_Directory_${format(new Date(), 'yyyy-MM-dd')}`);
+                }}
+                className="btn-classic text-xs font-bold px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg flex items-center gap-1 cursor-pointer shadow-xs"
+                title="داگرتنی لیستی کارمەندان وەک Excel / CSV"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>📊 CSV</span>
+              </button>
+
+              <button
+                onClick={() => handleOpenEmpModal()}
+                className="btn-classic-primary text-xs flex items-center gap-1"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>زیادکردنی کارمەندی نوێ</span>
+              </button>
+            </div>
           </div>
 
           <div className="p-3.5 space-y-4">
