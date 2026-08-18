@@ -168,7 +168,6 @@ export default function PublicTerminalLightPage() {
 
   useEffect(() => {
     syncRegisteredFaces();
-    // Preload neural network models in background
     loadFaceModels();
   }, [syncRegisteredFaces]);
 
@@ -178,9 +177,9 @@ export default function PublicTerminalLightPage() {
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
 
-  // Biometric Detection Real-Time State
+  // Biometric Detection 2-Second Hold State
+  const [scanProgress, setScanProgress] = useState(0); // 0 to 100%
   const [isFaceScanning, setIsFaceScanning] = useState(false);
-  const [faceInsideOval, setFaceInsideOval] = useState(false);
   const [faceScanMessage, setFaceScanMessage] = useState<string | null>(null);
   const [faceScanSuccess, setFaceScanSuccess] = useState<boolean | null>(null);
   const [recognizedEmployeeName, setRecognizedEmployeeName] = useState<string | null>(null);
@@ -189,10 +188,10 @@ export default function PublicTerminalLightPage() {
   const [attMessage, setAttMessage] = useState<{ text: string; success: boolean } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const autoScanTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isProcessingScanRef = useRef(false);
+  const holdTimerRef = useRef<number>(0);
+  const currentCandidateRef = useRef<{ id: string; name: string } | null>(null);
 
   // Check Geofence & Location Accuracy
   const checkCurrentLocation = useCallback(() => {
@@ -283,7 +282,6 @@ export default function PublicTerminalLightPage() {
 
       let stream: MediaStream | null = null;
       try {
-        // High quality un-cropped video stream on iOS Safari
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: targetFacing === 'environment' ? 'environment' : 'user',
@@ -325,10 +323,6 @@ export default function PublicTerminalLightPage() {
 
   // Stop Camera Stream
   const stopCamera = () => {
-    if (autoScanTimerRef.current) {
-      clearInterval(autoScanTimerRef.current);
-      autoScanTimerRef.current = null;
-    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -339,11 +333,13 @@ export default function PublicTerminalLightPage() {
     }
     setCameraActive(false);
     setIsFaceScanning(false);
-    setFaceInsideOval(false);
     setActiveFaceAction(null);
     setFaceScanMessage(null);
     setFaceScanSuccess(null);
     setRecognizedEmployeeName(null);
+    setScanProgress(0);
+    holdTimerRef.current = 0;
+    currentCandidateRef.current = null;
     isProcessingScanRef.current = false;
   };
 
@@ -412,77 +408,91 @@ export default function PublicTerminalLightPage() {
 
     setActiveFaceAction(action);
     setFacingMode('user');
-    setFaceScanMessage('سەیری کامێرای پێشەوە (سێڵفی) بکە...');
+    setFaceScanMessage('سەیری کامێرای پێشەوە بکە و ڕوخسارت جێگیر بکە...');
     setFaceScanSuccess(null);
-    setFaceInsideOval(false);
+    setScanProgress(0);
+    holdTimerRef.current = 0;
+    currentCandidateRef.current = null;
     setRecognizedEmployeeName(null);
     setCameraActive(true);
     startCamera('user');
   };
 
-  // Automated Facial Scanning Loop (Stable & Shaking-Free)
+  // 🌟 2-SECOND STEADY HOLD SCANNING LOOP (ZERO FLICKER)
   useEffect(() => {
-    if (!cameraActive || !activeFaceAction || !videoRef.current) return;
+    if (!cameraActive || !activeFaceAction) return;
+
+    let isFrameRunning = false;
 
     const interval = setInterval(async () => {
-      if (isProcessingScanRef.current || !videoRef.current || videoRef.current.readyState < 2) {
+      if (isProcessingScanRef.current || !videoRef.current || videoRef.current.readyState < 2 || isFrameRunning) {
         return;
       }
 
-      isProcessingScanRef.current = true;
-      setIsFaceScanning(true);
-
+      isFrameRunning = true;
       try {
         const liveResult = await extractFaceDescriptor(videoRef.current);
 
-        if (!liveResult || !liveResult.descriptor) {
-          setFaceInsideOval(false);
-          isProcessingScanRef.current = false;
-          setIsFaceScanning(false);
-          return;
-        }
-
-        // Face is in frame
-        setFaceInsideOval(true);
-
-        // Match against database
-        let matchedEmp: { id: string; name: string } | null = null;
-        for (const registeredUser of registeredFacesList) {
-          if (registeredUser.descriptor && registeredUser.descriptor.length > 0) {
-            const match = matchFaceDescriptors(liveResult.descriptor, registeredUser.descriptor, 0.60);
-            if (match.isMatch) {
-              matchedEmp = registeredUser;
-              break;
+        if (liveResult && liveResult.descriptor) {
+          // Match against database
+          let matchedEmp: { id: string; name: string } | null = null;
+          for (const registeredUser of registeredFacesList) {
+            if (registeredUser.descriptor && registeredUser.descriptor.length > 0) {
+              const match = matchFaceDescriptors(liveResult.descriptor, registeredUser.descriptor, 0.60);
+              if (match.isMatch) {
+                matchedEmp = registeredUser;
+                break;
+              }
             }
           }
-        }
 
-        if (matchedEmp) {
-          setFaceScanSuccess(true);
-          setRecognizedEmployeeName(matchedEmp.name);
-          setFaceScanMessage(`سەرکەوتوو بوو! بەخێربێیت ${matchedEmp.name}`);
+          if (matchedEmp) {
+            currentCandidateRef.current = matchedEmp;
+            holdTimerRef.current += 150;
 
-          // Save Attendance immediately
-          await saveAttendanceLog(matchedEmp.id, matchedEmp.name, activeFaceAction);
+            const pct = Math.min(100, Math.round((holdTimerRef.current / 2000) * 100));
+            setScanProgress(pct);
 
-          // Automatically close full-screen camera smoothly after 1.2s
-          setTimeout(() => {
-            stopCamera();
-          }, 1200);
+            if (pct < 100) {
+              setFaceScanMessage(`سڵاو ${matchedEmp.name}... جێگیربە بۆ دڵنیابوونەوە (${Math.round((2000 - holdTimerRef.current) / 1000 * 10) / 10} چ)`);
+            } else if (pct >= 100 && !isProcessingScanRef.current) {
+              isProcessingScanRef.current = true;
+              clearInterval(interval);
+
+              setFaceScanSuccess(true);
+              setRecognizedEmployeeName(matchedEmp.name);
+              setFaceScanMessage(`سەرکەوتوو بوو! بەخێربێیت ${matchedEmp.name}`);
+
+              // Save Attendance immediately
+              await saveAttendanceLog(matchedEmp.id, matchedEmp.name, activeFaceAction);
+
+              // Automatically close smoothly after 1.2s
+              setTimeout(() => {
+                stopCamera();
+              }, 1200);
+            }
+          } else {
+            // Face in frame but not registered
+            if (holdTimerRef.current > 0) {
+              holdTimerRef.current = Math.max(0, holdTimerRef.current - 200);
+              setScanProgress(Math.round((holdTimerRef.current / 2000) * 100));
+            }
+            setFaceScanMessage('ڕوخسار لەناو سیستم تۆمار نەکراوە! دەتوانیت لە ڕێگەی ئەدمین تۆماری بکەیت.');
+          }
         } else {
-          setFaceScanSuccess(false);
-          setFaceScanMessage('ڕوخسار نەناسرایەوە! دەتوانیت لە ڕێگەی ئەدمین تۆماری بکەیت.');
-          isProcessingScanRef.current = false;
-          setIsFaceScanning(false);
+          // Face moved out of frame
+          if (holdTimerRef.current > 0) {
+            holdTimerRef.current = Math.max(0, holdTimerRef.current - 300);
+            setScanProgress(Math.round((holdTimerRef.current / 2000) * 100));
+          }
+          setFaceScanMessage('سەیری کامێرا بکە و دەموچاوت لە ناو بازنەکە ڕابگرە...');
         }
       } catch (err) {
         console.error('Scan error:', err);
-        isProcessingScanRef.current = false;
-        setIsFaceScanning(false);
+      } finally {
+        isFrameRunning = false;
       }
-    }, 600);
-
-    autoScanTimerRef.current = interval;
+    }, 150);
 
     return () => {
       clearInterval(interval);
@@ -716,7 +726,7 @@ export default function PublicTerminalLightPage() {
             </div>
           </div>
 
-          {/* 🌟 FULL SCREEN CAMERA FEED (NO ARTIFICIAL ZOOM OR SHAKE) */}
+          {/* 🌟 FULL SCREEN CAMERA FEED (STATIC ISOLATED ELEMENT - ZERO SHAKE) */}
           <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
             <video
               ref={videoRef}
@@ -724,33 +734,65 @@ export default function PublicTerminalLightPage() {
               playsInline
               muted
               disablePictureInPicture
-              className={`w-full h-full object-cover sm:object-contain transition-none will-change-transform ${
+              className={`w-full h-full object-cover sm:object-contain will-change-transform ${
                 facingMode === 'user' ? 'transform scale-x-[-1]' : ''
               }`}
             />
-            <canvas ref={canvasRef} className="hidden" />
 
-            {/* 🟢 BIOMETRIC SCANNING OVAL GUIDE HUD */}
-            <div
-              className={`absolute w-64 h-80 sm:w-72 sm:h-96 rounded-[50%] border-4 transition-all duration-200 pointer-events-none flex flex-col items-center justify-between py-6 ${
-                faceScanSuccess === true
-                  ? 'border-emerald-400 shadow-[0_0_60px_rgba(52,211,153,0.9)] bg-emerald-500/20 scale-105'
-                  : faceScanSuccess === false
-                  ? 'border-rose-500 shadow-[0_0_50px_rgba(244,63,94,0.8)] bg-rose-500/15'
-                  : faceInsideOval
-                  ? 'border-emerald-400 shadow-[0_0_40px_rgba(52,211,153,0.6)]'
-                  : 'border-dashed border-white/60 shadow-[0_0_30px_rgba(255,255,255,0.25)]'
-              }`}
-            >
-              <span className="text-xs font-black text-white px-3 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/20">
-                {faceScanSuccess === true
-                  ? `✅ ناسراوە: ${recognizedEmployeeName}`
-                  : faceInsideOval
-                  ? '🟢 ڕوخسار لە ناو بازنەیە'
-                  : 'ڕوخسارت بخەرە ناو بازنەکە'}
-              </span>
+            {/* 🟢 2-SECOND FILLING BIOMETRIC SVG OVAL HUD */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <div className="relative w-64 h-80 sm:w-72 sm:h-96 flex items-center justify-center">
+                
+                {/* SVG Ellipse Progress Ring */}
+                <svg className="w-full h-full drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]" viewBox="0 0 280 360">
+                  {/* Background Track */}
+                  <ellipse
+                    cx="140"
+                    cy="180"
+                    rx="120"
+                    ry="160"
+                    fill="none"
+                    stroke="rgba(255, 255, 255, 0.25)"
+                    strokeWidth="4"
+                    strokeDasharray="8 6"
+                  />
 
-              <div className="w-12 h-1 bg-white/40 rounded-full" />
+                  {/* Glowing Smooth Progress Stroke (Fills in 2 Seconds) */}
+                  <ellipse
+                    cx="140"
+                    cy="180"
+                    rx="120"
+                    ry="160"
+                    fill="none"
+                    stroke={faceScanSuccess ? '#10b981' : scanProgress > 0 ? '#38bdf8' : 'transparent'}
+                    strokeWidth="6"
+                    strokeLinecap="round"
+                    style={{
+                      strokeDasharray: 890,
+                      strokeDashoffset: 890 - (890 * scanProgress) / 100,
+                      transition: 'stroke-dashoffset 0.15s linear, stroke 0.3s ease',
+                    }}
+                  />
+                </svg>
+
+                {/* Center Live Guidance Badge */}
+                <div className="absolute inset-x-0 bottom-6 text-center">
+                  <span className={`text-xs font-black px-3.5 py-1 rounded-full backdrop-blur-md border shadow-lg transition-colors ${
+                    scanProgress >= 100
+                      ? 'bg-emerald-500 text-white border-emerald-300'
+                      : scanProgress > 0
+                      ? 'bg-sky-600/90 text-white border-sky-400 font-mono'
+                      : 'bg-black/70 text-white border-white/20'
+                  }`}>
+                    {scanProgress >= 100
+                      ? `✅ ${recognizedEmployeeName || 'سەرکەوتوو بوو'}`
+                      : scanProgress > 0
+                      ? `⏳ ${scanProgress}% جێگیربە`
+                      : 'ڕوخسارت بخەرە ناو بازنەکە'}
+                  </span>
+                </div>
+
+              </div>
             </div>
 
             {/* Success Overlay Flash */}
@@ -779,7 +821,7 @@ export default function PublicTerminalLightPage() {
                 : 'bg-black/70 text-white border-white/20'
             }`}>
               <p className="text-xs sm:text-sm font-black">
-                {faceScanMessage || 'سەیری کامێرای پێشەوە بکە بۆ پشکنینی ناسنامە...'}
+                {faceScanMessage || 'سەیری کامێرای پێشەوە بکە و بۆ ٢ چرکە جێگیربە...'}
               </p>
             </div>
           </div>
