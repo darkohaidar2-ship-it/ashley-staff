@@ -1,5 +1,5 @@
 /**
- * Ashley Universal PDF & CSV Export Utility
+ * Ashley Universal PDF & CSV Export Utility & Smart 15-Minute Tolerance Color Engine
  * Generates pixel-perfect, full-width multi-page PDF documents and Excel-compatible CSVs with UTF-8 BOM.
  */
 
@@ -53,6 +53,99 @@ export function formatTime12H(timeStr?: string | null): string {
   const periodStr = isPM ? 'پ.ن' : 'ب.ن';
 
   return `${hourStr}:${minute} ${periodStr}`;
+}
+
+/**
+ * 🌟 Smart Status Color Determination based on the Ashley 15-Minute Tolerance Rule:
+ * 
+ * Check-In (Base 08:00 AM / 480 mins):
+ * - Early or On-Time up to 08:15 (<= 495 mins) -> 🟢 GREEN (ڕێکوپێک)
+ * - Late arrival (> 08:15 / > 495 mins) -> 🔴 RED (دواکەوتوو)
+ * 
+ * Check-Out (Base 05:00 PM / 17:00 / 1020 mins):
+ * - Early departure (< 16:45 / < 1005 mins) -> 🔴 RED (ڕۆیشتنی پێشوەختە)
+ * - On-time departure (16:45 to 17:15 / 1005 to 1035 mins) -> 🟢 GREEN (ئاسایی و بێ کێشە)
+ * - Overtime departure (> 17:15 / > 1035 mins) -> 🟣 PURPLE (ئیزافە و کاتی زیادە)
+ */
+export function getAttendanceTimeBadge(timeStr: string | null | undefined, type: 'in' | 'out'): {
+  status: 'on_time' | 'late' | 'early_leave' | 'overtime';
+  colorClass: string;
+  cssClass: string;
+  badgeStyle: { bg: string; color: string; border: string };
+  label: string;
+} {
+  if (!timeStr || timeStr === '-' || timeStr === '') {
+    return {
+      status: 'on_time',
+      colorClass: 'bg-slate-100 text-slate-500 border-slate-300',
+      cssClass: 'badge-empty',
+      badgeStyle: { bg: '#f1f5f9', color: '#64748b', border: '#cbd5e1' },
+      label: '-',
+    };
+  }
+
+  let cleanTime = timeStr.trim();
+  if (cleanTime.includes('T')) cleanTime = cleanTime.split('T')[1]?.split('.')[0] || cleanTime;
+  if (cleanTime.includes(' ')) {
+    const parts = cleanTime.split(' ');
+    cleanTime = parts[parts.length - 1] || cleanTime;
+  }
+  
+  const [hStr, mStr] = cleanTime.split(':');
+  const hours = parseInt(hStr || '0', 10);
+  const minutes = parseInt(mStr || '0', 10);
+  const totalMins = hours * 60 + minutes;
+
+  if (type === 'in') {
+    // 08:00 is 480 mins. Up to 08:15 (495 mins) is GREEN. After 08:15 is RED.
+    if (totalMins <= 495) {
+      return {
+        status: 'on_time',
+        colorClass: 'bg-emerald-50 text-emerald-800 border-emerald-300',
+        cssClass: 'badge-ontime',
+        badgeStyle: { bg: '#ecfdf5', color: '#065f46', border: '#10b981' },
+        label: 'هاتن (ڕێکوپێک)',
+      };
+    } else {
+      return {
+        status: 'late',
+        colorClass: 'bg-rose-50 text-rose-800 border-rose-300',
+        cssClass: 'badge-late',
+        badgeStyle: { bg: '#fef2f2', color: '#991b1b', border: '#f87171' },
+        label: 'هاتن (دواکەوتوو)',
+      };
+    }
+  } else {
+    // Check-out: 17:00 is 1020 mins.
+    // Early (< 16:45 / 1005 mins) -> RED
+    // On-Time (16:45 to 17:15 / 1005 to 1035 mins) -> GREEN
+    // Overtime (> 17:15 / 1035 mins) -> PURPLE / ROYAL BLUE
+    if (totalMins < 1005) {
+      return {
+        status: 'early_leave',
+        colorClass: 'bg-rose-50 text-rose-800 border-rose-300',
+        cssClass: 'badge-early',
+        badgeStyle: { bg: '#fef2f2', color: '#991b1b', border: '#f87171' },
+        label: 'ڕۆیشتن (پێشوەختە)',
+      };
+    } else if (totalMins <= 1035) {
+      return {
+        status: 'on_time',
+        colorClass: 'bg-emerald-50 text-emerald-800 border-emerald-300',
+        cssClass: 'badge-ontime',
+        badgeStyle: { bg: '#ecfdf5', color: '#065f46', border: '#10b981' },
+        label: 'ڕۆیشتن (تەواو)',
+      };
+    } else {
+      return {
+        status: 'overtime',
+        colorClass: 'bg-purple-50 text-purple-800 border-purple-300',
+        cssClass: 'badge-overtime',
+        badgeStyle: { bg: '#f5f3ff', color: '#581c87', border: '#a855f7' },
+        label: 'ڕۆیشتن (ئیزافە)',
+      };
+    }
+  }
 }
 
 /**
@@ -285,24 +378,20 @@ export function exportToPDF(options: ExportReportOptions) {
       background-color: #ffffff !important;
     }
 
-    /* 🌟 STRICT USER-REQUESTED COLOR HIGHLIGHT BADGES:
-       - هاتن (Check In): شین (Blue)
-       - ڕۆیشتوو / دەرچوون (Check Out): سوور (Red)
-       - گۆڕاو / دەستکاریکراو (Modified / Edited): سەوز (Green)
-    */
-    .badge-in {
-      background: #eff6ff !important;
-      color: #1d4ed8 !important;
-      border: 1.5px solid #60a5fa !important;
+    /* 🌟 ASHLEY 15-MINUTE SMART COLOR TOLERANCE BADGES */
+    .badge-ontime {
+      background: #ecfdf5 !important;
+      color: #065f46 !important;
+      border: 1.5px solid #10b981 !important;
       padding: 2.5px 8px;
       border-radius: 5px;
       font-weight: 900;
       display: inline-block;
       white-space: nowrap;
     }
-    .badge-out {
+    .badge-late, .badge-early {
       background: #fef2f2 !important;
-      color: #dc2626 !important;
+      color: #991b1b !important;
       border: 1.5px solid #f87171 !important;
       padding: 2.5px 8px;
       border-radius: 5px;
@@ -310,10 +399,20 @@ export function exportToPDF(options: ExportReportOptions) {
       display: inline-block;
       white-space: nowrap;
     }
+    .badge-overtime {
+      background: #f5f3ff !important;
+      color: #581c87 !important;
+      border: 1.5px solid #a855f7 !important;
+      padding: 2.5px 8px;
+      border-radius: 5px;
+      font-weight: 900;
+      display: inline-block;
+      white-space: nowrap;
+    }
     .badge-edited {
-      background: #f0fdf4 !important;
-      color: #15803d !important;
-      border: 1.5px solid #4ade80 !important;
+      background: #eff6ff !important;
+      color: #1e40af !important;
+      border: 1.5px solid #60a5fa !important;
       padding: 2.5px 8px;
       border-radius: 5px;
       font-weight: 900;
@@ -480,28 +579,23 @@ export function exportToPDF(options: ExportReportOptions) {
               .map(col => {
                 const val = row[col.key] !== undefined && row[col.key] !== null ? String(row[col.key]) : '-';
                 
-                // Smart color highlights for dates, times, check-in (blue), check-out (red), modified (green)
                 let formattedCell = val;
                 const lowerKey = col.key.toLowerCase();
                 const lowerVal = val.toLowerCase();
 
                 if (lowerVal.includes('گۆڕاو') || lowerVal.includes('دەستکاریکراو') || lowerVal.includes('edited') || lowerVal.includes('modified') || lowerKey.includes('edit')) {
-                  // گۆڕاو سەوز
                   formattedCell = `<span class="badge-edited">✏️ ${val}</span>`;
-                } else if (lowerKey.includes('in') || lowerKey.includes('هاتن') || lowerVal.includes('📥') || lowerVal.includes('هاتن') || lowerVal.includes('check in')) {
-                  // هاتن شین
-                  formattedCell = `<span class="badge-in">📥 ${val.replace('📥', '').trim()}</span>`;
-                } else if (lowerKey.includes('out') || lowerKey.includes('ڕۆشتن') || lowerKey.includes('دەرچوون') || lowerVal.includes('📤') || lowerVal.includes('ڕۆیشتوو') || lowerVal.includes('check out')) {
-                  // ڕۆیشتوو سوور
-                  formattedCell = `<span class="badge-out">📤 ${val.replace('📤', '').trim()}</span>`;
+                } else if (lowerKey.includes('in') || lowerKey.includes('هاتن') || lowerVal.includes('📥')) {
+                  const badge = getAttendanceTimeBadge(val, 'in');
+                  formattedCell = `<span class="${badge.cssClass}">📥 ${val.replace('📥', '').trim()}</span>`;
+                } else if (lowerKey.includes('out') || lowerKey.includes('ڕۆشتن') || lowerKey.includes('دەرچوون') || lowerVal.includes('📤')) {
+                  const badge = getAttendanceTimeBadge(val, 'out');
+                  formattedCell = `<span class="${badge.cssClass}">📤 ${val.replace('📤', '').trim()}</span>`;
                 } else if (lowerKey.includes('date') || lowerKey.includes('بەروار') || /^\d{4}-\d{2}-\d{2}$/.test(val)) {
-                  // بەروار
                   formattedCell = `<span class="badge-date">📅 ${val}</span>`;
                 } else if (lowerKey.includes('amount') || lowerKey.includes('cost') || lowerKey.includes('pay') || lowerVal.includes('iqd')) {
-                  // پارە
                   formattedCell = `<span class="badge-money">${val}</span>`;
                 } else if (lowerKey.includes('hour') || lowerKey.includes('overtime') || lowerVal.includes('کاتژمێر')) {
-                  // ئیزافە
                   formattedCell = `<span class="badge-ot">${val}</span>`;
                 }
 

@@ -283,27 +283,35 @@
     display: table-footer-group !important;
   }
 
-  /* Specific Colorful Indicators */
-  .badge-in, [data-log-type="in"], [data-type*="in"], [data-type*="هاتن"] {
-    background: #eff6ff !important;
-    color: #1d4ed8 !important;
-    border: 1.5px solid #60a5fa !important;
+  /* 🌟 ASHLEY 15-MINUTE SMART COLOR TOLERANCE BADGES */
+  .badge-ontime, [data-status="on_time"] {
+    background: #ecfdf5 !important;
+    color: #065f46 !important;
+    border: 1.5px solid #10b981 !important;
     font-weight: 900 !important;
   }
 
-  .badge-out, [data-log-type="out"], [data-type*="out"], [data-type*="دەرچوون"], [data-type*="ڕۆشتن"] {
+  .badge-late, .badge-early, [data-status="late"], [data-status="early_leave"] {
     background: #fef2f2 !important;
-    color: #dc2626 !important;
+    color: #991b1b !important;
     border: 1.5px solid #f87171 !important;
     font-weight: 900 !important;
   }
 
+  .badge-overtime, [data-status="overtime"] {
+    background: #f5f3ff !important;
+    color: #581c87 !important;
+    border: 1.5px solid #a855f7 !important;
+    font-weight: 900 !important;
+  }
+
   .badge-edited, .badge-modified, [data-is-edited="true"] {
-    background: #f0fdf4 !important;
-    color: #15803d !important;
-    border: 1.5px solid #4ade80 !important;
+    background: #eff6ff !important;
+    color: #1e40af !important;
+    border: 1.5px solid #60a5fa !important;
     font-weight: 900 !important;
   }
 }
+
 
 

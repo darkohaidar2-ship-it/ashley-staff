@@ -5,7 +5,7 @@ import type { AttendanceRecord, Employee } from '@/lib/types';
 import { Camera, Calendar, MapPin, Trash2, CheckCircle, User, FileText, Edit3 } from 'lucide-react';
 import { getDaysInMonth, format } from 'date-fns';
 import { AttendanceAnalyticsReport } from './AttendanceAnalyticsReport';
-import { exportToPDF, exportToCSV, formatTime12H, type ExportTableColumn } from '@/lib/export-utils';
+import { exportToPDF, exportToCSV, formatTime12H, getAttendanceTimeBadge, type ExportTableColumn } from '@/lib/export-utils';
 
 interface AttendanceSheetGridProps {
   attendanceLogs: AttendanceRecord[];
@@ -394,7 +394,7 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                       <td key={dayNum} className="text-center p-1 border-l border-slate-300 align-middle">
                         {cellLogs.length > 0 ? (
                           <div className="flex flex-col items-center justify-center gap-0.5 font-mono text-[11px] font-bold">
-                            {/* Check-In Link (12H Format) */}
+                            {/* Check-In Link (12H Format with 15-min tolerance colors) */}
                             {checkIn ? (
                               <button
                                 type="button"
@@ -405,15 +405,19 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                                 {checkIn.originalTime || checkIn.checkInOriginalTime ? (
                                   <div className="flex flex-col items-center leading-tight">
                                     <span className="line-through text-rose-500 text-[9px]">{formatTime12H(checkIn.originalTime || checkIn.checkInOriginalTime)}</span>
-                                    <span className="text-emerald-700 hover:text-emerald-950 font-black text-[10px] underline bg-emerald-50 px-1 rounded">{formatTime12H(checkIn.time)}</span>
+                                    <span className="text-emerald-800 hover:text-emerald-950 font-black text-[10px] underline bg-emerald-50 px-1 rounded">{formatTime12H(checkIn.time)}</span>
                                   </div>
                                 ) : (
-                                  <span className="text-blue-700 hover:text-blue-950 underline text-[10px]">{formatTime12H(checkIn.time)}</span>
+                                  <span className={`px-1 py-0.2 rounded text-[10px] font-bold ${
+                                    getAttendanceTimeBadge(checkIn.time, 'in').colorClass
+                                  }`}>
+                                    {formatTime12H(checkIn.time)}
+                                  </span>
                                 )}
                               </button>
                             ) : null}
 
-                            {/* Check-Out Link (12H Format) */}
+                            {/* Check-Out Link (12H Format with 15-min tolerance colors) */}
                             {checkOut ? (
                               <button
                                 type="button"
@@ -424,10 +428,14 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                                 {checkOut.originalTime || checkOut.checkOutOriginalTime ? (
                                   <div className="flex flex-col items-center leading-tight">
                                     <span className="line-through text-rose-400 text-[9px]">{formatTime12H(checkOut.originalTime || checkOut.checkOutOriginalTime)}</span>
-                                    <span className="text-emerald-700 hover:text-emerald-950 font-black text-[10px] underline bg-emerald-50 px-1 rounded">{formatTime12H(checkOut.time)}</span>
+                                    <span className="text-emerald-800 hover:text-emerald-950 font-black text-[10px] underline bg-emerald-50 px-1 rounded">{formatTime12H(checkOut.time)}</span>
                                   </div>
                                 ) : (
-                                  <span className="text-rose-700 hover:text-rose-950 underline text-[10px]">{formatTime12H(checkOut.time)}</span>
+                                  <span className={`px-1 py-0.2 rounded text-[10px] font-bold ${
+                                    getAttendanceTimeBadge(checkOut.time, 'out').colorClass
+                                  }`}>
+                                    {formatTime12H(checkOut.time)}
+                                  </span>
                                 )}
                               </button>
                             ) : null}
