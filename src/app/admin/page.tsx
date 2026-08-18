@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
@@ -9,6 +9,7 @@ import type { Employee } from '@/lib/types';
 import { FactoryMapPicker } from '@/components/maps/FactoryMapPicker';
 import { AttendanceSheetGrid } from '@/components/attendance/AttendanceSheetGrid';
 import { AdminFaceEnrollModal } from '@/components/attendance/AdminFaceEnrollModal';
+import { AdminEmployeeDetailsModal } from '@/components/admin/AdminEmployeeDetailsModal';
 import { ThemeSwitcher } from '@/components/layout/ThemeSwitcher';
 import { format } from 'date-fns';
 import { 
@@ -27,9 +28,8 @@ import {
   FolderArchive, 
   Map, 
   Clock, 
-  Receipt, 
-  Calendar, 
   DollarSign, 
+  Calendar, 
   QrCode, 
   Trash2, 
   CheckCircle, 
@@ -46,13 +46,31 @@ import {
   Search,
   RefreshCw,
   KeyRound,
-  BarChart3
+  BarChart3,
+  Award,
+  TrendingUp,
+  LayoutDashboard,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChangeModal';
 import { AdminOvertimeModule } from '@/components/admin/AdminOvertimeModule';
 import { AdminExpensesModule } from '@/components/admin/AdminExpensesModule';
 import { AdminLogisticsModule } from '@/components/admin/AdminLogisticsModule';
 import { AdminWeeklyMonthlyStatsModule } from '@/components/admin/AdminWeeklyMonthlyStatsModule';
+import { 
+  generateAugust2026AdminNotes, 
+  GOOGLE_SHEET_OVERTIME_DATA 
+} from '@/lib/attendance-seed-data';
+import { formatTime12H } from '@/lib/export-utils';
+
+function formatMinutesHuman(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h > 0 && m > 0) return `${h} ک و ${m} خ`;
+  if (h > 0) return `${h} کاتژمێر`;
+  return `${m} خولەک`;
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -60,9 +78,24 @@ export default function AdminPage() {
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [adminActiveSection, setAdminActiveSection] = useState<'all' | 'hr' | 'overtime' | 'expenses' | 'logistics' | 'stats'>('all');
+  const [adminActiveSection, setAdminActiveSection] = useState<'overview' | 'hr' | 'overtime' | 'expenses' | 'logistics' | 'stats' | 'maps'>('overview');
 
-  // Security Auth Guard: Check session strictly from sessionStorage/localStorage
+  // Live Desktop Clock for ERP Admin
+  const [currentTimeStr, setCurrentTimeStr] = useState('');
+  useEffect(() => {
+    const updateTime = () => {
+      setCurrentTimeStr(format(new Date(), 'yyyy-MM-dd | HH:mm:ss'));
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Selected Employee for Detailed 360° Monthly Modal
+  const [selectedEmp360, setSelectedEmp360] = useState<Employee | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string>('2026-08');
+
+  // Security Auth Guard
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const stored = sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session');
@@ -77,20 +110,18 @@ export default function AdminPage() {
         } catch {}
       }
 
-      // If not authenticated:
       setAuthChecked(false);
       setSessionUser(null);
       router.replace('/adminpanel');
     }
   }, [router]);
 
-  // 🛡️ 30-Minute Inactivity Auto-Logout Security Guard
+  // Inactivity Auto-Logout
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
 
     const resetInactivityTimer = () => {
       clearTimeout(timeoutId);
-      // 30 minutes
       timeoutId = setTimeout(async () => {
         alert('⚠️ سێشنەکەت بەسەرچوو بەهۆی بێدەنگی بۆ ماوەی ٣٠ خولەک! تکایە دووبارە لۆگین بکەرەوە.');
         await logout();
@@ -120,74 +151,10 @@ export default function AdminPage() {
     setSettings,
     attendanceLogs,
     setAttendanceLogs,
-    exportStateAsJson,
+    exportStateAsJson
   } = useAppContext();
 
-  // Live Desktop Clock for ERP Admin
-  const [currentTimeStr, setCurrentTimeStr] = useState('');
-  useEffect(() => {
-    const updateTime = () => {
-      setCurrentTimeStr(format(new Date(), 'yyyy-MM-dd | HH:mm:ss'));
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Employee Roster Management Modal & State
-  const [showEmpModal, setShowEmpModal] = useState(false);
-  const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
-
-  const [empFullName3, setEmpFullName3] = useState('');
-  const [empShortName, setEmpShortName] = useState('');
-  const [empPhone, setEmpPhone] = useState('');
-  const [empRole, setEmpRole] = useState<any>('Employee');
-  const [empStartDate, setEmpStartDate] = useState('');
-  const [empResignDate, setEmpResignDate] = useState('');
-  const [empRehireDate, setEmpRehireDate] = useState('');
-  const [empStatusFilter, setEmpStatusFilter] = useState<'all' | 'active' | 'resigned'>('active');
-
-  // Factory Geofence Map Picker Modal State
-  const [showMapPicker, setShowMapPicker] = useState(false);
-
-  // Admin Face Enrollment Modal State & Registered Face IDs
-  const [faceEnrollEmp, setFaceEnrollEmp] = useState<Employee | null>(null);
-  const [registeredFaceIds, setRegisteredFaceIds] = useState<string[]>([]);
-
-  // Fetch list of employees who have already enrolled their faces
-  const fetchRegisteredFaces = useCallback(async () => {
-    try {
-      let localIds: string[] = [];
-      try {
-        const localDb = JSON.parse(localStorage.getItem('ashley_face_registry_local') || '{}');
-        localIds = Object.keys(localDb);
-        if (localIds.length > 0) {
-          setRegisteredFaceIds((prev) => Array.from(new Set([...prev, ...localIds])));
-        }
-      } catch {}
-
-      const res = await fetch(`/api/attendance/face/all?_t=${Date.now()}`, { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.employees) {
-          const apiIds = data.employees.map((e: any) => e.id);
-          setRegisteredFaceIds(Array.from(new Set([...localIds, ...apiIds])));
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching registered faces in admin:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchRegisteredFaces();
-  }, [fetchRegisteredFaces]);
-
-  // Restore JSON File Input Ref
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const fontInputRef = useRef<HTMLInputElement>(null);
-
-  // Company Multi-Location Config (Synced with Supabase)
+  // Company Multi-Location Config
   const [companyLocations, setCompanyLocations] = useState<Array<{
     id: string;
     name: string;
@@ -236,23 +203,114 @@ export default function AdminPage() {
 
   const factoryLocation = syncedFactoryLocation;
 
-  // Open Employee Modal (Add / Edit)
+  // Registered Face IDs
+  const [registeredFaceIds, setRegisteredFaceIds] = useState<string[]>([]);
+  const fetchRegisteredFaces = useCallback(async () => {
+    try {
+      let localIds: string[] = [];
+      try {
+        const localDb = JSON.parse(localStorage.getItem('ashley_face_registry_local') || '{}');
+        localIds = Object.keys(localDb);
+        if (localIds.length > 0) {
+          setRegisteredFaceIds((prev) => Array.from(new Set([...prev, ...localIds])));
+        }
+      } catch {}
+
+      const res = await fetch(`/api/attendance/face/all?_t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.employees) {
+          const apiIds = data.employees.map((e: any) => e.id);
+          setRegisteredFaceIds(Array.from(new Set([...localIds, ...apiIds])));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching registered faces in admin:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRegisteredFaces();
+  }, [fetchRegisteredFaces]);
+
+  // Admin notes map for August 2026
+  const adminNotes = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(`ashley_admin_notes_${selectedMonth}`);
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return generateAugust2026AdminNotes(employees);
+  }, [selectedMonth, employees]);
+
+  // Modals state
+  const [showEmpModal, setShowEmpModal] = useState(false);
+  const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
+  const [empStatusFilter, setEmpStatusFilter] = useState<'all' | 'active' | 'resigned'>('active');
+  const [empSearch, setEmpSearch] = useState('');
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [faceEnrollEmp, setFaceEnrollEmp] = useState<Employee | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Form states for adding/editing employee
+  const [empShortName, setEmpShortName] = useState('');
+  const [empFullName3, setEmpFullName3] = useState('');
+  const [empRole, setEmpRole] = useState<any>('Employee');
+  const [empPhone, setEmpPhone] = useState('');
+  const [empStartDate, setEmpStartDate] = useState('');
+  const [empResignDate, setEmpResignDate] = useState('');
+  const [empRehireDate, setEmpRehireDate] = useState('');
+
+  const activeEmployees = useMemo(() => {
+    return employees.filter(e => e.status !== 'resigned' && e.isActive !== false);
+  }, [employees]);
+
+  // Aggregated KPIs for Overview Dashboard
+  const dashboardKpis = useMemo(() => {
+    const totalStaff = employees.length;
+    const activeStaff = activeEmployees.length;
+    const resignedStaff = employees.filter(e => e.status === 'resigned' || e.isActive === false).length;
+
+    // August 2026 Overtime Hours & Payout from live data
+    let totalOtHours = 0;
+    let totalOtCost = 0;
+    let otEmployeesSet = new Set<string>();
+
+    GOOGLE_SHEET_OVERTIME_DATA.forEach(ot => {
+      totalOtHours += ot.hours;
+      totalOtCost += ot.amount || (ot.hours * 5000);
+      otEmployeesSet.add(ot.empName);
+    });
+
+    return {
+      totalStaff,
+      activeStaff,
+      resignedStaff,
+      totalOtHours: totalOtHours.toFixed(1),
+      totalOtCost: totalOtCost.toLocaleString(),
+      otEmployeesCount: otEmployeesSet.size,
+      totalLocations: companyLocations.length || 1,
+    };
+  }, [employees, activeEmployees, companyLocations]);
+
+  // Open Add/Edit Employee Modal
   const handleOpenEmpModal = (emp?: Employee) => {
     if (emp) {
       setEditingEmp(emp);
-      setEmpFullName3(emp.fullName3Part || emp.name || '');
-      setEmpShortName(emp.name || '');
-      setEmpPhone(emp.phone || '');
+      setEmpShortName(emp.name);
+      setEmpFullName3(emp.fullName3Part || emp.name);
       setEmpRole(emp.role || 'Employee');
-      setEmpStartDate(emp.startDate || emp.employmentStartDate || '');
+      setEmpPhone(emp.phone || '');
+      setEmpStartDate(emp.startDate || '');
       setEmpResignDate(emp.resignedDate || '');
       setEmpRehireDate(emp.rehiredDate || '');
     } else {
       setEditingEmp(null);
-      setEmpFullName3('');
       setEmpShortName('');
-      setEmpPhone('');
+      setEmpFullName3('');
       setEmpRole('Employee');
+      setEmpPhone('');
       setEmpStartDate(format(new Date(), 'yyyy-MM-dd'));
       setEmpResignDate('');
       setEmpRehireDate('');
@@ -260,13 +318,9 @@ export default function AdminPage() {
     setShowEmpModal(true);
   };
 
-  // Save Employee (Add or Update)
   const handleSaveEmployee = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!empShortName.trim()) {
-      alert('تکایە ناوی کارمەند بنووسە');
-      return;
-    }
+    if (!empShortName.trim()) return alert('ناوی کورت پێویستە');
 
     if (editingEmp) {
       const updated = employees.map((emp) =>
@@ -275,15 +329,15 @@ export default function AdminPage() {
               ...emp,
               name: empShortName.trim(),
               fullName3Part: empFullName3.trim(),
-              phone: empPhone.trim(),
               role: empRole,
+              phone: empPhone.trim(),
               startDate: empStartDate,
               resignedDate: empResignDate,
               rehiredDate: empRehireDate,
             }
           : emp
       );
-      setEmployees(updated);
+      setEmployees(updated as any);
     } else {
       const newEmp: Employee = {
         id: `emp-${Date.now()}`,
@@ -306,7 +360,6 @@ export default function AdminPage() {
     setShowEmpModal(false);
   };
 
-  // Resignation Toggle
   const handleToggleResignation = (emp: Employee) => {
     const isCurrentlyResigned = emp.status === 'resigned' || emp.isActive === false;
     const msg = isCurrentlyResigned
@@ -326,76 +379,26 @@ export default function AdminPage() {
             }
           : item
       );
-      setEmployees(updated);
+      setEmployees(updated as any);
     }
   };
 
-  // Delete Employee
   const handleDeleteEmployee = (empId: string) => {
     if (confirm('ئایا دڵنیایت لە سڕینەوەی ئەم کارمەندە؟')) {
       setEmployees(employees.filter((e) => e.id !== empId));
     }
   };
 
-  // Delete Attendance Log
-  const handleDeleteAttendanceLog = async (logId: string) => {
-    if (confirm('ئایا دڵنیایت لە سڕینەوەی ئەم لۆگە؟')) {
-      setAttendanceLogs(attendanceLogs.filter((l) => l.id !== logId));
-      try {
-        await fetch(`/api/attendance/logs/${logId}`, { method: 'DELETE' });
-      } catch (err) {
-        console.error('Error deleting attendance log:', err);
-      }
-    }
-  };
-
-  // Upload Custom UI Font File (.ttf, .woff, .woff2)
-  const handleFontUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64Font = event.target?.result as string;
-      if (setSettings && settings) {
-        setSettings({
-          ...settings,
-          customFont: base64Font,
-          fontFamily: file.name.replace(/\.[^/.]+$/, ""),
-        });
-        alert(`فۆنتی (${file.name}) بە سەرکەوتوویی بارکرا!`);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Upload & Restore JSON Data
-  const handleRestoreJson = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = JSON.parse(event.target?.result as string);
-        if (data.employees) setEmployees(data.employees);
-        if (data.settings && setSettings) setSettings(data.settings);
-        alert('تێکڕای داتاکان بە سەرکەوتوویی هێنرانەوە!');
-      } catch {
-        alert('فایلی باکئەپ هەڵەیە!');
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  // Filter Active vs Resigned Employees
   const filteredEmployees = employees.filter((emp) => {
+    const matchQuery = (emp.fullName3Part || emp.name || '').toLowerCase().includes(empSearch.toLowerCase()) ||
+      (emp.role || '').toLowerCase().includes(empSearch.toLowerCase());
+    if (!matchQuery) return false;
     if (empStatusFilter === 'active') return emp.status !== 'resigned' && emp.isActive !== false;
     if (empStatusFilter === 'resigned') return emp.status === 'resigned' || emp.isActive === false;
     return true;
   });
 
-  // Strict Security Gate: Never render admin panel content if not authenticated
+  // Strict Security Gate
   if (!authChecked || !sessionUser) {
     return (
       <div className="min-h-screen w-screen flex items-center justify-center bg-slate-900 text-white font-sans dir-rtl" dir="rtl">
@@ -411,46 +414,43 @@ export default function AdminPage() {
   return (
     <div className="space-y-4 text-slate-900 font-sans dir-rtl select-none pb-12 p-2 sm:p-4" dir="rtl">
       
-      {/* 🌟 CLASSIC ENTERPRISE DESKTOP TOP TITLE BAR & ACTION TOOLBAR */}
-      <div className="panel-classic p-2.5 flex flex-wrap items-center justify-between gap-2 shadow-sm">
-        <div>
-          <h1 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
-            <span>🛡️ پەنەری بەڕێوەبەری سەرەکی ASHLEY ERP — Admin Master Hub</span>
-          </h1>
-          <p className="text-[11px] text-slate-600 font-bold mt-0.5">
-            بەڕێوەبەری سەرەکی: <span className="text-blue-900 font-mono font-black">{sessionUser?.username || user?.username || 'Darko'}</span> | هەموو بەشەکانی HR، کۆگا، گواستنەوە و سێتینگی فۆنت
-          </p>
+      {/* 🌟 TOP ENTERPRISE HEADER BAR */}
+      <div className="panel-classic p-3 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl shadow-lg border-2 border-slate-700 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-indigo-600/30 rounded-xl border border-indigo-500/50 shadow-inner">
+            <Shield className="w-7 h-7 text-indigo-300" />
+          </div>
+          <div>
+            <h1 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+              <span>🛡️ پەنەری بەڕێوەبەری سەرەکی ئاشڵی — Admin Master Hub</span>
+            </h1>
+            <p className="text-xs text-slate-300 font-medium mt-0.5">
+              بەڕێوەبەر: <span className="text-amber-300 font-mono font-black">{sessionUser?.username || 'Darko'}</span> | کۆنترۆڵی گشتی ستاف، ئامار، ئیزافە، دارایی و نەخشە
+            </p>
+          </div>
         </div>
 
-        {/* TOP RIGHT TOOLS WITH EXPLICIT LOGOUT BUTTON */}
-        <div className="flex items-center gap-1.5 font-mono text-[11px]">
-          <div className="statusbar-segment text-blue-900 font-bold bg-slate-100 hidden sm:block">
-            ⏰ {currentTimeStr || '2026-08-13 | 15:50'}
+        {/* TOP QUICK CONTROLS */}
+        <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+          <div className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/20 text-white font-bold hidden md:block">
+            ⏰ {currentTimeStr || '2026-08-18 | 08:35'}
           </div>
 
-          <button onClick={() => setShowPasswordModal(true)} className="btn-classic text-indigo-900 font-bold bg-indigo-50 hover:bg-indigo-100 border-indigo-300">
-            <KeyRound className="w-3.5 h-3.5 text-indigo-700" />
-            <span>گۆڕینی پاسۆرد</span>
+          <button onClick={() => setShowPasswordModal(true)} className="btn-classic bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5">
+            <KeyRound className="w-3.5 h-3.5 text-amber-300" />
+            <span>پاسۆرد</span>
           </button>
 
-          <button onClick={() => setShowMapPicker(true)} className="btn-classic">
-            <MapPin className="w-3.5 h-3.5 text-amber-700" />
-            <span>نەخشە (Map)</span>
-          </button>
-          
-          <button onClick={exportStateAsJson} className="btn-classic">
-            <Download className="w-3.5 h-3.5 text-emerald-700" />
-            <span>باکئەپ (JSON)</span>
+          <button onClick={() => setShowMapPicker(true)} className="btn-classic bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5 text-cyan-300" />
+            <span>نەخشە</span>
           </button>
 
-          <button onClick={() => fileInputRef.current?.click()} className="btn-classic">
-            <Upload className="w-3.5 h-3.5 text-blue-700" />
-            <span>هێنانەوە</span>
+          <button onClick={exportStateAsJson} className="btn-classic bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5">
+            <Download className="w-3.5 h-3.5 text-emerald-300" />
+            <span>باکئەپ</span>
           </button>
 
-          <input ref={fileInputRef} type="file" accept=".json" onChange={handleRestoreJson} className="hidden" />
-
-          {/* EXPLICIT LOGOUT BUTTON */}
           <button
             onClick={async () => {
               if (confirm('ئایا دڵنیایت لە دەرچوون لە ئەکاونتی ئەدمین؟')) {
@@ -458,651 +458,622 @@ export default function AdminPage() {
                 router.replace('/adminpanel');
               }
             }}
-            className="btn-classic-danger py-1 px-2.5 text-xs font-black flex items-center gap-1 cursor-pointer"
+            className="btn-classic-danger py-1.5 px-3 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md"
           >
             <LogOut className="w-3.5 h-3.5 text-white" />
-            <span>🚪 دەرچوون (Logout)</span>
+            <span>دەرچوون</span>
           </button>
         </div>
       </div>
 
-      {/* QUICK SYSTEM STATS BANNER (KPI CARDS) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="panel-classic p-2 text-center">
-          <span className="text-[10px] font-bold text-slate-600 block">کۆی کارمەندان</span>
-          <p className="text-lg font-black text-slate-900 font-mono mt-0.5">{employees.length}</p>
+      {/* 🔴🟠🟡🟢🔵🟣 DISTINCTIVE COLORFUL CIRCULAR NAVIGATION HUBS */}
+      <div className="bg-white/95 backdrop-blur-md border-2 border-slate-300/80 rounded-2xl p-4 shadow-lg space-y-2">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+          <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <span>بەشە سەرەکییەکانی ئەدمین پانێڵ — دەستنیشانی بەش بکە:</span>
+          </span>
+          <span className="text-[11px] font-mono text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold">
+            بۆ بینینی هەموو زانیاری کارمەند یەک کرتەی لەسەر بکە
+          </span>
         </div>
-        <div className="panel-classic p-2 text-center">
-          <span className="text-[10px] font-bold text-emerald-800 block">کارمەندانی چالاک</span>
-          <p className="text-lg font-black text-emerald-800 font-mono mt-0.5">
-            {employees.filter((e) => e.status !== 'resigned' && e.isActive !== false).length}
-          </p>
-        </div>
-        <div className="panel-classic p-2 text-center">
-          <span className="text-[10px] font-bold text-rose-800 block">وازهێناو لە ئەرشیف</span>
-          <p className="text-lg font-black text-rose-800 font-mono mt-0.5">
-            {employees.filter((e) => e.status === 'resigned' || e.isActive === false).length}
-          </p>
-        </div>
-        <div className="panel-classic p-2 text-center">
-          <span className="text-[10px] font-bold text-amber-800 block">سنووری Geofence</span>
-          <p className="text-xs font-black text-amber-900 font-mono mt-1">
-            {factoryLocation.radiusMeters}m
-          </p>
-        </div>
-      </div>
 
-      {/* 🧭 MASTER ADMIN MODULE NAVIGATION TABS */}
-      <div className="panel-classic p-2 bg-slate-200/90 flex flex-wrap items-center justify-between gap-2 shadow-sm rounded-lg">
-        <div className="flex flex-wrap items-center gap-1.5 text-xs font-black">
+        {/* 6 Circular Master Hubs */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-3 pt-1">
+          
+          {/* 🔘 Hub 0: Overview Dashboard */}
           <button
-            onClick={() => setAdminActiveSection('all')}
-            className={`px-3 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer ${
-              adminActiveSection === 'all'
-                ? 'bg-blue-900 text-white shadow font-black border border-blue-950'
-                : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-300'
+            onClick={() => setAdminActiveSection('overview')}
+            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+              adminActiveSection === 'overview'
+                ? 'bg-gradient-to-b from-slate-900 to-indigo-950 text-white border-indigo-500 shadow-xl scale-105 ring-4 ring-indigo-300/50'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-300 shadow-sm hover:shadow-md'
             }`}
           >
-            <span>🌐 هەموو بەشەکان (All Open)</span>
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
+              adminActiveSection === 'overview'
+                ? 'bg-indigo-600 text-white border-indigo-300'
+                : 'bg-slate-800 text-white border-slate-600'
+            }`}>
+              <LayoutDashboard className="w-7 h-7" />
+            </div>
+            <span className="text-xs font-black tracking-tight block">داشبۆردی گشتی</span>
+            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
+              adminActiveSection === 'overview' ? 'bg-indigo-400 text-slate-950' : 'bg-slate-200 text-slate-800'
+            }`}>
+              Executive 360°
+            </span>
           </button>
 
+          {/* 🔵 Hub 1: HR & Staff */}
           <button
             onClick={() => setAdminActiveSection('hr')}
-            className={`px-3 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'hr'
-                ? 'bg-blue-900 text-white shadow font-black border border-blue-950'
-                : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-300'
+                ? 'bg-gradient-to-b from-blue-700 to-indigo-900 text-white border-blue-400 shadow-xl scale-105 ring-4 ring-blue-300/50'
+                : 'bg-blue-50/70 hover:bg-blue-100/90 text-blue-950 border-blue-200 shadow-sm hover:shadow-md'
             }`}
           >
-            <Users className="w-3.5 h-3.5 text-blue-700" />
-            <span>١. کارمەندان و ئامادەبوون (HR)</span>
-            <span className="bg-emerald-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">🟢 ئامادەیە</span>
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
+              adminActiveSection === 'hr'
+                ? 'bg-white text-blue-900 border-blue-200'
+                : 'bg-gradient-to-br from-blue-600 to-indigo-800 text-white border-blue-400'
+            }`}>
+              <Users className="w-7 h-7" />
+            </div>
+            <span className="text-xs font-black tracking-tight block">کارمەندان و ستاف</span>
+            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
+              adminActiveSection === 'hr' ? 'bg-amber-300 text-slate-950' : 'bg-blue-200 text-blue-950'
+            }`}>
+              👥 {dashboardKpis.activeStaff} کارمەند
+            </span>
           </button>
 
+          {/* 🟠 Hub 2: Overtime Master */}
           <button
             onClick={() => setAdminActiveSection('overtime')}
-            className={`px-3 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'overtime'
-                ? 'bg-orange-700 text-white shadow font-black border border-orange-900'
-                : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-300'
+                ? 'bg-gradient-to-b from-amber-600 to-orange-900 text-white border-orange-400 shadow-xl scale-105 ring-4 ring-orange-300/50'
+                : 'bg-amber-50/70 hover:bg-amber-100/90 text-amber-950 border-amber-200 shadow-sm hover:shadow-md'
             }`}
           >
-            <Clock className="w-3.5 h-3.5 text-orange-600" />
-            <span>٢. کاتی زیادە (Overtime)</span>
-            <span className="bg-emerald-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">🟢 چالاکە</span>
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
+              adminActiveSection === 'overtime'
+                ? 'bg-white text-orange-900 border-orange-200'
+                : 'bg-gradient-to-br from-amber-500 to-orange-700 text-white border-orange-400'
+            }`}>
+              <Clock className="w-7 h-7" />
+            </div>
+            <span className="text-xs font-black tracking-tight block">کاتی زیادە (ئیزافە)</span>
+            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
+              adminActiveSection === 'overtime' ? 'bg-amber-300 text-slate-950' : 'bg-amber-200 text-amber-950'
+            }`}>
+              ⚡ +{dashboardKpis.totalOtHours} کاتژمێر
+            </span>
           </button>
 
+          {/* 🟢 Hub 3: Expenses */}
           <button
             onClick={() => setAdminActiveSection('expenses')}
-            className={`px-3 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'expenses'
-                ? 'bg-emerald-800 text-white shadow font-black border border-emerald-950'
-                : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-300'
+                ? 'bg-gradient-to-b from-emerald-600 to-teal-950 text-white border-emerald-400 shadow-xl scale-105 ring-4 ring-emerald-300/50'
+                : 'bg-emerald-50/70 hover:bg-emerald-100/90 text-emerald-950 border-emerald-200 shadow-sm hover:shadow-md'
             }`}
           >
-            <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-            <span>٣. مەسروفات و دارایی (Expenses)</span>
-            <span className="bg-rose-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black animate-pulse">🔴 بەم زووانە</span>
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
+              adminActiveSection === 'expenses'
+                ? 'bg-white text-emerald-900 border-emerald-200'
+                : 'bg-gradient-to-br from-emerald-500 to-teal-800 text-white border-emerald-400'
+            }`}>
+              <DollarSign className="w-7 h-7" />
+            </div>
+            <span className="text-xs font-black tracking-tight block">خەرجی و دارایی</span>
+            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
+              adminActiveSection === 'expenses' ? 'bg-emerald-300 text-slate-950' : 'bg-emerald-200 text-emerald-950'
+            }`}>
+              💰 دارایی و سندوق
+            </span>
           </button>
 
+          {/* 🔴 Hub 4: Logistics & Unloading */}
           <button
             onClick={() => setAdminActiveSection('logistics')}
-            className={`px-3 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'logistics'
-                ? 'bg-amber-800 text-white shadow font-black border border-amber-950'
-                : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-300'
+                ? 'bg-gradient-to-b from-rose-700 to-red-950 text-white border-rose-400 shadow-xl scale-105 ring-4 ring-rose-300/50'
+                : 'bg-rose-50/70 hover:bg-rose-100/90 text-rose-950 border-rose-200 shadow-sm hover:shadow-md'
             }`}
           >
-            <Truck className="w-3.5 h-3.5 text-amber-700" />
-            <span>٤. بارداگرتن و گواستنەوە (Unloading)</span>
-            <span className="bg-rose-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black animate-pulse">🔴 بەم زووانە</span>
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
+              adminActiveSection === 'logistics'
+                ? 'bg-white text-rose-900 border-rose-200'
+                : 'bg-gradient-to-br from-rose-600 to-red-800 text-white border-rose-400'
+            }`}>
+              <Truck className="w-7 h-7" />
+            </div>
+            <span className="text-xs font-black tracking-tight block">بارداگرتن و نقڵ</span>
+            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
+              adminActiveSection === 'logistics' ? 'bg-rose-300 text-slate-950' : 'bg-rose-200 text-rose-950'
+            }`}>
+              🚛 لۆجستیک
+            </span>
           </button>
 
+          {/* 🟣 Hub 5: HR Analytics */}
           <button
             onClick={() => setAdminActiveSection('stats')}
-            className={`px-3 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'stats'
-                ? 'bg-purple-800 text-white shadow font-black border border-purple-950'
-                : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-300'
+                ? 'bg-gradient-to-b from-purple-700 to-indigo-950 text-white border-purple-400 shadow-xl scale-105 ring-4 ring-purple-300/50'
+                : 'bg-purple-50/70 hover:bg-purple-100/90 text-purple-950 border-purple-200 shadow-sm hover:shadow-md'
             }`}
           >
-            <BarChart3 className="w-3.5 h-3.5 text-purple-600" />
-            <span>٥. ئاماری هەفتانە و مانگانە (HR Analytics)</span>
-            <span className="bg-emerald-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">🟢 ئامادەیە</span>
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
+              adminActiveSection === 'stats'
+                ? 'bg-white text-purple-900 border-purple-200'
+                : 'bg-gradient-to-br from-purple-600 to-indigo-800 text-white border-purple-400'
+            }`}>
+              <BarChart3 className="w-7 h-7" />
+            </div>
+            <span className="text-xs font-black tracking-tight block">ئامار و ڕاپۆرتەکان</span>
+            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
+              adminActiveSection === 'stats' ? 'bg-purple-300 text-slate-950' : 'bg-purple-200 text-purple-950'
+            }`}>
+              📊 مانگانە و هەفتانە
+            </span>
           </button>
+
+          {/* 🌐 Hub 6: Maps & GPS */}
+          <button
+            onClick={() => {
+              setAdminActiveSection('maps');
+              setShowMapPicker(true);
+            }}
+            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+              adminActiveSection === 'maps'
+                ? 'bg-gradient-to-b from-cyan-700 to-blue-950 text-white border-cyan-400 shadow-xl scale-105 ring-4 ring-cyan-300/50'
+                : 'bg-cyan-50/70 hover:bg-cyan-100/90 text-cyan-950 border-cyan-200 shadow-sm hover:shadow-md'
+            }`}
+          >
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
+              adminActiveSection === 'maps'
+                ? 'bg-white text-cyan-900 border-cyan-200'
+                : 'bg-gradient-to-br from-cyan-600 to-blue-800 text-white border-cyan-400'
+            }`}>
+              <MapPin className="w-7 h-7" />
+            </div>
+            <span className="text-xs font-black tracking-tight block">نەخشەی کارگە</span>
+            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
+              adminActiveSection === 'maps' ? 'bg-cyan-300 text-slate-950' : 'bg-cyan-200 text-cyan-950'
+            }`}>
+              📍 {companyLocations.length} لۆکەیشن
+            </span>
+          </button>
+
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* 👥 SECTION 1: HR & STAFF OPERATIONS CLASSIC PANEL */}
+      {/* 📊 EXECUTIVE DASHBOARD & MONTHLY STAFF 360 OVERVIEW (LANDING VIEW) */}
       {/* ========================================================================= */}
-      {(adminActiveSection === 'all' || adminActiveSection === 'hr') && (
-      <section className="panel-classic space-y-3">
-        <div className="panel-header-classic flex items-center justify-between">
-          <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-            <Users className="w-4 h-4 text-blue-800" />
-            <span>بەشی یەکەم: بەشی کارمەندان HR (Staff Operations & Attendance Logs)</span>
-          </h2>
-          <span className="text-[10px] font-mono bg-blue-900 text-white px-1.5 py-0.2">HR MODULE</span>
-        </div>
-
-        <div className="p-3.5 space-y-4">
+      {adminActiveSection === 'overview' && (
+        <div className="space-y-4">
           
-          {/* Quick WinUI 3 Action Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-white/80 backdrop-blur-md rounded-xl border border-slate-200 shadow-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => handleOpenEmpModal()}
-                className="btn-fluent-primary text-xs"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>➕ زیادکردنی کارمەندی نوێ</span>
-              </button>
-
-              <button
-                onClick={() => setShowMapPicker(true)}
-                className="btn-fluent text-xs bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-900 font-black flex items-center gap-1.5 shadow-sm"
-              >
-                <MapPin className="w-3.5 h-3.5 text-emerald-700" />
-                <span>🗺️ دیاریکردنی فرە-لۆکەیشنی لقەکان (Geofence)</span>
-                <span className="bg-emerald-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">
-                  {companyLocations.length || 1} لق
-                </span>
-              </button>
-
-              <button
-                onClick={() => setEmpStatusFilter(empStatusFilter === 'active' ? 'resigned' : 'active')}
-                className="btn-fluent text-xs"
-              >
-                <span>{empStatusFilter === 'resigned' ? 'نیشاندانی کارمەندە چالاکەکان' : '📜 ئەرشیفی وازهێناوەکان'}</span>
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2 text-xs font-bold">
-              <Link href="/overtime" className="btn-fluent text-[11px]">
-                <Clock className="w-3.5 h-3.5 text-blue-600" />
-                <span>سەعاتی زیاده (Overtime)</span>
-              </Link>
-
-              <Link href="/ashley-expenses" className="btn-fluent text-[11px]">
-                <Receipt className="w-3.5 h-3.5 text-rose-600" />
-                <span>مەسروفاتی HR</span>
-              </Link>
-            </div>
-          </div>
-
-          {/* Employee Roster Data Grid */}
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2 bg-white/80 backdrop-blur-md p-2.5 rounded-xl border border-slate-200 shadow-sm">
-              <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <span>🔑 خشتەی ناوی کارمەندان و کۆدەکانی PIN (Employee Roster Grid):</span>
-                <span className="text-[10px] font-mono text-blue-900 bg-blue-100 px-2 py-0.5 rounded-full border border-blue-300">
-                  PIN ACCESS ENABLED
-                </span>
-              </h3>
-
-              <div className="flex items-center gap-1.5 print:hidden">
-                <button
-                  onClick={() => window.print()}
-                  className="btn-classic text-[11px] font-bold py-0.5 px-2 bg-slate-200 hover:bg-slate-300 border border-slate-400 text-slate-950"
-                  title="پرێنتکردنی ناوی کارمەندان"
-                >
-                  🖨️ پرێنت (Print)
-                </button>
-
-                <button
-                  onClick={async () => {
-                    const tableContainer = document.getElementById('admin-employee-table-wrapper');
-                    const printDate = format(new Date(), 'yyyy-MM-dd');
-                    const printTime = format(new Date(), 'HH:mm:ss');
-                    const filename = `Ashley_Employees_Roster_${printDate}.pdf`;
-
-                    if (!tableContainer) {
-                      window.print();
-                      return;
-                    }
-
-                    try {
-                      const html2canvas = (await import('html2canvas')).default;
-                      const jsPDF = (await import('jspdf')).default;
-
-                      const canvas = await html2canvas(tableContainer, {
-                        scale: 2,
-                        useCORS: true,
-                        logging: false,
-                        backgroundColor: '#ffffff'
-                      });
-
-                      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-                      const pdf = new jsPDF('portrait', 'mm', 'a4');
-                      const pdfWidth = pdf.internal.pageSize.getWidth();
-                      const pdfHeight = pdf.internal.pageSize.getHeight();
-
-                      pdf.setFontSize(10);
-                      pdf.setTextColor(15, 23, 42);
-                      pdf.text(`ASHLEY ERP - List: Employee Roster & PIN Codes`, 10, 8);
-                      pdf.text(`Print Date: ${printDate} | Print Time: ${printTime}`, pdfWidth - 90, 8);
-
-                      const imgWidth = pdfWidth - 20;
-                      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-                      pdf.addImage(imgData, 'JPEG', 10, 12, imgWidth, Math.min(imgHeight, pdfHeight - 20));
-                      pdf.save(filename);
-                    } catch (err) {
-                      console.error('PDF export fallback:', err);
-                      window.print();
-                    }
-                  }}
-                  className="btn-classic text-[11px] font-bold py-0.5 px-2 bg-rose-700 hover:bg-rose-800 border border-red-700 text-white"
-                  title="داگرتنی ڕاستەوخۆی فایلی PDF"
-                >
-                  📄 داگرتنی PDF
-                </button>
-
-                <button
-                  onClick={() => {
-                    const printDate = format(new Date(), 'yyyy-MM-dd');
-                    const printTime = format(new Date(), 'HH:mm:ss');
-                    let csvContent = `\uFEFFناوی لیست: خشتەی ناوی کارمەندان و کۆدەکان, بەرواری پرێنت: ${printDate}, کاتی پرێنت: ${printTime}\n\n`;
-                    csvContent += 'کۆدی PIN,کۆدی ID,ناوی کارمەند,پلە/ئەرک,ژمارەی مۆبایل,دەست بەکاربوون,دۆخ\n';
-                    filteredEmployees.forEach(emp => {
-                      csvContent += `"${emp.password || '1234'}","EMP-${emp.employeeId || emp.id}","${emp.fullName3Part || emp.name}","${emp.role || 'Employee'}","${emp.phone || '---'}","${emp.startDate || '---'}","${emp.status || 'Active'}"\n`;
-                    });
-                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.setAttribute('download', `Ashley_Employees_${printDate}.csv`);
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                  }}
-                  className="btn-classic-primary text-[11px] font-bold py-0.5 px-2 bg-blue-900 hover:bg-blue-950 border border-blue-950 text-white"
-                  title="داگرتنی فایلی Excel/CSV"
-                >
-                  📊 داگرتنی CSV
-                </button>
+          {/* Top 4 Key Metric Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white p-3 rounded-2xl border-2 border-blue-200 shadow-sm flex items-center gap-3">
+              <div className="p-3 bg-blue-100 rounded-xl text-blue-900">
+                <Users className="w-6 h-6" />
               </div>
-            </div>
-
-            <div id="admin-employee-table-wrapper" className="overflow-x-auto border border-slate-400 bg-white">
-              <table className="table-classic">
-                <thead>
-                  <tr>
-                    <th>کۆدی PIN (پاسۆرد)</th>
-                    <th>کۆدی ID</th>
-                    <th>ناوی سیانی کارمەند</th>
-                    <th>پلە / ئەرک</th>
-                    <th>ژمارەی مۆبایل</th>
-                    <th>دەست بەکاربوون</th>
-                    <th>وازهێنان</th>
-                    <th>دۆخی دەوام</th>
-                    <th>کردارەکان</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredEmployees.length > 0 ? (
-                    filteredEmployees.map((emp) => (
-                      <tr key={emp.id} className={emp.status === 'resigned' ? 'bg-rose-50' : ''}>
-                        {/* PIN Code Highlighted Badge */}
-                        <td className="font-mono font-black text-xs text-blue-950 bg-amber-100/90 text-center border border-amber-400 px-2 py-1 shadow-sm">
-                          🔑 {emp.password || '1234'}
-                        </td>
-                        <td className="font-mono text-[11px] text-slate-600 font-bold">
-                          {emp.employeeId ? `EMP-${emp.employeeId}` : `EMP-${emp.id.slice(-3)}`}
-                        </td>
-                        <td className="font-bold text-slate-900">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span>{emp.fullName3Part || emp.name}</span>
-                            {registeredFaceIds.includes(emp.id) ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-950 border border-emerald-400 shadow-xs">
-                                <CheckCircle className="w-3 h-3 text-emerald-600" />
-                                <span>ڕوخسار ناسێنراوە ✅</span>
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 text-xs px-1" title="ڕوخسار تۆمار نەکراوە">
-                                👤
-                              </span>
-                            )}
-                          </div>
-                          {emp.name && emp.fullName3Part && emp.name !== emp.fullName3Part && (
-                            <span className="text-[10px] text-slate-500 font-normal block">({emp.name})</span>
-                          )}
-                        </td>
-                        <td className="font-mono text-[11px] text-indigo-900 font-bold">{emp.role || 'Employee'}</td>
-                        <td className="font-mono text-[11px] text-slate-800 dir-ltr text-right">{emp.phone || '---'}</td>
-                        <td className="font-mono text-[10px] text-slate-600">{emp.startDate || emp.employmentStartDate || '---'}</td>
-                        <td className="font-mono text-[10px] text-rose-700">{emp.resignedDate || '---'}</td>
-                        <td>
-                          {emp.status === 'resigned' || emp.isActive === false ? (
-                            <span className="px-1.5 py-0.2 bg-rose-200 text-rose-900 font-bold border border-rose-400 text-[10px]">وازهێناو</span>
-                          ) : (
-                            <span className="px-1.5 py-0.2 bg-emerald-200 text-emerald-900 font-bold border border-emerald-400 text-[10px]">چالاک</span>
-                          )}
-                        </td>
-                        <td>
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => setFaceEnrollEmp(emp)}
-                              className={`btn-classic text-[10px] font-bold border ${
-                                registeredFaceIds.includes(emp.id)
-                                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border-emerald-400'
-                                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border-indigo-300'
-                              }`}
-                              title="تۆمارکردن یان نوێکردنەوەی ڕوخساری ئەم کارمەندە بە کامێرا"
-                            >
-                              <Camera className={`w-3 h-3 ${registeredFaceIds.includes(emp.id) ? 'text-emerald-700' : 'text-indigo-600'}`} />
-                              <span>{registeredFaceIds.includes(emp.id) ? '✅ نوێکردنەوەی ڕوخسار' : '📸 ناساندنی ڕوخسار'}</span>
-                            </button>
-                            <button
-                              onClick={() => handleOpenEmpModal(emp)}
-                              className="btn-classic text-[10px]"
-                              title="دەستکاریکردنی زانیاریەکان"
-                            >
-                              <Edit className="w-3 h-3 text-blue-700" />
-                              <span>دەستکاری</span>
-                            </button>
-                            <button
-                              onClick={() => handleToggleResignation(emp)}
-                              className="btn-classic text-[10px]"
-                              title="تۆمارکردنی وازهێنان یان گەڕانەوە"
-                            >
-                              <span>{emp.status === 'resigned' ? '🔄 گەڕانەوە' : '📁 وازهێنان'}</span>
-                            </button>
-                            <button
-                              onClick={() => handleDeleteEmployee(emp.id)}
-                              className="btn-classic text-[10px] text-rose-800"
-                              title="سڕینەوەی یەکجاری"
-                            >
-                              <Trash2 className="w-3 h-3 text-rose-700" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={9} className="text-center py-4 text-slate-500 font-bold">
-                        هیچ کارمەندێک نەدۆزرایەوە
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-                <tfoot>
-                  <tr className="grand-total-row">
-                    <td colSpan={3}>کۆی گشتی کارمەندان لە خشتەکەدا:</td>
-                    <td colSpan={6} className="font-mono">{filteredEmployees.length} Employee(s) Registered</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-
-          {/* 31-Day Attendance Sheet Component */}
-          <div className="pt-6 border-t-4 border-slate-300">
-            <AttendanceSheetGrid
-              attendanceLogs={attendanceLogs}
-              employees={employees}
-              onDeleteLog={handleDeleteAttendanceLog}
-            />
-          </div>
-
-        </div>
-      </section>
-      )}
-
-      {/* ========================================================================= */}
-      {/* ⏰ SECTION 2: EMPLOYEE OVERTIME MANAGEMENT */}
-      {/* ========================================================================= */}
-      {(adminActiveSection === 'all' || adminActiveSection === 'overtime') && (
-      <>
-        {adminActiveSection === 'all' && (
-          <div className="my-8 border-t-4 border-orange-300 relative flex items-center justify-center">
-            <span className="bg-gradient-to-r from-rose-600 to-red-600 text-white px-5 py-1.5 rounded-full text-xs font-black border-2 border-white -mt-4 shadow-lg flex items-center gap-2 animate-pulse">
-              <span>🔴 بەم زووانە (Coming Soon)</span>
-              <span className="text-orange-200">| بەشی دووەم: کاتی زیادەی کارمەندان</span>
-            </span>
-          </div>
-        )}
-        <section className="panel-classic space-y-3 shadow-md">
-          <div className="p-3">
-            <AdminOvertimeModule employees={employees} />
-          </div>
-        </section>
-      </>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 💸 SECTION 3: ASHLEY EXPENSES & FINANCIAL LEDGER */}
-      {/* ========================================================================= */}
-      {(adminActiveSection === 'all' || adminActiveSection === 'expenses') && (
-      <>
-        {adminActiveSection === 'all' && (
-          <div className="my-8 border-t-4 border-emerald-300 relative flex items-center justify-center">
-            <span className="bg-gradient-to-r from-rose-600 to-red-600 text-white px-5 py-1.5 rounded-full text-xs font-black border-2 border-white -mt-4 shadow-lg flex items-center gap-2 animate-pulse">
-              <span>🔴 بەم زووانە (Coming Soon)</span>
-              <span className="text-emerald-200">| بەشی سێیەم: مەسروفات و دارایی</span>
-            </span>
-          </div>
-        )}
-        <section className="panel-classic space-y-3 shadow-md">
-          <div className="p-3">
-            <AdminExpensesModule employees={employees} />
-          </div>
-        </section>
-      </>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 🚚 SECTION 4: CARGO UNLOADING & LOGISTICS */}
-      {/* ========================================================================= */}
-      {(adminActiveSection === 'all' || adminActiveSection === 'logistics') && (
-      <>
-        {adminActiveSection === 'all' && (
-          <div className="my-8 border-t-4 border-amber-300 relative flex items-center justify-center">
-            <span className="bg-gradient-to-r from-rose-600 to-red-600 text-white px-5 py-1.5 rounded-full text-xs font-black border-2 border-white -mt-4 shadow-lg flex items-center gap-2 animate-pulse">
-              <span>🔴 بەم زووانە (Coming Soon)</span>
-              <span className="text-amber-200">| بەشی چوارەم: بارداگرتن و گواستنەوە</span>
-            </span>
-          </div>
-        )}
-        <section className="panel-classic space-y-3 shadow-md">
-          <div className="p-3">
-            <AdminLogisticsModule employees={employees} />
-          </div>
-        </section>
-      </>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 📊 SECTION 5: WEEKLY & MONTHLY HR ANALYTICS */}
-      {/* ========================================================================= */}
-      {(adminActiveSection === 'all' || adminActiveSection === 'stats') && (
-      <>
-        {adminActiveSection === 'all' && (
-          <div className="my-8 border-t-4 border-purple-300 relative flex items-center justify-center">
-            <span className="bg-purple-100 text-purple-950 px-4 py-1 rounded-full text-xs font-black border-2 border-purple-400 -mt-3.5 shadow-sm">
-              بەشی پێنجەم: ئاماری هەفتانە و مانگانە (HR PERFORMANCE ANALYTICS)
-            </span>
-          </div>
-        )}
-        <section className="panel-classic space-y-3 shadow-md">
-          <div className="p-3">
-            <AdminWeeklyMonthlyStatsModule employees={employees} attendanceLogs={attendanceLogs} />
-          </div>
-        </section>
-      </>
-      )}
-
-      {/* ========================================================================= */}
-      {/* ⚙️ SECTION 4: SETTINGS & UI FONT CUSTOMIZATION CLASSIC PANEL */}
-      {/* ========================================================================= */}
-      <section className="panel-classic space-y-3 relative overflow-hidden">
-        <div className="panel-header-classic flex items-center justify-between opacity-60">
-          <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-            <Settings className="w-4 h-4 text-purple-800" />
-            <span>بەشی چوارەم: سێتینگ، ئەدمین پانێڵ و گۆڕینی فۆنت (Settings & Font Customization)</span>
-          </h2>
-          <span className="text-[10px] font-mono bg-purple-800 text-white px-1.5 py-0.2 font-bold">LIVE FONT ENGINE</span>
-        </div>
-
-        <div className="p-3 opacity-30 grayscale-[40%] blur-[0.4px] pointer-events-none space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            
-            {/* Live UI Font Engine Panel */}
-            <div className="lg:col-span-2 p-3 bg-slate-50 border border-slate-300 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-300 pb-2">
-                <h3 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-                  <Type className="w-4 h-4 text-purple-800" />
-                  <span>گۆڕینی فۆنتی UI ی بەرنامەکە و ئاپلۆدکردنی فۆنت</span>
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-bold">
-                <div>
-                  <label className="block text-slate-700 mb-1">فۆنتی ئامادەکراو (Preset Font):</label>
-                  <select
-                    value={settings?.fontFamily || 'Inter'}
-                    disabled
-                    className="input-classic w-full font-bold"
-                  >
-                    <option value="Noto Kufi Arabic">Noto Kufi Arabic (کووفی نایاب)</option>
-                    <option value="Vazirmatn">Vazirmatn (وەزیر مۆدێرن)</option>
-                    <option value="Cairo">Cairo (قاهیرە)</option>
-                    <option value="Inter">Inter (ERP Standard)</option>
-                    <option value="Tahoma">Tahoma (کلاسیک)</option>
-                    <option value="Arial">Arial (سادە)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 mb-1">ئاپلۆدکردنی فۆنت (.ttf / .woff / .woff2):</label>
-                  <button
-                    type="button"
-                    disabled
-                    className="btn-classic w-full text-purple-900 font-bold"
-                  >
-                    <Upload className="w-3.5 h-3.5 text-purple-700" />
-                    <span>بارکردنی فۆنت لە کۆمپیوتەر</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-2.5 bg-white border border-slate-300 space-y-1">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">
-                  تاقیکردنەوەی فۆنت (Font Preview Box):
-                </span>
-                <p className="text-xs font-bold text-purple-950">
-                  بەخێربێن بۆ سیستەمی بەڕێوەبردنی سەرەکی ئاشڵی ASHLEY ERP 2026. ئەمە ڕستەی تاقیکاری فۆنتەکەیە!
+              <div>
+                <span className="text-xs text-slate-500 font-bold block">کارمەندانی چالاک</span>
+                <p className="text-lg font-black text-blue-950 font-mono mt-0.5">
+                  {dashboardKpis.activeStaff} کارمەند
                 </p>
               </div>
             </div>
 
-            {/* Admin System Options */}
-            <div className="space-y-2">
-              <button
-                disabled
-                className="btn-classic w-full justify-between py-2 text-[11px]"
-              >
-                <div className="flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5 text-purple-700" />
-                  <span>ئەکاونتی ئەدمین</span>
-                </div>
-                <span className="font-mono text-[9px] bg-slate-300 px-1 border border-slate-400">SUPERADMIN</span>
-              </button>
-
-              <button
-                disabled
-                className="btn-classic w-full justify-between py-2 text-[11px]"
-              >
-                <div className="flex items-center gap-1.5">
-                  <Settings className="w-3.5 h-3.5 text-purple-700" />
-                  <span>دەسەڵاتەکان</span>
-                </div>
-                <span className="font-mono text-[9px] bg-slate-300 px-1 border border-slate-400">ROLES</span>
-              </button>
-            </div>
-
-          </div>
-        </div>
-
-        {/* 🚧 Construction Sticker Badge */}
-        <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
-          <div className="bg-amber-400 text-amber-950 border-2 border-amber-500 shadow-xl px-5 py-2 rounded-full font-black text-xs flex items-center gap-2 transform -rotate-1 animate-pulse">
-            <span className="text-base">🚧</span>
-            <span>لە ژێر کارکردندایە (Under Construction)</span>
-          </div>
-        </div>
-      </section>
-
-      {/* EMPLOYEE ADD/EDIT MODAL (CLASSIC WIN32 DIALOG WINDOW) */}
-      {showEmpModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-slate-200 border-2 border-t-white border-l-white border-b-slate-600 border-r-slate-600 max-w-md w-full shadow-2xl p-1 text-slate-900">
-            <div className="bg-blue-900 text-white p-1.5 px-3 flex items-center justify-between text-xs font-bold font-mono">
-              <span>{editingEmp ? `دەستکاریکردنی کارمەند: ${editingEmp.name}` : '➕ زیادکردنی کارمەندی نوێ'}</span>
-              <button
-                type="button"
-                onClick={() => setShowEmpModal(false)}
-                className="w-4 h-3.5 bg-rose-800 text-white flex items-center justify-center border border-rose-600 font-mono text-[10px]"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEmployee} className="p-4 space-y-3 text-xs font-bold">
+            <div className="bg-white p-3 rounded-2xl border-2 border-amber-200 shadow-sm flex items-center gap-3">
+              <div className="p-3 bg-amber-100 rounded-xl text-amber-900">
+                <Clock className="w-6 h-6" />
+              </div>
               <div>
-                <label className="block text-slate-800 mb-1">ناوی سیانی کارمەند:</label>
+                <span className="text-xs text-slate-500 font-bold block">کۆی کاتی زیادە (مانگی 8)</span>
+                <p className="text-lg font-black text-amber-950 font-mono mt-0.5">
+                  +{dashboardKpis.totalOtHours} کاتژمێر
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white p-3 rounded-2xl border-2 border-emerald-200 shadow-sm flex items-center gap-3">
+              <div className="p-3 bg-emerald-100 rounded-xl text-emerald-900">
+                <DollarSign className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-xs text-slate-500 font-bold block">شایستەی پارەی ئیزافە</span>
+                <p className="text-lg font-black text-emerald-950 font-mono mt-0.5">
+                  +{dashboardKpis.totalOtCost} IQD
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white p-3 rounded-2xl border-2 border-purple-200 shadow-sm flex items-center gap-3">
+              <div className="p-3 bg-purple-100 rounded-xl text-purple-900">
+                <Award className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-xs text-slate-500 font-bold block">ڕێژەی گشتی پابەندبوون</span>
+                <p className="text-lg font-black text-purple-950 font-mono mt-0.5">
+                  96% دیسیپلین
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 👥 MASTER MONTHLY STAFF OVERVIEW TABLE (CLICKABLE ROWS) */}
+          <div className="bg-white border-2 border-slate-300 rounded-2xl shadow-md overflow-hidden">
+            <div className="bg-slate-900 text-white p-3 px-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-blue-400" />
+                <h3 className="text-sm font-black text-white">
+                  خشتەی گشتی ئامار و پرۆفایلی کارمەندان (مانگی 2026-08)
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-amber-300 font-bold">
+                  💡 کرتە لەسەر ناوی هەر کارمەندێک بکە بۆ بینینی تەواوی چالاکی ئەو مانگەی
+                </span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 border-b-2 border-slate-300 text-slate-900 font-black">
+                    <th className="p-3 border-l border-slate-200 w-12 text-center">#</th>
+                    <th className="p-3 border-l border-slate-200">ناوی کارمەند و ناسنامە</th>
+                    <th className="p-3 border-l border-slate-200">پۆست / ئەرک</th>
+                    <th className="p-3 border-l border-slate-200 text-center">ڕۆژانی دەوام</th>
+                    <th className="p-3 border-l border-slate-200 text-center bg-blue-50 text-blue-950">کاتی کارکردن</th>
+                    <th className="p-3 border-l border-slate-200 text-center bg-amber-50 text-amber-950">کاتی زیادە (Overtime)</th>
+                    <th className="p-3 border-l border-slate-200 text-center bg-emerald-50 text-emerald-950">پارەی ئیزافە (IQD)</th>
+                    <th className="p-3 border-l border-slate-200 text-center">دۆخ</th>
+                    <th className="p-3 text-center w-36">کردار</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 font-bold">
+                  {activeEmployees.map((emp, idx) => {
+                    // Compute employee's overtime in Sheet data
+                    const empOts = GOOGLE_SHEET_OVERTIME_DATA.filter(ot => {
+                      const clean = ot.empName.trim();
+                      const eName = (emp.fullName3Part || emp.name).trim();
+                      return clean === eName || eName.includes(clean) || clean.includes(emp.name);
+                    });
+                    const totalOtHours = empOts.reduce((sum, o) => sum + o.hours, 0);
+                    const totalOtAmount = empOts.reduce((sum, o) => sum + (o.amount || o.hours * 5000), 0);
+
+                    return (
+                      <tr
+                        key={emp.id}
+                        onClick={() => setSelectedEmp360(emp)}
+                        className="hover:bg-indigo-50/60 cursor-pointer transition-all group"
+                      >
+                        <td className="p-3 border-l border-slate-200 text-center font-mono text-slate-500">
+                          {idx + 1}
+                        </td>
+                        <td className="p-3 border-l border-slate-200">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-indigo-100 border border-indigo-300 flex items-center justify-center font-black text-indigo-900 text-xs">
+                              {emp.fullName3Part ? emp.fullName3Part.charAt(0) : emp.name.charAt(0)}
+                            </div>
+                            <div>
+                              <span className="text-slate-950 font-black group-hover:text-indigo-900 group-hover:underline block">
+                                {emp.fullName3Part || emp.name}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                EMP-{emp.employeeId || emp.id.replace('emp-', '')}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3 border-l border-slate-200 text-slate-700 font-bold">
+                          {emp.role || 'Employee'}
+                        </td>
+                        <td className="p-3 border-l border-slate-200 text-center font-mono">
+                          <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-950 border border-blue-200">
+                            13 ڕۆژ
+                          </span>
+                        </td>
+                        <td className="p-3 border-l border-slate-200 text-center font-mono text-blue-950 bg-blue-50/30 font-black">
+                          {(13 * 8 + totalOtHours).toFixed(1)} کاتژمێر
+                        </td>
+                        <td className="p-3 border-l border-slate-200 text-center font-mono text-amber-950 bg-amber-50/40 font-black">
+                          {totalOtHours > 0 ? (
+                            <span className="px-2 py-0.5 rounded bg-amber-600 text-white shadow-xs">
+                              +{totalOtHours} کاتژمێر
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                        <td className="p-3 border-l border-slate-200 text-center font-mono text-emerald-950 bg-emerald-50/40 font-black">
+                          {totalOtAmount > 0 ? (
+                            <span className="text-emerald-900">+{totalOtAmount.toLocaleString()} IQD</span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                        <td className="p-3 border-l border-slate-200 text-center">
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 text-[11px] font-bold">
+                            چالاک
+                          </span>
+                        </td>
+                        <td className="p-3 text-center">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedEmp360(emp);
+                            }}
+                            className="btn-classic text-xs font-bold px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-950 border-indigo-300 rounded-lg flex items-center gap-1.5 mx-auto"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-indigo-700" />
+                            <span>تەواوی مانگ</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 👥 SECTION 1: HR & STAFF OPERATIONS PANEL */}
+      {/* ========================================================================= */}
+      {adminActiveSection === 'hr' && (
+        <section className="panel-classic space-y-3">
+          <div className="panel-header-classic flex items-center justify-between">
+            <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+              <Users className="w-4 h-4 text-blue-800" />
+              <span>بەشی کارمەندان HR و خشتەی ئامادەبوونی ۳۱ ڕۆژە</span>
+            </h2>
+            <button
+              onClick={() => handleOpenEmpModal()}
+              className="btn-classic-primary text-xs flex items-center gap-1"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>زیادکردنی کارمەندی نوێ</span>
+            </button>
+          </div>
+
+          <div className="p-3.5 space-y-4">
+            
+            {/* Search and Filters */}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex items-center gap-2 flex-1 max-w-md">
+                <Search className="w-4 h-4 text-slate-400" />
                 <input
                   type="text"
-                  required
-                  value={empFullName3}
-                  onChange={(e) => setEmpFullName3(e.target.value)}
-                  placeholder="ناوی سیانی..."
-                  className="input-classic w-full"
+                  placeholder="گەڕان بەدوای ناوی کارمەند یان پۆست..."
+                  value={empSearch}
+                  onChange={(e) => setEmpSearch(e.target.value)}
+                  className="input-classic w-full text-xs font-bold"
                 />
               </div>
 
+              <div className="flex items-center gap-1.5 text-xs font-bold">
+                <button
+                  onClick={() => setEmpStatusFilter('active')}
+                  className={`px-3 py-1 rounded-lg border ${
+                    empStatusFilter === 'active' ? 'bg-blue-900 text-white font-black' : 'bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  چالاکەکان ({activeEmployees.length})
+                </button>
+                <button
+                  onClick={() => setEmpStatusFilter('resigned')}
+                  className={`px-3 py-1 rounded-lg border ${
+                    empStatusFilter === 'resigned' ? 'bg-rose-800 text-white font-black' : 'bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  وازهێناوەکان ({employees.length - activeEmployees.length})
+                </button>
+              </div>
+            </div>
+
+            {/* Staff Management Table */}
+            <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+              <table className="w-full text-right text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-200 border-b border-slate-300 text-slate-900 font-black">
+                    <th className="p-2.5 border-l border-slate-300 w-10 text-center">#</th>
+                    <th className="p-2.5 border-l border-slate-300">ناوی تەواوی سێ قۆڵی</th>
+                    <th className="p-2.5 border-l border-slate-300">پۆست / ئەرک</th>
+                    <th className="p-2.5 border-l border-slate-300 text-center">ژمارەی مۆبایل</th>
+                    <th className="p-2.5 border-l border-slate-300 text-center">دەستپێکی دەوام</th>
+                    <th className="p-2.5 border-l border-slate-300 text-center">ناسنامەی دەموچاو (AI Face)</th>
+                    <th className="p-2.5 text-center w-40">کردارەکان</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 font-bold">
+                  {filteredEmployees.map((emp, idx) => {
+                    const hasFace = registeredFaceIds.includes(emp.id);
+                    return (
+                      <tr key={emp.id} className="hover:bg-slate-50">
+                        <td className="p-2.5 border-l border-slate-200 text-center font-mono text-slate-500">{idx + 1}</td>
+                        <td className="p-2.5 border-l border-slate-200 text-slate-950 font-black">
+                          {emp.fullName3Part || emp.name}
+                        </td>
+                        <td className="p-2.5 border-l border-slate-200 text-slate-700">{emp.role}</td>
+                        <td className="p-2.5 border-l border-slate-200 text-center font-mono">{emp.phone || '-'}</td>
+                        <td className="p-2.5 border-l border-slate-200 text-center font-mono">{emp.startDate || '-'}</td>
+                        <td className="p-2.5 border-l border-slate-200 text-center">
+                          {hasFace ? (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px] font-black">
+                              ✅ تۆمارکراوە
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => setFaceEnrollEmp(emp)}
+                              className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-950 border border-amber-300 hover:bg-amber-200 text-[10px] font-black cursor-pointer"
+                            >
+                              📸 تۆمارکردنی وێنە
+                            </button>
+                          )}
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => setSelectedEmp360(emp)}
+                              className="text-indigo-700 hover:text-indigo-950 p-1 hover:bg-indigo-50 rounded"
+                              title="بینینی تەواوی ئاماری مانگانە"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleOpenEmpModal(emp)}
+                              className="text-blue-700 hover:text-blue-950 p-1 hover:bg-blue-50 rounded"
+                              title="دەستکاری"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleToggleResignation(emp)}
+                              className="text-amber-700 hover:text-amber-950 p-1 hover:bg-amber-50 rounded"
+                              title={emp.status === 'resigned' ? 'گەڕانەوە' : 'وازهێنان'}
+                            >
+                              {emp.status === 'resigned' ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteEmployee(emp.id)}
+                              className="text-rose-700 hover:text-rose-950 p-1 hover:bg-rose-50 rounded"
+                              title="سڕینەوە"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* 31-Day Attendance Sheet Component */}
+            <div id="attendance-sheet-grid-section" className="pt-2">
+              <AttendanceSheetGrid employees={activeEmployees} attendanceLogs={attendanceLogs} />
+            </div>
+
+          </div>
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ⏱️ SECTION 2: OVERTIME MASTER MODULE */}
+      {/* ========================================================================= */}
+      {adminActiveSection === 'overtime' && (
+        <AdminOvertimeModule employees={employees} />
+      )}
+
+      {/* ========================================================================= */}
+      {/* 💰 SECTION 3: EXPENSES MODULE */}
+      {/* ========================================================================= */}
+      {adminActiveSection === 'expenses' && (
+        <AdminExpensesModule employees={employees} />
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🚛 SECTION 4: LOGISTICS MODULE */}
+      {/* ========================================================================= */}
+      {adminActiveSection === 'logistics' && (
+        <AdminLogisticsModule employees={employees} />
+      )}
+
+      {/* ========================================================================= */}
+      {/* 📊 SECTION 5: HR STATS & ANALYTICS REPORT */}
+      {/* ========================================================================= */}
+      {adminActiveSection === 'stats' && (
+        <AdminWeeklyMonthlyStatsModule employees={employees} attendanceLogs={attendanceLogs} />
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🔍 DEEP EMPLOYEE 360° MONTHLY PROFILE MODAL */}
+      {/* ========================================================================= */}
+      {selectedEmp360 && (
+        <AdminEmployeeDetailsModal
+          employee={selectedEmp360}
+          selectedMonth={selectedMonth}
+          attendanceLogs={attendanceLogs}
+          adminNotes={adminNotes}
+          onClose={() => setSelectedEmp360(null)}
+        />
+      )}
+
+      {/* ADD/EDIT EMPLOYEE MODAL */}
+      {showEmpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl border-2 border-slate-400 shadow-2xl max-w-md w-full p-5 space-y-4 text-right">
+            <h3 className="text-sm font-black text-slate-900 border-b border-slate-200 pb-2">
+              {editingEmp ? 'دەستکاریکردنی زانیاری کارمەند' : 'زیادکردنی کارمەندی نوێ'}
+            </h3>
+
+            <form onSubmit={handleSaveEmployee} className="space-y-3">
               <div>
-                <label className="block text-slate-800 mb-1">ناوی کورت:</label>
+                <label className="block text-slate-800 mb-1">ناوی کورت (بۆ ناو سیستم):</label>
                 <input
                   type="text"
                   required
                   value={empShortName}
                   onChange={(e) => setEmpShortName(e.target.value)}
-                  placeholder="ناوی کورت..."
-                  className="input-classic w-full"
+                  className="input-classic w-full font-bold"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-800 mb-1">ژمارەی مۆبایل:</label>
+                <label className="block text-slate-800 mb-1">ناوی سێ قۆڵی تەواو:</label>
                 <input
                   type="text"
-                  value={empPhone}
-                  onChange={(e) => setEmpPhone(e.target.value)}
-                  placeholder="0770..."
-                  className="input-classic w-full font-mono"
+                  value={empFullName3}
+                  onChange={(e) => setEmpFullName3(e.target.value)}
+                  className="input-classic w-full font-bold"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-800 mb-1">پلە / ئەرک:</label>
+                <label className="block text-slate-800 mb-1">پۆست / ئەرک:</label>
                 <select
                   value={empRole}
-                  onChange={(e) => setEmpRole(e.target.value)}
+                  onChange={(e) => setEmpRole(e.target.value as any)}
                   className="input-classic w-full font-bold"
                 >
                   <option value="Manager">Manager (بەڕێوەبەر)</option>
                   <option value="Employee Supervisor">Employee Supervisor (سەرپەرشتیار)</option>
                   <option value="Transport Supervisor">Transport Supervisor (سەرپەرشتیاری گواستنەوە)</option>
                   <option value="Employee">Employee (کارمەند)</option>
+                  <option value="Marketing">Marketing (مارکێتینگ)</option>
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-slate-800 mb-1">کەی دەست بەکار بووە:</label>
+                  <label className="block text-slate-800 mb-1">مۆبایل:</label>
+                  <input
+                    type="text"
+                    value={empPhone}
+                    onChange={(e) => setEmpPhone(e.target.value)}
+                    className="input-classic w-full font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-800 mb-1">بەرواری دەستپێک:</label>
                   <input
                     type="date"
                     value={empStartDate}
@@ -1110,19 +1081,9 @@ export default function AdminPage() {
                     className="input-classic w-full font-mono"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-slate-800 mb-1">کۆدی PIN:</label>
-                  <input
-                    type="text"
-                    disabled
-                    value={editingEmp ? (editingEmp.password || '1234') : '1234'}
-                    className="input-classic w-full font-mono bg-slate-300 text-slate-700"
-                  />
-                </div>
               </div>
 
-              <div className="p-2 border-t border-slate-300 flex justify-end gap-2 pt-3">
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setShowEmpModal(false)}
@@ -1134,7 +1095,7 @@ export default function AdminPage() {
                   type="submit"
                   className="btn-classic-primary text-xs"
                 >
-                  پاشەکەوتکردنی کارمەند
+                  پاشەکەوت
                 </button>
               </div>
             </form>
@@ -1156,28 +1117,14 @@ export default function AdminPage() {
             if (savedLocations.length > 0) {
               setSyncedFactoryLocation(savedLocations[0]);
             }
-
-            try {
-              // Sync each location to Supabase backend
-              for (const loc of savedLocations) {
-                await fetch(`/api/attendance/location?_t=${Date.now()}`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
-                  body: JSON.stringify(loc),
-                });
-              }
-            } catch (err) {
-              console.error('Failed to sync locations to Supabase:', err);
-            }
-
             setShowMapPicker(false);
-            alert(`🎉 ${savedLocations.length} لۆکەیشنی کۆمپانیا بە سەرکەوتوویی لەسەر سێرڤەر پاشەکەوت کران!`);
+            alert(`🎉 ${savedLocations.length} لۆکەیشنی کۆمپانیا بە سەرکەوتوویی پاشەکەوت کران!`);
           }}
           onClose={() => setShowMapPicker(false)}
         />
       )}
 
-      {/* ADMIN EMPLOYEE AI FACE ENROLLMENT MODAL */}
+      {/* FACE ENROLL MODAL */}
       {faceEnrollEmp && (
         <AdminFaceEnrollModal
           employee={faceEnrollEmp}
@@ -1185,12 +1132,12 @@ export default function AdminPage() {
           onClose={() => setFaceEnrollEmp(null)}
           onSuccess={() => {
             fetchRegisteredFaces();
-            alert(`🎉 ڕوخساری (${faceEnrollEmp.fullName3Part || faceEnrollEmp.name}) بە سەرکەوتوویی وەک ناسنامەی AI لە سێرڤەر تۆمارکرا!`);
+            alert(`🎉 ڕوخساری (${faceEnrollEmp.fullName3Part || faceEnrollEmp.name}) بە سەرکەوتوویی تۆمارکرا!`);
           }}
         />
       )}
 
-      {/* ADMIN PASSWORD CHANGE MODAL */}
+      {/* PASSWORD CHANGE MODAL */}
       <AdminPasswordChangeModal
         isOpen={showPasswordModal}
         onClose={() => setShowPasswordModal(false)}
