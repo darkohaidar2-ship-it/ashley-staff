@@ -278,46 +278,42 @@ export function AttendanceAnalyticsReport({
         let dayWorkedMins = 0;
         if (checkInTimeStr && checkOutTimeStr) {
           const inM = timeToMinutes(checkInTimeStr);
-          const outM = timeToMinutes(checkOutTimeStr);
+          let outM = timeToMinutes(checkOutTimeStr);
+          if (outM <= 360) outM += 1440; // 🌟 12 midnight / 00:00 is 1440 mins
           if (outM > inM) {
             dayWorkedMins = outM - inM;
             totalWorkedMinutes += dayWorkedMins;
           }
         } else if (checkInTimeStr && !checkOutTimeStr) {
-          // If only checked in, count default shift duration (e.g. 8 hours)
           dayWorkedMins = Math.max(0, shiftEndMins - shiftStartMins);
           totalWorkedMinutes += dayWorkedMins;
         }
 
-        // Late calculation (Check In > Shift Start e.g. 08:00)
+        // Late calculation (Check In > 08:15 with 15-min tolerance)
         let dayLateMins = 0;
         if (checkInTimeStr) {
           const checkInMins = timeToMinutes(checkInTimeStr);
-          if (checkInMins > shiftStartMins) {
-            dayLateMins = checkInMins - shiftStartMins;
+          if (checkInMins > 495) {
+            dayLateMins = checkInMins - 480;
             totalLateMinutes += dayLateMins;
             lateDaysCount++;
           }
         }
 
-        // Early Leave calculation (Check Out < Shift End e.g. 17:00)
+        // Early Leave & Overtime calculation (with midnight support & 15-min tolerance)
         let dayEarlyLeaveMins = 0;
-        if (checkOutTimeStr) {
-          const checkOutMins = timeToMinutes(checkOutTimeStr);
-          if (checkOutMins < shiftEndMins) {
-            dayEarlyLeaveMins = shiftEndMins - checkOutMins;
-            totalEarlyLeaveMinutes += dayEarlyLeaveMins;
-            earlyLeaveDaysCount++;
-          }
-        }
-
-        // Overtime calculation (Check Out > Shift End e.g. 17:00)
         let dayOvertimeMins = 0;
         let isOt30 = false;
         if (checkOutTimeStr) {
-          const checkOutMins = timeToMinutes(checkOutTimeStr);
-          if (checkOutMins > shiftEndMins) {
-            dayOvertimeMins = checkOutMins - shiftEndMins;
+          let checkOutMins = timeToMinutes(checkOutTimeStr);
+          if (checkOutMins <= 360) checkOutMins += 1440; // 🌟 12 midnight / 00:00 is 1440 mins
+
+          if (checkOutMins < 1005) { // Early leave before 16:45
+            dayEarlyLeaveMins = 1020 - checkOutMins;
+            totalEarlyLeaveMinutes += dayEarlyLeaveMins;
+            earlyLeaveDaysCount++;
+          } else if (checkOutMins > 1035) { // Overtime after 17:15
+            dayOvertimeMins = checkOutMins - 1020;
             totalOvertimeMinutes += dayOvertimeMins;
             overtimeDaysCount++;
             if (dayOvertimeMins >= 30) {

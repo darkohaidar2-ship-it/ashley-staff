@@ -24,7 +24,7 @@ export interface ExportReportOptions {
 
 /**
  * Convert 24-hour timestamp into 12-hour format with Kurdish indicators (ب.ن / پ.ن)
- * Example: '08:30:00' -> '08:30 ب.ن', '17:15' -> '05:15 پ.ن'
+ * Example: '08:30:00' -> '08:30 ب.ن', '17:15' -> '05:15 پ.ن', '00:00:00' -> '12:00 شەو'
  */
 export function formatTime12H(timeStr?: string | null): string {
   if (!timeStr) return '-';
@@ -44,6 +44,10 @@ export function formatTime12H(timeStr?: string | null): string {
   const minute = chunks[1].slice(0, 2);
 
   if (isNaN(hour)) return timeStr;
+
+  if (hour === 0 && (minute === '00' || minute === '0')) {
+    return '12:00 شەو';
+  }
 
   const isPM = hour >= 12;
   hour = hour % 12;
@@ -65,7 +69,7 @@ export function formatTime12H(timeStr?: string | null): string {
  * Check-Out (Base 05:00 PM / 17:00 / 1020 mins):
  * - Early departure (< 16:45 / < 1005 mins) -> 🔴 RED (ڕۆیشتنی پێشوەختە)
  * - On-time departure (16:45 to 17:15 / 1005 to 1035 mins) -> 🟢 GREEN (ئاسایی و بێ کێشە)
- * - Overtime departure (> 17:15 / > 1035 mins) -> 🟣 PURPLE (ئیزافە و کاتی زیادە)
+ * - Overtime departure (> 17:15 / > 1035 mins OR 00:00 - 06:00 midnight) -> 🟣 PURPLE (ئیزافە و کاتی زیادە)
  */
 export function getAttendanceTimeBadge(timeStr: string | null | undefined, type: 'in' | 'out'): {
   status: 'on_time' | 'late' | 'early_leave' | 'overtime';
@@ -94,11 +98,11 @@ export function getAttendanceTimeBadge(timeStr: string | null | undefined, type:
   const [hStr, mStr] = cleanTime.split(':');
   const hours = parseInt(hStr || '0', 10);
   const minutes = parseInt(mStr || '0', 10);
-  const totalMins = hours * 60 + minutes;
+  const rawMins = hours * 60 + minutes;
 
   if (type === 'in') {
     // 08:00 is 480 mins. Up to 08:15 (495 mins) is GREEN. After 08:15 is RED.
-    if (totalMins <= 495) {
+    if (rawMins <= 495) {
       return {
         status: 'on_time',
         colorClass: 'bg-emerald-50 text-emerald-800 border-emerald-300',
@@ -117,10 +121,11 @@ export function getAttendanceTimeBadge(timeStr: string | null | undefined, type:
     }
   } else {
     // Check-out: 17:00 is 1020 mins.
-    // Early (< 16:45 / 1005 mins) -> RED
-    // On-Time (16:45 to 17:15 / 1005 to 1035 mins) -> GREEN
-    // Overtime (> 17:15 / 1035 mins) -> PURPLE / ROYAL BLUE
-    if (totalMins < 1005) {
+    // 🌟 Midnight & Overnight Support: 00:00 (12 AM) to 06:00 (6 AM) is 1440+ mins (Night Overtime)
+    const effectiveOutMins = rawMins <= 360 ? rawMins + 1440 : rawMins;
+
+    if (effectiveOutMins < 1005) {
+      // Early leave (before 16:45)
       return {
         status: 'early_leave',
         colorClass: 'bg-rose-50 text-rose-800 border-rose-300',
@@ -128,7 +133,8 @@ export function getAttendanceTimeBadge(timeStr: string | null | undefined, type:
         badgeStyle: { bg: '#fef2f2', color: '#991b1b', border: '#f87171' },
         label: 'ڕۆیشتن (پێشوەختە)',
       };
-    } else if (totalMins <= 1035) {
+    } else if (effectiveOutMins <= 1035) {
+      // On-time (16:45 to 17:15)
       return {
         status: 'on_time',
         colorClass: 'bg-emerald-50 text-emerald-800 border-emerald-300',
@@ -137,9 +143,10 @@ export function getAttendanceTimeBadge(timeStr: string | null | undefined, type:
         label: 'ڕۆیشتن (تەواو)',
       };
     } else {
+      // Overtime (> 17:15, 20:00, 23:00, 00:00 midnight)
       return {
         status: 'overtime',
-        colorClass: 'bg-purple-50 text-purple-800 border-purple-300',
+        colorClass: 'bg-purple-100 text-purple-900 border-purple-400 font-black',
         cssClass: 'badge-overtime',
         badgeStyle: { bg: '#f5f3ff', color: '#581c87', border: '#a855f7' },
         label: 'ڕۆیشتن (ئیزافە)',

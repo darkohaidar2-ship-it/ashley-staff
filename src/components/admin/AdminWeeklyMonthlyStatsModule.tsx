@@ -105,7 +105,7 @@ export function AdminWeeklyMonthlyStatsModule({
         if (timeStr) {
           const parts = timeStr.split(':');
           const mins = (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
-          if (mins > 8 * 60) { // After 08:00
+          if (mins > 495) { // 15-min tolerance: After 08:15
             lateCount++;
             totalLateMins += (mins - 480);
           }
@@ -116,11 +116,13 @@ export function AdminWeeklyMonthlyStatsModule({
         const timeStr = l.time ? (l.time.includes(' ') ? l.time.split(' ')[1]?.slice(0, 5) : l.time.slice(0, 5)) : (l as any).checkOutTime?.slice(0, 5);
         if (timeStr) {
           const parts = timeStr.split(':');
-          const mins = (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
-          if (mins < 17 * 60) { // Before 17:00
+          let mins = (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+          if (mins <= 360) mins += 1440; // 🌟 12 midnight / 00:00 is 1440 mins
+
+          if (mins < 1005) { // Early leave before 16:45
             earlyLeaveCount++;
             totalEarlyLeaveMins += (1020 - mins);
-          } else if (mins > 17 * 60) { // After 17:00
+          } else if (mins > 1035) { // Overtime after 17:15
             overtimeCount++;
             const ot = mins - 1020;
             totalOvertimeMins += ot;
