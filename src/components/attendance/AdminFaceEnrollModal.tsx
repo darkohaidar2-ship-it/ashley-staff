@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Camera, RefreshCw, Sparkles, CheckCircle, AlertTriangle, SwitchCamera, X, User } from 'lucide-react';
+import { Camera, RefreshCw, CheckCircle2, SwitchCamera, X, User } from 'lucide-react';
 import { extractFaceDescriptor, loadFaceModels } from '@/lib/face-recognition';
 import type { Employee } from '@/lib/types';
 
@@ -26,6 +26,7 @@ export function AdminFaceEnrollModal({
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const autoDetectTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isEnrollingRef = useRef(false);
@@ -33,7 +34,7 @@ export function AdminFaceEnrollModal({
   // Check if employee already has face registered
   useEffect(() => {
     if (!employee?.id || !isOpen) return;
-    setStatusMessage(null);
+    setStatusMessage('سەیری کامێرای پێشەوە بکە...');
     setIsSuccess(null);
     setFaceInsideOval(false);
     isEnrollingRef.current = false;
@@ -58,11 +59,12 @@ export function AdminFaceEnrollModal({
       .catch(() => setAlreadyRegistered(false));
   }, [employee, isOpen]);
 
-  // Start camera (Natural Un-zoomed Resolution for iPhone)
+  // Start camera (Natural Un-zoomed Resolution for iPhone - Hardware Accelerated)
   const startCamera = async (mode: 'user' | 'environment') => {
     try {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
       }
 
       let stream: MediaStream | null = null;
@@ -75,20 +77,29 @@ export function AdminFaceEnrollModal({
           },
           audio: false,
         });
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: mode },
-          audio: false,
-        });
+      } catch (err) {
+        console.warn('High-res camera fallback in enroll modal:', err);
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: mode },
+            audio: false,
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
       }
 
       streamRef.current = stream;
-      if (videoRef.current) {
+      if (videoRef.current && stream) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+        videoRef.current.play().catch(() => {});
       }
     } catch (err: any) {
-      setStatusMessage('هەڵە لە کردنەوەی کامێرا: ' + (err.message || 'تکایە ڕێگەپێدانی کامێرا بدە'));
+      console.error('Camera open error:', err);
+      setStatusMessage('هەڵە لە کردنەوەی کامێرا: ' + (err.message || 'تکایە لە Safari ڕێگە بدە'));
       setIsSuccess(false);
     }
   };
@@ -106,6 +117,8 @@ export function AdminFaceEnrollModal({
       videoRef.current.srcObject = null;
     }
     isEnrollingRef.current = false;
+    setIsScanning(false);
+    setFaceInsideOval(false);
   };
 
   // Perform face extraction & save
@@ -115,15 +128,14 @@ export function AdminFaceEnrollModal({
     try {
       isEnrollingRef.current = true;
       setIsScanning(true);
-      setStatusMessage('پشکنین و کۆدکردنی دەموچاو بە زیرەکی دەستکرد...');
-      setIsSuccess(null);
+      setStatusMessage('پشکنین و کۆدکردنی ئەندازەی دەموچاو...');
 
       const faceResult = await extractFaceDescriptor(videoRef.current);
-      if (!faceResult) {
+      if (!faceResult || !faceResult.descriptor) {
         isEnrollingRef.current = false;
         setIsScanning(false);
         setFaceInsideOval(false);
-        setStatusMessage('❌ دەموچاو لە ناو بازنەکە نەدۆزرایەوە! دەموچاوەکە بخەرە ناو بازنەکە.');
+        setStatusMessage('سەیری ناو بازنەکە بکە...');
         return;
       }
 
@@ -157,14 +169,15 @@ export function AdminFaceEnrollModal({
       }
 
       setIsSuccess(true);
-      setStatusMessage(`✅ ڕوخساری (${employee.fullName3Part || employee.name}) بە سەرکەوتوویی تۆمار کرا!`);
+      setStatusMessage(`✅ ڕوخساری (${employee.fullName3Part || employee.name}) بە سەرکەوتوویی ناسێندرا!`);
       setAlreadyRegistered(true);
 
+      // Smooth auto-close after 1.2s
       setTimeout(() => {
         stopCamera();
         onSuccess();
         onClose();
-      }, 1500);
+      }, 1200);
     } catch (err: any) {
       console.error('Face registration error:', err);
       setIsSuccess(false);
@@ -175,13 +188,12 @@ export function AdminFaceEnrollModal({
     }
   }, [employee, onSuccess, onClose]);
 
-  // Lifecycle: open & start camera
+  // Lifecycle: open & start camera with stable loop
   useEffect(() => {
     if (isOpen) {
       loadFaceModels();
       startCamera(facingMode);
 
-      // Auto-scan continuously
       const timer = setInterval(async () => {
         if (!isEnrollingRef.current && videoRef.current && videoRef.current.readyState >= 2) {
           try {
@@ -190,12 +202,10 @@ export function AdminFaceEnrollModal({
               setFaceInsideOval(true);
               clearInterval(timer);
               handleScanAndSave();
-            } else {
-              setFaceInsideOval(false);
             }
           } catch {}
         }
-      }, 700);
+      }, 600);
 
       autoDetectTimerRef.current = timer;
     }
@@ -209,160 +219,135 @@ export function AdminFaceEnrollModal({
   const handleToggleCamera = () => {
     const nextMode = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(nextMode);
+    startCamera(nextMode);
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 dir-rtl" dir="rtl">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4 text-white animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-black flex flex-col justify-between overflow-hidden select-none touch-none dir-rtl" dir="rtl">
+      
+      {/* 🌟 TOP FLOATING MINIMAL CONTROLS BAR */}
+      <div className="absolute top-0 inset-x-0 z-30 p-4 pt-6 flex items-center justify-between bg-gradient-to-b from-black/80 via-black/40 to-transparent">
         
-        {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-700 flex items-center justify-center text-white shadow-md">
-              <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" />
-            </div>
-            <div>
-              <h3 className="text-sm font-black text-white">
-                ناساندنی ڕوخسار: {employee.fullName3Part || employee.name}
-              </h3>
-              <p className="text-[11px] text-slate-400 font-semibold">
-                دەموچاو بخەرە ناو بازنەکەوە بۆ تۆمارکردنی خۆکار
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-all"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Existing Status Badge */}
-        <div className="flex items-center justify-between px-3 py-1.5 bg-slate-800/80 rounded-xl text-xs font-black">
-          <span className="text-slate-300">دۆخی لە داتابەیز:</span>
-          <span className={alreadyRegistered ? 'text-emerald-400' : 'text-amber-400'}>
-            {alreadyRegistered ? '✅ ڕوخسار پێشتر تۆمارکراوە' : '⏳ لە چاوەڕوانی ناساندن'}
+        {/* Action Title Badge */}
+        <div className="px-3.5 py-1.5 rounded-full bg-black/50 backdrop-blur-xl border border-white/20 text-white text-xs font-black flex items-center gap-2">
+          <Camera className="w-4 h-4 text-amber-400" />
+          <span>
+            ناساندنی ڕوخسار: <strong className="text-amber-300">{employee.fullName3Part || employee.name}</strong>
           </span>
+          {alreadyRegistered && (
+            <span className="px-2 py-0.2 bg-emerald-500/40 text-emerald-200 rounded-full text-[10px] font-mono font-bold">
+              دووبارە
+            </span>
+          )}
         </div>
 
-        {/* Camera Viewfinder with Face Oval Frame */}
-        <div className="relative rounded-3xl overflow-hidden bg-black aspect-[3/4] max-h-[380px] flex items-center justify-center border-2 border-indigo-500/50 shadow-2xl">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            disablePictureInPicture
-            className={`w-full h-full object-cover ${facingMode === 'user' ? 'transform scale-x-[-1]' : ''}`}
-          />
-
-          {/* 🌟 HUMAN FACE OVAL TARGET HUD */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none p-4">
-            
-            {/* The Head Oval Guide Circle */}
-            <div
-              className={`w-52 h-68 rounded-[50%] transition-all duration-300 flex flex-col items-center justify-center relative ${
-                isSuccess
-                  ? 'border-4 border-emerald-400 bg-emerald-500/20 shadow-[0_0_40px_rgba(52,211,153,0.9)] animate-pulse'
-                  : faceInsideOval
-                  ? 'border-4 border-emerald-400 bg-emerald-500/10 shadow-[0_0_30px_rgba(52,211,153,0.7)]'
-                  : 'border-2 border-dashed border-indigo-300/80 shadow-[0_0_20px_rgba(99,102,241,0.4)] animate-pulse'
-              }`}
-            >
-              {/* Center Silhouette Hint */}
-              {!faceInsideOval && !isSuccess && (
-                <div className="text-center space-y-1">
-                  <User className="w-12 h-12 text-white/30 mx-auto animate-bounce" />
-                  <span className="text-[10px] font-bold text-white/70 bg-black/50 px-2 py-0.5 rounded-full backdrop-blur-xs">
-                    دەموچاو لەم بازنەیە دابنێ
-                  </span>
-                </div>
-              )}
-
-              {/* Success Badge Inside Oval */}
-              {isSuccess && (
-                <div className="text-center space-y-1 animate-in zoom-in-75 duration-200">
-                  <CheckCircle className="w-14 h-14 text-emerald-400 mx-auto" />
-                  <span className="text-xs font-black text-emerald-300 bg-black/60 px-3 py-1 rounded-full backdrop-blur-sm">
-                    ✅ تۆمار کرا!
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Bottom guide text */}
-            <div className="mt-3 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black text-amber-200 shadow-md">
-              {faceInsideOval ? '🟢 دەموچاو ناسرایەوە - چاوەڕێبە...' : '⚡ دەموچاو بخەرە ناو بازنەکە، خۆکارانە تۆمار دەبێت'}
-            </div>
-          </div>
-        </div>
-
-        {/* Live Status Message Feedback */}
-        {statusMessage && (
-          <div
-            className={`p-3 rounded-2xl text-xs font-black text-center flex items-center justify-center gap-2 border ${
-              isSuccess === true
-                ? 'bg-emerald-900/60 text-emerald-200 border-emerald-500/50'
-                : isSuccess === false
-                ? 'bg-rose-900/60 text-rose-200 border-rose-500/50'
-                : 'bg-indigo-900/60 text-indigo-200 border-indigo-500/50'
-            }`}
-          >
-            {isScanning && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-            {isSuccess === true && <CheckCircle className="w-4 h-4 text-emerald-400" />}
-            {isSuccess === false && <AlertTriangle className="w-4 h-4 text-rose-400" />}
-            <span>{statusMessage}</span>
-          </div>
-        )}
-
-        {/* Controls Toolbar */}
-        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800">
+        {/* Switch Camera & Close Buttons Only */}
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={handleToggleCamera}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-all"
+            className="w-11 h-11 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-xl border border-white/30 text-white flex items-center justify-center shadow-lg transition-transform active:scale-90 cursor-pointer"
             title="گۆڕینی کامێرا"
           >
-            <SwitchCamera className="w-4 h-4" />
-            <span>گۆڕینی کامێرا</span>
+            <SwitchCamera className="w-5 h-5 text-white" />
           </button>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all"
-            >
-              داخستن
-            </button>
+          <button
+            type="button"
+            onClick={() => {
+              stopCamera();
+              onClose();
+            }}
+            className="w-11 h-11 rounded-full bg-rose-600/80 hover:bg-rose-600 backdrop-blur-xl border border-white/30 text-white flex items-center justify-center shadow-lg transition-transform active:scale-90 cursor-pointer"
+            title="داخستن"
+          >
+            <X className="w-6 h-6 text-white" />
+          </button>
+        </div>
+      </div>
 
-            <button
-              type="button"
-              disabled={isScanning || isSuccess === true}
-              onClick={handleScanAndSave}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50"
-            >
-              {isScanning ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>لە تۆمارکردندایە...</span>
-                </>
-              ) : (
-                <>
-                  <Camera className="w-4 h-4" />
-                  <span>📸 تۆمارکردنی ئێستا</span>
-                </>
-              )}
-            </button>
-          </div>
+      {/* 🌟 FULL SCREEN CAMERA FEED (NO ARTIFICIAL ZOOM OR SHAKE) */}
+      <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          disablePictureInPicture
+          className={`w-full h-full object-cover sm:object-contain transition-none will-change-transform ${
+            facingMode === 'user' ? 'transform scale-x-[-1]' : ''
+          }`}
+        />
+        <canvas ref={canvasRef} className="hidden" />
+
+        {/* 🟢 BIOMETRIC SCANNING OVAL GUIDE HUD */}
+        <div
+          className={`absolute w-64 h-80 sm:w-72 sm:h-96 rounded-[50%] border-4 transition-all duration-200 pointer-events-none flex flex-col items-center justify-between py-6 ${
+            isSuccess === true
+              ? 'border-emerald-400 shadow-[0_0_60px_rgba(52,211,153,0.9)] bg-emerald-500/20 scale-105'
+              : isSuccess === false
+              ? 'border-rose-500 shadow-[0_0_50px_rgba(244,63,94,0.8)] bg-rose-500/15'
+              : faceInsideOval
+              ? 'border-emerald-400 shadow-[0_0_40px_rgba(52,211,153,0.6)]'
+              : 'border-dashed border-white/60 shadow-[0_0_30px_rgba(255,255,255,0.25)]'
+          }`}
+        >
+          <span className="text-xs font-black text-white px-3 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/20">
+            {isSuccess === true
+              ? `✅ ڕوخسار بە سەرکەوتوویی تۆمارکرا!`
+              : faceInsideOval
+              ? '🟢 ڕوخسار لە ناو بازنەیە'
+              : 'ڕوخسارت بخەرە ناو بازنەکە'}
+          </span>
+
+          <div className="w-12 h-1 bg-white/40 rounded-full" />
         </div>
 
+        {/* Success Overlay Flash */}
+        {isSuccess === true && (
+          <div className="absolute inset-0 bg-emerald-950/40 backdrop-blur-xs flex flex-col items-center justify-center text-white space-y-3 pointer-events-none animate-in fade-in duration-200">
+            <div className="w-20 h-20 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-2xl shadow-emerald-500/80 animate-bounce">
+              <CheckCircle2 className="w-12 h-12" />
+            </div>
+            <div className="text-center">
+              <h2 className="text-xl font-black">{employee.fullName3Part || employee.name}</h2>
+              <p className="text-sm font-bold text-emerald-200 mt-0.5">
+                ناساندنی ڕوخسار بە سەرکەوتوویی تەواو بوو!
+              </p>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* 🌟 BOTTOM STATUS BAR & MANUAL SNAP BUTTON */}
+      <div className="absolute bottom-0 inset-x-0 z-30 p-6 pb-8 flex flex-col items-center justify-center gap-3 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
+        <div className={`px-5 py-2.5 rounded-full backdrop-blur-2xl border text-center shadow-xl transition-all ${
+          isSuccess === true
+            ? 'bg-emerald-600/90 text-white border-emerald-400'
+            : isSuccess === false
+            ? 'bg-rose-600/90 text-white border-rose-400'
+            : 'bg-black/70 text-white border-white/20'
+        }`}>
+          <p className="text-xs sm:text-sm font-black flex items-center gap-2">
+            {isScanning && <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-300" />}
+            <span>{statusMessage || 'سەیری کامێرای پێشەوە بکە بۆ ناساندنی دەموچاو...'}</span>
+          </p>
+        </div>
+
+        {/* Manual Snap Button Fallback */}
+        <button
+          type="button"
+          disabled={isScanning || isSuccess === true}
+          onClick={handleScanAndSave}
+          className="btn-classic px-5 py-2 rounded-full bg-white/20 hover:bg-white/30 text-white border border-white/30 font-black text-xs flex items-center gap-2 backdrop-blur-md cursor-pointer transition-transform active:scale-95 disabled:opacity-50"
+        >
+          <Camera className="w-4 h-4 text-amber-300" />
+          <span>📸 تۆمارکردنی دەستبەجێ</span>
+        </button>
+      </div>
+
     </div>
   );
 }
