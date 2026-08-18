@@ -54,14 +54,19 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
       if (logDate !== targetDateStr) return false;
 
       // Employee match
+      const logEmpId = (log.employeeId || log.userId || '').toString().trim().toLowerCase();
+      const empId = (emp.id || '').toString().trim().toLowerCase();
+      const empNumId = (emp.employeeId || '').toString().trim().toLowerCase();
+      
+      const logName = (log.name || log.userName || (log as any).employeeName || '').trim().toLowerCase();
+      const empName1 = (emp.fullName3Part || '').trim().toLowerCase();
+      const empName2 = (emp.name || '').trim().toLowerCase();
+
       const isEmpMatch = 
-        log.employeeId === emp.id || 
-        log.userId === emp.id || 
-        (emp.employeeId && log.employeeId === `EMP-${emp.employeeId}`) ||
-        log.name === emp.fullName3Part || 
-        log.name === emp.name ||
-        log.userName === emp.name ||
-        log.userName === emp.fullName3Part;
+        logEmpId === empId || 
+        (empNumId && logEmpId.includes(empNumId)) ||
+        (logName && empName1 && (logName === empName1 || logName.includes(empName1) || empName1.includes(logName))) ||
+        (logName && empName2 && (logName === empName2 || logName.includes(empName2) || empName2.includes(logName)));
 
       return isEmpMatch;
     });

@@ -739,12 +739,14 @@ export default function AdminPage() {
                     <th className="p-3 border-l border-slate-200 text-center bg-blue-50 text-blue-950">کاتی کارکردن</th>
                     <th className="p-3 border-l border-slate-200 text-center bg-amber-50 text-amber-950">کاتی زیادە (Overtime)</th>
                     <th className="p-3 border-l border-slate-200 text-center bg-emerald-50 text-emerald-950">پارەی ئیزافە (IQD)</th>
+                    <th className="p-3 border-l border-slate-200 text-center">ڕوخسار (AI Face)</th>
                     <th className="p-3 border-l border-slate-200 text-center">دۆخ</th>
                     <th className="p-3 text-center w-36">کردار</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 font-bold">
                   {activeEmployees.map((emp, idx) => {
+                    const hasFace = registeredFaceIds.includes(emp.id);
                     // Compute employee's overtime in Sheet data
                     const empOts = GOOGLE_SHEET_OVERTIME_DATA.filter(ot => {
                       const clean = ot.empName.trim();
@@ -803,6 +805,28 @@ export default function AdminPage() {
                             <span className="text-emerald-900">+{totalOtAmount.toLocaleString()} IQD</span>
                           ) : (
                             <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                        <td className="p-3 border-l border-slate-200 text-center" onClick={(e) => e.stopPropagation()}>
+                          {hasFace ? (
+                            <button
+                              type="button"
+                              onClick={() => setFaceEnrollEmp(emp)}
+                              className="px-2 py-0.5 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-950 border border-emerald-300 text-[10px] font-black cursor-pointer inline-flex items-center gap-1 shadow-xs transition-all"
+                              title="دووبارە ناساندنەوە و نوێکردنەوەی ڕوخسار"
+                            >
+                              <RefreshCw className="w-2.5 h-2.5" />
+                              <span>✅ ناسراوە (دووبارە)</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setFaceEnrollEmp(emp)}
+                              className="px-2.5 py-0.5 rounded-full bg-amber-500 hover:bg-amber-600 text-slate-950 border border-amber-400 text-[10px] font-black cursor-pointer inline-flex items-center gap-1 shadow-xs transition-all"
+                            >
+                              <Camera className="w-3 h-3" />
+                              <span>📸 ناساندن</span>
+                            </button>
                           )}
                         </td>
                         <td className="p-3 border-l border-slate-200 text-center">
@@ -915,15 +939,28 @@ export default function AdminPage() {
                         <td className="p-2.5 border-l border-slate-200 text-center font-mono">{emp.startDate || '-'}</td>
                         <td className="p-2.5 border-l border-slate-200 text-center">
                           {hasFace ? (
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px] font-black">
-                              ✅ تۆمارکراوە
-                            </span>
+                            <div className="flex items-center justify-center gap-1">
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px] font-black">
+                                ✅ ناسراوە
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setFaceEnrollEmp(emp)}
+                                className="px-2 py-0.5 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-950 border border-blue-300 text-[10px] font-black cursor-pointer flex items-center gap-1 shadow-xs transition-all"
+                                title="دووبارە ناساندنەوە و گۆڕینی وێنەی ڕوخساری کارمەند"
+                              >
+                                <RefreshCw className="w-2.5 h-2.5" />
+                                <span>دووبارە ناساندنەوە</span>
+                              </button>
+                            </div>
                           ) : (
                             <button
+                              type="button"
                               onClick={() => setFaceEnrollEmp(emp)}
-                              className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-950 border border-amber-300 hover:bg-amber-200 text-[10px] font-black cursor-pointer"
+                              className="px-2.5 py-0.5 rounded-full bg-amber-500 hover:bg-amber-600 text-slate-950 border border-amber-400 text-[10px] font-black cursor-pointer flex items-center gap-1 shadow-xs mx-auto transition-all"
                             >
-                              📸 تۆمارکردنی وێنە
+                              <Camera className="w-3 h-3" />
+                              <span>📸 ناساندنی ڕوخسار</span>
                             </button>
                           )}
                         </td>
@@ -1013,6 +1050,7 @@ export default function AdminPage() {
           attendanceLogs={attendanceLogs}
           adminNotes={adminNotes}
           onClose={() => setSelectedEmp360(null)}
+          onEnrollFace={(emp) => setFaceEnrollEmp(emp)}
         />
       )}
 

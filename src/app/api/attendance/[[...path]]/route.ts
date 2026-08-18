@@ -1307,15 +1307,8 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           });
         }
 
-        const allLogs = Array.from(uniqueMap.values()).filter((item: any) => {
-          const itemDate = item.date || (item.time ? item.time.split(' ')[0] : '');
-          if (itemDate && itemDate.startsWith('2026-08-')) {
-            const dayNum = parseInt(itemDate.split('-')[2], 10);
-            return !isNaN(dayNum) && dayNum <= 15;
-          }
-          return true;
-        });
-
+        // Return all logs (Seeds 1-15 + ALL live real-time check-ins/check-outs from Supabase)
+        const allLogs = Array.from(uniqueMap.values());
         return NextResponse.json(allLogs);
       } catch (err) {
         return NextResponse.json(generateAugust2026AttendanceRecords());
