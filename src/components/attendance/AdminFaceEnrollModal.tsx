@@ -58,25 +58,34 @@ export function AdminFaceEnrollModal({
       .catch(() => setAlreadyRegistered(false));
   }, [employee, isOpen]);
 
-  // Start camera
+  // Start camera (Natural Un-zoomed Resolution for iPhone)
   const startCamera = async (mode: 'user' | 'environment') => {
     try {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: mode },
-          width: { ideal: 640 },
-          height: { ideal: 640 },
-        },
-      });
+      let stream: MediaStream | null = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: mode === 'environment' ? 'environment' : 'user',
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: mode },
+          audio: false,
+        });
+      }
 
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        await videoRef.current.play().catch(() => {});
       }
     } catch (err: any) {
       setStatusMessage('هەڵە لە کردنەوەی کامێرا: ' + (err.message || 'تکایە ڕێگەپێدانی کامێرا بدە'));
@@ -106,7 +115,7 @@ export function AdminFaceEnrollModal({
     try {
       isEnrollingRef.current = true;
       setIsScanning(true);
-      setStatusMessage('پشکنین و کۆدکردنی ئەندازەی دەموچاو بە زیرەکی دەستکرد...');
+      setStatusMessage('پشکنین و کۆدکردنی دەموچاو بە زیرەکی دەستکرد...');
       setIsSuccess(null);
 
       const faceResult = await extractFaceDescriptor(videoRef.current);
@@ -139,59 +148,57 @@ export function AdminFaceEnrollModal({
           userId: employee.id,
           userName: employee.fullName3Part || employee.name,
           descriptor: faceResult.descriptor,
+          createdAt: new Date().toISOString(),
         }),
       });
 
-      if (res.ok) {
-        setIsSuccess(true);
-        setAlreadyRegistered(true);
-        setStatusMessage(`🎉 ڕوخساری (${employee.fullName3Part || employee.name}) بە سەرکەوتوویی تۆمارکرا! ✅`);
-        
-        // Stop camera and trigger success
-        stopCamera();
-        setTimeout(() => {
-          onSuccess();
-          onClose();
-        }, 1800);
-      } else {
-        isEnrollingRef.current = false;
-        setIsSuccess(false);
-        setStatusMessage('هەڵە لە پاشەکەوتکردنی داتاکان لە سێرڤەر');
+      if (!res.ok) {
+        throw new Error('کێشەیەک لە پاشەکەوتکردنی سێرڤەر هەیە');
       }
+
+      setIsSuccess(true);
+      setStatusMessage(`✅ ڕوخساری (${employee.fullName3Part || employee.name}) بە سەرکەوتوویی تۆمار کرا!`);
+      setAlreadyRegistered(true);
+
+      setTimeout(() => {
+        stopCamera();
+        onSuccess();
+        onClose();
+      }, 1500);
     } catch (err: any) {
-      isEnrollingRef.current = false;
+      console.error('Face registration error:', err);
       setIsSuccess(false);
-      setStatusMessage(err.message || 'هەڵە لە تۆمارکردنی ڕوخسار');
+      setStatusMessage('هەڵە لە تۆمارکردن: ' + (err.message || 'شکستی هێڵ'));
+      isEnrollingRef.current = false;
     } finally {
       setIsScanning(false);
     }
   }, [employee, onSuccess, onClose]);
 
-  // Live Auto-Detection Loop: Automatically detects face in circle
+  // Lifecycle: open & start camera
   useEffect(() => {
-    if (!isOpen) return;
-
-    loadFaceModels().then(() => {
+    if (isOpen) {
+      loadFaceModels();
       startCamera(facingMode);
 
-      // Start periodic auto-detection every 400ms
-      autoDetectTimerRef.current = setInterval(async () => {
-        if (!videoRef.current || isEnrollingRef.current || videoRef.current.readyState < 2) return;
-
-        try {
-          const liveFace = await extractFaceDescriptor(videoRef.current);
-          if (liveFace && !isEnrollingRef.current) {
-            setFaceInsideOval(true);
-            // Automatically capture & enroll face!
-            handleScanAndSave();
-          } else {
-            setFaceInsideOval(false);
-          }
-        } catch {
-          // Silent catch in background scanner
+      // Auto-scan continuously
+      const timer = setInterval(async () => {
+        if (!isEnrollingRef.current && videoRef.current && videoRef.current.readyState >= 2) {
+          try {
+            const liveResult = await extractFaceDescriptor(videoRef.current);
+            if (liveResult && liveResult.descriptor) {
+              setFaceInsideOval(true);
+              clearInterval(timer);
+              handleScanAndSave();
+            } else {
+              setFaceInsideOval(false);
+            }
+          } catch {}
         }
-      }, 400);
-    });
+      }, 700);
+
+      autoDetectTimerRef.current = timer;
+    }
 
     return () => {
       stopCamera();
@@ -244,12 +251,13 @@ export function AdminFaceEnrollModal({
         </div>
 
         {/* Camera Viewfinder with Face Oval Frame */}
-        <div className="relative rounded-3xl overflow-hidden bg-black aspect-square max-h-[340px] flex items-center justify-center border-2 border-indigo-500/50 shadow-2xl">
+        <div className="relative rounded-3xl overflow-hidden bg-black aspect-[3/4] max-h-[380px] flex items-center justify-center border-2 border-indigo-500/50 shadow-2xl">
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted
+            disablePictureInPicture
             className={`w-full h-full object-cover ${facingMode === 'user' ? 'transform scale-x-[-1]' : ''}`}
           />
 
@@ -258,7 +266,7 @@ export function AdminFaceEnrollModal({
             
             {/* The Head Oval Guide Circle */}
             <div
-              className={`w-52 h-64 rounded-[50%/60%] transition-all duration-300 flex flex-col items-center justify-center relative ${
+              className={`w-52 h-68 rounded-[50%] transition-all duration-300 flex flex-col items-center justify-center relative ${
                 isSuccess
                   ? 'border-4 border-emerald-400 bg-emerald-500/20 shadow-[0_0_40px_rgba(52,211,153,0.9)] animate-pulse'
                   : faceInsideOval
@@ -266,12 +274,6 @@ export function AdminFaceEnrollModal({
                   : 'border-2 border-dashed border-indigo-300/80 shadow-[0_0_20px_rgba(99,102,241,0.4)] animate-pulse'
               }`}
             >
-              {/* Corner brackets */}
-              <div className="absolute top-2 left-6 w-4 h-4 border-t-2 border-l-2 border-white/60" />
-              <div className="absolute top-2 right-6 w-4 h-4 border-t-2 border-r-2 border-white/60" />
-              <div className="absolute bottom-2 left-6 w-4 h-4 border-b-2 border-l-2 border-white/60" />
-              <div className="absolute bottom-2 right-6 w-4 h-4 border-b-2 border-r-2 border-white/60" />
-
               {/* Center Silhouette Hint */}
               {!faceInsideOval && !isSuccess && (
                 <div className="text-center space-y-1">
@@ -298,52 +300,66 @@ export function AdminFaceEnrollModal({
               {faceInsideOval ? '🟢 دەموچاو ناسرایەوە - چاوەڕێبە...' : '⚡ دەموچاو بخەرە ناو بازنەکە، خۆکارانە تۆمار دەبێت'}
             </div>
           </div>
-
-          {/* Toggle Camera Button (Front vs Back) */}
-          <button
-            type="button"
-            onClick={handleToggleCamera}
-            className="absolute top-3 left-3 bg-black/70 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-black px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-1.5 active:scale-95 transition-all z-10"
-          >
-            <SwitchCamera className="w-3.5 h-3.5 text-amber-300" />
-            <span>{facingMode === 'user' ? '🔄 کامێرای پشتەوە' : '🔄 کامێرای پێشەوە'}</span>
-          </button>
         </div>
 
-        {/* Status Message Display */}
+        {/* Live Status Message Feedback */}
         {statusMessage && (
           <div
-            className={`p-3 rounded-2xl text-xs font-black text-center border animate-in fade-in ${
+            className={`p-3 rounded-2xl text-xs font-black text-center flex items-center justify-center gap-2 border ${
               isSuccess === true
-                ? 'bg-emerald-950/90 text-emerald-200 border-emerald-500 shadow-lg shadow-emerald-900/50'
+                ? 'bg-emerald-900/60 text-emerald-200 border-emerald-500/50'
                 : isSuccess === false
-                ? 'bg-rose-950/90 text-rose-200 border-rose-600 shadow-lg shadow-rose-900/50'
-                : 'bg-indigo-950/90 text-indigo-200 border-indigo-700'
+                ? 'bg-rose-900/60 text-rose-200 border-rose-500/50'
+                : 'bg-indigo-900/60 text-indigo-200 border-indigo-500/50'
             }`}
           >
-            {statusMessage}
+            {isScanning && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+            {isSuccess === true && <CheckCircle className="w-4 h-4 text-emerald-400" />}
+            {isSuccess === false && <AlertTriangle className="w-4 h-4 text-rose-400" />}
+            <span>{statusMessage}</span>
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div className="flex gap-2.5 pt-1">
+        {/* Controls Toolbar */}
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800">
           <button
             type="button"
-            disabled={isScanning || isSuccess === true}
-            onClick={handleScanAndSave}
-            className="flex-1 py-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 text-white rounded-2xl text-xs font-black shadow-lg shadow-emerald-900/40 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all"
+            onClick={handleToggleCamera}
+            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-all"
+            title="گۆڕینی کامێرا"
           >
-            <Camera className="w-4 h-4 text-white" />
-            <span>سکان و تۆمارکردنی دەستی</span>
+            <SwitchCamera className="w-4 h-4" />
+            <span>گۆڕینی کامێرا</span>
           </button>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-bold transition-all"
-          >
-            داخستن
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all"
+            >
+              داخستن
+            </button>
+
+            <button
+              type="button"
+              disabled={isScanning || isSuccess === true}
+              onClick={handleScanAndSave}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50"
+            >
+              {isScanning ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>لە تۆمارکردندایە...</span>
+                </>
+              ) : (
+                <>
+                  <Camera className="w-4 h-4" />
+                  <span>📸 تۆمارکردنی ئێستا</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
       </div>

@@ -66,7 +66,8 @@ export async function extractFaceDescriptor(
 
   await loadFaceModels();
 
-  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
+  // Optimized detector settings for iPhone / Mobile Cameras
+  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.38 });
   
   const result = await faceapi
     .detectSingleFace(input, options)
@@ -84,30 +85,26 @@ export async function extractFaceDescriptor(
 }
 
 // 3. Match Two Face Descriptors (Euclidean Distance)
-// Distance < 0.56 is matching the same person reliably across different lighting & angles
+// Standard threshold for mobile facial recognition is 0.60
 export function matchFaceDescriptors(
   descriptor1: number[] | Float32Array,
   descriptor2: number[] | Float32Array,
-  threshold = 0.56
+  threshold = 0.60
 ): { isMatch: boolean; distance: number; similarityPercent: number } {
   const d1 = Array.from(descriptor1);
   const d2 = Array.from(descriptor2);
 
-  // Pure Euclidean Distance calculation (works identically on client and server without dependencies)
   let sum = 0;
   for (let i = 0; i < Math.min(d1.length, d2.length); i++) {
     const diff = d1[i] - d2[i];
     sum += diff * diff;
   }
   const distance = Math.sqrt(sum);
-  const isMatch = distance <= threshold;
-
-  // Convert Euclidean distance to confidence percentage (0 distance = 100%, 0.65 = 0%)
-  const similarityPercent = Math.max(0, Math.min(100, Math.round((1 - distance / 0.65) * 100)));
+  const similarityPercent = Math.max(0, Math.min(100, Math.round((1 - distance / 1.2) * 100)));
 
   return {
-    isMatch,
-    distance: Number(distance.toFixed(4)),
+    isMatch: distance <= threshold,
+    distance,
     similarityPercent,
   };
 }

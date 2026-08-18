@@ -14,7 +14,9 @@ import {
   Building2,
   Sparkles,
   UserX,
-  X
+  X,
+  RefreshCw,
+  User
 } from 'lucide-react';
 import { extractFaceDescriptor, matchFaceDescriptors, loadFaceModels } from '@/lib/face-recognition';
 
@@ -101,102 +103,106 @@ export default function PublicTerminalLightPage() {
         }
       }
     } catch (err) {
-      console.error('Error fetching company locations:', err);
+      console.error('Failed to sync company locations:', err);
     }
   }, []);
 
   useEffect(() => {
     syncCompanyLocations();
-    const interval = setInterval(syncCompanyLocations, 15000);
-    window.addEventListener('focus', syncCompanyLocations);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', syncCompanyLocations);
-    };
   }, [syncCompanyLocations]);
 
-  // AI Face Recognition State
+  // Registered Face AI Profiles List (Synced with Database & LocalStorage)
   const [registeredFacesList, setRegisteredFacesList] = useState<Array<{ id: string; name: string; descriptor: number[] }>>([]);
+
+  const syncRegisteredFaces = useCallback(async () => {
+    try {
+      // 1. First read from local database fallback
+      const localMap: Record<string, { name: string; descriptor: number[] }> = {};
+      try {
+        const stored = localStorage.getItem('ashley_face_registry_local');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          Object.assign(localMap, parsed);
+        }
+      } catch {}
+
+      // 2. Fetch from Supabase API
+      const res = await fetch(`/api/attendance/face/all?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      
+      const combined: Array<{ id: string; name: string; descriptor: number[] }> = [];
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.employees && Array.isArray(data.employees)) {
+          data.employees.forEach((emp: any) => {
+            if (emp.descriptor && Array.isArray(emp.descriptor) && emp.descriptor.length > 0) {
+              combined.push({
+                id: emp.id,
+                name: emp.fullName3Part || emp.name,
+                descriptor: emp.descriptor,
+              });
+            }
+          });
+        }
+      }
+
+      // Add local ones if not in remote
+      Object.entries(localMap).forEach(([empId, item]) => {
+        if (!combined.some((c) => c.id === empId)) {
+          combined.push({
+            id: empId,
+            name: item.name,
+            descriptor: item.descriptor,
+          });
+        }
+      });
+
+      setRegisteredFacesList(combined);
+    } catch (err) {
+      console.error('Failed to sync registered faces:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    syncRegisteredFaces();
+    // Preload neural network models in background
+    loadFaceModels();
+  }, [syncRegisteredFaces]);
+
+  // Camera & Face Terminal State
   const [cameraActive, setCameraActive] = useState(false);
-  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [activeFaceAction, setActiveFaceAction] = useState<'Check In' | 'Check Out' | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+
+  // Biometric Detection Real-Time State
   const [isFaceScanning, setIsFaceScanning] = useState(false);
   const [faceInsideOval, setFaceInsideOval] = useState(false);
   const [faceScanMessage, setFaceScanMessage] = useState<string | null>(null);
   const [faceScanSuccess, setFaceScanSuccess] = useState<boolean | null>(null);
+  const [recognizedEmployeeName, setRecognizedEmployeeName] = useState<string | null>(null);
+
+  // General Attendance Message Banner
   const [attMessage, setAttMessage] = useState<{ text: string; success: boolean } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const autoScanTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isProcessingScanRef = useRef(false);
 
-  // Pre-load AI Face models on mount
-  useEffect(() => {
-    loadFaceModels().catch((e) => console.log('Preloading face models:', e));
-  }, []);
-
-  // Ensure Video element attaches and plays stream as soon as modal mounts
-  useEffect(() => {
-    if (cameraActive && mediaStream && videoRef.current) {
-      videoRef.current.srcObject = mediaStream;
-      videoRef.current.play().catch((err) => console.log('Video play caught:', err));
-    }
-  }, [cameraActive, mediaStream]);
-
-  // Fetch all registered employees with face descriptors
-  const fetchAllFaces = useCallback(async () => {
-    try {
-      const combinedMap: Record<string, any> = {};
-
-      try {
-        const localDb = JSON.parse(localStorage.getItem('ashley_face_registry_local') || '{}');
-        Object.entries(localDb).forEach(([id, val]: [string, any]) => {
-          if (val && val.descriptor) {
-            combinedMap[id] = { id, name: val.name || id, descriptor: val.descriptor };
-          }
-        });
-      } catch {}
-
-      try {
-        const res = await fetch(`/api/attendance/logs?type=faces&_t=${Date.now()}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.faces && Array.isArray(data.faces)) {
-            data.faces.forEach((f: any) => {
-              if (f.id && f.descriptor) {
-                combinedMap[f.id] = { id: f.id, name: f.name || f.id, descriptor: f.descriptor };
-              }
-            });
-          }
-        }
-      } catch {}
-
-      const finalList = Object.values(combinedMap);
-      setRegisteredFacesList(finalList);
-    } catch (err) {
-      console.error('Error fetching face database:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchAllFaces();
-    const interval = setInterval(fetchAllFaces, 30000);
-    return () => clearInterval(interval);
-  }, [fetchAllFaces]);
-
-  // Check Geofence Distance against ALL active company branches
+  // Check Geofence & Location Accuracy
   const checkCurrentLocation = useCallback(() => {
-    if (!navigator.geolocation) {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
       setGpsStatus('GPS لەم وێبگەڕەدا بەردەست نییە');
       setIsInsideGeofence(false);
       return;
     }
 
     setGpsLoading(true);
-
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const userLat = pos.coords.latitude;
@@ -266,7 +272,7 @@ export default function PublicTerminalLightPage() {
     return () => clearInterval(interval);
   }, [checkCurrentLocation]);
 
-  // Start Front Selfie Camera Stream Instantly
+  // Start Front Selfie Camera Stream - Optimized for iPhone Without Zoom
   const startCamera = async (overrideFacingMode?: 'user' | 'environment') => {
     const targetFacing = overrideFacingMode || facingMode || 'user';
     try {
@@ -277,20 +283,30 @@ export default function PublicTerminalLightPage() {
 
       let stream: MediaStream | null = null;
       try {
+        // High quality un-cropped video stream on iOS Safari
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: { ideal: targetFacing },
-            width: { ideal: 640 },
-            height: { ideal: 480 },
+            facingMode: targetFacing === 'environment' ? 'environment' : 'user',
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
           },
           audio: false,
         });
       } catch (firstErr) {
-        console.warn('Front camera constraint fallback:', firstErr);
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
+        console.warn('High resolution constraint fallback:', firstErr);
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: targetFacing === 'environment' ? 'environment' : 'user',
+            },
+            audio: false,
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
       }
 
       streamRef.current = stream;
@@ -303,7 +319,7 @@ export default function PublicTerminalLightPage() {
       }
     } catch (err) {
       console.error('Camera error:', err);
-      alert('نەتوانرا کامێرا بکرێتەوە. تکایە لە سێتینگی وێبگەڕ ڕێگە بە کامێرای سێڵفی بدە.');
+      alert('نەتوانرا کامێرا بکرێتەوە. تکایە لە سێتینگی وێبگەڕ (Safari) ڕێگە بە کامێرای سێڵفی بدە.');
     }
   };
 
@@ -327,6 +343,7 @@ export default function PublicTerminalLightPage() {
     setActiveFaceAction(null);
     setFaceScanMessage(null);
     setFaceScanSuccess(null);
+    setRecognizedEmployeeName(null);
     isProcessingScanRef.current = false;
   };
 
@@ -395,14 +412,15 @@ export default function PublicTerminalLightPage() {
 
     setActiveFaceAction(action);
     setFacingMode('user');
-    setFaceScanMessage('سەیری کامێرای پێشەوە (سێڵفی) بکە... ڕوخسارت بخەرە ناو بازنەکە');
+    setFaceScanMessage('سەیری کامێرای پێشەوە (سێڵفی) بکە...');
     setFaceScanSuccess(null);
     setFaceInsideOval(false);
+    setRecognizedEmployeeName(null);
     setCameraActive(true);
     startCamera('user');
   };
 
-  // Automated Facial Scanning Loop
+  // Automated Facial Scanning Loop (Stable & Shaking-Free)
   useEffect(() => {
     if (!cameraActive || !activeFaceAction || !videoRef.current) return;
 
@@ -419,21 +437,19 @@ export default function PublicTerminalLightPage() {
 
         if (!liveResult || !liveResult.descriptor) {
           setFaceInsideOval(false);
-          setFaceScanMessage('سەیری ناو بازنەکە بکە...');
           isProcessingScanRef.current = false;
           setIsFaceScanning(false);
           return;
         }
 
-        // Face is inside oval!
+        // Face is in frame
         setFaceInsideOval(true);
-        setFaceScanMessage('ڕوخسار لەناو بازنەیە... پشکنینی ناسینەوە');
 
         // Match against database
         let matchedEmp: { id: string; name: string } | null = null;
         for (const registeredUser of registeredFacesList) {
           if (registeredUser.descriptor && registeredUser.descriptor.length > 0) {
-            const match = matchFaceDescriptors(liveResult.descriptor, registeredUser.descriptor, 0.58);
+            const match = matchFaceDescriptors(liveResult.descriptor, registeredUser.descriptor, 0.60);
             if (match.isMatch) {
               matchedEmp = registeredUser;
               break;
@@ -443,15 +459,16 @@ export default function PublicTerminalLightPage() {
 
         if (matchedEmp) {
           setFaceScanSuccess(true);
+          setRecognizedEmployeeName(matchedEmp.name);
           setFaceScanMessage(`سەرکەوتوو بوو! بەخێربێیت ${matchedEmp.name}`);
 
-          // Save Attendance
+          // Save Attendance immediately
           await saveAttendanceLog(matchedEmp.id, matchedEmp.name, activeFaceAction);
 
-          // Close modal smoothly after 2.5s
+          // Automatically close full-screen camera smoothly after 1.2s
           setTimeout(() => {
             stopCamera();
-          }, 2500);
+          }, 1200);
         } else {
           setFaceScanSuccess(false);
           setFaceScanMessage('ڕوخسار نەناسرایەوە! دەتوانیت لە ڕێگەی ئەدمین تۆماری بکەیت.');
@@ -463,7 +480,7 @@ export default function PublicTerminalLightPage() {
         isProcessingScanRef.current = false;
         setIsFaceScanning(false);
       }
-    }, 650);
+    }, 600);
 
     autoScanTimerRef.current = interval;
 
@@ -516,94 +533,56 @@ export default function PublicTerminalLightPage() {
           <div className="absolute -top-24 -right-24 w-60 h-60 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-24 -left-24 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          {/* 📍 GEOFENCE STATUS PILL INSIDE CARD (STABLE & NEVER JUMPS) */}
+          {/* 📍 GEOFENCE STATUS PILL */}
           <div className="space-y-1.5">
-            <div className="flex justify-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200/90 shadow-xs max-w-full">
+              <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+                {gpsLoading ? (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                ) : isInsideGeofence === true ? (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                ) : (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                )}
+                <span
+                  className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                    gpsLoading
+                      ? 'bg-amber-500'
+                      : isInsideGeofence === true
+                      ? 'bg-emerald-600'
+                      : 'bg-rose-600'
+                  }`}
+                />
+              </span>
+
+              <span className="text-xs font-bold text-slate-700 truncate">
+                {gpsStatus}
+              </span>
+
               <button
                 type="button"
                 onClick={checkCurrentLocation}
-                className={`h-8 sm:h-9 px-3.5 max-w-full rounded-full border shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 ${
-                  isInsideGeofence === true
-                    ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
-                    : isInsideGeofence === false
-                    ? 'bg-rose-50 border-rose-300 text-rose-800 hover:bg-rose-100'
-                    : 'bg-slate-100 border-slate-300 text-slate-700'
-                }`}
-                title="کلیک بکە بۆ دووبارە پشکنینی لۆکەیشن"
+                disabled={gpsLoading}
+                className="p-1 rounded-full hover:bg-slate-200 text-slate-500 transition-transform active:rotate-180 cursor-pointer"
+                title="نوێکردنەوەی لۆکەیشن"
               >
-                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                  isInsideGeofence === true
-                    ? 'bg-emerald-500 animate-pulse'
-                    : isInsideGeofence === false
-                    ? 'bg-rose-500'
-                    : 'bg-amber-500'
-                }`} />
-                
-                <span className="text-[11px] sm:text-xs font-bold truncate max-w-[260px] sm:max-w-[420px]">
-                  {gpsLoading ? 'پشکنینی لۆکەیشن...' : gpsStatus}
-                </span>
-
-                <span className="text-[10px] text-slate-400 font-normal">🔄 نوێکردنەوە</span>
+                <RefreshCw className={`w-3 h-3 ${gpsLoading ? 'animate-spin text-indigo-600' : ''}`} />
               </button>
             </div>
-
-            {/* 🏢 ALL BRANCH LOCATIONS LIVE DISTANCES (SHOWN CLEARLY) */}
-            {branchDistanceList.length > 1 && (
-              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-0.5">
-                {branchDistanceList.map((branch) => (
-                  <div
-                    key={branch.id}
-                    className={`px-2.5 py-0.5 rounded-full border text-[10px] sm:text-[11px] font-bold flex items-center gap-1.5 transition-all ${
-                      branch.isInside
-                        ? 'bg-emerald-100 border-emerald-400 text-emerald-950 shadow-xs ring-1 ring-emerald-400/50 font-black'
-                        : 'bg-slate-100/90 border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${branch.isInside ? 'bg-emerald-500 animate-pulse' : 'bg-rose-400'}`} />
-                    <span>{branch.name}</span>
-                    <span className="font-mono text-[9px] text-slate-500">
-                      ({branch.distance < 1000 ? `${branch.distance}m` : `${(branch.distance / 1000).toFixed(1)}km`})
-                    </span>
-                    {branch.isInside ? (
-                      <span className="text-emerald-700 font-black">✅ لەناو سنوورە</span>
-                    ) : (
-                      <span className="text-slate-400 text-[9px]">دەرەوە</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
-          {/* Clock & Date Badge */}
-          <div className="space-y-1">
-            <div className="text-3xl sm:text-5xl font-black font-mono tracking-tight text-slate-900">
-              {currentTimeStr || '09:00:00'}
-            </div>
-            
-            <div className="text-[11px] sm:text-xs font-black text-indigo-700 font-mono">
-              📅 {currentDateStr || '2026-08-17'}
-            </div>
-
-            <p className="text-[10px] sm:text-xs font-bold text-slate-500 max-w-md mx-auto pt-0.5">
-              تەنها سەیری کامێرا بکە، سیستەمەکە ڕاستەوخۆ دەتبینێت و کاتی هاتن و دەرچوونت تۆمار دەکات.
-            </p>
-          </div>
-
-          {/* Notification Alert Message Banner */}
+          {/* ATTENDANCE MESSAGE BANNER */}
           {attMessage && (
-            <div className={`p-3 rounded-xl border text-xs font-black flex items-center justify-between gap-2 shadow-md animate-in fade-in slide-in-from-top-2 ${
-              attMessage.success 
-                ? 'bg-emerald-500 text-white border-emerald-600' 
-                : 'bg-rose-500 text-white border-rose-600'
+            <div className={`p-3 rounded-2xl border text-xs font-bold flex items-center justify-between gap-2 shadow-sm animate-in fade-in slide-in-from-top-2 ${
+              attMessage.success ? 'bg-emerald-50 text-emerald-950 border-emerald-300' : 'bg-rose-50 text-rose-950 border-rose-300'
             }`}>
               <div className="flex items-center gap-2">
-                {attMessage.success ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
+                {attMessage.success ? <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-700" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0 text-rose-700" />}
                 <span>{attMessage.text}</span>
               </div>
               <button 
                 onClick={() => setAttMessage(null)}
-                className="p-1 hover:bg-white/20 rounded-lg text-white"
+                className="p-1 hover:bg-black/10 rounded-lg text-slate-700"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -693,111 +672,118 @@ export default function PublicTerminalLightPage() {
 
       </main>
 
-      {/* 🌟 FOOTER (FIXED BOTTOM) */}
+      {/* 🌟 FOOTER */}
       <footer className="w-full max-w-4xl mx-auto flex-shrink-0 py-1 text-center text-[10px] font-bold text-slate-400">
         ASHLEY ENTERPRISE ERP SYSTEM © 2026 — هەموو مافەکان پارێزراون
       </footer>
 
       {/* ========================================================================= */}
-      {/* 🎥 AI FACE RECOGNITION CAMERA MODAL OVERLAY */}
+      {/* 🎥 IMMERSIVE FULL-SCREEN AI FACE RECOGNITION CAMERA MODAL (IPHONE OPTIMIZED) */}
       {/* ========================================================================= */}
       {cameraActive && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-black flex flex-col justify-between overflow-hidden select-none touch-none">
+          
+          {/* 🌟 TOP FLOATING MINIMAL CONTROLS BAR */}
+          <div className="absolute top-0 inset-x-0 z-30 p-4 pt-6 flex items-center justify-between bg-gradient-to-b from-black/80 via-black/40 to-transparent">
             
-            {/* Modal Header */}
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Camera className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-black">
-                  {activeFaceAction === 'Check In' ? '📥 چێک‌ئین بە ڕوخسار (Check In)' : '📤 چێک‌ئاوت بە ڕوخسار (Check Out)'}
-                </h3>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={toggleCameraFacing}
-                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold"
-                  title="گۆڕینی کامێرای پێشەوە/پشتەوە"
-                >
-                  <SwitchCamera className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={stopCamera}
-                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+            {/* Action Title Badge */}
+            <div className="px-3.5 py-1.5 rounded-full bg-black/50 backdrop-blur-xl border border-white/20 text-white text-xs font-black flex items-center gap-2">
+              <Camera className="w-4 h-4 text-emerald-400" />
+              <span>
+                {activeFaceAction === 'Check In' ? '📥 هاتن (Check In)' : '📤 دەرچوون (Check Out)'}
+              </span>
             </div>
 
-            {/* Camera Viewport with Biometric Oval HUD */}
-            <div className="relative aspect-[3/4] bg-black flex items-center justify-center overflow-hidden">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover transform scale-x-[-1]"
-              />
-              <canvas ref={canvasRef} className="hidden" />
-
-              {/* 🟢 Apple Biometric Scanning Oval Guide HUD */}
-              <div
-                className={`absolute w-52 h-72 rounded-[50%] border-4 transition-all duration-300 pointer-events-none flex flex-col items-center justify-between py-4 ${
-                  faceScanSuccess === true
-                    ? 'border-emerald-500 shadow-[0_0_40px_rgba(16,185,129,0.8)] bg-emerald-500/10'
-                    : faceScanSuccess === false
-                    ? 'border-rose-500 shadow-[0_0_40px_rgba(244,63,94,0.8)] bg-rose-500/10'
-                    : faceInsideOval
-                    ? 'border-emerald-400 shadow-[0_0_30px_rgba(52,211,153,0.6)] animate-pulse'
-                    : 'border-dashed border-white/70 shadow-[0_0_20px_rgba(255,255,255,0.3)]'
-                }`}
+            {/* Switch Camera & Close Buttons Only */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={toggleCameraFacing}
+                className="w-11 h-11 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-xl border border-white/30 text-white flex items-center justify-center shadow-lg transition-transform active:scale-90 cursor-pointer"
+                title="گۆڕینی کامێرا"
               >
-                <span className="text-[11px] font-black text-white px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md">
-                  {faceInsideOval ? '🟢 ڕوخسار لە ناو بازنەیە' : 'ڕوخسارت لێرە دابنێ'}
-                </span>
+                <SwitchCamera className="w-5 h-5 text-white" />
+              </button>
 
-                {faceScanSuccess === true && (
-                  <CheckCircle2 className="w-12 h-12 text-emerald-400 animate-bounce" />
-                )}
-
-                {faceScanSuccess === false && (
-                  <UserX className="w-12 h-12 text-rose-400 animate-pulse" />
-                )}
-
-                <span className="text-[10px] font-black text-white/90 bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-md">
-                  {activeFaceAction === 'Check In' ? 'چێک‌ئین' : 'چێک‌ئاوت'}
-                </span>
-              </div>
-            </div>
-
-            {/* Status Message Footer */}
-            <div className="p-4 bg-slate-50 border-t border-slate-200 text-center space-y-2">
-              <p
-                className={`text-xs font-black transition-colors ${
-                  faceScanSuccess === true
-                    ? 'text-emerald-700 text-sm'
-                    : faceScanSuccess === false
-                    ? 'text-rose-700'
-                    : 'text-slate-800'
-                }`}
-              >
-                {faceScanMessage || 'سەیری کامێرا بکە...'}
-              </p>
-              
               <button
                 type="button"
                 onClick={stopCamera}
-                className="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl"
+                className="w-11 h-11 rounded-full bg-rose-600/80 hover:bg-rose-600 backdrop-blur-xl border border-white/30 text-white flex items-center justify-center shadow-lg transition-transform active:scale-90 cursor-pointer"
+                title="داخستن"
               >
-                پاشگەزبوونەوە و داخستن
+                <X className="w-6 h-6 text-white" />
               </button>
             </div>
-
           </div>
+
+          {/* 🌟 FULL SCREEN CAMERA FEED (NO ARTIFICIAL ZOOM OR SHAKE) */}
+          <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              disablePictureInPicture
+              className={`w-full h-full object-cover sm:object-contain transition-none will-change-transform ${
+                facingMode === 'user' ? 'transform scale-x-[-1]' : ''
+              }`}
+            />
+            <canvas ref={canvasRef} className="hidden" />
+
+            {/* 🟢 BIOMETRIC SCANNING OVAL GUIDE HUD */}
+            <div
+              className={`absolute w-64 h-80 sm:w-72 sm:h-96 rounded-[50%] border-4 transition-all duration-200 pointer-events-none flex flex-col items-center justify-between py-6 ${
+                faceScanSuccess === true
+                  ? 'border-emerald-400 shadow-[0_0_60px_rgba(52,211,153,0.9)] bg-emerald-500/20 scale-105'
+                  : faceScanSuccess === false
+                  ? 'border-rose-500 shadow-[0_0_50px_rgba(244,63,94,0.8)] bg-rose-500/15'
+                  : faceInsideOval
+                  ? 'border-emerald-400 shadow-[0_0_40px_rgba(52,211,153,0.6)]'
+                  : 'border-dashed border-white/60 shadow-[0_0_30px_rgba(255,255,255,0.25)]'
+              }`}
+            >
+              <span className="text-xs font-black text-white px-3 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/20">
+                {faceScanSuccess === true
+                  ? `✅ ناسراوە: ${recognizedEmployeeName}`
+                  : faceInsideOval
+                  ? '🟢 ڕوخسار لە ناو بازنەیە'
+                  : 'ڕوخسارت بخەرە ناو بازنەکە'}
+              </span>
+
+              <div className="w-12 h-1 bg-white/40 rounded-full" />
+            </div>
+
+            {/* Success Overlay Flash */}
+            {faceScanSuccess === true && (
+              <div className="absolute inset-0 bg-emerald-950/40 backdrop-blur-xs flex flex-col items-center justify-center text-white space-y-3 pointer-events-none animate-in fade-in duration-200">
+                <div className="w-20 h-20 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-2xl shadow-emerald-500/80 animate-bounce">
+                  <CheckCircle2 className="w-12 h-12" />
+                </div>
+                <div className="text-center">
+                  <h2 className="text-xl font-black">{recognizedEmployeeName}</h2>
+                  <p className="text-sm font-bold text-emerald-200 mt-0.5">
+                    {activeFaceAction === 'Check In' ? 'هاتن بە سەرکەوتوویی تۆمارکرا!' : 'دەرچوون بە سەرکەوتوویی تۆمارکرا!'}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 🌟 BOTTOM STATUS BAR */}
+          <div className="absolute bottom-0 inset-x-0 z-30 p-6 pb-8 flex flex-col items-center justify-center bg-gradient-to-t from-black/90 via-black/50 to-transparent pointer-events-none">
+            <div className={`px-5 py-2.5 rounded-full backdrop-blur-2xl border text-center shadow-xl transition-all ${
+              faceScanSuccess === true
+                ? 'bg-emerald-600/90 text-white border-emerald-400'
+                : faceScanSuccess === false
+                ? 'bg-rose-600/90 text-white border-rose-400'
+                : 'bg-black/70 text-white border-white/20'
+            }`}>
+              <p className="text-xs sm:text-sm font-black">
+                {faceScanMessage || 'سەیری کامێرای پێشەوە بکە بۆ پشکنینی ناسنامە...'}
+              </p>
+            </div>
+          </div>
+
         </div>
       )}
 
