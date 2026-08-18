@@ -238,3 +238,49 @@
     backdrop-filter: blur(8px) !important;
   }
 }
+
+/* ==========================================================================
+   VIBRANT & COLORFUL PRINT STYLES (@media print)
+   ========================================================================== */
+@media print {
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 11px !important;
+    padding: 0 !important;
+  }
+
+  .no-print, nav, header button, .btn-classic-danger, .btn-classic-primary {
+    display: none !important;
+  }
+
+  .panel-fluent, .panel-classic, .bg-white, .bg-slate-900, .bg-indigo-950 {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+  }
+
+  table {
+    page-break-inside: auto !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+}
+

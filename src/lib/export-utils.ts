@@ -84,12 +84,12 @@ export function exportToCSV(
 }
 
 /**
- * Generate full-width, multi-page, professional PDF Report with Print / Save as PDF
+ * Generate full-width, multi-page, professional Colorful PDF Report with Print / Save as PDF
  */
 export function exportToPDF(options: ExportReportOptions) {
   const {
     title,
-    subtitle = 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی (Ashley Company ERP)',
+    subtitle = 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی (Ashley Enterprise ERP)',
     period = '',
     columns,
     data,
@@ -124,12 +124,13 @@ export function exportToPDF(options: ExportReportOptions) {
   <style>
     @page {
       size: ${orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait'};
-      margin: 10mm 10mm 15mm 10mm;
+      margin: 8mm 8mm 12mm 8mm;
     }
     *, *::before, *::after {
       box-sizing: border-box;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
+      color-adjust: exact !important;
     }
     body {
       font-family: 'Segoe UI', Tahoma, 'Noto Kufi Arabic', Arial, sans-serif;
@@ -147,78 +148,109 @@ export function exportToPDF(options: ExportReportOptions) {
       margin: 0 auto;
     }
     
-    /* Header styling */
+    /* 🌟 COLORFUL EXECUTIVE HEADER */
     .report-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 2.5px solid #1e3a8a;
-      padding-bottom: 8px;
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #1e3a8a 100%) !important;
+      color: #ffffff !important;
+      padding: 12px 16px;
+      border-radius: 10px;
       margin-bottom: 12px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+      border: 1px solid #1e3a8a;
     }
     .header-titles h1 {
       margin: 0;
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 900;
-      color: #1e3a8a;
-      letter-spacing: -0.5px;
+      color: #ffffff;
+      letter-spacing: -0.3px;
     }
     .header-titles h2 {
-      margin: 2px 0 0 0;
+      margin: 3px 0 0 0;
       font-size: 11px;
       font-weight: 700;
-      color: #475569;
+      color: #cbd5e1;
     }
     .header-meta {
       text-align: left;
       font-size: 10px;
       font-weight: bold;
-      color: #334155;
+      color: #f1f5f9;
     }
     .header-meta .badge {
       display: inline-block;
-      background: #1e3a8a;
-      color: #ffffff;
-      padding: 3px 8px;
-      border-radius: 4px;
+      background: #3b82f6 !important;
+      color: #ffffff !important;
+      padding: 3px 10px;
+      border-radius: 6px;
       font-size: 10px;
+      font-weight: 900;
       margin-bottom: 3px;
+      border: 1px solid rgba(255,255,255,0.4);
     }
 
-    /* Summary Cards */
+    /* 📊 VIBRANT SUMMARY KPI CARDS */
     .summary-grid {
       display: grid;
       grid-template-columns: repeat(${Math.max(1, Math.min(summaryCards.length, 5))}, 1fr);
-      gap: 8px;
+      gap: 10px;
       margin-bottom: 14px;
     }
     .summary-card {
-      background: #f8fafc;
-      border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      padding: 6px 10px;
+      background: #f8fafc !important;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 8px 12px;
       text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .summary-card:nth-child(1) {
+      border-top: 4px solid #2563eb !important;
+      background: #eff6ff !important;
+    }
+    .summary-card:nth-child(2) {
+      border-top: 4px solid #d97706 !important;
+      background: #fffbeb !important;
+    }
+    .summary-card:nth-child(3) {
+      border-top: 4px solid #059669 !important;
+      background: #ecfdf5 !important;
+    }
+    .summary-card:nth-child(4) {
+      border-top: 4px solid #7c3aed !important;
+      background: #f5f3ff !important;
+    }
+    .summary-card:nth-child(5) {
+      border-top: 4px solid #e11d48 !important;
+      background: #fff1f2 !important;
     }
     .summary-card .label {
-      font-size: 9.5px;
+      font-size: 10px;
       font-weight: 800;
-      color: #475569;
+      color: #334155;
       display: block;
-      margin-bottom: 2px;
+      margin-bottom: 3px;
     }
     .summary-card .value {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 900;
       color: #0f172a;
-      font-family: monospace;
+      font-family: Consolas, monospace;
     }
 
-    /* Main Table (Full Width & Multi-page repeat headers) */
+    /* 📋 COLORFUL FULL-WIDTH TABLE */
     table {
       width: 100% !important;
       border-collapse: collapse !important;
-      margin-top: 5px;
+      margin-top: 6px;
       page-break-inside: auto;
+      border: 1.5px solid #64748b !important;
+      border-radius: 6px;
+      overflow: hidden;
     }
     tr {
       page-break-inside: avoid;
@@ -231,60 +263,133 @@ export function exportToPDF(options: ExportReportOptions) {
       display: table-footer-group;
     }
     th {
-      background-color: #1e293b !important;
+      background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%) !important;
       color: #ffffff !important;
-      font-weight: 800;
-      font-size: 10px;
-      padding: 6px 6px;
-      border: 1px solid #334155;
+      font-weight: 900;
+      font-size: 10.5px;
+      padding: 7px 8px;
+      border: 1px solid #475569;
       text-align: right;
     }
     td {
-      padding: 5.5px 6px;
+      padding: 6px 8px;
       border: 1px solid #cbd5e1;
-      font-size: 10px;
-      font-weight: 600;
-      color: #1e293b;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #0f172a;
     }
     tbody tr:nth-child(even) {
       background-color: #f8fafc !important;
     }
-    tbody tr:hover {
-      background-color: #f1f5f9 !important;
+    tbody tr:nth-child(odd) {
+      background-color: #ffffff !important;
+    }
+
+    /* Highlight Badges */
+    .badge-in {
+      background: #ecfdf5 !important;
+      color: #065f46 !important;
+      border: 1px solid #a7f3d0 !important;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 800;
+      display: inline-block;
+    }
+    .badge-out {
+      background: #eff6ff !important;
+      color: #1e40af !important;
+      border: 1px solid #bfdbfe !important;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 800;
+      display: inline-block;
+    }
+    .badge-ot {
+      background: #fffbeb !important;
+      color: #92400e !important;
+      border: 1px solid #fde68a !important;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 900;
+      display: inline-block;
+    }
+    .badge-money {
+      background: #f0fdf4 !important;
+      color: #166534 !important;
+      border: 1px solid #bbf7d0 !important;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 900;
+      display: inline-block;
     }
 
     /* Footer & Signatures */
     .report-footer {
-      margin-top: 20px;
+      margin-top: 24px;
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
-      padding-top: 10px;
-      border-top: 1px dashed #94a3b8;
-      font-size: 9.5px;
-      color: #64748b;
+      padding-top: 12px;
+      border-top: 2px dashed #94a3b8;
+      font-size: 10px;
+      color: #475569;
       page-break-inside: avoid;
     }
     .signature-box {
       text-align: center;
-      width: 180px;
-      border-top: 1px solid #475569;
-      padding-top: 4px;
+      width: 190px;
+      border-top: 1.5px solid #334155;
+      padding-top: 6px;
       font-weight: bold;
-      color: #1e293b;
+      color: #0f172a;
+    }
+
+    /* Print Controls */
+    .print-controls-bar {
+      position: fixed;
+      bottom: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f172a;
+      color: #ffffff;
+      padding: 8px 18px;
+      border-radius: 30px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 9999;
+    }
+    .print-btn {
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .print-btn:hover {
+      background: #1d4ed8;
     }
 
     @media print {
       body {
         padding: 0;
       }
-      .no-print {
+      .no-print, .print-controls-bar {
         display: none !important;
       }
     }
   </style>
 </head>
 <body>
+
+  <div class="print-controls-bar no-print">
+    <span>🖨️ ئامادەیە بۆ پرێنت / داگرتن وەک PDF</span>
+    <button class="print-btn" onclick="window.print()">پرێنت بکە (Print)</button>
+  </div>
 
   <div class="report-container">
     <!-- Header -->
@@ -319,75 +424,80 @@ export function exportToPDF(options: ExportReportOptions) {
         : ''
     }
 
-    <!-- Table (Full Width) -->
+    <!-- Main Data Table -->
     <table>
       <thead>
         <tr>
-          <th style="width: 30px; text-align: center;">#</th>
+          <th style="width: 35px; text-align: center;">#</th>
           ${columns
             .map(
-              c => `
-          <th style="${c.width ? `width:${c.width};` : ''} text-align:${c.align || 'right'};">
-            ${c.header}
-          </th>
+              col => `
+            <th style="text-align: ${col.align || 'right'}; ${col.width ? `width: ${col.width};` : ''}">
+              ${col.header}
+            </th>
           `
             )
             .join('')}
         </tr>
       </thead>
       <tbody>
-        ${
-          data.length === 0
-            ? `
-        <tr>
-          <td colspan="${columns.length + 1}" style="text-align: center; padding: 20px; color: #64748b;">
-            هیچ داتایەک بۆ ئەم بەشە بوونی نییە.
-          </td>
-        </tr>
+        ${data
+          .map(
+            (row, index) => `
+          <tr>
+            <td style="text-align: center; color: #64748b; font-family: monospace;">${index + 1}</td>
+            ${columns
+              .map(col => {
+                const val = row[col.key] !== undefined && row[col.key] !== null ? String(row[col.key]) : '-';
+                
+                // Smart color highlights for numbers, hours, and amounts
+                let formattedCell = val;
+                if (col.key.toLowerCase().includes('amount') || col.key.toLowerCase().includes('cost') || val.includes('IQD')) {
+                  formattedCell = `<span class="badge-money">${val}</span>`;
+                } else if (col.key.toLowerCase().includes('hour') || val.includes('کاتژمێر')) {
+                  formattedCell = `<span class="badge-ot">${val}</span>`;
+                } else if (col.key.toLowerCase().includes('in') || val.includes('📥')) {
+                  formattedCell = `<span class="badge-in">${val}</span>`;
+                } else if (col.key.toLowerCase().includes('out') || val.includes('📤')) {
+                  formattedCell = `<span class="badge-out">${val}</span>`;
+                }
+
+                return `
+                  <td style="text-align: ${col.align || 'right'};">
+                    ${formattedCell}
+                  </td>
+                `;
+              })
+              .join('')}
+          </tr>
         `
-            : data
-                .map(
-                  (row, idx) => `
-        <tr>
-          <td style="text-align: center; font-family: monospace; font-weight: bold; color: #64748b;">${idx + 1}</td>
-          ${columns
-            .map(
-              c => `
-          <td style="text-align:${c.align || 'right'};">
-            ${row[c.key] !== undefined && row[c.key] !== null ? row[c.key] : '-'}
-          </td>
-          `
-            )
-            .join('')}
-        </tr>
-        `
-                )
-                .join('')
-        }
+          )
+          .join('')}
       </tbody>
     </table>
 
-    <!-- Footer & Signature -->
+    <!-- Footer & Signatures -->
     <div class="report-footer">
       <div>
-        <span>سیستەمی کارگێڕی و ژمێریاری ئاشڵی ASHLEY ERP 2026</span><br>
-        <span>کۆی گشتی تۆمارەکان: ${data.length} دێڕ</span>
+        <p style="margin: 0; font-weight: bold;">سیستەمی بەڕێوەبردنی سەرچاوەکانی مرۆیی ئاشڵی (Ashley ERP 2026)</p>
+        <p style="margin: 2px 0 0 0; color: #64748b;">تێبینی: ئەم ڕاپۆرتە فەرمییە و لەسەر بنەمای ئامادەبوونی ئەلیکترۆنی دەرکراوە.</p>
       </div>
-      <div class="signature-box">
-        واژوو و پەسەندکردنی ئەدمین
+
+      <div style="display: flex; gap: 30px;">
+        <div class="signature-box">
+          واژووی سەرپەرشتیار
+        </div>
+        <div class="signature-box">
+          واژووی بەڕێوەبەری کارگێڕی
+        </div>
       </div>
     </div>
 
   </div>
 
-  <script>
-    window.onload = function() {
-      window.print();
-    };
-  </script>
 </body>
 </html>
-`;
+  `;
 
   printWindow.document.open();
   printWindow.document.write(html);
