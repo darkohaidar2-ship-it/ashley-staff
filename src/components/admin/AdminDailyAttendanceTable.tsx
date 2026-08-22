@@ -18,7 +18,8 @@ import {
   Sparkles,
   Search,
   MessageSquare,
-  RefreshCw
+  RefreshCw,
+  Shield
 } from 'lucide-react';
 import { format, addDays, subDays, parseISO, getDaysInMonth, getDay } from 'date-fns';
 import type { Employee, AttendanceRecord } from '@/lib/types';
@@ -68,6 +69,29 @@ export function AdminDailyAttendanceTable({
   const [searchTerm, setSearchTerm] = useState('');
   const [editingAdminNoteKey, setEditingAdminNoteKey] = useState<string | null>(null);
   const [tempAdminNoteText, setTempAdminNoteText] = useState('');
+
+  // Edit Time Modal state
+  const [editingTimeModal, setEditingTimeModal] = useState<{
+    empId: string;
+    empName: string;
+    targetType: 'in' | 'out';
+    currentTime: string;
+    originalTime?: string;
+    dateStr: string;
+  } | null>(null);
+
+  const [newTimeInput, setNewTimeInput] = useState('');
+  const [adminReasonInput, setAdminReasonInput] = useState('');
+  const [localOverridesVersion, setLocalOverridesVersion] = useState(0);
+
+  // Listen for local attendance updates
+  React.useEffect(() => {
+    const handleUpdate = () => {
+      setLocalOverridesVersion(v => v + 1);
+    };
+    window.addEventListener('ashley_attendance_updated', handleUpdate);
+    return () => window.removeEventListener('ashley_attendance_updated', handleUpdate);
+  }, []);
 
   // Active Employees only
   const activeEmployees = useMemo(() => {
@@ -149,6 +173,9 @@ export function AdminDailyAttendanceTable({
       let checkInTime = inLog?.time ? (inLog.time.includes(' ') ? inLog.time.split(' ')[1].slice(0, 5) : inLog.time.slice(0, 5)) : '-';
       let checkOutTime = outLog?.time ? (outLog.time.includes(' ') ? outLog.time.split(' ')[1].slice(0, 5) : outLog.time.slice(0, 5)) : '-';
 
+      let checkInOriginalTime = inLog?.originalTime || (inLog as any)?.checkInOriginalTime || '';
+      let checkOutOriginalTime = outLog?.originalTime || (outLog as any)?.checkOutOriginalTime || '';
+
       let checkInNote = inLog?.employeeNote || (inLog?.notes?.startsWith('تێبینی کارمەند:') ? inLog.notes.replace('تێبینی کارمەند:', '').trim() : inLog?.notes || '');
       let checkOutNote = outLog?.employeeNote || (outLog?.notes?.startsWith('تێبینی کارمەند:') ? outLog.notes.replace('تێبینی کارمەند:', '').trim() : outLog?.notes || '');
 
@@ -177,6 +204,28 @@ export function AdminDailyAttendanceTable({
         }
       }
 
+      // Check Local Overrides (manual edits by Admin)
+      if (typeof window !== 'undefined') {
+        try {
+          const rawIn = localStorage.getItem(`ashley_time_override_${emp.id}_${dateStr}_in`);
+          if (rawIn) {
+            const parsedIn = JSON.parse(rawIn);
+            if (parsedIn.time) {
+              checkInTime = parsedIn.time;
+              checkInOriginalTime = parsedIn.originalTime || checkInOriginalTime || '08:00';
+            }
+          }
+          const rawOut = localStorage.getItem(`ashley_time_override_${emp.id}_${dateStr}_out`);
+          if (rawOut) {
+            const parsedOut = JSON.parse(rawOut);
+            if (parsedOut.time) {
+              checkOutTime = parsedOut.time;
+              checkOutOriginalTime = parsedOut.originalTime || checkOutOriginalTime || '17:00';
+            }
+          }
+        } catch {}
+      }
+
       // 4. Admin Note
       const adminNoteKey = `${emp.id}_${dateStr}`;
       let adminNote = adminNotes[adminNoteKey] || '';
@@ -185,7 +234,7 @@ export function AdminDailyAttendanceTable({
         adminNote = seedAdminMap[adminNoteKey] || '';
       }
 
-      // 4. Calculate Work Duration and Overtime
+      // 5. Calculate Work Duration and Overtime
       let durationStr = '-';
       let overtimeStr = '-';
       let otMins = 0;
@@ -238,8 +287,10 @@ export function AdminDailyAttendanceTable({
         name: emp.fullName3Part || emp.name,
         role: emp.role || 'کارمەند',
         checkInTime,
+        checkInOriginalTime,
         checkInNote,
         checkOutTime,
+        checkOutOriginalTime,
         checkOutNote,
         durationStr,
         overtimeStr,
@@ -265,7 +316,7 @@ export function AdminDailyAttendanceTable({
   // Current selected day data
   const currentDayData = useMemo(() => {
     return computeDayRows(selectedDate);
-  }, [selectedDate, activeEmployees, attendanceLogs, adminNotes]);
+  }, [selectedDate, activeEmployees, attendanceLogs, adminNotes, localOverridesVersion]);
 
   // Filtered rows for UI
   const filteredRows = useMemo(() => {
@@ -278,9 +329,9 @@ export function AdminDailyAttendanceTable({
       (r.checkOutNote && r.checkOutNote.toLowerCase().includes(q)) ||
       (r.adminNote && r.adminNote.toLowerCase().includes(q))
     );
-  }, [currentDayData.rows, searchTerm]);
+  }, [currentDayData, searchTerm]);
 
-  // Save Admin Note
+  // Save Inline Admin Note
   const handleSaveAdminNote = (empId: string) => {
     const key = `${empId}_${selectedDate}`;
     if (onUpdateAdminNote) {
@@ -288,6 +339,54 @@ export function AdminDailyAttendanceTable({
     }
     setEditingAdminNoteKey(null);
     setTempAdminNoteText('');
+  };
+
+  // Save Time Change from Modal
+  const handleSaveTimeModal = () => {
+    if (!editingTimeModal) return;
+    const { empId, targetType, dateStr, originalTime } = editingTimeModal;
+    const cleanTime = newTimeInput.trim();
+    if (!cleanTime) {
+      alert('تکایە کاتی نوێ دیاری بکە (بۆ نموونە 08:45)');
+      return;
+    }
+
+    const cleanReason = adminReasonInput.trim();
+    if (!cleanReason) {
+      alert('تکایە هۆکاری گۆڕینی کات (تێبینی ئەدمین) بنووسە');
+      return;
+    }
+
+    const adminNoteKey = `${empId}_${dateStr}`;
+    const formattedAdminReason = `🛡️ دەستکاریکردنی کاتی ${targetType === 'in' ? 'هاتن' : 'ڕۆیشتن'} بۆ (${cleanTime}): ${cleanReason}`;
+
+    // 1. Update Admin Notes
+    if (onUpdateAdminNote) {
+      onUpdateAdminNote(adminNoteKey, formattedAdminReason);
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const storedAdminNotes = JSON.parse(localStorage.getItem(`ashley_admin_notes_${selectedMonth}`) || '{}');
+        storedAdminNotes[adminNoteKey] = formattedAdminReason;
+        localStorage.setItem(`ashley_admin_notes_${selectedMonth}`, JSON.stringify(storedAdminNotes));
+      } catch {}
+    }
+
+    // 2. Update local storage for log overrides
+    if (typeof window !== 'undefined') {
+      try {
+        const overrideKey = `ashley_time_override_${empId}_${dateStr}_${targetType}`;
+        localStorage.setItem(overrideKey, JSON.stringify({
+          time: cleanTime,
+          originalTime: originalTime || (targetType === 'in' ? '08:00' : '17:00'),
+          editNote: cleanReason,
+        }));
+        window.dispatchEvent(new Event('ashley_attendance_updated'));
+      } catch {}
+    }
+
+    setEditingTimeModal(null);
+    setLocalOverridesVersion(v => v + 1);
   };
 
   // 🖨️ Export Single Day PDF
@@ -630,13 +729,49 @@ export function AdminDailyAttendanceTable({
 
                     {/* Check-In */}
                     <td className="p-2.5 border-l border-slate-200 text-center">
-                      {row.checkInTime !== '-' ? (
-                        <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-950 border border-emerald-300 font-mono font-black text-xs inline-block">
-                          📥 {inBadge.formattedTime}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 font-mono font-bold">-</span>
-                      )}
+                      <div className="flex flex-col items-center justify-center gap-1">
+                        {row.checkInTime !== '-' ? (
+                          <div className="flex flex-col items-center">
+                            {row.checkInOriginalTime ? (
+                              <>
+                                <span className="line-through text-rose-500 font-bold font-mono text-[10px] block">
+                                  {row.checkInOriginalTime}
+                                </span>
+                                <span className="px-2.5 py-0.5 rounded-lg bg-emerald-600 text-white font-mono font-black text-xs inline-flex items-center gap-1 shadow-xs">
+                                  📥 {inBadge.formattedTime}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-950 border border-emerald-300 font-mono font-black text-xs inline-block">
+                                📥 {inBadge.formattedTime}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 font-mono font-bold">-</span>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingTimeModal({
+                              empId: row.empId,
+                              empName: row.name,
+                              targetType: 'in',
+                              currentTime: row.checkInTime !== '-' ? row.checkInTime : '08:00',
+                              originalTime: row.checkInOriginalTime || (row.checkInTime !== '-' ? row.checkInTime : '08:00'),
+                              dateStr: selectedDate,
+                            });
+                            setNewTimeInput(row.checkInTime !== '-' ? row.checkInTime : '08:00');
+                            setAdminReasonInput('');
+                          }}
+                          className="px-1.5 py-0.5 text-[10px] text-slate-400 hover:text-emerald-800 hover:bg-emerald-50 rounded transition-all flex items-center gap-0.5 font-bold cursor-pointer"
+                          title="گۆڕینی کاتی هاتن و نووسینی هۆکارەکەی لە تێبینی ئەدمین"
+                        >
+                          <Edit3 className="w-2.5 h-2.5" />
+                          <span>گۆڕین</span>
+                        </button>
+                      </div>
                     </td>
 
                     {/* Check-In Employee Note */}
@@ -653,13 +788,49 @@ export function AdminDailyAttendanceTable({
 
                     {/* Check-Out */}
                     <td className="p-2.5 border-l border-slate-200 text-center">
-                      {row.checkOutTime !== '-' ? (
-                        <span className="px-2.5 py-1 rounded-lg bg-sky-100 text-sky-950 border border-sky-300 font-mono font-black text-xs inline-block">
-                          📤 {outBadge.formattedTime}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 font-mono font-bold">-</span>
-                      )}
+                      <div className="flex flex-col items-center justify-center gap-1">
+                        {row.checkOutTime !== '-' ? (
+                          <div className="flex flex-col items-center">
+                            {row.checkOutOriginalTime ? (
+                              <>
+                                <span className="line-through text-rose-500 font-bold font-mono text-[10px] block">
+                                  {row.checkOutOriginalTime}
+                                </span>
+                                <span className="px-2.5 py-0.5 rounded-lg bg-emerald-600 text-white font-mono font-black text-xs inline-flex items-center gap-1 shadow-xs">
+                                  📤 {outBadge.formattedTime}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-lg bg-sky-100 text-sky-950 border border-sky-300 font-mono font-black text-xs inline-block">
+                                📤 {outBadge.formattedTime}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 font-mono font-bold">-</span>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingTimeModal({
+                              empId: row.empId,
+                              empName: row.name,
+                              targetType: 'out',
+                              currentTime: row.checkOutTime !== '-' ? row.checkOutTime : '17:00',
+                              originalTime: row.checkOutOriginalTime || (row.checkOutTime !== '-' ? row.checkOutTime : '17:00'),
+                              dateStr: selectedDate,
+                            });
+                            setNewTimeInput(row.checkOutTime !== '-' ? row.checkOutTime : '17:00');
+                            setAdminReasonInput('');
+                          }}
+                          className="px-1.5 py-0.5 text-[10px] text-slate-400 hover:text-sky-800 hover:bg-sky-50 rounded transition-all flex items-center gap-0.5 font-bold cursor-pointer"
+                          title="گۆڕینی کاتی دەرچوون و نووسینی هۆکارەکەی لە تێبینی ئەدمین"
+                        >
+                          <Edit3 className="w-2.5 h-2.5" />
+                          <span>گۆڕین</span>
+                        </button>
+                      </div>
                     </td>
 
                     {/* Check-Out Employee Note / Overtime Reason */}
@@ -690,7 +861,7 @@ export function AdminDailyAttendanceTable({
                       )}
                     </td>
 
-                    {/* Admin Note with Instant Inline Edit */}
+                    {/* Admin Note with Instant Inline Edit & Prominent Shield Styling */}
                     <td className="p-2.5">
                       {isEditingThisAdminNote ? (
                         <div className="flex items-center gap-1.5">
@@ -709,7 +880,7 @@ export function AdminDailyAttendanceTable({
                           <button
                             type="button"
                             onClick={() => handleSaveAdminNote(row.empId)}
-                            className="p-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                            className="p-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
                             title="پاشەکەوت"
                           >
                             <Check className="w-3.5 h-3.5" />
@@ -717,18 +888,19 @@ export function AdminDailyAttendanceTable({
                           <button
                             type="button"
                             onClick={() => setEditingAdminNoteKey(null)}
-                            className="p-1 rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300"
+                            className="p-1 rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 cursor-pointer"
                             title="پاشگەزبوونەوە"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       ) : (
-                        <div className="flex items-center justify-between gap-1 group">
+                        <div className="flex items-start justify-between gap-1.5 group">
                           {row.adminNote ? (
-                            <span className="text-xs font-bold text-amber-900 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 flex-1">
-                              {row.adminNote}
-                            </span>
+                            <div className="flex items-start gap-1.5 text-xs font-bold text-amber-950 bg-amber-50/95 px-2.5 py-1.5 rounded-xl border border-amber-300 shadow-xs flex-1">
+                              <Shield className="w-3.5 h-3.5 text-amber-700 flex-shrink-0 mt-0.5" />
+                              <span className="leading-relaxed">{row.adminNote}</span>
+                            </div>
                           ) : (
                             <span className="text-slate-300 text-xs italic">تێبینی نییە</span>
                           )}
@@ -738,7 +910,7 @@ export function AdminDailyAttendanceTable({
                               setEditingAdminNoteKey(row.empId);
                               setTempAdminNoteText(row.adminNote || '');
                             }}
-                            className="opacity-60 group-hover:opacity-100 p-1 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded transition-all cursor-pointer"
+                            className="opacity-60 group-hover:opacity-100 p-1 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all cursor-pointer flex-shrink-0"
                             title="دەستکاریکردنی تێبینی ئەدمین"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -760,6 +932,102 @@ export function AdminDailyAttendanceTable({
           </tbody>
         </table>
       </div>
+
+      {/* 🛠️ MODAL FOR EDITING ATTENDANCE TIME & WRITING ADMIN NOTE */}
+      {editingTimeModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-300 shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 p-4 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-white/10 text-amber-300">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black">
+                    گۆڕینی کاتی {editingTimeModal.targetType === 'in' ? 'هاتن (Check-In)' : 'ڕۆیشتن (Check-Out)'}
+                  </h3>
+                  <p className="text-[11px] text-slate-300 font-bold">
+                    بۆ کارمەند: {editingTimeModal.empName}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingTimeModal(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4 text-xs font-bold text-slate-800">
+              <div className="p-3 bg-blue-50/80 rounded-2xl border border-blue-200 space-y-1">
+                <div className="flex justify-between text-[11px] text-slate-600">
+                  <span>کاتی کۆن (سەرەتایی):</span>
+                  <span className="font-mono font-bold line-through text-rose-600">
+                    {editingTimeModal.originalTime || editingTimeModal.currentTime}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[11px] text-slate-600">
+                  <span>بەرواری تۆمار:</span>
+                  <span className="font-mono font-bold text-slate-900">
+                    {editingTimeModal.dateStr}
+                  </span>
+                </div>
+              </div>
+
+              {/* New Time Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>کاتی نوێی دروست دیاری بکە (سەعات:خولەک):</span>
+                </label>
+                <input
+                  type="time"
+                  value={newTimeInput}
+                  onChange={(e) => setNewTimeInput(e.target.value)}
+                  className="input-classic w-full text-base font-black text-center font-mono py-2 bg-emerald-50/50 border-emerald-300 focus:border-emerald-500 rounded-xl"
+                />
+              </div>
+
+              {/* Admin Reason Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-amber-700" />
+                  <span>هۆکاری گۆڕانکاری (تێبینی ئەدمین کە لە خشتەکە دەردەکەوێت):</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={adminReasonInput}
+                  onChange={(e) => setAdminReasonInput(e.target.value)}
+                  placeholder="بۆ نموونە: لەدەرەوەی کۆمپانیا لە ئەرک بوو، مۆڵەتی پێدرابوو، یان دواکەوت بەهۆی چاککردنەوە..."
+                  className="input-classic w-full text-xs font-bold p-2.5 rounded-xl border-amber-300 focus:border-amber-500 bg-amber-50/40"
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 p-4 bg-slate-50 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setEditingTimeModal(null)}
+                className="btn-classic text-xs px-4 py-2 cursor-pointer"
+              >
+                پاشگەزبوونەوە
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveTimeModal}
+                className="btn-classic-primary text-xs px-5 py-2 flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-black cursor-pointer shadow-md"
+              >
+                <Check className="w-4 h-4" />
+                <span>پاشەکەوتکردنی کات و تێبینی</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

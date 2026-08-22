@@ -28,8 +28,10 @@ export interface DailyReportRow {
   name: string;
   role: string;
   checkInTime: string;
+  checkInOriginalTime?: string;
   checkInNote?: string;
   checkOutTime: string;
+  checkOutOriginalTime?: string;
   checkOutNote?: string;
   durationStr: string;
   overtimeStr: string;
