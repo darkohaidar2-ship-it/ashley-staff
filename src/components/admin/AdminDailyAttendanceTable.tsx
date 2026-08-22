@@ -31,7 +31,7 @@ import {
   DailyReportRow,
   ExportTableColumn
 } from '@/lib/export-utils';
-import { GOOGLE_SHEET_OVERTIME_DATA, generateAugust2026AdminNotes, generateAugust2026OvertimeList } from '@/lib/attendance-seed-data';
+import { GOOGLE_SHEET_OVERTIME_DATA, generateAugust2026AdminNotes, generateAugust2026OvertimeList, matchEmployeeByName } from '@/lib/attendance-seed-data';
 
 interface AdminDailyAttendanceTableProps {
   employees: Employee[];
@@ -123,24 +123,39 @@ export function AdminDailyAttendanceTable({
     const rows: DailyReportRow[] = activeEmployees.map((emp, idx) => {
       // 1. Find dynamic logs for this day
       const dayLogs = attendanceLogs.filter(l => {
-        const lDate = l.date || (l.timestamp ? l.timestamp.split('T')[0] : '');
-        return lDate === dateStr && (l.employeeId === emp.id || l.name === emp.name || l.name === emp.fullName3Part);
+        const lDate = l.date || (l.timestamp ? l.timestamp.split('T')[0] : (l.time ? l.time.split(' ')[0] : ''));
+        if (lDate !== dateStr) return false;
+        
+        const logEmpId = (l.employeeId || l.userId || '').toString().trim().toLowerCase();
+        const empId = (emp.id || '').toString().trim().toLowerCase();
+        const empNumId = (emp.employeeId || '').toString().trim().toLowerCase();
+        
+        const logName = (l.name || l.userName || (l as any).employeeName || '').trim().toLowerCase();
+        const empName1 = (emp.fullName3Part || '').trim().toLowerCase();
+        const empName2 = (emp.name || '').trim().toLowerCase();
+
+        return (
+          logEmpId === empId ||
+          (empNumId && logEmpId.includes(empNumId)) ||
+          (logName && empName1 && (logName === empName1 || logName.includes(empName1) || empName1.includes(logName))) ||
+          (logName && empName2 && (logName === empName2 || logName.includes(empName2) || empName2.includes(logName)))
+        );
       });
 
       const inLog = dayLogs.find(l => (l.type || l.action || '').toLowerCase().includes('in') || (l.type || l.action || '').includes('هاتن'));
       const outLog = dayLogs.find(l => (l.type || l.action || '').toLowerCase().includes('out') || (l.type || l.action || '').includes('دەرچوون') || (l.type || l.action || '').includes('ڕۆشتن'));
 
-      // 2. Check Seed Data if no dynamic log found
-      let checkInTime = inLog?.time ? formatTime24H(inLog.time) : '-';
-      let checkOutTime = outLog?.time ? formatTime24H(outLog.time) : '-';
+      // 2. Extract times from dynamic logs
+      let checkInTime = inLog?.time ? (inLog.time.includes(' ') ? inLog.time.split(' ')[1].slice(0, 5) : inLog.time.slice(0, 5)) : '-';
+      let checkOutTime = outLog?.time ? (outLog.time.includes(' ') ? outLog.time.split(' ')[1].slice(0, 5) : outLog.time.slice(0, 5)) : '-';
 
-      let checkInNote = inLog?.employeeNote || (inLog?.notes?.startsWith('تێبینی کارمەند:') ? inLog.notes.replace('تێبینی کارمەند:', '').trim() : '');
-      let checkOutNote = outLog?.employeeNote || (outLog?.notes?.startsWith('تێبینی کارمەند:') ? outLog.notes.replace('تێبینی کارمەند:', '').trim() : '');
+      let checkInNote = inLog?.employeeNote || (inLog?.notes?.startsWith('تێبینی کارمەند:') ? inLog.notes.replace('تێبینی کارمەند:', '').trim() : inLog?.notes || '');
+      let checkOutNote = outLog?.employeeNote || (outLog?.notes?.startsWith('تێبینی کارمەند:') ? outLog.notes.replace('تێبینی کارمەند:', '').trim() : outLog?.notes || '');
 
-      // Seed fallback for August 2026
+      // 3. Check Seed Data / August 2026 Fallback
       if (dateStr.startsWith('2026-08')) {
         const seedEntry = GOOGLE_SHEET_OVERTIME_DATA.find(
-          d => d.date === dateStr && (d.empName === emp.name || d.empName === emp.fullName3Part)
+          d => d.date === dateStr && !!matchEmployeeByName(d.empName, [emp])
         );
 
         if (seedEntry) {
@@ -154,14 +169,19 @@ export function AdminDailyAttendanceTable({
           if (!checkOutNote) {
             checkOutNote = seedEntry.workType + (seedEntry.note ? ` (${seedEntry.note})` : '');
           }
+        } else if (dNum <= 19 && !isFri) {
+          // Regular Working Day in August for Active Employee
+          if (checkInTime === '-') checkInTime = '08:00';
+          if (checkOutTime === '-') checkOutTime = '17:00';
+          if (!checkInNote) checkInNote = 'دەوامی ئاسایی فەرمی';
         }
       }
 
-      // 3. Admin Note
+      // 4. Admin Note
       const adminNoteKey = `${emp.id}_${dateStr}`;
       let adminNote = adminNotes[adminNoteKey] || '';
       if (!adminNote && dateStr.startsWith('2026-08')) {
-        const seedAdminMap = generateAugust2026AdminNotes();
+        const seedAdminMap = generateAugust2026AdminNotes(employees);
         adminNote = seedAdminMap[adminNoteKey] || '';
       }
 

@@ -63,6 +63,7 @@ import { AdminWeeklyMonthlyStatsModule } from '@/components/admin/AdminWeeklyMon
 import { AdminDailyAttendanceTable } from '@/components/admin/AdminDailyAttendanceTable';
 import { 
   generateAugust2026AdminNotes, 
+  generateAugust2026AttendanceRecords,
   GOOGLE_SHEET_OVERTIME_DATA 
 } from '@/lib/attendance-seed-data';
 import { formatTime12H, formatTime24H, exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
@@ -286,6 +287,26 @@ export default function AdminPage() {
   const activeEmployees = useMemo(() => {
     return employees.filter(e => e.status !== 'resigned' && e.isActive !== false);
   }, [employees]);
+
+  // Merge live attendance logs with August 2026 seed records so check-in / check-out are always fully populated
+  const allMergedAttendanceLogs = useMemo(() => {
+    const seedRecords = generateAugust2026AttendanceRecords(employees);
+    const existingKeys = new Set(attendanceLogs.map(l => {
+      const d = l.date || (l.time ? l.time.split(' ')[0] : '');
+      const e = (l.employeeId || l.userId || '').toString().toLowerCase();
+      const t = (l.type || (l as any).action || '').toLowerCase();
+      return `${e}_${d}_${t.includes('in') ? 'in' : 'out'}`;
+    }));
+
+    const nonOverlappingSeed = seedRecords.filter(s => {
+      const d = s.date || '';
+      const e = (s.employeeId || '').toString().toLowerCase();
+      const t = (s.type || '').toLowerCase();
+      return !existingKeys.has(`${e}_${d}_${t.includes('in') ? 'in' : 'out'}`);
+    });
+
+    return [...attendanceLogs, ...nonOverlappingSeed];
+  }, [attendanceLogs, employees]);
 
   // Aggregated KPIs for Overview Dashboard
   const dashboardKpis = useMemo(() => {
@@ -935,7 +956,7 @@ export default function AdminPage() {
           <div className="pt-2">
             <AdminDailyAttendanceTable
               employees={employees}
-              attendanceLogs={attendanceLogs}
+              attendanceLogs={allMergedAttendanceLogs}
               adminNotes={adminNotes}
               onUpdateAdminNote={handleUpdateAdminNote}
               selectedMonth={selectedMonth}
@@ -984,7 +1005,7 @@ export default function AdminPage() {
           {attendanceSubTab === 'daily' && (
             <AdminDailyAttendanceTable
               employees={employees}
-              attendanceLogs={attendanceLogs}
+              attendanceLogs={allMergedAttendanceLogs}
               adminNotes={adminNotes}
               onUpdateAdminNote={handleUpdateAdminNote}
               selectedMonth={selectedMonth}
@@ -994,7 +1015,7 @@ export default function AdminPage() {
           {/* Sub-Tab 2: 31-Day Matrix Grid */}
           {attendanceSubTab === 'matrix' && (
             <div id="attendance-sheet-grid-section" className="space-y-2">
-              <AttendanceSheetGrid employees={activeEmployees} attendanceLogs={attendanceLogs} />
+              <AttendanceSheetGrid employees={activeEmployees} attendanceLogs={allMergedAttendanceLogs} />
             </div>
           )}
         </section>
