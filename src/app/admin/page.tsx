@@ -81,8 +81,8 @@ export default function AdminPage() {
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [adminActiveSection, setAdminActiveSection] = useState<'overview' | 'hr' | 'overtime' | 'expenses' | 'logistics' | 'stats' | 'maps'>('overview');
-  const [hrSubTab, setHrSubTab] = useState<'daily' | 'matrix' | 'staff'>('daily');
+  const [adminActiveSection, setAdminActiveSection] = useState<'overview' | 'attendance' | 'hr' | 'overtime' | 'expenses' | 'logistics' | 'stats' | 'maps'>('overview');
+  const [attendanceSubTab, setAttendanceSubTab] = useState<'daily' | 'matrix'>('daily');
 
   // Live Desktop Clock for ERP Admin
   const [currentTimeStr, setCurrentTimeStr] = useState('');
@@ -531,7 +531,7 @@ export default function AdminPage() {
           </span>
         </div>
 
-        {/* 6 Circular Master Hubs */}
+        {/* 7 Circular Master Hubs */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-3 pt-1">
           
           {/* 🔘 Hub 0: Overview Dashboard */}
@@ -558,7 +558,31 @@ export default function AdminPage() {
             </span>
           </button>
 
-          {/* 🔵 Hub 1: HR & Staff */}
+          {/* 📅 Hub 1: Attendance & Daily Logs */}
+          <button
+            onClick={() => setAdminActiveSection('attendance')}
+            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+              adminActiveSection === 'attendance'
+                ? 'bg-gradient-to-b from-teal-700 to-emerald-950 text-white border-emerald-400 shadow-xl scale-105 ring-4 ring-emerald-300/50'
+                : 'bg-emerald-50/70 hover:bg-emerald-100/90 text-emerald-950 border-emerald-200 shadow-sm hover:shadow-md'
+            }`}
+          >
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
+              adminActiveSection === 'attendance'
+                ? 'bg-white text-emerald-900 border-emerald-200'
+                : 'bg-gradient-to-br from-teal-600 to-emerald-800 text-white border-emerald-400'
+            }`}>
+              <Calendar className="w-7 h-7" />
+            </div>
+            <span className="text-xs font-black tracking-tight block">ئامادەبوون و دەوام</span>
+            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
+              adminActiveSection === 'attendance' ? 'bg-amber-300 text-slate-950' : 'bg-emerald-200 text-emerald-950'
+            }`}>
+              📅 ڕۆژانە و ۳۱ ڕۆژە
+            </span>
+          </button>
+
+          {/* 🔵 Hub 2: HR & Staff */}
           <button
             onClick={() => setAdminActiveSection('hr')}
             className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
@@ -582,7 +606,7 @@ export default function AdminPage() {
             </span>
           </button>
 
-          {/* 🟠 Hub 2: Overtime Master */}
+          {/* 🟠 Hub 3: Overtime Master */}
           <button
             onClick={() => setAdminActiveSection('overtime')}
             className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
@@ -606,7 +630,7 @@ export default function AdminPage() {
             </span>
           </button>
 
-          {/* 🟢 Hub 3: Expenses */}
+          {/* 🟢 Hub 4: Expenses */}
           <button
             onClick={() => setAdminActiveSection('expenses')}
             className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
@@ -630,7 +654,7 @@ export default function AdminPage() {
             </span>
           </button>
 
-          {/* 🔴 Hub 4: Logistics & Unloading */}
+          {/* 🔴 Hub 5: Logistics & Unloading */}
           <button
             onClick={() => setAdminActiveSection('logistics')}
             className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
@@ -654,7 +678,7 @@ export default function AdminPage() {
             </span>
           </button>
 
-          {/* 🟣 Hub 5: HR Analytics */}
+          {/* 🟣 Hub 6: HR Analytics */}
           <button
             onClick={() => setAdminActiveSection('stats')}
             className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
@@ -678,7 +702,6 @@ export default function AdminPage() {
             </span>
           </button>
 
-          {/* 🌐 Hub 6: Maps & GPS */}
           <button
             onClick={() => {
               setAdminActiveSection('maps');
@@ -911,70 +934,43 @@ export default function AdminPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* 👥 SECTION 1: HR & STAFF OPERATIONS PANEL */}
+      {/* 📅 SECTION 1: ATTENDANCE & DAILY OPERATIONS HUB */}
       {/* ========================================================================= */}
-      {adminActiveSection === 'hr' && (
+      {adminActiveSection === 'attendance' && (
         <section className="panel-classic space-y-4">
-          
-          {/* 🌟 3 SUB-TABS NAVIGATION HEADER */}
+          {/* Top Sub-tabs Switcher */}
           <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
-              
               <button
                 type="button"
-                onClick={() => setHrSubTab('daily')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                  hrSubTab === 'daily'
-                    ? 'bg-gradient-to-r from-blue-900 to-indigo-900 text-white shadow-sm'
+                onClick={() => setAttendanceSubTab('daily')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  attendanceSubTab === 'daily'
+                    ? 'bg-gradient-to-r from-emerald-700 to-teal-900 text-white shadow-sm'
                     : 'text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 <Calendar className="w-3.5 h-3.5" />
-                <span>📅 خشتەی ئامادەبوونی ڕۆژانە (Daily)</span>
+                <span>📅 خشتەی ئامادەبوونی ڕۆژانە (Daily Attendance)</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setHrSubTab('matrix')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                  hrSubTab === 'matrix'
-                    ? 'bg-gradient-to-r from-blue-900 to-indigo-900 text-white shadow-sm'
+                onClick={() => setAttendanceSubTab('matrix')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  attendanceSubTab === 'matrix'
+                    ? 'bg-gradient-to-r from-emerald-700 to-teal-900 text-white shadow-sm'
                     : 'text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 <Table className="w-3.5 h-3.5" />
-                <span>📊 خشتەی ۳۱ ڕۆژەی گشتی (Matrix)</span>
+                <span>📊 خشتەی ۳۱ ڕۆژەی گشتی (31-Day Matrix)</span>
               </button>
-
-              <button
-                type="button"
-                onClick={() => setHrSubTab('staff')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                  hrSubTab === 'staff'
-                    ? 'bg-gradient-to-r from-blue-900 to-indigo-900 text-white shadow-sm'
-                    : 'text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>👥 بەڕێوەبردنی ستاف و دەموچاو (Staff)</span>
-              </button>
-
             </div>
-
-            {/* Quick Add Employee Button */}
-            <button
-              onClick={() => handleOpenEmpModal()}
-              className="btn-classic-primary text-xs flex items-center gap-1 px-3 py-1.5"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>زیادکردنی کارمەندی نوێ</span>
-            </button>
           </div>
 
-          {/* ========================================== */}
-          {/* 📅 SUB-TAB 1: DAILY ATTENDANCE MASTER VIEW */}
-          {/* ========================================== */}
-          {hrSubTab === 'daily' && (
+          {/* Sub-Tab 1: Daily Attendance Table */}
+          {attendanceSubTab === 'daily' && (
             <AdminDailyAttendanceTable
               employees={employees}
               attendanceLogs={attendanceLogs}
@@ -984,20 +980,35 @@ export default function AdminPage() {
             />
           )}
 
-          {/* ========================================== */}
-          {/* 📊 SUB-TAB 2: 31-DAY MATRIX GRID VIEW     */}
-          {/* ========================================== */}
-          {hrSubTab === 'matrix' && (
+          {/* Sub-Tab 2: 31-Day Matrix Grid */}
+          {attendanceSubTab === 'matrix' && (
             <div id="attendance-sheet-grid-section" className="space-y-2">
               <AttendanceSheetGrid employees={activeEmployees} attendanceLogs={attendanceLogs} />
             </div>
           )}
+        </section>
+      )}
 
-          {/* ========================================== */}
-          {/* 👥 SUB-TAB 3: STAFF DIRECTORY & FACE ID   */}
-          {/* ========================================== */}
-          {hrSubTab === 'staff' && (
-            <div className="space-y-4">
+      {/* ========================================================================= */}
+      {/* 👥 SECTION 2: HR & STAFF MANAGEMENT HUB */}
+      {/* ========================================================================= */}
+      {adminActiveSection === 'hr' && (
+        <section className="panel-classic space-y-4">
+          <div className="panel-header-classic flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+              <Users className="w-4 h-4 text-blue-800" />
+              <span>بەڕێوەبردنی ستاف، زانیاری کارمەندان، و ناسنامەی دەموچاو (HR Staff Hub)</span>
+            </h2>
+            <button
+              onClick={() => handleOpenEmpModal()}
+              className="btn-classic-primary text-xs flex items-center gap-1 px-3 py-1.5"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>زیادکردنی کارمەندی نوێ</span>
+            </button>
+          </div>
+
+          <div className="space-y-4">
               {/* Search and Filters & Export */}
               <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
                 <div className="flex items-center gap-2 flex-1 max-w-md">
@@ -1211,8 +1222,6 @@ export default function AdminPage() {
                 </table>
               </div>
             </div>
-          )}
-
         </section>
       )}
 
