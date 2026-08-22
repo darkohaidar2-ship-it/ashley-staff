@@ -57,6 +57,15 @@ export function AttendanceAnalyticsReport({
     return {};
   });
 
+  // Company-wide Official Holidays (e.g. { "2026-08-13": true })
+  const [companyHolidays, setCompanyHolidays] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem(`ashley_holidays_${selectedMonth}`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {};
+  });
+
   // Selected Employee for Daily First-In / Last-Out Logs Drawer Modal
   const [activeEmpDrawer, setActiveEmpDrawer] = useState<any | null>(null);
 
@@ -72,14 +81,24 @@ export function AttendanceAnalyticsReport({
   const [leaveType, setLeaveType] = useState<'off' | 'excused' | 'sick'>('off');
   const [leaveNote, setLeaveNote] = useState<string>('');
 
-  // Load saved admin notes & leaves
+  // Load saved admin notes & leaves & holidays
   useEffect(() => {
-    try {
-      const savedNotes = localStorage.getItem(`ashley_ot_notes_${selectedMonth}`);
-      if (savedNotes) setAdminNotes(JSON.parse(savedNotes));
-      const savedLeaves = localStorage.getItem(`ashley_leaves_${selectedMonth}`);
-      if (savedLeaves) setEmployeeLeaves(JSON.parse(savedLeaves));
-    } catch {}
+    const loadSaved = () => {
+      try {
+        const savedNotes = localStorage.getItem(`ashley_ot_notes_${selectedMonth}`);
+        if (savedNotes) setAdminNotes(JSON.parse(savedNotes));
+        const savedLeaves = localStorage.getItem(`ashley_leaves_${selectedMonth}`);
+        if (savedLeaves) setEmployeeLeaves(JSON.parse(savedLeaves));
+        const savedHolidays = localStorage.getItem(`ashley_holidays_${selectedMonth}`);
+        if (savedHolidays) setCompanyHolidays(JSON.parse(savedHolidays));
+      } catch {}
+    };
+
+    loadSaved();
+    window.addEventListener('ashley_attendance_updated', loadSaved);
+    return () => {
+      window.removeEventListener('ashley_attendance_updated', loadSaved);
+    };
   }, [selectedMonth]);
 
   // Save admin note helper
@@ -219,9 +238,10 @@ export function AttendanceAnalyticsReport({
         const dateObj = new Date(year, month - 1, d);
         const dayOfWeekIndex = getDay(dateObj); // 5 is Friday
         const isFriday = dayOfWeekIndex === 5;
+        const isCompanyHoliday = !!companyHolidays[targetDate];
         const leaveKey = `${emp.id}_${targetDate}`;
         const customLeave = employeeLeaves[leaveKey];
-        const isOff = isFriday || !!customLeave;
+        const isOff = isFriday || isCompanyHoliday || !!customLeave;
 
         if (isOff) {
           officialOffDaysCount++;

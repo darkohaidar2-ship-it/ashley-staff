@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { AttendanceRecord, Employee } from '@/lib/types';
-import { Camera, Calendar, MapPin, Trash2, CheckCircle, User, FileText, Edit3 } from 'lucide-react';
-import { getDaysInMonth, format } from 'date-fns';
+import { Camera, Calendar, MapPin, Trash2, CheckCircle, User, FileText, Edit3, RefreshCw, Sparkles, Coffee, Check, X, ShieldAlert } from 'lucide-react';
+import { getDaysInMonth, format, getDay } from 'date-fns';
 import { AttendanceAnalyticsReport } from './AttendanceAnalyticsReport';
 import { exportToPDF, exportToCSV, formatTime12H, getAttendanceTimeBadge, type ExportTableColumn } from '@/lib/export-utils';
+import { GOOGLE_SHEET_OVERTIME_DATA, generateAugust2026AdminNotes, generateAugust2026OvertimeList } from '@/lib/attendance-seed-data';
 
 interface AttendanceSheetGridProps {
   attendanceLogs: AttendanceRecord[];
@@ -15,19 +16,109 @@ interface AttendanceSheetGridProps {
 
 export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, onDeleteLog }: AttendanceSheetGridProps) {
   // Selected Month (default to current dynamic month)
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'));
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => '2026-08');
   // Selected Employee filter ('all' or emp.id)
   const [selectedEmpFilter, setSelectedEmpFilter] = useState<string>('all');
   
   // Realtime Logs state
   const [gridLogs, setGridLogs] = useState<AttendanceRecord[]>(initialLogs);
   
-  React.useEffect(() => {
+  useEffect(() => {
     setGridLogs(initialLogs);
   }, [initialLogs]);
 
+  // Company Holidays state (e.g. { "2026-08-13": true })
+  const [holidays, setHolidays] = useState<Record<string, boolean>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ashley_holidays_2026-08');
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return {};
+  });
+
+  // Employee Leaves state (e.g. { "empId_2026-08-13": { type: 'excused', note: 'ئیجازەی فەرمی' } })
+  const [leaves, setLeaves] = useState<Record<string, { type: 'off' | 'excused' | 'sick'; note?: string }>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ashley_leaves_2026-08');
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return {};
+  });
+
+  // Drag & Drop visual tracking state
+  const [dragOverCol, setDragOverCol] = useState<number | null>(null);
+  const [dragOverCell, setDragOverCell] = useState<string | null>(null);
+
+  // Quick Action Menu on Cell Click
+  const [cellActionMenu, setCellActionMenu] = useState<{
+    empId: string;
+    empName: string;
+    dayNum: number;
+    dateStr: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  // Sync state on month change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const h = localStorage.getItem(`ashley_holidays_${selectedMonth}`);
+        setHolidays(h ? JSON.parse(h) : {});
+        const l = localStorage.getItem(`ashley_leaves_${selectedMonth}`);
+        setLeaves(l ? JSON.parse(l) : {});
+      } catch {}
+    }
+  }, [selectedMonth]);
+
   // Selected Log for Selfie & Full Details Modal
   const [activeLogModal, setActiveLogModal] = useState<AttendanceRecord | null>(null);
+
+  // Google Sheets Sync Handler
+  const handleSyncGoogleSheet = () => {
+    const defaultNotes = generateAugust2026AdminNotes(employees);
+    const defaultOvertime = generateAugust2026OvertimeList(employees);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ashley_admin_notes_2026-08', JSON.stringify(defaultNotes));
+      localStorage.setItem('ashley_ot_notes_2026-08', JSON.stringify(defaultNotes));
+      window.dispatchEvent(new Event('ashley_attendance_updated'));
+    }
+    alert(`🎉 سەرجەم داتاکانی گووگڵ شیت (${GOOGLE_SHEET_OVERTIME_DATA.length} تۆمار) لەگەڵ کاتژمێری هاتن 08:00 و دەرچوونی ئیزافە بە سەرکەوتوویی هاوتا کران!`);
+  };
+
+  // Toggle Holiday Helper
+  const toggleCompanyHoliday = (dateStr: string, isHoliday: boolean) => {
+    const updated = { ...holidays };
+    if (isHoliday) {
+      updated[dateStr] = true;
+    } else {
+      delete updated[dateStr];
+    }
+    setHolidays(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`ashley_holidays_${selectedMonth}`, JSON.stringify(updated));
+      window.dispatchEvent(new Event('ashley_attendance_updated'));
+    }
+  };
+
+  // Toggle Employee Leave Helper
+  const toggleEmployeeLeave = (key: string, leaveData: { type: 'off' | 'excused' | 'sick'; note?: string } | null) => {
+    const updated = { ...leaves };
+    if (leaveData) {
+      updated[key] = leaveData;
+    } else {
+      delete updated[key];
+    }
+    setLeaves(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`ashley_leaves_${selectedMonth}`, JSON.stringify(updated));
+      window.dispatchEvent(new Event('ashley_attendance_updated'));
+    }
+  };
 
   // Generate 1 to 31 Days Array for Selected Month
   const [yearStr, monthStr] = selectedMonth.split('-');
@@ -267,84 +358,150 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
         </div>
       </div>
 
-      {/* 🛠️ SHEET CONTROL BAR (WinUI 3 Fluent Acrylic) */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white/80 backdrop-blur-md border border-slate-200 rounded-xl text-xs font-bold shadow-sm print:hidden">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-blue-100 text-blue-800 rounded-lg">
-            <Calendar className="w-4 h-4" />
-          </div>
-          <span className="text-slate-900 font-extrabold text-xs">
-            شیت ماتریسی مانگانەی ئامادەبوونی کارمەندان (31-Day Attendance Matrix Sheet):
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Month Picker */}
-          <div className="flex items-center gap-1">
-            <label className="text-slate-600 font-bold">مانگ:</label>
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="input-fluent font-mono text-xs font-bold rounded-lg"
-            />
+      {/* 🛠️ SHEET CONTROL BAR & DRAG-AND-DROP RIBBON */}
+      <div className="space-y-2 print:hidden">
+        
+        {/* Main Filters & Actions Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white/90 backdrop-blur-md border border-slate-200 rounded-2xl text-xs font-bold shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-blue-100 text-blue-800 rounded-lg">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <span className="text-slate-900 font-black text-xs">
+              شیت ماتریسی مانگانەی ئامادەبوونی ۳۱ ڕۆژە (Attendance Matrix Sheet)
+            </span>
           </div>
 
-          {/* Employee Filter */}
-          <div className="flex items-center gap-1">
-            <label className="text-slate-600 font-bold">کارمەند:</label>
-            <select
-              value={selectedEmpFilter}
-              onChange={(e) => setSelectedEmpFilter(e.target.value)}
-              className="input-fluent font-bold text-xs rounded-lg"
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Month Picker */}
+            <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-xl border border-slate-200">
+              <label className="text-slate-600 font-bold">مانگ:</label>
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="bg-transparent font-mono text-xs font-black outline-none cursor-pointer"
+              />
+            </div>
+
+            {/* Employee Filter */}
+            <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-xl border border-slate-200">
+              <label className="text-slate-600 font-bold">کارمەند:</label>
+              <select
+                value={selectedEmpFilter}
+                onChange={(e) => setSelectedEmpFilter(e.target.value)}
+                className="bg-transparent font-bold text-xs outline-none cursor-pointer"
+              >
+                <option value="all">تێکڕای کارمەندان ({employees.length})</option>
+                {employees.filter(e => e.status !== 'resigned').map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.fullName3Part || emp.name} ({emp.role || 'کارمەند'})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 🔄 GOOGLE SHEETS SYNC BUTTON */}
+            <button
+              type="button"
+              onClick={handleSyncGoogleSheet}
+              className="btn-fluent text-xs font-black flex items-center gap-1.5 py-1.5 px-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 border border-amber-300 shadow-sm cursor-pointer transition-all hover:scale-105"
+              title="هاوتاکردن و هاوردەکردنی سەرجەم داتاکانی گووگڵ شیت (کاتی هاتن، دەرچوون، ئیزافە و تێبینیەکان)"
             >
-              <option value="all">تێکڕای کارمەندان ({employees.length})</option>
-              {employees.filter(e => e.status !== 'resigned').map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.fullName3Part || emp.name} ({emp.role || 'کارمەند'})
-                </option>
-              ))}
-            </select>
+              <RefreshCw className="w-3.5 h-3.5 text-slate-950" />
+              <span>🔄 هاوتاکردنەوە بە Google Sheets</span>
+            </button>
+
+            {/* 🖨️ PRINT, PDF & CSV ACTION BUTTONS */}
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="btn-fluent text-xs font-bold flex items-center gap-1 py-1.5 px-3 rounded-xl"
+              title="پرێنتکردنی لیست لەسەر کاغەز"
+            >
+              <span>🖨️ پرێنت</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              className="btn-fluent-danger text-xs font-bold flex items-center gap-1 py-1.5 px-3 rounded-xl"
+              title="داگرتنی فایلی PDF"
+            >
+              <span>📄 PDF</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadCsv}
+              className="btn-fluent-primary text-xs font-bold flex items-center gap-1 py-1.5 px-3 rounded-xl"
+              title="داگرتنی فایلی Excel / CSV"
+            >
+              <span>📊 CSV</span>
+            </button>
           </div>
-
-          {/* REAL-TIME STATUS BADGE */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-bold shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            سیستەمی ڕاستەوخۆ (Real-Time Live)
-          </div>
-
-          {/* 🖨️ PRINT, PDF & CSV ACTION BUTTONS */}
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="btn-fluent text-xs font-bold flex items-center gap-1 py-1.5 px-3 rounded-lg"
-            title="پرێنتکردنی ناوی لیست و کاتی پرێنت لەسەر کاغەز"
-          >
-            <span>🖨️ پرێنت (Print)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleDownloadPdf}
-            className="btn-fluent-danger text-xs font-bold flex items-center gap-1 py-1.5 px-3 rounded-lg"
-            title="داگرتنی ڕاستەوخۆی فایلی PDF"
-          >
-            <span>📄 داگرتنی PDF</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleDownloadCsv}
-            className="btn-fluent-primary text-xs font-bold flex items-center gap-1 py-1.5 px-3 rounded-lg"
-            title="داگرتنی فایلی Excel / CSV"
-          >
-            <span>📊 داگرتنی CSV</span>
-          </button>
         </div>
+
+        {/* 🎯 DRAG & DROP TOOLBAR FOR HOLIDAYS & LEAVES */}
+        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl border border-indigo-800 shadow-md">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-black text-amber-300 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>کەرەستەی دیاریکردنی پشوو و ئیجازە (Drag & Drop):</span>
+            </span>
+
+            {/* Tool 1: Holiday Drag Badge */}
+            <div
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', JSON.stringify({ action: 'holiday' }));
+                e.dataTransfer.effectAllowed = 'copy';
+              }}
+              className="cursor-grab active:cursor-grabbing px-3 py-1 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center gap-1.5 shadow-sm border border-emerald-400 select-none transition-transform hover:scale-105"
+              title="ڕایکێشە (Drag) بۆ سەر کۆڵۆمی ڕۆژێک تا لەو ڕۆژە پشوو بێت و کەس سزا نەدرێت"
+            >
+              <span>🏖️ پشووی گشتی (Holiday)</span>
+              <span className="text-[9px] bg-white/20 px-1 py-0.2 rounded font-mono">ڕاکێشان ➔</span>
+            </div>
+
+            {/* Tool 2: Leave Drag Badge */}
+            <div
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', JSON.stringify({ action: 'leave' }));
+                e.dataTransfer.effectAllowed = 'copy';
+              }}
+              className="cursor-grab active:cursor-grabbing px-3 py-1 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs flex items-center gap-1.5 shadow-sm border border-purple-400 select-none transition-transform hover:scale-105"
+              title="ڕایکێشە (Drag) بۆ سەر خانەی کارمەندێک تا ئەو ڕۆژەی وەک ئیجازە/مۆڵەت هەژمار بکرێت"
+            >
+              <span>📝 مۆڵەت / ئیجازە (Leave)</span>
+              <span className="text-[9px] bg-white/20 px-1 py-0.2 rounded font-mono">ڕاکێشان ➔</span>
+            </div>
+
+            {/* Tool 3: Eraser */}
+            <div
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', JSON.stringify({ action: 'clear' }));
+                e.dataTransfer.effectAllowed = 'copy';
+              }}
+              className="cursor-grab active:cursor-grabbing px-2.5 py-1 rounded-xl bg-rose-500/80 hover:bg-rose-500 text-white font-black text-xs flex items-center gap-1 border border-rose-400 select-none transition-transform hover:scale-105"
+              title="ڕایکێشە بۆ سەر هەر ڕۆژێک یان خانەیەک بۆ سڕینەوەی پشوو و ئیجازە"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>پاککردنەوە</span>
+            </div>
+          </div>
+
+          <div className="text-[11px] text-slate-300 font-normal">
+            💡 دەتوانیت نیشانەکان ڕابکێشیتە سەر ڕۆژەکان، یان ڕاستەوخۆ کلیک لەسەر سەرناوی ڕۆژەکە یان خانەکان بکەیت.
+          </div>
+        </div>
+
       </div>
 
       {/* 📊 31-DAY MATRIX GRID TABLE (WinUI 3 Fluent Glassmorphism Widescreen) */}
-      <div id="attendance-matrix-table-wrapper" className="w-full overflow-x-auto border border-slate-300 rounded-xl max-h-[72vh] min-h-[450px] overflow-y-auto shadow-sm bg-white/90 backdrop-blur-md">
+      <div id="attendance-matrix-table-wrapper" className="w-full overflow-x-auto border border-slate-300 rounded-2xl max-h-[72vh] min-h-[450px] overflow-y-auto shadow-md bg-white/95 backdrop-blur-md relative">
         <table className="table-fluent w-full text-xs">
           <thead className="sticky top-0 bg-slate-100 border-b-2 border-slate-300 z-20">
             <tr>
@@ -353,14 +510,63 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                 👤 ناوی کارمەند / ڕێکەوت ➔
               </th>
 
-              {/* 31 Day Header Columns (Simplified Date Only) */}
-              {daysArray.map((dayNum) => (
-                <th key={dayNum} className="text-center font-mono font-bold min-w-[50px] px-1 py-1 border-l border-slate-400 bg-slate-200">
-                  <span className="text-slate-600 text-[11px] font-mono font-bold">
-                    {dayNum.toString().padStart(2, '0')}/{monthStr}
-                  </span>
-                </th>
-              ))}
+              {/* 31 Day Header Columns (With Drag & Drop, Holiday Status, Friday Colors) */}
+              {daysArray.map((dayNum) => {
+                const dayStrFormatted = dayNum.toString().padStart(2, '0');
+                const fullDateStr = `${selectedMonth}-${dayStrFormatted}`;
+                const dateObj = new Date(year, month - 1, dayNum);
+                const dayOfWeek = getDay(dateObj); // 5 is Friday
+                const isFriday = dayOfWeek === 5;
+                const isCompanyHoliday = !!holidays[fullDateStr];
+                const isDragOver = dragOverCol === dayNum;
+
+                return (
+                  <th 
+                    key={dayNum}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOverCol(dayNum);
+                    }}
+                    onDragLeave={() => setDragOverCol(null)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragOverCol(null);
+                      try {
+                        const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+                        if (data.action === 'holiday') {
+                          toggleCompanyHoliday(fullDateStr, true);
+                        } else if (data.action === 'clear') {
+                          toggleCompanyHoliday(fullDateStr, false);
+                        }
+                      } catch {}
+                    }}
+                    onClick={() => {
+                      toggleCompanyHoliday(fullDateStr, !isCompanyHoliday);
+                    }}
+                    className={`text-center font-mono font-bold min-w-[52px] px-1 py-1.5 border-l border-slate-300 transition-all cursor-pointer select-none ${
+                      isDragOver
+                        ? 'bg-amber-300 text-slate-950 scale-105 ring-2 ring-amber-500 z-10'
+                        : isCompanyHoliday
+                        ? 'bg-emerald-600 text-white'
+                        : isFriday
+                        ? 'bg-slate-300 text-slate-800'
+                        : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                    }`}
+                    title={isCompanyHoliday ? `ڕۆژی ${dayNum} پشووی فەرمییە (کلیک بکە بۆ گۆڕین)` : `ڕۆژی ${dayNum} (کلیک بکە یان نیشانەی پشوو ڕابکێشە ئێرە)`}
+                  >
+                    <div className="flex flex-col items-center justify-center leading-tight">
+                      <span className={`text-[11px] font-mono font-black ${isCompanyHoliday ? 'text-white' : ''}`}>
+                        {dayStrFormatted}/{monthStr}
+                      </span>
+                      {isCompanyHoliday ? (
+                        <span className="text-[9px] bg-white/20 px-1 rounded font-black text-amber-200 mt-0.5">🏖️ پشوو</span>
+                      ) : isFriday ? (
+                        <span className="text-[9px] text-slate-600 font-bold mt-0.5">هەینی</span>
+                      ) : null}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -386,19 +592,80 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
 
                   {/* 31 Day Cells for this Employee */}
                   {daysArray.map((dayNum) => {
+                    const dayStrFormatted = dayNum.toString().padStart(2, '0');
+                    const fullDateStr = `${selectedMonth}-${dayStrFormatted}`;
+                    const dateObj = new Date(year, month - 1, dayNum);
+                    const dayOfWeek = getDay(dateObj); // 5 is Friday
+                    const isFriday = dayOfWeek === 5;
+                    const isCompanyHoliday = !!holidays[fullDateStr];
+                    const leaveKey = `${emp.id}_${fullDateStr}`;
+                    const customLeave = leaves[leaveKey];
+
                     const cellLogs = getLogsForEmpAndDay(emp, dayNum);
                     const checkIn = cellLogs.find(l => l.type?.includes('In') || l.type?.includes('هاتن'));
                     const checkOut = cellLogs.find(l => l.type?.includes('Out') || l.type?.includes('دەرچوون'));
 
+                    const cellKey = `${emp.id}_${dayNum}`;
+                    const isCellDragOver = dragOverCell === cellKey;
+
                     return (
-                      <td key={dayNum} className="text-center p-1 border-l border-slate-300 align-middle">
+                      <td 
+                        key={dayNum} 
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOverCell(cellKey);
+                        }}
+                        onDragLeave={() => setDragOverCell(null)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setDragOverCell(null);
+                          try {
+                            const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+                            if (data.action === 'holiday') {
+                              toggleEmployeeLeave(leaveKey, { type: 'off', note: 'پشوو' });
+                            } else if (data.action === 'leave') {
+                              toggleEmployeeLeave(leaveKey, { type: 'excused', note: 'ئیجازەی فەرمی' });
+                            } else if (data.action === 'clear') {
+                              toggleEmployeeLeave(leaveKey, null);
+                            }
+                          } catch {}
+                        }}
+                        onClick={(e) => {
+                          if (cellLogs.length === 0) {
+                            // Open Quick Cell Action Menu
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setCellActionMenu({
+                              empId: emp.id,
+                              empName: emp.fullName3Part || emp.name,
+                              dayNum,
+                              dateStr: fullDateStr,
+                              x: rect.left,
+                              y: rect.bottom + window.scrollY
+                            });
+                          }
+                        }}
+                        className={`text-center p-1 border-l border-slate-300 align-middle transition-all relative ${
+                          isCellDragOver 
+                            ? 'bg-amber-200 ring-2 ring-amber-400'
+                            : isCompanyHoliday
+                            ? 'bg-emerald-50/70'
+                            : customLeave
+                            ? 'bg-purple-50/70'
+                            : isFriday
+                            ? 'bg-slate-100/60'
+                            : ''
+                        }`}
+                      >
                         {cellLogs.length > 0 ? (
                           <div className="flex flex-col items-center justify-center gap-0.5 font-mono text-[11px] font-bold">
                             {/* Check-In Link (12H Format with 15-min tolerance colors) */}
                             {checkIn ? (
                               <button
                                 type="button"
-                                onClick={() => setActiveLogModal(checkIn)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveLogModal(checkIn);
+                                }}
                                 className="cursor-pointer transition-colors block text-center"
                                 title={checkIn.editNote ? `تێبینی گۆڕینی کات: ${checkIn.editNote}` : "کرتە بکە بۆ بینینی فۆتۆ و زانیاریەکانی چێک ئین"}
                               >
@@ -421,7 +688,10 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                             {checkOut ? (
                               <button
                                 type="button"
-                                onClick={() => setActiveLogModal(checkOut)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveLogModal(checkOut);
+                                }}
                                 className="cursor-pointer transition-colors block text-center"
                                 title={checkOut.editNote ? `تێبینی گۆڕینی کات: ${checkOut.editNote}` : "کرتە بکە بۆ بینینی فۆتۆ و زانیاریەکانی چێک ئاوت"}
                               >
@@ -441,7 +711,24 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                             ) : null}
                           </div>
                         ) : (
-                          <span className="text-slate-300 font-mono text-[10px]">---</span>
+                          /* Visual indicators when NO check-in log exists */
+                          isCompanyHoliday ? (
+                            <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px] font-black shadow-xs inline-block" title="پشووی فەرمیی کۆمپانیا - بێ سزا">
+                              🏖️ پشوو
+                            </span>
+                          ) : customLeave ? (
+                            <span className="px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-950 border border-purple-300 text-[10px] font-black shadow-xs inline-block" title={customLeave.note || 'مۆڵەت / ئیجازەی فەرمی - بێ سزا'}>
+                              📝 ئیجازە
+                            </span>
+                          ) : isFriday ? (
+                            <span className="px-1 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold inline-block">
+                              🕌 هەینی
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 font-mono text-[10px] hover:text-blue-700 cursor-pointer" title="کرتە بکە بۆ دیاریکردنی ئیجازە یان پشوو">
+                              ---
+                            </span>
+                          )
                         )}
                       </td>
                     );
@@ -647,6 +934,59 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* 📝 QUICK CELL ACTION MODAL FOR HOLIDAY & LEAVE */}
+      {cellActionMenu && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 dir-rtl" dir="rtl" onClick={() => setCellActionMenu(null)}>
+          <div className="bg-white rounded-2xl border-2 border-slate-300 shadow-2xl p-4 max-w-sm w-full space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <span className="text-xs font-black text-slate-900">
+                دیاریکردنی دۆخی ڕۆژی {cellActionMenu.dayNum} بۆ ({cellActionMenu.empName})
+              </span>
+              <button onClick={() => setCellActionMenu(null)} className="text-slate-400 hover:text-rose-600 font-black text-sm">✕</button>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  toggleEmployeeLeave(`${cellActionMenu.empId}_${cellActionMenu.dateStr}`, { type: 'excused', note: 'ئیجازەی فەرمی' });
+                  setCellActionMenu(null);
+                }}
+                className="w-full text-right p-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-950 font-black text-xs border border-purple-200 flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <span>📝 ئیجازە / مۆڵەتی فەرمی (بێ سزا)</span>
+                <span className="text-[10px] bg-purple-200 text-purple-900 px-2 py-0.5 rounded-full font-mono">Leave</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  toggleCompanyHoliday(cellActionMenu.dateStr, true);
+                  setCellActionMenu(null);
+                }}
+                className="w-full text-right p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-950 font-black text-xs border border-emerald-200 flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <span>🏖️ پشووی فەرمی کۆمپانیا (بۆ هەمووان)</span>
+                <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full font-mono">Holiday</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  toggleEmployeeLeave(`${cellActionMenu.empId}_${cellActionMenu.dateStr}`, null);
+                  toggleCompanyHoliday(cellActionMenu.dateStr, false);
+                  setCellActionMenu(null);
+                }}
+                className="w-full text-right p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-950 font-black text-xs border border-rose-200 flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <span>🗑️ پاککردنەوە و گەڕاندنەوە بۆ دۆخی ئاسایی</span>
+                <Trash2 className="w-3.5 h-3.5 text-rose-700" />
+              </button>
+            </div>
           </div>
         </div>
       )}
