@@ -170,15 +170,16 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
     const newTime = prompt('کاتی نوێی هاتن/چوون دیاری بکە (بۆ نموونە 09:30):', currentTimeOnly);
     if (!newTime || !newTime.trim()) return;
 
-    const note = prompt('تکایە تێبینی و هۆکاری گۆڕینی کاتەکە بنووسە (بۆ نموونە: لەدەرەوەی کۆمپانیا لە ئەرک بوو):');
+    const note = prompt('تکایە تێبینی ئەدمین بۆ هۆکاری گۆڕینی کات بنووسە (بۆ نموونە: لەدەرەوەی کۆمپانیا لە ئەرک بوو):');
     if (!note || !note.trim()) {
-      alert('تێبینی پێویستە بۆ گۆڕینی کات!');
+      alert('تێبینی ئەدمین پێویستە بۆ گۆڕینی کات!');
       return;
     }
 
     try {
       const dateStr = activeLogModal.time ? activeLogModal.time.split(' ')[0] : activeLogModal.createdAt?.split('T')[0] || activeLogModal.date || selectedMonth + '-01';
       const oldTime = activeLogModal.originalTime || activeLogModal.checkInOriginalTime || activeLogModal.checkOutOriginalTime || currentTimeOnly;
+      const targetEmpId = activeLogModal.employeeId || activeLogModal.userId || '';
 
       const res = await fetch(`/api/attendance/logs/${activeLogModal.id}`, {
         method: 'PATCH',
@@ -186,8 +187,9 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
         body: JSON.stringify({
           newTime: newTime.trim(),
           note: note.trim(),
+          adminNote: note.trim(),
           logType: activeLogModal.type,
-          employeeId: activeLogModal.employeeId || activeLogModal.userId,
+          employeeId: targetEmpId,
           dateStr,
           oldTime,
         }),
@@ -202,6 +204,7 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
               time: updatedTimeStr,
               originalTime: oldTime,
               editNote: note.trim(),
+              adminNote: note.trim(),
             };
           }
           return l;
@@ -212,9 +215,20 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
           time: updatedTimeStr,
           originalTime: oldTime,
           editNote: note.trim(),
+          adminNote: note.trim(),
         } : null);
 
-        alert('کاتی تۆمارەکە بە سەرکەوتوویی چاککرا و تێبینییەکە تۆمارکرا!');
+        // Update Admin Notes in localStorage
+        if (typeof window !== 'undefined' && targetEmpId) {
+          try {
+            const currentAdminNotes = JSON.parse(localStorage.getItem(`ashley_admin_notes_${selectedMonth}`) || '{}');
+            currentAdminNotes[`${targetEmpId}_${dateStr}`] = note.trim();
+            localStorage.setItem(`ashley_admin_notes_${selectedMonth}`, JSON.stringify(currentAdminNotes));
+            window.dispatchEvent(new Event('ashley_attendance_updated'));
+          } catch {}
+        }
+
+        alert('کاتی تۆمارەکە بە سەرکەوتوویی چاککرا و وەک تێبینی ئەدمین تۆمارکرا!');
       } else {
         const err = await res.json();
         alert('هەڵە لە گۆڕینی کات: ' + (err.error || 'نەتوانرا'));
@@ -848,13 +862,13 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                   </div>
                 </div>
 
-                {(activeLogModal.editNote || activeLogModal.checkInEditNote || activeLogModal.checkOutEditNote) && (
-                  <div className="flex flex-col gap-1 border-b border-slate-200 pb-1.5 bg-amber-50/80 p-2 rounded border border-amber-200 text-amber-950">
-                    <span className="text-[11px] font-extrabold text-amber-800 flex items-center gap-1">
-                      <Edit3 className="w-3.5 h-3.5" /> هۆکاری گۆڕینی کات (تێبینی):
+                {(activeLogModal.editNote || activeLogModal.checkInEditNote || activeLogModal.checkOutEditNote || (activeLogModal as any).adminNote) && (
+                  <div className="flex flex-col gap-1 border-b border-slate-200 pb-1.5 bg-amber-50/90 p-2 rounded border border-amber-300 text-amber-950">
+                    <span className="text-[11px] font-black text-amber-900 flex items-center gap-1">
+                      <Edit3 className="w-3.5 h-3.5 text-amber-800" /> 🛡️ تێبینی ئەدمین (دەستکاریکردنی کات):
                     </span>
-                    <span className="text-xs font-semibold">
-                      {activeLogModal.editNote || activeLogModal.checkInEditNote || activeLogModal.checkOutEditNote}
+                    <span className="text-xs font-bold">
+                      {activeLogModal.editNote || activeLogModal.checkInEditNote || activeLogModal.checkOutEditNote || (activeLogModal as any).adminNote}
                     </span>
                   </div>
                 )}
@@ -868,10 +882,10 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
 
                 <div className="flex justify-between pt-0.5">
                   <span className="text-slate-600 flex items-center gap-1">
-                    <FileText className="w-3.5 h-3.5 text-indigo-700" /> تێبینی / ئەرک:
+                    <FileText className="w-3.5 h-3.5 text-indigo-700" /> 📝 تێبینی کارمەند:
                   </span>
-                  <span className="text-slate-800 font-normal">
-                    {(activeLogModal as any).notes || (activeLogModal as any).note || 'تۆماری ئامادەبوونی ئۆتۆماتیکی جی پی ئێس'}
+                  <span className="text-slate-800 font-bold">
+                    {activeLogModal.employeeNote || (activeLogModal as any).notes || (activeLogModal as any).note || 'تۆماری فەرمی'}
                   </span>
                 </div>
               </div>
