@@ -540,88 +540,77 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* 🔴🟠🟡🟢🔵🟣 DISTINCTIVE COLORFUL CIRCULAR NAVIGATION HUBS */}
-      <div className="bg-white/95 backdrop-blur-md border-2 border-slate-300/80 rounded-2xl p-4 shadow-lg space-y-2">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-          <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>بەشە سەرەکییەکانی ئەدمین پانێڵ — دەستنیشانی بەش بکە:</span>
-          </span>
-          <span className="text-[11px] font-mono text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold">
-            بۆ بینینی هەموو زانیاری کارمەند یەک کرتەی لەسەر بکە
-          </span>
-        </div>
-
-        {/* 7 Circular Master Hubs */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-3 pt-1">
+      {/* 🧭 MASTER ERP ENTERPRISE NAVIGATION BAR */}
+      <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-2.5 shadow-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
           
-          {/* 🔘 Hub 0: Overview Dashboard */}
+          {/* 📅 Hub 1: Attendance Central (Primary Default) */}
           <button
-            onClick={() => setAdminActiveSection('overview')}
-            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-              adminActiveSection === 'overview'
-                ? 'bg-gradient-to-b from-slate-900 to-indigo-950 text-white border-indigo-500 shadow-xl scale-105 ring-4 ring-indigo-300/50'
-                : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-300 shadow-sm hover:shadow-md'
+            onClick={() => setAdminActiveSection('attendance')}
+            className={`group relative p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+              adminActiveSection === 'attendance'
+                ? 'bg-emerald-900 text-white border-emerald-700 shadow-md ring-2 ring-emerald-400/40'
+                : 'bg-slate-50 hover:bg-emerald-50/60 text-slate-800 border-slate-200 hover:border-emerald-300'
             }`}
           >
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
-              adminActiveSection === 'overview'
-                ? 'bg-indigo-600 text-white border-indigo-300'
-                : 'bg-slate-800 text-white border-slate-600'
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105 ${
+              adminActiveSection === 'attendance'
+                ? 'bg-emerald-700 text-white'
+                : 'bg-emerald-100 text-emerald-900'
             }`}>
-              <LayoutDashboard className="w-7 h-7" />
+              <Calendar className="w-5 h-5" />
             </div>
-            <span className="text-xs font-black tracking-tight block">داشبۆردی گشتی</span>
-            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
-              adminActiveSection === 'overview' ? 'bg-indigo-400 text-slate-950' : 'bg-slate-200 text-slate-800'
+            <span className="text-xs font-black tracking-tight block">ئامادەبوون و دەوام</span>
+            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md mt-1 ${
+              adminActiveSection === 'attendance' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-emerald-100 text-emerald-900'
             }`}>
-              Executive 360°
+              📅 ڕۆژانە و ۳۱ ڕۆژە
             </span>
           </button>
 
-          {/* 📅 Hub 1: Attendance & Daily Logs */}
+          {/* 🔘 Hub 0: Overview Dashboard */}
           <button
-            onClick={() => setAdminActiveSection('attendance')}
-            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-              adminActiveSection === 'attendance'
-                ? 'bg-gradient-to-b from-teal-700 to-emerald-950 text-white border-emerald-400 shadow-xl scale-105 ring-4 ring-emerald-300/50'
-                : 'bg-emerald-50/70 hover:bg-emerald-100/90 text-emerald-950 border-emerald-200 shadow-sm hover:shadow-md'
+            onClick={() => setAdminActiveSection('overview')}
+            className={`group relative p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+              adminActiveSection === 'overview'
+                ? 'bg-slate-900 text-white border-slate-800 shadow-md ring-2 ring-indigo-400/40'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
             }`}
           >
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
-              adminActiveSection === 'attendance'
-                ? 'bg-white text-emerald-900 border-emerald-200'
-                : 'bg-gradient-to-br from-teal-600 to-emerald-800 text-white border-emerald-400'
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105 ${
+              adminActiveSection === 'overview'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-slate-200 text-slate-800'
             }`}>
-              <Calendar className="w-7 h-7" />
+              <LayoutDashboard className="w-5 h-5" />
             </div>
-            <span className="text-xs font-black tracking-tight block">ئامادەبوون و دەوام</span>
-            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
-              adminActiveSection === 'attendance' ? 'bg-amber-300 text-slate-950' : 'bg-emerald-200 text-emerald-950'
+            <span className="text-xs font-black tracking-tight block">داشبۆردی گشتی</span>
+            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md mt-1 ${
+              adminActiveSection === 'overview' ? 'bg-indigo-300 text-slate-950 font-black' : 'bg-slate-200 text-slate-700'
             }`}>
-              📅 ڕۆژانە و ۳۱ ڕۆژە
+              Executive 360°
             </span>
           </button>
 
           {/* 🔵 Hub 2: HR & Staff */}
           <button
             onClick={() => setAdminActiveSection('hr')}
-            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+            className={`group relative p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'hr'
-                ? 'bg-gradient-to-b from-blue-700 to-indigo-900 text-white border-blue-400 shadow-xl scale-105 ring-4 ring-blue-300/50'
-                : 'bg-blue-50/70 hover:bg-blue-100/90 text-blue-950 border-blue-200 shadow-sm hover:shadow-md'
+                ? 'bg-blue-900 text-white border-blue-700 shadow-md ring-2 ring-blue-400/40'
+                : 'bg-slate-50 hover:bg-blue-50/60 text-slate-800 border-slate-200 hover:border-blue-300'
             }`}
           >
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105 ${
               adminActiveSection === 'hr'
-                ? 'bg-white text-blue-900 border-blue-200'
-                : 'bg-gradient-to-br from-blue-600 to-indigo-800 text-white border-blue-400'
+                ? 'bg-blue-700 text-white'
+                : 'bg-blue-100 text-blue-900'
             }`}>
-              <Users className="w-7 h-7" />
+              <Users className="w-5 h-5" />
             </div>
             <span className="text-xs font-black tracking-tight block">کارمەندان و ستاف</span>
-            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
-              adminActiveSection === 'hr' ? 'bg-amber-300 text-slate-950' : 'bg-blue-200 text-blue-950'
+            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md mt-1 ${
+              adminActiveSection === 'hr' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-blue-100 text-blue-900'
             }`}>
               👥 {dashboardKpis.activeStaff} کارمەند
             </span>
@@ -630,22 +619,22 @@ export default function AdminPage() {
           {/* 🟠 Hub 3: Overtime Master */}
           <button
             onClick={() => setAdminActiveSection('overtime')}
-            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+            className={`group relative p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'overtime'
-                ? 'bg-gradient-to-b from-amber-600 to-orange-900 text-white border-orange-400 shadow-xl scale-105 ring-4 ring-orange-300/50'
-                : 'bg-amber-50/70 hover:bg-amber-100/90 text-amber-950 border-amber-200 shadow-sm hover:shadow-md'
+                ? 'bg-amber-900 text-white border-amber-700 shadow-md ring-2 ring-orange-400/40'
+                : 'bg-slate-50 hover:bg-amber-50/60 text-slate-800 border-slate-200 hover:border-amber-300'
             }`}
           >
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105 ${
               adminActiveSection === 'overtime'
-                ? 'bg-white text-orange-900 border-orange-200'
-                : 'bg-gradient-to-br from-amber-500 to-orange-700 text-white border-orange-400'
+                ? 'bg-amber-600 text-white'
+                : 'bg-amber-100 text-amber-900'
             }`}>
-              <Clock className="w-7 h-7" />
+              <Clock className="w-5 h-5" />
             </div>
             <span className="text-xs font-black tracking-tight block">کاتی زیادە (ئیزافە)</span>
-            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
-              adminActiveSection === 'overtime' ? 'bg-amber-300 text-slate-950' : 'bg-amber-200 text-amber-950'
+            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md mt-1 ${
+              adminActiveSection === 'overtime' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-amber-100 text-amber-900'
             }`}>
               ⚡ +{dashboardKpis.totalOtHours} کاتژمێر
             </span>
@@ -654,98 +643,72 @@ export default function AdminPage() {
           {/* 🟢 Hub 4: Expenses */}
           <button
             onClick={() => setAdminActiveSection('expenses')}
-            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+            className={`group relative p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'expenses'
-                ? 'bg-gradient-to-b from-emerald-600 to-teal-950 text-white border-emerald-400 shadow-xl scale-105 ring-4 ring-emerald-300/50'
-                : 'bg-emerald-50/70 hover:bg-emerald-100/90 text-emerald-950 border-emerald-200 shadow-sm hover:shadow-md'
+                ? 'bg-teal-900 text-white border-teal-700 shadow-md ring-2 ring-teal-400/40'
+                : 'bg-slate-50 hover:bg-teal-50/60 text-slate-800 border-slate-200 hover:border-teal-300'
             }`}
           >
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105 ${
               adminActiveSection === 'expenses'
-                ? 'bg-white text-emerald-900 border-emerald-200'
-                : 'bg-gradient-to-br from-emerald-500 to-teal-800 text-white border-emerald-400'
+                ? 'bg-teal-700 text-white'
+                : 'bg-teal-100 text-teal-900'
             }`}>
-              <DollarSign className="w-7 h-7" />
+              <DollarSign className="w-5 h-5" />
             </div>
             <span className="text-xs font-black tracking-tight block">خەرجی و دارایی</span>
-            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
-              adminActiveSection === 'expenses' ? 'bg-emerald-300 text-slate-950' : 'bg-emerald-200 text-emerald-950'
+            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md mt-1 ${
+              adminActiveSection === 'expenses' ? 'bg-emerald-300 text-slate-950 font-black' : 'bg-teal-100 text-teal-900'
             }`}>
-              💰 دارایی و سندوق
+              💰 سندوق
             </span>
           </button>
 
           {/* 🔴 Hub 5: Logistics & Unloading */}
           <button
             onClick={() => setAdminActiveSection('logistics')}
-            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+            className={`group relative p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'logistics'
-                ? 'bg-gradient-to-b from-rose-700 to-red-950 text-white border-rose-400 shadow-xl scale-105 ring-4 ring-rose-300/50'
-                : 'bg-rose-50/70 hover:bg-rose-100/90 text-rose-950 border-rose-200 shadow-sm hover:shadow-md'
+                ? 'bg-rose-900 text-white border-rose-700 shadow-md ring-2 ring-rose-400/40'
+                : 'bg-slate-50 hover:bg-rose-50/60 text-slate-800 border-slate-200 hover:border-rose-300'
             }`}
           >
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105 ${
               adminActiveSection === 'logistics'
-                ? 'bg-white text-rose-900 border-rose-200'
-                : 'bg-gradient-to-br from-rose-600 to-red-800 text-white border-rose-400'
+                ? 'bg-rose-700 text-white'
+                : 'bg-rose-100 text-rose-900'
             }`}>
-              <Truck className="w-7 h-7" />
+              <Truck className="w-5 h-5" />
             </div>
             <span className="text-xs font-black tracking-tight block">بارداگرتن و نقڵ</span>
-            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
-              adminActiveSection === 'logistics' ? 'bg-rose-300 text-slate-950' : 'bg-rose-200 text-rose-950'
+            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md mt-1 ${
+              adminActiveSection === 'logistics' ? 'bg-rose-300 text-slate-950 font-black' : 'bg-rose-100 text-rose-900'
             }`}>
               🚛 لۆجستیک
             </span>
           </button>
 
-          {/* 🟣 Hub 6: HR Analytics */}
+          {/* 🟣 Hub 6: HR Analytics & Stats */}
           <button
             onClick={() => setAdminActiveSection('stats')}
-            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+            className={`group relative p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'stats'
-                ? 'bg-gradient-to-b from-purple-700 to-indigo-950 text-white border-purple-400 shadow-xl scale-105 ring-4 ring-purple-300/50'
-                : 'bg-purple-50/70 hover:bg-purple-100/90 text-purple-950 border-purple-200 shadow-sm hover:shadow-md'
+                ? 'bg-purple-900 text-white border-purple-700 shadow-md ring-2 ring-purple-400/40'
+                : 'bg-slate-50 hover:bg-purple-50/60 text-slate-800 border-slate-200 hover:border-purple-300'
             }`}
           >
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105 ${
               adminActiveSection === 'stats'
-                ? 'bg-white text-purple-900 border-purple-200'
-                : 'bg-gradient-to-br from-purple-600 to-indigo-800 text-white border-purple-400'
+                ? 'bg-purple-700 text-white'
+                : 'bg-purple-100 text-purple-900'
             }`}>
-              <BarChart3 className="w-7 h-7" />
+              <BarChart3 className="w-5 h-5" />
             </div>
             <span className="text-xs font-black tracking-tight block">ئامار و ڕاپۆرتەکان</span>
-            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
-              adminActiveSection === 'stats' ? 'bg-purple-300 text-slate-950' : 'bg-purple-200 text-purple-950'
+            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md mt-1 ${
+              adminActiveSection === 'stats' ? 'bg-purple-300 text-slate-950 font-black' : 'bg-purple-100 text-purple-900'
             }`}>
-              📊 مانگانە و هەفتانە
-            </span>
-          </button>
-
-          <button
-            onClick={() => {
-              setAdminActiveSection('maps');
-              setShowMapPicker(true);
-            }}
-            className={`group relative p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-              adminActiveSection === 'maps'
-                ? 'bg-gradient-to-b from-cyan-700 to-blue-950 text-white border-cyan-400 shadow-xl scale-105 ring-4 ring-cyan-300/50'
-                : 'bg-cyan-50/70 hover:bg-cyan-100/90 text-cyan-950 border-cyan-200 shadow-sm hover:shadow-md'
-            }`}
-          >
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-inner border-2 transition-transform group-hover:scale-110 ${
-              adminActiveSection === 'maps'
-                ? 'bg-white text-cyan-900 border-cyan-200'
-                : 'bg-gradient-to-br from-cyan-600 to-blue-800 text-white border-cyan-400'
-            }`}>
-              <MapPin className="w-7 h-7" />
-            </div>
-            <span className="text-xs font-black tracking-tight block">نەخشەی کارگە</span>
-            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full mt-1.5 ${
-              adminActiveSection === 'maps' ? 'bg-cyan-300 text-slate-950' : 'bg-cyan-200 text-cyan-950'
-            }`}>
-              📍 {companyLocations.length} لۆکەیشن
+              📊 مانگانە
             </span>
           </button>
 
@@ -950,17 +913,6 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
-          </div>
-
-          {/* 📅 EMBEDDED 31-DAY DAILY ATTENDANCE & OVERTIME TABLE */}
-          <div className="pt-2">
-            <AdminDailyAttendanceTable
-              employees={employees}
-              attendanceLogs={allMergedAttendanceLogs}
-              adminNotes={adminNotes}
-              onUpdateAdminNote={handleUpdateAdminNote}
-              selectedMonth={selectedMonth}
-            />
           </div>
         </div>
       )}
