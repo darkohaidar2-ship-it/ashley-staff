@@ -16,7 +16,8 @@ import {
   UserX,
   X,
   RefreshCw,
-  User
+  User,
+  FileText
 } from 'lucide-react';
 import { extractFaceDescriptor, matchFaceDescriptors, loadFaceModels } from '@/lib/face-recognition';
 
@@ -183,6 +184,18 @@ export default function PublicTerminalLightPage() {
   // General Attendance Message Banner
   const [attMessage, setAttMessage] = useState<{ text: string; success: boolean } | null>(null);
 
+  // Employee Self-Note Modal State (for late arrival, early departure, or overtime)
+  const [pendingNoteData, setPendingNoteData] = useState<{
+    empId: string;
+    empName: string;
+    action: 'Check In' | 'Check Out';
+    isLate: boolean;
+    isEarly: boolean;
+    isOvertime: boolean;
+    timeStr: string;
+  } | null>(null);
+  const [customEmployeeNote, setCustomEmployeeNote] = useState('');
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const isProcessingScanRef = useRef(false);
@@ -335,7 +348,12 @@ export default function PublicTerminalLightPage() {
   };
 
   // Process Attendance Check-In / Check-Out
-  const saveAttendanceLog = async (empId: string, empName: string, actionType: 'Check In' | 'Check Out') => {
+  const saveAttendanceLog = async (
+    empId: string, 
+    empName: string, 
+    actionType: 'Check In' | 'Check Out',
+    employeeNote?: string
+  ) => {
     const dateStr = format(new Date(), 'yyyy-MM-dd');
     const timeStr = format(new Date(), 'HH:mm:ss');
     const locName = currentMatchedLocation?.name || 'کۆمپانیای ئاشڵی';
@@ -358,7 +376,8 @@ export default function PublicTerminalLightPage() {
             lng: currentMatchedLocation?.lng || 45.4352,
           },
           status: 'success',
-          notes: `Automatic Face Recognition at ${locName}`,
+          notes: employeeNote ? `تێبینی کارمەند: ${employeeNote}` : `Automatic Face Recognition at ${locName}`,
+          employeeNote: employeeNote || '',
         }),
       });
 
@@ -370,8 +389,8 @@ export default function PublicTerminalLightPage() {
       setAttMessage({
         text:
           actionType === 'Check In'
-            ? `✅ سوپاس بۆ چێک‌ئین! هاتنەکەت لە کاتژمێر (${format(new Date(), 'HH:mm')}) تۆمار کرا، ${empName}.`
-            : `👋 سوپاس بۆ چێک‌ئاوت! دەرچوونەکەت لە کاتژمێر (${format(new Date(), 'HH:mm')}) تۆمار کرا، ${empName}.`,
+            ? `✅ سوپاس بۆ چێک‌ئین! هاتنەکەت لە کاتژمێر (${format(new Date(), 'HH:mm')}) تۆمار کرا، ${empName}. ${employeeNote ? `(تێبینی: ${employeeNote})` : ''}`
+            : `👋 سوپاس بۆ چێک‌ئاوت! دەرچوونەکەت لە کاتژمێر (${format(new Date(), 'HH:mm')}) تۆمار کرا، ${empName}. ${employeeNote ? `(تێبینی: ${employeeNote})` : ''}`,
         success: true,
       });
     } catch (err: any) {
@@ -451,17 +470,36 @@ export default function PublicTerminalLightPage() {
               isProcessingScanRef.current = true;
               clearInterval(interval);
 
-              setFaceScanSuccess(true);
-              setRecognizedEmployeeName(bestMatchedEmp.name);
-              setFaceScanMessage(`سەرکەوتوو بوو! بەخێربێیت ${bestMatchedEmp.name}`);
+              const now = new Date();
+              const currentMins = now.getHours() * 60 + now.getMinutes();
+              const isLate = activeFaceAction === 'Check In' && currentMins > 495; // > 08:15
+              const isEarly = activeFaceAction === 'Check Out' && currentMins < 1005; // < 16:45
+              const isOvertime = activeFaceAction === 'Check Out' && (currentMins > 1035 || currentMins <= 360); // > 17:15 or night
 
-              // Save Attendance immediately
-              await saveAttendanceLog(bestMatchedEmp.id, bestMatchedEmp.name, activeFaceAction);
-
-              // Automatically close smoothly after 1.2s
-              setTimeout(() => {
+              if (isLate || isEarly || isOvertime) {
                 stopCamera();
-              }, 1200);
+                setPendingNoteData({
+                  empId: bestMatchedEmp.id,
+                  empName: bestMatchedEmp.name,
+                  action: activeFaceAction,
+                  isLate,
+                  isEarly,
+                  isOvertime,
+                  timeStr: format(now, 'HH:mm'),
+                });
+              } else {
+                setFaceScanSuccess(true);
+                setRecognizedEmployeeName(bestMatchedEmp.name);
+                setFaceScanMessage(`سەرکەوتوو بوو! بەخێربێیت ${bestMatchedEmp.name}`);
+
+                // Save Attendance immediately
+                await saveAttendanceLog(bestMatchedEmp.id, bestMatchedEmp.name, activeFaceAction);
+
+                // Automatically close smoothly after 1.2s
+                setTimeout(() => {
+                  stopCamera();
+                }, 1200);
+              }
             }
           } else {
             // Face in frame but does not match any registered employee closely
@@ -802,6 +840,104 @@ export default function PublicTerminalLightPage() {
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* 🌟 EMPLOYEE SELF-NOTE MODAL (ON LATE, EARLY, OR OVERTIME) */}
+      {pendingNoteData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-md p-4 dir-rtl" dir="rtl">
+          <div className="bg-white rounded-3xl border-2 border-indigo-300 shadow-2xl max-w-md w-full p-5 space-y-4 text-right animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-md ${
+                  pendingNoteData.isLate || pendingNoteData.isEarly ? 'bg-gradient-to-br from-rose-500 to-red-700' : 'bg-gradient-to-br from-purple-600 to-indigo-800'
+                }`}>
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">
+                    تێبینی و هۆکاری {pendingNoteData.action === 'Check In' ? 'هاتن' : 'دەرچوون'}
+                  </h3>
+                  <span className="text-[11px] font-bold text-slate-500 font-mono">
+                    👤 {pendingNoteData.empName} — ⏰ {pendingNoteData.timeStr}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs font-bold text-slate-700 leading-relaxed">
+              {pendingNoteData.isLate && '⚠️ کاتی هاتنەکەت دوای کاتژمێر 08:15 تۆمار کراوە (دواکەوتن). تکایە هۆکاری دواکەوتن بنووسە:'}
+              {pendingNoteData.isEarly && '⚠️ کاتی ڕۆیشتنەکەت پێش کاتژمێر 16:45 تۆمار کراوە (ڕۆیشتنی پێشوەختە). تکایە هۆکار بنووسە:'}
+              {pendingNoteData.isOvertime && '⚡ کاتی ئیزافە و مانەوە تۆمار کراوە. تکایە جۆری کار و هۆکاری ئیزافەکەت دیاری بکە:'}
+            </p>
+
+            {/* Quick Presets */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-bold text-slate-500 block">هەڵبژاردنی خێرا:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {(pendingNoteData.action === 'Check In'
+                  ? ['قەرەباڵغی ڕێگا', 'نەخۆشی و تەندروستی', 'ئەرکی فەرمی کارگە', 'تێکچوونی سەیارە', 'سەردانی مەیدانی']
+                  : pendingNoteData.isOvertime
+                  ? ['مانەوە بۆ بارداگرتن', 'تەواوکردنی ئیشی فەرمی', 'کاری فریاگوزاری', 'ئیشی مەیدانی و نقڵ']
+                  : ['مۆڵەتی تەندروستی', 'ئەرکی کارگێڕی دەرەوە', 'کێشەی خێزانی لەناکاو']
+                ).map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setCustomEmployeeNote(preset)}
+                    className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                      customEmployeeNote === preset
+                        ? 'bg-blue-900 text-white border-blue-900 shadow-sm scale-105'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Input */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">یان نووسینی تێبینی بە دەست:</label>
+              <textarea
+                value={customEmployeeNote}
+                onChange={(e) => setCustomEmployeeNote(e.target.value)}
+                placeholder="تێبینی یان هۆکار لێرە بنووسە..."
+                rows={2}
+                className="input-classic w-full text-xs font-bold p-2.5 rounded-xl"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={async () => {
+                  const data = pendingNoteData;
+                  setPendingNoteData(null);
+                  setCustomEmployeeNote('');
+                  await saveAttendanceLog(data.empId, data.empName, data.action, '');
+                }}
+                className="btn-classic text-xs px-3 py-1.5 text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                تێپەڕاندن (بێ تێبینی)
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const data = pendingNoteData;
+                  const note = customEmployeeNote.trim();
+                  setPendingNoteData(null);
+                  setCustomEmployeeNote('');
+                  await saveAttendanceLog(data.empId, data.empName, data.action, note);
+                }}
+                className="btn-classic-primary text-xs px-4 py-1.5 font-bold shadow-md rounded-xl cursor-pointer"
+              >
+                پاشەکەوت و چێک‌{pendingNoteData.action === 'Check In' ? 'ئین' : 'ئاوت'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

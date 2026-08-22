@@ -419,8 +419,12 @@ export type AttendanceRecord = {
   userName?: string;
   name: string;
   type: string;
+  action?: string;
   time: string;
   date?: string;
+  timestamp?: string;
+  notes?: string;
+  employeeNote?: string;
   distance?: string;
   selfieUrl?: string;
   checkInSelfie?: string;

@@ -52,13 +52,15 @@ import {
   LayoutDashboard,
   CheckCircle2,
   AlertCircle,
-  Printer
+  Printer,
+  Table
 } from 'lucide-react';
 import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChangeModal';
 import { AdminOvertimeModule } from '@/components/admin/AdminOvertimeModule';
 import { AdminExpensesModule } from '@/components/admin/AdminExpensesModule';
 import { AdminLogisticsModule } from '@/components/admin/AdminLogisticsModule';
 import { AdminWeeklyMonthlyStatsModule } from '@/components/admin/AdminWeeklyMonthlyStatsModule';
+import { AdminDailyAttendanceTable } from '@/components/admin/AdminDailyAttendanceTable';
 import { 
   generateAugust2026AdminNotes, 
   GOOGLE_SHEET_OVERTIME_DATA 
@@ -80,6 +82,7 @@ export default function AdminPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [adminActiveSection, setAdminActiveSection] = useState<'overview' | 'hr' | 'overtime' | 'expenses' | 'logistics' | 'stats' | 'maps'>('overview');
+  const [hrSubTab, setHrSubTab] = useState<'daily' | 'matrix' | 'staff'>('daily');
 
   // Live Desktop Clock for ERP Admin
   const [currentTimeStr, setCurrentTimeStr] = useState('');
@@ -235,15 +238,32 @@ export default function AdminPage() {
   }, [fetchRegisteredFaces]);
 
   // Admin notes map for August 2026
-  const adminNotes = useMemo(() => {
+  const [adminNotesLocal, setAdminNotesLocal] = useState<Record<string, string>>({});
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem(`ashley_admin_notes_${selectedMonth}`);
-        if (stored) return JSON.parse(stored);
+        if (stored) {
+          setAdminNotesLocal(JSON.parse(stored));
+          return;
+        }
       } catch {}
     }
-    return generateAugust2026AdminNotes(employees);
+    setAdminNotesLocal(generateAugust2026AdminNotes(employees));
   }, [selectedMonth, employees]);
+
+  const handleUpdateAdminNote = (key: string, note: string) => {
+    setAdminNotesLocal(prev => {
+      const updated = { ...prev, [key]: note };
+      try {
+        localStorage.setItem(`ashley_admin_notes_${selectedMonth}`, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const adminNotes = adminNotesLocal;
 
   // Modals state
   const [showEmpModal, setShowEmpModal] = useState(false);
@@ -894,242 +914,305 @@ export default function AdminPage() {
       {/* 👥 SECTION 1: HR & STAFF OPERATIONS PANEL */}
       {/* ========================================================================= */}
       {adminActiveSection === 'hr' && (
-        <section className="panel-classic space-y-3">
-          <div className="panel-header-classic flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-blue-800" />
-              <span>بەشی کارمەندان HR و خشتەی ئامادەبوونی ۳۱ ڕۆژە</span>
-            </h2>
-            <div className="flex items-center gap-1.5">
+        <section className="panel-classic space-y-4">
+          
+          {/* 🌟 3 SUB-TABS NAVIGATION HEADER */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white rounded-2xl border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+              
               <button
                 type="button"
-                onClick={() => {
-                  const cols: ExportTableColumn[] = [
-                    { header: '#', key: 'index', width: '35px', align: 'center' },
-                    { header: 'ناوی تەواوی سێ قۆڵی', key: 'fullName', align: 'right' },
-                    { header: 'پۆست / ئەرک', key: 'role', align: 'right' },
-                    { header: 'ژمارەی مۆبایل', key: 'phone', align: 'center' },
-                    { header: 'بەرواری دەستبەکاربوون', key: 'startDate', align: 'center' },
-                    { header: 'ناسنامەی دەموچاو (AI Face)', key: 'faceStatus', align: 'center' },
-                    { header: 'دۆخی کارمەند', key: 'status', align: 'center' },
-                  ];
-
-                  const data = filteredEmployees.map((emp, idx) => ({
-                    index: idx + 1,
-                    fullName: emp.fullName3Part || emp.name,
-                    role: emp.role || 'کارمەند',
-                    phone: emp.phone || '-',
-                    startDate: emp.startDate || '-',
-                    faceStatus: registeredFaceIds.includes(emp.id) ? '✅ تۆمارکراوە' : '❌ تۆمارنەکراوە',
-                    status: emp.status === 'resigned' ? 'وازهێناو' : 'چالاک',
-                  }));
-
-                  exportToPDF({
-                    title: 'لیستی فەرمیی سەرجەم کارمەندانی کۆمپانیای ئاشڵی (Ashley Staff Directory)',
-                    subtitle: 'بەشی سەرچاوە مرۆییەکان و ئیدارەی گشتی (HR Department)',
-                    period: `بەرواری تۆمار: ${format(new Date(), 'yyyy-MM-dd')}`,
-                    columns: cols,
-                    data,
-                    fileName: `Ashley_Staff_Directory_${format(new Date(), 'yyyy-MM-dd')}`,
-                    summaryCards: [
-                      { label: 'کۆی گشتی کارمەندان', value: `${employees.length} کارمەند`, color: '#2563eb' },
-                      { label: 'کارمەندانی چالاک', value: `${activeEmployees.length} کارمەند`, color: '#059669' },
-                      { label: 'وازهێناوەکان', value: `${employees.length - activeEmployees.length} کارمەند`, color: '#be123c' },
-                      { label: 'خاوەن ناسنامەی ڕوخسار', value: `${registeredFaceIds.length} کارمەند`, color: '#7c3aed' },
-                    ],
-                  });
-                }}
-                className="btn-classic text-xs font-bold px-2.5 py-1 bg-blue-700 hover:bg-blue-800 text-white rounded-lg flex items-center gap-1 cursor-pointer shadow-xs"
-                title="پرێنتکردنی تەواوی لیستی کارمەندان وەک PDF"
+                onClick={() => setHrSubTab('daily')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  hrSubTab === 'daily'
+                    ? 'bg-gradient-to-r from-blue-900 to-indigo-900 text-white shadow-sm'
+                    : 'text-slate-700 hover:bg-slate-200'
+                }`}
               >
-                <Printer className="w-3.5 h-3.5" />
-                <span>🖨️ پرێنت (PDF)</span>
+                <Calendar className="w-3.5 h-3.5" />
+                <span>📅 خشتەی ئامادەبوونی ڕۆژانە (Daily)</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => {
-                  const cols: ExportTableColumn[] = [
-                    { header: 'ژمارە', key: 'index' },
-                    { header: 'ناوی تەواو', key: 'fullName' },
-                    { header: 'پۆست', key: 'role' },
-                    { header: 'ژمارەی مۆبایل', key: 'phone' },
-                    { header: 'بەرواری دەستپێک', key: 'startDate' },
-                    { header: 'ناسنامەی دەموچاو', key: 'faceStatus' },
-                    { header: 'دۆخ', key: 'status' },
-                  ];
-
-                  const data = filteredEmployees.map((emp, idx) => ({
-                    index: idx + 1,
-                    fullName: emp.fullName3Part || emp.name,
-                    role: emp.role || 'کارمەند',
-                    phone: emp.phone || '',
-                    startDate: emp.startDate || '',
-                    faceStatus: registeredFaceIds.includes(emp.id) ? 'ناسراوە' : 'تۆمارنەکراوە',
-                    status: emp.status === 'resigned' ? 'وازهێناو' : 'چالاک',
-                  }));
-
-                  exportToCSV(cols, data, `Ashley_Staff_Directory_${format(new Date(), 'yyyy-MM-dd')}`);
-                }}
-                className="btn-classic text-xs font-bold px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg flex items-center gap-1 cursor-pointer shadow-xs"
-                title="داگرتنی لیستی کارمەندان وەک Excel / CSV"
+                onClick={() => setHrSubTab('matrix')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  hrSubTab === 'matrix'
+                    ? 'bg-gradient-to-r from-blue-900 to-indigo-900 text-white shadow-sm'
+                    : 'text-slate-700 hover:bg-slate-200'
+                }`}
               >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>📊 CSV</span>
+                <Table className="w-3.5 h-3.5" />
+                <span>📊 خشتەی ۳۱ ڕۆژەی گشتی (Matrix)</span>
               </button>
 
               <button
-                onClick={() => handleOpenEmpModal()}
-                className="btn-classic-primary text-xs flex items-center gap-1"
+                type="button"
+                onClick={() => setHrSubTab('staff')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  hrSubTab === 'staff'
+                    ? 'bg-gradient-to-r from-blue-900 to-indigo-900 text-white shadow-sm'
+                    : 'text-slate-700 hover:bg-slate-200'
+                }`}
               >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>زیادکردنی کارمەندی نوێ</span>
+                <Users className="w-3.5 h-3.5" />
+                <span>👥 بەڕێوەبردنی ستاف و دەموچاو (Staff)</span>
               </button>
+
             </div>
+
+            {/* Quick Add Employee Button */}
+            <button
+              onClick={() => handleOpenEmpModal()}
+              className="btn-classic-primary text-xs flex items-center gap-1 px-3 py-1.5"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>زیادکردنی کارمەندی نوێ</span>
+            </button>
           </div>
 
-          <div className="p-3.5 space-y-4">
-            
-            {/* Search and Filters */}
-            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-white rounded-xl border border-slate-200 shadow-sm">
-              <div className="flex items-center gap-2 flex-1 max-w-md">
-                <Search className="w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="گەڕان بەدوای ناوی کارمەند یان پۆست..."
-                  value={empSearch}
-                  onChange={(e) => setEmpSearch(e.target.value)}
-                  className="input-classic w-full text-xs font-bold"
-                />
-              </div>
+          {/* ========================================== */}
+          {/* 📅 SUB-TAB 1: DAILY ATTENDANCE MASTER VIEW */}
+          {/* ========================================== */}
+          {hrSubTab === 'daily' && (
+            <AdminDailyAttendanceTable
+              employees={employees}
+              attendanceLogs={attendanceLogs}
+              adminNotes={adminNotes}
+              onUpdateAdminNote={handleUpdateAdminNote}
+              selectedMonth={selectedMonth}
+            />
+          )}
 
-              <div className="flex items-center gap-1.5 text-xs font-bold">
-                <button
-                  onClick={() => setEmpStatusFilter('active')}
-                  className={`px-3 py-1 rounded-lg border ${
-                    empStatusFilter === 'active' ? 'bg-blue-900 text-white font-black' : 'bg-slate-100 text-slate-700'
-                  }`}
-                >
-                  چالاکەکان ({activeEmployees.length})
-                </button>
-                <button
-                  onClick={() => setEmpStatusFilter('resigned')}
-                  className={`px-3 py-1 rounded-lg border ${
-                    empStatusFilter === 'resigned' ? 'bg-rose-800 text-white font-black' : 'bg-slate-100 text-slate-700'
-                  }`}
-                >
-                  وازهێناوەکان ({employees.length - activeEmployees.length})
-                </button>
-              </div>
+          {/* ========================================== */}
+          {/* 📊 SUB-TAB 2: 31-DAY MATRIX GRID VIEW     */}
+          {/* ========================================== */}
+          {hrSubTab === 'matrix' && (
+            <div id="attendance-sheet-grid-section" className="space-y-2">
+              <AttendanceSheetGrid employees={activeEmployees} attendanceLogs={attendanceLogs} />
             </div>
+          )}
 
-            {/* Staff Management Table */}
-            <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
-              <table className="w-full text-right text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-200 border-b border-slate-300 text-slate-900 font-black">
-                    <th className="p-2.5 border-l border-slate-300 w-10 text-center">#</th>
-                    <th className="p-2.5 border-l border-slate-300">ناوی تەواوی سێ قۆڵی</th>
-                    <th className="p-2.5 border-l border-slate-300">پۆست / ئەرک</th>
-                    <th className="p-2.5 border-l border-slate-300 text-center">ژمارەی مۆبایل</th>
-                    <th className="p-2.5 border-l border-slate-300 text-center">دەستپێکی دەوام</th>
-                    <th className="p-2.5 border-l border-slate-300 text-center">ناسنامەی دەموچاو (AI Face)</th>
-                    <th className="p-2.5 text-center w-40">کردارەکان</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 font-bold">
-                  {filteredEmployees.map((emp, idx) => {
-                    const hasFace = registeredFaceIds.includes(emp.id);
-                    return (
-                      <tr key={emp.id} className="hover:bg-slate-50">
-                        <td className="p-2.5 border-l border-slate-200 text-center font-mono text-slate-500">{idx + 1}</td>
-                        <td className="p-2.5 border-l border-slate-200 text-slate-950 font-black">
-                          {emp.fullName3Part || emp.name}
-                        </td>
-                        <td className="p-2.5 border-l border-slate-200 text-slate-700">{emp.role}</td>
-                        <td className="p-2.5 border-l border-slate-200 text-center font-mono">{emp.phone || '-'}</td>
-                        <td className="p-2.5 border-l border-slate-200 text-center font-mono">{emp.startDate || '-'}</td>
-                        <td className="p-2.5 border-l border-slate-200 text-center">
-                          {hasFace ? (
-                            <div className="flex items-center justify-center gap-1">
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px] font-black">
-                                ✅ ناسراوە
-                              </span>
+          {/* ========================================== */}
+          {/* 👥 SUB-TAB 3: STAFF DIRECTORY & FACE ID   */}
+          {/* ========================================== */}
+          {hrSubTab === 'staff' && (
+            <div className="space-y-4">
+              {/* Search and Filters & Export */}
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-2 flex-1 max-w-md">
+                  <Search className="w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="گەڕان بەدوای ناوی کارمەند یان پۆست..."
+                    value={empSearch}
+                    onChange={(e) => setEmpSearch(e.target.value)}
+                    className="input-classic w-full text-xs font-bold"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 text-xs font-bold">
+                    <button
+                      onClick={() => setEmpStatusFilter('active')}
+                      className={`px-3 py-1 rounded-lg border ${
+                        empStatusFilter === 'active' ? 'bg-blue-900 text-white font-black' : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      چالاکەکان ({activeEmployees.length})
+                    </button>
+                    <button
+                      onClick={() => setEmpStatusFilter('resigned')}
+                      className={`px-3 py-1 rounded-lg border ${
+                        empStatusFilter === 'resigned' ? 'bg-rose-800 text-white font-black' : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      وازهێناوەکان ({employees.length - activeEmployees.length})
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cols: ExportTableColumn[] = [
+                        { header: '#', key: 'index', width: '35px', align: 'center' },
+                        { header: 'ناوی تەواوی سێ قۆڵی', key: 'fullName', align: 'right' },
+                        { header: 'پۆست / ئەرک', key: 'role', align: 'right' },
+                        { header: 'ژمارەی مۆبایل', key: 'phone', align: 'center' },
+                        { header: 'بەرواری دەستبەکاربوون', key: 'startDate', align: 'center' },
+                        { header: 'ناسنامەی دەموچاو (AI Face)', key: 'faceStatus', align: 'center' },
+                        { header: 'دۆخی کارمەند', key: 'status', align: 'center' },
+                      ];
+
+                      const data = filteredEmployees.map((emp, idx) => ({
+                        index: idx + 1,
+                        fullName: emp.fullName3Part || emp.name,
+                        role: emp.role || 'کارمەند',
+                        phone: emp.phone || '-',
+                        startDate: emp.startDate || '-',
+                        faceStatus: registeredFaceIds.includes(emp.id) ? '✅ تۆمارکراوە' : '❌ تۆمارنەکراوە',
+                        status: emp.status === 'resigned' ? 'وازهێناو' : 'چالاک',
+                      }));
+
+                      exportToPDF({
+                        title: 'لیستی فەرمیی سەرجەم کارمەندانی کۆمپانیای ئاشڵی (Ashley Staff Directory)',
+                        subtitle: 'بەشی سەرچاوە مرۆییەکان و ئیدارەی گشتی (HR Department)',
+                        period: `بەرواری تۆمار: ${format(new Date(), 'yyyy-MM-dd')}`,
+                        columns: cols,
+                        data,
+                        fileName: `Ashley_Staff_Directory_${format(new Date(), 'yyyy-MM-dd')}`,
+                        summaryCards: [
+                          { label: 'کۆی گشتی کارمەندان', value: `${employees.length} کارمەند`, color: '#2563eb' },
+                          { label: 'کارمەندانی چالاک', value: `${activeEmployees.length} کارمەند`, color: '#059669' },
+                          { label: 'وازهێناوەکان', value: `${employees.length - activeEmployees.length} کارمەند`, color: '#be123c' },
+                          { label: 'خاوەن ناسنامەی ڕوخسار', value: `${registeredFaceIds.length} کارمەند`, color: '#7c3aed' },
+                        ],
+                      });
+                    }}
+                    className="btn-classic text-xs font-bold px-2.5 py-1 bg-blue-700 hover:bg-blue-800 text-white rounded-lg flex items-center gap-1 cursor-pointer shadow-xs"
+                    title="پرێنتکردنی تەواوی لیستی کارمەندان وەک PDF"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>🖨️ پرێنت</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cols: ExportTableColumn[] = [
+                        { header: 'ژمارە', key: 'index' },
+                        { header: 'ناوی تەواو', key: 'fullName' },
+                        { header: 'پۆست', key: 'role' },
+                        { header: 'ژمارەی مۆبایل', key: 'phone' },
+                        { header: 'بەرواری دەستپێک', key: 'startDate' },
+                        { header: 'ناسنامەی دەموچاو', key: 'faceStatus' },
+                        { header: 'دۆخ', key: 'status' },
+                      ];
+
+                      const data = filteredEmployees.map((emp, idx) => ({
+                        index: idx + 1,
+                        fullName: emp.fullName3Part || emp.name,
+                        role: emp.role || 'کارمەند',
+                        phone: emp.phone || '',
+                        startDate: emp.startDate || '',
+                        faceStatus: registeredFaceIds.includes(emp.id) ? 'ناسراوە' : 'تۆمارنەکراوە',
+                        status: emp.status === 'resigned' ? 'وازهێناو' : 'چالاک',
+                      }));
+
+                      exportToCSV(cols, data, `Ashley_Staff_Directory_${format(new Date(), 'yyyy-MM-dd')}`);
+                    }}
+                    className="btn-classic text-xs font-bold px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg flex items-center gap-1 cursor-pointer shadow-xs"
+                    title="داگرتنی لیستی کارمەندان وەک Excel / CSV"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span>📊 CSV</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Staff Management Table */}
+              <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm bg-white">
+                <table className="w-full text-right text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-200 border-b border-slate-300 text-slate-900 font-black">
+                      <th className="p-2.5 border-l border-slate-300 w-10 text-center">#</th>
+                      <th className="p-2.5 border-l border-slate-300">ناوی تەواوی سێ قۆڵی</th>
+                      <th className="p-2.5 border-l border-slate-300">پۆست / ئەرک</th>
+                      <th className="p-2.5 border-l border-slate-300 text-center">ژمارەی مۆبایل</th>
+                      <th className="p-2.5 border-l border-slate-300 text-center">دەستپێکی دەوام</th>
+                      <th className="p-2.5 border-l border-slate-300 text-center">ناسنامەی دەموچاو (AI Face)</th>
+                      <th className="p-2.5 text-center w-40">کردارەکان</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 font-bold">
+                    {filteredEmployees.map((emp, idx) => {
+                      const hasFace = registeredFaceIds.includes(emp.id);
+                      return (
+                        <tr key={emp.id} className="hover:bg-slate-50">
+                          <td className="p-2.5 border-l border-slate-200 text-center font-mono text-slate-500">{idx + 1}</td>
+                          <td className="p-2.5 border-l border-slate-200 text-slate-950 font-black">
+                            {emp.fullName3Part || emp.name}
+                          </td>
+                          <td className="p-2.5 border-l border-slate-200 text-slate-700">{emp.role}</td>
+                          <td className="p-2.5 border-l border-slate-200 text-center font-mono">{emp.phone || '-'}</td>
+                          <td className="p-2.5 border-l border-slate-200 text-center font-mono">{emp.startDate || '-'}</td>
+                          <td className="p-2.5 border-l border-slate-200 text-center">
+                            {hasFace ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px] font-black">
+                                  ✅ ناسراوە
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setFaceEnrollEmp(emp)}
+                                  className="px-2 py-0.5 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-950 border border-blue-300 text-[10px] font-black cursor-pointer flex items-center gap-1 shadow-xs transition-all"
+                                  title="دووبارە ناساندنەوە و گۆڕینی وێنەی ڕوخساری کارمەند"
+                                >
+                                  <RefreshCw className="w-2.5 h-2.5" />
+                                  <span>نوێکردنەوە</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteFace(emp)}
+                                  className="px-1.5 py-0.5 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-950 border border-rose-300 text-[10px] font-black cursor-pointer flex items-center gap-0.5 shadow-xs transition-all"
+                                  title="سڕینەوەی ناسنامەی دەموچاوی ئەم کارمەندە"
+                                >
+                                  <Trash2 className="w-2.5 h-2.5 text-rose-700" />
+                                  <span>سڕینەوە</span>
+                                </button>
+                              </div>
+                            ) : (
                               <button
                                 type="button"
                                 onClick={() => setFaceEnrollEmp(emp)}
-                                className="px-2 py-0.5 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-950 border border-blue-300 text-[10px] font-black cursor-pointer flex items-center gap-1 shadow-xs transition-all"
-                                title="دووبارە ناساندنەوە و گۆڕینی وێنەی ڕوخساری کارمەند"
+                                className="px-2.5 py-0.5 rounded-full bg-amber-500 hover:bg-amber-600 text-slate-950 border border-amber-400 text-[10px] font-black cursor-pointer flex items-center gap-1 shadow-xs mx-auto transition-all"
                               >
-                                <RefreshCw className="w-2.5 h-2.5" />
-                                <span>نوێکردنەوە</span>
+                                <Camera className="w-3 h-3" />
+                                <span>📸 ناساندنی ڕوخسار</span>
+                              </button>
+                            )}
+                          </td>
+                          <td className="p-2.5 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => setSelectedEmp360(emp)}
+                                className="text-indigo-700 hover:text-indigo-950 p-1 hover:bg-indigo-50 rounded"
+                                title="بینینی تەواوی ئاماری مانگانە"
+                              >
+                                <Eye className="w-4 h-4" />
                               </button>
                               <button
-                                type="button"
-                                onClick={() => handleDeleteFace(emp)}
-                                className="px-1.5 py-0.5 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-950 border border-rose-300 text-[10px] font-black cursor-pointer flex items-center gap-0.5 shadow-xs transition-all"
-                                title="سڕینەوەی ناسنامەی دەموچاوی ئەم کارمەندە"
+                                onClick={() => handleOpenEmpModal(emp)}
+                                className="text-blue-700 hover:text-blue-950 p-1 hover:bg-blue-50 rounded"
+                                title="دەستکاری"
                               >
-                                <Trash2 className="w-2.5 h-2.5 text-rose-700" />
-                                <span>سڕینەوە</span>
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleToggleResignation(emp)}
+                                className="text-amber-700 hover:text-amber-950 p-1 hover:bg-amber-50 rounded"
+                                title={emp.status === 'resigned' ? 'گەڕانەوە' : 'وازهێنان'}
+                              >
+                                {emp.status === 'resigned' ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteEmployee(emp.id)}
+                                className="text-rose-700 hover:text-rose-950 p-1 hover:bg-rose-50 rounded"
+                                title="سڕینەوە"
+                              >
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setFaceEnrollEmp(emp)}
-                              className="px-2.5 py-0.5 rounded-full bg-amber-500 hover:bg-amber-600 text-slate-950 border border-amber-400 text-[10px] font-black cursor-pointer flex items-center gap-1 shadow-xs mx-auto transition-all"
-                            >
-                              <Camera className="w-3 h-3" />
-                              <span>📸 ناساندنی ڕوخسار</span>
-                            </button>
-                          )}
-                        </td>
-                        <td className="p-2.5 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => setSelectedEmp360(emp)}
-                              className="text-indigo-700 hover:text-indigo-950 p-1 hover:bg-indigo-50 rounded"
-                              title="بینینی تەواوی ئاماری مانگانە"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleOpenEmpModal(emp)}
-                              className="text-blue-700 hover:text-blue-950 p-1 hover:bg-blue-50 rounded"
-                              title="دەستکاری"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleToggleResignation(emp)}
-                              className="text-amber-700 hover:text-amber-950 p-1 hover:bg-amber-50 rounded"
-                              title={emp.status === 'resigned' ? 'گەڕانەوە' : 'وازهێنان'}
-                            >
-                              {emp.status === 'resigned' ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
-                            </button>
-                            <button
-                              onClick={() => handleDeleteEmployee(emp.id)}
-                              className="text-rose-700 hover:text-rose-950 p-1 hover:bg-rose-50 rounded"
-                              title="سڕینەوە"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
+          )}
 
-            {/* 31-Day Attendance Sheet Component */}
-            <div id="attendance-sheet-grid-section" className="pt-2">
-              <AttendanceSheetGrid employees={activeEmployees} attendanceLogs={attendanceLogs} />
-            </div>
-
-          </div>
         </section>
       )}
 
