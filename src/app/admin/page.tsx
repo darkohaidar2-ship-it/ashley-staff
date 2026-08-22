@@ -81,7 +81,7 @@ export default function AdminPage() {
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [adminActiveSection, setAdminActiveSection] = useState<'overview' | 'attendance' | 'hr' | 'overtime' | 'expenses' | 'logistics' | 'stats' | 'maps'>('overview');
+  const [adminActiveSection, setAdminActiveSection] = useState<'overview' | 'attendance' | 'hr' | 'overtime' | 'expenses' | 'logistics' | 'stats' | 'maps'>('attendance');
   const [attendanceSubTab, setAttendanceSubTab] = useState<'daily' | 'matrix'>('daily');
 
   // Live Desktop Clock for ERP Admin
@@ -929,6 +929,17 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* 📅 EMBEDDED 31-DAY DAILY ATTENDANCE & OVERTIME TABLE */}
+          <div className="pt-2">
+            <AdminDailyAttendanceTable
+              employees={employees}
+              attendanceLogs={attendanceLogs}
+              adminNotes={adminNotes}
+              onUpdateAdminNote={handleUpdateAdminNote}
+              selectedMonth={selectedMonth}
+            />
           </div>
         </div>
       )}
