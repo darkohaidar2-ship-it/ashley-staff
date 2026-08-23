@@ -226,15 +226,41 @@ export function AdminDailyAttendanceTable({
         } catch {}
       }
 
-      // 4. Admin Note
+      // 4. Admin Note (Priority: Props -> LocalStorage -> Seed Map)
       const adminNoteKey = `${emp.id}_${dateStr}`;
       let adminNote = adminNotes[adminNoteKey] || '';
+      if (!adminNote && typeof window !== 'undefined') {
+        try {
+          const storedNotes = JSON.parse(localStorage.getItem(`ashley_admin_notes_${selectedMonth}`) || '{}');
+          if (storedNotes[adminNoteKey]) {
+            adminNote = storedNotes[adminNoteKey];
+          }
+        } catch {}
+      }
       if (!adminNote && dateStr.startsWith('2026-08')) {
         const seedAdminMap = generateAugust2026AdminNotes(employees);
         adminNote = seedAdminMap[adminNoteKey] || '';
       }
 
-      // 5. Calculate Work Duration and Overtime
+      // 5. Holiday & Leave Override (Highest Authority Level)
+      let isCompanyHoliday = false;
+      let empLeave: any = null;
+      if (typeof window !== 'undefined') {
+        try {
+          const rawH = localStorage.getItem(`ashley_holidays_${selectedMonth}`);
+          if (rawH) {
+            const hObj = JSON.parse(rawH);
+            if (hObj[dateStr]) isCompanyHoliday = true;
+          }
+          const rawL = localStorage.getItem(`ashley_leaves_${selectedMonth}`);
+          if (rawL) {
+            const lObj = JSON.parse(rawL);
+            if (lObj[adminNoteKey]) empLeave = lObj[adminNoteKey];
+          }
+        } catch {}
+      }
+
+      // 6. Calculate Work Duration and Overtime
       let durationStr = '-';
       let overtimeStr = '-';
       let otMins = 0;
@@ -265,7 +291,7 @@ export function AdminDailyAttendanceTable({
         }
       }
 
-      // Check In status
+      // Check In status & Hierarchy Resolution
       const isPresent = checkInTime !== '-';
       if (isPresent) presentCount++;
 
@@ -279,6 +305,26 @@ export function AdminDailyAttendanceTable({
       if (otMins > 0) {
         overtimeCount++;
         totalOvertimeMins += otMins;
+      }
+
+      let finalStatus: 'present' | 'absent' | 'leave' | 'off' = isPresent ? 'present' : isFri ? 'off' : 'absent';
+      if (isCompanyHoliday) {
+        finalStatus = 'off';
+        if (!adminNote) adminNote = '🏖️ پشووی فەرمی کۆمپانیا';
+      } else if (empLeave) {
+        if (empLeave.type === 'excused') {
+          finalStatus = 'leave';
+          if (!adminNote) adminNote = `📝 مۆڵەت بە ئاگاداریەوە (${empLeave.note || 'مۆڵەت'})`;
+        } else if (empLeave.type === 'unexcused') {
+          finalStatus = 'absent';
+          if (!adminNote) adminNote = `❌ مۆڵەت بێ ئاگاداری / غیاب (${empLeave.note || 'غیاب'})`;
+        } else if (empLeave.type === 'field') {
+          finalStatus = 'present';
+          if (!adminNote) adminNote = `🚗 لە دەرەوەی کۆمپانیا (${empLeave.note || 'ئەرکی فەرمی'})`;
+        } else if (empLeave.type === 'off') {
+          finalStatus = 'off';
+          if (!adminNote) adminNote = '🏖️ پشوو';
+        }
       }
 
       return {
@@ -295,7 +341,7 @@ export function AdminDailyAttendanceTable({
         durationStr,
         overtimeStr,
         adminNote,
-        status: isPresent ? 'present' : isFri ? 'off' : 'absent',
+        status: finalStatus,
       };
     });
 

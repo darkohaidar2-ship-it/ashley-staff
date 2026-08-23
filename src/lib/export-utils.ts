@@ -36,7 +36,7 @@ export interface DailyReportRow {
   durationStr: string;
   overtimeStr: string;
   adminNote?: string;
-  status: 'present' | 'absent' | 'off' | 'future';
+  status: 'present' | 'absent' | 'off' | 'future' | 'leave';
 }
 
 export interface MonthDailyReportOptions {

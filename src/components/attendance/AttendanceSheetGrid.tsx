@@ -39,7 +39,7 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
   });
 
   // Employee Leaves state (e.g. { "empId_2026-08-13": { type: 'excused', note: 'ئیجازەی فەرمی' } })
-  const [leaves, setLeaves] = useState<Record<string, { type: 'off' | 'excused' | 'sick'; note?: string }>>(() => {
+  const [leaves, setLeaves] = useState<Record<string, { type: 'off' | 'excused' | 'unexcused' | 'field' | 'sick'; note?: string }>>(() => {
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem('ashley_leaves_2026-08');
@@ -106,7 +106,7 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
   };
 
   // Toggle Employee Leave Helper
-  const toggleEmployeeLeave = (key: string, leaveData: { type: 'off' | 'excused' | 'sick'; note?: string } | null) => {
+  const toggleEmployeeLeave = (key: string, leaveData: { type: 'off' | 'excused' | 'unexcused' | 'field' | 'sick'; note?: string } | null) => {
     const updated = { ...leaves };
     if (leaveData) {
       updated[key] = leaveData;
@@ -456,59 +456,87 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
           </div>
         </div>
 
-        {/* 🎯 DRAG & DROP TOOLBAR FOR HOLIDAYS & LEAVES */}
+        {/* 🎯 DRAG & DROP TOOLBAR FOR HOLIDAYS, LEAVES, ABSENCES & FIELD DUTY */}
         <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl border border-indigo-800 shadow-md">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-black text-amber-300 flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>کەرەستەی دیاریکردنی پشوو و ئیجازە (Drag & Drop):</span>
+              <span>کورتکراوەکانی کێشان (Drag & Drop):</span>
             </span>
 
-            {/* Tool 1: Holiday Drag Badge */}
+            {/* 1. Holiday */}
             <div
               draggable
               onDragStart={(e) => {
-                e.dataTransfer.setData('text/plain', JSON.stringify({ action: 'holiday' }));
+                e.dataTransfer.setData('text/plain', JSON.stringify({ action: 'holiday', type: 'off', label: 'پشووی فەرمی' }));
                 e.dataTransfer.effectAllowed = 'copy';
               }}
-              className="cursor-grab active:cursor-grabbing px-3 py-1 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center gap-1.5 shadow-sm border border-emerald-400 select-none transition-transform hover:scale-105"
-              title="ڕایکێشە (Drag) بۆ سەر کۆڵۆمی ڕۆژێک تا لەو ڕۆژە پشوو بێت و کەس سزا نەدرێت"
+              className="cursor-grab active:cursor-grabbing px-2.5 py-1 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center gap-1 shadow-sm border border-emerald-400 select-none transition-transform hover:scale-105"
+              title="ڕایکێشە بۆ سەر ڕۆژێک یان کارمەندێک بۆ دانانی پشووی فەرمی"
             >
-              <span>🏖️ پشووی گشتی (Holiday)</span>
-              <span className="text-[9px] bg-white/20 px-1 py-0.2 rounded font-mono">ڕاکێشان ➔</span>
+              <span>🏖️ پشووی فەرمی</span>
+              <span className="text-[9px] bg-white/20 px-1 py-0.2 rounded font-mono">➔</span>
             </div>
 
-            {/* Tool 2: Leave Drag Badge */}
+            {/* 2. Excused Leave */}
             <div
               draggable
               onDragStart={(e) => {
-                e.dataTransfer.setData('text/plain', JSON.stringify({ action: 'leave' }));
+                e.dataTransfer.setData('text/plain', JSON.stringify({ action: 'leave', type: 'excused', label: 'مۆڵەت بە ئاگاداریەوە' }));
                 e.dataTransfer.effectAllowed = 'copy';
               }}
-              className="cursor-grab active:cursor-grabbing px-3 py-1 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs flex items-center gap-1.5 shadow-sm border border-purple-400 select-none transition-transform hover:scale-105"
-              title="ڕایکێشە (Drag) بۆ سەر خانەی کارمەندێک تا ئەو ڕۆژەی وەک ئیجازە/مۆڵەت هەژمار بکرێت"
+              className="cursor-grab active:cursor-grabbing px-2.5 py-1 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs flex items-center gap-1 shadow-sm border border-purple-400 select-none transition-transform hover:scale-105"
+              title="ڕایکێشە بۆ سەر خانەی کارمەند بۆ مۆڵەت بە ئاگاداریەوە (بێ سزا)"
             >
-              <span>📝 مۆڵەت / ئیجازە (Leave)</span>
-              <span className="text-[9px] bg-white/20 px-1 py-0.2 rounded font-mono">ڕاکێشان ➔</span>
+              <span>📝 مۆڵەت بە ئاگاداریەوە</span>
+              <span className="text-[9px] bg-white/20 px-1 py-0.2 rounded font-mono">➔</span>
             </div>
 
-            {/* Tool 3: Eraser */}
+            {/* 3. Unexcused Absence / غیاب */}
+            <div
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', JSON.stringify({ action: 'leave', type: 'unexcused', label: 'مۆڵەت بێ ئاگاداری (غیاب)' }));
+                e.dataTransfer.effectAllowed = 'copy';
+              }}
+              className="cursor-grab active:cursor-grabbing px-2.5 py-1 rounded-xl bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white font-black text-xs flex items-center gap-1 shadow-sm border border-rose-400 select-none transition-transform hover:scale-105"
+              title="ڕایکێشە بۆ سەر خانەی کارمەند بۆ مۆڵەت بێ ئاگاداری / غیاب (بە سزا)"
+            >
+              <span>❌ مۆڵەت بێ ئاگاداری (غیاب)</span>
+              <span className="text-[9px] bg-white/20 px-1 py-0.2 rounded font-mono">➔</span>
+            </div>
+
+            {/* 4. Outside / Field Duty */}
+            <div
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', JSON.stringify({ action: 'leave', type: 'field', label: 'لە دەرەوەی کۆمپانیا' }));
+                e.dataTransfer.effectAllowed = 'copy';
+              }}
+              className="cursor-grab active:cursor-grabbing px-2.5 py-1 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-black text-xs flex items-center gap-1 shadow-sm border border-sky-400 select-none transition-transform hover:scale-105"
+              title="ڕایکێشە بۆ سەر خانەی کارمەند بۆ دەوامی دەرەوە لە ئەرک"
+            >
+              <span>🚗 لە دەرەوەی کۆمپانیا</span>
+              <span className="text-[9px] bg-white/20 px-1 py-0.2 rounded font-mono">➔</span>
+            </div>
+
+            {/* 5. Clear / Eraser */}
             <div
               draggable
               onDragStart={(e) => {
                 e.dataTransfer.setData('text/plain', JSON.stringify({ action: 'clear' }));
                 e.dataTransfer.effectAllowed = 'copy';
               }}
-              className="cursor-grab active:cursor-grabbing px-2.5 py-1 rounded-xl bg-rose-500/80 hover:bg-rose-500 text-white font-black text-xs flex items-center gap-1 border border-rose-400 select-none transition-transform hover:scale-105"
-              title="ڕایکێشە بۆ سەر هەر ڕۆژێک یان خانەیەک بۆ سڕینەوەی پشوو و ئیجازە"
+              className="cursor-grab active:cursor-grabbing px-2.5 py-1 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-black text-xs flex items-center gap-1 border border-slate-500 select-none transition-transform hover:scale-105"
+              title="ڕایکێشە بۆ سەر خانەیەک بۆ سڕینەوە و گەڕاندنەوەی دۆخی ئاسایی"
             >
-              <Trash2 className="w-3 h-3" />
+              <Trash2 className="w-3 h-3 text-rose-300" />
               <span>پاککردنەوە</span>
             </div>
           </div>
 
           <div className="text-[11px] text-slate-300 font-normal">
-            💡 دەتوانیت نیشانەکان ڕابکێشیتە سەر ڕۆژەکان، یان ڕاستەوخۆ کلیک لەسەر سەرناوی ڕۆژەکە یان خانەکان بکەیت.
+            💡 نیشانەکان ڕابکێشە سەر خانەکان یان کلیکیان لێ بکە.
           </div>
         </div>
 
@@ -636,33 +664,35 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                           try {
                             const data = JSON.parse(e.dataTransfer.getData('text/plain'));
                             if (data.action === 'holiday') {
-                              toggleEmployeeLeave(leaveKey, { type: 'off', note: 'پشوو' });
+                              toggleEmployeeLeave(leaveKey, { type: 'off', note: 'پشووی فەرمی' });
                             } else if (data.action === 'leave') {
-                              toggleEmployeeLeave(leaveKey, { type: 'excused', note: 'ئیجازەی فەرمی' });
+                              toggleEmployeeLeave(leaveKey, { type: data.type || 'excused', note: data.label || 'مۆڵەت' });
                             } else if (data.action === 'clear') {
                               toggleEmployeeLeave(leaveKey, null);
                             }
                           } catch {}
                         }}
                         onClick={(e) => {
-                          if (cellLogs.length === 0) {
-                            // Open Quick Cell Action Menu
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setCellActionMenu({
-                              empId: emp.id,
-                              empName: emp.fullName3Part || emp.name,
-                              dayNum,
-                              dateStr: fullDateStr,
-                              x: rect.left,
-                              y: rect.bottom + window.scrollY
-                            });
-                          }
+                          // Open Quick Cell Action Menu on click
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setCellActionMenu({
+                            empId: emp.id,
+                            empName: emp.fullName3Part || emp.name,
+                            dayNum,
+                            dateStr: fullDateStr,
+                            x: rect.left,
+                            y: rect.bottom + window.scrollY
+                          });
                         }}
-                        className={`text-center p-1 border-l border-slate-300 align-middle transition-all relative ${
+                        className={`text-center p-1 border-l border-slate-300 align-middle transition-all relative cursor-pointer ${
                           isCellDragOver 
                             ? 'bg-amber-200 ring-2 ring-amber-400'
                             : isCompanyHoliday
                             ? 'bg-emerald-50/70'
+                            : customLeave?.type === 'unexcused'
+                            ? 'bg-rose-50/70'
+                            : customLeave?.type === 'field'
+                            ? 'bg-sky-50/70'
                             : customLeave
                             ? 'bg-purple-50/70'
                             : isFriday
@@ -670,7 +700,30 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                             : ''
                         }`}
                       >
-                        {cellLogs.length > 0 ? (
+                        {/* 1. Priority: Explicit Custom Holiday / Leave / Absence / Field Duty */}
+                        {isCompanyHoliday ? (
+                          <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px] font-black shadow-xs inline-block" title="پشووی فەرمیی کۆمپانیا - بێ سزا">
+                            🏖️ پشوو
+                          </span>
+                        ) : customLeave ? (
+                          customLeave.type === 'excused' ? (
+                            <span className="px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-950 border border-purple-300 text-[10px] font-black shadow-xs inline-block" title="مۆڵەت بە ئاگاداریەوە (بێ سزا)">
+                              📝 مۆڵەت
+                            </span>
+                          ) : customLeave.type === 'unexcused' ? (
+                            <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-950 border border-rose-300 text-[10px] font-black shadow-xs inline-block" title="مۆڵەت بێ ئاگاداری / غیاب (بە سزا)">
+                              ❌ غیاب
+                            </span>
+                          ) : customLeave.type === 'field' ? (
+                            <span className="px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-950 border border-sky-300 text-[10px] font-black shadow-xs inline-block" title="لە دەرەوەی کۆمپانیا (ئەرکی فەرمی)">
+                              🚗 دەرەوە
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px] font-black shadow-xs inline-block" title="پشوو">
+                              🏖️ پشوو
+                            </span>
+                          )
+                        ) : cellLogs.length > 0 ? (
                           <div className="flex flex-col items-center justify-center gap-0.5 font-mono text-[11px] font-bold">
                             {/* Check-In Link (12H Format with 15-min tolerance colors) */}
                             {checkIn ? (
@@ -724,25 +777,14 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                               </button>
                             ) : null}
                           </div>
+                        ) : isFriday ? (
+                          <span className="px-1 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold inline-block">
+                            🕌 هەینی
+                          </span>
                         ) : (
-                          /* Visual indicators when NO check-in log exists */
-                          isCompanyHoliday ? (
-                            <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px] font-black shadow-xs inline-block" title="پشووی فەرمیی کۆمپانیا - بێ سزا">
-                              🏖️ پشوو
-                            </span>
-                          ) : customLeave ? (
-                            <span className="px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-950 border border-purple-300 text-[10px] font-black shadow-xs inline-block" title={customLeave.note || 'مۆڵەت / ئیجازەی فەرمی - بێ سزا'}>
-                              📝 ئیجازە
-                            </span>
-                          ) : isFriday ? (
-                            <span className="px-1 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold inline-block">
-                              🕌 هەینی
-                            </span>
-                          ) : (
-                            <span className="text-slate-300 font-mono text-[10px] hover:text-blue-700 cursor-pointer" title="کرتە بکە بۆ دیاریکردنی ئیجازە یان پشوو">
-                              ---
-                            </span>
-                          )
+                          <span className="text-slate-300 font-mono text-[10px] hover:text-blue-700 cursor-pointer" title="کرتە بکە بۆ دیاریکردنی ئیجازە، غیاب، یان پشوو">
+                            ---
+                          </span>
                         )}
                       </td>
                     );
@@ -967,13 +1009,37 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
               <button
                 type="button"
                 onClick={() => {
-                  toggleEmployeeLeave(`${cellActionMenu.empId}_${cellActionMenu.dateStr}`, { type: 'excused', note: 'ئیجازەی فەرمی' });
+                  toggleEmployeeLeave(`${cellActionMenu.empId}_${cellActionMenu.dateStr}`, { type: 'excused', note: 'مۆڵەت بە ئاگاداریەوە' });
                   setCellActionMenu(null);
                 }}
                 className="w-full text-right p-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-950 font-black text-xs border border-purple-200 flex items-center justify-between transition-colors cursor-pointer"
               >
-                <span>📝 ئیجازە / مۆڵەتی فەرمی (بێ سزا)</span>
-                <span className="text-[10px] bg-purple-200 text-purple-900 px-2 py-0.5 rounded-full font-mono">Leave</span>
+                <span>📝 مۆڵەت بە ئاگاداریەوە (بێ سزا)</span>
+                <span className="text-[10px] bg-purple-200 text-purple-900 px-2 py-0.5 rounded-full font-mono">Excused</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  toggleEmployeeLeave(`${cellActionMenu.empId}_${cellActionMenu.dateStr}`, { type: 'unexcused', note: 'مۆڵەت بێ ئاگاداری (غیاب)' });
+                  setCellActionMenu(null);
+                }}
+                className="w-full text-right p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-950 font-black text-xs border border-rose-200 flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <span>❌ مۆڵەت بێ ئاگاداری (غیاب - بە سزا)</span>
+                <span className="text-[10px] bg-rose-200 text-rose-900 px-2 py-0.5 rounded-full font-mono">Unexcused</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  toggleEmployeeLeave(`${cellActionMenu.empId}_${cellActionMenu.dateStr}`, { type: 'field', note: 'لە دەرەوەی کۆمپانیا' });
+                  setCellActionMenu(null);
+                }}
+                className="w-full text-right p-2.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-950 font-black text-xs border border-sky-200 flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <span>🚗 لە دەرەوەی کۆمپانیا (ئەرکی فەرمی)</span>
+                <span className="text-[10px] bg-sky-200 text-sky-900 px-2 py-0.5 rounded-full font-mono">Field Duty</span>
               </button>
 
               <button
@@ -995,7 +1061,7 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                   toggleCompanyHoliday(cellActionMenu.dateStr, false);
                   setCellActionMenu(null);
                 }}
-                className="w-full text-right p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-950 font-black text-xs border border-rose-200 flex items-center justify-between transition-colors cursor-pointer"
+                className="w-full text-right p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs border border-slate-300 flex items-center justify-between transition-colors cursor-pointer"
               >
                 <span>🗑️ پاککردنەوە و گەڕاندنەوە بۆ دۆخی ئاسایی</span>
                 <Trash2 className="w-3.5 h-3.5 text-rose-700" />
