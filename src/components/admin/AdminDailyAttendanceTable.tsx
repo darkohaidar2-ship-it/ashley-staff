@@ -19,7 +19,8 @@ import {
   Search,
   MessageSquare,
   RefreshCw,
-  Shield
+  Shield,
+  Trash2
 } from 'lucide-react';
 import { format, addDays, subDays, parseISO, getDaysInMonth, getDay } from 'date-fns';
 import type { Employee, AttendanceRecord } from '@/lib/types';
@@ -179,8 +180,20 @@ export function AdminDailyAttendanceTable({
       let checkInNote = inLog?.employeeNote || (inLog?.notes?.startsWith('تێبینی کارمەند:') ? inLog.notes.replace('تێبینی کارمەند:', '').trim() : inLog?.notes || '');
       let checkOutNote = outLog?.employeeNote || (outLog?.notes?.startsWith('تێبینی کارمەند:') ? outLog.notes.replace('تێبینی کارمەند:', '').trim() : outLog?.notes || '');
 
-      // 3. Check Seed Data / August 2026 Fallback
-      if (dateStr.startsWith('2026-08')) {
+      // Check if this attendance record was deleted by Admin
+      let isDeleted = false;
+      if (typeof window !== 'undefined') {
+        try {
+          const rawDel = localStorage.getItem(`ashley_deleted_attendance_${selectedMonth}`);
+          if (rawDel) {
+            const delMap = JSON.parse(rawDel);
+            if (delMap[`${emp.id}_${dateStr}`]) isDeleted = true;
+          }
+        } catch {}
+      }
+
+      // 3. Check Seed Data / August 2026 Fallback (ONLY if NOT explicitly deleted)
+      if (!isDeleted && dateStr.startsWith('2026-08')) {
         const seedEntry = GOOGLE_SHEET_OVERTIME_DATA.find(
           d => d.date === dateStr && !!matchEmployeeByName(d.empName, [emp])
         );
@@ -204,8 +217,8 @@ export function AdminDailyAttendanceTable({
         }
       }
 
-      // Check Local Overrides (manual edits by Admin)
-      if (typeof window !== 'undefined') {
+      // Check Local Overrides (manual edits by Admin) (ONLY if NOT explicitly deleted)
+      if (!isDeleted && typeof window !== 'undefined') {
         try {
           const rawIn = localStorage.getItem(`ashley_time_override_${emp.id}_${dateStr}_in`);
           if (rawIn) {
@@ -224,6 +237,15 @@ export function AdminDailyAttendanceTable({
             }
           }
         } catch {}
+      }
+
+      if (isDeleted) {
+        checkInTime = '-';
+        checkOutTime = '-';
+        checkInOriginalTime = '';
+        checkOutOriginalTime = '';
+        checkInNote = '';
+        checkOutNote = '';
       }
 
       // 4. Admin Note (Priority: Props -> LocalStorage -> Seed Map)
@@ -380,11 +402,42 @@ export function AdminDailyAttendanceTable({
   // Save Inline Admin Note
   const handleSaveAdminNote = (empId: string) => {
     const key = `${empId}_${selectedDate}`;
+    const cleanText = tempAdminNoteText.trim();
     if (onUpdateAdminNote) {
-      onUpdateAdminNote(key, tempAdminNoteText.trim());
+      onUpdateAdminNote(key, cleanText);
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const storedAdminNotes = JSON.parse(localStorage.getItem(`ashley_admin_notes_${selectedMonth}`) || '{}');
+        if (cleanText) {
+          storedAdminNotes[key] = cleanText;
+        } else {
+          delete storedAdminNotes[key];
+        }
+        localStorage.setItem(`ashley_admin_notes_${selectedMonth}`, JSON.stringify(storedAdminNotes));
+        window.dispatchEvent(new Event('ashley_attendance_updated'));
+      } catch {}
     }
     setEditingAdminNoteKey(null);
     setTempAdminNoteText('');
+  };
+
+  // Delete Attendance Record for specific Employee on this date
+  const handleDeleteRowAttendance = (empId: string, empName: string) => {
+    if (confirm(`ئایا دڵنیایت لە سڕینەوەی دەوامی (${empName}) بۆ ئەم بەروارە (${selectedDate})؟\nبەم کارە سەرجەم کاتەکانی هاتن، ڕۆیشتن، و داتای گۆگڵ شیت دەسڕێنەوە.`)) {
+      if (typeof window !== 'undefined') {
+        try {
+          const delKey = `${empId}_${selectedDate}`;
+          const delMap = JSON.parse(localStorage.getItem(`ashley_deleted_attendance_${selectedMonth}`) || '{}');
+          delMap[delKey] = true;
+          localStorage.setItem(`ashley_deleted_attendance_${selectedMonth}`, JSON.stringify(delMap));
+          localStorage.removeItem(`ashley_time_override_${empId}_${selectedDate}_in`);
+          localStorage.removeItem(`ashley_time_override_${empId}_${selectedDate}_out`);
+          window.dispatchEvent(new Event('ashley_attendance_updated'));
+        } catch {}
+      }
+      setLocalOverridesVersion(v => v + 1);
+    }
   };
 
   // Save Time Change from Modal
@@ -406,19 +459,33 @@ export function AdminDailyAttendanceTable({
     const adminNoteKey = `${empId}_${dateStr}`;
     const formattedAdminReason = `🛡️ دەستکاریکردنی کاتی ${targetType === 'in' ? 'هاتن' : 'ڕۆیشتن'} بۆ (${cleanTime}): ${cleanReason}`;
 
-    // 1. Update Admin Notes
-    if (onUpdateAdminNote) {
-      onUpdateAdminNote(adminNoteKey, formattedAdminReason);
-    }
+    // 1. Update Admin Notes (concatenate if existing notes exist)
+    let combinedNote = formattedAdminReason;
     if (typeof window !== 'undefined') {
       try {
         const storedAdminNotes = JSON.parse(localStorage.getItem(`ashley_admin_notes_${selectedMonth}`) || '{}');
-        storedAdminNotes[adminNoteKey] = formattedAdminReason;
+        const existing = storedAdminNotes[adminNoteKey] || adminNotes[adminNoteKey] || '';
+        if (existing && existing.trim() && !existing.includes(cleanReason)) {
+          combinedNote = `${existing.trim()}\n${formattedAdminReason}`;
+        }
+        storedAdminNotes[adminNoteKey] = combinedNote;
         localStorage.setItem(`ashley_admin_notes_${selectedMonth}`, JSON.stringify(storedAdminNotes));
       } catch {}
     }
+    if (onUpdateAdminNote) {
+      onUpdateAdminNote(adminNoteKey, combinedNote);
+    }
 
-    // 2. Update local storage for log overrides
+    // 2. Remove deletion flag if user is explicitly re-adding/editing time
+    if (typeof window !== 'undefined') {
+      try {
+        const delMap = JSON.parse(localStorage.getItem(`ashley_deleted_attendance_${selectedMonth}`) || '{}');
+        delete delMap[adminNoteKey];
+        localStorage.setItem(`ashley_deleted_attendance_${selectedMonth}`, JSON.stringify(delMap));
+      } catch {}
+    }
+
+    // 3. Update local storage for log overrides
     if (typeof window !== 'undefined') {
       try {
         const overrideKey = `ashley_time_override_${empId}_${dateStr}_${targetType}`;
@@ -744,12 +811,12 @@ export function AdminDailyAttendanceTable({
               <th className="p-2.5 w-44">ناوی کارمەند</th>
               <th className="p-2.5 w-32">پۆست / ئەرک</th>
               <th className="p-2.5 text-center w-28">📥 هاتن</th>
-              <th className="p-2.5 w-44">📝 تێبینی هاتن</th>
+              <th className="p-2.5 w-44">💬 تێبینی کارمەند (هاتن)</th>
               <th className="p-2.5 text-center w-28">📤 ڕۆیشتن</th>
-              <th className="p-2.5 w-44">📝 تێبینی ڕۆیشتن / ئیزافە</th>
+              <th className="p-2.5 w-44">💬 تێبینی کارمەند (ڕۆیشتن / ئیزافە)</th>
               <th className="p-2.5 text-center w-24">⏱️ دەوام</th>
               <th className="p-2.5 text-center w-24">⚡ ئیزافە</th>
-              <th className="p-2.5">🛡️ تێبینی ئەدمین</th>
+              <th className="p-2.5">🛡️ تێبینی ئەدمین (دەستکاریکردن و هۆکارەکان)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -907,60 +974,72 @@ export function AdminDailyAttendanceTable({
                       )}
                     </td>
 
-                    {/* Admin Note with Instant Inline Edit & Prominent Shield Styling */}
-                    <td className="p-2.5">
+                    {/* Admin Note Column (Supports Multiple Notes & Direct Delete) */}
+                    <td className="p-2.5 border-l border-slate-200">
                       {isEditingThisAdminNote ? (
                         <div className="flex items-center gap-1.5">
-                          <input
-                            type="text"
+                          <textarea
                             autoFocus
+                            rows={2}
                             value={tempAdminNoteText}
                             onChange={(e) => setTempAdminNoteText(e.target.value)}
-                            placeholder="تێبینی ئەدمین..."
+                            placeholder="تێبینی ئەدمین بنووسە..."
                             className="input-classic w-full text-xs font-bold py-1 px-2"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveAdminNote(row.empId);
-                              if (e.key === 'Escape') setEditingAdminNoteKey(null);
-                            }}
                           />
-                          <button
-                            type="button"
-                            onClick={() => handleSaveAdminNote(row.empId)}
-                            className="p-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
-                            title="پاشەکەوت"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingAdminNoteKey(null)}
-                            className="p-1 rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 cursor-pointer"
-                            title="پاشگەزبوونەوە"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex flex-col gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleSaveAdminNote(row.empId)}
+                              className="p-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
+                              title="پاشەکەوت"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingAdminNoteKey(null)}
+                              className="p-1 rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 cursor-pointer"
+                              title="پاشگەزبوونەوە"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="flex items-start justify-between gap-1.5 group">
                           {row.adminNote ? (
-                            <div className="flex items-start gap-1.5 text-xs font-bold text-amber-950 bg-amber-50/95 px-2.5 py-1.5 rounded-xl border border-amber-300 shadow-xs flex-1">
-                              <Shield className="w-3.5 h-3.5 text-amber-700 flex-shrink-0 mt-0.5" />
-                              <span className="leading-relaxed">{row.adminNote}</span>
+                            <div className="flex flex-col gap-1 text-xs font-bold text-amber-950 flex-1">
+                              {row.adminNote.split('\n').filter(Boolean).map((noteLine, nIdx) => (
+                                <div key={nIdx} className="flex items-start gap-1.5 bg-amber-50/95 px-2.5 py-1 rounded-xl border border-amber-300 shadow-xs">
+                                  <Shield className="w-3.5 h-3.5 text-amber-700 flex-shrink-0 mt-0.5" />
+                                  <span className="leading-relaxed">{noteLine}</span>
+                                </div>
+                              ))}
                             </div>
                           ) : (
                             <span className="text-slate-300 text-xs italic">تێبینی نییە</span>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingAdminNoteKey(row.empId);
-                              setTempAdminNoteText(row.adminNote || '');
-                            }}
-                            className="opacity-60 group-hover:opacity-100 p-1 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all cursor-pointer flex-shrink-0"
-                            title="دەستکاریکردنی تێبینی ئەدمین"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingAdminNoteKey(row.empId);
+                                setTempAdminNoteText(row.adminNote || '');
+                              }}
+                              className="opacity-60 group-hover:opacity-100 p-1 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all cursor-pointer"
+                              title="دەستکاریکردنی تێبینی ئەدمین"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRowAttendance(row.empId, row.name)}
+                              className="opacity-60 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                              title="سڕینەوەی ئەم دەوامە (هەموو کات و داتای شیت دەسڕێتەوە)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                            </button>
+                          </div>
                         </div>
                       )}
                     </td>

@@ -139,6 +139,16 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
     const formattedDay = dayNum.toString().padStart(2, '0');
     const targetDateStr = `${selectedMonth}-${formattedDay}`;
 
+    // Check if explicitly deleted
+    if (typeof window !== 'undefined') {
+      try {
+        const delMap = JSON.parse(localStorage.getItem(`ashley_deleted_attendance_${selectedMonth}`) || '{}');
+        if (delMap[`${emp.id}_${targetDateStr}`]) {
+          return [];
+        }
+      } catch {}
+    }
+
     return gridLogs.filter(log => {
       // Date match
       const logDate = log.date || (log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || '');
@@ -950,7 +960,7 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                 <button
                   type="button"
                   onClick={async () => {
-                    if (confirm('ئایا دڵنیایت لە سڕینەوەی ئەم تۆمارەی ئامادەبوون؟')) {
+                    if (confirm('ئایا دڵنیایت لە سڕینەوەی ئەم تۆمارەی ئامادەبوون؟\nبەم کارە سەرجەم کاتەکان دەسڕێنەوە و تەنانەت داتای گۆگڵ شیتەکەش دەرناکەوێتەوە.')) {
                       const targetId = activeLogModal.id;
                       const empId = activeLogModal.employeeId || activeLogModal.userId;
                       const dateStr = activeLogModal.time ? activeLogModal.time.split(' ')[0] : activeLogModal.createdAt?.split('T')[0] || activeLogModal.date;
@@ -960,12 +970,25 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                       setGridLogs(prev => prev.filter(l => l.id !== targetId));
                       setActiveLogModal(null);
 
-                      // 2. Call parent onDeleteLog if available
+                      // 2. Register deletion in localStorage so Google Sheet fallback does NOT reappear
+                      if (typeof window !== 'undefined' && empId && dateStr) {
+                        try {
+                          const delKey = `${empId}_${dateStr}`;
+                          const delMap = JSON.parse(localStorage.getItem(`ashley_deleted_attendance_${selectedMonth}`) || '{}');
+                          delMap[delKey] = true;
+                          localStorage.setItem(`ashley_deleted_attendance_${selectedMonth}`, JSON.stringify(delMap));
+                          localStorage.removeItem(`ashley_time_override_${empId}_${dateStr}_in`);
+                          localStorage.removeItem(`ashley_time_override_${empId}_${dateStr}_out`);
+                          window.dispatchEvent(new Event('ashley_attendance_updated'));
+                        } catch {}
+                      }
+
+                      // 3. Call parent onDeleteLog if available
                       if (onDeleteLog) {
                         onDeleteLog(targetId);
                       }
 
-                      // 3. Call DELETE API with query params
+                      // 4. Call DELETE API with query params
                       try {
                         const url = `/api/attendance/logs/${targetId}?employeeId=${encodeURIComponent(empId || '')}&dateStr=${encodeURIComponent(dateStr || '')}&logType=${encodeURIComponent(logType || '')}`;
                         await fetch(url, { method: 'DELETE' });
@@ -1059,11 +1082,22 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                 onClick={() => {
                   toggleEmployeeLeave(`${cellActionMenu.empId}_${cellActionMenu.dateStr}`, null);
                   toggleCompanyHoliday(cellActionMenu.dateStr, false);
+                  if (typeof window !== 'undefined') {
+                    try {
+                      const delKey = `${cellActionMenu.empId}_${cellActionMenu.dateStr}`;
+                      const delMap = JSON.parse(localStorage.getItem(`ashley_deleted_attendance_${selectedMonth}`) || '{}');
+                      delMap[delKey] = true;
+                      localStorage.setItem(`ashley_deleted_attendance_${selectedMonth}`, JSON.stringify(delMap));
+                      localStorage.removeItem(`ashley_time_override_${cellActionMenu.empId}_${cellActionMenu.dateStr}_in`);
+                      localStorage.removeItem(`ashley_time_override_${cellActionMenu.empId}_${cellActionMenu.dateStr}_out`);
+                      window.dispatchEvent(new Event('ashley_attendance_updated'));
+                    } catch {}
+                  }
                   setCellActionMenu(null);
                 }}
                 className="w-full text-right p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs border border-slate-300 flex items-center justify-between transition-colors cursor-pointer"
               >
-                <span>🗑️ پاککردنەوە و گەڕاندنەوە بۆ دۆخی ئاسایی</span>
+                <span>🗑️ پاککردنەوە و سڕینەوەی کاتەکان</span>
                 <Trash2 className="w-3.5 h-3.5 text-rose-700" />
               </button>
             </div>
