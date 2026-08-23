@@ -1147,81 +1147,96 @@ export default function AdminPage() {
       {/* ========================================================================= */}
       {/* 🚧 COMING SOON / WORK IN PROGRESS SECTION AT THE VERY BOTTOM */}
       {/* ========================================================================= */}
+      {/* ========================================================================= */}
+      {/* 🔧 UNDER MAINTENANCE & COMING SOON MODULES AT THE VERY BOTTOM */}
+      {/* ========================================================================= */}
       <div className="mt-8 pt-6 border-t-2 border-dashed border-slate-200">
-        <div className="bg-slate-50/80 rounded-2xl border border-slate-200 p-4 space-y-3">
+        <div className="bg-slate-50/80 rounded-2xl border border-slate-200 p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-slate-700">
               <Sparkles className="w-4 h-4 text-amber-500" />
-              <h3 className="text-xs font-black">بەشەکانی لەژێر پەرەپێداندان (بەم زوانە چالاک دەبن):</h3>
+              <h3 className="text-xs font-black">بەشەکانی لەژێر چاککردن و پەرەپێداندان:</h3>
             </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 font-mono">
-              🚧 Work in Progress
+            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-mono">
+              🔧 لەژێر چاککردندایە
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-            {/* 1. Expenses */}
-            <div className="p-3 bg-white/70 rounded-xl border border-slate-200 flex items-center justify-between opacity-75">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
-                  <DollarSign className="w-4 h-4" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* 1. Master Unified Warehouse & Inventory Suite */}
+            <div className="p-3.5 bg-white/80 rounded-2xl border border-slate-200 space-y-2.5 shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
+                    <Table className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-black text-slate-800 block">بەشی جەردی کۆگا</span>
+                    <span className="text-[10px] text-slate-400 font-mono">Warehouse & Inventory Suite</span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-xs font-bold text-slate-700 block">خەرجی و دارایی</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Expenses & Fund</span>
+                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                  لەژێر چاککردندایە
+                </span>
+              </div>
+              
+              {/* Submodules included */}
+              <div className="grid grid-cols-2 gap-1.5 pt-1 text-[11px] font-bold text-slate-600">
+                <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center gap-1">
+                  <span>📦</span> <span>جەردی کەرەستە و ماددە</span>
+                </div>
+                <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center gap-1">
+                  <span>📂</span> <span>ئەرشیف و پسوولەی PDF</span>
+                </div>
+                <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center gap-1">
+                  <span>🗺️</span> <span>نەخشەی سنووری کۆگا</span>
+                </div>
+                <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center gap-1">
+                  <span>🎨</span> <span>دیزاینەری ڕاپۆرتەکان</span>
                 </div>
               </div>
-              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">
-                بەم زوانە
-              </span>
             </div>
 
-            {/* 2. Logistics & Unloading */}
-            <div className="p-3 bg-white/70 rounded-xl border border-slate-200 flex items-center justify-between opacity-75">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
-                  <Truck className="w-4 h-4" />
+            {/* 2. Expenses */}
+            <div className="p-3.5 bg-white/80 rounded-2xl border border-slate-200 flex flex-col justify-between shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
+                    <DollarSign className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-black text-slate-800 block">خەرجی و دارایی</span>
+                    <span className="text-[10px] text-slate-400 font-mono">Expenses & Fund</span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-xs font-bold text-slate-700 block">بارداگرتن و نقڵ</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Logistics & Unload</span>
-                </div>
+                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                  لەژێر چاککردندایە
+                </span>
               </div>
-              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">
-                بەم زوانە
-              </span>
+              <p className="text-[11px] text-slate-500 font-bold mt-2">
+                بەڕێوەبردنی سندوق، پۆلێنکردنی خەرجییەکان، و ژمێریاری مانگانە.
+              </p>
             </div>
 
-            {/* 3. Warehouse Stock */}
-            <div className="p-3 bg-white/70 rounded-xl border border-slate-200 flex items-center justify-between opacity-75">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
-                  <Table className="w-4 h-4" />
+            {/* 3. Logistics & Transport */}
+            <div className="p-3.5 bg-white/80 rounded-2xl border border-slate-200 flex flex-col justify-between shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-black text-slate-800 block">بارداگرتن و نقڵ</span>
+                    <span className="text-[10px] text-slate-400 font-mono">Logistics & Unload</span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-xs font-bold text-slate-700 block">کۆگا و کەرەستەکان</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Warehouse & Stock</span>
-                </div>
+                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                  لەژێر چاککردندایە
+                </span>
               </div>
-              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">
-                بەم زوانە
-              </span>
-            </div>
-
-            {/* 4. Facility Maps */}
-            <div className="p-3 bg-white/70 rounded-xl border border-slate-200 flex items-center justify-between opacity-75">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
-                  <MapPin className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-slate-700 block">نەخشەی کارگە</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Factory Geofence</span>
-                </div>
-              </div>
-              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">
-                بەم زوانە
-              </span>
+              <p className="text-[11px] text-slate-500 font-bold mt-2">
+                تۆمارکردنی حەملەکان، بارداگرتنی کەرەستە، و گواستنەوەی نێوان کارگە.
+              </p>
             </div>
 
           </div>
