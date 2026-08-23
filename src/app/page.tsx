@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { format } from 'date-fns';
 import { 
   Camera, 
@@ -17,7 +18,8 @@ import {
   X,
   RefreshCw,
   User,
-  FileText
+  FileText,
+  Smartphone
 } from 'lucide-react';
 import { extractFaceDescriptor, matchFaceDescriptors, loadFaceModels } from '@/lib/face-recognition';
 
@@ -733,6 +735,25 @@ export default function PublicTerminalLightPage() {
           <div className="pt-1 flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-500">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             <span>{registeredFacesList.length} کارمەند بە ڕوخسار تۆمار کراون و ئامادەن</span>
+          </div>
+
+          {/* Quick Switch to Mobile Auto-Geofence Mode */}
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-2 border-t border-slate-100">
+            <Link
+              href="/attendance/mobile"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-black transition-all shadow-xs"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+              <span>📱 ئەپی مۆبایل و چێک‌ئینی خۆکارانە (Auto Geofence)</span>
+            </Link>
+
+            <Link
+              href="/adminpanel"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-bold transition-all shadow-xs"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-slate-500" />
+              <span>پانێڵی ئەدمین</span>
+            </Link>
           </div>
         </div>
       </main>
