@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useAppContext } from '@/context/app-provider';
-import type { Employee } from '@/lib/types';
+import type { Employee, AttendanceRecord } from '@/lib/types';
 import { FactoryMapPicker } from '@/components/maps/FactoryMapPicker';
 import { AttendanceSheetGrid } from '@/components/attendance/AttendanceSheetGrid';
 import { AdminFaceEnrollModal } from '@/components/attendance/AdminFaceEnrollModal';
@@ -288,10 +288,37 @@ export default function AdminPage() {
     return employees.filter(e => e.status !== 'resigned' && e.isActive !== false);
   }, [employees]);
 
+  // Live attendance refresh trigger
+  const [liveLogRefreshCounter, setLiveLogRefreshCounter] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setLiveLogRefreshCounter(c => c + 1);
+    };
+    window.addEventListener('ashley_attendance_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('ashley_attendance_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, []);
+
   // Merge live attendance logs with August 2026 seed records so check-in / check-out are always fully populated
   const allMergedAttendanceLogs = useMemo(() => {
+    let liveCheckins: AttendanceRecord[] = [];
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('ashley_live_checkins');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) liveCheckins = parsed;
+        }
+      } catch {}
+    }
+
+    const combinedDynamic = [...liveCheckins, ...attendanceLogs];
     const seedRecords = generateAugust2026AttendanceRecords(employees);
-    const existingKeys = new Set(attendanceLogs.map(l => {
+    const existingKeys = new Set(combinedDynamic.map(l => {
       const d = l.date || (l.time ? l.time.split(' ')[0] : '');
       const e = (l.employeeId || l.userId || '').toString().toLowerCase();
       const t = (l.type || (l as any).action || '').toLowerCase();
@@ -305,8 +332,8 @@ export default function AdminPage() {
       return !existingKeys.has(`${e}_${d}_${t.includes('in') ? 'in' : 'out'}`);
     });
 
-    return [...attendanceLogs, ...nonOverlappingSeed];
-  }, [attendanceLogs, employees]);
+    return [...combinedDynamic, ...nonOverlappingSeed];
+  }, [attendanceLogs, employees, liveLogRefreshCounter]);
 
   // Aggregated KPIs for Overview Dashboard
   const dashboardKpis = useMemo(() => {
@@ -881,21 +908,96 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Sub-Tab 1: Daily Attendance Table */}
+          {/* ========================================================================= */}
+          {/* 📅 SUB-TAB 1: DAILY ATTENDANCE HUB (Sequential Daily Tables) */}
+          {/* ========================================================================= */}
           {attendanceSubTab === 'daily' && (
-            <AdminDailyAttendanceTable
-              employees={employees}
-              attendanceLogs={allMergedAttendanceLogs}
-              adminNotes={adminNotes}
-              onUpdateAdminNote={handleUpdateAdminNote}
-              selectedMonth={selectedMonth}
-            />
+            <div className="space-y-6">
+              {/* Table 1: Master Daily Attendance Table */}
+              <AdminDailyAttendanceTable
+                employees={employees}
+                attendanceLogs={allMergedAttendanceLogs}
+                adminNotes={adminNotes}
+                onUpdateAdminNote={handleUpdateAdminNote}
+                selectedMonth={selectedMonth}
+              />
+
+              {/* Table 2: Live Check-In / Out Real-Time Activity Stream Table */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black text-slate-900">خشتەی تۆمارە زیندووەکانی چێک ئین و چێک ئاوت (Live Activity Stream)</h3>
+                      <span className="text-[10px] text-slate-500 font-bold">تەواوی ئەو دەوام و تێبینیانەی کارمەندان بە ڕاستەوخۆ لەڕێگەی کامێرا و سیستەم تۆماریان کردووە</span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-[10px] font-black font-mono">
+                    🟢 Live Synced
+                  </span>
+                </div>
+
+                <div className="table-classic-wrapper rounded-xl border border-slate-200 overflow-hidden">
+                  <table className="table-classic w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-900 text-white font-black text-right">
+                        <th className="p-2 text-center w-12">#</th>
+                        <th className="p-2 w-48">ناوی کارمەند</th>
+                        <th className="p-2 text-center w-36">جۆری کردار</th>
+                        <th className="p-2 text-center w-36">کاتی تۆمار</th>
+                        <th className="p-2 w-44">شوێن و بازنە</th>
+                        <th className="p-2">💬 تێبینی کارمەند</th>
+                        <th className="p-2 text-center w-28">دۆخی ئاسایش</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {allMergedAttendanceLogs.filter(l => (l.date || '').startsWith(selectedMonth)).slice(0, 15).map((log, lIdx) => {
+                        const isIn = (log.type || (log as any).action || '').toLowerCase().includes('in') || (log.type || '').includes('هاتن');
+                        return (
+                          <tr key={log.id || lIdx} className="hover:bg-slate-50">
+                            <td className="p-2 border-l border-slate-100 text-center font-mono text-slate-400 font-bold">{lIdx + 1}</td>
+                            <td className="p-2 border-l border-slate-100 font-black text-slate-900">{log.name || log.userName || (log as any).employeeName}</td>
+                            <td className="p-2 border-l border-slate-100 text-center">
+                              <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] inline-block ${
+                                isIn ? 'bg-emerald-100 text-emerald-950 border border-emerald-300' : 'bg-sky-100 text-sky-950 border border-sky-300'
+                              }`}>
+                                {isIn ? '📥 چێک ئین (هاتن)' : '📤 چێک ئاوت (ڕۆیشتن)'}
+                              </span>
+                            </td>
+                            <td className="p-2 border-l border-slate-100 text-center font-mono font-bold text-slate-700">{log.time || log.createdAt}</td>
+                            <td className="p-2 border-l border-slate-100 text-slate-600 font-bold">{log.distance || 'کۆمپانیای سەرەکی ئاشڵی'}</td>
+                            <td className="p-2 border-l border-slate-100 font-bold text-slate-700">
+                              {log.employeeNote || (log.notes?.startsWith('تێبینی کارمەند:') ? log.notes.replace('تێبینی کارمەند:', '').trim() : log.notes || '-')}
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 inline-block">
+                                ✅ پارێزراو
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           )}
 
-          {/* Sub-Tab 2: 31-Day Matrix Grid */}
+          {/* ========================================================================= */}
+          {/* 📊 SUB-TAB 2: MONTHLY 31-DAY HUB (Sequential Monthly Tables) */}
+          {/* ========================================================================= */}
           {attendanceSubTab === 'matrix' && (
-            <div id="attendance-sheet-grid-section" className="space-y-2">
+            <div id="attendance-sheet-grid-section" className="space-y-6">
+              {/* Table 1: Master 31-Day Attendance Matrix Grid */}
               <AttendanceSheetGrid employees={activeEmployees} attendanceLogs={allMergedAttendanceLogs} />
+
+              {/* Table 2: Monthly Overtime & Shift Settlement Table */}
+              <div className="pt-2">
+                <AdminOvertimeModule employees={employees} />
+              </div>
             </div>
           )}
         </section>

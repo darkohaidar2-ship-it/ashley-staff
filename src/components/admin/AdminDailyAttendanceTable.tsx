@@ -145,9 +145,30 @@ export function AdminDailyAttendanceTable({
     let overtimeCount = 0;
     let totalOvertimeMins = 0;
 
+    // 1. Gather all live & prop attendance logs
+    let combinedLogs: AttendanceRecord[] = [...attendanceLogs];
+    if (typeof window !== 'undefined') {
+      try {
+        const rawLive = localStorage.getItem('ashley_live_checkins');
+        if (rawLive) {
+          const liveList = JSON.parse(rawLive);
+          if (Array.isArray(liveList)) {
+            combinedLogs = [...liveList, ...combinedLogs];
+          }
+        }
+        const rawLocal = localStorage.getItem('ashley_local_attendanceLogs');
+        if (rawLocal) {
+          const localList = JSON.parse(rawLocal);
+          if (Array.isArray(localList)) {
+            combinedLogs = [...combinedLogs, ...localList];
+          }
+        }
+      } catch {}
+    }
+
     const rows: DailyReportRow[] = activeEmployees.map((emp, idx) => {
       // 1. Find dynamic logs for this day
-      const dayLogs = attendanceLogs.filter(l => {
+      const dayLogs = combinedLogs.filter(l => {
         const lDate = l.date || (l.timestamp ? l.timestamp.split('T')[0] : (l.time ? l.time.split(' ')[0] : ''));
         if (lDate !== dateStr) return false;
         

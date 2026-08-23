@@ -386,6 +386,43 @@ export default function PublicTerminalLightPage() {
         throw new Error(data.error || 'هەڵەیەک ڕوویدا لە کاتی پاشەکەوتکردن');
       }
 
+      // Store in local storage for instant sync across tabs & admin panel
+      if (typeof window !== 'undefined') {
+        try {
+          const liveRecord = {
+            id: data?.record?.id || `live-${empId}-${dateStr}-${actionType === 'Check In' ? 'in' : 'out'}-${Date.now()}`,
+            employeeId: empId,
+            userId: empId,
+            userName: empName,
+            name: empName,
+            type: actionType === 'Check In' ? 'هاتن (Check In)' : 'دەرچوون (Check Out)',
+            action: actionType,
+            date: dateStr,
+            time: `${dateStr} ${timeStr.slice(0, 5)}`,
+            distance: locName,
+            status: 'verified',
+            employeeNote: employeeNote || '',
+            notes: employeeNote || '',
+            createdAt: new Date().toISOString(),
+          };
+
+          const rawLive = localStorage.getItem('ashley_live_checkins');
+          const liveList = rawLive ? JSON.parse(rawLive) : [];
+          const filtered = liveList.filter((l: any) => !(l.employeeId === empId && l.date === dateStr && l.action === actionType));
+          filtered.unshift(liveRecord);
+          localStorage.setItem('ashley_live_checkins', JSON.stringify(filtered));
+
+          // Also remove any deletion flag for this employee and date
+          const month = dateStr.slice(0, 7);
+          const delMap = JSON.parse(localStorage.getItem(`ashley_deleted_attendance_${month}`) || '{}');
+          delete delMap[`${empId}_${dateStr}`];
+          localStorage.setItem(`ashley_deleted_attendance_${month}`, JSON.stringify(delMap));
+
+          window.dispatchEvent(new Event('ashley_attendance_updated'));
+          window.dispatchEvent(new Event('storage'));
+        } catch {}
+      }
+
       setAttMessage({
         text:
           actionType === 'Check In'

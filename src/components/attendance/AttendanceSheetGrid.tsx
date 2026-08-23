@@ -149,7 +149,20 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
       } catch {}
     }
 
-    return gridLogs.filter(log => {
+    let allLogs = [...gridLogs];
+    if (typeof window !== 'undefined') {
+      try {
+        const rawLive = localStorage.getItem('ashley_live_checkins');
+        if (rawLive) {
+          const liveList = JSON.parse(rawLive);
+          if (Array.isArray(liveList)) {
+            allLogs = [...liveList, ...allLogs];
+          }
+        }
+      } catch {}
+    }
+
+    return allLogs.filter(log => {
       // Date match
       const logDate = log.date || (log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || '');
       if (logDate !== targetDateStr) return false;
