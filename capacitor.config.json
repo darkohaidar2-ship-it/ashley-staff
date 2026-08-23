@@ -1,10 +1,15 @@
 {
   "appId": "com.ashley.staff.erp",
   "appName": "Ashley Staff",
-  "webDir": "out",
+  "webDir": "public",
   "server": {
-    "url": "https://ashley-staff.vercel.app",
+    "url": "https://ashley-staff.vercel.app/attendance/mobile",
     "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
   },
   "plugins": {
     "LocalNotifications": {
