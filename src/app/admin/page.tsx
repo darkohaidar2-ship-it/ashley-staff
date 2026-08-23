@@ -542,26 +542,26 @@ export default function AdminPage() {
 
       {/* 🧭 MASTER ERP ENTERPRISE NAVIGATION BAR */}
       <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-2.5 shadow-sm">
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           
           {/* 📅 Hub 1: Attendance Central (Primary Default) */}
           <button
             onClick={() => setAdminActiveSection('attendance')}
-            className={`group relative p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+            className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'attendance'
-                ? 'bg-emerald-900 text-white border-emerald-700 shadow-md ring-2 ring-emerald-400/40'
+                ? 'bg-emerald-900 text-white border-emerald-700 shadow-lg ring-4 ring-emerald-400/40 scale-[1.02]'
                 : 'bg-slate-50 hover:bg-emerald-50/60 text-slate-800 border-slate-200 hover:border-emerald-300'
             }`}
           >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105 ${
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
               adminActiveSection === 'attendance'
-                ? 'bg-emerald-700 text-white'
+                ? 'bg-emerald-700 text-white shadow-inner'
                 : 'bg-emerald-100 text-emerald-900'
             }`}>
-              <Calendar className="w-5 h-5" />
+              <Calendar className="w-6 h-6" />
             </div>
             <span className="text-xs font-black tracking-tight block">ئامادەبوون و دەوام</span>
-            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md mt-1 ${
+            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
               adminActiveSection === 'attendance' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-emerald-100 text-emerald-900'
             }`}>
               📅 ڕۆژانە و ۳۱ ڕۆژە
@@ -571,21 +571,21 @@ export default function AdminPage() {
           {/* 🔘 Hub 0: Overview Dashboard */}
           <button
             onClick={() => setAdminActiveSection('overview')}
-            className={`group relative p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+            className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'overview'
-                ? 'bg-slate-900 text-white border-slate-800 shadow-md ring-2 ring-indigo-400/40'
+                ? 'bg-slate-900 text-white border-slate-800 shadow-lg ring-4 ring-indigo-400/40 scale-[1.02]'
                 : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
             }`}
           >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105 ${
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
               adminActiveSection === 'overview'
-                ? 'bg-indigo-600 text-white'
+                ? 'bg-indigo-600 text-white shadow-inner'
                 : 'bg-slate-200 text-slate-800'
             }`}>
-              <LayoutDashboard className="w-5 h-5" />
+              <LayoutDashboard className="w-6 h-6" />
             </div>
             <span className="text-xs font-black tracking-tight block">داشبۆردی گشتی</span>
-            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md mt-1 ${
+            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
               adminActiveSection === 'overview' ? 'bg-indigo-300 text-slate-950 font-black' : 'bg-slate-200 text-slate-700'
             }`}>
               Executive 360°
@@ -595,21 +595,21 @@ export default function AdminPage() {
           {/* 🔵 Hub 2: HR & Staff */}
           <button
             onClick={() => setAdminActiveSection('hr')}
-            className={`group relative p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+            className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'hr'
-                ? 'bg-blue-900 text-white border-blue-700 shadow-md ring-2 ring-blue-400/40'
+                ? 'bg-blue-900 text-white border-blue-700 shadow-lg ring-4 ring-blue-400/40 scale-[1.02]'
                 : 'bg-slate-50 hover:bg-blue-50/60 text-slate-800 border-slate-200 hover:border-blue-300'
             }`}
           >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105 ${
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
               adminActiveSection === 'hr'
-                ? 'bg-blue-700 text-white'
+                ? 'bg-blue-700 text-white shadow-inner'
                 : 'bg-blue-100 text-blue-900'
             }`}>
-              <Users className="w-5 h-5" />
+              <Users className="w-6 h-6" />
             </div>
             <span className="text-xs font-black tracking-tight block">کارمەندان و ستاف</span>
-            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md mt-1 ${
+            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
               adminActiveSection === 'hr' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-blue-100 text-blue-900'
             }`}>
               👥 {dashboardKpis.activeStaff} کارمەند
@@ -619,96 +619,24 @@ export default function AdminPage() {
           {/* 🟠 Hub 3: Overtime Master */}
           <button
             onClick={() => setAdminActiveSection('overtime')}
-            className={`group relative p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+            className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'overtime'
-                ? 'bg-amber-900 text-white border-amber-700 shadow-md ring-2 ring-orange-400/40'
+                ? 'bg-amber-900 text-white border-amber-700 shadow-lg ring-4 ring-orange-400/40 scale-[1.02]'
                 : 'bg-slate-50 hover:bg-amber-50/60 text-slate-800 border-slate-200 hover:border-amber-300'
             }`}
           >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105 ${
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
               adminActiveSection === 'overtime'
-                ? 'bg-amber-600 text-white'
+                ? 'bg-amber-600 text-white shadow-inner'
                 : 'bg-amber-100 text-amber-900'
             }`}>
-              <Clock className="w-5 h-5" />
+              <Clock className="w-6 h-6" />
             </div>
             <span className="text-xs font-black tracking-tight block">کاتی زیادە (ئیزافە)</span>
-            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md mt-1 ${
+            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
               adminActiveSection === 'overtime' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-amber-100 text-amber-900'
             }`}>
               ⚡ +{dashboardKpis.totalOtHours} کاتژمێر
-            </span>
-          </button>
-
-          {/* 🟢 Hub 4: Expenses */}
-          <button
-            onClick={() => setAdminActiveSection('expenses')}
-            className={`group relative p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-              adminActiveSection === 'expenses'
-                ? 'bg-teal-900 text-white border-teal-700 shadow-md ring-2 ring-teal-400/40'
-                : 'bg-slate-50 hover:bg-teal-50/60 text-slate-800 border-slate-200 hover:border-teal-300'
-            }`}
-          >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105 ${
-              adminActiveSection === 'expenses'
-                ? 'bg-teal-700 text-white'
-                : 'bg-teal-100 text-teal-900'
-            }`}>
-              <DollarSign className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-black tracking-tight block">خەرجی و دارایی</span>
-            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md mt-1 ${
-              adminActiveSection === 'expenses' ? 'bg-emerald-300 text-slate-950 font-black' : 'bg-teal-100 text-teal-900'
-            }`}>
-              💰 سندوق
-            </span>
-          </button>
-
-          {/* 🔴 Hub 5: Logistics & Unloading */}
-          <button
-            onClick={() => setAdminActiveSection('logistics')}
-            className={`group relative p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-              adminActiveSection === 'logistics'
-                ? 'bg-rose-900 text-white border-rose-700 shadow-md ring-2 ring-rose-400/40'
-                : 'bg-slate-50 hover:bg-rose-50/60 text-slate-800 border-slate-200 hover:border-rose-300'
-            }`}
-          >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105 ${
-              adminActiveSection === 'logistics'
-                ? 'bg-rose-700 text-white'
-                : 'bg-rose-100 text-rose-900'
-            }`}>
-              <Truck className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-black tracking-tight block">بارداگرتن و نقڵ</span>
-            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md mt-1 ${
-              adminActiveSection === 'logistics' ? 'bg-rose-300 text-slate-950 font-black' : 'bg-rose-100 text-rose-900'
-            }`}>
-              🚛 لۆجستیک
-            </span>
-          </button>
-
-          {/* 🟣 Hub 6: HR Analytics & Stats */}
-          <button
-            onClick={() => setAdminActiveSection('stats')}
-            className={`group relative p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-              adminActiveSection === 'stats'
-                ? 'bg-purple-900 text-white border-purple-700 shadow-md ring-2 ring-purple-400/40'
-                : 'bg-slate-50 hover:bg-purple-50/60 text-slate-800 border-slate-200 hover:border-purple-300'
-            }`}
-          >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105 ${
-              adminActiveSection === 'stats'
-                ? 'bg-purple-700 text-white'
-                : 'bg-purple-100 text-purple-900'
-            }`}>
-              <BarChart3 className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-black tracking-tight block">ئامار و ڕاپۆرتەکان</span>
-            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md mt-1 ${
-              adminActiveSection === 'stats' ? 'bg-purple-300 text-slate-950 font-black' : 'bg-purple-100 text-purple-900'
-            }`}>
-              📊 مانگانە
             </span>
           </button>
 
@@ -1217,25 +1145,88 @@ export default function AdminPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* 💰 SECTION 3: EXPENSES MODULE */}
+      {/* 🚧 COMING SOON / WORK IN PROGRESS SECTION AT THE VERY BOTTOM */}
       {/* ========================================================================= */}
-      {adminActiveSection === 'expenses' && (
-        <AdminExpensesModule employees={employees} />
-      )}
+      <div className="mt-8 pt-6 border-t-2 border-dashed border-slate-200">
+        <div className="bg-slate-50/80 rounded-2xl border border-slate-200 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-slate-700">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <h3 className="text-xs font-black">بەشەکانی لەژێر پەرەپێداندان (بەم زوانە چالاک دەبن):</h3>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 font-mono">
+              🚧 Work in Progress
+            </span>
+          </div>
 
-      {/* ========================================================================= */}
-      {/* 🚛 SECTION 4: LOGISTICS MODULE */}
-      {/* ========================================================================= */}
-      {adminActiveSection === 'logistics' && (
-        <AdminLogisticsModule employees={employees} />
-      )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+            {/* 1. Expenses */}
+            <div className="p-3 bg-white/70 rounded-xl border border-slate-200 flex items-center justify-between opacity-75">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-700 block">خەرجی و دارایی</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Expenses & Fund</span>
+                </div>
+              </div>
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">
+                بەم زوانە
+              </span>
+            </div>
 
-      {/* ========================================================================= */}
-      {/* 📊 SECTION 5: HR STATS & ANALYTICS REPORT */}
-      {/* ========================================================================= */}
-      {adminActiveSection === 'stats' && (
-        <AdminWeeklyMonthlyStatsModule employees={employees} attendanceLogs={attendanceLogs} />
-      )}
+            {/* 2. Logistics & Unloading */}
+            <div className="p-3 bg-white/70 rounded-xl border border-slate-200 flex items-center justify-between opacity-75">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
+                  <Truck className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-700 block">بارداگرتن و نقڵ</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Logistics & Unload</span>
+                </div>
+              </div>
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">
+                بەم زوانە
+              </span>
+            </div>
+
+            {/* 3. Warehouse Stock */}
+            <div className="p-3 bg-white/70 rounded-xl border border-slate-200 flex items-center justify-between opacity-75">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
+                  <Table className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-700 block">کۆگا و کەرەستەکان</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Warehouse & Stock</span>
+                </div>
+              </div>
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">
+                بەم زوانە
+              </span>
+            </div>
+
+            {/* 4. Facility Maps */}
+            <div className="p-3 bg-white/70 rounded-xl border border-slate-200 flex items-center justify-between opacity-75">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-700 block">نەخشەی کارگە</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Factory Geofence</span>
+                </div>
+              </div>
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">
+                بەم زوانە
+              </span>
+            </div>
+
+          </div>
+        </div>
+      </div>
 
       {/* ========================================================================= */}
       {/* 🔍 DEEP EMPLOYEE 360° MONTHLY PROFILE MODAL */}

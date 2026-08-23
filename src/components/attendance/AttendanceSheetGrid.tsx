@@ -712,27 +712,45 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
                       >
                         {/* 1. Priority: Explicit Custom Holiday / Leave / Absence / Field Duty */}
                         {isCompanyHoliday ? (
-                          <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px] font-black shadow-xs inline-block" title="پشووی فەرمیی کۆمپانیا - بێ سزا">
-                            🏖️ پشوو
-                          </span>
-                        ) : customLeave ? (
-                          customLeave.type === 'excused' ? (
-                            <span className="px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-950 border border-purple-300 text-[10px] font-black shadow-xs inline-block" title="مۆڵەت بە ئاگاداریەوە (بێ سزا)">
-                              📝 مۆڵەت
-                            </span>
-                          ) : customLeave.type === 'unexcused' ? (
-                            <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-950 border border-rose-300 text-[10px] font-black shadow-xs inline-block" title="مۆڵەت بێ ئاگاداری / غیاب (بە سزا)">
-                              ❌ غیاب
-                            </span>
-                          ) : customLeave.type === 'field' ? (
-                            <span className="px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-950 border border-sky-300 text-[10px] font-black shadow-xs inline-block" title="لە دەرەوەی کۆمپانیا (ئەرکی فەرمی)">
-                              🚗 دەرەوە
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px] font-black shadow-xs inline-block" title="پشوو">
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 text-[9px] font-black shadow-xs inline-block" title="پشووی فەرمیی کۆمپانیا - بێ سزا">
                               🏖️ پشوو
                             </span>
-                          )
+                            {cellLogs.length > 0 && (
+                              <div className="text-[9px] font-mono text-emerald-800 font-bold leading-none mt-0.5">
+                                {checkIn ? formatTime12H(checkIn.time) : ''}
+                                {checkIn && checkOut ? ' - ' : ''}
+                                {checkOut ? formatTime12H(checkOut.time) : ''}
+                              </div>
+                            )}
+                          </div>
+                        ) : customLeave ? (
+                          <div className="flex flex-col items-center gap-0.5">
+                            {customLeave.type === 'excused' ? (
+                              <span className="px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-950 border border-purple-300 text-[9px] font-black shadow-xs inline-block" title="مۆڵەت بە ئاگاداریەوە (بێ سزا)">
+                                📝 مۆڵەت
+                              </span>
+                            ) : customLeave.type === 'unexcused' ? (
+                              <span className="px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-950 border border-rose-300 text-[9px] font-black shadow-xs inline-block" title="مۆڵەت بێ ئاگاداری / غیاب (بە سزا)">
+                                ❌ غیاب
+                              </span>
+                            ) : customLeave.type === 'field' ? (
+                              <span className="px-1.5 py-0.2 rounded-full bg-sky-100 text-sky-950 border border-sky-300 text-[9px] font-black shadow-xs inline-block" title="لە دەرەوەی کۆمپانیا (ئەرکی فەرمی)">
+                                🚗 دەرەوە
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 text-[9px] font-black shadow-xs inline-block" title="پشوو">
+                                🏖️ پشوو
+                              </span>
+                            )}
+                            {cellLogs.length > 0 && (
+                              <div className="text-[9px] font-mono text-purple-900 font-bold leading-none mt-0.5">
+                                {checkIn ? formatTime12H(checkIn.time) : ''}
+                                {checkIn && checkOut ? ' - ' : ''}
+                                {checkOut ? formatTime12H(checkOut.time) : ''}
+                              </div>
+                            )}
+                          </div>
                         ) : cellLogs.length > 0 ? (
                           <div className="flex flex-col items-center justify-center gap-0.5 font-mono text-[11px] font-bold">
                             {/* Check-In Link (12H Format with 15-min tolerance colors) */}
