@@ -7,6 +7,23 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
+let GLOBAL_SAVED_LOCATIONS = [
+  {
+    id: 'ashley-base-main',
+    name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
+    lat: 35.5571,
+    lng: 45.4352,
+    radiusMeters: 100
+  },
+  {
+    id: 'huana-warehouse-main',
+    name: 'کۆگای سەرەکی هوانە (Huana Warehouse)',
+    lat: 35.6012,
+    lng: 45.3850,
+    radiusMeters: 120
+  }
+];
+
 // Get current Date and Time in Asia/Baghdad timezone (Kurdish Local Time)
 function getBaghdadDateTime() {
   const now = new Date();
@@ -255,27 +272,24 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
-    // GET /api/attendance/location (Strictly 2 Official Company Locations)
+    // GET /api/attendance/location (Live 2 Official Company Locations)
     // ----------------------------------------
     if (pathStr === 'location' && method === 'GET') {
-      const officialTwoLocations = [
-        {
-          id: 'ashley-base-main',
-          name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
-          lat: 35.5571,
-          lng: 45.4352,
-          radiusMeters: 100
-        },
-        {
-          id: 'huana-warehouse-main',
-          name: 'کۆگای سەرەکی هوانە (Huana Warehouse)',
-          lat: 35.6012,
-          lng: 45.3850,
-          radiusMeters: 120
+      try {
+        const { data: dbLocs } = await supabase.from('warehouses').select('*');
+        if (dbLocs && dbLocs.length > 0) {
+          const mapped = dbLocs.slice(0, 2).map((l: any) => ({
+            id: l.id,
+            name: l.name,
+            lat: parseFloat(l.lat),
+            lng: parseFloat(l.lng),
+            radiusMeters: parseFloat(l.radius) || 100
+          }));
+          return NextResponse.json({ locations: mapped });
         }
-      ];
+      } catch {}
 
-      return NextResponse.json({ locations: officialTwoLocations });
+      return NextResponse.json({ locations: GLOBAL_SAVED_LOCATIONS });
     }
 
     // ----------------------------------------
@@ -321,11 +335,13 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
-    // POST /api/attendance/location
+    // POST /api/attendance/location (Save Official Locations)
     // ----------------------------------------
     if (pathStr === 'location' && method === 'POST') {
       const body = await req.json();
       const locList = body.locations || [body];
+      GLOBAL_SAVED_LOCATIONS = locList;
+
       try {
         for (const loc of locList) {
           await supabase.from('warehouses').upsert({
@@ -339,7 +355,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       } catch (err) {
         console.warn('Save locations error:', err);
       }
-      return NextResponse.json({ success: true });
+      return NextResponse.json({ success: true, locations: GLOBAL_SAVED_LOCATIONS });
     }
 
     // ----------------------------------------

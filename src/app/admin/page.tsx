@@ -1466,12 +1466,22 @@ export default function AdminPage() {
           factoryName={factoryLocation.name}
           isRTL={true}
           onSave={async (savedLocations) => {
+            try {
+              await fetch('/api/attendance/location', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ locations: savedLocations })
+              });
+            } catch (err) {
+              console.warn('Failed to save locations to server:', err);
+            }
+
             setCompanyLocations(savedLocations);
             if (savedLocations.length > 0) {
               setSyncedFactoryLocation(savedLocations[0]);
             }
             setShowMapPicker(false);
-            alert(`🎉 ${savedLocations.length} لۆکەیشنی کۆمپانیا بە سەرکەوتوویی پاشەکەوت کران!`);
+            alert(`🎉 هەردوو لۆکەیشنی (ئاشڵی و هوانە) بە سەرکەوتوویی لە سێرڤەر پاشەکەوت کران!`);
           }}
           onClose={() => setShowMapPicker(false)}
         />

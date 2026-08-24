@@ -141,15 +141,21 @@ export default function AutonomousMobileAppLight() {
       })
       .catch(() => {});
 
-    // Load ALL company base locations dynamically from website API (Ashley Base, Huana, etc.)
-    fetch('/api/attendance/location')
-      .then(res => res.json())
-      .then(data => {
-        if (data?.locations && data.locations.length > 0) {
-          setCompanyLocations(data.locations);
-        }
-      })
-      .catch(() => {});
+    // Load ALL company base locations dynamically from website API (Ashley Base, Huana) with 5s polling
+    const fetchCompanyLocations = () => {
+      fetch('/api/attendance/location')
+        .then(res => res.json())
+        .then(data => {
+          if (data?.locations && data.locations.length > 0) {
+            setCompanyLocations(data.locations);
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchCompanyLocations();
+    const locInterval = setInterval(fetchCompanyLocations, 5000);
+    return () => clearInterval(locInterval);
   }, []);
 
   // 4. Remote Unbind Polling (Checks every 5 seconds if Admin unlinked this device)

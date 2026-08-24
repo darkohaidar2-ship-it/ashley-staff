@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, MapPin, Check, Search, Navigation } from 'lucide-react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Plus, Trash2, MapPin, Check, Search, Navigation, Building2, Warehouse, Compass, X, AlertCircle } from 'lucide-react';
 
 export interface CompanyLocation {
   id: string;
@@ -22,34 +22,48 @@ interface FactoryMapPickerProps {
   onClose: () => void;
 }
 
+const DEFAULT_TWO_BRANCHES: CompanyLocation[] = [
+  {
+    id: 'ashley-base-main',
+    name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
+    lat: 35.5571,
+    lng: 45.4352,
+    radiusMeters: 100,
+  },
+  {
+    id: 'huana-warehouse-main',
+    name: 'کۆگای سەرەکی هوانە (Huana Warehouse)',
+    lat: 35.6012,
+    lng: 45.3850,
+    radiusMeters: 120,
+  },
+];
+
 export function FactoryMapPicker({
   initialLocations,
-  initialLat = 35.5571,
-  initialLng = 45.4352,
-  initialRadius = 50,
-  factoryName = 'کۆمپانیای سەرەکی ئاشڵی',
   isRTL,
   onSave,
   onClose,
 }: FactoryMapPickerProps) {
-  // Array of multiple company branches
+  // Always ensure precisely the 2 branches exist
   const [locations, setLocations] = useState<CompanyLocation[]>(() => {
     if (initialLocations && initialLocations.length > 0) {
-      return initialLocations;
+      // If user had locations, keep up to 2
+      const mapped = initialLocations.slice(0, 2);
+      if (mapped.length === 1) {
+        mapped.push(DEFAULT_TWO_BRANCHES[1]);
+      }
+      return mapped;
     }
-    return [
-      {
-        id: 'main-company-location',
-        name: factoryName || 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
-        lat: initialLat || 35.5571,
-        lng: initialLng || 45.4352,
-        radiusMeters: initialRadius || 50,
-      },
-    ];
+    return DEFAULT_TWO_BRANCHES;
   });
 
   const [selectedIdx, setSelectedIdx] = useState<number>(0);
-  const activeLoc = locations[selectedIdx] || locations[0];
+  const selectedIdxRef = useRef<number>(0);
+  selectedIdxRef.current = selectedIdx;
+
+  const locationsRef = useRef<CompanyLocation[]>(locations);
+  locationsRef.current = locations;
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searching, setSearching] = useState<boolean>(false);
@@ -60,7 +74,22 @@ export function FactoryMapPicker({
   const markersRef = useRef<any[]>([]);
   const circlesRef = useRef<any[]>([]);
 
-  // Load Leaflet CSS & JS
+  // Update a single location's properties
+  const updateLocationAt = useCallback((index: number, updates: Partial<CompanyLocation>) => {
+    setLocations(prev => {
+      const copy = [...prev];
+      if (!copy[index]) return prev;
+      copy[index] = { ...copy[index], ...updates };
+      return copy;
+    });
+  }, []);
+
+  // Update currently selected active branch
+  const updateActiveLocation = useCallback((updates: Partial<CompanyLocation>) => {
+    updateLocationAt(selectedIdxRef.current, updates);
+  }, [updateLocationAt]);
+
+  // Load Leaflet
   useEffect(() => {
     if (!document.getElementById('leaflet-css')) {
       const link = document.createElement('link');
@@ -102,10 +131,8 @@ export function FactoryMapPicker({
   const initMap = (L: any) => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
-    const startLat = activeLoc?.lat || 35.5571;
-    const startLng = activeLoc?.lng || 45.4352;
-
-    const map = L.map(mapContainerRef.current).setView([startLat, startLng], 15);
+    const startLoc = locationsRef.current[selectedIdxRef.current] || locationsRef.current[0];
+    const map = L.map(mapContainerRef.current).setView([startLoc.lat, startLoc.lng], 14);
     mapInstanceRef.current = map;
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -113,191 +140,241 @@ export function FactoryMapPicker({
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(map);
 
-    // Map click moves currently selected location
+    // Map click moves ONLY the currently selected active branch!
     map.on('click', (e: any) => {
       const clickLat = Number(e.latlng.lat.toFixed(6));
       const clickLng = Number(e.latlng.lng.toFixed(6));
-      updateActiveLocation({ lat: clickLat, lng: clickLng });
+      const currIdx = selectedIdxRef.current;
+      updateLocationAt(currIdx, { lat: clickLat, lng: clickLng });
     });
 
-    renderAllMarkersAndCircles(L);
+    renderMarkersAndCircles();
   };
 
-  const renderAllMarkersAndCircles = (L: any = (window as any).L) => {
-    if (!L || !mapInstanceRef.current) return;
+  // Sync Markers on Map whenever locations change
+  const renderMarkersAndCircles = useCallback(() => {
+    const L = (window as any).L;
+    const map = mapInstanceRef.current;
+    if (!L || !map) return;
 
     // Clear old markers & circles
-    markersRef.current.forEach((m) => m.remove());
-    circlesRef.current.forEach((c) => c.remove());
+    markersRef.current.forEach(m => m.remove());
+    circlesRef.current.forEach(c => c.remove());
     markersRef.current = [];
     circlesRef.current = [];
 
     locations.forEach((loc, idx) => {
       const isSelected = idx === selectedIdx;
+      const isAshley = idx === 0;
+      const themeColor = isAshley ? '#ea580c' : '#7c3aed';
+      const iconEmoji = isAshley ? '🏢' : '🏭';
 
-      // Marker
-      const marker = L.marker([loc.lat, loc.lng], { draggable: isSelected }).addTo(mapInstanceRef.current);
-      marker.bindPopup(`<b>${loc.name}</b><br/>مەودا: ${loc.radiusMeters}m`);
-      if (isSelected) marker.openPopup();
+      const customIcon = L.divIcon({
+        className: `custom-pin-${idx}`,
+        html: `
+          <div style="background-color: ${themeColor}; color: white; width: ${isSelected ? 44 : 36}px; height: ${isSelected ? 44 : 36}px; border-radius: 14px; display: flex; align-items: center; justify-content: center; border: ${isSelected ? '4px solid #ffffff' : '2px solid #ffffff'}; box-shadow: 0 6px 18px rgba(0,0,0,0.35); font-size: ${isSelected ? 20 : 16}px; transform: scale(${isSelected ? 1.1 : 1}); transition: all 0.2s ease;">
+            ${iconEmoji}
+          </div>
+        `,
+        iconSize: [isSelected ? 44 : 36, isSelected ? 44 : 36],
+        iconAnchor: [isSelected ? 22 : 18, isSelected ? 22 : 18],
+      });
 
-      if (isSelected) {
-        marker.on('dragend', (e: any) => {
-          const newPos = e.target.getLatLng();
-          updateActiveLocation({
-            lat: Number(newPos.lat.toFixed(6)),
-            lng: Number(newPos.lng.toFixed(6)),
-          });
-        });
-      }
+      // Draggable Marker
+      const marker = L.marker([loc.lat, loc.lng], {
+        icon: customIcon,
+        draggable: true,
+      }).addTo(map);
+
+      marker.on('click', () => {
+        setSelectedIdx(idx);
+      });
+
+      marker.on('dragend', (e: any) => {
+        const newLat = Number(e.target.getLatLng().lat.toFixed(6));
+        const newLng = Number(e.target.getLatLng().lng.toFixed(6));
+        updateLocationAt(idx, { lat: newLat, lng: newLng });
+      });
+
+      // Geofence Circle
+      const circle = L.circle([loc.lat, loc.lng], {
+        color: themeColor,
+        fillColor: themeColor,
+        fillOpacity: isSelected ? 0.22 : 0.12,
+        radius: loc.radiusMeters || 100,
+        weight: isSelected ? 3 : 1.5,
+      }).addTo(map);
 
       markersRef.current.push(marker);
-
-      // Circle
-      const circle = L.circle([loc.lat, loc.lng], {
-        color: isSelected ? '#10b981' : '#6366f1',
-        fillColor: isSelected ? '#10b981' : '#6366f1',
-        fillOpacity: isSelected ? 0.25 : 0.12,
-        radius: loc.radiusMeters || 50,
-      }).addTo(mapInstanceRef.current);
-
       circlesRef.current.push(circle);
     });
-  };
+  }, [locations, selectedIdx, updateLocationAt]);
 
-  // Re-render markers and pan whenever locations or selected location changes
   useEffect(() => {
-    if ((window as any).L && mapInstanceRef.current) {
-      renderAllMarkersAndCircles((window as any).L);
-      if (activeLoc) {
-        mapInstanceRef.current.panTo([activeLoc.lat, activeLoc.lng]);
-      }
-    }
-  }, [locations, selectedIdx]);
+    renderMarkersAndCircles();
+  }, [locations, selectedIdx, renderMarkersAndCircles]);
 
-  const updateActiveLocation = (fields: Partial<CompanyLocation>) => {
-    setLocations((prev) =>
-      prev.map((loc, idx) => (idx === selectedIdx ? { ...loc, ...fields } : loc))
-    );
-  };
-
-  const handleAddNewBranch = () => {
-    const newId = `loc-${Date.now().toString().slice(-6)}`;
-    const newBranchNum = locations.length + 1;
-    const offsetLat = (activeLoc?.lat || 35.5571) + (Math.random() - 0.5) * 0.005;
-    const offsetLng = (activeLoc?.lng || 45.4352) + (Math.random() - 0.5) * 0.005;
-
-    const newLoc: CompanyLocation = {
-      id: newId,
-      name: `لقی نوێی ${newBranchNum} (Branch ${newBranchNum})`,
-      lat: Number(offsetLat.toFixed(6)),
-      lng: Number(offsetLng.toFixed(6)),
-      radiusMeters: 50,
-    };
-
-    setLocations((prev) => [...prev, newLoc]);
-    setSelectedIdx(locations.length);
-  };
-
-  const handleDeleteLocation = (idxToDelete: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (locations.length <= 1) {
-      alert('نابێت هەموو لۆکەیشنەکان بسڕیتەوە! بەلایەنی کەمەوە دەبێت ١ لۆکەیشن هەبێت.');
-      return;
-    }
-    if (!confirm('ئایا دڵنیایت لە سڕینەوەی ئەم شوێنە؟')) return;
-
-    setLocations((prev) => prev.filter((_, i) => i !== idxToDelete));
-    if (selectedIdx >= idxToDelete) {
-      setSelectedIdx(Math.max(0, selectedIdx - 1));
+  // When clicking a tab, center map on that branch
+  const selectBranch = (idx: number) => {
+    setSelectedIdx(idx);
+    selectedIdxRef.current = idx;
+    const target = locations[idx];
+    if (target && mapInstanceRef.current) {
+      mapInstanceRef.current.flyTo([target.lat, target.lng], 15, { duration: 0.8 });
     }
   };
 
+  // Search Address / Coordinates
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
+
+    // Check if user typed coordinates like "35.5571, 45.4352"
+    const coordMatch = searchQuery.match(/(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)/);
+    if (coordMatch) {
+      const lat = parseFloat(coordMatch[1]);
+      const lng = parseFloat(coordMatch[3]);
+      updateActiveLocation({ lat, lng });
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.flyTo([lat, lng], 16);
+      }
+      setSearchError('');
+      return;
+    }
+
     setSearching(true);
     setSearchError('');
 
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery + ' Iraq Sulaymaniyah')}`
       );
       const data = await res.json();
+
       if (data && data.length > 0) {
-        const foundLat = Number(parseFloat(data[0].lat).toFixed(6));
-        const foundLng = Number(parseFloat(data[0].lon).toFixed(6));
-        updateActiveLocation({ lat: foundLat, lng: foundLng });
+        const lat = Number(parseFloat(data[0].lat).toFixed(6));
+        const lng = Number(parseFloat(data[0].lon).toFixed(6));
+        updateActiveLocation({ lat, lng });
         if (mapInstanceRef.current) {
-          mapInstanceRef.current.setView([foundLat, foundLng], 15);
+          mapInstanceRef.current.flyTo([lat, lng], 16);
         }
       } else {
-        setSearchError('شوێنەکە نەدۆزرایەوە');
+        setSearchError('هیچ شوێنێک نەدۆزرایەوە');
       }
     } catch {
-      setSearchError('هەڵەیەک لە گەڕاندا ڕوویدا');
+      setSearchError('هەڵەیەک ڕوویدا لە گەڕان');
     } finally {
       setSearching(false);
     }
   };
 
-  const setCurrentGps = () => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition((pos) => {
-      const curLat = Number(pos.coords.latitude.toFixed(6));
-      const curLng = Number(pos.coords.longitude.toFixed(6));
-      updateActiveLocation({ lat: curLat, lng: curLng });
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.setView([curLat, curLng], 16);
-      }
-    });
-  };
-
-  const handleSaveAll = () => {
-    onSave(locations);
+  // Set Current Device GPS to active branch
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert('جی پی ئێس لەسەر ئەم وێبگەڕە بەردەست نییە');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = Number(pos.coords.latitude.toFixed(6));
+        const lng = Number(pos.coords.longitude.toFixed(6));
+        updateActiveLocation({ lat, lng });
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.flyTo([lat, lng], 16);
+        }
+      },
+      (err) => alert('نەتوانرا لۆکەیشنی ئێستات وەربگیرێت: ' + err.message),
+      { enableHighAccuracy: true }
+    );
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 font-sans dir-rtl" dir="rtl">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 dir-rtl" dir="rtl">
+      <div className="bg-white rounded-3xl max-w-4xl w-full h-[90vh] shadow-2xl border border-slate-300 flex flex-col overflow-hidden">
         
-        {/* Modal Header */}
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-900 text-white">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-md">
-              <MapPin className="w-4 h-4" />
+        {/* Header */}
+        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-orange-500 flex items-center justify-center text-white">
+              <Compass className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-sm sm:text-base font-black">
-                دیاریکردنی فرە-لۆکەیشن و بازنەی ڕێگەپێدراوی لقەکان (Multi-Geofence)
-              </h2>
-              <p className="text-[11px] text-slate-400 font-semibold">
-                دەتوانیت ٢ شوێن یان زیاتر دیاری بکەیت تا کارمەندان لە هەر لقێک بن بتوانن چێک‌ئین بکەن
-              </p>
+              <h2 className="text-base font-black">دیاریکردنی لۆکەیشنی فەرمیی دەوام (GPS)</h2>
+              <p className="text-xs text-slate-300 font-bold">هەڵبژاردنی شوێنی دەقیقی (کۆمپانیای ئاشڵی و کۆگای هوانە)</p>
             </div>
           </div>
 
-          <button onClick={onClose} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300 transition-all">
-            ✕ داخستن
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-white cursor-pointer">
+            <X className="w-6 h-6" />
           </button>
         </div>
 
-        {/* Top Controls & Search Bar */}
-        <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 grid grid-cols-1 md:grid-cols-12 gap-2 text-xs font-bold">
-          <form onSubmit={handleSearch} className="md:col-span-8 flex gap-2">
+        {/* 2 Clear Selectable Branch Tabs */}
+        <div className="p-3 bg-slate-100 border-b border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {locations.map((loc, idx) => {
+            const isSelected = idx === selectedIdx;
+            const isAshley = idx === 0;
+
+            return (
+              <div
+                key={loc.id}
+                onClick={() => selectBranch(idx)}
+                className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${
+                  isSelected
+                    ? isAshley
+                      ? 'bg-orange-50 border-orange-500 shadow-md ring-4 ring-orange-500/10'
+                      : 'bg-purple-50 border-purple-600 shadow-md ring-4 ring-purple-600/10'
+                    : 'bg-white border-slate-200 hover:border-slate-300 opacity-70'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg font-black ${
+                    isAshley ? 'bg-orange-500 text-white' : 'bg-purple-600 text-white'
+                  }`}>
+                    {isAshley ? '🏢' : '🏭'}
+                  </div>
+                  <div className="text-right">
+                    <div className="font-black text-xs text-slate-900">{loc.name}</div>
+                    <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                      Lat: {loc.lat.toFixed(4)}, Lng: {loc.lng.toFixed(4)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-left space-y-1">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+                    isSelected
+                      ? isAshley ? 'bg-orange-500 text-white' : 'bg-purple-600 text-white'
+                      : 'bg-slate-200 text-slate-600'
+                  }`}>
+                    {isSelected ? 'دەستنیشانکراوە 🎯' : 'کلیک بکە بۆ گۆڕین'}
+                  </span>
+                  <div className="text-[10px] font-bold text-slate-500">
+                    سنوور: {loc.radiusMeters}م
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Controls Bar: Search & GPS Auto-Detect */}
+        <div className="p-3 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <form onSubmit={handleSearch} className="flex-1 min-w-[240px] flex items-center gap-2">
             <div className="relative flex-1">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="گەڕان لەسەر نەخشە (بۆ نموونە: سلێمانی، تاسڵوجە، هەولێر)..."
-                className="w-full pl-3 pr-8 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none text-xs font-bold"
+                placeholder="گەڕان بەدوای گەڕەک، شەقام یان کۆردینەیت (35.55, 45.43)..."
+                className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-orange-500 focus:outline-hidden"
               />
-              <Search className="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
+              <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
             </div>
             <button
               type="submit"
               disabled={searching}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black shadow-sm"
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
             >
               {searching ? '...' : 'گەڕان'}
             </button>
@@ -305,160 +382,44 @@ export function FactoryMapPicker({
 
           <button
             type="button"
-            onClick={setCurrentGps}
-            className="md:col-span-4 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-black text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all"
+            onClick={handleUseCurrentLocation}
+            className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <Navigation className="w-3.5 h-3.5" />
-            <span>📍 دانانی شوێنی ئێستای GPSی من</span>
+            <span>📍 دانانی شوێنی ئێستای من</span>
           </button>
-
-          {searchError && (
-            <p className="col-span-12 text-rose-500 text-xs font-semibold">{searchError}</p>
-          )}
         </div>
 
-        {/* Main Body: Left Locations List + Right Map */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-12 min-h-[360px] overflow-hidden">
+        {/* Map Container */}
+        <div className="flex-1 w-full relative bg-slate-100">
+          <div ref={mapContainerRef} className="w-full h-full" />
           
-          {/* Left Panel: Locations Sidebar List */}
-          <div className="md:col-span-4 border-l border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 p-3 space-y-2.5 overflow-y-auto max-h-[380px] md:max-h-none">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-slate-800 dark:text-slate-200">
-                لیستی لقەکان ({locations.length}):
-              </span>
-              <button
-                type="button"
-                onClick={handleAddNewBranch}
-                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black rounded-lg shadow-sm flex items-center gap-1 active:scale-95 transition-all"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>زیادکردنی لقی نوێ</span>
-              </button>
+          <div className="absolute top-3 right-3 z-40 bg-white/90 backdrop-blur-xs p-2.5 rounded-2xl shadow-lg border border-slate-200 text-xs font-bold space-y-1">
+            <div className="text-slate-800 font-black flex items-center gap-1">
+              <span>🎯 لقێک لە سەرەوە هەڵبژێرە، پاشان لەسەر نەخشە کلیک بکە.</span>
             </div>
-
-            <div className="space-y-2">
-              {locations.map((loc, idx) => {
-                const isSel = idx === selectedIdx;
-                return (
-                  <div
-                    key={loc.id || idx}
-                    onClick={() => setSelectedIdx(idx)}
-                    className={`p-3 rounded-2xl border transition-all cursor-pointer select-none space-y-1.5 ${
-                      isSel
-                        ? 'bg-white dark:bg-slate-800 border-emerald-500 shadow-md ring-2 ring-emerald-500/20'
-                        : 'bg-white/70 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2.5 h-2.5 rounded-full ${isSel ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                        <span className="text-xs font-black text-slate-900 dark:text-white">
-                          {loc.name}
-                        </span>
-                      </div>
-                      {locations.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteLocation(idx, e)}
-                          className="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
-                          title="سڕینەوەی ئەم لۆکەیشنە"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 dark:text-slate-400">
-                      <span>مەودا: {loc.radiusMeters}m</span>
-                      <span>{loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <div className="text-[11px] text-slate-500">دەتوانیت مارکەرەکە بە دەستیش ڕابکێشیت.</div>
           </div>
-
-          {/* Right Panel: Interactive Map */}
-          <div className="md:col-span-8 relative bg-slate-200 dark:bg-slate-800 min-h-[300px]">
-            <div ref={mapContainerRef} className="w-full h-full min-h-[300px] z-10" />
-          </div>
-
         </div>
 
-        {/* Selected Location Form Controls */}
-        {activeLoc && (
-          <div className="p-3.5 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs font-bold">
-            <div>
-              <label className="block text-slate-600 dark:text-slate-400 mb-1">ناوی ئەم لقە/کۆگایە:</label>
-              <input
-                type="text"
-                value={activeLoc.name}
-                onChange={(e) => updateActiveLocation({ name: e.target.value })}
-                className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-600 dark:text-slate-400 mb-1">Latitude:</label>
-              <input
-                type="number"
-                step="any"
-                value={activeLoc.lat}
-                onChange={(e) => updateActiveLocation({ lat: Number(e.target.value) })}
-                className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-600 dark:text-slate-400 mb-1">Longitude:</label>
-              <input
-                type="number"
-                step="any"
-                value={activeLoc.lng}
-                onChange={(e) => updateActiveLocation({ lng: Number(e.target.value) })}
-                className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-600 dark:text-slate-400 mb-1">
-                مەودای بازنە: ({activeLoc.radiusMeters} مەتر)
-              </label>
-              <input
-                type="range"
-                min="20"
-                max="2000"
-                step="10"
-                value={activeLoc.radiusMeters || 50}
-                onChange={(e) => updateActiveLocation({ radiusMeters: Number(e.target.value) })}
-                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer mt-2"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Modal Footer Actions */}
-        <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
-            کارمەندان لە هەر یەک لەم {locations.length} لقەدا بن، چێک‌ئینیان بۆ ئەنجام دەدرێت
-          </span>
-
-          <div className="flex gap-2">
+        {/* Footer Actions */}
+        <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl"
+              className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black transition-all cursor-pointer"
             >
-              پاشگەزبوونەوە
-            </button>
-
-            <button
-              onClick={handleSaveAll}
-              className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 active:scale-95 transition-all"
-            >
-              <Check className="w-4 h-4" />
-              <span>💾 پاشەکەوتکردنی هەموو لۆکەیشنەکان</span>
+              داخستن
             </button>
           </div>
+
+          <button
+            onClick={() => onSave(locations)}
+            className="px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-black shadow-lg shadow-orange-600/30 flex items-center gap-2 transition-all cursor-pointer"
+          >
+            <Check className="w-4 h-4" />
+            <span>پاشەکەوتکردنی هەردوو لۆکەیشن</span>
+          </button>
         </div>
 
       </div>
