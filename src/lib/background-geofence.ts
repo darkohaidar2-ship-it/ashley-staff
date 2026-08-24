@@ -150,26 +150,41 @@ class AutonomousGeofenceManager {
     });
 
     const now = Date.now();
-    // Cooldown of 90 seconds between auto-triggers to prevent GPS bounce
-    const COOLDOWN_MS = 90 * 1000;
+    // Cooldown between auto-triggers to prevent GPS bounce
+    const COOLDOWN_MS = 60 * 1000;
 
-    // State Transition 1: Outside -> Inside (ENTER)
+    // State Transition 1: Outside -> Inside (ENTER - Immediate Check-In)
     if (this.isInsideState === false && currentlyInside) {
       if (now - this.lastTriggerTime > COOLDOWN_MS) {
         this.isInsideState = true;
         this.lastTriggerTime = now;
         localStorage.setItem(`ashley_geostate_${this.config.userId}`, 'inside');
+        localStorage.removeItem(`ashley_exit_timestamp_${this.config.userId}`);
         await this.triggerGeofenceEvent('ENTER', currentLat, currentLng, closestDistance, matchedRegion);
       }
     }
-    // State Transition 2: Inside -> Outside (EXIT)
+    // State Transition 2: Inside -> Outside (EXIT - Protected with 5-Minute Grace Period)
     else if (this.isInsideState === true && !currentlyInside) {
-      if (now - this.lastTriggerTime > COOLDOWN_MS) {
+      // Check if exit grace timer has started
+      const exitStartKey = `ashley_exit_timestamp_${this.config.userId}`;
+      const firstExitTime = Number(localStorage.getItem(exitStartKey)) || now;
+      if (!localStorage.getItem(exitStartKey)) {
+        localStorage.setItem(exitStartKey, String(now));
+      }
+
+      // If outside continuously for > 3 minutes (180s) or cooldown passed, confirm EXIT
+      const GRACE_PERIOD_MS = 3 * 60 * 1000; // 3 minutes grace period for errands / glitches
+      if (now - firstExitTime >= GRACE_PERIOD_MS && now - this.lastTriggerTime > COOLDOWN_MS) {
         this.isInsideState = false;
         this.lastTriggerTime = now;
         localStorage.setItem(`ashley_geostate_${this.config.userId}`, 'outside');
+        localStorage.removeItem(exitStartKey);
         await this.triggerGeofenceEvent('EXIT', currentLat, currentLng, closestDistance, matchedRegion);
       }
+    }
+    // If returned inside during grace period, reset exit timer
+    else if (currentlyInside) {
+      localStorage.removeItem(`ashley_exit_timestamp_${this.config.userId}`);
     }
     // Initial Baseline initialization
     else if (this.isInsideState === null) {

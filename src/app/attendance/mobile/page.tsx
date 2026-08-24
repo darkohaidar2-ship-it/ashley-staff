@@ -651,8 +651,8 @@ export default function AutonomousMobileAppLight() {
             </button>
           </div>
 
-          {/* Today's Activity Summary Cards with High-Visibility Times */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Today's Activity Summary Cards: Side-by-Side (Right: Check-In, Left: Check-Out) */}
+          <div className="grid grid-cols-2 gap-2.5">
             
             {/* Card 1: Check In */}
             <div className={`p-4 rounded-2xl border text-right space-y-2 transition-all shadow-sm ${

@@ -347,6 +347,33 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
+    // POST /api/attendance/reset-today (Clear Today Attendance for Clean Re-testing)
+    // ----------------------------------------
+    if (pathStr === 'reset-today' && method === 'POST') {
+      const body = await req.json().catch(() => ({}));
+      const { userId } = body;
+      const { dateStr } = getBaghdadDateTime();
+
+      try {
+        let query = supabase.from('attendance').delete().eq('date', dateStr);
+        if (userId) {
+          query = query.eq('user_id', userId);
+        }
+        await query;
+
+        let logQuery = supabase.from('attendance_logs').delete().eq('log_date', dateStr);
+        if (userId) {
+          logQuery = logQuery.eq('employee_id', userId);
+        }
+        await logQuery;
+
+        return NextResponse.json({ success: true, message: 'داتاکانی دەوامی ئەمڕۆ بە سەرکەوتوویی سڕانەوە بۆ تێستی نوێ' });
+      } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 500 });
+      }
+    }
+
+    // ----------------------------------------
     // POST /api/attendance/location (Save Official Locations)
     // ----------------------------------------
     if (pathStr === 'location' && method === 'POST') {
