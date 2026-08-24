@@ -618,54 +618,6 @@ export default function AutonomousMobileAppLight() {
             </button>
           </div>
 
-          {/* Quick Manual Check-In / Check-Out Trigger Button */}
-          <div>
-            <button
-              type="button"
-              disabled={actionLoading}
-              onClick={async () => {
-                if (!employeeProfile) return;
-                setActionLoading(true);
-                try {
-                  const eventType = !shiftStatus.checkInTime ? 'ENTER' : 'EXIT';
-                  const res = await fetch('/api/attendance/autonomous-event', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      userId: employeeProfile.id,
-                      userName: employeeProfile.name,
-                      event: eventType,
-                      lat: currentLat || companyLocations[0].lat,
-                      lng: currentLng || companyLocations[0].lng,
-                      deviceToken: localStorage.getItem('ashley_device_token') || 'dev-auto'
-                    })
-                  });
-                  const data = await res.json();
-                  if (data.success) {
-                    await fetchLiveTodayAttendance();
-                    sendLocalNotification('🎉 دەوام تۆمارکرا', data.message || 'دەوامی ئەمڕۆ بە سەرکەوتوویی تۆمارکرا.');
-                  }
-                } catch (e) {
-                  console.error('Check-in error:', e);
-                } finally {
-                  setActionLoading(false);
-                }
-              }}
-              className={`w-full py-3.5 rounded-2xl text-xs font-black transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer ${
-                !shiftStatus.checkInTime
-                  ? 'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white shadow-emerald-600/30'
-                  : 'bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white shadow-rose-600/30'
-              }`}
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>
-                {actionLoading 
-                  ? 'لە تۆمارکردندایە...' 
-                  : (!shiftStatus.checkInTime ? '📍 تۆمارکردنی دەوام (چێک‌ئین ئێستا) 🟢' : '👋 تۆمارکردنی ڕۆیشتن (چێک‌ئاوت ئێستا) 🔴')}
-              </span>
-            </button>
-          </div>
-
           {/* Today's Activity Summary Cards */}
           <div className="grid grid-cols-2 gap-3">
             <div className="p-4 bg-white rounded-2xl border border-slate-200 text-right space-y-1 shadow-sm">

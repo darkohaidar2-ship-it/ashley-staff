@@ -62,6 +62,8 @@ export function FactoryMapPicker({
   const selectedIdxRef = useRef<number>(0);
   selectedIdxRef.current = selectedIdx;
 
+  const activeLoc = locations[selectedIdx] || locations[0];
+
   const locationsRef = useRef<CompanyLocation[]>(locations);
   locationsRef.current = locations;
 
@@ -358,9 +360,9 @@ export function FactoryMapPicker({
           })}
         </div>
 
-        {/* Controls Bar: Search & GPS Auto-Detect */}
-        <div className="p-3 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-          <form onSubmit={handleSearch} className="flex-1 min-w-[240px] flex items-center gap-2">
+        {/* Controls Bar: Search, Radius Slider & GPS Auto-Detect */}
+        <div className="p-3 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <form onSubmit={handleSearch} className="flex-1 min-w-[220px] flex items-center gap-2">
             <div className="relative flex-1">
               <input
                 type="text"
@@ -379,6 +381,31 @@ export function FactoryMapPicker({
               {searching ? '...' : 'گەڕان'}
             </button>
           </form>
+
+          {/* Interactive Radius Adjuster for Selected Branch */}
+          <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+            <span className="text-xs font-black text-slate-700">تیرەی بازنە (سنوور):</span>
+            <input
+              type="range"
+              min={30}
+              max={300}
+              step={10}
+              value={activeLoc?.radiusMeters || 100}
+              onChange={(e) => updateActiveLocation({ radiusMeters: Number(e.target.value) })}
+              className="w-24 accent-orange-600 cursor-pointer"
+            />
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min={20}
+                max={500}
+                value={activeLoc?.radiusMeters || 100}
+                onChange={(e) => updateActiveLocation({ radiusMeters: Number(e.target.value) || 50 })}
+                className="w-14 px-1.5 py-0.5 bg-white border border-slate-300 rounded-lg text-xs font-black text-center text-orange-600 font-mono focus:outline-hidden"
+              />
+              <span className="text-[11px] font-bold text-slate-500">مەتر</span>
+            </div>
+          </div>
 
           <button
             type="button"
