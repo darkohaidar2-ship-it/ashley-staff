@@ -20,7 +20,11 @@ import {
   KeyRound,
   X,
   ChevronDown,
-  Search
+  Search,
+  Map,
+  Compass,
+  Link2,
+  AlertCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { 
@@ -29,20 +33,21 @@ import {
   sendLocalNotification, 
   type GeofenceRegion 
 } from '@/lib/background-geofence';
+import { MobileAttendanceMapModal } from '@/components/maps/MobileAttendanceMapModal';
 
 const ASHLEY_DEFAULT_EMPLOYEES = [
-  { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', fullName3Part: 'سه هەند مەریوان حەمەسەعید', role: 'Employee' },
-  { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', fullName3Part: 'دارکۆ حەیدەر حسێن', role: 'Manager' },
-  { id: 'emp-03', name: 'شادیار هوشیار', fullName3Part: 'شادیار هوشیار', role: 'Employee Supervisor' },
-  { id: 'emp-04', name: 'هەڤاڵ حبیب حەمەڕەزا', fullName3Part: 'هەڤاڵ حبیب حەمەڕەزا', role: 'Transport Supervisor' },
-  { id: 'emp-05', name: 'عیماد سەباح نوری', fullName3Part: 'عیماد سەباح نوری', role: 'Employee' },
-  { id: 'emp-06', name: 'کامەران عومەر ڕووئوف', fullName3Part: 'کامەران عومەر ڕووئوف', role: 'Employee' },
-  { id: 'emp-07', name: 'ڕابەر محەمەد مەحمود', fullName3Part: 'ڕابەر محەمەد مەحمود', role: 'Employee' },
-  { id: 'emp-08', name: 'دانەر محەمەد باسام', fullName3Part: 'دانەر محەمەد باسام', role: 'Employee' },
-  { id: 'emp-09', name: 'ڕێبین سەباح نوری', fullName3Part: 'ڕێبین سەباح نوری', role: 'Employee' },
-  { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', fullName3Part: 'بەهرەمەند ڕزگار عزیز', role: 'Employee' },
-  { id: 'emp-11', name: 'شادومان یادگار رحیم', fullName3Part: 'شادومان یادگار رحیم', role: 'Employee' },
-  { id: 'emp-12', name: 'سەروەت قادر', fullName3Part: 'سەروەت قادر', role: 'Employee' },
+  { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', fullName3Part: 'سه هەند مەریوان حەمەسەعید', role: 'Employee', pin: '1001', deviceBound: false },
+  { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', fullName3Part: 'دارکۆ حەیدەر حسێن', role: 'Manager', pin: '1002', deviceBound: false },
+  { id: 'emp-03', name: 'شادیار هوشیار', fullName3Part: 'شادیار هوشیار', role: 'Employee Supervisor', pin: '1003', deviceBound: false },
+  { id: 'emp-04', name: 'هەڤاڵ حبیب حەمەڕەزا', fullName3Part: 'هەڤاڵ حبیب حەمەڕەزا', role: 'Transport Supervisor', pin: '1004', deviceBound: false },
+  { id: 'emp-05', name: 'عیماد سەباح نوری', fullName3Part: 'عیماد سەباح نوری', role: 'Employee', pin: '1005', deviceBound: false },
+  { id: 'emp-06', name: 'کامەران عومەر ڕووئوف', fullName3Part: 'کامەران عومەر ڕووئوف', role: 'Employee', pin: '1006', deviceBound: false },
+  { id: 'emp-07', name: 'ڕابەر محەمەد مەحمود', fullName3Part: 'ڕابەر محەمەد مەحمود', role: 'Employee', pin: '1007', deviceBound: false },
+  { id: 'emp-08', name: 'دانەر محەمەد باسام', fullName3Part: 'دانەر محەمەد باسام', role: 'Employee', pin: '1008', deviceBound: false },
+  { id: 'emp-09', name: 'ڕێبین سەباح نوری', fullName3Part: 'ڕێبین سەباح نوری', role: 'Employee', pin: '1009', deviceBound: false },
+  { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', fullName3Part: 'بەهرەمەند ڕزگار عزیز', role: 'Employee', pin: '1010', deviceBound: false },
+  { id: 'emp-11', name: 'شادومان یادگار رحیم', fullName3Part: 'شادومان یادگار رحیم', role: 'Employee', pin: '1011', deviceBound: false },
+  { id: 'emp-12', name: 'سەروەت قادر', fullName3Part: 'سەروەت قادر', role: 'Employee', pin: '1012', deviceBound: false },
 ];
 
 export default function AutonomousMobileAppLight() {
@@ -52,15 +57,18 @@ export default function AutonomousMobileAppLight() {
   // 1. Profile & Permanent Device Binding State
   const [employeeProfile, setEmployeeProfile] = useState<{ id: string; name: string; role?: string } | null>(null);
   const [boundEmployee, setBoundEmployee] = useState<{ id: string; name: string } | null>(null);
-  const [allEmployees, setAllEmployees] = useState<Array<{ id: string; name: string; fullName3Part?: string; role?: string }>>(ASHLEY_DEFAULT_EMPLOYEES);
+  const [allEmployees, setAllEmployees] = useState<Array<{ id: string; name: string; fullName3Part?: string; role?: string; pin?: string; deviceBound?: boolean }>>(ASHLEY_DEFAULT_EMPLOYEES);
   const [selectedEmpId, setSelectedEmpId] = useState('');
   const [pinInput, setPinInput] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
-  // Custom Employee Picker Modal State (Replaces native Android select)
+  // Custom Employee Picker Modal State
   const [showEmployeePicker, setShowEmployeePicker] = useState(false);
   const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
+
+  // View-Only Map Modal State
+  const [showMapModal, setShowMapModal] = useState(false);
 
   // 2. Secret 10-Second Long-Press Admin Reset Modal
   const [pressProgress, setPressProgress] = useState(0); // 0 to 100
@@ -70,15 +78,17 @@ export default function AutonomousMobileAppLight() {
   const longPressTimerRef = useRef<any>(null);
   const progressIntervalRef = useRef<any>(null);
 
-  // 3. Geofence & Live Location (Fetched dynamically from website)
+  // 3. Geofence & Live Location (Synced dynamically from website)
   const [companyLocation, setCompanyLocation] = useState<GeofenceRegion>({
     id: 'main-company-location',
-    name: 'کۆمپانیای ئاشڵی (Ashley Base)',
+    name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
     lat: 35.5571,
     lng: 45.4352,
-    radiusMeters: 55,
+    radiusMeters: 100,
   });
 
+  const [currentLat, setCurrentLat] = useState<number | null>(null);
+  const [currentLng, setCurrentLng] = useState<number | null>(null);
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const [isInsideGeofence, setIsInsideGeofence] = useState<boolean | null>(null);
   const [todayLogs, setTodayLogs] = useState<any[]>([]);
@@ -130,7 +140,7 @@ export default function AutonomousMobileAppLight() {
             name: data.locations[0].name || 'کۆمپانیای ئاشڵی',
             lat: data.locations[0].lat,
             lng: data.locations[0].lng,
-            radiusMeters: data.locations[0].radiusMeters || 55,
+            radiusMeters: data.locations[0].radiusMeters || 100,
           });
         }
       })
@@ -148,7 +158,6 @@ export default function AutonomousMobileAppLight() {
         const data = await res.json();
         
         if (data && data.bound === false) {
-          // Admin requested remote unbind!
           localStorage.removeItem('ashley_bound_employee_profile');
           localStorage.removeItem('ashley_bound_employee_id');
           setEmployeeProfile(null);
@@ -199,9 +208,12 @@ export default function AutonomousMobileAppLight() {
       (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
+        setCurrentLat(lat);
+        setCurrentLng(lng);
+
         const dist = getDistanceMeters(lat, lng, companyLocation.lat, companyLocation.lng);
-        setDistanceMeters(dist);
-        setIsInsideGeofence(dist <= companyLocation.radiusMeters + 30);
+        setDistanceMeters(Math.round(dist));
+        setIsInsideGeofence(dist <= companyLocation.radiusMeters + 35);
       },
       (err) => console.warn('GPS update:', err.message),
       { enableHighAccuracy: true, maximumAge: 3000 }
@@ -258,11 +270,16 @@ export default function AutonomousMobileAppLight() {
     );
   }, [allEmployees, employeeSearchQuery]);
 
-  // 1-Time Secure Login & Permanent Device Binding Handler
+  // 1-Time Secure Login & Permanent Device Binding Handler with Strict PIN Check
   const handleDeviceBinding = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEmpId) {
       setAuthError('تکایە ناوی خۆت هەڵبژێرە');
+      return;
+    }
+
+    if (!pinInput.trim()) {
+      setAuthError('❌ داخڵکردنی پین کۆد (PIN) مەرجی سەرەکییە بۆ چوونەژوورەوە!');
       return;
     }
 
@@ -282,11 +299,17 @@ export default function AutonomousMobileAppLight() {
         localStorage.setItem('ashley_device_token', devToken);
       }
 
-      await fetch('/api/attendance/register-device', {
+      const res = await fetch('/api/attendance/register-device', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: selectedEmpId, pin: pinInput.trim() || '1234', deviceToken: devToken }),
+        body: JSON.stringify({ userId: selectedEmpId, pin: pinInput.trim(), deviceToken: devToken }),
       });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || '❌ کۆدی نهێنی (PIN) هەڵەیە! تکایە کۆدی دروست بنووسە.');
+      }
 
       const targetEmp = allEmployees.find(e => e.id === selectedEmpId);
       const fullName = targetEmp?.fullName3Part || targetEmp?.name || 'کارمەند';
@@ -306,7 +329,7 @@ export default function AutonomousMobileAppLight() {
 
       sendLocalNotification('🎉 بەخێربێیت', `مۆبایلەکەت بە ناوی ${profile.name} بە سەرکەوتوویی بەسترایەوە.`);
     } catch (err: any) {
-      setAuthError(err.message || 'هەڵەیەک ڕوویدا لە کاتی بەستنەوەی مۆبایل');
+      setAuthError(err.message || 'هەڵەیەک ڕوویدا لە کاتی چوونەژوورەوە');
     } finally {
       setAuthLoading(false);
     }
@@ -363,7 +386,7 @@ export default function AutonomousMobileAppLight() {
       {/* VIEW 1: ONE-TIME CLEAN LIGHT LOGIN & BINDING SCREEN */}
       {/* ========================================================================= */}
       {!employeeProfile ? (
-        <div className="flex-1 w-full max-w-sm mx-auto flex flex-col justify-center px-5 py-6 space-y-5">
+        <div className="flex-1 w-full max-w-sm mx-auto flex flex-col justify-center px-5 py-6 space-y-4">
           
           {/* Ashley Logo with 10s Secret Touch Indicator */}
           <div className="text-center space-y-2 relative">
@@ -390,7 +413,7 @@ export default function AutonomousMobileAppLight() {
 
           <form onSubmit={handleDeviceBinding} className="space-y-3.5 bg-white p-5 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/60">
             
-            {/* Custom Light Employee Selector (Opens in-app modal with zero Android OS glitches) */}
+            {/* Custom Light Employee Selector Button */}
             <div className="space-y-1 text-right">
               <label className="text-xs font-black text-slate-800">ناوی کارمەند:</label>
               
@@ -406,12 +429,17 @@ export default function AutonomousMobileAppLight() {
               </button>
             </div>
 
+            {/* Mandatory PIN Input */}
             <div className="space-y-1 text-right">
-              <label className="text-xs font-black text-slate-800">پین کۆد (PIN):</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black text-slate-800">پین کۆد (PIN):</label>
+                <span className="text-[10px] text-orange-600 font-bold">* مەرجی سەرەکی</span>
+              </div>
               <div className="relative">
                 <input
                   type="password"
                   maxLength={6}
+                  required
                   placeholder="••••"
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
@@ -435,6 +463,18 @@ export default function AutonomousMobileAppLight() {
               {authLoading ? 'لە پشکنیندایە...' : 'چوونەژوورەوە و بەستنەوەی مۆبایل'}
             </button>
           </form>
+
+          {/* Quick Map Check Button */}
+          <div className="flex items-center justify-center pt-1">
+            <button
+              type="button"
+              onClick={() => setShowMapModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold shadow-2xs transition-all cursor-pointer"
+            >
+              <Compass className="w-3.5 h-3.5 text-orange-500" />
+              <span>بینینی نەخشە 🗺️ (تێستی دووری)</span>
+            </button>
+          </div>
 
           <div className="text-[10px] text-slate-400 text-center font-bold">
             تەنها یەکجار تۆمار دەبێت و مۆبایلەکە بە ناوتەوە دەبەسترێتەوە
@@ -482,40 +522,50 @@ export default function AutonomousMobileAppLight() {
           </div>
 
           {/* Center Presence Radar Hero */}
-          <div className="flex-1 flex flex-col items-center justify-center py-4 space-y-5 text-center">
+          <div className="flex-1 flex flex-col items-center justify-center py-2 space-y-4 text-center">
             
             {/* Glowing Presence Circle */}
             <div className="relative flex items-center justify-center">
-              <div className={`w-44 h-44 rounded-full border-4 flex items-center justify-center transition-all duration-700 ${
+              <div className={`w-40 h-40 rounded-full border-4 flex items-center justify-center transition-all duration-700 ${
                 isInsideGeofence 
                   ? 'border-emerald-500 bg-emerald-50 shadow-2xl shadow-emerald-500/20 ring-8 ring-emerald-500/10' 
                   : 'border-slate-200 bg-white shadow-lg'
               }`}>
-                <div className={`w-32 h-32 rounded-full flex flex-col items-center justify-center transition-all ${
+                <div className={`w-28 h-28 rounded-full flex flex-col items-center justify-center transition-all ${
                   isInsideGeofence ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-600'
                 }`}>
-                  <MapPin className={`w-10 h-10 ${isInsideGeofence ? 'animate-bounce text-white' : 'text-slate-400'}`} />
+                  <MapPin className={`w-9 h-9 ${isInsideGeofence ? 'animate-bounce text-white' : 'text-slate-400'}`} />
                   <span className="text-xs font-black font-mono mt-1">
-                    {distanceMeters !== null ? `${distanceMeters}m` : '...'}
+                    {distanceMeters !== null ? `${distanceMeters.toLocaleString()}m` : '...'}
                   </span>
                 </div>
               </div>
             </div>
 
             {/* Status Title */}
-            <div className="space-y-1.5">
-              <div className={`inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-black border ${
+            <div className="space-y-1">
+              <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black border ${
                 isInsideGeofence
                   ? 'bg-emerald-100 text-emerald-800 border-emerald-300 shadow-sm'
                   : 'bg-slate-200/80 text-slate-700 border-slate-300'
               }`}>
-                <span className={`w-2.5 h-2.5 rounded-full ${isInsideGeofence ? 'bg-emerald-600 animate-ping' : 'bg-slate-500'}`} />
+                <span className={`w-2 h-2 rounded-full ${isInsideGeofence ? 'bg-emerald-600 animate-ping' : 'bg-slate-500'}`} />
                 <span>{isInsideGeofence ? '🟢 لەناو کۆمپانیایت (دەوامی فەرمی)' : '🔴 لە دەرەوەی کۆمپانیایت'}</span>
               </div>
               <p className="text-[11px] text-slate-500 font-bold">
                 لە کاتی گەیشتن و دەرچوون خۆکارانە تۆمار دەکرێت
               </p>
             </div>
+
+            {/* View Map Button */}
+            <button
+              type="button"
+              onClick={() => setShowMapModal(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+            >
+              <Compass className="w-3.5 h-3.5 text-orange-600" />
+              <span>بینینی نەخشە 🗺️</span>
+            </button>
           </div>
 
           {/* Today's Activity Summary Cards */}
@@ -551,7 +601,7 @@ export default function AutonomousMobileAppLight() {
       )}
 
       {/* ========================================================================= */}
-      {/* 🌟 CUSTOM IN-APP LIGHT EMPLOYEE PICKER MODAL (Zero Android OS glitches) */}
+      {/* 🌟 CUSTOM IN-APP LIGHT EMPLOYEE PICKER MODAL WITH BOUND/UNBOUND BADGES */}
       {/* ========================================================================= */}
       {showEmployeePicker && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -559,7 +609,10 @@ export default function AutonomousMobileAppLight() {
             
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b pb-3 border-slate-100">
-              <h3 className="font-black text-slate-900 text-sm">ناوی کارمەند هەڵبژێرە</h3>
+              <div className="text-right">
+                <h3 className="font-black text-slate-900 text-sm">ناوی کارمەند هەڵبژێرە</h3>
+                <p className="text-[10px] text-slate-500 font-bold">دۆخی بەستنەوەی مۆبایل بۆ هەر کارمەندێک</p>
+              </div>
               <button 
                 onClick={() => setShowEmployeePicker(false)}
                 className="p-1 rounded-full text-slate-400 hover:text-slate-700 cursor-pointer"
@@ -580,10 +633,12 @@ export default function AutonomousMobileAppLight() {
               <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3.5" />
             </div>
 
-            {/* Employee List */}
+            {/* Employee List with Bound / Unbound Badges */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               {filteredEmployees.map((emp) => {
                 const isSelected = selectedEmpId === emp.id;
+                const isBound = Boolean(emp.deviceBound);
+
                 return (
                   <button
                     key={emp.id}
@@ -593,7 +648,7 @@ export default function AutonomousMobileAppLight() {
                       setShowEmployeePicker(false);
                       setAuthError(null);
                     }}
-                    className={`w-full p-3.5 rounded-2xl border flex items-center justify-between text-right transition-all cursor-pointer ${
+                    className={`w-full p-3 rounded-2xl border flex items-center justify-between text-right transition-all cursor-pointer ${
                       isSelected 
                         ? 'bg-orange-50 border-orange-400 text-orange-950 font-black shadow-xs' 
                         : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-900 font-bold'
@@ -607,7 +662,16 @@ export default function AutonomousMobileAppLight() {
                       </div>
                       <div>
                         <div className="text-xs font-black text-slate-900">{emp.fullName3Part || emp.name}</div>
-                        <div className="text-[10px] text-slate-500">{emp.role || 'کارمەند'}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] text-slate-500">{emp.role || 'کارمەند'}</span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold ${
+                            isBound 
+                              ? 'bg-amber-100 text-amber-800 border border-amber-200' 
+                              : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          }`}>
+                            {isBound ? '🔒 بەستراوەتەوە' : '🟢 بەردەستە'}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -624,6 +688,17 @@ export default function AutonomousMobileAppLight() {
           </div>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* 🗺️ VIEW-ONLY INTERACTIVE MAP MODAL */}
+      {/* ========================================================================= */}
+      <MobileAttendanceMapModal
+        isOpen={showMapModal}
+        onClose={() => setShowMapModal(false)}
+        companyLocation={companyLocation}
+        currentLat={currentLat}
+        currentLng={currentLng}
+      />
 
       {/* ========================================================================= */}
       {/* 🔐 SECRET ADMIN OVERRIDE MODAL (Triggered by 10s Long-Press on Logo) */}

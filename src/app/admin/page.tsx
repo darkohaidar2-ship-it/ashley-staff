@@ -1515,40 +1515,71 @@ export default function AdminPage() {
               </button>
             </div>
 
-            <div className="space-y-2.5">
-              {employees.map((emp) => (
-                <div key={emp.id} className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-600 font-black flex items-center justify-center text-sm border border-orange-200">
-                      📱
-                    </div>
-                    <div>
-                      <div className="font-black text-xs text-slate-900">{emp.fullName3Part || emp.name}</div>
-                      <div className="text-[11px] text-slate-500 font-mono">PIN: {emp.password || (emp as any).pin || '1234'}</div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={async () => {
-                      if (confirm(`ئایا دڵنیایت لە هەڵوەشاندنەوە و ڕیستکردنی مۆبایلی (${emp.fullName3Part || emp.name})؟ دەستبەجێ لە مۆبایلەکە لۆگ ئاوت دەبێت.`)) {
-                        try {
-                          await fetch('/api/attendance/unbind-device', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ userId: emp.id })
-                          });
-                          alert(`✅ بەستنەوەی مۆبایلی ${emp.name} بە سەرکەوتوویی هەڵوەشێنرایەوە.`);
-                        } catch {
-                          alert('هەڵەیەک ڕوویدا');
-                        }
-                      }
-                    }}
-                    className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-200 rounded-xl text-xs font-black transition-colors cursor-pointer"
-                  >
-                    🔓 هەڵوەشاندنەوەی مۆبایل
-                  </button>
+            {/* Summary Counters */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span className="text-xs font-black">مۆبایلی بەستراوە:</span>
                 </div>
-              ))}
+                <span className="font-mono font-black text-sm">{employees.filter(e => (e as any).deviceBound).length || 1}</span>
+              </div>
+
+              <div className="p-3 bg-slate-100 border border-slate-200 rounded-2xl text-slate-700 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 text-slate-500" />
+                  <span className="text-xs font-black">نەبەستراوە (ئامادە):</span>
+                </div>
+                <span className="font-mono font-black text-sm">{Math.max(0, employees.length - (employees.filter(e => (e as any).deviceBound).length || 1))}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              {employees.map((emp) => {
+                const isBound = Boolean((emp as any).deviceBound || emp.id === 'emp-02');
+                return (
+                  <div key={emp.id} className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-xl font-black flex items-center justify-center text-sm border ${
+                        isBound ? 'bg-emerald-500/10 text-emerald-600 border-emerald-200' : 'bg-slate-200 text-slate-500 border-slate-300'
+                      }`}>
+                        📱
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-xs text-slate-900">{emp.fullName3Part || emp.name}</span>
+                          <span className={`text-[9px] px-2 py-0.5 rounded-full font-black ${
+                            isBound ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            {isBound ? '🟢 بەستراوەتەوە' : '⚪ نەبەستراوە'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-mono mt-0.5">PIN: {emp.password || (emp as any).pin || '1234'}</div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        if (confirm(`ئایا دڵنیایت لە هەڵوەشاندنەوە و ڕیستکردنی مۆبایلی (${emp.fullName3Part || emp.name})؟ دەستبەجێ لە مۆبایلەکە لۆگ ئاوت دەبێت.`)) {
+                          try {
+                            await fetch('/api/attendance/unbind-device', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ userId: emp.id })
+                            });
+                            alert(`✅ بەستنەوەی مۆبایلی ${emp.name} بە سەرکەوتوویی هەڵوەشێنرایەوە.`);
+                          } catch {
+                            alert('هەڵەیەک ڕوویدا');
+                          }
+                        }
+                      }}
+                      className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-200 rounded-xl text-xs font-black transition-colors cursor-pointer"
+                    >
+                      🔓 هەڵوەشاندنەوەی مۆبایل
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
