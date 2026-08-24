@@ -674,8 +674,8 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const body = await req.json();
       const { userId, deviceToken, event, lat, lng, warehouseId, employeeName } = body;
 
-      if (!userId || !event || lat === undefined || lng === undefined) {
-        return NextResponse.json({ error: 'userId, event (ENTER/EXIT), lat, and lng are required' }, { status: 400 });
+      if (!userId || !event) {
+        return NextResponse.json({ error: 'userId and event (ENTER/EXIT) are required' }, { status: 400 });
       }
 
       // 1. Fetch user
@@ -692,28 +692,32 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         console.warn('User fetch in auto-geofence:', uErr);
       }
 
-      // 2. Geofence Distance Validation
+      // 2. Geofence Distance Validation across ALL branches
       const { data: warehouses } = await supabase.from('warehouses').select('*');
-      let targetWh = (warehouses || []).find((w: any) => w.id === warehouseId) || (warehouses || [])[0] || {
-        id: 'main-company-location',
+      const allBranches = (warehouses && warehouses.length > 0) ? warehouses : GLOBAL_SAVED_LOCATIONS;
+
+      let targetWh = allBranches[0] || {
+        id: 'ashley-base-main',
         name: 'کۆمپانیای سەرەکی ئاشڵی',
         lat: 35.5571,
         lng: 45.4352,
-        radius: 60,
+        radius: 100,
       };
 
-      const dist = getDistance(parseFloat(lat), parseFloat(lng), parseFloat(targetWh.lat), parseFloat(targetWh.lng));
-      const allowedRadius = (parseInt(targetWh.radius) || 50) + 35; // +35m GPS tolerance buffer
-
-      if (event === 'ENTER' && dist > allowedRadius) {
-        return NextResponse.json({ 
-          error: `⚠️ تۆ هێشتا نەگەیشتوویتەتە سنووری کۆمپانیا. دووری تۆ: ${Math.round(dist)} مەتر (ڕێگەپێدراو: ${allowedRadius}م)`,
-          distance: Math.round(dist)
-        }, { status: 400 });
+      let minDistance = Infinity;
+      if (lat !== undefined && lng !== undefined) {
+        for (const b of allBranches) {
+          if (!b.lat || !b.lng) continue;
+          const d = getDistance(parseFloat(lat), parseFloat(lng), parseFloat(b.lat), parseFloat(b.lng));
+          if (d < minDistance) {
+            minDistance = d;
+            targetWh = b;
+          }
+        }
       }
 
       const { dateStr, timeStr } = getBaghdadDateTime();
-      const address = await getAddressFromCoords(parseFloat(lat), parseFloat(lng));
+      const address = (lat !== undefined && lng !== undefined) ? await getAddressFromCoords(parseFloat(lat), parseFloat(lng)) : targetWh.name;
       const isCheckIn = event === 'ENTER';
 
       // 3. Find existing record for today
@@ -747,43 +751,25 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       }
 
       if (isCheckIn) {
-        // ENTER EVENT
-        if (existingRecord?.check_in_time && !existingRecord?.check_out_time) {
-          return NextResponse.json({
-            success: true,
-            alreadyActive: true,
-            action: 'Check In',
-            time: existingRecord.check_in_time,
-            message: `✅ تۆ پێشتر لە کاتژمێر (${existingRecord.check_in_time}) چێک‌ئینت کردووە و لەناو کۆمپانیایت.`
-          });
-        }
-
         upsertPayload.check_in = nowIso;
-        upsertPayload.check_in_time = timeStr;
-        upsertPayload.check_in_lat = parseFloat(lat);
-        upsertPayload.check_in_lng = parseFloat(lng);
+        upsertPayload.check_in_time = existingRecord?.check_in_time || timeStr;
+        if (lat !== undefined) upsertPayload.check_in_lat = parseFloat(lat);
+        if (lng !== undefined) upsertPayload.check_in_lng = parseFloat(lng);
         upsertPayload.check_in_address = address || targetWh.name;
       } else {
-        // EXIT EVENT
-        if (existingRecord?.check_out_time && !existingRecord?.check_in_time) {
-          return NextResponse.json({
-            success: true,
-            alreadyCheckedOut: true,
-            action: 'Check Out',
-            time: existingRecord.check_out_time,
-            message: `👋 دەرچوونت پێشتر لە کاتژمێر (${existingRecord.check_out_time}) تۆمار کراوە.`
-          });
-        }
-
         upsertPayload.check_out = nowIso;
         upsertPayload.check_out_time = timeStr;
-        upsertPayload.check_out_lat = parseFloat(lat);
-        upsertPayload.check_out_lng = parseFloat(lng);
+        if (lat !== undefined) upsertPayload.check_out_lat = parseFloat(lat);
+        if (lng !== undefined) upsertPayload.check_out_lng = parseFloat(lng);
         upsertPayload.check_out_address = address || targetWh.name;
       }
 
       // Upsert to attendance table
-      await supabase.from('attendance').upsert(upsertPayload);
+      try {
+        await supabase.from('attendance').upsert(upsertPayload);
+      } catch (upErr) {
+        console.error('Attendance upsert error:', upErr);
+      }
 
       // Insert log entry to attendance_logs
       const logRecordId = `auto-geo-${userId}-${dateStr}-${isCheckIn ? 'in' : 'out'}-${Date.now().toString().slice(-4)}`;
@@ -794,10 +780,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           employee_name: matchedName,
           log_type: isCheckIn ? 'Check In' : 'Check Out',
           log_date: dateStr,
-          log_time_str: timeStr,
-          location_address: `${targetWh.name} (خۆکارانە Geofence)`,
+          log_time_str: isCheckIn ? (existingRecord?.check_in_time || timeStr) : timeStr,
+          location_address: `${targetWh.name}`,
           created_at: nowIso,
-          notes: `خۆکارانە لەڕێگەی لۆکەیشنی مۆبایل (${isCheckIn ? 'چوونەژوورەوە' : 'دەرچوون'})`
+          notes: `لەڕێگەی مۆبایل (${isCheckIn ? 'هاتن' : 'ڕۆیشتن'})`
         });
       } catch (logErr) {
         console.warn('Auto log insert error:', logErr);
@@ -807,26 +793,61 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         success: true,
         action: isCheckIn ? 'Check In' : 'Check Out',
         employeeName: matchedName,
-        time: timeStr,
+        time: isCheckIn ? (existingRecord?.check_in_time || timeStr) : timeStr,
         date: dateStr,
         location: targetWh.name,
         message: isCheckIn 
-          ? `🟢 بەیانی باش ${matchedName}! چێک‌ئین لە کاتژمێر (${timeStr}) بە شێوەی خۆکارانە تۆمارکرا.`
-          : `👋 دەستت خۆش بێت ${matchedName}! چێک‌ئاوت لە کاتژمێر (${timeStr}) بە شێوەی خۆکارانە تۆمارکرا.`,
+          ? `🟢 هاتن لە کاتژمێر (${existingRecord?.check_in_time || timeStr}) بە سەرکەوتوویی تۆمارکرا.`
+          : `👋 ڕۆیشتن لە کاتژمێر (${timeStr}) بە سەرکەوتوویی تۆمارکرا.`,
         record: {
           id: logRecordId,
           employeeId: userId,
           userName: matchedName,
           type: isCheckIn ? 'هاتن (Check In)' : 'دەرچوون (Check Out)',
-          time: `${dateStr} ${timeStr}`,
+          time: `${dateStr} ${isCheckIn ? (existingRecord?.check_in_time || timeStr) : timeStr}`,
           distance: targetWh.name,
-          employeeNote: 'Autonomous Geofence Auto-Detection',
-          notes: 'Autonomous Geofence Auto-Detection',
+          employeeNote: targetWh.name,
+          notes: targetWh.name,
           status: 'verified'
         }
       });
     }
+
+    // ----------------------------------------
+    // GET /api/attendance/logs (Supabase Attendance Records for Web & Mobile)
+    // ----------------------------------------
+    if (pathStr === 'logs' && method === 'GET') {
+      try {
+        const { data: attendance } = await supabase
+          .from('attendance')
+          .select('*')
+          .order('date', { ascending: false });
+
+        if (attendance && attendance.length > 0) {
+          const formatted = attendance.map(r => ({
+            id: r.id,
+            employeeId: r.user_id,
+            employeeName: r.user_name,
+            date: r.date,
+            checkIn: r.check_in_time ? `${r.date} ${r.check_in_time}` : (r.check_in || ''),
+            checkInTime: r.check_in_time || '',
+            checkOut: r.check_out_time ? `${r.date} ${r.check_out_time}` : (r.check_out || ''),
+            checkOutTime: r.check_out_time || '',
+            warehouseName: r.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
+            status: r.status || 'Present'
+          }));
+          return NextResponse.json(formatted);
+        }
+      } catch (err) {
+        console.warn('Error fetching attendance logs:', err);
+      }
+
+      return NextResponse.json([]);
+    }
+
+    // ----------------------------------------
     // GET /api/attendance/daily-token
+    // ----------------------------------------
     // ----------------------------------------
     if (pathStr === 'daily-token' && method === 'GET') {
       return NextResponse.json({ token: getDailyToken() });
