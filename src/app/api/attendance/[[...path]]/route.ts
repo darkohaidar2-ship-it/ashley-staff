@@ -235,6 +235,50 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
+    // POST /api/attendance/unbind-device (Remote Admin Device Unbind)
+    // ----------------------------------------
+    if (pathStr === 'unbind-device' && method === 'POST') {
+      const { userId } = await req.json();
+      if (!userId) return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+
+      try {
+        await supabase
+          .from('users')
+          .update({ device_token: null })
+          .eq('id', userId);
+      } catch (err) {
+        console.warn('Supabase unbind-device error:', err);
+      }
+
+      return NextResponse.json({ success: true, message: 'مۆبایلەکە بە سەرکەوتوویی لە ئەدمینەوە هەڵوەشێنرایەوە' });
+    }
+
+    // ----------------------------------------
+    // GET /api/attendance/device-status (Mobile Periodic Status Checker)
+    // ----------------------------------------
+    if (pathStr === 'device-status' && method === 'GET') {
+      const url = new URL(req.url);
+      const userId = url.searchParams.get('userId');
+      const deviceToken = url.searchParams.get('deviceToken');
+
+      if (!userId) return NextResponse.json({ bound: true });
+
+      try {
+        const { data: user } = await supabase
+          .from('users')
+          .select('device_token')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (user && user.device_token && deviceToken && user.device_token !== deviceToken) {
+          return NextResponse.json({ bound: false, reason: 'unbound_by_admin' });
+        }
+      } catch {}
+
+      return NextResponse.json({ bound: true });
+    }
+
+    // ----------------------------------------
     // POST /api/attendance/admin/login
     // ----------------------------------------
     if (pathStr === 'admin/login' && method === 'POST') {

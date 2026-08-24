@@ -53,7 +53,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Printer,
-  Table
+  Table,
+  Smartphone,
+  X
 } from 'lucide-react';
 import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChangeModal';
 import { AdminOvertimeModule } from '@/components/admin/AdminOvertimeModule';
@@ -82,6 +84,7 @@ export default function AdminPage() {
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showMobileDeviceModal, setShowMobileDeviceModal] = useState(false);
   const [adminActiveSection, setAdminActiveSection] = useState<'overview' | 'attendance' | 'hr' | 'overtime' | 'expenses' | 'logistics' | 'stats' | 'maps'>('attendance');
   const [attendanceSubTab, setAttendanceSubTab] = useState<'daily' | 'matrix'>('daily');
 
@@ -536,6 +539,11 @@ export default function AdminPage() {
           <div className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/20 text-white font-bold hidden md:block">
             ⏰ {currentTimeStr || '2026-08-18 | 08:35'}
           </div>
+
+          <button onClick={() => setShowMobileDeviceModal(true)} className="btn-classic bg-orange-600/40 hover:bg-orange-600/60 text-white border-orange-400/40 rounded-xl px-3 py-1.5 flex items-center gap-1.5 shadow-sm">
+            <Smartphone className="w-3.5 h-3.5 text-orange-300" />
+            <span>مۆبایلەکان 📱</span>
+          </button>
 
           <button onClick={() => setShowPasswordModal(true)} className="btn-classic bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5">
             <KeyRound className="w-3.5 h-3.5 text-amber-300" />
@@ -1487,6 +1495,64 @@ export default function AdminPage() {
         isOpen={showPasswordModal}
         onClose={() => setShowPasswordModal(false)}
       />
+
+      {/* 📱 MODAL: REMOTE MOBILE DEVICE BINDING MANAGEMENT */}
+      {showMobileDeviceModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 border-2 border-slate-700 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3 border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-orange-100 text-orange-600 rounded-2xl">
+                  <Smartphone className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">بەڕێوەبردنی مۆبایلە بەستراوەکان</h3>
+                  <p className="text-xs text-slate-500 font-bold">هەڵوەشاندنەوە و ڕیستکردنی دەستبەجێی مۆبایلی کارمەندان بە یەک کلیک</p>
+                </div>
+              </div>
+              <button onClick={() => setShowMobileDeviceModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer p-1">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              {employees.map((emp) => (
+                <div key={emp.id} className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-600 font-black flex items-center justify-center text-sm border border-orange-200">
+                      📱
+                    </div>
+                    <div>
+                      <div className="font-black text-xs text-slate-900">{emp.fullName3Part || emp.name}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">PIN: {emp.password || (emp as any).pin || '1234'}</div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      if (confirm(`ئایا دڵنیایت لە هەڵوەشاندنەوە و ڕیستکردنی مۆبایلی (${emp.fullName3Part || emp.name})؟ دەستبەجێ لە مۆبایلەکە لۆگ ئاوت دەبێت.`)) {
+                        try {
+                          await fetch('/api/attendance/unbind-device', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId: emp.id })
+                          });
+                          alert(`✅ بەستنەوەی مۆبایلی ${emp.name} بە سەرکەوتوویی هەڵوەشێنرایەوە.`);
+                        } catch {
+                          alert('هەڵەیەک ڕوویدا');
+                        }
+                      }
+                    }}
+                    className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-200 rounded-xl text-xs font-black transition-colors cursor-pointer"
+                  >
+                    🔓 هەڵوەشاندنەوەی مۆبایل
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
