@@ -142,9 +142,9 @@ export default function AutonomousMobileAppLight() {
       })
       .catch(() => {});
 
-    // Load ALL company base locations dynamically from website API (Ashley Base, Huana) with 5s polling
+    // Load ALL company base locations dynamically from website API (Ashley Base, Huana) with 2s live polling
     const fetchCompanyLocations = () => {
-      fetch('/api/attendance/location')
+      fetch(`/api/attendance/location?t=${Date.now()}`, { cache: 'no-store' })
         .then(res => res.json())
         .then(data => {
           if (data?.locations && data.locations.length > 0) {
@@ -152,7 +152,11 @@ export default function AutonomousMobileAppLight() {
               (l: any) => l.lat > 10 && l.lng > 10 && !l.name?.toLowerCase().includes('face') && !l.id?.includes('face')
             );
             if (valid.length > 0) {
-              setCompanyLocations(valid);
+              setCompanyLocations(prev => {
+                const prevStr = JSON.stringify(prev);
+                const newStr = JSON.stringify(valid);
+                return prevStr !== newStr ? valid : prev;
+              });
             }
           }
         })
@@ -160,7 +164,7 @@ export default function AutonomousMobileAppLight() {
     };
 
     fetchCompanyLocations();
-    const locInterval = setInterval(fetchCompanyLocations, 5000);
+    const locInterval = setInterval(fetchCompanyLocations, 2000);
     return () => clearInterval(locInterval);
   }, []);
 
@@ -188,6 +192,55 @@ export default function AutonomousMobileAppLight() {
     return () => clearInterval(interval);
   }, [employeeProfile]);
 
+  // Track GPS updates continuously
+  useEffect(() => {
+    if (typeof window === 'undefined' || !navigator.geolocation) return;
+
+    const wId = navigator.geolocation.watchPosition(
+      (pos) => {
+        setCurrentLat(pos.coords.latitude);
+        setCurrentLng(pos.coords.longitude);
+      },
+      (err) => console.warn('GPS update:', err.message),
+      { enableHighAccuracy: true, maximumAge: 2000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(wId);
+  }, []);
+
+  // Reactive Live Presence calculations based on current GPS + live updated company locations
+  const presence = useMemo(() => {
+    if (currentLat === null || currentLng === null || companyLocations.length === 0) {
+      return {
+        distanceMeters: null,
+        isInsideGeofence: false,
+        matchedLocationName: companyLocations[0]?.name || 'کۆمپانیای سەرەکی ئاشڵی',
+      };
+    }
+
+    let minD = Infinity;
+    let isInsideAny = false;
+    let matchedName = companyLocations[0]?.name || 'کۆمپانیای سەرەکی ئاشڵی';
+
+    for (const loc of companyLocations) {
+      const dist = getDistanceMeters(currentLat, currentLng, loc.lat, loc.lng);
+      if (dist < minD) {
+        minD = dist;
+        matchedName = loc.name;
+      }
+      if (dist <= loc.radiusMeters + 35) {
+        isInsideAny = true;
+        matchedName = loc.name;
+      }
+    }
+
+    return {
+      distanceMeters: Math.round(minD),
+      isInsideGeofence: isInsideAny,
+      matchedLocationName: matchedName,
+    };
+  }, [currentLat, currentLng, companyLocations]);
+
   // Autonomous Geofencing Engine Listener across ALL company locations
   useEffect(() => {
     if (!employeeProfile) {
@@ -206,57 +259,12 @@ export default function AutonomousMobileAppLight() {
       userName: employeeProfile.name,
       deviceToken: devToken,
       regions: companyLocations,
-      onStatusChange: (status) => {
-        setIsInsideGeofence(status.isInside);
-        setDistanceMeters(status.distance);
-        if (status.matchedRegionName) {
-          setMatchedLocationName(status.matchedRegionName);
-        }
-      },
     });
 
     return () => {
       autonomousGeofenceManager.stop();
     };
   }, [employeeProfile, companyLocations]);
-
-  // Track GPS updates across ALL company locations
-  useEffect(() => {
-    if (typeof window === 'undefined' || !navigator.geolocation) return;
-
-    const wId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setCurrentLat(lat);
-        setCurrentLng(lng);
-
-        let minD = Infinity;
-        let isInsideAny = false;
-        let matchedName = companyLocations[0]?.name || 'کۆمپانیای ئاشڵی';
-
-        for (const loc of companyLocations) {
-          const dist = getDistanceMeters(lat, lng, loc.lat, loc.lng);
-          if (dist < minD) {
-            minD = dist;
-            matchedName = loc.name;
-          }
-          if (dist <= loc.radiusMeters + 35) {
-            isInsideAny = true;
-            matchedName = loc.name;
-          }
-        }
-
-        setDistanceMeters(Math.round(minD));
-        setIsInsideGeofence(isInsideAny);
-        setMatchedLocationName(matchedName);
-      },
-      (err) => console.warn('GPS update:', err.message),
-      { enableHighAccuracy: true, maximumAge: 3000 }
-    );
-
-    return () => navigator.geolocation.clearWatch(wId);
-  }, [companyLocations]);
 
   const [liveTodayShift, setLiveTodayShift] = useState<{
     checkInTime: string | null;
@@ -574,16 +582,16 @@ export default function AutonomousMobileAppLight() {
             {/* Glowing Presence Circle */}
             <div className="relative flex items-center justify-center">
               <div className={`w-40 h-40 rounded-full border-4 flex items-center justify-center transition-all duration-700 ${
-                isInsideGeofence 
+                presence.isInsideGeofence 
                   ? 'border-emerald-500 bg-emerald-50 shadow-2xl shadow-emerald-500/20 ring-8 ring-emerald-500/10' 
                   : 'border-slate-200 bg-white shadow-lg'
               }`}>
                 <div className={`w-28 h-28 rounded-full flex flex-col items-center justify-center transition-all ${
-                  isInsideGeofence ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-600'
+                  presence.isInsideGeofence ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-600'
                 }`}>
-                  <MapPin className={`w-9 h-9 ${isInsideGeofence ? 'animate-bounce text-white' : 'text-slate-400'}`} />
+                  <MapPin className={`w-9 h-9 ${presence.isInsideGeofence ? 'animate-bounce text-white' : 'text-slate-400'}`} />
                   <span className="text-xs font-black font-mono mt-1">
-                    {distanceMeters !== null ? `${distanceMeters.toLocaleString()}m` : '...'}
+                    {presence.distanceMeters !== null ? `${presence.distanceMeters.toLocaleString()}m` : '...'}
                   </span>
                 </div>
               </div>
@@ -592,12 +600,12 @@ export default function AutonomousMobileAppLight() {
             {/* Status Title with Matched Company Location */}
             <div className="space-y-1">
               <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black border ${
-                isInsideGeofence
+                presence.isInsideGeofence
                   ? 'bg-emerald-100 text-emerald-800 border-emerald-300 shadow-xs'
                   : 'bg-slate-200/80 text-slate-700 border-slate-300'
               }`}>
-                <span className={`w-2 h-2 rounded-full ${isInsideGeofence ? 'bg-emerald-600 animate-ping' : 'bg-slate-500'}`} />
-                <span>{isInsideGeofence ? `🟢 لەناو (${matchedLocationName})` : `🔴 لە دەرەوە (${distanceMeters?.toLocaleString()}m)`}</span>
+                <span className={`w-2 h-2 rounded-full ${presence.isInsideGeofence ? 'bg-emerald-600 animate-ping' : 'bg-slate-500'}`} />
+                <span>{presence.isInsideGeofence ? `🟢 لەناو (${presence.matchedLocationName})` : `🔴 لە دەرەوە (${presence.distanceMeters?.toLocaleString()}m)`}</span>
               </div>
             </div>
 

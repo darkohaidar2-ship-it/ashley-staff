@@ -275,6 +275,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // GET /api/attendance/location (Strictly 2 Real Locations: Ashley Base & Huana Warehouse)
     // ----------------------------------------
     if (pathStr === 'location' && method === 'GET') {
+      const noCacheHeaders = {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Vercel-CDN-Cache-Control': 'no-store',
+      };
+
       try {
         const { data: dbLocs } = await supabase
           .from('warehouses')
@@ -293,21 +299,27 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             }));
 
           if (validLocs.length >= 2) {
-            return NextResponse.json({ locations: validLocs.slice(0, 2) });
+            return NextResponse.json({ locations: validLocs.slice(0, 2) }, { headers: noCacheHeaders });
           } else if (validLocs.length === 1) {
             const missingBranch = validLocs[0].name.includes('ئاشڵی') ? GLOBAL_SAVED_LOCATIONS[1] : GLOBAL_SAVED_LOCATIONS[0];
-            return NextResponse.json({ locations: [validLocs[0], missingBranch] });
+            return NextResponse.json({ locations: [validLocs[0], missingBranch] }, { headers: noCacheHeaders });
           }
         }
       } catch {}
 
-      return NextResponse.json({ locations: GLOBAL_SAVED_LOCATIONS });
+      return NextResponse.json({ locations: GLOBAL_SAVED_LOCATIONS }, { headers: noCacheHeaders });
     }
 
     // ----------------------------------------
     // GET /api/attendance/today (Live Real-Time Sync for Mobile & Web)
     // ----------------------------------------
     if (pathStr === 'today' && method === 'GET') {
+      const noCacheHeaders = {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Vercel-CDN-Cache-Control': 'no-store',
+      };
+
       const url = new URL(req.url);
       const userId = url.searchParams.get('userId');
       const { dateStr } = getBaghdadDateTime();
@@ -331,7 +343,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             status: record.status || 'Present',
             warehouseName: record.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
             date: dateStr
-          });
+          }, { headers: noCacheHeaders });
         }
       } catch (err) {
         console.warn('Get today attendance error:', err);
@@ -343,7 +355,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         status: null,
         warehouseName: null,
         date: dateStr
-      });
+      }, { headers: noCacheHeaders });
     }
 
     // ----------------------------------------
