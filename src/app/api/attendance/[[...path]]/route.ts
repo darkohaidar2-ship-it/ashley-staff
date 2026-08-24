@@ -255,10 +255,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
-    // GET /api/attendance/location
+    // GET /api/attendance/location (Strictly 2 Official Company Locations)
     // ----------------------------------------
     if (pathStr === 'location' && method === 'GET') {
-      const defaultLocations = [
+      const officialTwoLocations = [
         {
           id: 'ashley-base-main',
           name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
@@ -267,35 +267,57 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           radiusMeters: 100
         },
         {
-          id: 'huana-warehouse-loc',
-          name: 'کۆگای هوانە (Huana Warehouse)',
+          id: 'huana-warehouse-main',
+          name: 'کۆگای سەرەکی هوانە (Huana Warehouse)',
           lat: 35.6012,
           lng: 45.3850,
           radiusMeters: 120
         }
       ];
 
+      return NextResponse.json({ locations: officialTwoLocations });
+    }
+
+    // ----------------------------------------
+    // GET /api/attendance/today (Live Real-Time Sync for Mobile & Web)
+    // ----------------------------------------
+    if (pathStr === 'today' && method === 'GET') {
+      const url = new URL(req.url);
+      const userId = url.searchParams.get('userId');
+      const { dateStr } = getBaghdadDateTime();
+
+      if (!userId) {
+        return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+      }
+
       try {
-        const { data: locs } = await supabase.from('warehouses').select('*');
-        if (locs && locs.length > 0) {
-          const dbLocations = locs.map(l => ({
-            id: l.id,
-            name: l.name,
-            lat: parseFloat(l.lat),
-            lng: parseFloat(l.lng),
-            radiusMeters: parseFloat(l.radius) || 100
-          }));
+        const { data: record } = await supabase
+          .from('attendance')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('date', dateStr)
+          .maybeSingle();
 
-          // Ensure Ashley Base is always included
-          const hasAshley = dbLocations.some(l => l.name.includes('ئاشڵی') || l.name.includes('Ashley'));
-          if (!hasAshley) {
-            dbLocations.unshift(defaultLocations[0]);
-          }
-          return NextResponse.json({ locations: dbLocations });
+        if (record) {
+          return NextResponse.json({
+            checkInTime: record.check_in_time || null,
+            checkOutTime: record.check_out_time || null,
+            status: record.status || 'Present',
+            warehouseName: record.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
+            date: dateStr
+          });
         }
-      } catch {}
+      } catch (err) {
+        console.warn('Get today attendance error:', err);
+      }
 
-      return NextResponse.json({ locations: defaultLocations });
+      return NextResponse.json({
+        checkInTime: null,
+        checkOutTime: null,
+        status: null,
+        warehouseName: null,
+        date: dateStr
+      });
     }
 
     // ----------------------------------------
@@ -630,9 +652,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
-    // POST /api/attendance/auto-geofence (Autonomous Background Check-In/Out)
+    // POST /api/attendance/auto-geofence & autonomous-event
     // ----------------------------------------
-    if (pathStr === 'auto-geofence' && method === 'POST') {
+    if ((pathStr === 'auto-geofence' || pathStr === 'autonomous-event') && method === 'POST') {
       const body = await req.json();
       const { userId, deviceToken, event, lat, lng, warehouseId, employeeName } = body;
 

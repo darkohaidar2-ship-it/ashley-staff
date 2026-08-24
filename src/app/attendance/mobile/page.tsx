@@ -246,39 +246,53 @@ export default function AutonomousMobileAppLight() {
     return () => navigator.geolocation.clearWatch(wId);
   }, [companyLocations]);
 
-  // Load employee's own activity logs for today
-  const refreshMyLogs = useCallback(() => {
-    if (!employeeProfile) return;
-    const today = format(new Date(), 'yyyy-MM-dd');
+  const [liveTodayShift, setLiveTodayShift] = useState<{
+    checkInTime: string | null;
+    checkOutTime: string | null;
+    status?: string | null;
+    warehouseName?: string | null;
+  }>({
+    checkInTime: null,
+    checkOutTime: null,
+  });
 
+  // Fetch live today attendance from server API every 4 seconds
+  const fetchLiveTodayAttendance = useCallback(async () => {
+    if (!employeeProfile?.id) return;
     try {
-      const rawLive = localStorage.getItem('ashley_live_checkins');
-      const liveList = rawLive ? JSON.parse(rawLive) : [];
-      const myLogs = liveList.filter(
-        (l: any) =>
-          (l.employeeId === employeeProfile.id || l.userId === employeeProfile.id) &&
-          (l.date === today || (l.time && l.time.startsWith(today)))
-      );
-      setTodayLogs(myLogs);
+      const res = await fetch(`/api/attendance/today?userId=${employeeProfile.id}`);
+      const data = await res.json();
+      if (data) {
+        setLiveTodayShift({
+          checkInTime: data.checkInTime || null,
+          checkOutTime: data.checkOutTime || null,
+          status: data.status,
+          warehouseName: data.warehouseName,
+        });
+      }
     } catch {}
   }, [employeeProfile]);
 
   useEffect(() => {
-    refreshMyLogs();
-    window.addEventListener('ashley_attendance_updated', refreshMyLogs);
-    return () => window.removeEventListener('ashley_attendance_updated', refreshMyLogs);
-  }, [refreshMyLogs]);
+    fetchLiveTodayAttendance();
+    const interval = setInterval(fetchLiveTodayAttendance, 4000);
+    window.addEventListener('ashley_attendance_updated', fetchLiveTodayAttendance);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('ashley_attendance_updated', fetchLiveTodayAttendance);
+    };
+  }, [fetchLiveTodayAttendance]);
 
   // Shift calculation
   const shiftStatus = useMemo(() => {
-    const inLog = todayLogs.find(l => (l.type || l.action || '').toLowerCase().includes('in') || (l.type || '').includes('هاتن'));
-    const outLog = todayLogs.find(l => (l.type || l.action || '').toLowerCase().includes('out') || (l.type || '').includes('دەرچوون'));
+    const checkIn = liveTodayShift.checkInTime || null;
+    const checkOut = liveTodayShift.checkOutTime || null;
 
     return {
-      checkInTime: inLog ? (inLog.time?.includes(' ') ? inLog.time.split(' ')[1].slice(0, 5) : inLog.time?.slice(0, 5)) : null,
-      checkOutTime: outLog ? (outLog.time?.includes(' ') ? outLog.time.split(' ')[1].slice(0, 5) : outLog.time?.slice(0, 5)) : null,
+      checkInTime: checkIn ? (checkIn.includes(' ') ? checkIn.split(' ')[1].slice(0, 5) : checkIn.slice(0, 5)) : null,
+      checkOutTime: checkOut ? (checkOut.includes(' ') ? checkOut.split(' ')[1].slice(0, 5) : checkOut.slice(0, 5)) : null,
     };
-  }, [todayLogs]);
+  }, [liveTodayShift]);
 
   // Selected Employee display label
   const selectedEmpObject = useMemo(() => {
