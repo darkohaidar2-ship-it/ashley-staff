@@ -258,31 +258,44 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // GET /api/attendance/location
     // ----------------------------------------
     if (pathStr === 'location' && method === 'GET') {
+      const defaultLocations = [
+        {
+          id: 'ashley-base-main',
+          name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
+          lat: 35.5571,
+          lng: 45.4352,
+          radiusMeters: 100
+        },
+        {
+          id: 'huana-warehouse-loc',
+          name: 'کۆگای هوانە (Huana Warehouse)',
+          lat: 35.6012,
+          lng: 45.3850,
+          radiusMeters: 120
+        }
+      ];
+
       try {
         const { data: locs } = await supabase.from('warehouses').select('*');
         if (locs && locs.length > 0) {
-          const locations = locs.map(l => ({
+          const dbLocations = locs.map(l => ({
             id: l.id,
             name: l.name,
             lat: parseFloat(l.lat),
             lng: parseFloat(l.lng),
             radiusMeters: parseFloat(l.radius) || 100
           }));
-          return NextResponse.json({ locations });
+
+          // Ensure Ashley Base is always included
+          const hasAshley = dbLocations.some(l => l.name.includes('ئاشڵی') || l.name.includes('Ashley'));
+          if (!hasAshley) {
+            dbLocations.unshift(defaultLocations[0]);
+          }
+          return NextResponse.json({ locations: dbLocations });
         }
       } catch {}
 
-      return NextResponse.json({
-        locations: [
-          {
-            id: 'main-company-location',
-            name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
-            lat: 35.5571,
-            lng: 45.4352,
-            radiusMeters: 100
-          }
-        ]
-      });
+      return NextResponse.json({ locations: defaultLocations });
     }
 
     // ----------------------------------------

@@ -50,6 +50,23 @@ const ASHLEY_DEFAULT_EMPLOYEES = [
   { id: 'emp-12', name: 'سەروەت قادر', fullName3Part: 'سەروەت قادر', role: 'Employee', pin: '1012', deviceBound: false },
 ];
 
+const DEFAULT_COMPANY_LOCATIONS: GeofenceRegion[] = [
+  {
+    id: 'ashley-base-main',
+    name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
+    lat: 35.5571,
+    lng: 45.4352,
+    radiusMeters: 100,
+  },
+  {
+    id: 'huana-warehouse-loc',
+    name: 'کۆگای هوانە (Huana Warehouse)',
+    lat: 35.6012,
+    lng: 45.3850,
+    radiusMeters: 120,
+  },
+];
+
 export default function AutonomousMobileAppLight() {
   const [currentTimeStr, setCurrentTimeStr] = useState('');
   const [currentDateStr, setCurrentDateStr] = useState('');
@@ -78,15 +95,9 @@ export default function AutonomousMobileAppLight() {
   const longPressTimerRef = useRef<any>(null);
   const progressIntervalRef = useRef<any>(null);
 
-  // 3. Geofence & Live Location (Synced dynamically from website)
-  const [companyLocation, setCompanyLocation] = useState<GeofenceRegion>({
-    id: 'main-company-location',
-    name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
-    lat: 35.5571,
-    lng: 45.4352,
-    radiusMeters: 100,
-  });
-
+  // 3. Geofence & Multiple Company Locations (Ashley + Huana)
+  const [companyLocations, setCompanyLocations] = useState<GeofenceRegion[]>(DEFAULT_COMPANY_LOCATIONS);
+  const [matchedLocationName, setMatchedLocationName] = useState<string>('کۆمپانیای سەرەکی ئاشڵی');
   const [currentLat, setCurrentLat] = useState<number | null>(null);
   const [currentLng, setCurrentLng] = useState<number | null>(null);
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
@@ -130,18 +141,12 @@ export default function AutonomousMobileAppLight() {
       })
       .catch(() => {});
 
-    // Load company base location dynamically from website API
+    // Load ALL company base locations dynamically from website API (Ashley Base, Huana, etc.)
     fetch('/api/attendance/location')
       .then(res => res.json())
       .then(data => {
         if (data?.locations && data.locations.length > 0) {
-          setCompanyLocation({
-            id: data.locations[0].id || 'main-loc',
-            name: data.locations[0].name || 'کۆمپانیای ئاشڵی',
-            lat: data.locations[0].lat,
-            lng: data.locations[0].lng,
-            radiusMeters: data.locations[0].radiusMeters || 100,
-          });
+          setCompanyLocations(data.locations);
         }
       })
       .catch(() => {});
@@ -171,7 +176,7 @@ export default function AutonomousMobileAppLight() {
     return () => clearInterval(interval);
   }, [employeeProfile]);
 
-  // Autonomous Geofencing Engine Listener
+  // Autonomous Geofencing Engine Listener across ALL company locations
   useEffect(() => {
     if (!employeeProfile) {
       autonomousGeofenceManager.stop();
@@ -188,19 +193,22 @@ export default function AutonomousMobileAppLight() {
       userId: employeeProfile.id,
       userName: employeeProfile.name,
       deviceToken: devToken,
-      region: companyLocation,
+      regions: companyLocations,
       onStatusChange: (status) => {
         setIsInsideGeofence(status.isInside);
         setDistanceMeters(status.distance);
+        if (status.matchedRegionName) {
+          setMatchedLocationName(status.matchedRegionName);
+        }
       },
     });
 
     return () => {
       autonomousGeofenceManager.stop();
     };
-  }, [employeeProfile, companyLocation]);
+  }, [employeeProfile, companyLocations]);
 
-  // Track GPS updates
+  // Track GPS updates across ALL company locations
   useEffect(() => {
     if (typeof window === 'undefined' || !navigator.geolocation) return;
 
@@ -211,16 +219,32 @@ export default function AutonomousMobileAppLight() {
         setCurrentLat(lat);
         setCurrentLng(lng);
 
-        const dist = getDistanceMeters(lat, lng, companyLocation.lat, companyLocation.lng);
-        setDistanceMeters(Math.round(dist));
-        setIsInsideGeofence(dist <= companyLocation.radiusMeters + 35);
+        let minD = Infinity;
+        let isInsideAny = false;
+        let matchedName = companyLocations[0]?.name || 'کۆمپانیای ئاشڵی';
+
+        for (const loc of companyLocations) {
+          const dist = getDistanceMeters(lat, lng, loc.lat, loc.lng);
+          if (dist < minD) {
+            minD = dist;
+            matchedName = loc.name;
+          }
+          if (dist <= loc.radiusMeters + 35) {
+            isInsideAny = true;
+            matchedName = loc.name;
+          }
+        }
+
+        setDistanceMeters(Math.round(minD));
+        setIsInsideGeofence(isInsideAny);
+        setMatchedLocationName(matchedName);
       },
       (err) => console.warn('GPS update:', err.message),
       { enableHighAccuracy: true, maximumAge: 3000 }
     );
 
     return () => navigator.geolocation.clearWatch(wId);
-  }, [companyLocation]);
+  }, [companyLocations]);
 
   // Load employee's own activity logs for today
   const refreshMyLogs = useCallback(() => {
@@ -469,10 +493,10 @@ export default function AutonomousMobileAppLight() {
             <button
               type="button"
               onClick={() => setShowMapModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold shadow-2xs transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold shadow-2xs transition-all cursor-pointer"
             >
               <Compass className="w-3.5 h-3.5 text-orange-500" />
-              <span>بینینی نەخشە 🗺️ (تێستی دووری)</span>
+              <span>بینینی نەخشە 🗺️ (ئاشڵی و هوانە)</span>
             </button>
           </div>
 
@@ -542,7 +566,7 @@ export default function AutonomousMobileAppLight() {
               </div>
             </div>
 
-            {/* Status Title */}
+            {/* Status Title with Matched Company Location */}
             <div className="space-y-1">
               <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black border ${
                 isInsideGeofence
@@ -550,10 +574,10 @@ export default function AutonomousMobileAppLight() {
                   : 'bg-slate-200/80 text-slate-700 border-slate-300'
               }`}>
                 <span className={`w-2 h-2 rounded-full ${isInsideGeofence ? 'bg-emerald-600 animate-ping' : 'bg-slate-500'}`} />
-                <span>{isInsideGeofence ? '🟢 لەناو کۆمپانیایت (دەوامی فەرمی)' : '🔴 لە دەرەوەی کۆمپانیایت'}</span>
+                <span>{isInsideGeofence ? `🟢 لەناو (${matchedLocationName})` : `🔴 لە دەرەوەیت (${distanceMeters?.toLocaleString()}m لە ${matchedLocationName})`}</span>
               </div>
               <p className="text-[11px] text-slate-500 font-bold">
-                لە کاتی گەیشتن و دەرچوون خۆکارانە تۆمار دەکرێت
+                لە کاتی گەیشتن بە (ئاشڵی یان هوانە) خۆکارانە تۆمار دەکرێت
               </p>
             </div>
 
@@ -564,7 +588,7 @@ export default function AutonomousMobileAppLight() {
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200 text-xs font-bold transition-all shadow-2xs cursor-pointer"
             >
               <Compass className="w-3.5 h-3.5 text-orange-600" />
-              <span>بینینی نەخشە 🗺️</span>
+              <span>بینینی نەخشە 🗺️ (ئاشڵی و هوانە)</span>
             </button>
           </div>
 
@@ -690,12 +714,12 @@ export default function AutonomousMobileAppLight() {
       )}
 
       {/* ========================================================================= */}
-      {/* 🗺️ VIEW-ONLY INTERACTIVE MAP MODAL */}
+      {/* 🗺️ VIEW-ONLY INTERACTIVE MAP MODAL WITH ALL LOCATIONS */}
       {/* ========================================================================= */}
       <MobileAttendanceMapModal
         isOpen={showMapModal}
         onClose={() => setShowMapModal(false)}
-        companyLocation={companyLocation}
+        companyLocations={companyLocations}
         currentLat={currentLat}
         currentLng={currentLng}
       />

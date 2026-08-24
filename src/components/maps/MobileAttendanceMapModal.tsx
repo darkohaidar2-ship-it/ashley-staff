@@ -1,18 +1,13 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { MapPin, Navigation, X, Building2, Compass, AlertCircle } from 'lucide-react';
-import { getDistanceMeters } from '@/lib/background-geofence';
+import { MapPin, Navigation, X, Building2, Compass, AlertCircle, Warehouse } from 'lucide-react';
+import { getDistanceMeters, type GeofenceRegion } from '@/lib/background-geofence';
 
 interface MobileAttendanceMapModalProps {
   isOpen: boolean;
   onClose: () => void;
-  companyLocation: {
-    name: string;
-    lat: number;
-    lng: number;
-    radiusMeters: number;
-  };
+  companyLocations: GeofenceRegion[];
   currentLat: number | null;
   currentLng: number | null;
 }
@@ -20,7 +15,7 @@ interface MobileAttendanceMapModalProps {
 export function MobileAttendanceMapModal({
   isOpen,
   onClose,
-  companyLocation,
+  companyLocations,
   currentLat,
   currentLng,
 }: MobileAttendanceMapModalProps) {
@@ -28,7 +23,21 @@ export function MobileAttendanceMapModal({
   const mapInstanceRef = useRef<any>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
 
-  const distance = useMemoDistance(currentLat, currentLng, companyLocation.lat, companyLocation.lng);
+  // Compute distances to each location
+  const locationsWithDistance = companyLocations.map(loc => {
+    const dist = (currentLat && currentLng) 
+      ? Math.round(getDistanceMeters(currentLat, currentLng, loc.lat, loc.lng)) 
+      : null;
+    return { ...loc, distance: dist };
+  });
+
+  // Find closest company location
+  const closestLocation = locationsWithDistance.reduce((prev, curr) => {
+    if (!prev) return curr;
+    if (prev.distance === null) return curr;
+    if (curr.distance === null) return prev;
+    return curr.distance < prev.distance ? curr : prev;
+  }, locationsWithDistance[0]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -73,13 +82,11 @@ export function MobileAttendanceMapModal({
         mapInstanceRef.current.remove();
       }
 
-      // Initial center between company and user
-      const centerLat = currentLat ? (currentLat + companyLocation.lat) / 2 : companyLocation.lat;
-      const centerLng = currentLng ? (currentLng + companyLocation.lng) / 2 : companyLocation.lng;
+      const primaryLoc = companyLocations[0] || { lat: 35.5571, lng: 45.4352 };
 
       const map = L.map(mapContainerRef.current, {
-        center: [centerLat, centerLng],
-        zoom: 14,
+        center: [primaryLoc.lat, primaryLoc.lng],
+        zoom: 13,
         zoomControl: false,
       });
 
@@ -91,63 +98,75 @@ export function MobileAttendanceMapModal({
         maxZoom: 19,
       }).addTo(map);
 
-      // 🏢 Company Base Marker & Geofence Circle
-      const companyIcon = L.divIcon({
-        className: 'custom-company-marker',
-        html: `
-          <div style="background-color: #ea580c; color: white; width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 12px rgba(234,88,12,0.4); font-size: 16px;">
-            🏢
-          </div>
-        `,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18],
+      const allLatLngs: [number, number][] = [];
+
+      // 🏢 Plot ALL Company Locations (Ashley Main Showroom, Huana Warehouse, etc.)
+      companyLocations.forEach((loc, idx) => {
+        const isAshley = loc.name.includes('ئاشڵی') || loc.name.includes('Ashley');
+        const color = isAshley ? '#ea580c' : '#7c3aed';
+        const iconChar = isAshley ? '🏢' : '🏭';
+
+        const compIcon = L.divIcon({
+          className: `custom-comp-marker-${idx}`,
+          html: `
+            <div style="background-color: ${color}; color: white; width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 14px rgba(0,0,0,0.3); font-size: 17px;">
+              ${iconChar}
+            </div>
+          `,
+          iconSize: [38, 38],
+          iconAnchor: [19, 19],
+        });
+
+        L.marker([loc.lat, loc.lng], { icon: compIcon })
+          .addTo(map)
+          .bindPopup(`<b>${iconChar} ${loc.name}</b><br>سنووری دەوام: ${loc.radiusMeters} مەتر`);
+
+        L.circle([loc.lat, loc.lng], {
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.15,
+          radius: loc.radiusMeters,
+        }).addTo(map);
+
+        allLatLngs.push([loc.lat, loc.lng]);
+
+        // Draw dashed line from user to this location
+        if (currentLat && currentLng) {
+          const d = Math.round(getDistanceMeters(currentLat, currentLng, loc.lat, loc.lng));
+          L.polyline(
+            [
+              [loc.lat, loc.lng],
+              [currentLat, currentLng],
+            ],
+            { color: color, dashArray: '5, 8', weight: 2.5, opacity: 0.8 }
+          ).addTo(map);
+        }
       });
-
-      L.marker([companyLocation.lat, companyLocation.lng], { icon: companyIcon })
-        .addTo(map)
-        .bindPopup(`<b>🏢 ${companyLocation.name}</b><br>سنووری دەوام: ${companyLocation.radiusMeters} مەتر`);
-
-      L.circle([companyLocation.lat, companyLocation.lng], {
-        color: '#ea580c',
-        fillColor: '#ea580c',
-        fillOpacity: 0.15,
-        radius: companyLocation.radiusMeters,
-      }).addTo(map);
 
       // 📍 User's Live GPS Marker
       if (currentLat && currentLng) {
         const userIcon = L.divIcon({
           className: 'custom-user-marker',
           html: `
-            <div style="background-color: #2563eb; color: white; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 14px rgba(37,99,235,0.5); font-size: 16px;">
+            <div style="background-color: #2563eb; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 14px rgba(37,99,235,0.6); font-size: 17px;">
               📍
             </div>
           `,
-          iconSize: [34, 34],
-          iconAnchor: [17, 17],
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
         });
 
         L.marker([currentLat, currentLng], { icon: userIcon })
           .addTo(map)
-          .bindPopup(`<b>📍 شوێنی ئێستای مۆبایلەکەت</b><br>دووری لە کۆمپانیا: ${distance} مەتر`);
+          .bindPopup(`<b>📍 شوێنی ئێستای تۆ</b>`);
 
-        // Connect both with dashed line
-        L.polyline(
-          [
-            [companyLocation.lat, companyLocation.lng],
-            [currentLat, currentLng],
-          ],
-          { color: '#f97316', dashArray: '6, 8', weight: 3 }
-        ).addTo(map);
+        allLatLngs.push([currentLat, currentLng]);
 
-        // Fit map bounds to show both
-        const bounds = L.latLngBounds([
-          [companyLocation.lat, companyLocation.lng],
-          [currentLat, currentLng],
-        ]);
+        const bounds = L.latLngBounds(allLatLngs);
         map.fitBounds(bounds, { padding: [50, 50] });
-      } else {
-        map.setView([companyLocation.lat, companyLocation.lng], 16);
+      } else if (allLatLngs.length > 0) {
+        const bounds = L.latLngBounds(allLatLngs);
+        map.fitBounds(bounds, { padding: [50, 50] });
       }
 
       mapInstanceRef.current = map;
@@ -155,13 +174,13 @@ export function MobileAttendanceMapModal({
     };
 
     loadLeaflet();
-  }, [isOpen, companyLocation, currentLat, currentLng, distance]);
+  }, [isOpen, companyLocations, currentLat, currentLng]);
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4">
-      <div className="w-full max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col h-[85vh] sm:h-[650px]">
+      <div className="w-full max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col h-[90vh] sm:h-[680px]">
         
         {/* Header */}
         <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
@@ -170,8 +189,8 @@ export function MobileAttendanceMapModal({
               <Compass className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-black text-slate-900">بینینی نەخشەی لۆکەیشن و دووری</h3>
-              <p className="text-[11px] text-slate-500 font-bold">پشکنینی مەودای نێوان مۆبایل و کۆمپانیا</p>
+              <h3 className="text-sm font-black text-slate-900">نەخشەی تەواوی لق و کۆگاکان</h3>
+              <p className="text-[11px] text-slate-500 font-bold">پشکنینی دووری لە (ئاشڵی و هوانە)</p>
             </div>
           </div>
 
@@ -183,25 +202,30 @@ export function MobileAttendanceMapModal({
           </button>
         </div>
 
-        {/* Live Distance & Coordinates Bar */}
-        <div className="p-3 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-800 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-orange-600">🏢 کۆمپانیا:</span>
-            <span className="font-mono text-[11px]">{companyLocation.lat.toFixed(4)}, {companyLocation.lng.toFixed(4)}</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-blue-600">📍 مۆبایل:</span>
-            <span className="font-mono text-[11px]">
-              {currentLat ? `${currentLat.toFixed(4)}, ${currentLng?.toFixed(4)}` : 'چاوەڕوانە...'}
-            </span>
-          </div>
-
-          <div className="w-full flex items-center justify-between pt-1 border-t border-slate-200/80 font-black">
-            <span>مەودای دووری:</span>
-            <span className="text-orange-600 font-mono text-sm">
-              {distance !== null ? `${distance.toLocaleString()} مەتر (${(distance / 1000).toFixed(2)} کم)` : '...'}
-            </span>
+        {/* Distance Cards for ALL locations */}
+        <div className="p-3 bg-slate-50 border-b border-slate-200 space-y-2 max-h-36 overflow-y-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {locationsWithDistance.map((loc, i) => {
+              const isAshley = loc.name.includes('ئاشڵی') || loc.name.includes('Ashley');
+              return (
+                <div key={loc.id || i} className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between text-xs font-black">
+                    <span className={isAshley ? 'text-orange-600' : 'text-purple-600'}>
+                      {isAshley ? '🏢 ' : '🏭 '}{loc.name}
+                    </span>
+                    <span className="font-mono text-slate-900">
+                      {loc.distance !== null ? `${loc.distance.toLocaleString()}m` : '...'}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-mono flex items-center justify-between">
+                    <span>{loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</span>
+                    <span className="font-bold text-slate-700">
+                      {loc.distance !== null ? `(${(loc.distance / 1000).toFixed(2)} کم)` : ''}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -234,9 +258,4 @@ export function MobileAttendanceMapModal({
       </div>
     </div>
   );
-}
-
-function useMemoDistance(lat1: number | null, lon1: number | null, lat2: number, lon2: number) {
-  if (!lat1 || !lon1) return null;
-  return Math.round(getDistanceMeters(lat1, lon1, lat2, lon2));
 }

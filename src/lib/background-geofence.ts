@@ -18,8 +18,15 @@ export interface GeofenceConfig {
   userId: string;
   userName: string;
   deviceToken?: string;
-  region: GeofenceRegion;
-  onStatusChange?: (status: { isInside: boolean; distance: number; lastAction?: string; message?: string }) => void;
+  region?: GeofenceRegion;
+  regions?: GeofenceRegion[];
+  onStatusChange?: (status: { 
+    isInside: boolean; 
+    distance: number; 
+    matchedRegionName?: string; 
+    lastAction?: string; 
+    message?: string 
+  }) => void;
 }
 
 // Calculate Haversine distance in meters between two GPS coordinates
@@ -90,7 +97,7 @@ class AutonomousGeofenceManager {
         (err) => console.warn('Geofence GPS Watcher warning:', err.message),
         {
           enableHighAccuracy: true,
-          maximumAge: 5000,
+          maximumAge: 3000,
           timeout: 15000,
         }
       );
@@ -110,16 +117,36 @@ class AutonomousGeofenceManager {
 
     const currentLat = pos.coords.latitude;
     const currentLng = pos.coords.longitude;
-    const target = this.config.region;
+    
+    // Support multiple locations (Ashley Main, Huana Warehouse, etc.)
+    const regions = this.config.regions && this.config.regions.length > 0 
+      ? this.config.regions 
+      : (this.config.region ? [this.config.region] : []);
 
-    const distance = getDistanceMeters(currentLat, currentLng, target.lat, target.lng);
-    const effectiveRadius = target.radiusMeters + 25; // 25m tolerance buffer
-    const currentlyInside = distance <= effectiveRadius;
+    if (regions.length === 0) return;
+
+    let closestDistance = Infinity;
+    let currentlyInside = false;
+    let matchedRegion = regions[0];
+
+    for (const reg of regions) {
+      const d = getDistanceMeters(currentLat, currentLng, reg.lat, reg.lng);
+      if (d < closestDistance) {
+        closestDistance = d;
+        matchedRegion = reg;
+      }
+      const effectiveRadius = reg.radiusMeters + 35; // 35m tolerance buffer
+      if (d <= effectiveRadius) {
+        currentlyInside = true;
+        matchedRegion = reg;
+      }
+    }
 
     // Report status to UI callback
     this.config.onStatusChange?.({
       isInside: currentlyInside,
-      distance,
+      distance: closestDistance,
+      matchedRegionName: matchedRegion.name,
     });
 
     const now = Date.now();
@@ -132,7 +159,7 @@ class AutonomousGeofenceManager {
         this.isInsideState = true;
         this.lastTriggerTime = now;
         localStorage.setItem(`ashley_geostate_${this.config.userId}`, 'inside');
-        await this.triggerGeofenceEvent('ENTER', currentLat, currentLng, distance);
+        await this.triggerGeofenceEvent('ENTER', currentLat, currentLng, closestDistance, matchedRegion);
       }
     }
     // State Transition 2: Inside -> Outside (EXIT)
@@ -141,7 +168,7 @@ class AutonomousGeofenceManager {
         this.isInsideState = false;
         this.lastTriggerTime = now;
         localStorage.setItem(`ashley_geostate_${this.config.userId}`, 'outside');
-        await this.triggerGeofenceEvent('EXIT', currentLat, currentLng, distance);
+        await this.triggerGeofenceEvent('EXIT', currentLat, currentLng, closestDistance, matchedRegion);
       }
     }
     // Initial Baseline initialization
@@ -155,85 +182,85 @@ class AutonomousGeofenceManager {
     event: 'ENTER' | 'EXIT',
     lat: number,
     lng: number,
-    distanceMeters?: number
+    distanceMeters?: number,
+    region?: GeofenceRegion
   ) {
     if (!this.config) return;
 
     const payload = {
       userId: this.config.userId,
-      employeeName: this.config.userName,
-      deviceToken: this.config.deviceToken || 'mobile-token-auto',
+      userName: this.config.userName,
+      deviceToken: this.config.deviceToken || 'dev-auto',
       event,
       lat,
       lng,
-      warehouseId: this.config.region.id,
+      distance: distanceMeters,
+      regionName: region?.name || 'کۆمپانیای ئاشڵی',
+      timestamp: new Date().toISOString(),
     };
 
     try {
-      const res = await fetch('/api/attendance/auto-geofence', {
+      const res = await fetch('/api/attendance/autonomous-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
       const data = await res.json();
+
       if (res.ok && data.success) {
-        const notifTitle = event === 'ENTER' ? '🟢 چێک‌ئینـی خۆکارانە' : '👋 چێک‌ئاوتـی خۆکارانە';
-        const notifBody = data.message || (event === 'ENTER' ? 'هاتنەکەت لە کاتی خۆیدا تۆمارکرا' : 'دەرچوونەکەت تۆمارکرا');
+        const title = event === 'ENTER' ? '🟢 چوونەژوورەوەی خۆکارانە' : '👋 دەرچوونی خۆکارانە';
+        const msg = data.message || (event === 'ENTER' ? `هاتن بە سەرکەوتوویی لە (${payload.regionName}) تۆمارکرا.` : `دەرچوون بە سەرکەوتوویی لە (${payload.regionName}) تۆمارکرا.`);
+        sendLocalNotification(title, msg);
 
-        sendLocalNotification(notifTitle, notifBody);
-
-        // Update local logs for instant UI responsiveness
-        if (data.record) {
+        if (typeof window !== 'undefined') {
           const raw = localStorage.getItem('ashley_live_checkins');
           const list = raw ? JSON.parse(raw) : [];
-          list.unshift(data.record);
-          localStorage.setItem('ashley_live_checkins', JSON.stringify(list));
+          list.unshift(data.record || {
+            id: `auto-${Date.now()}`,
+            userId: this.config.userId,
+            userName: this.config.userName,
+            type: event === 'ENTER' ? 'هاتن (Check In)' : 'دەرچوون (Check Out)',
+            time: new Date().toLocaleString(),
+            distance: `${distanceMeters}m (${payload.regionName})`,
+          });
+          localStorage.setItem('ashley_live_checkins', JSON.stringify(list.slice(0, 100)));
+          window.dispatchEvent(new Event('ashley_attendance_updated'));
         }
-
-        window.dispatchEvent(new Event('ashley_attendance_updated'));
-        window.dispatchEvent(new Event('storage'));
-
-        this.config.onStatusChange?.({
-          isInside: event === 'ENTER',
-          distance: distanceMeters || 0,
-          lastAction: event === 'ENTER' ? 'چێک‌ئین' : 'چێک‌ئاوت',
-          message: data.message,
-        });
-      } else {
-        console.warn('Geofence trigger response:', data);
       }
-    } catch (err) {
-      // Offline fallback: save event to offline queue
-      console.warn('Network offline, queueing geofence event:', err);
-      this.queueOfflineEvent(payload);
+    } catch {
+      this.enqueueOfflineEvent(payload);
     }
   }
 
-  private queueOfflineEvent(payload: any) {
+  private enqueueOfflineEvent(payload: any) {
+    if (typeof window === 'undefined') return;
     try {
-      const raw = localStorage.getItem('ashley_geofence_offline_queue');
-      const queue = raw ? JSON.parse(raw) : [];
-      queue.push({ ...payload, queuedAt: new Date().toISOString() });
-      localStorage.setItem('ashley_geofence_offline_queue', JSON.stringify(queue));
+      const queue = JSON.parse(localStorage.getItem('ashley_offline_geofence_queue') || '[]');
+      queue.push(payload);
+      localStorage.setItem('ashley_offline_geofence_queue', JSON.stringify(queue));
     } catch {}
   }
 
   private async flushOfflineQueue() {
+    if (typeof window === 'undefined' || !navigator.onLine) return;
     try {
-      const raw = localStorage.getItem('ashley_geofence_offline_queue');
-      if (!raw) return;
-      const queue = JSON.parse(raw);
-      if (!Array.isArray(queue) || queue.length === 0) return;
+      const queue = JSON.parse(localStorage.getItem('ashley_offline_geofence_queue') || '[]');
+      if (queue.length === 0) return;
 
+      const remaining: any[] = [];
       for (const item of queue) {
-        await fetch('/api/attendance/auto-geofence', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(item),
-        });
+        try {
+          await fetch('/api/attendance/autonomous-event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item),
+          });
+        } catch {
+          remaining.push(item);
+        }
       }
-      localStorage.removeItem('ashley_geofence_offline_queue');
+      localStorage.setItem('ashley_offline_geofence_queue', JSON.stringify(remaining));
     } catch {}
   }
 }
