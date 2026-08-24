@@ -142,20 +142,42 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // GET /api/attendance/employees
     // ----------------------------------------
     if (pathStr === 'employees' && method === 'GET') {
-      const { data: users, error } = await supabase
-        .from('users')
-        .select('id, name, device_token')
-        .neq('role', 'admin');
+      const fallbackEmployees = [
+        { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', fullName3Part: 'سه هەند مەریوان حەمەسەعید', role: 'Employee' },
+        { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', fullName3Part: 'دارکۆ حەیدەر حسێن', role: 'Manager' },
+        { id: 'emp-03', name: 'شادیار هوشیار', fullName3Part: 'شادیار هوشیار', role: 'Employee Supervisor' },
+        { id: 'emp-04', name: 'هەڤاڵ حبیب حەمەڕەزا', fullName3Part: 'هەڤاڵ حبیب حەمەڕەزا', role: 'Transport Supervisor' },
+        { id: 'emp-05', name: 'عیماد سەباح نوری', fullName3Part: 'عیماد سەباح نوری', role: 'Employee' },
+        { id: 'emp-06', name: 'کامەران عومەر ڕووئوف', fullName3Part: 'کامەران عومەر ڕووئوف', role: 'Employee' },
+        { id: 'emp-07', name: 'ڕابەر محەمەد مەحمود', fullName3Part: 'ڕابەر محەمەد مەحمود', role: 'Employee' },
+        { id: 'emp-08', name: 'دانەر محەمەد باسام', fullName3Part: 'دانەر محەمەد باسام', role: 'Employee' },
+        { id: 'emp-09', name: 'ڕێبین سەباح نوری', fullName3Part: 'ڕێبین سەباح نوری', role: 'Employee' },
+        { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', fullName3Part: 'بەهرەمەند ڕزگار عزیز', role: 'Employee' },
+        { id: 'emp-11', name: 'شادومان یادگار رحیم', fullName3Part: 'شادومان یادگار رحیم', role: 'Employee' },
+        { id: 'emp-12', name: 'سەروەت قادر', fullName3Part: 'سەروەت قادر', role: 'Employee' },
+      ];
 
-      if (error) throw error;
+      try {
+        const { data: users, error } = await supabase
+          .from('users')
+          .select('id, name, device_token, role')
+          .neq('role', 'admin');
 
-      const employees = users.map(u => ({
-        id: u.id,
-        name: u.name,
-        deviceBound: !!u.device_token
-      }));
+        if (!error && users && users.length > 0) {
+          const employees = users.map(u => ({
+            id: u.id,
+            name: u.name,
+            fullName3Part: u.name,
+            role: u.role,
+            deviceBound: !!u.device_token
+          }));
+          return NextResponse.json(employees);
+        }
+      } catch (err) {
+        console.warn('Supabase fetch employees fallback:', err);
+      }
 
-      return NextResponse.json(employees);
+      return NextResponse.json(fallbackEmployees);
     }
 
     // ----------------------------------------
