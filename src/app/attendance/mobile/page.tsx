@@ -235,8 +235,8 @@ export default function MinimalAutonomousMobileAttendancePage() {
         {!employeeProfile ? (
           <div className="space-y-5">
             <div className="text-center space-y-2">
-              <div className="w-14 h-14 mx-auto rounded-3xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-xl shadow-emerald-500/20">
-                <Building2 className="w-7 h-7 text-white" />
+              <div className="w-16 h-16 mx-auto rounded-3xl overflow-hidden shadow-xl shadow-orange-500/20 border-2 border-orange-500/40">
+                <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-cover" />
               </div>
               <h1 className="text-lg font-black text-white">ئاشڵی مۆبایل</h1>
               <p className="text-xs text-slate-400 font-bold">بەستنەوەی مۆبایل بە ناوی کارمەند بۆ دەوامی خۆکارانە</p>
@@ -298,12 +298,12 @@ export default function MinimalAutonomousMobileAttendancePage() {
             {/* Top Bar */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2 text-right">
-                <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center font-black text-xs">
-                  👤
+                <div className="w-9 h-9 rounded-xl overflow-hidden border border-orange-500/40 flex-shrink-0">
+                  <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-cover" />
                 </div>
                 <div>
                   <div className="text-xs font-black text-white">{employeeProfile.name}</div>
-                  <div className="text-[10px] text-emerald-400 font-mono">بەستراوەتەوە ✅</div>
+                  <div className="text-[10px] text-emerald-400 font-mono">سیستەمی زیرەک چالاکە ✅</div>
                 </div>
               </div>
 

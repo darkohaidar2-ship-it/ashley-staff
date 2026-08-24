@@ -518,8 +518,8 @@ export default function AdminPage() {
       {/* 🌟 TOP ENTERPRISE HEADER BAR */}
       <div className="panel-classic p-3 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl shadow-lg border-2 border-slate-700 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-indigo-600/30 rounded-xl border border-indigo-500/50 shadow-inner">
-            <Shield className="w-7 h-7 text-indigo-300" />
+          <div className="w-11 h-11 rounded-2xl overflow-hidden shadow-md shadow-orange-500/20 flex-shrink-0 border border-orange-400/40">
+            <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-cover" />
           </div>
           <div>
             <h1 className="text-base sm:text-lg font-black text-white flex items-center gap-2">

@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { 
   Camera, 
@@ -47,6 +48,18 @@ interface CompanyLocation {
 }
 
 export default function PublicTerminalLightPage() {
+  const router = useRouter();
+
+  // Auto-redirect to Mobile Autonomous Portal when running in Android / iOS native app
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isNative = !!(window as any).Capacitor?.isNativePlatform?.();
+      if (isNative) {
+        router.replace('/attendance/mobile');
+      }
+    }
+  }, [router]);
+
   // Live Desktop Clock for ERP
   const [currentTimeStr, setCurrentTimeStr] = useState('');
   const [currentDateStr, setCurrentDateStr] = useState('');
@@ -576,20 +589,20 @@ export default function PublicTerminalLightPage() {
       {/* 🌟 ULTRA-CLEAN LIGHT HEADER (FIXED TOP) */}
       <header className="w-full max-w-4xl mx-auto flex-shrink-0 flex items-center justify-between pb-1">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-slate-900 to-indigo-900 flex items-center justify-center text-white shadow-md shadow-slate-900/10 flex-shrink-0">
-            <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl overflow-hidden shadow-md shadow-orange-500/20 flex-shrink-0 border border-orange-400/30">
+            <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-cover" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
               <h1 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
                 ASHLEY ENTERPRISE
               </h1>
-              <span className="text-[9px] sm:text-[10px] font-black uppercase px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-full border border-indigo-200">
-                AI Face Terminal
+              <span className="text-[9px] sm:text-[10px] font-black uppercase px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full border border-orange-200">
+                ERP Staff
               </span>
             </div>
             <p className="text-[10px] sm:text-xs text-slate-500 font-bold">
-              سیستەمی فەرمیی چێک‌ئین و ئامادەبوونی کارمەندان
+              سیستەمی فەرمیی دەوام و کارمەندانی کۆمپانیای ئاشڵی
             </p>
           </div>
         </div>
