@@ -42,8 +42,10 @@ function DynamicFontInjector({ children }: { children: React.ReactNode }) {
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  const isMobileOrTerminal = 
+  const isStandalonePage = 
     pathname === '/' || 
+    pathname === '/adminpanel' || 
+    pathname === '/login' || 
     pathname?.startsWith('/attendance') || 
     pathname?.includes('mobile');
 
@@ -57,13 +59,13 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       <LanguageProvider>
         <AppProvider>
           <DynamicFontInjector>
-            {isMobileOrTerminal ? (
-              // 📱 100% IMMERSIVE FULL-SCREEN FOR MOBILE APP & TERMINAL (NO DESKTOP BORDERS)
-              <div className="min-h-[100dvh] h-[100dvh] w-full bg-slate-950 text-slate-100 font-sans antialiased overflow-hidden p-0 m-0 dir-rtl" dir="rtl">
+            {isStandalonePage ? (
+              // 📱 STANDALONE CLEAN IMMERSIVE SHELL (FOR ADMINPANEL, MOBILE, AND TERMINAL)
+              <div className="min-h-[100dvh] w-full bg-slate-100 text-slate-900 font-sans antialiased dir-rtl" dir="rtl">
                 {children}
               </div>
             ) : (
-              // 🖥️ CLASSIC ERP DESKTOP WORKSPACE
+              // 🖥️ FULL ERP DESKTOP WORKSPACE (FOR MAIN ADMIN DESKTOP)
               <div className="min-h-screen bg-slate-200 text-slate-900 font-sans antialiased flex flex-col dir-rtl" dir="rtl">
                 <TopNavbar />
                 <main className="flex-1 w-full max-w-[1920px] mx-auto px-3 md:px-6 py-3">

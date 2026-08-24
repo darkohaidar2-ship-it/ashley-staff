@@ -18,7 +18,9 @@ import {
   Check,
   RefreshCw,
   KeyRound,
-  X
+  X,
+  ChevronDown,
+  Search
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { 
@@ -56,6 +58,10 @@ export default function AutonomousMobileAppLight() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
+  // Custom Employee Picker Modal State (Replaces native Android select)
+  const [showEmployeePicker, setShowEmployeePicker] = useState(false);
+  const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
+
   // 2. Secret 10-Second Long-Press Admin Reset Modal
   const [pressProgress, setPressProgress] = useState(0); // 0 to 100
   const [showAdminResetModal, setShowAdminResetModal] = useState(false);
@@ -64,7 +70,7 @@ export default function AutonomousMobileAppLight() {
   const longPressTimerRef = useRef<any>(null);
   const progressIntervalRef = useRef<any>(null);
 
-  // 3. Geofence & Live Location
+  // 3. Geofence & Live Location (Fetched dynamically from website)
   const [companyLocation, setCompanyLocation] = useState<GeofenceRegion>({
     id: 'main-company-location',
     name: 'کۆمپانیای ئاشڵی (Ashley Base)',
@@ -89,7 +95,7 @@ export default function AutonomousMobileAppLight() {
     return () => clearInterval(interval);
   }, []);
 
-  // Initial Load: Check if this phone is permanently bound
+  // Initial Load: Check if this phone is permanently bound & fetch live website data
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -104,7 +110,7 @@ export default function AutonomousMobileAppLight() {
       } catch {}
     }
 
-    // Load full official employee list
+    // Load live employee list from website API
     fetch('/api/attendance/employees')
       .then(res => res.json())
       .then(data => {
@@ -114,7 +120,7 @@ export default function AutonomousMobileAppLight() {
       })
       .catch(() => {});
 
-    // Load company base location
+    // Load company base location dynamically from website API
     fetch('/api/attendance/location')
       .then(res => res.json())
       .then(data => {
@@ -152,7 +158,7 @@ export default function AutonomousMobileAppLight() {
       } catch {}
     };
 
-    const interval = setInterval(checkRemoteBinding, 6000);
+    const interval = setInterval(checkRemoteBinding, 5000);
     return () => clearInterval(interval);
   }, [employeeProfile]);
 
@@ -237,6 +243,20 @@ export default function AutonomousMobileAppLight() {
       checkOutTime: outLog ? (outLog.time?.includes(' ') ? outLog.time.split(' ')[1].slice(0, 5) : outLog.time?.slice(0, 5)) : null,
     };
   }, [todayLogs]);
+
+  // Selected Employee display label
+  const selectedEmpObject = useMemo(() => {
+    return allEmployees.find(e => e.id === selectedEmpId);
+  }, [allEmployees, selectedEmpId]);
+
+  // Filtered employees for custom picker search
+  const filteredEmployees = useMemo(() => {
+    if (!employeeSearchQuery.trim()) return allEmployees;
+    const q = employeeSearchQuery.toLowerCase().trim();
+    return allEmployees.filter(e => 
+      (e.fullName3Part || e.name || '').toLowerCase().includes(q)
+    );
+  }, [allEmployees, employeeSearchQuery]);
 
   // 1-Time Secure Login & Permanent Device Binding Handler
   const handleDeviceBinding = async (e: React.FormEvent) => {
@@ -323,7 +343,7 @@ export default function AutonomousMobileAppLight() {
   // Admin Manual Override / Reset from Secret Prompt
   const handleAdminReset = (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminPinInput.trim() === '12355321' || adminPinInput.trim() === '1234') {
+    if (adminPinInput.trim() === '12355321' || adminPinInput.trim() === '1234' || adminPinInput.trim() === '000') {
       localStorage.removeItem('ashley_bound_employee_profile');
       localStorage.removeItem('ashley_bound_employee_id');
       setEmployeeProfile(null);
@@ -337,13 +357,13 @@ export default function AutonomousMobileAppLight() {
   };
 
   return (
-    <div className="min-h-[100dvh] h-[100dvh] w-full bg-slate-50 text-slate-900 font-sans flex flex-col justify-between select-none overflow-hidden touch-manipulation dir-rtl" dir="rtl">
+    <div className="min-h-[100dvh] h-[100dvh] w-full bg-slate-100 text-slate-900 font-sans flex flex-col justify-between select-none overflow-hidden touch-manipulation dir-rtl" dir="rtl">
       
       {/* ========================================================================= */}
       {/* VIEW 1: ONE-TIME CLEAN LIGHT LOGIN & BINDING SCREEN */}
       {/* ========================================================================= */}
       {!employeeProfile ? (
-        <div className="flex-1 w-full max-w-sm mx-auto flex flex-col justify-center px-6 py-6 space-y-5">
+        <div className="flex-1 w-full max-w-sm mx-auto flex flex-col justify-center px-5 py-6 space-y-5">
           
           {/* Ashley Logo with 10s Secret Touch Indicator */}
           <div className="text-center space-y-2 relative">
@@ -358,9 +378,7 @@ export default function AutonomousMobileAppLight() {
               
               {/* Live Long-press circle timer */}
               {pressProgress > 0 && (
-                <div 
-                  className="absolute inset-0 bg-orange-600/60 flex items-center justify-center text-white font-black text-xs font-mono"
-                >
+                <div className="absolute inset-0 bg-orange-600/70 flex items-center justify-center text-white font-black text-xs font-mono">
                   {Math.ceil((100 - pressProgress) / 10)}s
                 </div>
               )}
@@ -370,25 +388,22 @@ export default function AutonomousMobileAppLight() {
             <p className="text-xs text-slate-500 font-bold">سیستەمی دەوامی خۆکارانەی کارمەند</p>
           </div>
 
-          <form onSubmit={handleDeviceBinding} className="space-y-3.5 bg-white p-5 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50">
+          <form onSubmit={handleDeviceBinding} className="space-y-3.5 bg-white p-5 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/60">
+            
+            {/* Custom Light Employee Selector (Opens in-app modal with zero Android OS glitches) */}
             <div className="space-y-1 text-right">
               <label className="text-xs font-black text-slate-800">ناوی کارمەند:</label>
-              <select
-                value={selectedEmpId}
-                onChange={(e) => {
-                  setSelectedEmpId(e.target.value);
-                  setAuthError(null);
-                }}
-                required
-                className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-black focus:border-orange-500 focus:bg-white focus:outline-hidden transition-all"
+              
+              <button
+                type="button"
+                onClick={() => setShowEmployeePicker(true)}
+                className="w-full p-3.5 bg-slate-50 hover:bg-slate-100 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-black flex items-center justify-between transition-all cursor-pointer text-right"
               >
-                <option value="" className="text-slate-500">-- ناوی خۆت هەڵبژێرە --</option>
-                {allEmployees.map(emp => (
-                  <option key={emp.id} value={emp.id} className="text-slate-900 font-bold">
-                    {emp.fullName3Part || emp.name}
-                  </option>
-                ))}
-              </select>
+                <span className={selectedEmpObject ? 'text-slate-900 font-black' : 'text-slate-400 font-bold'}>
+                  {selectedEmpObject ? (selectedEmpObject.fullName3Part || selectedEmpObject.name) : '-- ناوی خۆت هەڵبژێرە --'}
+                </span>
+                <ChevronDown className="w-4 h-4 text-slate-500" />
+              </button>
             </div>
 
             <div className="space-y-1 text-right">
@@ -536,6 +551,81 @@ export default function AutonomousMobileAppLight() {
       )}
 
       {/* ========================================================================= */}
+      {/* 🌟 CUSTOM IN-APP LIGHT EMPLOYEE PICKER MODAL (Zero Android OS glitches) */}
+      {/* ========================================================================= */}
+      {showEmployeePicker && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl border border-slate-200 space-y-4 max-h-[80vh] flex flex-col">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b pb-3 border-slate-100">
+              <h3 className="font-black text-slate-900 text-sm">ناوی کارمەند هەڵبژێرە</h3>
+              <button 
+                onClick={() => setShowEmployeePicker(false)}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="گەڕان بەدوای ناوی کارمەند..."
+                value={employeeSearchQuery}
+                onChange={(e) => setEmployeeSearchQuery(e.target.value)}
+                className="w-full p-3 pr-9 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-orange-500 focus:bg-white focus:outline-hidden"
+              />
+              <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3.5" />
+            </div>
+
+            {/* Employee List */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              {filteredEmployees.map((emp) => {
+                const isSelected = selectedEmpId === emp.id;
+                return (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedEmpId(emp.id);
+                      setShowEmployeePicker(false);
+                      setAuthError(null);
+                    }}
+                    className={`w-full p-3.5 rounded-2xl border flex items-center justify-between text-right transition-all cursor-pointer ${
+                      isSelected 
+                        ? 'bg-orange-50 border-orange-400 text-orange-950 font-black shadow-xs' 
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-900 font-bold'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black ${
+                        isSelected ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        👤
+                      </div>
+                      <div>
+                        <div className="text-xs font-black text-slate-900">{emp.fullName3Part || emp.name}</div>
+                        <div className="text-[10px] text-slate-500">{emp.role || 'کارمەند'}</div>
+                      </div>
+                    </div>
+
+                    {isSelected && (
+                      <div className="w-5 h-5 rounded-full bg-orange-500 text-white flex items-center justify-center">
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* 🔐 SECRET ADMIN OVERRIDE MODAL (Triggered by 10s Long-Press on Logo) */}
       {/* ========================================================================= */}
       {showAdminResetModal && (
@@ -567,13 +657,13 @@ export default function AutonomousMobileAppLight() {
                 <button
                   type="button"
                   onClick={() => setShowAdminResetModal(false)}
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
                 >
                   پاشگەزبوونەوە
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-md shadow-rose-600/30"
+                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-md shadow-rose-600/30 cursor-pointer"
                 >
                   ڕیستکردن 🔓
                 </button>

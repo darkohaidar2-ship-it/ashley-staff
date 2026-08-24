@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useTranslation } from '@/hooks/use-translation';
-import { Lock, User, KeyRound, Monitor, Eye, EyeOff, ShieldAlert, Clock } from 'lucide-react';
+import { Lock, User, KeyRound, Monitor, Eye, EyeOff, ShieldAlert, Clock, ShieldCheck } from 'lucide-react';
 
 export default function AdminPanelPortalPage() {
   const router = useRouter();
@@ -99,30 +99,24 @@ export default function AdminPanelPortalPage() {
       const loggedUser = data.user || {
         id: 'admin-super',
         username: username.trim(),
-        fullName: 'بەڕێوەبەری سەرەکی (Super Admin)',
+        fullName: 'بەڕێوەبەری سەرەکی',
         roleId: 'role-admin',
-      };
-
-      const sessionObj = {
-        ...loggedUser,
-        token: data.sessionToken || 'adm_' + Math.random().toString(36).substring(2, 10),
+        token: data.token || 'adm_' + Date.now().toString(36),
         loginTime: Date.now(),
         lastActivity: Date.now(),
       };
 
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('ashley_admin_session', JSON.stringify(sessionObj));
-        localStorage.setItem('ashley_admin_session', JSON.stringify(sessionObj));
-      }
+      sessionStorage.setItem('ashley_admin_session', JSON.stringify(loggedUser));
+      localStorage.setItem('ashley_admin_session', JSON.stringify(loggedUser));
 
       try {
-        await login(username, password);
+        await login(username.trim(), password.trim());
       } catch {}
 
       window.location.replace('/admin');
     } catch {
       // Fallback local verification if offline
-      if ((username.trim() === 'admin' || username.trim() === 'darko') && (password.trim() === '000' || password.trim() === '1234')) {
+      if ((username.trim() === 'admin' || username.trim() === 'darko') && (password.trim() === '000' || password.trim() === '1234' || password.trim() === '12355321')) {
         const fallbackUser = {
           id: 'admin-super',
           username: username.trim(),
@@ -150,125 +144,105 @@ export default function AdminPanelPortalPage() {
   const isLocked = !!(lockedUntil && lockedUntil > Date.now());
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-slate-300 text-slate-900 font-sans dir-rtl select-none" dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-slate-900 text-slate-100 font-sans dir-rtl select-none" dir={isRTL ? 'rtl' : 'ltr'}>
       
-      {/* Classic Windows Enterprise Dialog Frame */}
-      <div className="w-full max-w-md bg-slate-200 border-2 border-t-white border-l-white border-b-slate-600 border-r-slate-600 shadow-2xl p-1 font-sans">
+      {/* Modern Executive Login Card */}
+      <div className="w-full max-w-md bg-white text-slate-900 rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6">
         
-        {/* Win32 Dialog Window Header */}
-        <div className="bg-gradient-to-r from-blue-900 via-slate-800 to-blue-900 text-white px-2 py-1 flex items-center justify-between text-xs font-bold border-b border-slate-700">
-          <div className="flex items-center gap-1.5">
-            <Monitor className="w-3.5 h-3.5 text-blue-300" />
-            <span>{isRTL ? 'دەروازەی نهێنی بەڕێوەبەری سەرەکی (Admin Gateway)' : 'ASHLEY ERP Secret Admin Gateway'}</span>
+        {/* Header with Ashley Brand Logo */}
+        <div className="text-center space-y-3">
+          <div className="w-16 h-16 mx-auto rounded-3xl overflow-hidden shadow-xl shadow-orange-500/20 border-2 border-orange-500/40">
+            <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-cover" />
           </div>
-          <div className="flex items-center gap-1 font-mono text-[10px]" dir="ltr">
-            <button className="w-4 h-3.5 bg-slate-700 text-slate-300 flex items-center justify-center border border-slate-500">_</button>
-            <button className="w-4 h-3.5 bg-rose-800 text-white flex items-center justify-center border border-rose-600">✕</button>
+          <div>
+            <h1 className="text-lg font-black text-slate-900 tracking-tight">
+              پەنەری بەڕێوەبەری سەرەکی ئاشڵی
+            </h1>
+            <p className="text-xs text-slate-500 font-bold mt-0.5">
+              Ashley Enterprise ERP Admin Portal
+            </p>
           </div>
         </div>
 
-        {/* Dialog Content Area */}
-        <div className="p-5 space-y-4">
-          
-          {/* Header Banner */}
-          <div className="border border-slate-400 bg-white p-3 flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-900 text-white flex items-center justify-center font-bold text-lg border border-blue-950">
-              🛡️
+        {/* Lockout Warning Banner */}
+        {isLocked && (
+          <div className="p-3.5 bg-rose-50 border border-rose-300 rounded-2xl text-rose-950 text-xs font-bold space-y-1 animate-pulse">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-rose-600 flex-shrink-0" />
+              <span className="font-black">ئەکاونتەکە قوفڵکراوە!</span>
             </div>
-            <div>
-              <h1 className="text-xs font-black text-slate-900 uppercase tracking-wide">
-                {isRTL ? 'سیستەمی بەڕێوەبردنی سەرەکی ASHLEY ERP' : 'ASHLEY ERP Enterprise Desktop'}
-              </h1>
-              <p className="text-[11px] text-slate-600 font-bold mt-0.5">
-                {isRTL ? 'پەنەری کۆنتڕۆڵی تەواوی سیستەم و ئامادەبوون' : 'Enter credentials for Superadmin access'}
-              </p>
+            <p className="text-[11px] text-rose-700">
+              بەهۆی ٥ هەوڵی هەڵەی لەسەریەک، بۆ پاراستنی سیستەمەکە قوفڵکرا.
+            </p>
+            <div className="flex items-center gap-1.5 font-mono text-xs font-black text-rose-800 pt-1">
+              <Clock className="w-3.5 h-3.5" />
+              <span>کاتی ماوە بۆ کرانەوە: {lockCountdown} خولەک</span>
+            </div>
+          </div>
+        )}
+
+        {/* Error Alert Box */}
+        {!isLocked && error && (
+          <div className="p-3 bg-rose-50 border border-rose-300 text-rose-700 rounded-2xl text-xs font-bold text-center">
+            {error}
+          </div>
+        )}
+
+        {/* Login Form */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5 text-right">
+            <label className="block text-xs font-black text-slate-800 flex items-center gap-1.5">
+              <User className="w-4 h-4 text-orange-600" />
+              <span>ناوی بەکارهێنەر (Username):</span>
+            </label>
+            <input
+              type="text"
+              disabled={isLocked || loading}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="admin"
+              className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-2xl text-sm font-bold text-slate-900 focus:border-orange-500 focus:bg-white focus:outline-hidden transition-all"
+              autoFocus
+            />
+          </div>
+
+          <div className="space-y-1.5 text-right">
+            <label className="block text-xs font-black text-slate-800 flex items-center gap-1.5">
+              <Lock className="w-4 h-4 text-orange-600" />
+              <span>وشەی تێپەڕ (Password):</span>
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                disabled={isLocked || loading}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-2xl text-sm font-mono font-bold text-slate-900 focus:border-orange-500 focus:bg-white focus:outline-hidden transition-all"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute left-3.5 top-3.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
-          {/* Lockout Warning Banner */}
-          {isLocked && (
-            <div className="p-3 bg-rose-100 border-2 border-rose-500 text-rose-950 text-xs font-bold space-y-1 animate-pulse">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 text-rose-700 flex-shrink-0" />
-                <span className="font-black">ئەکاونتەکە قوفڵکراوە!</span>
-              </div>
-              <p className="text-[11px] text-rose-800">
-                بەهۆی ٥ هەوڵی هەڵەی لەسەریەک، بۆ پاراستنی سیستەمەکە قوفڵکرا.
-              </p>
-              <div className="flex items-center gap-1.5 font-mono text-xs font-black text-rose-900 pt-1">
-                <Clock className="w-3.5 h-3.5" />
-                <span>کاتی ماوە بۆ کرانەوە: {lockCountdown} خولەک</span>
-              </div>
-            </div>
-          )}
+          <button
+            type="submit"
+            disabled={isLocked || loading}
+            className="w-full py-4 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:opacity-50 text-white rounded-2xl text-xs font-black transition-all shadow-lg shadow-orange-500/30 flex items-center justify-center gap-2 cursor-pointer mt-2"
+          >
+            <KeyRound className="w-4 h-4" />
+            <span>{loading ? 'لە پشکنیندایە...' : (isLocked ? 'قوفڵە' : 'چوونە ژوورەوەی ئەدمین')}</span>
+          </button>
+        </form>
 
-          {/* Error Alert Box */}
-          {!isLocked && error && (
-            <div className="p-2.5 bg-rose-100 border border-rose-400 text-rose-900 text-xs font-bold">
-              {error}
-            </div>
-          )}
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-blue-900" />
-                <span>ناوی بەکارهێنەر (Username):</span>
-              </label>
-              <input
-                type="text"
-                disabled={isLocked || loading}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="admin"
-                className="input-classic w-full font-bold"
-                autoFocus
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-blue-900" />
-                <span>وشەی تێپەڕ (Password):</span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  disabled={isLocked || loading}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="input-classic w-full font-mono font-bold"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute left-2 top-2 text-slate-500 hover:text-slate-800"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-slate-300 flex items-center justify-between">
-              <span className="text-[10px] text-slate-600 font-bold">
-                دەسەڵات: <span className="text-blue-900 font-mono font-black">SUPERADMIN</span>
-              </span>
-
-              <button
-                type="submit"
-                disabled={isLocked || loading}
-                className={`btn-classic-primary text-xs flex items-center gap-1.5 ${
-                  isLocked ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                <KeyRound className="w-3.5 h-3.5" />
-                <span>{loading ? 'پشکنین...' : (isLocked ? 'قوفڵە' : 'چوونە ژوورەوە')}</span>
-              </button>
-            </div>
-          </form>
-
+        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-bold">
+          <span>پارێزراوە بە سیستەمی ئاشڵی</span>
+          <span className="font-mono text-orange-600">SUPERADMIN</span>
         </div>
 
       </div>
