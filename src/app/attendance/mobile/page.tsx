@@ -295,16 +295,49 @@ export default function AutonomousMobileAppLight() {
     };
   }, [fetchLiveTodayAttendance]);
 
-  // Shift calculation
+  // Shift calculation (Single source of truth from Server + Local sync)
   const shiftStatus = useMemo(() => {
-    const checkIn = liveTodayShift.checkInTime || null;
-    const checkOut = liveTodayShift.checkOutTime || null;
+    let checkIn = liveTodayShift.checkInTime || null;
+    let checkOut = liveTodayShift.checkOutTime || null;
+    let warehouseName = liveTodayShift.warehouseName || null;
+
+    if (!checkIn) {
+      try {
+        const rawLive = localStorage.getItem('ashley_live_checkins');
+        const liveList = rawLive ? JSON.parse(rawLive) : [];
+        const inLog = liveList.find(
+          (l: any) =>
+            (l.employeeId === employeeProfile?.id || l.userId === employeeProfile?.id) &&
+            ((l.type || l.action || '').toLowerCase().includes('in') || (l.type || '').includes('هاتن'))
+        );
+        if (inLog?.time) {
+          checkIn = inLog.time.includes(' ') ? inLog.time.split(' ')[1] : inLog.time;
+          warehouseName = inLog.distance || inLog.notes || warehouseName;
+        }
+      } catch {}
+    }
+
+    if (!checkOut) {
+      try {
+        const rawLive = localStorage.getItem('ashley_live_checkins');
+        const liveList = rawLive ? JSON.parse(rawLive) : [];
+        const outLog = liveList.find(
+          (l: any) =>
+            (l.employeeId === employeeProfile?.id || l.userId === employeeProfile?.id) &&
+            ((l.type || l.action || '').toLowerCase().includes('out') || (l.type || '').includes('دەرچوون'))
+        );
+        if (outLog?.time) {
+          checkOut = outLog.time.includes(' ') ? outLog.time.split(' ')[1] : outLog.time;
+        }
+      } catch {}
+    }
 
     return {
       checkInTime: checkIn ? (checkIn.includes(' ') ? checkIn.split(' ')[1].slice(0, 5) : checkIn.slice(0, 5)) : null,
       checkOutTime: checkOut ? (checkOut.includes(' ') ? checkOut.split(' ')[1].slice(0, 5) : checkOut.slice(0, 5)) : null,
+      warehouseName,
     };
-  }, [liveTodayShift]);
+  }, [liveTodayShift, employeeProfile]);
 
   // Selected Employee display label
   const selectedEmpObject = useMemo(() => {
@@ -618,27 +651,73 @@ export default function AutonomousMobileAppLight() {
             </button>
           </div>
 
-          {/* Today's Activity Summary Cards */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-4 bg-white rounded-2xl border border-slate-200 text-right space-y-1 shadow-sm">
-              <div className="text-[11px] text-slate-500 font-bold flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                <span>کاتی هاتن:</span>
+          {/* Today's Activity Summary Cards with High-Visibility Times */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            
+            {/* Card 1: Check In */}
+            <div className={`p-4 rounded-2xl border text-right space-y-2 transition-all shadow-sm ${
+              shiftStatus.checkInTime 
+                ? 'bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-500/10' 
+                : 'bg-white border-slate-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+                  shiftStatus.checkInTime 
+                    ? 'bg-emerald-600 text-white' 
+                    : 'bg-slate-100 text-slate-500'
+                }`}>
+                  {shiftStatus.checkInTime ? '✅ تۆمارکراوە' : '⏳ هێشتا نەکراوە'}
+                </span>
+                <div className="text-xs font-black text-slate-700 flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>کاتی هاتن (چێک‌ئین)</span>
+                </div>
               </div>
-              <div className="text-base font-black font-mono text-emerald-600">
-                {shiftStatus.checkInTime || 'چاوەڕوانە...'}
+
+              <div className="flex items-baseline justify-between pt-1">
+                <span className="text-[11px] font-bold text-slate-500 truncate max-w-[130px]">
+                  {shiftStatus.checkInTime ? (shiftStatus.warehouseName || matchedLocationName) : 'چاوەڕوانی گەیشتن'}
+                </span>
+                <div className={`text-xl font-black font-mono ${
+                  shiftStatus.checkInTime ? 'text-emerald-700' : 'text-slate-400'
+                }`}>
+                  {shiftStatus.checkInTime || '--:--'}
+                </div>
               </div>
             </div>
 
-            <div className="p-4 bg-white rounded-2xl border border-slate-200 text-right space-y-1 shadow-sm">
-              <div className="text-[11px] text-slate-500 font-bold flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-sky-600" />
-                <span>کاتی ڕۆیشتن:</span>
+            {/* Card 2: Check Out */}
+            <div className={`p-4 rounded-2xl border text-right space-y-2 transition-all shadow-sm ${
+              shiftStatus.checkOutTime 
+                ? 'bg-sky-50/80 border-sky-300 ring-2 ring-sky-500/10' 
+                : (shiftStatus.checkInTime ? 'bg-amber-50/60 border-amber-200' : 'bg-white border-slate-200')
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+                  shiftStatus.checkOutTime 
+                    ? 'bg-sky-600 text-white' 
+                    : (shiftStatus.checkInTime ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500')
+                }`}>
+                  {shiftStatus.checkOutTime ? '✅ چێک‌ئاوت کرا' : (shiftStatus.checkInTime ? '🟢 لە دەوامدایە' : '⏳ دەستپێنەکراو')}
+                </span>
+                <div className="text-xs font-black text-slate-700 flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-sky-600" />
+                  <span>کاتی ڕۆیشتن (چێک‌ئاوت)</span>
+                </div>
               </div>
-              <div className="text-base font-black font-mono text-sky-600">
-                {shiftStatus.checkOutTime || (shiftStatus.checkInTime ? 'لە دەوامدایە 🟢' : '--:--')}
+
+              <div className="flex items-baseline justify-between pt-1">
+                <span className="text-[11px] font-bold text-slate-500">
+                  {shiftStatus.checkOutTime ? 'دەوام تەواو بوو' : (shiftStatus.checkInTime ? 'خۆکارانە لە دەرچوون' : 'چاوەڕوانی هاتنە')}
+                </span>
+                <div className={`text-xl font-black font-mono ${
+                  shiftStatus.checkOutTime ? 'text-sky-700' : (shiftStatus.checkInTime ? 'text-amber-600 text-sm' : 'text-slate-400')
+                }`}>
+                  {shiftStatus.checkOutTime || (shiftStatus.checkInTime ? 'لە دەوامدایە' : '--:--')}
+                </div>
               </div>
             </div>
+
           </div>
 
           {/* Bottom Clean Footer */}
