@@ -1,24 +1,20 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
-  Smartphone, 
   MapPin, 
   CheckCircle2, 
   Clock, 
   ShieldCheck, 
-  Bell, 
-  LogOut, 
-  LogIn, 
-  Radio, 
-  Sparkles, 
-  UserCheck, 
-  AlertCircle,
-  Building2,
-  RefreshCw,
-  Lock,
-  ChevronRight,
-  User
+  Lock, 
+  Building2, 
+  Calendar, 
+  AlertTriangle,
+  Radio,
+  User,
+  History,
+  TrendingUp,
+  Sparkles
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { 
@@ -28,22 +24,23 @@ import {
   type GeofenceRegion 
 } from '@/lib/background-geofence';
 
-export default function MinimalAutonomousMobileAttendancePage() {
+export default function AutonomousMobileApp() {
   const [currentTimeStr, setCurrentTimeStr] = useState('');
   const [currentDateStr, setCurrentDateStr] = useState('');
 
-  // Profile & Auth
-  const [employeeProfile, setEmployeeProfile] = useState<{ id: string; name: string } | null>(null);
-  const [allEmployees, setAllEmployees] = useState<Array<{ id: string; name: string; fullName3Part?: string; pin?: string }>>([]);
+  // 1. Profile & Permanent Device Binding State
+  const [employeeProfile, setEmployeeProfile] = useState<{ id: string; name: string; role?: string } | null>(null);
+  const [boundEmployee, setBoundEmployee] = useState<{ id: string; name: string } | null>(null);
+  const [allEmployees, setAllEmployees] = useState<Array<{ id: string; name: string; fullName3Part?: string; role?: string }>>([]);
   const [selectedEmpId, setSelectedEmpId] = useState('');
   const [pinInput, setPinInput] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
-  // Geofence & Location States
+  // 2. Geofence & Live Location
   const [companyLocation, setCompanyLocation] = useState<GeofenceRegion>({
     id: 'main-company-location',
-    name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
+    name: 'کۆمپانیای ئاشڵی (Ashley Base)',
     lat: 35.5571,
     lng: 45.4352,
     radiusMeters: 55,
@@ -53,10 +50,9 @@ export default function MinimalAutonomousMobileAttendancePage() {
   const [currentLng, setCurrentLng] = useState<number | null>(null);
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const [isInsideGeofence, setIsInsideGeofence] = useState<boolean | null>(null);
-  const [lastActionMessage, setLastActionMessage] = useState<string | null>(null);
   const [todayLogs, setTodayLogs] = useState<any[]>([]);
 
-  // 1. Live Clock
+  // Live Clock
   useEffect(() => {
     const tick = () => {
       const now = new Date();
@@ -68,36 +64,49 @@ export default function MinimalAutonomousMobileAttendancePage() {
     return () => clearInterval(interval);
   }, []);
 
-  // 2. Load stored profile & employees list
+  // Initial Load: Check if this phone is permanently bound to an employee
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('ashley_mobile_employee_profile');
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
+      try {
+        const storedProfile = localStorage.getItem('ashley_bound_employee_profile');
+        if (storedProfile) {
+          const parsed = JSON.parse(storedProfile);
           if (parsed?.id) {
             setEmployeeProfile(parsed);
+            setBoundEmployee(parsed);
           }
-        } catch {}
-      }
+        } else {
+          const legacy = localStorage.getItem('ashley_mobile_employee_profile');
+          if (legacy) {
+            const parsed = JSON.parse(legacy);
+            if (parsed?.id) {
+              setEmployeeProfile(parsed);
+              setBoundEmployee(parsed);
+              localStorage.setItem('ashley_bound_employee_profile', JSON.stringify(parsed));
+            }
+          }
+        }
+      } catch {}
     }
 
-    // Fetch employee directory
+    // Load full official employee list
     fetch('/api/attendance/employees')
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) setAllEmployees(data);
+        if (Array.isArray(data)) {
+          setAllEmployees(data.filter((e: any) => e.name && e.name !== 'Admin'));
+        }
       })
       .catch(() => {});
 
-    // Fetch company base location
+    // Load company base location
     fetch('/api/attendance/location')
       .then(res => res.json())
       .then(data => {
         if (data?.locations && data.locations.length > 0) {
           setCompanyLocation({
             id: data.locations[0].id || 'main-loc',
-            name: data.locations[0].name || 'کۆمپانیای سەرەکی ئاشڵی',
+            name: data.locations[0].name || 'کۆمپانیای ئاشڵی',
             lat: data.locations[0].lat,
             lng: data.locations[0].lng,
             radiusMeters: data.locations[0].radiusMeters || 55,
@@ -107,7 +116,7 @@ export default function MinimalAutonomousMobileAttendancePage() {
       .catch(() => {});
   }, []);
 
-  // 3. Start Background Geofence Watcher when profile is active
+  // Autonomous Geofencing Engine Listener
   useEffect(() => {
     if (!employeeProfile) {
       autonomousGeofenceManager.stop();
@@ -128,7 +137,6 @@ export default function MinimalAutonomousMobileAttendancePage() {
       onStatusChange: (status) => {
         setIsInsideGeofence(status.isInside);
         setDistanceMeters(status.distance);
-        if (status.message) setLastActionMessage(status.message);
       },
     });
 
@@ -137,7 +145,7 @@ export default function MinimalAutonomousMobileAttendancePage() {
     };
   }, [employeeProfile, companyLocation]);
 
-  // 4. Track GPS locally
+  // Track GPS updates
   useEffect(() => {
     if (typeof window === 'undefined' || !navigator.geolocation) return;
 
@@ -150,17 +158,17 @@ export default function MinimalAutonomousMobileAttendancePage() {
 
         const dist = getDistanceMeters(lat, lng, companyLocation.lat, companyLocation.lng);
         setDistanceMeters(dist);
-        setIsInsideGeofence(dist <= companyLocation.radiusMeters + 25);
+        setIsInsideGeofence(dist <= companyLocation.radiusMeters + 30);
       },
-      (err) => console.warn('Local GPS update:', err.message),
+      (err) => console.warn('GPS update:', err.message),
       { enableHighAccuracy: true, maximumAge: 3000 }
     );
 
     return () => navigator.geolocation.clearWatch(wId);
   }, [companyLocation]);
 
-  // 5. Load Today's Attendance Logs
-  const refreshLogs = useCallback(() => {
+  // Load employee's own activity logs for today
+  const refreshMyLogs = useCallback(() => {
     if (!employeeProfile) return;
     const today = format(new Date(), 'yyyy-MM-dd');
 
@@ -177,16 +185,34 @@ export default function MinimalAutonomousMobileAttendancePage() {
   }, [employeeProfile]);
 
   useEffect(() => {
-    refreshLogs();
-    window.addEventListener('ashley_attendance_updated', refreshLogs);
-    return () => window.removeEventListener('ashley_attendance_updated', refreshLogs);
-  }, [refreshLogs]);
+    refreshMyLogs();
+    window.addEventListener('ashley_attendance_updated', refreshMyLogs);
+    return () => window.removeEventListener('ashley_attendance_updated', refreshMyLogs);
+  }, [refreshMyLogs]);
 
-  // Handle Login & Binding
-  const handleLogin = async (e: React.FormEvent) => {
+  // Check In & Check Out status for today
+  const shiftStatus = useMemo(() => {
+    const inLog = todayLogs.find(l => (l.type || l.action || '').toLowerCase().includes('in') || (l.type || '').includes('هاتن'));
+    const outLog = todayLogs.find(l => (l.type || l.action || '').toLowerCase().includes('out') || (l.type || '').includes('دەرچوون'));
+
+    return {
+      checkInTime: inLog ? (inLog.time?.includes(' ') ? inLog.time.split(' ')[1].slice(0, 5) : inLog.time?.slice(0, 5)) : null,
+      checkOutTime: outLog ? (outLog.time?.includes(' ') ? outLog.time.split(' ')[1].slice(0, 5) : outLog.time?.slice(0, 5)) : null,
+      isActivePresent: Boolean(inLog && !outLog),
+    };
+  }, [todayLogs]);
+
+  // 1-Time Secure Login & Permanent Device Binding Handler
+  const handleDeviceBinding = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEmpId) {
-      setAuthError('تکایە ناوی کارمەند هەڵبژێرە');
+      setAuthError('تکایە ناوی خۆت هەڵبژێرە');
+      return;
+    }
+
+    // 🔒 Security Check: If device was already bound to someone else
+    if (boundEmployee && boundEmployee.id !== selectedEmpId) {
+      setAuthError(`⚠️ ئەم مۆبایلە پێشتر بە ناوی (${boundEmployee.name}) قوفڵ کراوە و ناتوانیت بۆ کارمەندێکی تر بەکاری بهێنیت.`);
       return;
     }
 
@@ -201,128 +227,143 @@ export default function MinimalAutonomousMobileAttendancePage() {
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        // Fallback for easy onboarding if PIN not yet set
-        const found = allEmployees.find(emp => emp.id === selectedEmpId);
-        if (found) {
-          const profile = { id: found.id, name: found.fullName3Part || found.name };
-          setEmployeeProfile(profile);
-          localStorage.setItem('ashley_mobile_employee_profile', JSON.stringify(profile));
-          sendLocalNotification('🎉 پیرۆزە', `بەستنەوەی مۆبایلی ${profile.name} بە سەرکەوتوویی تەواو بوو.`);
-          return;
-        }
-        throw new Error(data.error || 'پین کۆد یان ناسنامە هەڵەیە');
-      }
+      const targetEmp = allEmployees.find(e => e.id === selectedEmpId);
+      const fullName = targetEmp?.fullName3Part || targetEmp?.name || data?.user?.name || 'کارمەند';
 
-      const profile = { id: data.user.id, name: data.user.name };
+      const profile = {
+        id: selectedEmpId,
+        name: fullName,
+        role: targetEmp?.role || 'کارمەند',
+      };
+
       setEmployeeProfile(profile);
-      localStorage.setItem('ashley_mobile_employee_profile', JSON.stringify(profile));
-      sendLocalNotification('🎉 پیرۆزە', `بەستنەوەی مۆبایلی ${profile.name} بە سەرکەوتوویی تەواو بوو.`);
+      setBoundEmployee(profile);
+
+      // Permanently lock device to this employee
+      localStorage.setItem('ashley_bound_employee_profile', JSON.stringify(profile));
+      localStorage.setItem('ashley_bound_employee_id', selectedEmpId);
+
+      sendLocalNotification('🎉 بەخێربێیت', `مۆبایلەکەت بە سەرکەوتوویی بەسترایەوە، ${profile.name}.`);
     } catch (err: any) {
-      setAuthError(err.message || 'شکست لە چوونەژوورەوە');
+      setAuthError(err.message || 'هەڵەیەک ڕوویدا لە کاتی بەستنەوەی مۆبایل');
     } finally {
       setAuthLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col items-center justify-center p-4 selection:bg-emerald-500 selection:text-black">
-      <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6">
-        
-        {/* ========================================================================= */}
-        {/* VIEW 1: ONE-TIME LOGIN / BINDING SCREEN */}
-        {/* ========================================================================= */}
-        {!employeeProfile ? (
-          <div className="space-y-5">
-            <div className="text-center space-y-2">
-              <div className="w-16 h-16 mx-auto rounded-3xl overflow-hidden shadow-xl shadow-orange-500/20 border-2 border-orange-500/40">
+    <div className="min-h-[100dvh] h-[100dvh] w-full bg-slate-950 text-slate-100 font-sans flex flex-col justify-between select-none overflow-hidden touch-manipulation dir-rtl" dir="rtl">
+      
+      {/* ========================================================================= */}
+      {/* VIEW 1: ONE-TIME CLEAN LOGIN & BINDING SCREEN */}
+      {/* ========================================================================= */}
+      {!employeeProfile ? (
+        <div className="flex-1 w-full max-w-sm mx-auto flex flex-col justify-center px-6 py-8 space-y-6">
+          
+          {/* Official Ashley Logo */}
+          <div className="text-center space-y-3">
+            <div className="w-20 h-20 mx-auto rounded-3xl overflow-hidden shadow-2xl shadow-orange-500/25 border-2 border-orange-500/40">
+              <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-cover" />
+            </div>
+            <h1 className="text-xl font-black text-white tracking-tight">کۆمپانیای ئاشڵی</h1>
+            <p className="text-xs text-slate-400 font-bold">سیستەمی دەوامی خۆکارانەی کارمەند</p>
+          </div>
+
+          <form onSubmit={handleDeviceBinding} className="space-y-4 pt-2">
+            <div className="space-y-1.5 text-right">
+              <label className="text-xs font-black text-slate-300">ناوی کارمەند:</label>
+              <select
+                value={selectedEmpId}
+                onChange={(e) => {
+                  setSelectedEmpId(e.target.value);
+                  setAuthError(null);
+                }}
+                required
+                className="w-full p-3.5 bg-slate-900 border border-slate-700 rounded-2xl text-xs text-white font-bold focus:border-orange-500 focus:outline-hidden transition-colors"
+              >
+                <option value="">-- ناوی خۆت دیاری بکە --</option>
+                {allEmployees.map(emp => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.fullName3Part || emp.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5 text-right">
+              <label className="text-xs font-black text-slate-300">پین کۆد (PIN):</label>
+              <div className="relative">
+                <input
+                  type="password"
+                  maxLength={6}
+                  placeholder="••••"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  className="w-full p-3.5 bg-slate-900 border border-slate-700 rounded-2xl text-base text-white font-mono font-black tracking-widest text-center focus:border-orange-500 focus:outline-hidden transition-colors"
+                />
+                <Lock className="w-4 h-4 text-slate-500 absolute left-4 top-4" />
+              </div>
+            </div>
+
+            {authError && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-400 text-xs font-bold text-center leading-relaxed">
+                {authError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={authLoading || !selectedEmpId}
+              className="w-full py-4 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 disabled:opacity-50 text-white rounded-2xl text-xs font-black transition-all shadow-xl shadow-orange-600/30 cursor-pointer active:scale-98"
+            >
+              {authLoading ? 'لە پشکنیندایە...' : 'چوونەژوورەوە و بەستنەوەی مۆبایل'}
+            </button>
+          </form>
+
+          <div className="text-[10px] text-slate-500 text-center font-bold">
+            تەنها یەکجار تۆمار دەبێت و مۆبایلەکە بە ناوتەوە دەبەسترێتەوە
+          </div>
+        </div>
+      ) : (
+        /* ========================================================================= */
+        /* VIEW 2: ULTRA-MODERN EMPLOYEE PERSONAL DASHBOARD (VIEW-ONLY) */
+        /* ========================================================================= */
+        <div className="flex-1 w-full max-w-md mx-auto flex flex-col justify-between p-5 space-y-4">
+          
+          {/* Top Elegant Header */}
+          <div className="flex items-center justify-between p-3 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl overflow-hidden border border-orange-500/40 shadow-sm flex-shrink-0">
                 <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-cover" />
               </div>
-              <h1 className="text-lg font-black text-white">ئاشڵی مۆبایل</h1>
-              <p className="text-xs text-slate-400 font-bold">بەستنەوەی مۆبایل بە ناوی کارمەند بۆ دەوامی خۆکارانە</p>
+              <div className="text-right">
+                <h2 className="text-sm font-black text-white">{employeeProfile.name}</h2>
+                <div className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>سیستەمی دەوام چالاکە</span>
+                </div>
+              </div>
             </div>
 
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-300 block">ناوی کارمەند:</label>
-                <select
-                  value={selectedEmpId}
-                  onChange={(e) => setSelectedEmpId(e.target.value)}
-                  required
-                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-2xl text-xs text-white font-bold focus:border-emerald-500 focus:outline-hidden"
-                >
-                  <option value="">-- ناوی خۆت هەڵبژێرە --</option>
-                  {allEmployees.map(emp => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.fullName3Part || emp.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-300 block">پین کۆد (PIN):</label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    maxLength={6}
-                    placeholder="1234"
-                    value={pinInput}
-                    onChange={(e) => setPinInput(e.target.value)}
-                    className="w-full p-3 bg-slate-800 border border-slate-700 rounded-2xl text-xs text-white font-mono font-bold tracking-widest text-center focus:border-emerald-500 focus:outline-hidden"
-                  />
-                  <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3.5" />
-                </div>
-              </div>
-
-              {authError && (
-                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-bold text-center">
-                  {authError}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={authLoading || !selectedEmpId}
-                className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white rounded-2xl text-xs font-black transition-all shadow-lg shadow-emerald-600/30 cursor-pointer"
-              >
-                {authLoading ? 'لە پشکنیندایە...' : 'چوونەژوورەوە و بەستنەوە ✨'}
-              </button>
-            </form>
+            <div className="text-left font-mono font-black text-xs text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded-lg border border-orange-500/20">
+              {currentTimeStr}
+            </div>
           </div>
-        ) : (
-          /* ========================================================================= */
-          /* VIEW 2: ULTRA-MINIMAL ACTIVE SMART RADAR CARD */
-          /* ========================================================================= */
-          <div className="space-y-6 text-center">
-            {/* Top Bar */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2 text-right">
-                <div className="w-9 h-9 rounded-xl overflow-hidden border border-orange-500/40 flex-shrink-0">
-                  <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-cover" />
-                </div>
-                <div>
-                  <div className="text-xs font-black text-white">{employeeProfile.name}</div>
-                  <div className="text-[10px] text-emerald-400 font-mono">سیستەمی زیرەک چالاکە ✅</div>
-                </div>
-              </div>
 
-              <div className="text-left font-mono text-xs font-black text-slate-300">
-                {currentTimeStr}
-              </div>
-            </div>
-
-            {/* Glowing Presence Radar */}
-            <div className="relative flex items-center justify-center py-4">
-              <div className={`w-36 h-36 rounded-full border-2 flex items-center justify-center transition-all duration-700 ${
+          {/* Center Presence Radar Hero */}
+          <div className="flex-1 flex flex-col items-center justify-center py-2 space-y-5 text-center">
+            
+            {/* Glowing Pulsing Ring */}
+            <div className="relative flex items-center justify-center">
+              <div className={`w-40 h-40 rounded-full border-2 flex items-center justify-center transition-all duration-700 ${
                 isInsideGeofence 
                   ? 'border-emerald-500 bg-emerald-500/10 shadow-2xl shadow-emerald-500/30 ring-8 ring-emerald-500/10' 
-                  : 'border-slate-700 bg-slate-800/40'
+                  : 'border-slate-800 bg-slate-900/50'
               }`}>
-                <div className={`w-24 h-24 rounded-full flex flex-col items-center justify-center transition-all ${
+                <div className={`w-28 h-28 rounded-full flex flex-col items-center justify-center transition-all ${
                   isInsideGeofence ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'
                 }`}>
-                  <MapPin className={`w-8 h-8 ${isInsideGeofence ? 'animate-bounce text-emerald-400' : ''}`} />
+                  <MapPin className={`w-9 h-9 ${isInsideGeofence ? 'animate-bounce text-emerald-400' : 'text-slate-500'}`} />
                   <span className="text-xs font-black font-mono mt-1">
                     {distanceMeters !== null ? `${distanceMeters}m` : '...'}
                   </span>
@@ -330,50 +371,54 @@ export default function MinimalAutonomousMobileAttendancePage() {
               </div>
             </div>
 
-            {/* Status Title */}
-            <div className="space-y-1.5">
+            {/* Status Title & Subtitle */}
+            <div className="space-y-1">
               <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black border ${
                 isInsideGeofence
                   ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                   : 'bg-slate-800 text-slate-400 border-slate-700'
               }`}>
-                <span className={`w-2.5 h-2.5 rounded-full ${isInsideGeofence ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`} />
-                <span>{isInsideGeofence ? '🟢 لەناو کۆمپانیایت (ئامادەبوو)' : '🔴 لە دەرەوەی کۆمپانیایت'}</span>
+                <span className={`w-2 h-2 rounded-full ${isInsideGeofence ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`} />
+                <span>{isInsideGeofence ? '🟢 لەناو کۆمپانیایت (دەوامی فەرمی)' : '🔴 لە دەرەوەی کۆمپانیایت'}</span>
               </div>
-              <p className="text-[11px] text-slate-500 font-bold">
-                دەوام لە پاشبنەما بە خۆکارانە تۆمار دەبێت (پێویست بە دەستلێدان ناکات)
+              <p className="text-[11px] text-slate-400 font-bold">
+                لە کاتی گەیشتن و دەرچوون خۆکارانە تۆمار دەکرێت
               </p>
             </div>
+          </div>
 
-            {/* Today's Log Item */}
-            {todayLogs.length > 0 && (
-              <div className="p-3 bg-slate-800/60 rounded-2xl border border-slate-700/60 flex items-center justify-between text-xs font-bold">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-emerald-400" />
-                  <span>دواین تۆماری ئەمڕۆ:</span>
-                </div>
-                <span className="font-mono text-emerald-300 font-black">{todayLogs[0].time || todayLogs[0].createdAt}</span>
+          {/* Today's Activity Summary Cards */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="p-3.5 bg-slate-900/80 rounded-2xl border border-slate-800 text-right space-y-1">
+              <div className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                <span>کاتی هاتن (چێک‌ئین):</span>
               </div>
-            )}
+              <div className="text-sm font-black font-mono text-emerald-400">
+                {shiftStatus.checkInTime || 'چاوەڕوانە...'}
+              </div>
+            </div>
 
-            {/* Logout/Unbind button */}
-            <div className="pt-2">
-              <button
-                onClick={() => {
-                  if (confirm('ئایا دڵنیایت لە دەرچوون لەم مۆبایلە؟')) {
-                    localStorage.removeItem('ashley_mobile_employee_profile');
-                    setEmployeeProfile(null);
-                  }
-                }}
-                className="text-[10px] text-slate-500 hover:text-rose-400 font-bold transition-colors cursor-pointer"
-              >
-                دەرچوون و بەستنەوەی مۆبایل بە کارمەندێکی تر
-              </button>
+            <div className="p-3.5 bg-slate-900/80 rounded-2xl border border-slate-800 text-right space-y-1">
+              <div className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-sky-400" />
+                <span>کاتی ڕۆیشتن (چێک‌ئاوت):</span>
+              </div>
+              <div className="text-sm font-black font-mono text-sky-400">
+                {shiftStatus.checkOutTime || (shiftStatus.checkInTime ? 'لە دەوامدایە 🟢' : '--:--')}
+              </div>
             </div>
           </div>
-        )}
 
-      </div>
+          {/* Bottom Security Footer */}
+          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-bold text-slate-500 px-1">
+            <span>🔒 پارێزراوە بۆ ئەم مۆبایلە</span>
+            <span>Ashley Autonomous ERP 2027</span>
+          </div>
+
+        </div>
+      )}
+
     </div>
   );
 }
