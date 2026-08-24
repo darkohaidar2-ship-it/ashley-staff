@@ -295,49 +295,18 @@ export default function AutonomousMobileAppLight() {
     };
   }, [fetchLiveTodayAttendance]);
 
-  // Shift calculation (Single source of truth from Server + Local sync)
+  // Shift calculation (100% Pure Live Server State from Supabase)
   const shiftStatus = useMemo(() => {
-    let checkIn = liveTodayShift.checkInTime || null;
-    let checkOut = liveTodayShift.checkOutTime || null;
-    let warehouseName = liveTodayShift.warehouseName || null;
-
-    if (!checkIn) {
-      try {
-        const rawLive = localStorage.getItem('ashley_live_checkins');
-        const liveList = rawLive ? JSON.parse(rawLive) : [];
-        const inLog = liveList.find(
-          (l: any) =>
-            (l.employeeId === employeeProfile?.id || l.userId === employeeProfile?.id) &&
-            ((l.type || l.action || '').toLowerCase().includes('in') || (l.type || '').includes('هاتن'))
-        );
-        if (inLog?.time) {
-          checkIn = inLog.time.includes(' ') ? inLog.time.split(' ')[1] : inLog.time;
-          warehouseName = inLog.distance || inLog.notes || warehouseName;
-        }
-      } catch {}
-    }
-
-    if (!checkOut) {
-      try {
-        const rawLive = localStorage.getItem('ashley_live_checkins');
-        const liveList = rawLive ? JSON.parse(rawLive) : [];
-        const outLog = liveList.find(
-          (l: any) =>
-            (l.employeeId === employeeProfile?.id || l.userId === employeeProfile?.id) &&
-            ((l.type || l.action || '').toLowerCase().includes('out') || (l.type || '').includes('دەرچوون'))
-        );
-        if (outLog?.time) {
-          checkOut = outLog.time.includes(' ') ? outLog.time.split(' ')[1] : outLog.time;
-        }
-      } catch {}
-    }
+    const checkIn = liveTodayShift.checkInTime || null;
+    const checkOut = liveTodayShift.checkOutTime || null;
+    const warehouseName = liveTodayShift.warehouseName || null;
 
     return {
       checkInTime: checkIn ? (checkIn.includes(' ') ? checkIn.split(' ')[1].slice(0, 5) : checkIn.slice(0, 5)) : null,
       checkOutTime: checkOut ? (checkOut.includes(' ') ? checkOut.split(' ')[1].slice(0, 5) : checkOut.slice(0, 5)) : null,
       warehouseName,
     };
-  }, [liveTodayShift, employeeProfile]);
+  }, [liveTodayShift]);
 
   // Selected Employee display label
   const selectedEmpObject = useMemo(() => {
@@ -569,20 +538,19 @@ export default function AutonomousMobileAppLight() {
         /* ========================================================================= */
         <div className="flex-1 w-full max-w-md mx-auto flex flex-col justify-between p-4 sm:p-5 space-y-4">
           
-          {/* Top Elegant Light Header with Secret Long Press on Logo */}
-          <div className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-200 shadow-sm">
+          {/* Top Clean Header with Secret Long Press on Logo */}
+          <div className="flex items-center justify-between p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs">
             <div className="flex items-center gap-3">
               <div 
                 onMouseDown={startLongPress}
                 onMouseUp={cancelLongPress}
                 onTouchStart={startLongPress}
                 onTouchEnd={cancelLongPress}
-                className="w-11 h-11 rounded-xl overflow-hidden border border-orange-400 shadow-xs flex-shrink-0 relative cursor-pointer active:scale-95 transition-transform"
+                className="w-10 h-10 rounded-xl overflow-hidden border border-orange-400 shadow-2xs flex-shrink-0 relative cursor-pointer active:scale-95 transition-transform"
                 title="١٠ چرکە دەست لەسەر دابگرە بۆ ڕیستکردنی ئەدمین"
               >
                 <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-cover pointer-events-none" />
                 
-                {/* Visual Ring Timer */}
                 {pressProgress > 0 && (
                   <div className="absolute inset-0 bg-orange-600/70 flex items-center justify-center text-white font-black text-[10px] font-mono">
                     {Math.ceil((100 - pressProgress) / 10)}s
@@ -592,10 +560,6 @@ export default function AutonomousMobileAppLight() {
 
               <div className="text-right">
                 <h2 className="text-sm font-black text-slate-900">{employeeProfile.name}</h2>
-                <div className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>سیستەمی دەوام چالاکە</span>
-                </div>
               </div>
             </div>
 
@@ -629,15 +593,12 @@ export default function AutonomousMobileAppLight() {
             <div className="space-y-1">
               <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black border ${
                 isInsideGeofence
-                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300 shadow-sm'
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300 shadow-xs'
                   : 'bg-slate-200/80 text-slate-700 border-slate-300'
               }`}>
                 <span className={`w-2 h-2 rounded-full ${isInsideGeofence ? 'bg-emerald-600 animate-ping' : 'bg-slate-500'}`} />
-                <span>{isInsideGeofence ? `🟢 لەناو (${matchedLocationName})` : `🔴 لە دەرەوەیت (${distanceMeters?.toLocaleString()}m لە ${matchedLocationName})`}</span>
+                <span>{isInsideGeofence ? `🟢 لەناو (${matchedLocationName})` : `🔴 لە دەرەوە (${distanceMeters?.toLocaleString()}m)`}</span>
               </div>
-              <p className="text-[11px] text-slate-500 font-bold">
-                لە کاتی گەیشتن بە (ئاشڵی یان هوانە) خۆکارانە تۆمار دەکرێت
-              </p>
             </div>
 
             {/* View Map Button */}
@@ -655,9 +616,9 @@ export default function AutonomousMobileAppLight() {
           <div className="grid grid-cols-2 gap-2.5">
             
             {/* Card 1: Check In */}
-            <div className={`p-4 rounded-2xl border text-right space-y-2 transition-all shadow-sm ${
+            <div className={`p-3.5 rounded-2xl border text-right space-y-1.5 transition-all shadow-2xs ${
               shiftStatus.checkInTime 
-                ? 'bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-500/10' 
+                ? 'bg-emerald-50/80 border-emerald-300' 
                 : 'bg-white border-slate-200'
             }`}>
               <div className="flex items-center justify-between">
@@ -666,30 +627,22 @@ export default function AutonomousMobileAppLight() {
                     ? 'bg-emerald-600 text-white' 
                     : 'bg-slate-100 text-slate-500'
                 }`}>
-                  {shiftStatus.checkInTime ? '✅ تۆمارکراوە' : '⏳ هێشتا نەکراوە'}
+                  {shiftStatus.checkInTime ? '✅ تۆمارکراوە' : '⏳ چاوەڕوانە'}
                 </span>
-                <div className="text-xs font-black text-slate-700 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>کاتی هاتن (چێک‌ئین)</span>
-                </div>
+                <span className="text-xs font-black text-slate-700">کاتی هاتن</span>
               </div>
 
-              <div className="flex items-baseline justify-between pt-1">
-                <span className="text-[11px] font-bold text-slate-500 truncate max-w-[130px]">
-                  {shiftStatus.checkInTime ? (shiftStatus.warehouseName || matchedLocationName) : 'چاوەڕوانی گەیشتن'}
-                </span>
-                <div className={`text-xl font-black font-mono ${
-                  shiftStatus.checkInTime ? 'text-emerald-700' : 'text-slate-400'
-                }`}>
-                  {shiftStatus.checkInTime || '--:--'}
-                </div>
+              <div className={`text-xl font-black font-mono pt-1 ${
+                shiftStatus.checkInTime ? 'text-emerald-700' : 'text-slate-400'
+              }`}>
+                {shiftStatus.checkInTime || '--:--'}
               </div>
             </div>
 
             {/* Card 2: Check Out */}
-            <div className={`p-4 rounded-2xl border text-right space-y-2 transition-all shadow-sm ${
+            <div className={`p-3.5 rounded-2xl border text-right space-y-1.5 transition-all shadow-2xs ${
               shiftStatus.checkOutTime 
-                ? 'bg-sky-50/80 border-sky-300 ring-2 ring-sky-500/10' 
+                ? 'bg-sky-50/80 border-sky-300' 
                 : (shiftStatus.checkInTime ? 'bg-amber-50/60 border-amber-200' : 'bg-white border-slate-200')
             }`}>
               <div className="flex items-center justify-between">
@@ -698,23 +651,15 @@ export default function AutonomousMobileAppLight() {
                     ? 'bg-sky-600 text-white' 
                     : (shiftStatus.checkInTime ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500')
                 }`}>
-                  {shiftStatus.checkOutTime ? '✅ چێک‌ئاوت کرا' : (shiftStatus.checkInTime ? '🟢 لە دەوامدایە' : '⏳ دەستپێنەکراو')}
+                  {shiftStatus.checkOutTime ? '✅ دەرچوو' : (shiftStatus.checkInTime ? '🟢 لە دەوامدایە' : '--')}
                 </span>
-                <div className="text-xs font-black text-slate-700 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-sky-600" />
-                  <span>کاتی ڕۆیشتن (چێک‌ئاوت)</span>
-                </div>
+                <span className="text-xs font-black text-slate-700">کاتی ڕۆیشتن</span>
               </div>
 
-              <div className="flex items-baseline justify-between pt-1">
-                <span className="text-[11px] font-bold text-slate-500">
-                  {shiftStatus.checkOutTime ? 'دەوام تەواو بوو' : (shiftStatus.checkInTime ? 'خۆکارانە لە دەرچوون' : 'چاوەڕوانی هاتنە')}
-                </span>
-                <div className={`text-xl font-black font-mono ${
-                  shiftStatus.checkOutTime ? 'text-sky-700' : (shiftStatus.checkInTime ? 'text-amber-600 text-sm' : 'text-slate-400')
-                }`}>
-                  {shiftStatus.checkOutTime || (shiftStatus.checkInTime ? 'لە دەوامدایە' : '--:--')}
-                </div>
+              <div className={`text-xl font-black font-mono pt-1 ${
+                shiftStatus.checkOutTime ? 'text-sky-700' : (shiftStatus.checkInTime ? 'text-amber-600 text-sm font-sans' : 'text-slate-400')
+              }`}>
+                {shiftStatus.checkOutTime || (shiftStatus.checkInTime ? 'لە دەوامدایە' : '--:--')}
               </div>
             </div>
 
