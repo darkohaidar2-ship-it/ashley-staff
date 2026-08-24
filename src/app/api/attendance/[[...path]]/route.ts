@@ -272,20 +272,32 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
-    // GET /api/attendance/location (Live 2 Official Company Locations)
+    // GET /api/attendance/location (Strictly 2 Real Locations: Ashley Base & Huana Warehouse)
     // ----------------------------------------
     if (pathStr === 'location' && method === 'GET') {
       try {
-        const { data: dbLocs } = await supabase.from('warehouses').select('*');
+        const { data: dbLocs } = await supabase
+          .from('warehouses')
+          .select('*')
+          .neq('id', 'ashley_face_registry');
+
         if (dbLocs && dbLocs.length > 0) {
-          const mapped = dbLocs.slice(0, 2).map((l: any) => ({
-            id: l.id,
-            name: l.name,
-            lat: parseFloat(l.lat),
-            lng: parseFloat(l.lng),
-            radiusMeters: parseFloat(l.radius) || 100
-          }));
-          return NextResponse.json({ locations: mapped });
+          const validLocs = dbLocs
+            .filter((l: any) => l.lat && l.lng && parseFloat(l.lat) > 10 && parseFloat(l.lng) > 10 && !l.name?.toLowerCase().includes('face'))
+            .map((l: any) => ({
+              id: l.id,
+              name: l.name,
+              lat: parseFloat(l.lat),
+              lng: parseFloat(l.lng),
+              radiusMeters: parseFloat(l.radius) || 100
+            }));
+
+          if (validLocs.length >= 2) {
+            return NextResponse.json({ locations: validLocs.slice(0, 2) });
+          } else if (validLocs.length === 1) {
+            const missingBranch = validLocs[0].name.includes('ئاشڵی') ? GLOBAL_SAVED_LOCATIONS[1] : GLOBAL_SAVED_LOCATIONS[0];
+            return NextResponse.json({ locations: [validLocs[0], missingBranch] });
+          }
         }
       } catch {}
 

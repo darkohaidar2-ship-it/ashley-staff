@@ -23,8 +23,19 @@ export function MobileAttendanceMapModal({
   const mapInstanceRef = useRef<any>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
 
+  // Filter out any invalid / zero coordinates or face registry rows
+  const validLocations = companyLocations.filter(
+    loc => loc.lat > 10 && loc.lng > 10 && !loc.name?.toLowerCase().includes('face') && !loc.id.includes('face')
+  );
+
+  // Fallback to default two branches if list is empty
+  const activeCompanyLocations = validLocations.length > 0 ? validLocations : [
+    { id: 'ashley-base-main', name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)', lat: 35.5571, lng: 45.4352, radiusMeters: 100 },
+    { id: 'huana-warehouse-main', name: 'کۆگای سەرەکی هوانە (Huana Warehouse)', lat: 35.6012, lng: 45.3850, radiusMeters: 120 }
+  ];
+
   // Compute distances to each location
-  const locationsWithDistance = companyLocations.map(loc => {
+  const locationsWithDistance = activeCompanyLocations.map(loc => {
     const dist = (currentLat && currentLng) 
       ? Math.round(getDistanceMeters(currentLat, currentLng, loc.lat, loc.lng)) 
       : null;
@@ -82,7 +93,7 @@ export function MobileAttendanceMapModal({
         mapInstanceRef.current.remove();
       }
 
-      const primaryLoc = companyLocations[0] || { lat: 35.5571, lng: 45.4352 };
+      const primaryLoc = activeCompanyLocations[0] || { lat: 35.5571, lng: 45.4352 };
 
       const map = L.map(mapContainerRef.current, {
         center: [primaryLoc.lat, primaryLoc.lng],
@@ -100,8 +111,8 @@ export function MobileAttendanceMapModal({
 
       const allLatLngs: [number, number][] = [];
 
-      // 🏢 Plot ALL Company Locations (Ashley Main Showroom, Huana Warehouse, etc.)
-      companyLocations.forEach((loc, idx) => {
+      // 🏢 Plot ALL Company Locations (Ashley Main Showroom, Huana Warehouse)
+      activeCompanyLocations.forEach((loc, idx) => {
         const isAshley = loc.name.includes('ئاشڵی') || loc.name.includes('Ashley');
         const color = isAshley ? '#ea580c' : '#7c3aed';
         const iconChar = isAshley ? '🏢' : '🏭';

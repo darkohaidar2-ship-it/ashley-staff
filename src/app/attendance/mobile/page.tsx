@@ -148,7 +148,12 @@ export default function AutonomousMobileAppLight() {
         .then(res => res.json())
         .then(data => {
           if (data?.locations && data.locations.length > 0) {
-            setCompanyLocations(data.locations);
+            const valid = data.locations.filter(
+              (l: any) => l.lat > 10 && l.lng > 10 && !l.name?.toLowerCase().includes('face') && !l.id?.includes('face')
+            );
+            if (valid.length > 0) {
+              setCompanyLocations(valid);
+            }
           }
         })
         .catch(() => {});
