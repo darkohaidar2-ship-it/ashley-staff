@@ -451,10 +451,15 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .eq('id', userId)
           .maybeSingle();
 
-        if (user && user.device_token && deviceToken && user.device_token !== deviceToken) {
-          return NextResponse.json({ bound: false, reason: 'unbound_by_admin' });
+        if (user) {
+          // If the server token is different or null, it means unbound
+          if (user.device_token !== deviceToken) {
+            return NextResponse.json({ bound: false, reason: 'unbound_by_admin' });
+          }
         }
-      } catch {}
+      } catch (err) {
+        console.warn('device-status error:', err);
+      }
 
       return NextResponse.json({ bound: true });
     }

@@ -195,9 +195,11 @@ export default function AutonomousMobileAppLight() {
         if (data && data.bound === false) {
           localStorage.removeItem('ashley_bound_employee_profile');
           localStorage.removeItem('ashley_bound_employee_id');
+          localStorage.removeItem('ashley_device_token');
           setEmployeeProfile(null);
           setBoundEmployee(null);
-          alert('⚠️ بەستنەوەی ئەم مۆبایلە لەلایەن بەڕێوەبەر (Admin)ـەوە هەڵوەشێنرایەوە.');
+          alert('⚠️ بەڕێوەبەر (ئەدمین) ئەم مۆبایلەی سڕییەوە، تکایە سەرلەنوێ خۆت تۆمار بکەرەوە.');
+          window.location.reload();
         }
       } catch {}
     };
