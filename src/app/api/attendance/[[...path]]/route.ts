@@ -1925,27 +1925,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         .eq('date', dateStr)
         .maybeSingle();
 
-      // Enforce Rule: Only ONE Check-In and ONE Check-Out per day
-      if (!isCheckOut) {
-        if (existingRecord?.check_in_time) {
-          return NextResponse.json({
-            success: false,
-            alreadyChecked: true,
-            message: `⚠️ تۆ پێشتر چێک‌ئین (هاتن)ت بۆ ئەمڕۆ لە کاتژمێر (${existingRecord.check_in_time}) تۆمار کردووە! تەنها ڕۆژی ١ جار دەتوانیت چێک‌ئین بکەیت.`,
-            error: `⚠️ تۆ پێشتر چێک‌ئینت بۆ ئەمڕۆ تۆمار کردووە (${existingRecord.check_in_time})`
-          }, { status: 400 });
-        }
-      } else {
-        if (existingRecord?.check_out_time) {
-          return NextResponse.json({
-            success: false,
-            alreadyChecked: true,
-            message: `⚠️ تۆ پێشتر چێک‌ئاوت (دەرچوون)ت بۆ ئەمڕۆ لە کاتژمێر (${existingRecord.check_out_time}) تۆمار کردووە! تەنها ڕۆژی ١ جار دەتوانیت چێک‌ئاوت بکەیت.`,
-            error: `⚠️ تۆ پێشتر چێک‌ئاوتت بۆ ئەمڕۆ تۆمار کردووە (${existingRecord.check_out_time})`
-          }, { status: 400 });
-        }
-      }
-
       // 2. Insert/Upsert into `attendance` table in Supabase (Primary Guaranteed Table)
       let upsertPayload: any = {
         id: existingRecord?.id || rowId,
@@ -1955,23 +1934,44 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         status: 'Present'
       };
 
+      const isCheckIn = !isCheckOut;
+
       if (existingRecord) {
+        // First-In, Last-Out Philosophy:
+        // Always preserve the FIRST check-in of the day
         if (existingRecord.check_in) upsertPayload.check_in = existingRecord.check_in;
         if (existingRecord.check_in_time) upsertPayload.check_in_time = existingRecord.check_in_time;
         if (existingRecord.check_in_selfie) upsertPayload.check_in_selfie = existingRecord.check_in_selfie;
         if (existingRecord.check_in_address) upsertPayload.check_in_address = existingRecord.check_in_address;
+        
+        // Preserve check_out by default, unless modified below
+        if (existingRecord.check_out) upsertPayload.check_out = existingRecord.check_out;
+        if (existingRecord.check_out_time) upsertPayload.check_out_time = existingRecord.check_out_time;
+        if (existingRecord.check_out_selfie) upsertPayload.check_out_selfie = existingRecord.check_out_selfie;
+        if (existingRecord.check_out_address) upsertPayload.check_out_address = existingRecord.check_out_address;
       }
 
-      if (isCheckOut) {
+      if (isCheckIn) {
+        // Only set check-in if it's the very first one today
+        if (!existingRecord?.check_in) {
+          upsertPayload.check_in = new Date().toISOString();
+          upsertPayload.check_in_time = timeStr;
+          upsertPayload.check_in_selfie = publicSelfieUrl || null;
+          upsertPayload.check_in_address = distance || 'ناوەوەی کۆمپانیا';
+        }
+        
+        // Mid-day return: Clear the check-out because they are back at work!
+        upsertPayload.check_out = null;
+        upsertPayload.check_out_time = null;
+        upsertPayload.check_out_selfie = null;
+        upsertPayload.check_out_address = null;
+
+      } else {
+        // Every EXIT becomes the new check-out (Last-Out)
         upsertPayload.check_out = new Date().toISOString();
         upsertPayload.check_out_time = timeStr;
         upsertPayload.check_out_selfie = publicSelfieUrl || null;
-        upsertPayload.check_out_address = distance || 'داخل کۆمپانیا';
-      } else {
-        upsertPayload.check_in = new Date().toISOString();
-        upsertPayload.check_in_time = timeStr;
-        upsertPayload.check_in_selfie = publicSelfieUrl || null;
-        upsertPayload.check_in_address = distance || 'داخل کۆمپانیا';
+        upsertPayload.check_out_address = distance || 'دەرەوەی کۆمپانیا';
       }
 
       try {
