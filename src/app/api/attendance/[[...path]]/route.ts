@@ -338,9 +338,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         const { data: record } = await query.maybeSingle();
 
         if (record) {
+          const inTime = record.check_in_time || (record.check_in ? (record.check_in.includes('T') ? record.check_in.split('T')[1].slice(0, 5) : record.check_in.slice(0, 5)) : null);
+          const outTime = record.check_out_time || (record.check_out ? (record.check_out.includes('T') ? record.check_out.split('T')[1].slice(0, 5) : record.check_out.slice(0, 5)) : null);
+
           return NextResponse.json({
-            checkInTime: record.check_in_time || null,
-            checkOutTime: record.check_out_time || null,
+            checkInTime: inTime || null,
+            checkOutTime: outTime || null,
             status: record.status || 'Present',
             warehouseName: record.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
             date: dateStr
