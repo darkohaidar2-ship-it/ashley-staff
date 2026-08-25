@@ -349,6 +349,35 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             date: dateStr
           }, { headers: noCacheHeaders });
         }
+
+        // Fallback: Check attendance_logs table for today
+        const { data: logs } = await supabase
+          .from('attendance_logs')
+          .select('*')
+          .eq('log_date', dateStr)
+          .order('created_at', { ascending: true });
+
+        if (logs && logs.length > 0) {
+          const empLogs = logs.filter(l => {
+            const lEmp = (l.employee_id || '').toString().toLowerCase();
+            const target = userId.toLowerCase();
+            const raw = target.replace('emp-', '');
+            return lEmp === target || lEmp === raw || lEmp === `emp-${raw}`;
+          });
+
+          if (empLogs.length > 0) {
+            const inLog = empLogs.find(l => (l.log_type || '').includes('In') || (l.log_type || '').includes('هاتن'));
+            const outLog = empLogs.filter(l => (l.log_type || '').includes('Out') || (l.log_type || '').includes('دەرچوون') || (l.log_type || '').includes('ڕۆیشتن')).pop();
+
+            return NextResponse.json({
+              checkInTime: inLog?.log_time_str || null,
+              checkOutTime: outLog?.log_time_str || null,
+              status: 'Present',
+              warehouseName: inLog?.location_address || 'کۆمپانیای سەرەکی ئاشڵی',
+              date: dateStr
+            }, { headers: noCacheHeaders });
+          }
+        }
       } catch (err) {
         console.warn('Get today attendance error:', err);
       }

@@ -293,25 +293,70 @@ export default function AutonomousMobileAppLight() {
     checkOutTime: string | null;
     status?: string | null;
     warehouseName?: string | null;
-  }>({
-    checkInTime: null,
-    checkOutTime: null,
+  }>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const todayIso = format(new Date(), 'yyyy-MM-dd');
+        const storedProfile = localStorage.getItem('ashley_bound_employee_profile');
+        const empId = storedProfile ? JSON.parse(storedProfile)?.id : null;
+        if (empId) {
+          const cached = localStorage.getItem(`ashley_shift_state_${todayIso}_${empId}`);
+          if (cached) {
+            return JSON.parse(cached);
+          }
+        }
+      } catch {}
+    }
+    return {
+      checkInTime: null,
+      checkOutTime: null,
+    };
   });
 
-  // Fetch live today attendance from server API every 4 seconds
+  // Fetch live today attendance from server API with LocalStorage Shield
   const fetchLiveTodayAttendance = useCallback(async () => {
     if (!employeeProfile?.id) return;
+    const todayIso = format(new Date(), 'yyyy-MM-dd');
+    const storageKey = `ashley_shift_state_${todayIso}_${employeeProfile.id}`;
+
     try {
       const res = await fetch(`/api/attendance/today?userId=${employeeProfile.id}`);
       const data = await res.json();
-      if (data) {
-        setLiveTodayShift({
-          checkInTime: data.checkInTime || null,
-          checkOutTime: data.checkOutTime || null,
-          status: data.status,
-          warehouseName: data.warehouseName,
-        });
-      }
+      
+      setLiveTodayShift(prev => {
+        // If server returned valid times, use them and persist to shield
+        if (data && (data.checkInTime || data.checkOutTime)) {
+          const newState = {
+            checkInTime: data.checkInTime || prev.checkInTime || null,
+            checkOutTime: data.checkOutTime || null,
+            status: data.status || 'Present',
+            warehouseName: data.warehouseName || prev.warehouseName || 'کۆمپانیای سەرەکی ئاشڵی',
+          };
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem(storageKey, JSON.stringify(newState));
+            } catch {}
+          }
+          return newState;
+        }
+
+        // If server returned null, but local shield already has check-in for today, PRESERVE IT!
+        if (prev.checkInTime) {
+          return prev;
+        }
+
+        // Check local storage directly as fallback
+        if (typeof window !== 'undefined') {
+          try {
+            const cached = localStorage.getItem(storageKey);
+            if (cached) {
+              return JSON.parse(cached);
+            }
+          } catch {}
+        }
+
+        return prev;
+      });
     } catch {}
   }, [employeeProfile]);
 
