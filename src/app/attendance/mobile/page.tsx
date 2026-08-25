@@ -102,6 +102,12 @@ export default function AutonomousMobileAppLight() {
   const [showMapModal, setShowMapModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // 📝 Excursion (Mid-Day Exit) Reason Modal
+  const [showExcursionModal, setShowExcursionModal] = useState(false);
+  const [excursionExitTime, setExcursionExitTime] = useState<string>('');
+  const [excursionNoteInput, setExcursionNoteInput] = useState<string>('');
+  const [isSubmittingNote, setIsSubmittingNote] = useState(false);
+
   // 2. Secret 10-Second Long-Press Admin Reset Modal
   const [pressProgress, setPressProgress] = useState(0); // 0 to 100
   const [showAdminResetModal, setShowAdminResetModal] = useState(false);
@@ -436,6 +442,8 @@ export default function AutonomousMobileAppLight() {
         timestamp: new Date().toISOString(),
       };
 
+      const previousExitTime = liveTodayShift.checkOutTime;
+
       const res = await fetch('/api/attendance/autonomous-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -452,6 +460,12 @@ export default function AutonomousMobileAppLight() {
           event === 'ENTER' ? '🟢 تۆمارکردنی هاتن' : '👋 تۆمارکردنی ڕۆیشتن',
           data.message || (event === 'ENTER' ? 'هاتنەکەت بە سەرکەوتوویی تۆمارکرا' : 'ڕۆیشتنەکەت بە سەرکەوتوویی تۆمارکرا')
         );
+
+        // 📝 If this was a mid-day return (they had an exit earlier today), open reason modal
+        if (event === 'ENTER' && previousExitTime) {
+          setExcursionExitTime(previousExitTime);
+          setShowExcursionModal(true);
+        }
       } else {
         alert(data.error || 'هەڵەیەک ڕوویدا لە کاتی تۆمارکردندا');
       }
@@ -462,13 +476,57 @@ export default function AutonomousMobileAppLight() {
     }
   };
 
-  // ⚡ Autonomous Instant Check-In upon Presence Detection
+  // 📝 Submit Excursion Explanation Note to Admin
+  const handleSubmitExcursionNote = async (quickText?: string) => {
+    const text = quickText || excursionNoteInput;
+    if (!text || !text.trim()) {
+      setShowExcursionModal(false);
+      return;
+    }
+
+    setIsSubmittingNote(true);
+    try {
+      await fetch('/api/attendance/excursion-note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: employeeProfile?.id,
+          date: new Date().toISOString().split('T')[0],
+          note: text.trim(),
+          exitTime: excursionExitTime,
+          returnTime: new Date().toTimeString().slice(0, 5)
+        })
+      });
+      setShowExcursionModal(false);
+      setExcursionNoteInput('');
+      alert('✅ هۆکاری دەرچوونەکەت بۆ بەڕێوەبەر (ئەدمین) نێردرا.');
+    } catch (err) {
+      setShowExcursionModal(false);
+    } finally {
+      setIsSubmittingNote(false);
+    }
+  };
+
+  // 🧭 Autonomous Geofencing Logic (ENTER / EXIT)
   useEffect(() => {
     if (!employeeProfile?.id) return;
-    if (presence.isInsideGeofence === true && !liveTodayShift.checkInTime && !triggerLoading) {
-      handleTriggerAttendance('ENTER');
+    
+    // We only act if presence has a solid boolean state
+    if (presence.isInsideGeofence === true) {
+      if (!liveTodayShift.checkInTime && !triggerLoading) {
+        // Morning Arrival
+        handleTriggerAttendance('ENTER');
+      } else if (liveTodayShift.checkInTime && liveTodayShift.checkOutTime && !triggerLoading) {
+        // Mid-day Return (They had checked out, but now they are back)
+        handleTriggerAttendance('ENTER');
+      }
+    } else if (presence.isInsideGeofence === false) {
+      if (liveTodayShift.checkInTime && !liveTodayShift.checkOutTime && !triggerLoading) {
+        // Leaving the Geofence
+        handleTriggerAttendance('EXIT');
+      }
     }
-  }, [presence.isInsideGeofence, liveTodayShift.checkInTime, employeeProfile]);
+  }, [presence.isInsideGeofence, liveTodayShift, employeeProfile, triggerLoading]);
 
   // =========================================================================
   // SECRET 10-SECOND LOGO LONG-PRESS LOGIC
@@ -968,6 +1026,90 @@ export default function AutonomousMobileAppLight() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 📝 EXCURSION / MID-DAY ABSENCE REASON MODAL */}
+      {/* ========================================================================= */}
+      {showExcursionModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl border-2 border-amber-400 space-y-4 text-right animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b pb-3 border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-lg font-black shadow-xs">
+                  📝
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">هۆکاری دەرچوونی کاتی</h3>
+                  <p className="text-[11px] text-amber-700 font-bold">تۆ لە دەوام چووبوویتە دەرەوە</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 rounded-2xl p-3 border border-amber-200 text-xs font-bold text-amber-900 space-y-1">
+              <div className="flex justify-between">
+                <span>کاتی چوونە دەرەوە:</span>
+                <span className="font-mono font-black text-amber-800">{excursionExitTime || '--:--'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>کاتی گەڕانەوە:</span>
+                <span className="font-mono font-black text-amber-800">{currentTimeStr.slice(0, 5)}</span>
+              </div>
+            </div>
+
+            {/* Quick Reason Badges */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-black text-slate-600 block">هەڵبژاردنی خێرا:</span>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  '💼 کاروباری فەرمی کۆمپانیا',
+                  '🍽️ نانخواردن / پشوو',
+                  '🏥 پشکنینی پزیشکی',
+                  '🚗 هاتوچۆی دەرەوە'
+                ].map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => handleSubmitExcursionNote(item)}
+                    className="p-2 text-[11px] font-black bg-slate-100 hover:bg-amber-100 hover:text-amber-900 hover:border-amber-300 border border-slate-200 rounded-xl transition-all text-slate-800 text-right cursor-pointer"
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Reason Text */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-black text-slate-600 block">یان هۆکارەکەت بە دەستی بنووسە:</span>
+              <textarea
+                rows={2}
+                value={excursionNoteInput}
+                onChange={(e) => setExcursionNoteInput(e.target.value)}
+                placeholder="بۆ نموونە: چووم بۆ بانک..."
+                className="w-full p-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-amber-500 focus:outline-hidden resize-none"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowExcursionModal(false)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+              >
+                دواتر دەنووسم
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingNote}
+                onClick={() => handleSubmitExcursionNote()}
+                className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-black shadow-md shadow-amber-500/30 cursor-pointer flex items-center justify-center gap-1"
+              >
+                {isSubmittingNote ? 'خەریکی ناردن...' : 'ناردن بۆ ئەدمین 🚀'}
+              </button>
+            </div>
           </div>
         </div>
       )}

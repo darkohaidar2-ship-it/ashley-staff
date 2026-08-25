@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Calendar, 
   Clock, 
@@ -84,14 +84,53 @@ export function AdminDailyAttendanceTable({
   const [adminReasonInput, setAdminReasonInput] = useState('');
   const [localOverridesVersion, setLocalOverridesVersion] = useState(0);
 
+  // 📋 Excursion Reports (Mid-Day Exits)
+  const [showExcursionReportModal, setShowExcursionReportModal] = useState(false);
+  const [dailyExcursions, setDailyExcursions] = useState<any[]>([]);
+  const [loadingExcursions, setLoadingExcursions] = useState(false);
+
+  const fetchDailyExcursions = useCallback(async (targetDate?: string) => {
+    const d = targetDate || selectedDate;
+    setLoadingExcursions(true);
+    try {
+      const res = await fetch(`/api/attendance/excursions?date=${d}`);
+      const data = await res.json();
+      if (data?.excursions) {
+        setDailyExcursions(data.excursions);
+      }
+    } catch {
+      setDailyExcursions([]);
+    } finally {
+      setLoadingExcursions(false);
+    }
+  }, [selectedDate]);
+
+  useEffect(() => {
+    fetchDailyExcursions(selectedDate);
+  }, [selectedDate, fetchDailyExcursions]);
+
+  const handleExcursionDecision = async (excursionId: string, decision: 'deduct' | 'count_as_work') => {
+    try {
+      await fetch('/api/attendance/excursion-decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ excursionId, date: selectedDate, decision })
+      });
+      setDailyExcursions(prev => prev.map(item => item.id === excursionId ? { ...item, decision } : item));
+    } catch {
+      alert('هەڵە لە پاشەکەوتکردنی بڕیار');
+    }
+  };
+
   // Listen for local attendance updates
   React.useEffect(() => {
     const handleUpdate = () => {
       setLocalOverridesVersion(v => v + 1);
+      fetchDailyExcursions(selectedDate);
     };
     window.addEventListener('ashley_attendance_updated', handleUpdate);
     return () => window.removeEventListener('ashley_attendance_updated', handleUpdate);
-  }, []);
+  }, [selectedDate, fetchDailyExcursions]);
 
   // Active Employees only
   const activeEmployees = useMemo(() => {
@@ -726,6 +765,25 @@ export function AdminDailyAttendanceTable({
         {/* Executive Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
           
+          {/* 📋 Mid-Day Excursion Reviews */}
+          <button
+            type="button"
+            onClick={() => {
+              fetchDailyExcursions(selectedDate);
+              setShowExcursionReportModal(true);
+            }}
+            className="btn-classic text-xs font-black px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 border border-amber-300 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
+            title="بینینی لیستی دەرچوونی کاتی کارمەندان و لێبڕین یان حیسابکردنی دەوام"
+          >
+            <Clock className="w-3.5 h-3.5 text-slate-950" />
+            <span>📋 دەرچوونە کاتییەکان</span>
+            {dailyExcursions.length > 0 && (
+              <span className="bg-slate-950 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-black">
+                {dailyExcursions.length}
+              </span>
+            )}
+          </button>
+
           {/* 🗑️ Wipe All Attendance Data Button */}
           <button
             type="button"
@@ -1181,6 +1239,130 @@ export function AdminDailyAttendanceTable({
                 <span>پاشەکەوتکردنی کات و تێبینی</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 📋 MODAL: DAILY EXCURSIONS REPORT & ADMIN DECISION */}
+      {/* ========================================================================= */}
+      {showExcursionReportModal && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full border-2 border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 bg-gradient-to-r from-amber-600 to-orange-700 text-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-white/20 rounded-2xl">
+                  <Clock className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black">ڕاپۆرتی دەرچوونی کاتی کارمەندان (Excursions)</h3>
+                  <p className="text-xs text-amber-100 font-bold">بۆ بەرواری ({selectedDate})</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExcursionReportModal(false)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content List */}
+            <div className="p-5 overflow-y-auto space-y-3 flex-1">
+              {loadingExcursions ? (
+                <div className="text-center py-10 text-slate-500 font-bold text-sm">
+                  خەریکی بارکردنی داتاکان... ⏳
+                </div>
+              ) : dailyExcursions.length === 0 ? (
+                <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-300 space-y-2">
+                  <span className="text-3xl block">✨</span>
+                  <span className="text-sm font-black text-slate-800">هیچ دەرچوونێکی کاتی لەم ڕۆژەدا تۆمار نەکراوە!</span>
+                  <p className="text-xs text-slate-500 font-bold">سەرجەم کارمەندان بە بەردەوامی لەناو لۆکەیشنی کۆمپانیا بوون.</p>
+                </div>
+              ) : (
+                dailyExcursions.map((item, idx) => {
+                  const isDeducted = item.decision === 'deduct';
+                  return (
+                    <div
+                      key={item.id || idx}
+                      className="p-4 rounded-2xl border-2 border-slate-200 bg-slate-50 hover:bg-white hover:border-amber-400 transition-all space-y-3 shadow-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-7 h-7 rounded-xl bg-amber-100 text-amber-900 font-black text-xs flex items-center justify-center">
+                            {idx + 1}
+                          </span>
+                          <span className="font-black text-slate-900 text-sm">{item.userName || 'کارمەند'}</span>
+                        </div>
+                        <div className="flex items-center gap-2 font-mono text-xs font-black">
+                          <span className="bg-rose-100 text-rose-800 px-2 py-0.5 rounded-lg border border-rose-200">
+                            چوونە دەرەوە: {item.exitTime || '--:--'}
+                          </span>
+                          <span>⬅️</span>
+                          <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-lg border border-emerald-200">
+                            گەڕانەوە: {item.returnTime || '--:--'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Employee Note / Reason */}
+                      <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-800 font-bold flex items-start gap-2">
+                        <MessageSquare className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-[11px] text-slate-500 font-black block">هۆکاری نووسراوی کارمەند:</span>
+                          <span className="text-slate-900">{item.note || 'هیچ هۆکارێک نەنووسراوە'}</span>
+                        </div>
+                      </div>
+
+                      {/* Admin Decision Actions */}
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-200">
+                        <span className="text-xs font-black text-slate-600">بڕیاری ئەدمین:</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleExcursionDecision(item.id, 'deduct')}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
+                              isDeducted
+                                ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-2 ring-rose-400'
+                                : 'bg-slate-200 text-slate-700 hover:bg-rose-100 hover:text-rose-800'
+                            }`}
+                          >
+                            <span>🔴 لێبڕین (Deduct)</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleExcursionDecision(item.id, 'count_as_work')}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
+                              !isDeducted
+                                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400'
+                                : 'bg-slate-200 text-slate-700 hover:bg-emerald-100 hover:text-emerald-800'
+                            }`}
+                          >
+                            <span>🟢 حیسابکردنی دەوام</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-100 border-t border-slate-200 flex justify-between items-center text-xs font-bold text-slate-600">
+              <span>💡 دەتوانیت بۆ هەر دەرچوونێک لێبڕین یان حیسابکردن دیاری بکەیت.</span>
+              <button
+                type="button"
+                onClick={() => setShowExcursionReportModal(false)}
+                className="btn-classic text-xs px-5 py-2 cursor-pointer bg-slate-800 text-white hover:bg-slate-900 rounded-xl"
+              >
+                داخستن
+              </button>
+            </div>
+
           </div>
         </div>
       )}

@@ -883,6 +883,125 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
+    // POST /api/attendance/excursion-note (Employee Submits Absence/Exit Reason)
+    // ----------------------------------------
+    if (pathStr === 'excursion-note' && method === 'POST') {
+      const { userId, date, note, exitTime, returnTime } = await req.json();
+      const dateStr = date || new Date().toISOString().split('T')[0];
+      const settingsKey = `excursions_${dateStr}`;
+
+      try {
+        const { data: existing } = await supabase
+          .from('attendance_settings')
+          .select('*')
+          .eq('id', settingsKey)
+          .maybeSingle();
+
+        const currentList: any[] = Array.isArray(existing?.settings) ? existing.settings : [];
+        const excursionId = `exc-${userId}-${dateStr}-${Date.now().toString().slice(-4)}`;
+        
+        // Find employee name
+        const { data: user } = await supabase.from('users').select('name').eq('id', userId).maybeSingle();
+        const empName = user?.name || 'کارمەند';
+
+        currentList.push({
+          id: excursionId,
+          userId,
+          userName: empName,
+          date: dateStr,
+          exitTime: exitTime || '--:--',
+          returnTime: returnTime || new Date().toTimeString().slice(0, 5),
+          note: note || '',
+          decision: 'deduct', // Default: لێبڕین (Deduct)
+          createdAt: new Date().toISOString()
+        });
+
+        await supabase.from('attendance_settings').upsert({
+          id: settingsKey,
+          settings: currentList,
+          updated_at: new Date().toISOString()
+        });
+
+        // Also append note to attendance table edit_note for audit visibility
+        const { data: att } = await supabase
+          .from('attendance')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('date', dateStr)
+          .maybeSingle();
+
+        if (att) {
+          const combinedNote = (att.check_out_edit_note ? att.check_out_edit_note + ' | ' : '') + `دەرچوون (${exitTime || ''}-${returnTime || ''}): ${note}`;
+          await supabase.from('attendance').update({
+            check_out_edit_note: combinedNote
+          }).eq('id', att.id);
+        }
+
+        return NextResponse.json({ success: true, message: 'تێبینی دەرچوون بە سەرکەوتوویی تۆمارکرا' });
+      } catch (err: any) {
+        console.warn('Excursion note save error:', err);
+        return NextResponse.json({ error: err.message }, { status: 500 });
+      }
+    }
+
+    // ----------------------------------------
+    // GET /api/attendance/excursions (Admin Fetches Excursions for Date)
+    // ----------------------------------------
+    if (pathStr === 'excursions' && method === 'GET') {
+      const url = new URL(req.url);
+      const dateStr = url.searchParams.get('date') || new Date().toISOString().split('T')[0];
+      const settingsKey = `excursions_${dateStr}`;
+
+      try {
+        const { data: existing } = await supabase
+          .from('attendance_settings')
+          .select('*')
+          .eq('id', settingsKey)
+          .maybeSingle();
+
+        const excursions = Array.isArray(existing?.settings) ? existing.settings : [];
+        return NextResponse.json({ success: true, excursions });
+      } catch (err: any) {
+        return NextResponse.json({ success: true, excursions: [] });
+      }
+    }
+
+    // ----------------------------------------
+    // POST /api/attendance/excursion-decision (Admin Decides Deduct vs Count as Work)
+    // ----------------------------------------
+    if (pathStr === 'excursion-decision' && method === 'POST') {
+      const { excursionId, date, decision } = await req.json();
+      const dateStr = date || new Date().toISOString().split('T')[0];
+      const settingsKey = `excursions_${dateStr}`;
+
+      try {
+        const { data: existing } = await supabase
+          .from('attendance_settings')
+          .select('*')
+          .eq('id', settingsKey)
+          .maybeSingle();
+
+        let currentList: any[] = Array.isArray(existing?.settings) ? existing.settings : [];
+        currentList = currentList.map((item: any) => {
+          if (item.id === excursionId) {
+            return { ...item, decision: decision || 'deduct' };
+          }
+          return item;
+        });
+
+        await supabase.from('attendance_settings').upsert({
+          id: settingsKey,
+          settings: currentList,
+          updated_at: new Date().toISOString()
+        });
+
+        return NextResponse.json({ success: true, message: 'بڕیاری ئەدمین بە سەرکەوتوویی پاشەکەوت کرا' });
+      } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 500 });
+      }
+    }
+
+    // ----------------------------------------
     // GET /api/attendance/logs (Supabase Attendance Records for Web & Mobile)
     // ----------------------------------------
     if (pathStr === 'logs' && method === 'GET') {
