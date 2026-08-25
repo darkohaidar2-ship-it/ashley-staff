@@ -499,6 +499,47 @@ export function AdminDailyAttendanceTable({
     setLocalOverridesVersion(v => v + 1);
   };
 
+  // 🗑️ Wipe All Attendance Data
+  const handleWipeAllAttendanceData = async () => {
+    if (!confirm('⚠️ ئایا دڵنیایت لە سڕینەوەی سەرجەم داتاکانی ئامادەبوون، مۆڵەتەکان، غیاب و پشووەکان؟ ئەم کارە داتابەیسی سێرڤەر و خشتەکان بە تەواوی پاک دەکاتەوە.')) return;
+    
+    try {
+      await fetch('/api/attendance/reset-today', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wipeAll: true })
+      });
+    } catch (e) {
+      console.warn('Wipe server attendance error:', e);
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('ashley_local_attendanceLogs');
+        localStorage.removeItem('ashley_live_checkins');
+        localStorage.removeItem('ashley_local_overtime');
+        localStorage.removeItem(`ashley_leaves_${selectedMonth}`);
+        localStorage.removeItem(`ashley_holidays_${selectedMonth}`);
+        localStorage.removeItem('ashley_leaves_2026-08');
+        localStorage.removeItem('ashley_holidays_2026-08');
+        localStorage.removeItem(`ashley_admin_notes_${selectedMonth}`);
+        localStorage.removeItem(`ashley_ot_notes_${selectedMonth}`);
+        Object.keys(localStorage).forEach(k => {
+          if (
+            k.startsWith('ashley_leaves_') ||
+            k.startsWith('ashley_holidays_') ||
+            k.startsWith('ashley_deleted_attendance_') ||
+            k.startsWith('ashley_time_override_')
+          ) {
+            localStorage.removeItem(k);
+          }
+        });
+      } catch {}
+      window.dispatchEvent(new Event('ashley_attendance_updated'));
+    }
+    alert('✅ سەرجەم داتاکانی ئامادەبوون و تۆمارەکان بە سەرکەوتوویی سڕانەوە.');
+  };
+
   // 🖨️ Export Single Day PDF
   const handlePrintSingleDayPDF = () => {
     const cols: ExportTableColumn[] = [
@@ -685,15 +726,15 @@ export function AdminDailyAttendanceTable({
         {/* Executive Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
           
-          {/* 🔄 Google Sheets Sync */}
+          {/* 🗑️ Wipe All Attendance Data Button */}
           <button
             type="button"
-            onClick={handleSyncGoogleSheet}
-            className="btn-classic text-xs font-black px-3 py-1.5 bg-amber-400 hover:bg-amber-500 text-slate-950 border border-amber-300 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md transition-all active:scale-95"
-            title="هاوتاکردنەوە و هێنانی داتاکانی گووگڵ شیت"
+            onClick={handleWipeAllAttendanceData}
+            className="btn-classic text-xs font-black px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white border border-rose-400 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
+            title="سڕینەوەی سەرجەم داتاکانی ئامادەبوون لە سێرڤەر و پاککردنەوەی تەواوی خشتەکە"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-slate-950" />
-            <span>🔄 هاوتاکردنەوە بە Google Sheets</span>
+            <Trash2 className="w-3.5 h-3.5 text-white" />
+            <span>🗑️ سڕینەوەی سەرجەم داتاکان (Wipe All)</span>
           </button>
 
           {/* 🖨️ Print Single Day */}

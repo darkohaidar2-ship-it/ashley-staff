@@ -512,6 +512,20 @@ export default function AdminPage() {
             ⏰ {currentTimeStr || '2026-08-18 | 08:35'}
           </div>
 
+          {/* ⚙️ SETTINGS BUTTON */}
+          <button 
+            onClick={() => setAdminActiveSection('settings')} 
+            className={`btn-classic px-3 py-1.5 rounded-xl flex items-center gap-1.5 font-bold transition-all shadow-sm ${
+              adminActiveSection === 'settings' 
+                ? 'bg-amber-400 text-slate-950 border-amber-300 ring-2 ring-amber-300 font-black' 
+                : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+            }`}
+            title="ڕێکخستنەکان و سڕینەوەی داتاکان"
+          >
+            <Settings className="w-3.5 h-3.5 text-amber-300" />
+            <span>⚙️ ڕێکخستنەکان</span>
+          </button>
+
           <button onClick={() => setShowMobileDeviceModal(true)} className="btn-classic bg-orange-600/40 hover:bg-orange-600/60 text-white border-orange-400/40 rounded-xl px-3 py-1.5 flex items-center gap-1.5 shadow-sm">
             <Smartphone className="w-3.5 h-3.5 text-orange-300" />
             <span>مۆبایلەکان 📱</span>

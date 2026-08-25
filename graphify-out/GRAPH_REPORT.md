@@ -1,11 +1,11 @@
 # Graph Report - src  (2026-08-25)
 
 ## Corpus Check
-- 169 files · ~153,170 words
+- 169 files · ~153,341 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2781 nodes · 4638 edges · 42 communities (36 shown, 6 thin omitted)
+- 2781 nodes · 4638 edges · 41 communities (35 shown, 6 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 3 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -43,10 +43,9 @@
 - [[_COMMUNITY_مۆدیوولی سیستەم 30|مۆدیوولی سیستەم 30]]
 - [[_COMMUNITY_مۆدیوولی سیستەم 31|مۆدیوولی سیستەم 31]]
 - [[_COMMUNITY_مۆدیوولی سیستەم 32|مۆدیوولی سیستەم 32]]
-- [[_COMMUNITY_مۆدیوولی سیستەم 33|مۆدیوولی سیستەم 33]]
+- [[_COMMUNITY_مۆدیوولی سیستەم 34|مۆدیوولی سیستەم 34]]
 - [[_COMMUNITY_مۆدیوولی سیستەم 35|مۆدیوولی سیستەم 35]]
 - [[_COMMUNITY_مۆدیوولی سیستەم 36|مۆدیوولی سیستەم 36]]
-- [[_COMMUNITY_مۆدیوولی سیستەم 37|مۆدیوولی سیستەم 37]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `useTranslation()` - 124 edges
@@ -75,7 +74,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (42 total, 6 thin omitted)
+## Communities (41 total, 6 thin omitted)
 
 ### Community 0 - "سیستەمی بەڕێوەبردنی دەوام (Attendance System)"
 Cohesion: 0.00
@@ -95,35 +94,35 @@ Nodes (499): admin_attendance, attendance, inputs, account_details, account_deta
 
 ### Community 4 - "سیستەمی کۆگا و کاڵاکان (Warehouse & Inventory)"
 Cohesion: 0.07
-Nodes (48): AdminDailyAttendanceTable(), AdminDailyAttendanceTableProps, KURDISH_DAY_NAMES, AdminEmployeeDetailsModal(), AdminEmployeeDetailsModalProps, formatMinutesHuman(), AdminExpensesModule(), AdminExpensesModuleProps (+40 more)
+Nodes (40): EmployeeReportPdf(), employeeRoles, formatCurrency(), InventoryDashboard(), SortableKeys, TextTransform, FloorBuilder, SearchResult (+32 more)
 
 ### Community 5 - "هەژماری کارمەندان و ناسینەوە (Employees & Users)"
+Cohesion: 0.07
+Nodes (48): AdminDailyAttendanceTable(), AdminDailyAttendanceTableProps, KURDISH_DAY_NAMES, AdminEmployeeDetailsModal(), AdminEmployeeDetailsModalProps, formatMinutesHuman(), AdminExpensesModule(), AdminExpensesModuleProps (+40 more)
+
+### Community 6 - "ڕاپۆرت و دۆکیۆمێنت (Reports & Documents)"
 Cohesion: 0.11
 Nodes (44): FinancialDetailTable(), formatCurrency(), OvertimeDetailTable(), FileReportPdfProps, EmployeePdfCardProps, FinancialTablePdf(), formatCurrency(), OvertimeTablePdf() (+36 more)
 
-### Community 6 - "ڕاپۆرت و دۆکیۆمێنت (Reports & Documents)"
-Cohesion: 0.08
-Nodes (55): AccountPage(), PageContent(), AppHeader(), PdfViewPage(), PdfViewPage(), FilePdfCard(), ArchivePage(), ExcelFileCard() (+47 more)
-
 ### Community 7 - "مۆدیوولی سیستەم 7"
-Cohesion: 0.10
-Nodes (26): classifications, ImportedItem, sources, MapFloor, MapHall, MapZone, TextTransform, WAREHOUSE_COLORS (+18 more)
+Cohesion: 0.08
+Nodes (56): AccountPage(), PageContent(), AppHeader(), PdfViewPage(), PdfViewPage(), FilePdfCard(), ArchivePage(), ExcelFileCard() (+48 more)
 
 ### Community 8 - "مۆدیوولی سیستەم 8"
 Cohesion: 0.11
-Nodes (34): EmployeeReportPdf(), employeeRoles, formatCurrency(), InventoryDashboard(), SortableKeys, sources, FloorBuilder, SearchResult (+26 more)
+Nodes (31): AttendanceRecord, AttendanceRecord, Holiday, User, Warehouse, EmployeeDashboardPrintView(), employeeRoles, classifications (+23 more)
 
 ### Community 9 - "مۆدیوولی سیستەم 9"
-Cohesion: 0.11
-Nodes (24): AttendanceRecord, Holiday, User, Warehouse, DashboardCard(), DashboardCardProps, COLORS, STATUS_NAMES (+16 more)
-
-### Community 10 - "مۆدیوولی سیستەم 10"
-Cohesion: 0.10
-Nodes (36): AppContext, AppState, ViewMode, ActivityLog, AppConfig, Bonus, BonusData, CashWithdrawal (+28 more)
-
-### Community 11 - "مۆدیوولی سیستەم 11"
 Cohesion: 0.06
 Nodes (37): useIsMobile(), AppSidebar(), SheetContent, SheetContentProps, SheetDescription, SheetFooter(), SheetHeader(), SheetOverlay (+29 more)
+
+### Community 10 - "مۆدیوولی سیستەم 10"
+Cohesion: 0.12
+Nodes (22): DashboardCard(), DashboardCardProps, COLORS, STATUS_NAMES, StatusKey, ActivityData, EmployeeActivityChart(), sources (+14 more)
+
+### Community 11 - "مۆدیوولی سیستەم 11"
+Cohesion: 0.10
+Nodes (36): AppContext, AppState, ViewMode, ActivityLog, AppConfig, Bonus, BonusData, CashWithdrawal (+28 more)
 
 ### Community 12 - "مۆدیوولی سیستەم 12"
 Cohesion: 0.06
@@ -146,58 +145,54 @@ Cohesion: 0.19
 Nodes (9): AutonomousGeofenceManager, GeofenceConfig, GeofenceRegion, getDistanceMeters(), sendLocalNotification(), MobileAttendanceMapModal(), MobileAttendanceMapModalProps, ASHLEY_DEFAULT_EMPLOYEES (+1 more)
 
 ### Community 17 - "مۆدیوولی سیستەم 17"
-Cohesion: 0.27
-Nodes (10): AttendanceRecord, EmployeeDashboardPrintView(), employeeRoles, DialogContent, DialogDescription, DialogFooter(), DialogHeader(), DialogOverlay (+2 more)
-
-### Community 18 - "مۆدیوولی سیستەم 18"
 Cohesion: 0.12
 Nodes (11): Menubar, MenubarCheckboxItem, MenubarContent, MenubarItem, MenubarLabel, MenubarRadioItem, MenubarSeparator, MenubarShortcut() (+3 more)
 
-### Community 19 - "مۆدیوولی سیستەم 19"
+### Community 18 - "مۆدیوولی سیستەم 18"
 Cohesion: 0.23
 Nodes (14): supabase, DELETE(), GET(), getAddressFromCoords(), getBaghdadDateTime(), getDailyToken(), getDistance(), getShiftForDate() (+6 more)
 
-### Community 20 - "مۆدیوولی سیستەم 20"
+### Community 19 - "مۆدیوولی سیستەم 19"
 Cohesion: 0.18
 Nodes (9): AdminPanelPortalPage(), AuthContext, AuthState, defaultAdminUser, useAuth(), SearchResult, AccordionContent, AccordionItem (+1 more)
 
-### Community 21 - "مۆدیوولی سیستەم 21"
+### Community 20 - "مۆدیوولی سیستەم 20"
 Cohesion: 0.14
 Nodes (12): Carousel, CarouselApi, CarouselContent, CarouselContext, CarouselContextProps, CarouselItem, CarouselNext, CarouselOptions (+4 more)
 
-### Community 22 - "مۆدیوولی سیستەم 22"
+### Community 21 - "مۆدیوولی سیستەم 21"
 Cohesion: 0.20
 Nodes (11): AppProvider(), useFirestoreCollection(), deleteDocumentNonBlocking(), setDocumentNonBlocking(), updateDocumentNonBlocking(), useMemoFirebase(), Theme, ThemeProvider() (+3 more)
 
-### Community 23 - "مۆدیوولی سیستەم 23"
+### Community 22 - "مۆدیوولی سیستەم 22"
 Cohesion: 0.18
 Nodes (6): FirebaseClientProviderProps, FirebaseServices, firebaseConfig, getSdks(), initializeFirebase(), FirebaseProvider()
 
-### Community 24 - "مۆدیوولی سیستەم 24"
+### Community 23 - "مۆدیوولی سیستەم 23"
 Cohesion: 0.22
 Nodes (12): FirebaseContextState, FirebaseProviderProps, FirebaseServicesAndUser, MemoFirebase, useAuth(), useFirebase(), useFirebaseApp(), useFirestore() (+4 more)
 
-### Community 25 - "مۆدیوولی سیستەم 25"
+### Community 24 - "مۆدیوولی سیستەم 24"
 Cohesion: 0.24
 Nodes (10): Toast, ToastAction, ToastActionElement, ToastClose, ToastDescription, ToastProps, ToastTitle, toastVariants (+2 more)
 
-### Community 26 - "مۆدیوولی سیستەم 26"
+### Community 25 - "مۆدیوولی سیستەم 25"
 Cohesion: 0.21
 Nodes (9): DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuShortcut(), DropdownMenuSubContent (+1 more)
 
-### Community 27 - "مۆدیوولی سیستەم 27"
+### Community 26 - "مۆدیوولی سیستەم 26"
 Cohesion: 0.17
 Nodes (9): FormControl, FormDescription, FormFieldContext, FormFieldContextValue, FormItem, FormItemContext, FormItemContextValue, FormLabel (+1 more)
 
-### Community 28 - "مۆدیوولی سیستەم 28"
+### Community 27 - "مۆدیوولی سیستەم 27"
 Cohesion: 0.18
 Nodes (7): ChartConfig, ChartContainer, ChartContext, ChartContextProps, ChartLegendContent, ChartTooltipContent, THEMES
 
-### Community 30 - "مۆدیوولی سیستەم 30"
+### Community 29 - "مۆدیوولی سیستەم 29"
 Cohesion: 0.29
 Nodes (6): Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle
 
-### Community 31 - "مۆدیوولی سیستەم 31"
+### Community 30 - "مۆدیوولی سیستەم 30"
 Cohesion: 0.60
 Nodes (5): base64ToBuffer(), bufferToBase64(), isBiometricSupported(), registerBiometric(), verifyBiometric()
 
@@ -209,11 +204,11 @@ Nodes (5): base64ToBuffer(), bufferToBase64(), isBiometricSupported(), registerB
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `cn()` connect `ڕاپۆرت و دۆکیۆمێنت (Reports & Documents)` to `سیستەمی کۆگا و کاڵاکان (Warehouse & Inventory)`, `هەژماری کارمەندان و ناسینەوە (Employees & Users)`, `مۆدیوولی سیستەم 36`, `مۆدیوولی سیستەم 7`, `مۆدیوولی سیستەم 8`, `مۆدیوولی سیستەم 9`, `مۆدیوولی سیستەم 10`, `مۆدیوولی سیستەم 11`, `مۆدیوولی سیستەم 37`, `مۆدیوولی سیستەم 17`, `مۆدیوولی سیستەم 18`, `مۆدیوولی سیستەم 20`, `مۆدیوولی سیستەم 21`, `مۆدیوولی سیستەم 25`, `مۆدیوولی سیستەم 26`, `مۆدیوولی سیستەم 27`, `مۆدیوولی سیستەم 28`, `مۆدیوولی سیستەم 30`?**
+- **Why does `cn()` connect `مۆدیوولی سیستەم 7` to `مۆدیوولی سیستەم 35`, `سیستەمی کۆگا و کاڵاکان (Warehouse & Inventory)`, `هەژماری کارمەندان و ناسینەوە (Employees & Users)`, `ڕاپۆرت و دۆکیۆمێنت (Reports & Documents)`, `مۆدیوولی سیستەم 36`, `مۆدیوولی سیستەم 8`, `مۆدیوولی سیستەم 9`, `مۆدیوولی سیستەم 10`, `مۆدیوولی سیستەم 17`, `مۆدیوولی سیستەم 19`, `مۆدیوولی سیستەم 20`, `مۆدیوولی سیستەم 24`, `مۆدیوولی سیستەم 25`, `مۆدیوولی سیستەم 26`, `مۆدیوولی سیستەم 27`, `مۆدیوولی سیستەم 29`?**
   _High betweenness centrality (0.050) - this node is a cross-community bridge._
-- **Why does `useAppContext()` connect `ڕاپۆرت و دۆکیۆمێنت (Reports & Documents)` to `سیستەمی کۆگا و کاڵاکان (Warehouse & Inventory)`, `هەژماری کارمەندان و ناسینەوە (Employees & Users)`, `مۆدیوولی سیستەم 7`, `مۆدیوولی سیستەم 8`, `مۆدیوولی سیستەم 9`, `مۆدیوولی سیستەم 10`, `مۆدیوولی سیستەم 11`, `مۆدیوولی سیستەم 14`, `مۆدیوولی سیستەم 17`, `مۆدیوولی سیستەم 20`, `مۆدیوولی سیستەم 22`, `مۆدیوولی سیستەم 26`?**
+- **Why does `useAppContext()` connect `مۆدیوولی سیستەم 7` to `سیستەمی کۆگا و کاڵاکان (Warehouse & Inventory)`, `هەژماری کارمەندان و ناسینەوە (Employees & Users)`, `ڕاپۆرت و دۆکیۆمێنت (Reports & Documents)`, `مۆدیوولی سیستەم 8`, `مۆدیوولی سیستەم 9`, `مۆدیوولی سیستەم 10`, `مۆدیوولی سیستەم 11`, `مۆدیوولی سیستەم 14`, `مۆدیوولی سیستەم 19`, `مۆدیوولی سیستەم 21`, `مۆدیوولی سیستەم 25`?**
   _High betweenness centrality (0.024) - this node is a cross-community bridge._
-- **Why does `useTranslation()` connect `ڕاپۆرت و دۆکیۆمێنت (Reports & Documents)` to `هەژماری کارمەندان و ناسینەوە (Employees & Users)`, `مۆدیوولی سیستەم 7`, `مۆدیوولی سیستەم 8`, `مۆدیوولی سیستەم 9`, `مۆدیوولی سیستەم 10`, `مۆدیوولی سیستەم 11`, `مۆدیوولی سیستەم 17`, `مۆدیوولی سیستەم 20`, `مۆدیوولی سیستەم 26`?**
+- **Why does `useTranslation()` connect `مۆدیوولی سیستەم 7` to `سیستەمی کۆگا و کاڵاکان (Warehouse & Inventory)`, `ڕاپۆرت و دۆکیۆمێنت (Reports & Documents)`, `مۆدیوولی سیستەم 8`, `مۆدیوولی سیستەم 9`, `مۆدیوولی سیستەم 10`, `مۆدیوولی سیستەم 19`, `مۆدیوولی سیستەم 25`?**
   _High betweenness centrality (0.023) - this node is a cross-community bridge._
 - **What connects `ExtractedItemSchema`, `ParsePdfInventoryInputSchema`, `ParsePdfInventoryOutputSchema` to the rest of the system?**
   _2209 weakly-connected nodes found - possible documentation gaps or missing edges._
