@@ -422,6 +422,7 @@ export default function AutonomousMobileAppLight() {
 
   const handleTriggerAttendance = async (event: 'ENTER' | 'EXIT') => {
     if (!employeeProfile?.id) return;
+    lastManualActionRef.current = Date.now();
     setTriggerLoading(event);
     try {
       let devToken = localStorage.getItem('ashley_device_token');
@@ -452,10 +453,50 @@ export default function AutonomousMobileAppLight() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        await fetchLiveTodayAttendance();
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('ashley_attendance_updated'));
+        const assignedTime = data.time || (event === 'ENTER' ? (liveTodayShift.checkInTime || format(new Date(), 'HH:mm')) : format(new Date(), 'HH:mm'));
+        const todayIso = format(new Date(), 'yyyy-MM-dd');
+
+        // Instant UI updates
+        if (event === 'ENTER') {
+          setLiveTodayShift(prev => ({
+            ...prev,
+            checkInTime: prev.checkInTime || assignedTime,
+            checkOutTime: null,
+            status: 'Present',
+            warehouseName: data.location || prev.warehouseName || 'کۆمپانیای سەرەکی ئاشڵی'
+          }));
+        } else {
+          setLiveTodayShift(prev => ({
+            ...prev,
+            checkOutTime: assignedTime
+          }));
         }
+
+        // Broadcast to localStorage for instant Admin table synchronization
+        if (typeof window !== 'undefined') {
+          try {
+            const newLiveRecord = {
+              id: data.record?.id || `live-${employeeProfile.id}-${Date.now()}`,
+              employeeId: employeeProfile.id,
+              userId: employeeProfile.id,
+              userName: employeeProfile.name,
+              name: employeeProfile.name,
+              type: event === 'ENTER' ? 'هاتن (Check In)' : 'دەرچوون (Check Out)',
+              time: `${todayIso} ${assignedTime}`,
+              date: todayIso,
+              status: 'Present',
+              checkInTime: event === 'ENTER' ? (liveTodayShift.checkInTime || assignedTime) : liveTodayShift.checkInTime,
+              checkOutTime: event === 'EXIT' ? assignedTime : null
+            };
+            const existingLive = JSON.parse(localStorage.getItem('ashley_live_checkins') || '[]');
+            const updatedList = [newLiveRecord, ...existingLive.filter((l: any) => !( (l.employeeId === employeeProfile.id || l.userId === employeeProfile.id) && l.date === todayIso ))];
+            localStorage.setItem('ashley_live_checkins', JSON.stringify(updatedList));
+            window.dispatchEvent(new Event('ashley_attendance_updated'));
+          } catch {}
+        }
+
+        await fetchLiveTodayAttendance();
+
         sendLocalNotification(
           event === 'ENTER' ? '🟢 تۆمارکردنی هاتن' : '👋 تۆمارکردنی ڕۆیشتن',
           data.message || (event === 'ENTER' ? 'هاتنەکەت بە سەرکەوتوویی تۆمارکرا' : 'ڕۆیشتنەکەت بە سەرکەوتوویی تۆمارکرا')
@@ -507,12 +548,16 @@ export default function AutonomousMobileAppLight() {
     }
   };
 
+  const hasBeenInsideRef = useRef(false);
+  const lastManualActionRef = useRef<number>(0);
+
   // 🧭 Autonomous Geofencing Logic (ENTER / EXIT)
   useEffect(() => {
     if (!employeeProfile?.id) return;
     
     // We only act if presence has a solid boolean state
     if (presence.isInsideGeofence === true) {
+      hasBeenInsideRef.current = true;
       if (!liveTodayShift.checkInTime && !triggerLoading) {
         // Morning Arrival
         handleTriggerAttendance('ENTER');
@@ -520,13 +565,16 @@ export default function AutonomousMobileAppLight() {
         // Mid-day Return (They had checked out, but now they are back)
         handleTriggerAttendance('ENTER');
       }
-    } else if (presence.isInsideGeofence === false) {
-      if (liveTodayShift.checkInTime && !liveTodayShift.checkOutTime && !triggerLoading) {
-        // Leaving the Geofence
-        handleTriggerAttendance('EXIT');
+    } else if (presence.isInsideGeofence === false && hasBeenInsideRef.current === true) {
+      // Only auto-exit if they were confirmed inside earlier AND not during a manual trigger cooldown
+      if (Date.now() - lastManualActionRef.current > 30000) {
+        if (liveTodayShift.checkInTime && !liveTodayShift.checkOutTime && !triggerLoading) {
+          // Leaving the Geofence
+          handleTriggerAttendance('EXIT');
+        }
       }
     }
-  }, [presence.isInsideGeofence, liveTodayShift, employeeProfile, triggerLoading]);
+  }, [presence.isInsideGeofence, liveTodayShift.checkInTime, liveTodayShift.checkOutTime, employeeProfile?.id, triggerLoading]);
 
   // =========================================================================
   // SECRET 10-SECOND LOGO LONG-PRESS LOGIC

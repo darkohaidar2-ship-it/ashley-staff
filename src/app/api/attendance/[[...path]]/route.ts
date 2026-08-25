@@ -814,18 +814,24 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         if (existingRecord.check_in) upsertPayload.check_in = existingRecord.check_in;
         if (existingRecord.check_in_time) upsertPayload.check_in_time = existingRecord.check_in_time;
         if (existingRecord.check_in_address) upsertPayload.check_in_address = existingRecord.check_in_address;
-        if (existingRecord.check_out) upsertPayload.check_out = existingRecord.check_out;
-        if (existingRecord.check_out_time) upsertPayload.check_out_time = existingRecord.check_out_time;
-        if (existingRecord.check_out_address) upsertPayload.check_out_address = existingRecord.check_out_address;
       }
 
       if (isCheckIn) {
-        upsertPayload.check_in = nowIso;
+        // Clean Check-In: Guarantee check_in and check_in_time exist
+        upsertPayload.check_in = existingRecord?.check_in || nowIso;
         upsertPayload.check_in_time = existingRecord?.check_in_time || timeStr;
         if (lat !== undefined) upsertPayload.check_in_lat = parseFloat(lat);
         if (lng !== undefined) upsertPayload.check_in_lng = parseFloat(lng);
         upsertPayload.check_in_address = address || targetWh.name;
+
+        // Clear previous check-out since employee is back at work
+        upsertPayload.check_out = null;
+        upsertPayload.check_out_time = null;
+        upsertPayload.check_out_address = null;
+        upsertPayload.check_out_lat = null;
+        upsertPayload.check_out_lng = null;
       } else {
+        // Check-Out: Record departure
         upsertPayload.check_out = nowIso;
         upsertPayload.check_out_time = timeStr;
         if (lat !== undefined) upsertPayload.check_out_lat = parseFloat(lat);
