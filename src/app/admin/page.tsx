@@ -63,11 +63,6 @@ import { AdminExpensesModule } from '@/components/admin/AdminExpensesModule';
 import { AdminLogisticsModule } from '@/components/admin/AdminLogisticsModule';
 import { AdminWeeklyMonthlyStatsModule } from '@/components/admin/AdminWeeklyMonthlyStatsModule';
 import { AdminDailyAttendanceTable } from '@/components/admin/AdminDailyAttendanceTable';
-import { 
-  generateAugust2026AdminNotes, 
-  generateAugust2026AttendanceRecords,
-  GOOGLE_SHEET_OVERTIME_DATA 
-} from '@/lib/attendance-seed-data';
 import { formatTime12H, formatTime24H, exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
 
 function formatMinutesHuman(minutes: number): string {
@@ -85,7 +80,7 @@ export default function AdminPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showMobileDeviceModal, setShowMobileDeviceModal] = useState(false);
-  const [adminActiveSection, setAdminActiveSection] = useState<'overview' | 'attendance' | 'hr' | 'overtime' | 'expenses' | 'logistics' | 'stats' | 'maps'>('attendance');
+  const [adminActiveSection, setAdminActiveSection] = useState<'overview' | 'attendance' | 'hr' | 'overtime' | 'settings' | 'expenses' | 'logistics' | 'stats' | 'maps'>('attendance');
   const [attendanceSubTab, setAttendanceSubTab] = useState<'daily' | 'matrix'>('daily');
 
   // Live Desktop Clock for ERP Admin
@@ -247,6 +242,17 @@ export default function AdminPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
+        localStorage.removeItem('ashley_admin_notes_2026-08');
+        localStorage.removeItem('ashley_ot_notes_2026-08');
+        localStorage.removeItem('ashley_local_attendanceLogs');
+        localStorage.removeItem('ashley_live_checkins');
+      } catch {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
         const stored = localStorage.getItem(`ashley_admin_notes_${selectedMonth}`);
         if (stored) {
           setAdminNotesLocal(JSON.parse(stored));
@@ -254,7 +260,7 @@ export default function AdminPage() {
         }
       } catch {}
     }
-    setAdminNotesLocal(generateAugust2026AdminNotes(employees));
+    setAdminNotesLocal({});
   }, [selectedMonth, employees]);
 
   const handleUpdateAdminNote = (key: string, note: string) => {
@@ -306,37 +312,10 @@ export default function AdminPage() {
     };
   }, []);
 
-  // Merge live attendance logs with August 2026 seed records so check-in / check-out are always fully populated
+  // Pure dynamic attendance logs from Supabase
   const allMergedAttendanceLogs = useMemo(() => {
-    let liveCheckins: AttendanceRecord[] = [];
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem('ashley_live_checkins');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) liveCheckins = parsed;
-        }
-      } catch {}
-    }
-
-    const combinedDynamic = [...liveCheckins, ...attendanceLogs];
-    const seedRecords = generateAugust2026AttendanceRecords(employees);
-    const existingKeys = new Set(combinedDynamic.map(l => {
-      const d = l.date || (l.time ? l.time.split(' ')[0] : '');
-      const e = (l.employeeId || l.userId || '').toString().toLowerCase();
-      const t = (l.type || (l as any).action || '').toLowerCase();
-      return `${e}_${d}_${t.includes('in') ? 'in' : 'out'}`;
-    }));
-
-    const nonOverlappingSeed = seedRecords.filter(s => {
-      const d = s.date || '';
-      const e = (s.employeeId || '').toString().toLowerCase();
-      const t = (s.type || '').toLowerCase();
-      return !existingKeys.has(`${e}_${d}_${t.includes('in') ? 'in' : 'out'}`);
-    });
-
-    return [...combinedDynamic, ...nonOverlappingSeed];
-  }, [attendanceLogs, employees, liveLogRefreshCounter]);
+    return attendanceLogs;
+  }, [attendanceLogs, liveLogRefreshCounter]);
 
   // Aggregated KPIs for Overview Dashboard
   const dashboardKpis = useMemo(() => {
@@ -344,16 +323,9 @@ export default function AdminPage() {
     const activeStaff = activeEmployees.length;
     const resignedStaff = employees.filter(e => e.status === 'resigned' || e.isActive === false).length;
 
-    // August 2026 Overtime Hours & Payout from live data
     let totalOtHours = 0;
     let totalOtCost = 0;
     let otEmployeesSet = new Set<string>();
-
-    GOOGLE_SHEET_OVERTIME_DATA.forEach(ot => {
-      totalOtHours += ot.hours;
-      totalOtCost += ot.amount || (ot.hours * 5000);
-      otEmployeesSet.add(ot.empName);
-    });
 
     return {
       totalStaff,
@@ -577,7 +549,7 @@ export default function AdminPage() {
 
       {/* 🧭 MASTER ERP ENTERPRISE NAVIGATION BAR */}
       <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-2.5 shadow-sm">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
           
           {/* 📅 Hub 1: Attendance Central (Primary Default) */}
           <button
@@ -672,6 +644,30 @@ export default function AdminPage() {
               adminActiveSection === 'overtime' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-amber-100 text-amber-900'
             }`}>
               ⚡ +{dashboardKpis.totalOtHours} کاتژمێر
+            </span>
+          </button>
+
+          {/* ⚙️ Hub 5: Settings & System */}
+          <button
+            onClick={() => setAdminActiveSection('settings')}
+            className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+              adminActiveSection === 'settings'
+                ? 'bg-slate-950 text-white border-slate-700 shadow-lg ring-4 ring-slate-400/40 scale-[1.02]'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+            }`}
+          >
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
+              adminActiveSection === 'settings'
+                ? 'bg-slate-700 text-white shadow-inner'
+                : 'bg-slate-200 text-slate-800'
+            }`}>
+              <Settings className="w-6 h-6" />
+            </div>
+            <span className="text-xs font-black tracking-tight block">ڕێکخستنەکان</span>
+            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
+              adminActiveSection === 'settings' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-slate-200 text-slate-700'
+            }`}>
+              ⚙️ ڕیسێت و کاتەکان
             </span>
           </button>
 
@@ -770,14 +766,8 @@ export default function AdminPage() {
                 <tbody className="divide-y divide-slate-200 font-bold">
                   {activeEmployees.map((emp, idx) => {
                     const hasFace = registeredFaceIds.includes(emp.id);
-                    // Compute employee's overtime in Sheet data
-                    const empOts = GOOGLE_SHEET_OVERTIME_DATA.filter(ot => {
-                      const clean = ot.empName.trim();
-                      const eName = (emp.fullName3Part || emp.name).trim();
-                      return clean === eName || eName.includes(clean) || clean.includes(emp.name);
-                    });
-                    const totalOtHours = empOts.reduce((sum, o) => sum + o.hours, 0);
-                    const totalOtAmount = empOts.reduce((sum, o) => sum + (o.amount || o.hours * 5000), 0);
+                    const totalOtHours = 0;
+                    const totalOtAmount = 0;
 
                     return (
                       <tr
@@ -1252,6 +1242,175 @@ export default function AdminPage() {
       {/* ========================================================================= */}
       {adminActiveSection === 'overtime' && (
         <AdminOvertimeModule employees={employees} />
+      )}
+
+      {/* ========================================================================= */}
+      {/* ⚙️ SECTION 5: SETTINGS & MASTER DATABASE CONFIGURATION */}
+      {/* ========================================================================= */}
+      {adminActiveSection === 'settings' && (
+        <div className="space-y-6 animate-fade-in">
+          
+          {/* Section Banner */}
+          <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-700 shadow-md flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-slate-800 rounded-xl border border-slate-600">
+                <Settings className="w-6 h-6 text-amber-400" />
+              </div>
+              <div>
+                <h2 className="text-base font-black">ڕێکخستنە سەرەکییەکانی سیستەم و ئامادەبوون</h2>
+                <p className="text-xs text-slate-400 mt-0.5">بەڕێوەبردنی کاتەکانی دەوام، سنووری لۆکەیشنەکانی GPS، و سڕینەوە و ڕیسێتی داتاکان</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={exportStateAsJson}
+                className="btn-classic bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-300" />
+                <span>داگرتنی کۆپی باکئەپ (JSON)</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            {/* CARD 1: 🗑️ MASTER ATTENDANCE WIPE & RESET */}
+            <div className="bg-white p-5 rounded-2xl border-2 border-rose-200 shadow-sm space-y-3">
+              <div className="flex items-center gap-2 text-rose-600 border-b border-rose-100 pb-2.5">
+                <Trash2 className="w-5 h-5" />
+                <h3 className="text-sm font-black">سڕینەوە و ڕیسێتی سەرجەم داتاکانی ئامادەبوون</h3>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                ئەم کردارە سەرجەم لۆگە تۆمارکراوەکانی هاتن و دەرچوون، مۆڵەتەکان، غیاب و پشووەکان لە هەردوو سێرڤەر (Supabase) و کاشی مۆبایل و کۆمپیوتەر بە تەواوی پاک دەکاتەوە و دەیانکاتە سفر.
+              </p>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!confirm('⚠️ ئایا دڵنیایت لە سڕینەوەی سەرجەم داتاکانی ئامادەبوون و تۆماری دەوام؟ ئەم کارە تەواوی خشتەکان و سێرڤەر پاک دەکاتەوە.')) return;
+                  try {
+                    await fetch('/api/attendance/reset-today', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ wipeAll: true })
+                    });
+                  } catch {}
+
+                  if (typeof window !== 'undefined') {
+                    try {
+                      localStorage.removeItem('ashley_local_attendanceLogs');
+                      localStorage.removeItem('ashley_live_checkins');
+                      localStorage.removeItem('ashley_local_overtime');
+                      localStorage.removeItem('ashley_admin_notes_2026-08');
+                      localStorage.removeItem('ashley_ot_notes_2026-08');
+                      Object.keys(localStorage).forEach(k => {
+                        if (
+                          k.startsWith('ashley_leaves_') ||
+                          k.startsWith('ashley_holidays_') ||
+                          k.startsWith('ashley_deleted_attendance_') ||
+                          k.startsWith('ashley_time_override_')
+                        ) {
+                          localStorage.removeItem(k);
+                        }
+                      });
+                    } catch {}
+                  }
+
+                  setAttendanceLogs([]);
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new Event('ashley_attendance_updated'));
+                  }
+                  alert('✅ سەرجەم داتاکانی ئامادەبوون و تۆمارەکان بە سەرکەوتوویی لە داتابەیس و سیستم پاککرانەوە.');
+                }}
+                className="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>🗑️ سڕینەوەی سەرجەم داتاکانی دەوام و ئامادەبوون (Wipe All Attendance)</span>
+              </button>
+            </div>
+
+            {/* CARD 2: 🗺️ GEOFENCE LOCATIONS */}
+            <div className="bg-white p-5 rounded-2xl border-2 border-cyan-200 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-cyan-100 pb-2.5">
+                <div className="flex items-center gap-2 text-cyan-700">
+                  <MapPin className="w-5 h-5" />
+                  <h3 className="text-sm font-black">لۆکەیشنەکانی کۆمپانیا و بازنەی GPS</h3>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 bg-cyan-100 text-cyan-800 rounded-full font-mono">
+                  {companyLocations.length} لۆکەیشن
+                </span>
+              </div>
+              <div className="space-y-1.5 text-xs text-slate-700">
+                {companyLocations.map((loc, i) => (
+                  <div key={loc.id || i} className="p-2 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                    <span className="font-bold">🏢 {loc.name}</span>
+                    <span className="text-[11px] font-mono text-cyan-800 font-bold bg-cyan-50 px-2 py-0.5 rounded border border-cyan-200">
+                      مەودا: {loc.radiusMeters}m
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMapPicker(true)}
+                className="w-full py-2.5 px-4 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Map className="w-4 h-4" />
+                <span>🗺️ دیاریکردن و دەستکاریکردنی لۆکەیشنەکان لەسەر نەخشە</span>
+              </button>
+            </div>
+
+            {/* CARD 3: ⏰ SHIFT TIMINGS */}
+            <div className="bg-white p-5 rounded-2xl border-2 border-amber-200 shadow-sm space-y-3">
+              <div className="flex items-center gap-2 text-amber-700 border-b border-amber-100 pb-2.5">
+                <Clock className="w-5 h-5" />
+                <h3 className="text-sm font-black">کاتەکانی دەوامی فەرمی ڕۆژانە</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">کاتی دەستپێکی دەوام (Check In):</label>
+                  <input
+                    type="time"
+                    defaultValue="08:30"
+                    className="input-classic w-full font-mono text-center font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">کاتی تەواوبوون (Check Out):</label>
+                  <input
+                    type="time"
+                    defaultValue="16:30"
+                    className="input-classic w-full font-mono text-center font-bold"
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium">
+                کاتی هاتن دوای 08:45 بە دواکەوتن دادەنرێت و کاتی مانەوە دوای 16:30 بە کاتی زیادە (ئیزافە) دەژمێردرێت.
+              </p>
+            </div>
+
+            {/* CARD 4: 🔑 ADMIN PASSWORD & SECURITY */}
+            <div className="bg-white p-5 rounded-2xl border-2 border-indigo-200 shadow-sm space-y-3">
+              <div className="flex items-center gap-2 text-indigo-700 border-b border-indigo-100 pb-2.5">
+                <KeyRound className="w-5 h-5" />
+                <h3 className="text-sm font-black">پاراستن و تێپەڕەوشەی بەڕێوەبەر</h3>
+              </div>
+              <p className="text-xs text-slate-600">
+                گۆڕینی تێپەڕەوشە و کۆدی PIN ی سەرەکی بۆ چوونەژوورەوەی ئەدمین و کۆنترۆڵکردنی بەشە هەستیارەکان.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowPasswordModal(true)}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>🔑 گۆڕینی وشەی تێپەڕی ئەدمین (Change Password)</span>
+              </button>
+            </div>
+
+          </div>
+
+        </div>
       )}
 
       {/* ========================================================================= */}

@@ -33,7 +33,6 @@ import {
   DailyReportRow,
   ExportTableColumn
 } from '@/lib/export-utils';
-import { GOOGLE_SHEET_OVERTIME_DATA, generateAugust2026AdminNotes, generateAugust2026OvertimeList, matchEmployeeByName } from '@/lib/attendance-seed-data';
 
 interface AdminDailyAttendanceTableProps {
   employees: Employee[];
@@ -188,12 +187,18 @@ export function AdminDailyAttendanceTable({
         );
       });
 
+      const directRec = dayLogs.find(l => (l as any).checkInTime || (l as any).checkOutTime);
       const inLog = dayLogs.find(l => (l.type || l.action || '').toLowerCase().includes('in') || (l.type || l.action || '').includes('هاتن'));
       const outLog = dayLogs.find(l => (l.type || l.action || '').toLowerCase().includes('out') || (l.type || l.action || '').includes('دەرچوون') || (l.type || l.action || '').includes('ڕۆشتن'));
 
-      // 2. Extract times from dynamic logs
-      let checkInTime = inLog?.time ? (inLog.time.includes(' ') ? inLog.time.split(' ')[1].slice(0, 5) : inLog.time.slice(0, 5)) : '-';
-      let checkOutTime = outLog?.time ? (outLog.time.includes(' ') ? outLog.time.split(' ')[1].slice(0, 5) : outLog.time.slice(0, 5)) : '-';
+      // 2. Extract times from dynamic logs or direct unified record
+      let checkInTime = (directRec as any)?.checkInTime 
+        ? (directRec as any).checkInTime.slice(0, 5)
+        : (inLog?.time ? (inLog.time.includes(' ') ? inLog.time.split(' ')[1].slice(0, 5) : inLog.time.slice(0, 5)) : '-');
+
+      let checkOutTime = (directRec as any)?.checkOutTime 
+        ? (directRec as any).checkOutTime.slice(0, 5)
+        : (outLog?.time ? (outLog.time.includes(' ') ? outLog.time.split(' ')[1].slice(0, 5) : outLog.time.slice(0, 5)) : '-');
 
       let checkInOriginalTime = inLog?.originalTime || (inLog as any)?.checkInOriginalTime || '';
       let checkOutOriginalTime = outLog?.originalTime || (outLog as any)?.checkOutOriginalTime || '';
@@ -211,31 +216,6 @@ export function AdminDailyAttendanceTable({
             if (delMap[`${emp.id}_${dateStr}`]) isDeleted = true;
           }
         } catch {}
-      }
-
-      // 3. Check Seed Data / August 2026 Fallback (ONLY if NOT explicitly deleted)
-      if (!isDeleted && dateStr.startsWith('2026-08')) {
-        const seedEntry = GOOGLE_SHEET_OVERTIME_DATA.find(
-          d => d.date === dateStr && !!matchEmployeeByName(d.empName, [emp])
-        );
-
-        if (seedEntry) {
-          if (checkInTime === '-') checkInTime = '08:00';
-          if (checkOutTime === '-') {
-            const endMinutes = 17 * 60 + Math.round(seedEntry.hours * 60);
-            const endH = Math.floor(endMinutes / 60) % 24;
-            const endM = endMinutes % 60;
-            checkOutTime = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
-          }
-          if (!checkOutNote) {
-            checkOutNote = seedEntry.workType + (seedEntry.note ? ` (${seedEntry.note})` : '');
-          }
-        } else if (dNum <= 19 && !isFri) {
-          // Regular Working Day in August for Active Employee
-          if (checkInTime === '-') checkInTime = '08:00';
-          if (checkOutTime === '-') checkOutTime = '17:00';
-          if (!checkInNote) checkInNote = 'دەوامی ئاسایی فەرمی';
-        }
       }
 
       // Check Local Overrides (manual edits by Admin) (ONLY if NOT explicitly deleted)
@@ -269,7 +249,7 @@ export function AdminDailyAttendanceTable({
         checkOutNote = '';
       }
 
-      // 4. Admin Note (Priority: Props -> LocalStorage -> Seed Map)
+      // 4. Admin Note (Priority: Props -> LocalStorage)
       const adminNoteKey = `${emp.id}_${dateStr}`;
       let adminNote = adminNotes[adminNoteKey] || '';
       if (!adminNote && typeof window !== 'undefined') {
@@ -279,10 +259,6 @@ export function AdminDailyAttendanceTable({
             adminNote = storedNotes[adminNoteKey];
           }
         } catch {}
-      }
-      if (!adminNote && dateStr.startsWith('2026-08')) {
-        const seedAdminMap = generateAugust2026AdminNotes(employees);
-        adminNote = seedAdminMap[adminNoteKey] || '';
       }
 
       // 5. Holiday & Leave Override (Highest Authority Level)
@@ -653,16 +629,9 @@ export function AdminDailyAttendanceTable({
     exportToCSV(cols, allRows, `Ashley_Full_Month_Daily_${selectedMonth}`);
   };
 
-  // 🔄 Google Sheets Sync
+  // 🔄 Google Sheets Clean Export
   const handleSyncGoogleSheet = () => {
-    const defaultNotes = generateAugust2026AdminNotes(employees);
-    const defaultOvertime = generateAugust2026OvertimeList(employees);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ashley_admin_notes_2026-08', JSON.stringify(defaultNotes));
-      localStorage.setItem('ashley_ot_notes_2026-08', JSON.stringify(defaultNotes));
-      window.dispatchEvent(new Event('ashley_attendance_updated'));
-    }
-    alert(`🎉 داتاکانی گووگڵ شیت (${GOOGLE_SHEET_OVERTIME_DATA.length} تۆمار) لەگەڵ کاتەکانی هاتن و دەرچوون بە سەرکەوتوویی هاوتا کران!`);
+    handleExportMonthCSV();
   };
 
   return (

@@ -24,11 +24,6 @@ import {
 } from 'lucide-react';
 import { format, getDaysInMonth, getDay } from 'date-fns';
 import { exportToPDF, exportToCSV, formatTime12H, type ExportTableColumn } from '@/lib/export-utils';
-import { 
-  generateAugust2026AdminNotes, 
-  generateAugust2026OvertimeList, 
-  GOOGLE_SHEET_OVERTIME_DATA 
-} from '@/lib/attendance-seed-data';
 
 interface AdminOvertimeModuleProps {
   employees: Employee[];
@@ -46,7 +41,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
   const [shiftEndTime, setShiftEndTime] = useState('17:00');
   const [hourlyRate, setHourlyRate] = useState<number>(5000);
 
-  // Admin Notes stored in localStorage (initialized with August 2026 Google Sheet notes)
+  // Admin Notes stored in localStorage
   const [adminNotes, setAdminNotes] = useState<Record<string, string>>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -54,7 +49,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         if (stored) return JSON.parse(stored);
       } catch {}
     }
-    return generateAugust2026AdminNotes(employees);
+    return {};
   });
 
   const [editingNoteKey, setEditingNoteKey] = useState<string | null>(null);
@@ -75,10 +70,6 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         const stored = localStorage.getItem(`ashley_admin_notes_${selectedMonth}`);
         if (stored) {
           setAdminNotes(JSON.parse(stored));
-        } else if (selectedMonth === '2026-08') {
-          const defaultNotes = generateAugust2026AdminNotes(employees);
-          setAdminNotes(defaultNotes);
-          localStorage.setItem('ashley_admin_notes_2026-08', JSON.stringify(defaultNotes));
         } else {
           setAdminNotes({});
         }
@@ -214,9 +205,10 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       }
     });
 
-    // 2. Process Manual / Stored Overtime Entries
+    // 2. Process Manual / Stored Overtime Entries (Excluding any legacy seed records)
     (overtime || []).forEach((r: any) => {
       if (!r.date) return;
+      if (r.id?.includes('sheet') || r.id?.includes('seed') || r.source === 'sheet') return;
       const emp = employees.find(e => e.id === (r.employeeId || r.userId));
       const hoursNum = parseFloat(r.hours || 0);
       const rateNum = parseFloat(r.rate || hourlyRate);
@@ -427,16 +419,24 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
     }
   };
 
-  // Reset / Sync with Google Sheet
+  // Clean Export Handler
   const handleSyncGoogleSheet = () => {
-    const defaultNotes = generateAugust2026AdminNotes(employees);
-    const defaultOvertime = generateAugust2026OvertimeList(employees);
-    setAdminNotes(defaultNotes);
-    setOvertime(defaultOvertime);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ashley_admin_notes_2026-08', JSON.stringify(defaultNotes));
+    handleExportCSV();
+  };
+
+  // Clear All Overtime Records & Purge Stale Caches
+  const handleClearAllOvertime = () => {
+    if (confirm('ئایا دڵنیایت لە سڕینەوەی سەرجەم کاتە زیادەکان و تێبینیەکان؟')) {
+      setOvertime([]);
+      setAdminNotes({});
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('ashley_local_overtime');
+        localStorage.removeItem(`ashley_admin_notes_${selectedMonth}`);
+        localStorage.removeItem(`ashley_ot_notes_${selectedMonth}`);
+        window.dispatchEvent(new Event('ashley_attendance_updated'));
+      }
+      alert('✅ سەرجەم داتاکانی کاتی زیادە بە سەرکەوتوویی سڕانەوە.');
     }
-    alert(`🎉 سەرجەم داتاکانی گووگڵ شیت (${GOOGLE_SHEET_OVERTIME_DATA.length} تۆمار) لەگەڵ کاتژمێری هاتن 08:00 و دەرچوونی نوێ بە سەرکەوتوویی هاوردە کران!`);
   };
 
   // PDF & CSV Export Handlers
@@ -558,15 +558,24 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
           </div>
         </div>
 
-        {/* 🔄 ACTIONS & SYNC BUTTON */}
+        {/* 🔄 ACTIONS & CLEAR BUTTONS */}
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleClearAllOvertime}
+            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white border-rose-400 shadow-md cursor-pointer px-3 py-1.5 rounded-lg"
+            title="سڕینەوەی سەرجەم کاتی زیادە و تێبینیەکان"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-white" />
+            <span>🗑️ سڕینەوەی سەرجەم داتاکان (Clear All)</span>
+          </button>
+
           <button
             onClick={handleSyncGoogleSheet}
             className="btn-classic text-xs font-black flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 border-amber-300 shadow-md cursor-pointer px-3 py-1.5 rounded-lg"
-            title="هاوردەکردن و نوێکردنەوەی سەرجەم کاتی زیادە و تێبینیەکانی گووگڵ شیت"
+            title="هەناردەکردنی کاتی زیادەی مانگانە و ڕۆژانە بۆ فایلی Google Sheets / Excel"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-slate-950" />
-            <span>📥 هاوردەکردنی داتاکانی Google Sheets</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-slate-950" />
+            <span>📊 هەناردەکردن بۆ Google Sheets</span>
           </button>
         </div>
       </div>
@@ -707,9 +716,9 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         </div>
 
         <div className="panel-classic p-2.5 text-center bg-purple-50/80 border-2 border-purple-200 shadow-sm rounded-xl">
-          <span className="text-[10px] text-purple-900 block font-bold">دۆخی گووگڵ شیت</span>
+          <span className="text-[10px] text-purple-900 block font-bold">دۆخی سیستەم</span>
           <p className="text-xs font-black text-purple-950 mt-1">
-            ✅ {GOOGLE_SHEET_OVERTIME_DATA.length} تۆمار ئامادەیە
+            ✅ سیستەمی زیندوو
           </p>
         </div>
       </div>

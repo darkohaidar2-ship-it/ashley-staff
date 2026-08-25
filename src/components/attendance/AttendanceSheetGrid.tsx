@@ -6,7 +6,6 @@ import { Camera, Calendar, MapPin, Trash2, CheckCircle, User, FileText, Edit3, R
 import { getDaysInMonth, format, getDay } from 'date-fns';
 import { AttendanceAnalyticsReport } from './AttendanceAnalyticsReport';
 import { exportToPDF, exportToCSV, formatTime12H, getAttendanceTimeBadge, type ExportTableColumn } from '@/lib/export-utils';
-import { GOOGLE_SHEET_OVERTIME_DATA, generateAugust2026AdminNotes, generateAugust2026OvertimeList } from '@/lib/attendance-seed-data';
 
 interface AttendanceSheetGridProps {
   attendanceLogs: AttendanceRecord[];
@@ -78,16 +77,51 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
   // Selected Log for Selfie & Full Details Modal
   const [activeLogModal, setActiveLogModal] = useState<AttendanceRecord | null>(null);
 
-  // Google Sheets Sync Handler
+  // Google Sheets Export Handler
   const handleSyncGoogleSheet = () => {
-    const defaultNotes = generateAugust2026AdminNotes(employees);
-    const defaultOvertime = generateAugust2026OvertimeList(employees);
+    handleDownloadCsv();
+  };
+
+  // Complete Wipe of All Attendance Data & Leaves
+  const handleWipeAllAttendance = async () => {
+    if (!confirm('⚠️ ئایا دڵنیایت لە سڕینەوەی سەرجەم داتاکانی ئامادەبوون، مۆڵەتەکان، غیاب و پشووەکان بۆ ئەم مانگە؟ ئەم کارە هەموو خانەکان سپی و پاک دەکاتەوە.')) return;
+    
+    try {
+      await fetch('/api/attendance/reset-today', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wipeAll: true })
+      });
+    } catch (e) {
+      console.warn('Wipe server attendance error:', e);
+    }
+
     if (typeof window !== 'undefined') {
-      localStorage.setItem('ashley_admin_notes_2026-08', JSON.stringify(defaultNotes));
-      localStorage.setItem('ashley_ot_notes_2026-08', JSON.stringify(defaultNotes));
+      try {
+        localStorage.removeItem(`ashley_leaves_${selectedMonth}`);
+        localStorage.removeItem(`ashley_holidays_${selectedMonth}`);
+        localStorage.removeItem('ashley_leaves_2026-08');
+        localStorage.removeItem('ashley_holidays_2026-08');
+        localStorage.removeItem('ashley_live_checkins');
+        localStorage.removeItem('ashley_local_attendanceLogs');
+        localStorage.removeItem(`ashley_deleted_attendance_${selectedMonth}`);
+        localStorage.removeItem(`ashley_admin_notes_${selectedMonth}`);
+        localStorage.removeItem(`ashley_ot_notes_${selectedMonth}`);
+        Object.keys(localStorage).forEach(k => {
+          if (k.startsWith('ashley_leaves_') || k.startsWith('ashley_holidays_') || k.startsWith('ashley_time_override_')) {
+            localStorage.removeItem(k);
+          }
+        });
+      } catch {}
+    }
+
+    setLeaves({});
+    setHolidays({});
+    setGridLogs([]);
+    if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('ashley_attendance_updated'));
     }
-    alert(`🎉 سەرجەم داتاکانی گووگڵ شیت (${GOOGLE_SHEET_OVERTIME_DATA.length} تۆمار) لەگەڵ کاتژمێری هاتن 08:00 و دەرچوونی ئیزافە بە سەرکەوتوویی هاوتا کران!`);
+    alert('✅ سەرجەم داتاکانی ئامادەبوون و مۆڵەتەکان بە سەرکەوتوویی سڕانەوە.');
   };
 
   // Toggle Holiday Helper
@@ -556,6 +590,17 @@ export function AttendanceSheetGrid({ attendanceLogs: initialLogs, employees, on
               <Trash2 className="w-3 h-3 text-rose-300" />
               <span>پاککردنەوە</span>
             </div>
+
+            {/* 6. WIPE ALL BUTTON */}
+            <button
+              type="button"
+              onClick={handleWipeAllAttendance}
+              className="px-3 py-1 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs flex items-center gap-1.5 border border-rose-400 shadow-md cursor-pointer transition-all"
+              title="سڕینەوەی سەرجەم داتاکانی ئامادەبوون و پاککردنەوەی تەواوی خشتەکە"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-white" />
+              <span>🗑️ سڕینەوەی سەرجەم داتاکان (Wipe All)</span>
+            </button>
           </div>
 
           <div className="text-[11px] text-slate-300 font-normal">

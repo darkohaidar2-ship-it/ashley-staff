@@ -150,46 +150,50 @@ class AutonomousGeofenceManager {
     });
 
     const now = Date.now();
-    // Cooldown between auto-triggers to prevent GPS bounce
-    const COOLDOWN_MS = 60 * 1000;
+    const todayDateStr = new Date().toISOString().slice(0, 10);
+    const checkInDateKey = `ashley_last_auto_checkin_date_${this.config.userId}`;
+    const checkOutDateKey = `ashley_last_auto_checkout_date_${this.config.userId}`;
+    const lastCheckInDate = localStorage.getItem(checkInDateKey);
+    const lastCheckOutDate = localStorage.getItem(checkOutDateKey);
 
-    // State Transition 1: Outside -> Inside (ENTER - Immediate Check-In)
-    if (this.isInsideState === false && currentlyInside) {
-      if (now - this.lastTriggerTime > COOLDOWN_MS) {
-        this.isInsideState = true;
-        this.lastTriggerTime = now;
-        localStorage.setItem(`ashley_geostate_${this.config.userId}`, 'inside');
-        localStorage.removeItem(`ashley_exit_timestamp_${this.config.userId}`);
-        await this.triggerGeofenceEvent('ENTER', currentLat, currentLng, closestDistance, matchedRegion);
-      }
-    }
-    // State Transition 2: Inside -> Outside (EXIT - Protected with 5-Minute Grace Period)
-    else if (this.isInsideState === true && !currentlyInside) {
-      // Check if exit grace timer has started
-      const exitStartKey = `ashley_exit_timestamp_${this.config.userId}`;
-      const firstExitTime = Number(localStorage.getItem(exitStartKey)) || now;
-      if (!localStorage.getItem(exitStartKey)) {
-        localStorage.setItem(exitStartKey, String(now));
-      }
+    const COOLDOWN_MS = 20 * 1000; // 20s cooldown
 
-      // If outside continuously for > 3 minutes (180s) or cooldown passed, confirm EXIT
-      const GRACE_PERIOD_MS = 3 * 60 * 1000; // 3 minutes grace period for errands / glitches
-      if (now - firstExitTime >= GRACE_PERIOD_MS && now - this.lastTriggerTime > COOLDOWN_MS) {
-        this.isInsideState = false;
-        this.lastTriggerTime = now;
-        localStorage.setItem(`ashley_geostate_${this.config.userId}`, 'outside');
-        localStorage.removeItem(exitStartKey);
-        await this.triggerGeofenceEvent('EXIT', currentLat, currentLng, closestDistance, matchedRegion);
-      }
-    }
-    // If returned inside during grace period, reset exit timer
-    else if (currentlyInside) {
+    // Case 1: Currently Inside the Geofence -> Auto-CheckIn immediately if not checked in today
+    if (currentlyInside) {
+      this.isInsideState = true;
+      localStorage.setItem(`ashley_geostate_${this.config.userId}`, 'inside');
       localStorage.removeItem(`ashley_exit_timestamp_${this.config.userId}`);
+
+      if (lastCheckInDate !== todayDateStr) {
+        if (now - this.lastTriggerTime > COOLDOWN_MS) {
+          this.lastTriggerTime = now;
+          localStorage.setItem(checkInDateKey, todayDateStr);
+          await this.triggerGeofenceEvent('ENTER', currentLat, currentLng, closestDistance, matchedRegion);
+        }
+      }
     }
-    // Initial Baseline initialization
-    else if (this.isInsideState === null) {
-      this.isInsideState = currentlyInside;
-      localStorage.setItem(`ashley_geostate_${this.config.userId}`, currentlyInside ? 'inside' : 'outside');
+    // Case 2: Currently Outside the Geofence -> Auto-CheckOut after grace period if checked in today
+    else if (!currentlyInside) {
+      if (lastCheckInDate === todayDateStr && lastCheckOutDate !== todayDateStr) {
+        const exitStartKey = `ashley_exit_timestamp_${this.config.userId}`;
+        const firstExitTime = Number(localStorage.getItem(exitStartKey)) || now;
+        if (!localStorage.getItem(exitStartKey)) {
+          localStorage.setItem(exitStartKey, String(now));
+        }
+
+        const GRACE_PERIOD_MS = 2 * 60 * 1000; // 2 minutes grace period for errands/signal
+        if (now - firstExitTime >= GRACE_PERIOD_MS && now - this.lastTriggerTime > COOLDOWN_MS) {
+          this.isInsideState = false;
+          this.lastTriggerTime = now;
+          localStorage.setItem(`ashley_geostate_${this.config.userId}`, 'outside');
+          localStorage.setItem(checkOutDateKey, todayDateStr);
+          localStorage.removeItem(exitStartKey);
+          await this.triggerGeofenceEvent('EXIT', currentLat, currentLng, closestDistance, matchedRegion);
+        }
+      } else {
+        this.isInsideState = false;
+        localStorage.setItem(`ashley_geostate_${this.config.userId}`, 'outside');
+      }
     }
   }
 

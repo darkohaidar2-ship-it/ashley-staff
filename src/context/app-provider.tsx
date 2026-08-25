@@ -157,6 +157,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Global Real-Time Supabase Attendance Sync (Single source of truth from Supabase)
     useEffect(() => {
+      // Complete purge of any legacy stale seed logs, overtime, or notes from localStorage
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem('ashley_local_attendanceLogs');
+          localStorage.removeItem('ashley_live_checkins');
+          localStorage.removeItem('ashley_local_overtime');
+          localStorage.removeItem('ashley_admin_notes_2026-08');
+          localStorage.removeItem('ashley_ot_notes_2026-08');
+          Object.keys(localStorage).forEach(k => {
+            if (
+              k.startsWith('ashley_admin_notes_') ||
+              k.startsWith('ashley_ot_notes_') ||
+              k.startsWith('ashley_deleted_attendance_') ||
+              k.startsWith('ashley_time_override_') ||
+              k.startsWith('ashley_seed_')
+            ) {
+              localStorage.removeItem(k);
+            }
+          });
+        } catch {}
+      }
+
       const syncSupabaseAttendance = () => {
         fetch('/api/attendance/logs')
           .then((res) => res.json())
@@ -180,27 +202,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'attendance' },
-          (payload) => {
-            console.log('Realtime Supabase WebSocket check-in received:', payload);
+          () => {
             syncSupabaseAttendance();
           }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'attendance_logs' },
-          (payload) => {
-            console.log('Realtime Supabase logs change received:', payload);
+          () => {
             syncSupabaseAttendance();
           }
         )
         .subscribe();
 
-      // Fallback polling interval (every 8s)
-      const interval = setInterval(syncSupabaseAttendance, 8000);
+      // Broadcast and storage listeners
+      window.addEventListener('ashley_attendance_updated', syncSupabaseAttendance);
+      window.addEventListener('storage', syncSupabaseAttendance);
+
+      // Fast Polling interval (every 2s)
+      const interval = setInterval(syncSupabaseAttendance, 2000);
 
       return () => {
         supabase.removeChannel(channel);
         clearInterval(interval);
+        window.removeEventListener('ashley_attendance_updated', syncSupabaseAttendance);
+        window.removeEventListener('storage', syncSupabaseAttendance);
       };
     }, [setAttendanceLogs]);
 

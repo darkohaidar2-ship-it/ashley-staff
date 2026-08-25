@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, supabaseUrl, supabaseKey } from '@/lib/supabase';
 import crypto from 'crypto';
-import { generateAugust2026AttendanceRecords } from '@/lib/attendance-seed-data';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -329,12 +328,14 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       }
 
       try {
-        const { data: record } = await supabase
-          .from('attendance')
-          .select('*')
-          .eq('user_id', userId)
-          .eq('date', dateStr)
-          .maybeSingle();
+        let query = supabase.from('attendance').select('*').eq('date', dateStr);
+        if (userId.startsWith('emp-')) {
+          const rawNum = userId.replace('emp-', '');
+          query = query.or(`user_id.eq.${userId},user_id.eq.${rawNum}`);
+        } else {
+          query = query.or(`user_id.eq.${userId},user_id.eq.emp-${userId}`);
+        }
+        const { data: record } = await query.maybeSingle();
 
         if (record) {
           return NextResponse.json({
@@ -363,23 +364,28 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if (pathStr === 'reset-today' && method === 'POST') {
       const body = await req.json().catch(() => ({}));
-      const { userId } = body;
+      const { userId, wipeAll } = body;
       const { dateStr } = getBaghdadDateTime();
 
       try {
-        let query = supabase.from('attendance').delete().eq('date', dateStr);
-        if (userId) {
-          query = query.eq('user_id', userId);
-        }
-        await query;
+        if (wipeAll) {
+          await supabase.from('attendance').delete().neq('id', '___non_existent___');
+          await supabase.from('attendance_logs').delete().neq('id', '___non_existent___');
+        } else {
+          let query = supabase.from('attendance').delete().eq('date', dateStr);
+          if (userId) {
+            query = query.eq('user_id', userId);
+          }
+          await query;
 
-        let logQuery = supabase.from('attendance_logs').delete().eq('log_date', dateStr);
-        if (userId) {
-          logQuery = logQuery.eq('employee_id', userId);
+          let logQuery = supabase.from('attendance_logs').delete().eq('log_date', dateStr);
+          if (userId) {
+            logQuery = logQuery.eq('employee_id', userId);
+          }
+          await logQuery;
         }
-        await logQuery;
 
-        return NextResponse.json({ success: true, message: 'داتاکانی دەوامی ئەمڕۆ بە سەرکەوتوویی سڕانەوە بۆ تێستی نوێ' });
+        return NextResponse.json({ success: true, message: 'داتاکانی دەوام بە سەرکەوتوویی سڕانەوە' });
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
       }
@@ -723,14 +729,14 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if ((pathStr === 'auto-geofence' || pathStr === 'autonomous-event') && method === 'POST') {
       const body = await req.json();
-      const { userId, deviceToken, event, lat, lng, warehouseId, employeeName } = body;
+      const { userId, deviceToken, event, lat, lng, warehouseId, employeeName, userName, name } = body;
 
       if (!userId || !event) {
         return NextResponse.json({ error: 'userId and event (ENTER/EXIT) are required' }, { status: 400 });
       }
 
       // 1. Fetch user
-      let matchedName = employeeName || 'کارمەند';
+      let matchedName = userName || employeeName || name || 'کارمەند';
       try {
         const { data: userRow } = await supabase.from('users').select('id, name, device_token').eq('id', userId).maybeSingle();
         if (userRow) {
@@ -738,6 +744,13 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           if (deviceToken && !userRow.device_token) {
             await supabase.from('users').update({ device_token: deviceToken }).eq('id', userId);
           }
+        } else if (userId && matchedName) {
+          await supabase.from('users').upsert({
+            id: userId,
+            name: matchedName,
+            device_token: deviceToken || null,
+            role: 'Employee'
+          });
         }
       } catch (uErr) {
         console.warn('User fetch in auto-geofence:', uErr);
@@ -874,21 +887,100 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .select('*')
           .order('date', { ascending: false });
 
+        const formatted: any[] = [];
         if (attendance && attendance.length > 0) {
-          const formatted = attendance.map(r => ({
-            id: r.id,
-            employeeId: r.user_id,
-            employeeName: r.user_name,
-            date: r.date,
-            checkIn: r.check_in_time ? `${r.date} ${r.check_in_time}` : (r.check_in || ''),
-            checkInTime: r.check_in_time || '',
-            checkOut: r.check_out_time ? `${r.date} ${r.check_out_time}` : (r.check_out || ''),
-            checkOutTime: r.check_out_time || '',
-            warehouseName: r.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
-            status: r.status || 'Present'
-          }));
-          return NextResponse.json(formatted);
+          attendance.forEach(r => {
+            // 1. Unified Daily Shift Record
+            formatted.push({
+              id: r.id,
+              employeeId: r.user_id,
+              userId: r.user_id,
+              employeeName: r.user_name,
+              userName: r.user_name,
+              name: r.user_name,
+              date: r.date,
+              checkIn: r.check_in_time ? `${r.date} ${r.check_in_time}` : (r.check_in || ''),
+              checkInTime: r.check_in_time || '',
+              checkOut: r.check_out_time ? `${r.date} ${r.check_out_time}` : (r.check_out || ''),
+              checkOutTime: r.check_out_time || '',
+              time: r.check_in_time ? `${r.date} ${r.check_in_time}` : (r.date || ''),
+              warehouseName: r.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
+              status: r.status || 'Present'
+            });
+
+            // 2. Explicit Check-In Event
+            if (r.check_in_time) {
+              formatted.push({
+                id: `${r.id}-in`,
+                employeeId: r.user_id,
+                userId: r.user_id,
+                employeeName: r.user_name,
+                userName: r.user_name,
+                name: r.user_name,
+                type: 'Check In',
+                action: 'Check In',
+                date: r.date,
+                time: `${r.date} ${r.check_in_time}`,
+                checkInTime: r.check_in_time,
+                warehouseName: r.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
+                status: 'verified'
+              });
+            }
+
+            // 3. Explicit Check-Out Event
+            if (r.check_out_time) {
+              formatted.push({
+                id: `${r.id}-out`,
+                employeeId: r.user_id,
+                userId: r.user_id,
+                employeeName: r.user_name,
+                userName: r.user_name,
+                name: r.user_name,
+                type: 'Check Out',
+                action: 'Check Out',
+                date: r.date,
+                time: `${r.date} ${r.check_out_time}`,
+                checkOutTime: r.check_out_time,
+                warehouseName: r.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
+                status: 'verified'
+              });
+            }
+          });
         }
+
+        // Also fetch any standalone logs from attendance_logs table
+        try {
+          const { data: logsData } = await supabase
+            .from('attendance_logs')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (logsData && logsData.length > 0) {
+            logsData.forEach(l => {
+              formatted.push({
+                id: l.id,
+                employeeId: l.employee_id,
+                userId: l.employee_id,
+                employeeName: l.employee_name,
+                userName: l.employee_name,
+                name: l.employee_name,
+                type: l.log_type,
+                action: l.log_type,
+                date: l.log_date,
+                time: `${l.log_date} ${l.log_time_str}`,
+                checkInTime: l.log_type === 'Check In' ? l.log_time_str : undefined,
+                checkOutTime: l.log_type === 'Check Out' ? l.log_time_str : undefined,
+                notes: l.notes,
+                warehouseName: l.location_address,
+                status: 'verified'
+              });
+            });
+          }
+        } catch (logsErr) {
+          console.warn('attendance_logs fetch warning:', logsErr);
+        }
+
+        return NextResponse.json(formatted);
       } catch (err) {
         console.warn('Error fetching attendance logs:', err);
       }
@@ -909,10 +1001,14 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if (path[0] === 'employee' && path[1] && method === 'GET') {
       const empId = path[1];
-      const { data: records, error } = await supabase
-        .from('attendance')
-        .select('*')
-        .eq('user_id', empId);
+      let query = supabase.from('attendance').select('*').order('date', { ascending: false });
+      if (empId.startsWith('emp-')) {
+        const rawNum = empId.replace('emp-', '');
+        query = query.or(`user_id.eq.${empId},user_id.eq.${rawNum}`);
+      } else {
+        query = query.or(`user_id.eq.${empId},user_id.eq.emp-${empId}`);
+      }
+      const { data: records, error } = await query;
 
       if (error) throw error;
 
@@ -1688,20 +1784,13 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
-    // GET /api/attendance/logs (Supabase Clean Attendance Logs Fetch)
+    // GET /api/attendance/logs (Supabase Clean Pure GPS Attendance Logs)
     // ----------------------------------------
     if (pathStr === 'logs' && method === 'GET') {
       try {
-        const formattedLogs: any[] = [];
         const uniqueMap = new Map();
 
-        // 1. Seed base records from Google Sheet for August 2026 (08:00 check in, 17:00 check out + overtime departures & notes)
-        const seedLogs = generateAugust2026AttendanceRecords();
-        seedLogs.forEach((s: any) => {
-          uniqueMap.set(s.id, s);
-        });
-
-        // 2. Try reading from primary `attendance_logs` table (Overriding seeds if modified)
+        // 1. Read from primary `attendance_logs` table
         const { data: logs1 } = await supabase
           .from('attendance_logs')
           .select('*')
@@ -1731,7 +1820,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           });
         }
 
-        // 3. Also read from `attendance` table for backward compatibility
+        // 2. Also read from `attendance` table for live records
         const { data: logs2 } = await supabase
           .from('attendance')
           .select('*')
@@ -1780,23 +1869,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           });
         }
 
-        // Return all logs (Seeds 1-15 + ALL live real-time check-ins/check-outs from Supabase)
         const allLogs = Array.from(uniqueMap.values());
         return NextResponse.json(allLogs);
       } catch (err) {
-        return NextResponse.json(generateAugust2026AttendanceRecords());
-      }
-    }
-
-    // ----------------------------------------
-    // POST /api/attendance/admin/seed-sheet (Seed Google Sheets into DB)
-    // ----------------------------------------
-    if (pathStr === 'admin/seed-sheet' && method === 'POST') {
-      try {
-        const seedLogs = generateAugust2026AttendanceRecords();
-        return NextResponse.json({ success: true, count: seedLogs.length });
-      } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 });
+        return NextResponse.json([]);
       }
     }
 

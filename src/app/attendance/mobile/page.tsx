@@ -70,6 +70,20 @@ const DEFAULT_COMPANY_LOCATIONS: GeofenceRegion[] = [
 export default function AutonomousMobileAppLight() {
   const [currentTimeStr, setCurrentTimeStr] = useState('');
   const [currentDateStr, setCurrentDateStr] = useState('');
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const checkDevice = () => {
+      if (typeof window !== 'undefined') {
+        const isWide = window.innerWidth > 820;
+        const isDesktopAgent = !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        setIsDesktop(isWide && isDesktopAgent);
+      }
+    };
+    checkDevice();
+    window.addEventListener('resize', checkDevice);
+    return () => window.removeEventListener('resize', checkDevice);
+  }, []);
 
   // 1. Profile & Permanent Device Binding State
   const [employeeProfile, setEmployeeProfile] = useState<{ id: string; name: string; role?: string } | null>(null);
@@ -395,6 +409,65 @@ export default function AutonomousMobileAppLight() {
     }
   };
 
+  // 🚀 Manual 1-Tap Trigger for Check-In & Check-Out with Instant Feedback
+  const [triggerLoading, setTriggerLoading] = useState<string | null>(null);
+
+  const handleTriggerAttendance = async (event: 'ENTER' | 'EXIT') => {
+    if (!employeeProfile?.id) return;
+    setTriggerLoading(event);
+    try {
+      let devToken = localStorage.getItem('ashley_device_token');
+      if (!devToken) {
+        devToken = 'dev-' + Math.random().toString(36).substring(2, 12);
+        localStorage.setItem('ashley_device_token', devToken);
+      }
+
+      const payload = {
+        userId: employeeProfile.id,
+        userName: employeeProfile.name,
+        deviceToken: devToken,
+        event,
+        lat: currentLat || 35.5571,
+        lng: currentLng || 45.4352,
+        distance: presence.distanceMeters || 0,
+        regionName: presence.matchedLocationName || 'کۆمپانیای سەرەکی ئاشڵی',
+        timestamp: new Date().toISOString(),
+      };
+
+      const res = await fetch('/api/attendance/autonomous-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await fetchLiveTodayAttendance();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('ashley_attendance_updated'));
+        }
+        sendLocalNotification(
+          event === 'ENTER' ? '🟢 تۆمارکردنی هاتن' : '👋 تۆمارکردنی ڕۆیشتن',
+          data.message || (event === 'ENTER' ? 'هاتنەکەت بە سەرکەوتوویی تۆمارکرا' : 'ڕۆیشتنەکەت بە سەرکەوتوویی تۆمارکرا')
+        );
+      } else {
+        alert(data.error || 'هەڵەیەک ڕوویدا لە کاتی تۆمارکردندا');
+      }
+    } catch (err: any) {
+      alert('هەڵە لە پەیوەندی: ' + err.message);
+    } finally {
+      setTriggerLoading(null);
+    }
+  };
+
+  // ⚡ Autonomous Instant Check-In upon Presence Detection
+  useEffect(() => {
+    if (!employeeProfile?.id) return;
+    if (presence.isInsideGeofence === true && !liveTodayShift.checkInTime && !triggerLoading) {
+      handleTriggerAttendance('ENTER');
+    }
+  }, [presence.isInsideGeofence, liveTodayShift.checkInTime, employeeProfile]);
+
   // =========================================================================
   // SECRET 10-SECOND LOGO LONG-PRESS LOGIC
   // =========================================================================
@@ -438,6 +511,37 @@ export default function AutonomousMobileAppLight() {
       setAdminResetMsg('کۆدی ئەدمین هەڵەیە');
     }
   };
+
+  // 🖥️ Desktop Gate: If opened on PC / Large screen, guide to /admin
+  if (isDesktop) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 text-center font-sans dir-rtl" dir="rtl">
+        <div className="max-w-md w-full bg-slate-800 border border-slate-700 p-8 rounded-3xl shadow-2xl space-y-5">
+          <div className="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center mx-auto border border-amber-500/30">
+            <Smartphone className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-black text-white">ئەم بەشە تایبەتە بە مۆبایل 📱</h2>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            ئەپڵەکەیشنی ئامادەبوونی کارمەندان بە تایبەتی بۆ مۆبایل و بە سیستەمی GPS دیزاین کراوە بۆ چێک ئین و چێک ئاوت.
+          </p>
+          <div className="pt-2 flex flex-col gap-2.5">
+            <a
+              href="/admin"
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-black rounded-xl shadow-md transition-all block text-center cursor-pointer"
+            >
+              💻 چوون بۆ داشبۆردی بەڕێوەبەری کۆمپیوتەر (/admin)
+            </a>
+            <button
+              onClick={() => setIsDesktop(false)}
+              className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors cursor-pointer pt-1"
+            >
+              (تێستکردنی شێوازی مۆبایل لەسەر کۆمپیوتەر)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[100dvh] h-[100dvh] w-full bg-slate-100 text-slate-900 font-sans flex flex-col justify-between select-none overflow-hidden touch-manipulation dir-rtl" dir="rtl">
@@ -624,7 +728,7 @@ export default function AutonomousMobileAppLight() {
           <div className="grid grid-cols-2 gap-2.5">
             
             {/* Card 1: Check In */}
-            <div className={`p-3.5 rounded-2xl border text-right space-y-1.5 transition-all shadow-2xs ${
+            <div className={`p-3.5 rounded-2xl border text-right space-y-2 transition-all shadow-2xs ${
               shiftStatus.checkInTime 
                 ? 'bg-emerald-50/80 border-emerald-300' 
                 : 'bg-white border-slate-200'
@@ -645,10 +749,27 @@ export default function AutonomousMobileAppLight() {
               }`}>
                 {shiftStatus.checkInTime || '--:--'}
               </div>
+
+              <button
+                type="button"
+                onClick={() => handleTriggerAttendance('ENTER')}
+                disabled={!!triggerLoading}
+                className={`w-full py-2 text-xs font-black rounded-xl transition-all cursor-pointer shadow-xs active:scale-95 flex items-center justify-center gap-1 ${
+                  shiftStatus.checkInTime 
+                    ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300' 
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
+                }`}
+              >
+                {triggerLoading === 'ENTER' ? (
+                  <span className="animate-spin">⏳</span>
+                ) : (
+                  <span>{shiftStatus.checkInTime ? 'نوێکردنەوە 🔄' : '🟢 تۆمارکردنی هاتن'}</span>
+                )}
+              </button>
             </div>
 
             {/* Card 2: Check Out */}
-            <div className={`p-3.5 rounded-2xl border text-right space-y-1.5 transition-all shadow-2xs ${
+            <div className={`p-3.5 rounded-2xl border text-right space-y-2 transition-all shadow-2xs ${
               shiftStatus.checkOutTime 
                 ? 'bg-sky-50/80 border-sky-300' 
                 : (shiftStatus.checkInTime ? 'bg-amber-50/60 border-amber-200' : 'bg-white border-slate-200')
@@ -669,6 +790,25 @@ export default function AutonomousMobileAppLight() {
               }`}>
                 {shiftStatus.checkOutTime || (shiftStatus.checkInTime ? 'لە دەوامدایە' : '--:--')}
               </div>
+
+              <button
+                type="button"
+                onClick={() => handleTriggerAttendance('EXIT')}
+                disabled={!!triggerLoading}
+                className={`w-full py-2 text-xs font-black rounded-xl transition-all cursor-pointer shadow-xs active:scale-95 flex items-center justify-center gap-1 ${
+                  shiftStatus.checkOutTime 
+                    ? 'bg-sky-100 hover:bg-sky-200 text-sky-900 border border-sky-300' 
+                    : (shiftStatus.checkInTime 
+                        ? 'bg-sky-600 hover:bg-sky-700 text-white shadow-sky-500/20' 
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200')
+                }`}
+              >
+                {triggerLoading === 'EXIT' ? (
+                  <span className="animate-spin">⏳</span>
+                ) : (
+                  <span>{shiftStatus.checkOutTime ? 'نوێکردنەوە 🔄' : '👋 تۆمارکردنی ڕۆیشتن'}</span>
+                )}
+              </button>
             </div>
 
           </div>
