@@ -1417,95 +1417,144 @@ export default function AdminPage() {
       {/* 🚧 COMING SOON / WORK IN PROGRESS SECTION AT THE VERY BOTTOM */}
       {/* ========================================================================= */}
       {/* ========================================================================= */}
-      {/* 🔧 UNDER MAINTENANCE & COMING SOON MODULES AT THE VERY BOTTOM */}
+      {/* ========================================================================= */}
+      {/* 🧭 MASTER ERP MODULES & DIRECT PAGE NAVIGATION LINKS */}
       {/* ========================================================================= */}
       <div className="mt-8 pt-6 border-t-2 border-dashed border-slate-200">
-        <div className="bg-slate-50/80 rounded-2xl border border-slate-200 p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-slate-700">
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              <h3 className="text-xs font-black">بەشەکانی لەژێر چاککردن و پەرەپێداندان:</h3>
+        <div className="bg-slate-50/90 rounded-2xl border border-slate-200 p-4 space-y-4 shadow-sm">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 text-slate-800">
+              <Sparkles className="w-5 h-5 text-amber-500" />
+              <h3 className="text-sm font-black">بەشە سەرەکی و پەیجە تایبەتەکانی سیستەم (Direct Links):</h3>
             </div>
-            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-mono">
-              🔧 لەژێر چاککردندایە
+            <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono">
+              🔗 سەرجەم پەیجەکان چالاکن
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* 1. Master Unified Warehouse & Inventory Suite */}
-            <div className="p-3.5 bg-white/80 rounded-2xl border border-slate-200 space-y-2.5 shadow-xs">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            
+            {/* 1. Master Warehouse & Inventory Suite */}
+            <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-xs hover:border-blue-300 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-700">
                     <Table className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-xs font-black text-slate-800 block">بەشی جەردی کۆگا</span>
-                    <span className="text-[10px] text-slate-400 font-mono">Warehouse & Inventory Suite</span>
+                    <span className="text-xs font-black text-slate-900 block">بەشی کۆگا و جەرد</span>
+                    <span className="text-[10px] text-slate-500 font-mono">Warehouse & Items</span>
                   </div>
                 </div>
-                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
-                  لەژێر چاککردندایە
+                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-900">
+                  چالاکە
                 </span>
               </div>
               
-              {/* Submodules included */}
-              <div className="grid grid-cols-2 gap-1.5 pt-1 text-[11px] font-bold text-slate-600">
-                <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center gap-1">
-                  <span>📦</span> <span>جەردی کەرەستە و ماددە</span>
-                </div>
-                <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center gap-1">
-                  <span>📂</span> <span>ئەرشیف و پسوولەی PDF</span>
-                </div>
-                <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center gap-1">
-                  <span>🗺️</span> <span>نەخشەی سنووری کۆگا</span>
-                </div>
-                <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center gap-1">
-                  <span>🎨</span> <span>دیزاینەری ڕاپۆرتەکان</span>
-                </div>
+              <div className="grid grid-cols-2 gap-1.5 pt-1 text-xs font-bold">
+                <Link
+                  href="/public-inventory"
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>📦</span> <span>جەردی کەرەستە</span>
+                </Link>
+                <Link
+                  href="/sold-items"
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>📂</span> <span>کەرەستەی فرۆشراو</span>
+                </Link>
+                <Link
+                  href="/pdf-archive"
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>🧾</span> <span>ئەرشیفی پسوولە</span>
+                </Link>
+                <Link
+                  href="/report-designer"
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>🎨</span> <span>دیزاینی ڕاپۆرت</span>
+                </Link>
               </div>
             </div>
 
-            {/* 2. Expenses */}
-            <div className="p-3.5 bg-white/80 rounded-2xl border border-slate-200 flex flex-col justify-between shadow-xs">
+            {/* 2. Expenses Suite */}
+            <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-xs hover:border-emerald-300 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-700">
                     <DollarSign className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-xs font-black text-slate-800 block">خەرجی و دارایی</span>
-                    <span className="text-[10px] text-slate-400 font-mono">Expenses & Fund</span>
+                    <span className="text-xs font-black text-slate-900 block">خەرجی و دارایی</span>
+                    <span className="text-[10px] text-slate-500 font-mono">Expenses & Fund</span>
                   </div>
                 </div>
-                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
-                  لەژێر چاککردندایە
+                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900">
+                  چالاکە
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 font-bold mt-2">
-                بەڕێوەبردنی سندوق، پۆلێنکردنی خەرجییەکان، و ژمێریاری مانگانە.
-              </p>
+              
+              <div className="grid grid-cols-2 gap-1.5 pt-1 text-xs font-bold">
+                <Link
+                  href="/ashley-expenses"
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>💰</span> <span>سندوقی خەرجی</span>
+                </Link>
+                <Link
+                  href="/ashley-expenses-settings"
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>⚙️</span> <span>پۆلێنی خەرجی</span>
+                </Link>
+              </div>
             </div>
 
-            {/* 3. Logistics & Transport */}
-            <div className="p-3.5 bg-white/80 rounded-2xl border border-slate-200 flex flex-col justify-between shadow-xs">
+            {/* 3. Settings & Shift Administration */}
+            <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-xs hover:border-purple-300 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
-                    <Truck className="w-5 h-5" />
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-700">
+                    <Settings className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-xs font-black text-slate-800 block">بارداگرتن و نقڵ</span>
-                    <span className="text-[10px] text-slate-400 font-mono">Logistics & Unload</span>
+                    <span className="text-xs font-black text-slate-900 block">بەشی ڕێکخستنەکان</span>
+                    <span className="text-[10px] text-slate-500 font-mono">Settings & Master ERP</span>
                   </div>
                 </div>
-                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
-                  لەژێر چاککردندایە
+                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-900">
+                  تەواو
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 font-bold mt-2">
-                تۆمارکردنی حەملەکان، بارداگرتنی کەرەستە، و گواستنەوەی نێوان کارگە.
-              </p>
+              
+              <div className="grid grid-cols-2 gap-1.5 pt-1 text-xs font-bold">
+                <Link
+                  href="/settings"
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>⚙️</span> <span>ڕێکخستنی گشتی</span>
+                </Link>
+                <Link
+                  href="/admin/attendance"
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>⏰</span> <span>تۆمار و کاتەکان</span>
+                </Link>
+                <Link
+                  href="/map-management"
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>🗺️</span> <span>نەخشەی کارگە</span>
+                </Link>
+                <Link
+                  href="/attendance/mobile"
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>📱</span> <span>ئەپی مۆبایل</span>
+                </Link>
+              </div>
             </div>
 
           </div>
