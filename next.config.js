@@ -104,6 +104,15 @@ const nextConfig = {
     '*.cloudworkstations.dev',
     '*.cluster-*.cloudworkstations.dev'
   ],
+  async redirects() {
+    return [
+      {
+        source: '/setting',
+        destination: '/settings',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
