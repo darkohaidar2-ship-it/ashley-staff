@@ -8,6 +8,7 @@ import { useAppContext } from '@/context/app-provider';
 import type { Employee, AttendanceRecord } from '@/lib/types';
 import { FactoryMapPicker } from '@/components/maps/FactoryMapPicker';
 import { AttendanceSheetGrid } from '@/components/attendance/AttendanceSheetGrid';
+import { NewGpsAttendanceMatrixTable } from '@/components/attendance/NewGpsAttendanceMatrixTable';
 import { AdminFaceEnrollModal } from '@/components/attendance/AdminFaceEnrollModal';
 import { AdminEmployeeDetailsModal } from '@/components/admin/AdminEmployeeDetailsModal';
 import { ThemeSwitcher } from '@/components/layout/ThemeSwitcher';
@@ -80,7 +81,7 @@ export default function AdminPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showMobileDeviceModal, setShowMobileDeviceModal] = useState(false);
-  const [adminActiveSection, setAdminActiveSection] = useState<'overview' | 'attendance' | 'hr' | 'overtime' | 'settings' | 'expenses' | 'logistics' | 'stats' | 'maps'>('attendance');
+  const [adminActiveSection, setAdminActiveSection] = useState<'overview' | 'attendance' | 'gps_matrix' | 'hr' | 'overtime' | 'settings' | 'expenses' | 'logistics' | 'stats' | 'maps'>('attendance');
   const [attendanceSubTab, setAttendanceSubTab] = useState<'daily' | 'matrix'>('daily');
 
   // Live Desktop Clock for ERP Admin
@@ -592,30 +593,27 @@ export default function AdminPage() {
             </span>
           </button>
 
-          {/* 📊 Hub 1.5: 31-Day Attendance Matrix (Direct Mobile App Synced) */}
+          {/* 📡 Hub 1.5: New GPS 31-Day Attendance Matrix */}
           <button
-            onClick={() => {
-              setAdminActiveSection('attendance');
-              setAttendanceSubTab('matrix');
-            }}
+            onClick={() => setAdminActiveSection('gps_matrix')}
             className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-              adminActiveSection === 'attendance' && attendanceSubTab === 'matrix'
+              adminActiveSection === 'gps_matrix'
                 ? 'bg-teal-900 text-white border-teal-700 shadow-lg ring-4 ring-teal-400/40 scale-[1.02]'
                 : 'bg-slate-50 hover:bg-teal-50/60 text-slate-800 border-slate-200 hover:border-teal-300'
             }`}
           >
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
-              adminActiveSection === 'attendance' && attendanceSubTab === 'matrix'
+              adminActiveSection === 'gps_matrix'
                 ? 'bg-teal-700 text-white shadow-inner'
                 : 'bg-teal-100 text-teal-900'
             }`}>
-              <Table className="w-6 h-6" />
+              <Smartphone className="w-6 h-6" />
             </div>
-            <span className="text-xs font-black tracking-tight block">خشتەی ۳۱ ڕۆژە</span>
+            <span className="text-xs font-black tracking-tight block">خشتەی تۆماری GPS نوێ</span>
             <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
-              adminActiveSection === 'attendance' && attendanceSubTab === 'matrix' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-teal-100 text-teal-900'
+              adminActiveSection === 'gps_matrix' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-teal-100 text-teal-900'
             }`}>
-              📊 ماتریسی مانگانە
+              📡 ۳۱ ڕۆژەی مۆبایل
             </span>
           </button>
 
@@ -1042,6 +1040,18 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 📡 SECTION 1.5: NEW GPS ATTENDANCE MATRIX TABLE */}
+      {/* ========================================================================= */}
+      {adminActiveSection === 'gps_matrix' && (
+        <section className="panel-classic space-y-4">
+          <NewGpsAttendanceMatrixTable 
+            employees={activeEmployees} 
+            attendanceLogs={allMergedAttendanceLogs} 
+          />
         </section>
       )}
 
