@@ -1129,7 +1129,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         return NextResponse.json({ error: err.message }, { status: 500 });
       }
     }
-    }
 
     // ----------------------------------------
     // GET /api/attendance/logs (Supabase Attendance Records for Web & Mobile)
