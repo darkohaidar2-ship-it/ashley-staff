@@ -1051,6 +1051,24 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           updated_at: new Date().toISOString()
         });
 
+        // Dual-persistence: Also record into attendance_logs table
+        try {
+          const logRecordId = `exc-${empId}-${dateStr}-${Date.now().toString().slice(-4)}`;
+          await supabase.from('attendance_logs').upsert({
+            id: logRecordId,
+            employee_id: empId,
+            employee_name: empName,
+            log_type: type === 'late' ? 'Late Note' : type === 'early' ? 'Early Note' : 'Excursion',
+            log_date: dateStr,
+            log_time_str: exitTime || '08:35',
+            location_address: 'تێبینی مۆبایل',
+            notes: JSON.stringify(newItem),
+            created_at: new Date().toISOString()
+          });
+        } catch (logErr) {
+          console.warn('attendance_logs excursion note insert:', logErr);
+        }
+
         // Also append note to attendance table edit_note for audit visibility
         const { data: att } = await supabase
           .from('attendance')
@@ -1060,7 +1078,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .maybeSingle();
 
         if (att) {
-          const combinedNote = (att.check_out_edit_note ? att.check_out_edit_note + ' | ' : '') + `دەرچوون (${exitTime || ''}-${returnTime || ''}): ${note}`;
+          const combinedNote = (att.check_out_edit_note ? att.check_out_edit_note + ' | ' : '') + `${type === 'late' ? 'درەنگ هاتن' : type === 'early' ? 'زوو ڕۆیشتن' : 'دەرچوون'} (${exitTime || ''}-${returnTime || ''}): ${note}`;
           await supabase.from('attendance').update({
             check_out_edit_note: combinedNote
           }).eq('id', att.id);
@@ -1088,7 +1106,38 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .eq('id', settingsKey)
           .maybeSingle();
 
-        const excursions = Array.isArray(existing?.settings) ? existing.settings : [];
+        let excursions = Array.isArray(existing?.settings) ? existing.settings : [];
+
+        // Fallback: Also check attendance_logs for excursions on this date
+        if (excursions.length === 0) {
+          const { data: excLogs } = await supabase
+            .from('attendance_logs')
+            .select('*')
+            .eq('log_date', dateStr)
+            .in('log_type', ['Excursion', 'Late Note', 'Early Note']);
+
+          if (excLogs && excLogs.length > 0) {
+            excursions = excLogs.map(l => {
+              try {
+                return JSON.parse(l.notes);
+              } catch {
+                return {
+                  id: l.id,
+                  userId: l.employee_id,
+                  userName: l.employee_name,
+                  date: l.log_date,
+                  type: l.log_type === 'Late Note' ? 'late' : l.log_type === 'Early Note' ? 'early' : 'excursion',
+                  durationMinutes: 30,
+                  exitTime: l.log_time_str,
+                  returnTime: '--:--',
+                  note: l.location_address || 'تێبینی',
+                  decision: 'pending'
+                };
+              }
+            });
+          }
+        }
+
         return NextResponse.json({ success: true, date: dateStr, excursions });
       } catch (err: any) {
         return NextResponse.json({ success: true, date: dateStr, excursions: [] });
