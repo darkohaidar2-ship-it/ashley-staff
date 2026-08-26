@@ -567,25 +567,55 @@ export default function AdminPage() {
           
           {/* 📅 Hub 1: Attendance Central (Primary Default) */}
           <button
-            onClick={() => setAdminActiveSection('attendance')}
+            onClick={() => {
+              setAdminActiveSection('attendance');
+              setAttendanceSubTab('daily');
+            }}
             className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-              adminActiveSection === 'attendance'
+              adminActiveSection === 'attendance' && attendanceSubTab === 'daily'
                 ? 'bg-emerald-900 text-white border-emerald-700 shadow-lg ring-4 ring-emerald-400/40 scale-[1.02]'
                 : 'bg-slate-50 hover:bg-emerald-50/60 text-slate-800 border-slate-200 hover:border-emerald-300'
             }`}
           >
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
-              adminActiveSection === 'attendance'
+              adminActiveSection === 'attendance' && attendanceSubTab === 'daily'
                 ? 'bg-emerald-700 text-white shadow-inner'
                 : 'bg-emerald-100 text-emerald-900'
             }`}>
               <Calendar className="w-6 h-6" />
             </div>
-            <span className="text-xs font-black tracking-tight block">ئامادەبوون و دەوام</span>
+            <span className="text-xs font-black tracking-tight block">ئامادەبوونی ڕۆژانە</span>
             <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
-              adminActiveSection === 'attendance' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-emerald-100 text-emerald-900'
+              adminActiveSection === 'attendance' && attendanceSubTab === 'daily' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-emerald-100 text-emerald-900'
             }`}>
-              📅 ڕۆژانە و ۳۱ ڕۆژە
+              📅 دەوامی ڕۆژ
+            </span>
+          </button>
+
+          {/* 📊 Hub 1.5: 31-Day Attendance Matrix (Direct Mobile App Synced) */}
+          <button
+            onClick={() => {
+              setAdminActiveSection('attendance');
+              setAttendanceSubTab('matrix');
+            }}
+            className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+              adminActiveSection === 'attendance' && attendanceSubTab === 'matrix'
+                ? 'bg-teal-900 text-white border-teal-700 shadow-lg ring-4 ring-teal-400/40 scale-[1.02]'
+                : 'bg-slate-50 hover:bg-teal-50/60 text-slate-800 border-slate-200 hover:border-teal-300'
+            }`}
+          >
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
+              adminActiveSection === 'attendance' && attendanceSubTab === 'matrix'
+                ? 'bg-teal-700 text-white shadow-inner'
+                : 'bg-teal-100 text-teal-900'
+            }`}>
+              <Table className="w-6 h-6" />
+            </div>
+            <span className="text-xs font-black tracking-tight block">خشتەی ۳۱ ڕۆژە</span>
+            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
+              adminActiveSection === 'attendance' && attendanceSubTab === 'matrix' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-teal-100 text-teal-900'
+            }`}>
+              📊 ماتریسی مانگانە
             </span>
           </button>
 
