@@ -864,11 +864,22 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
       if (isCheckIn) {
         // Clean Check-In: Guarantee check_in and check_in_time exist
+        const checkInTimeFinal = existingRecord?.check_in_time || timeStr;
         upsertPayload.check_in = existingRecord?.check_in || nowIso;
-        upsertPayload.check_in_time = existingRecord?.check_in_time || timeStr;
+        upsertPayload.check_in_time = checkInTimeFinal;
         if (lat !== undefined) upsertPayload.check_in_lat = parseFloat(lat);
         if (lng !== undefined) upsertPayload.check_in_lng = parseFloat(lng);
         upsertPayload.check_in_address = address || targetWh.name;
+
+        // Calculate Late Minutes (Standard shift starts at 08:15)
+        const [inH, inM] = checkInTimeFinal.split(':').map(Number);
+        const actualMinutes = inH * 60 + inM;
+        const expectedMinutes = 8 * 60 + 15; // 08:15 AM
+        const lateMinutes = Math.max(0, actualMinutes - expectedMinutes);
+        const isLate = lateMinutes > 5;
+
+        upsertPayload.late_minutes = isLate ? lateMinutes : 0;
+        upsertPayload.status = isLate ? 'Late' : 'Present';
 
         // Clear previous check-out since employee is back at work
         upsertPayload.check_out = null;
