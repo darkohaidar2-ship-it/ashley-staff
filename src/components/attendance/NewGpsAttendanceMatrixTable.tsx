@@ -206,6 +206,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     let expectedMinutes = 480;
     let dotColor: 'green' | 'orange' | 'red' | null = null;
     let dotTooltip = '';
+    let finalExcursion: any = empExcursion || null;
 
     if (hasRecord) {
       const inMins = timeToMinutes(checkInTime || '08:00');
@@ -218,7 +219,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
       workedMinutes = rawDiff;
 
-      let finalExcursion = empExcursion;
       if (!finalExcursion && rawLog) {
         const embeddedNote = rawLog.check_out_edit_note || rawLog.check_in_edit_note || rawLog.notes || rawLog.edit_note;
         if (embeddedNote) {
