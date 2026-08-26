@@ -35,6 +35,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   const [selectedLogDetail, setSelectedLogDetail] = useState<any | null>(null);
 
   const [excursionsMap, setExcursionsMap] = useState<{ [dateStr: string]: any[] }>({});
+  const [localDecisions, setLocalDecisions] = useState<{ [key: string]: 'work' | 'deduct' }>({});
   const [savingDecisionId, setSavingDecisionId] = useState<string | null>(null);
 
   const [yearStr, monthStr] = selectedMonth.split('-');
@@ -45,39 +46,67 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
   const fetchMonthExcursions = useCallback(async () => {
     try {
-      const res26 = await fetch(`/api/attendance/excursions?date=2026-08-26&_t=${Date.now()}`);
-      const data26 = res26.ok ? await res26.json() : { excursions: [] };
+      const datesToFetch = [
+        `${selectedMonth}-25`,
+        `${selectedMonth}-26`,
+        `${selectedMonth}-27`,
+        format(new Date(), 'yyyy-MM-dd')
+      ];
 
-      const res25 = await fetch(`/api/attendance/excursions?date=2026-08-25&_t=${Date.now()}`);
-      const data25 = res25.ok ? await res25.json() : { excursions: [] };
+      const results = await Promise.all(
+        datesToFetch.map(d =>
+          fetch(`/api/attendance/excursions?date=${d}`)
+            .then(res => res.json())
+            .then(data => ({ date: d, items: data.excursions || [] }))
+            .catch(() => ({ date: d, items: [] }))
+        )
+      );
 
-      setExcursionsMap(prev => ({
-        ...prev,
-        '2026-08-26': Array.isArray(data26.excursions) ? data26.excursions : [],
-        '2026-08-25': Array.isArray(data25.excursions) ? data25.excursions : []
-      }));
+      const map: { [key: string]: any[] } = {};
+      results.forEach(r => {
+        if (r.items.length > 0) {
+          map[r.date] = r.items;
+        }
+      });
+      setExcursionsMap(map);
     } catch {}
-  }, []);
+  }, [selectedMonth]);
 
   useEffect(() => {
     fetchMonthExcursions();
   }, [fetchMonthExcursions, selectedMonth]);
 
-  const handleInlineExcursionDecision = async (excId: string, dateStr: string, decision: 'work' | 'deduct') => {
+  const handleInlineExcursionDecision = async (excId: string, dateStr: string, empId: string, decision: 'work' | 'deduct') => {
     setSavingDecisionId(excId);
+
+    // Instant local state update for real-time UI refresh
+    const decisionKey = `${dateStr}_${empId}`;
+    setLocalDecisions(prev => ({
+      ...prev,
+      [decisionKey]: decision,
+      [excId]: decision
+    }));
+
     setExcursionsMap(prev => {
       const list = prev[dateStr] || [];
-      const updated = list.map(x => x.id === excId ? { ...x, decision } : x);
+      const idx = list.findIndex(x => x.id === excId || (x.userId && (x.userId === empId || excId.includes(x.userId))));
+      let updated: any[];
+      if (idx >= 0) {
+        updated = list.map((x, i) => i === idx ? { ...x, decision } : x);
+      } else {
+        updated = [...list, { id: excId, userId: empId, date: dateStr, decision }];
+      }
       return { ...prev, [dateStr]: updated };
     });
 
-    if (selectedLogDetail && selectedLogDetail.info?.excursion) {
+    if (selectedLogDetail && selectedLogDetail.info) {
       setSelectedLogDetail((prev: any) => ({
         ...prev,
         info: {
           ...prev.info,
           excursion: {
-            ...prev.info.excursion,
+            ...(prev.info.excursion || {}),
+            id: excId,
             decision
           }
         }
@@ -88,7 +117,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       await fetch('/api/attendance/excursion-decision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ excursionId: excId, date: dateStr, decision })
+        body: JSON.stringify({ excursionId: excId, date: dateStr, decision, userId: empId })
       });
     } catch {} finally {
       setSavingDecisionId(null);
@@ -205,15 +234,30 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         }
       }
 
+      if (!finalExcursion && workedMinutes < expectedMinutes) {
+        finalExcursion = {
+          id: `exc-${empId}-${targetDateStr}`,
+          userId: empId,
+          userName: empName,
+          date: targetDateStr,
+          note: 'درەنگ کەوتن یان کەمی کاتی دەوام',
+          durationMinutes: expectedMinutes - workedMinutes,
+          decision: 'pending'
+        };
+      }
+
       if (finalExcursion) {
+        const activeDecision = localDecisions[`${targetDateStr}_${empId}`] || localDecisions[finalExcursion.id] || finalExcursion.decision || 'pending';
+        finalExcursion = { ...finalExcursion, decision: activeDecision };
+
         const excMins = finalExcursion.durationMinutes || 35;
-        if (finalExcursion.decision === 'deduct') {
+        if (activeDecision === 'deduct') {
           workedMinutes = Math.max(0, workedMinutes - excMins);
           dotColor = 'red';
           dotTooltip = `🔴 سزا / لێبڕین: ${excMins} خولەک لە دەوام لێبڕدراوە (${finalExcursion.note || 'مۆڵەت'})`;
-        } else if (finalExcursion.decision === 'work') {
+        } else if (activeDecision === 'work') {
           dotColor = 'green';
-          dotTooltip = `🟢 ئیشی کۆمپانیا: پەسەندکراوە بە ٨ کاتژمێری تەواو (${finalExcursion.note || 'کار'})`;
+          dotTooltip = `🟢 ئیشی کۆمپانیا / بەخشین: پەسەندکراوە بە ٨ کاتژمێری تەواو (${finalExcursion.note || 'کار'})`;
         } else {
           dotColor = 'orange';
           dotTooltip = `🟠 کاتی کەمە / تێبینی: ${excMins} خولەک • چاوەڕوانی بڕیاری ئەدمین (${finalExcursion.note || 'تێبینی'})`;
@@ -223,7 +267,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           dotColor = null; // 🟢 Clean! No dot for normal completed days
           dotTooltip = 'دەوامی ئاسایی (٨ کاتژمێری تەواو)';
         } else {
-          // Has deficit (late or early or short shift) -> Orange dot until resolved
           dotColor = 'orange';
           const deficitMins = expectedMinutes - workedMinutes;
           dotTooltip = `🟠 کاتی کەمە: ${deficitMins} خولەک کەمی هەیە • چاوەڕوانی تێبینی و بڕیاری ئەدمین`;
@@ -241,7 +284,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       status,
       rawLog,
       dateStr: targetDateStr,
-      excursion: empExcursion || null,
+      excursion: finalExcursion || null,
       workedMinutes,
       workedHours,
       dotColor,
@@ -654,28 +697,28 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
                     <div className="grid grid-cols-2 gap-2">
                       <button
-                        onClick={() => handleInlineExcursionDecision(selectedLogDetail.info.excursion.id, selectedLogDetail.info.dateStr, 'work')}
+                        onClick={() => handleInlineExcursionDecision(selectedLogDetail.info.excursion.id, selectedLogDetail.info.dateStr, selectedLogDetail.emp.id, 'work')}
                         disabled={savingDecisionId === selectedLogDetail.info.excursion.id}
-                        className={`p-2 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                          selectedLogDetail.info.excursion.decision === 'work'
+                        className={`p-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          (localDecisions[`${selectedLogDetail.info.dateStr}_${selectedLogDetail.emp.id}`] || selectedLogDetail.info.excursion.decision) === 'work'
                             ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400'
                             : 'bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300'
                         }`}
                       >
-                        <Check className="w-3.5 h-3.5" />
-                        <span>🟢 ئاساییە / ئیشی کۆمپانیا (بێ لێبڕین)</span>
+                        <Check className="w-4 h-4" />
+                        <span>🟢 ئاساییە / بەخشین (٨ کاتژمێر)</span>
                       </button>
 
                       <button
-                        onClick={() => handleInlineExcursionDecision(selectedLogDetail.info.excursion.id, selectedLogDetail.info.dateStr, 'deduct')}
+                        onClick={() => handleInlineExcursionDecision(selectedLogDetail.info.excursion.id, selectedLogDetail.info.dateStr, selectedLogDetail.emp.id, 'deduct')}
                         disabled={savingDecisionId === selectedLogDetail.info.excursion.id}
-                        className={`p-2 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                          selectedLogDetail.info.excursion.decision === 'deduct'
+                        className={`p-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          (localDecisions[`${selectedLogDetail.info.dateStr}_${selectedLogDetail.emp.id}`] || selectedLogDetail.info.excursion.decision) === 'deduct'
                             ? 'bg-rose-600 text-white shadow-md ring-2 ring-rose-400'
                             : 'bg-white hover:bg-rose-50 text-rose-800 border border-rose-300'
                         }`}
                       >
-                        <AlertCircle className="w-3.5 h-3.5" />
+                        <AlertCircle className="w-4 h-4" />
                         <span>🔴 سزا / لێبڕین لە دەوام</span>
                       </button>
                     </div>
@@ -700,18 +743,26 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
                     <div className="grid grid-cols-2 gap-2">
                       <button
-                        onClick={() => handleInlineExcursionDecision(`exc-${selectedLogDetail.emp.id}-${selectedLogDetail.info.dateStr}`, selectedLogDetail.info.dateStr, 'work')}
-                        className="p-2 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300"
+                        onClick={() => handleInlineExcursionDecision(`exc-${selectedLogDetail.emp.id}-${selectedLogDetail.info.dateStr}`, selectedLogDetail.info.dateStr, selectedLogDetail.emp.id, 'work')}
+                        className={`p-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          localDecisions[`${selectedLogDetail.info.dateStr}_${selectedLogDetail.emp.id}`] === 'work'
+                            ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400'
+                            : 'bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300'
+                        }`}
                       >
-                        <Check className="w-3.5 h-3.5" />
-                        <span>🟢 ئاساییە / بەخشین (بێ لێبڕین)</span>
+                        <Check className="w-4 h-4" />
+                        <span>🟢 ئاساییە / بەخشین (٨ کاتژمێر)</span>
                       </button>
 
                       <button
-                        onClick={() => handleInlineExcursionDecision(`exc-${selectedLogDetail.emp.id}-${selectedLogDetail.info.dateStr}`, selectedLogDetail.info.dateStr, 'deduct')}
-                        className="p-2 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-white hover:bg-rose-50 text-rose-800 border border-rose-300"
+                        onClick={() => handleInlineExcursionDecision(`exc-${selectedLogDetail.emp.id}-${selectedLogDetail.info.dateStr}`, selectedLogDetail.info.dateStr, selectedLogDetail.emp.id, 'deduct')}
+                        className={`p-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          localDecisions[`${selectedLogDetail.info.dateStr}_${selectedLogDetail.emp.id}`] === 'deduct'
+                            ? 'bg-rose-600 text-white shadow-md ring-2 ring-rose-400'
+                            : 'bg-white hover:bg-rose-50 text-rose-800 border border-rose-300'
+                        }`}
                       >
-                        <AlertCircle className="w-3.5 h-3.5" />
+                        <AlertCircle className="w-4 h-4" />
                         <span>🔴 سزا / لێبڕین لە دەوام</span>
                       </button>
                     </div>

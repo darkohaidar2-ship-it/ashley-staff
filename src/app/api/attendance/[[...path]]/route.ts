@@ -559,6 +559,28 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
+    // POST /api/attendance/update-profile (Employee updates profile details except Name)
+    // ----------------------------------------
+    if (pathStr === 'update-profile' && method === 'POST') {
+      const { userId, phone, address, emergencyContact, pin } = await req.json();
+      if (!userId) return NextResponse.json({ error: 'کارمەند دیاری نەکراوە' }, { status: 400 });
+
+      try {
+        const updatePayload: any = {};
+        if (phone !== undefined) updatePayload.phone = phone;
+        if (address !== undefined) updatePayload.address = address;
+        if (emergencyContact !== undefined) updatePayload.emergency_contact = emergencyContact;
+        if (pin !== undefined && pin.length >= 4) updatePayload.pin = pin;
+
+        await supabase.from('users').update(updatePayload).eq('id', userId);
+
+        return NextResponse.json({ success: true, message: 'زانیارییەکان بە سەرکەوتوویی نوێکرانەوە' });
+      } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 500 });
+      }
+    }
+
+    // ----------------------------------------
     // POST /api/attendance/admin/login
     // ----------------------------------------
     if (pathStr === 'admin/login' && method === 'POST') {
@@ -1148,9 +1170,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // POST /api/attendance/excursion-decision (Admin Decides Deduct vs Count as Work)
     // ----------------------------------------
     if (pathStr === 'excursion-decision' && method === 'POST') {
-      const { excursionId, date, decision } = await req.json();
+      const { excursionId, date, decision, userId } = await req.json();
       const dateStr = date || new Date().toISOString().split('T')[0];
       const settingsKey = `excursions_${dateStr}`;
+      const targetEmpId = userId || excursionId.replace('exc-', '').split('-')[0] || 'emp-02';
 
       try {
         const { data: existing } = await supabase
@@ -1160,18 +1183,41 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .maybeSingle();
 
         let currentList: any[] = Array.isArray(existing?.settings) ? existing.settings : [];
-        currentList = currentList.map((item: any) => {
-          if (item.id === excursionId || (item.userId && excursionId.includes(item.userId))) {
-            return { ...item, decision: decision || 'work' };
-          }
-          return item;
-        });
+        const existingIdx = currentList.findIndex((item: any) => 
+          item.id === excursionId || (item.userId && (item.userId === targetEmpId || excursionId.includes(item.userId)))
+        );
+
+        if (existingIdx >= 0) {
+          currentList[existingIdx] = { ...currentList[existingIdx], decision: decision || 'work' };
+        } else {
+          currentList.push({
+            id: excursionId,
+            userId: targetEmpId,
+            date: dateStr,
+            decision: decision || 'work',
+            updatedAt: new Date().toISOString()
+          });
+        }
 
         await supabase.from('attendance_settings').upsert({
           id: settingsKey,
           settings: currentList,
           updated_at: new Date().toISOString()
         });
+
+        // Dual log into attendance_logs
+        try {
+          await supabase.from('attendance_logs').upsert({
+            id: `dec-${excursionId}`,
+            employee_id: targetEmpId,
+            log_type: 'Admin Decision',
+            log_date: dateStr,
+            log_time_str: new Date().toTimeString().slice(0, 5),
+            location_address: decision === 'work' ? '🟢 ئاساییە / بەخشین' : '🔴 سزا / لێبڕین',
+            notes: JSON.stringify({ excursionId, date: dateStr, decision }),
+            created_at: new Date().toISOString()
+          });
+        } catch {}
 
         return NextResponse.json({ success: true, decision, message: 'بڕیاری ئەدمین بە سەرکەوتوویی پاشەکەوت کرا' });
       } catch (err: any) {
