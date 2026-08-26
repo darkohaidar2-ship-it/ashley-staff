@@ -35,7 +35,15 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   const [selectedLogDetail, setSelectedLogDetail] = useState<any | null>(null);
 
   const [excursionsMap, setExcursionsMap] = useState<{ [dateStr: string]: any[] }>({});
-  const [localDecisions, setLocalDecisions] = useState<{ [key: string]: 'work' | 'deduct' }>({});
+  const [localDecisions, setLocalDecisions] = useState<{ [key: string]: 'work' | 'deduct' }>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('ashley_matrix_decisions');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return {};
+  });
   const [savingDecisionId, setSavingDecisionId] = useState<string | null>(null);
 
   const [yearStr, monthStr] = selectedMonth.split('-');
@@ -63,12 +71,32 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       );
 
       const map: { [key: string]: any[] } = {};
+      const fetchedDecisions: { [key: string]: 'work' | 'deduct' } = {};
+
       results.forEach(r => {
         if (r.items.length > 0) {
           map[r.date] = r.items;
+          r.items.forEach((item: any) => {
+            if (item.decision === 'work' || item.decision === 'deduct') {
+              fetchedDecisions[item.id] = item.decision;
+              if (item.userId) {
+                fetchedDecisions[`${r.date}_${item.userId}_${item.id}`] = item.decision;
+                fetchedDecisions[`${r.date}_${item.userId}`] = item.decision;
+              }
+            }
+          });
         }
       });
+
       setExcursionsMap(map);
+
+      setLocalDecisions(prev => {
+        const merged = { ...fetchedDecisions, ...prev };
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ashley_matrix_decisions', JSON.stringify(merged));
+        }
+        return merged;
+      });
     } catch {}
   }, [selectedMonth]);
 
@@ -79,17 +107,26 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   const handleInlineExcursionDecision = async (excId: string, dateStr: string, empId: string, decision: 'work' | 'deduct') => {
     setSavingDecisionId(excId);
 
-    // Instant local state update for real-time UI refresh
-    const decisionKey = `${dateStr}_${empId}`;
-    setLocalDecisions(prev => ({
-      ...prev,
-      [decisionKey]: decision,
-      [excId]: decision
-    }));
+    // Instant local state & localStorage update for real-time persistence across refresh
+    const decisionKeySpecific = `${dateStr}_${empId}_${excId}`;
+    const decisionKeyGeneral = `${dateStr}_${empId}`;
+    
+    setLocalDecisions(prev => {
+      const updated = {
+        ...prev,
+        [decisionKeySpecific]: decision,
+        [decisionKeyGeneral]: decision,
+        [excId]: decision
+      };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ashley_matrix_decisions', JSON.stringify(updated));
+      }
+      return updated;
+    });
 
     setExcursionsMap(prev => {
       const list = prev[dateStr] || [];
-      const idx = list.findIndex(x => x.id === excId || (x.userId && (x.userId === empId || excId.includes(x.userId))));
+      const idx = list.findIndex(x => x.id === excId);
       let updated: any[];
       if (idx >= 0) {
         updated = list.map((x, i) => i === idx ? { ...x, decision } : x);
@@ -100,22 +137,38 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     });
 
     if (selectedLogDetail && selectedLogDetail.info) {
-      const newWorkedMins = decision === 'work' ? 480 : Math.max(0, 480 - (selectedLogDetail.info.excursion?.durationMinutes || 35));
-      const newWorkedHours = Math.round((newWorkedMins / 60) * 10) / 10;
-      setSelectedLogDetail((prev: any) => ({
-        ...prev,
-        info: {
-          ...prev.info,
-          workedMinutes: newWorkedMins,
-          workedHours: newWorkedHours,
-          dotColor: decision === 'work' ? 'green' : 'red',
-          excursion: {
-            ...(prev.info.excursion || {}),
-            id: excId,
-            decision
+      setSelectedLogDetail((prev: any) => {
+        if (!prev || !prev.info) return prev;
+        const currentExcList = prev.info.excursions || (prev.info.excursion ? [prev.info.excursion] : []);
+        const updatedExcList = currentExcList.map((exc: any) => {
+          if (exc.id === excId) return { ...exc, decision };
+          return exc;
+        });
+
+        // Recalculate modal hours based on updated decisions
+        let totalPardonedMins = 0;
+        let totalDeductedMins = 0;
+        updatedExcList.forEach((exc: any) => {
+          const dec = exc.id === excId ? decision : (localDecisions[`${dateStr}_${empId}_${exc.id}`] || exc.decision);
+          const dur = exc.durationMinutes || 45;
+          if (dec === 'work') totalPardonedMins += dur;
+          else if (dec === 'deduct') totalDeductedMins += dur;
+        });
+
+        const newWorkedMins = Math.min(480, (prev.info.rawDiffBase || 390) + totalPardonedMins);
+        const newWorkedHours = Math.round((newWorkedMins / 60) * 10) / 10;
+
+        return {
+          ...prev,
+          info: {
+            ...prev.info,
+            workedMinutes: newWorkedMins,
+            workedHours: newWorkedHours,
+            excursions: updatedExcList,
+            excursion: updatedExcList[0] || null
           }
-        }
-      }));
+        };
+      });
     }
 
     try {
@@ -199,19 +252,18 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     });
 
     const dayExcursions = excursionsMap[targetDateStr] || [];
-    const empExcursion = dayExcursions.find(x => {
+    let empExcursions = dayExcursions.filter(x => {
       const xId = (x.userId || '').toString().toLowerCase();
       const xName = (x.userName || '').trim().toLowerCase();
       return xId === empId || xId === empNum || (xName && (xName === empName || xName.includes(empName) || empName.includes(xName)));
     });
 
     const hasRecord = Boolean(checkInTime || checkOutTime);
-    
     let workedMinutes = 0;
     let expectedMinutes = 480;
     let dotColor: 'green' | 'orange' | 'red' | null = null;
     let dotTooltip = '';
-    let finalExcursion: any = empExcursion || null;
+    let rawDiffBase = 0;
 
     if (hasRecord) {
       const inMins = timeToMinutes(checkInTime || '08:00');
@@ -222,54 +274,83 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         rawDiff = Math.max(0, rawDiff - 60);
       }
 
-      workedMinutes = rawDiff;
+      rawDiffBase = rawDiff;
 
-      if (!finalExcursion && rawLog) {
+      if (empExcursions.length === 0 && rawLog) {
         const embeddedNote = rawLog.check_out_edit_note || rawLog.check_in_edit_note || rawLog.notes || rawLog.edit_note;
         if (embeddedNote) {
-          finalExcursion = {
+          empExcursions = [{
             id: `exc-${empId}-${targetDateStr}`,
             userId: empId,
             userName: empName,
             date: targetDateStr,
             note: embeddedNote,
-            durationMinutes: Math.max(20, expectedMinutes - workedMinutes),
+            durationMinutes: Math.max(20, expectedMinutes - rawDiff),
             decision: 'pending'
-          };
+          }];
         }
       }
 
-      if (!finalExcursion && workedMinutes < expectedMinutes) {
-        finalExcursion = {
+      if (empExcursions.length === 0 && rawDiff < expectedMinutes) {
+        empExcursions = [{
           id: `exc-${empId}-${targetDateStr}`,
           userId: empId,
           userName: empName,
           date: targetDateStr,
           note: 'درەنگ کەوتن یان کەمی کاتی دەوام',
-          durationMinutes: expectedMinutes - workedMinutes,
+          durationMinutes: expectedMinutes - rawDiff,
           decision: 'pending'
-        };
+        }];
       }
 
-      if (finalExcursion) {
-        const activeDecision = localDecisions[`${targetDateStr}_${empId}`] || localDecisions[finalExcursion.id] || finalExcursion.decision || 'pending';
-        finalExcursion = { ...finalExcursion, decision: activeDecision };
+      if (empExcursions.length > 0) {
+        let totalDeficitMins = 0;
+        let pardonedMins = 0;
+        let deductedMins = 0;
+        let pendingCount = 0;
 
-        const excMins = finalExcursion.durationMinutes || 35;
-        if (activeDecision === 'deduct') {
-          workedMinutes = Math.max(0, Math.min(workedMinutes, expectedMinutes - excMins));
-          dotColor = 'red';
-          dotTooltip = `🔴 سزا / لێبڕین: ${excMins} خولەک لە دەوام لێبڕدراوە (${finalExcursion.note || 'مۆڵەت'})`;
-        } else if (activeDecision === 'work') {
-          // 🟢 لێخۆشبوون / بەخشین: دەگەڕێتەوە سەر ٨ کاتژمێری تەواو بۆ کارمەند!
-          workedMinutes = expectedMinutes; // 480 mins = 8.0h
-          dotColor = 'green';
-          dotTooltip = `🟢 ئیشی کۆمپانیا / بەخشین: ٨ کاتژمێری تەواو پەسەندکراوە (${finalExcursion.note || 'کار'})`;
-        } else {
+        const enrichedList = empExcursions.map((exc) => {
+          const itemKeySpecific = `${targetDateStr}_${empId}_${exc.id}`;
+          const activeDec = localDecisions[itemKeySpecific] || 
+                            localDecisions[exc.id] || 
+                            (empExcursions.length === 1 ? localDecisions[`${targetDateStr}_${empId}`] : undefined) || 
+                            exc.decision || 'pending';
+          const dur = exc.durationMinutes || (exc.type === 'late' ? 35 : 45);
+          totalDeficitMins += dur;
+
+          if (activeDec === 'work') {
+            pardonedMins += dur;
+          } else if (activeDec === 'deduct') {
+            deductedMins += dur;
+          } else {
+            pendingCount++;
+          }
+
+          return { ...exc, decision: activeDec, durationMinutes: dur };
+        });
+
+        empExcursions = enrichedList;
+
+        // Base worked time
+        const baseMins = Math.max(0, expectedMinutes - totalDeficitMins);
+        workedMinutes = Math.min(expectedMinutes, baseMins + pardonedMins);
+
+        if (pendingCount > 0) {
           dotColor = 'orange';
-          dotTooltip = `🟠 کاتی کەمە / تێبینی: ${excMins} خولەک • چاوەڕوانی بڕیاری ئەدمین (${finalExcursion.note || 'تێبینی'})`;
+          dotTooltip = `🟠 ${pendingCount} تێبینی / دەرچوون چاوەڕوانی بڕیاری ئەدمینە`;
+        } else if (pardonedMins >= totalDeficitMins) {
+          workedMinutes = expectedMinutes; // 8.0h full!
+          dotColor = 'green';
+          dotTooltip = `🟢 هەموو کەمی و دەرچوونەکان وەک کاری فەرمی / لێخۆشبوون پەسەند کراون (٨ کاتژمێری تەواو)`;
+        } else if (deductedMins > 0 && pardonedMins === 0) {
+          dotColor = 'red';
+          dotTooltip = `🔴 سزا و لێبڕینی ${deductedMins} خولەک جێبەجێکراوە`;
+        } else {
+          dotColor = pardonedMins > 0 ? 'green' : 'orange';
+          dotTooltip = `بڕیاری بەشەکی: ${pardonedMins} خولەک بەخشراوە، ${deductedMins} خولەک لێبڕدراوە`;
         }
       } else {
+        workedMinutes = rawDiff;
         if (workedMinutes >= expectedMinutes) {
           dotColor = null; // 🟢 Clean! No dot for normal completed days
           dotTooltip = 'دەوامی ئاسایی (٨ کاتژمێری تەواو)';
@@ -291,7 +372,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       status,
       rawLog,
       dateStr: targetDateStr,
-      excursion: finalExcursion || null,
+      excursion: empExcursions[0] || null,
+      excursions: empExcursions,
+      rawDiffBase,
       workedMinutes,
       workedHours,
       dotColor,
@@ -676,60 +759,90 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </span>
               </div>
 
-              {/* 🚪 EXCURSION & MID-DAY ABSENCE CARD (If exists) */}
-              {selectedLogDetail.info.excursion ? (
-                <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 space-y-2.5">
-                  <div className="flex items-center justify-between border-b border-amber-200 pb-2">
-                    <div className="flex items-center gap-1.5 text-amber-900 font-black">
-                      <DoorOpen className="w-4 h-4 text-amber-600" />
-                      <span>دەرچوونی کاتی لە کاتی دەوامدا (Excursion)</span>
+              {/* 🚪 EXCURSION & MID-DAY ABSENCE CARDS (Single or Multiple Excursions) */}
+              {selectedLogDetail.info.excursions && selectedLogDetail.info.excursions.length > 0 ? (
+                <div className="space-y-3">
+                  {selectedLogDetail.info.excursions.length > 1 && (
+                    <div className="p-2.5 rounded-xl bg-orange-50 border border-orange-200 text-orange-950 font-black text-xs flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <AlertTriangle className="w-4 h-4 text-orange-600" />
+                        <span>ئەم کارمەندە {selectedLogDetail.info.excursions.length} حاڵەتی دەرچوونی هەیە لەم ڕۆژەدا:</span>
+                      </div>
+                      <span className="text-[10px] bg-orange-200 text-orange-900 px-2 py-0.5 rounded-md font-bold">
+                        بڕیاری جیاواز بۆ هەریەکەیان
+                      </span>
                     </div>
-                    <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-950 font-mono font-black text-[10px]">
-                      ⏰ {selectedLogDetail.info.excursion.exitTime} ➔ {selectedLogDetail.info.excursion.returnTime} ({selectedLogDetail.info.excursion.durationMinutes || 40} خولەک)
-                    </span>
-                  </div>
+                  )}
 
-                  <div className="p-2.5 bg-white rounded-xl border border-amber-200 space-y-1">
-                    <span className="text-slate-500 font-bold text-[11px] block">📝 تێبینی و هۆکاری نووسراوی کارمەند لە مۆبایلەوە:</span>
-                    <p className="font-bold text-slate-900 text-xs">
-                      «{selectedLogDetail.info.excursion.note || 'هیچ تێبینییەک نەنووسراوە'}»
-                    </p>
-                  </div>
+                  {selectedLogDetail.info.excursions.map((exc: any, excIdx: number) => {
+                    const itemDecision = (
+                      localDecisions[`${selectedLogDetail.info.dateStr}_${selectedLogDetail.emp.id}_${exc.id}`] ||
+                      localDecisions[exc.id] ||
+                      (selectedLogDetail.info.excursions.length === 1 ? localDecisions[`${selectedLogDetail.info.dateStr}_${selectedLogDetail.emp.id}`] : undefined) ||
+                      exc.decision ||
+                      'pending'
+                    );
 
-                  {/* Admin Decision Toggle */}
-                  <div className="pt-1">
-                    <span className="text-[11px] font-black text-slate-700 block mb-1.5">
-                      ⚖️ بڕیاری بەڕێوەبەر (ئازادیت لە سزادان یان قبوڵکردنی وەک کاری فەرمی):
-                    </span>
+                    return (
+                      <div key={exc.id || excIdx} className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 space-y-2.5">
+                        <div className="flex items-center justify-between border-b border-amber-200 pb-2">
+                          <div className="flex items-center gap-1.5 text-amber-900 font-black">
+                            <DoorOpen className="w-4 h-4 text-amber-600" />
+                            <span>
+                              {selectedLogDetail.info.excursions.length > 1 
+                                ? `حاڵەتی #${excIdx + 1}: ${exc.title || 'دەرچوونی کاتی لە دەوام'}` 
+                                : 'دەرچوونی کاتی لە کاتی دەوامدا (Excursion)'}
+                            </span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-950 font-mono font-black text-[10px]">
+                            ⏰ {exc.exitTime || '--:--'} ➔ {exc.returnTime || '--:--'} ({exc.durationMinutes || 45} خولەک)
+                          </span>
+                        </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => handleInlineExcursionDecision(selectedLogDetail.info.excursion.id, selectedLogDetail.info.dateStr, selectedLogDetail.emp.id, 'work')}
-                        disabled={savingDecisionId === selectedLogDetail.info.excursion.id}
-                        className={`p-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                          (localDecisions[`${selectedLogDetail.info.dateStr}_${selectedLogDetail.emp.id}`] || selectedLogDetail.info.excursion.decision) === 'work'
-                            ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400'
-                            : 'bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300'
-                        }`}
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>🟢 ئاساییە / بەخشین (٨ کاتژمێر)</span>
-                      </button>
+                        <div className="p-2.5 bg-white rounded-xl border border-amber-200 space-y-1">
+                          <span className="text-slate-500 font-bold text-[11px] block">📝 تێبینی و هۆکاری کارمەند:</span>
+                          <p className="font-bold text-slate-900 text-xs">
+                            «{exc.note || 'تێبینی نووسراوی کارمەند بۆ ئەم کاتە'}»
+                          </p>
+                        </div>
 
-                      <button
-                        onClick={() => handleInlineExcursionDecision(selectedLogDetail.info.excursion.id, selectedLogDetail.info.dateStr, selectedLogDetail.emp.id, 'deduct')}
-                        disabled={savingDecisionId === selectedLogDetail.info.excursion.id}
-                        className={`p-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                          (localDecisions[`${selectedLogDetail.info.dateStr}_${selectedLogDetail.emp.id}`] || selectedLogDetail.info.excursion.decision) === 'deduct'
-                            ? 'bg-rose-600 text-white shadow-md ring-2 ring-rose-400'
-                            : 'bg-white hover:bg-rose-50 text-rose-800 border border-rose-300'
-                        }`}
-                      >
-                        <AlertCircle className="w-4 h-4" />
-                        <span>🔴 سزا / لێبڕین لە دەوام</span>
-                      </button>
-                    </div>
-                  </div>
+                        {/* Admin Decision Toggle for this specific excursion */}
+                        <div className="pt-1">
+                          <span className="text-[11px] font-black text-slate-700 block mb-1.5">
+                            ⚖️ بڕیاری بەڕێوەبەر بۆ ئەم کاتە ({exc.durationMinutes || 45} خولەک):
+                          </span>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => handleInlineExcursionDecision(exc.id, selectedLogDetail.info.dateStr, selectedLogDetail.emp.id, 'work')}
+                              disabled={savingDecisionId === exc.id}
+                              className={`p-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                itemDecision === 'work'
+                                  ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400'
+                                  : 'bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300'
+                              }`}
+                            >
+                              <Check className="w-4 h-4" />
+                              <span>🟢 لێخۆشبوون ({exc.durationMinutes || 45} خولەک)</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleInlineExcursionDecision(exc.id, selectedLogDetail.info.dateStr, selectedLogDetail.emp.id, 'deduct')}
+                              disabled={savingDecisionId === exc.id}
+                              className={`p-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                itemDecision === 'deduct'
+                                  ? 'bg-rose-600 text-white shadow-md ring-2 ring-rose-400'
+                                  : 'bg-white hover:bg-rose-50 text-rose-800 border border-rose-300'
+                              }`}
+                            >
+                              <AlertCircle className="w-4 h-4" />
+                              <span>🔴 سزا / لێبڕین</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : selectedLogDetail.info.workedMinutes < 480 ? (
                 <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 space-y-2.5">

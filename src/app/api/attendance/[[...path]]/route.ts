@@ -1183,9 +1183,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .maybeSingle();
 
         let currentList: any[] = Array.isArray(existing?.settings) ? existing.settings : [];
-        const existingIdx = currentList.findIndex((item: any) => 
-          item.id === excursionId || (item.userId && (item.userId === targetEmpId || excursionId.includes(item.userId)))
-        );
+        let existingIdx = currentList.findIndex((item: any) => item.id === excursionId);
+        if (existingIdx < 0) {
+          existingIdx = currentList.findIndex((item: any) => item.userId === targetEmpId);
+        }
 
         if (existingIdx >= 0) {
           currentList[existingIdx] = { ...currentList[existingIdx], decision: decision || 'work' };
