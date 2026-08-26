@@ -281,6 +281,7 @@ export default function AdminPage() {
   const [empStatusFilter, setEmpStatusFilter] = useState<'all' | 'active' | 'resigned'>('active');
   const [empSearch, setEmpSearch] = useState('');
   const [showMapPicker, setShowMapPicker] = useState(false);
+  const [showMobileDeviceModal, setShowMobileDeviceModal] = useState(false);
   const [faceEnrollEmp, setFaceEnrollEmp] = useState<Employee | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
