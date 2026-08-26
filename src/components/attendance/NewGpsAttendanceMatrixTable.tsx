@@ -87,21 +87,24 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     let status = 'Present';
     let rawLog: any = null;
 
-    dayRecords.forEach(r => {
+    dayRecords.forEach((r: any) => {
       rawLog = r;
-      if (r.checkInTime) checkInTime = r.checkInTime;
-      if (r.checkOutTime) checkOutTime = r.checkOutTime;
-      if (r.warehouseName) warehouseName = r.warehouseName;
+      const inCandidate = r.checkInTime || r.check_in_time || (r.checkIn ? (r.checkIn.includes(' ') ? r.checkIn.split(' ')[1]?.slice(0, 5) : r.checkIn.includes('T') ? r.checkIn.split('T')[1]?.slice(0, 5) : r.checkIn.slice(0, 5)) : '');
+      const outCandidate = r.checkOutTime || r.check_out_time || (r.checkOut ? (r.checkOut.includes(' ') ? r.checkOut.split(' ')[1]?.slice(0, 5) : r.checkOut.includes('T') ? r.checkOut.split('T')[1]?.slice(0, 5) : r.checkOut.slice(0, 5)) : '');
+
+      if (inCandidate && !checkInTime) checkInTime = inCandidate.slice(0, 5);
+      if (outCandidate) checkOutTime = outCandidate.slice(0, 5);
+      if (r.warehouseName || r.warehouse_name) warehouseName = r.warehouseName || r.warehouse_name;
       if (r.status) status = r.status;
 
       // Type-based detection if explicit logs
-      if (r.type?.includes('In') || r.type?.includes('هاتن') || r.action === 'Check In') {
-        const t = r.checkInTime || (r.time ? r.time.split(' ')[1]?.slice(0, 5) : '');
-        if (t && !checkInTime) checkInTime = t;
+      if (r.type?.includes('In') || r.type?.includes('هاتن') || r.action === 'Check In' || r.log_type?.includes('In')) {
+        const t = inCandidate || r.log_time_str || (r.time ? (r.time.includes(' ') ? r.time.split(' ')[1]?.slice(0, 5) : r.time.slice(0, 5)) : '');
+        if (t && !checkInTime) checkInTime = t.slice(0, 5);
       }
-      if (r.type?.includes('Out') || r.type?.includes('دەرچوون') || r.action === 'Check Out') {
-        const t = r.checkOutTime || (r.time ? r.time.split(' ')[1]?.slice(0, 5) : '');
-        if (t) checkOutTime = t;
+      if (r.type?.includes('Out') || r.type?.includes('دەرچوون') || r.action === 'Check Out' || r.log_type?.includes('Out')) {
+        const t = outCandidate || r.log_time_str || (r.time ? (r.time.includes(' ') ? r.time.split(' ')[1]?.slice(0, 5) : r.time.slice(0, 5)) : '');
+        if (t) checkOutTime = t.slice(0, 5);
       }
     });
 

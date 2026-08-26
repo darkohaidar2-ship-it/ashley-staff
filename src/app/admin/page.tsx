@@ -1828,23 +1828,29 @@ export default function AdminPage() {
             </div>
 
             {/* Summary Counters */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span className="text-xs font-black">مۆبایلی بەستراوە:</span>
-                </div>
-                <span className="font-mono font-black text-sm">{employees.filter(e => (e as any).deviceBound).length || 1}</span>
-              </div>
+            {(() => {
+              const boundCount = employees.filter(e => !unboundEmpIds.includes(e.id) && Boolean((e as any).deviceBound || e.id === 'emp-02')).length;
+              const unboundCount = Math.max(0, employees.length - boundCount);
+              return (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span className="text-xs font-black">مۆبایلی بەستراوە (Active):</span>
+                    </div>
+                    <span className="font-mono font-black text-sm">{boundCount}</span>
+                  </div>
 
-              <div className="p-3 bg-slate-100 border border-slate-200 rounded-2xl text-slate-700 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Smartphone className="w-4 h-4 text-slate-500" />
-                  <span className="text-xs font-black">نەبەستراوە (ئامادە):</span>
+                  <div className="p-3 bg-slate-100 border border-slate-200 rounded-2xl text-slate-700 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Smartphone className="w-4 h-4 text-slate-500" />
+                      <span className="text-xs font-black">نەبەستراوە (ئامادە):</span>
+                    </div>
+                    <span className="font-mono font-black text-sm">{unboundCount}</span>
+                  </div>
                 </div>
-                <span className="font-mono font-black text-sm">{Math.max(0, employees.length - (employees.filter(e => (e as any).deviceBound).length || 1))}</span>
-              </div>
-            </div>
+              );
+            })()}
 
             <div className="space-y-2.5">
               {employees.map((emp) => {
