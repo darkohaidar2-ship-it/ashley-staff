@@ -56,6 +56,7 @@ import {
   Printer,
   Table,
   Smartphone,
+  DoorOpen,
   X
 } from 'lucide-react';
 import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChangeModal';
@@ -285,6 +286,91 @@ export default function AdminPage() {
   const [unboundEmpIds, setUnboundEmpIds] = useState<string[]>([]);
   const [faceEnrollEmp, setFaceEnrollEmp] = useState<Employee | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 🚪 Excursion & Temporary Absence State
+  const [showExcursionModal, setShowExcursionModal] = useState(false);
+  const [excursionDate, setExcursionDate] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'));
+  const [excursionsList, setExcursionsList] = useState<any[]>([]);
+  const [loadingExcursions, setLoadingExcursions] = useState(false);
+  const [newExcEmpId, setNewExcEmpId] = useState('');
+  const [newExcExitTime, setNewExcExitTime] = useState('');
+  const [newExcReturnTime, setNewExcReturnTime] = useState('');
+  const [newExcNote, setNewExcNote] = useState('');
+  const [newExcDecision, setNewExcDecision] = useState<'work' | 'deduct'>('work');
+
+  const fetchExcursions = useCallback(async (date: string) => {
+    setLoadingExcursions(true);
+    try {
+      const res = await fetch(`/api/attendance/excursions?date=${date}&_t=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setExcursionsList(Array.isArray(data.excursions) ? data.excursions : []);
+      }
+    } catch {} finally {
+      setLoadingExcursions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showExcursionModal) {
+      fetchExcursions(excursionDate);
+    }
+  }, [showExcursionModal, excursionDate, fetchExcursions]);
+
+  const handleExcursionDecision = async (excId: string, decision: 'work' | 'deduct') => {
+    setExcursionsList(prev => prev.map(e => e.id === excId ? { ...e, decision } : e));
+    try {
+      await fetch('/api/attendance/excursion-decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ excursionId: excId, date: excursionDate, decision })
+      });
+    } catch {}
+  };
+
+  const handleCreateExcursion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newExcEmpId) {
+      alert('تکایە کارمەند هەڵبژێرە');
+      return;
+    }
+    const emp = employees.find(x => x.id === newExcEmpId);
+    const newRecord = {
+      id: `exc-${newExcEmpId}-${excursionDate}-${Date.now().toString().slice(-4)}`,
+      userId: newExcEmpId,
+      userName: emp?.fullName3Part || emp?.name || 'کارمەند',
+      date: excursionDate,
+      exitTime: newExcExitTime || '--:--',
+      returnTime: newExcReturnTime || '--:--',
+      note: newExcNote || 'تۆماری ئەدمین',
+      decision: newExcDecision
+    };
+    setExcursionsList(prev => [newRecord, ...prev]);
+    try {
+      await fetch('/api/attendance/excursion-note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: newExcEmpId,
+          date: excursionDate,
+          exitTime: newExcExitTime,
+          returnTime: newExcReturnTime,
+          note: newExcNote || 'تۆماری ئەدمین'
+        })
+      });
+      if (newExcDecision === 'work') {
+        await fetch('/api/attendance/excursion-decision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ excursionId: newRecord.id, date: excursionDate, decision: 'work' })
+        });
+      }
+      setNewExcNote('');
+      setNewExcExitTime('');
+      setNewExcReturnTime('');
+      alert('✅ دەرچوونی کاتی بە سەرکەوتوویی تۆمارکرا');
+    } catch {}
+  };
 
   // Form states for adding/editing employee
   const [empShortName, setEmpShortName] = useState('');
@@ -540,6 +626,11 @@ export default function AdminPage() {
           <button onClick={() => setShowMobileDeviceModal(true)} className="btn-classic bg-orange-600/40 hover:bg-orange-600/60 text-white border-orange-400/40 rounded-xl px-3 py-1.5 flex items-center gap-1.5 shadow-sm">
             <Smartphone className="w-3.5 h-3.5 text-orange-300" />
             <span>مۆبایلەکان 📱</span>
+          </button>
+
+          <button onClick={() => setShowExcursionModal(true)} className="btn-classic bg-amber-600/50 hover:bg-amber-600/80 text-white border-amber-400/50 rounded-xl px-3 py-1.5 flex items-center gap-1.5 shadow-sm">
+            <DoorOpen className="w-3.5 h-3.5 text-amber-300" />
+            <span>دەرچوونی کاتی (ئیجازە) 🚪</span>
           </button>
 
           <button onClick={() => setShowPasswordModal(true)} className="btn-classic bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5">
@@ -1900,6 +1991,187 @@ export default function AdminPage() {
                 );
               })}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🚪 MODAL: 📝 EXCURSIONS & TEMPORARY ABSENCE MANAGEMENT */}
+      {showExcursionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-4 shadow-2xl border border-slate-200">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b pb-3 border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-100 text-amber-700 rounded-2xl">
+                  <DoorOpen className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">دەرچوونی کاتی لە کاتی دەوامدا (Excursions)</h3>
+                  <p className="text-xs text-slate-500 font-bold">بڕیاردان لەسەر کاتەکانی چوونە دەرەوە (ئیشی فەرمی کۆمپانیا بەرامبەر لێبڕین)</p>
+                </div>
+              </div>
+              <button onClick={() => setShowExcursionModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer p-1">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Date Selector & KPI Counters */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-amber-600" />
+                <span className="text-xs font-black text-slate-700">بەروار:</span>
+                <input
+                  type="date"
+                  value={excursionDate}
+                  onChange={(e) => setExcursionDate(e.target.value)}
+                  className="px-2.5 py-1 bg-white border border-slate-300 rounded-xl text-xs font-bold font-mono text-slate-900"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-teal-100 text-teal-900 font-mono">
+                  🏢 کۆی دەرچوونەکان: {excursionsList.length}
+                </span>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-900 font-mono">
+                  🟢 کار: {excursionsList.filter(x => x.decision === 'work').length}
+                </span>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-rose-100 text-rose-900 font-mono">
+                  🔴 لێبڕین: {excursionsList.filter(x => x.decision === 'deduct').length}
+                </span>
+              </div>
+            </div>
+
+            {/* Excursions List */}
+            {loadingExcursions ? (
+              <div className="text-center py-8 text-slate-500 font-bold text-xs flex items-center justify-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-amber-600" />
+                <span>وەرگرتنی تۆمارەکان لە سێرڤەر...</span>
+              </div>
+            ) : excursionsList.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 font-bold text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+                📭 هیچ دەرچوونێکی کاتی بۆ ئەم بەروارە ({excursionDate}) تۆمار نەکراوە.
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {excursionsList.map((exc) => {
+                  const isWork = exc.decision === 'work';
+                  const isPending = exc.decision === 'pending';
+
+                  return (
+                    <div key={exc.id} className="p-3.5 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200 transition-all space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-amber-500 text-white font-black text-xs flex items-center justify-center">
+                            {(exc.userName || '').charAt(0)}
+                          </div>
+                          <div>
+                            <span className="font-black text-xs text-slate-900 block">{exc.userName}</span>
+                            <span className="text-[10px] text-slate-500 font-mono font-bold">
+                              ⏰ دەرچوون: {exc.exitTime} ➔ گەڕانەوە: {exc.returnTime}
+                              {exc.durationMinutes ? ` (${exc.durationMinutes} خولەک)` : ''}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Decision Badges / Selector */}
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleExcursionDecision(exc.id, 'work')}
+                            className={`px-2.5 py-1 rounded-xl text-[11px] font-black transition-all cursor-pointer ${
+                              isWork 
+                                ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-400' 
+                                : 'bg-slate-200 hover:bg-emerald-100 text-slate-700'
+                            }`}
+                          >
+                            🟢 ئیشی کۆمپانیا (موعتەمەد)
+                          </button>
+
+                          <button
+                            onClick={() => handleExcursionDecision(exc.id, 'deduct')}
+                            className={`px-2.5 py-1 rounded-xl text-[11px] font-black transition-all cursor-pointer ${
+                              !isWork && !isPending
+                                ? 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-400' 
+                                : 'bg-slate-200 hover:bg-rose-100 text-slate-700'
+                            }`}
+                          >
+                            🔴 مۆڵەت / لێبڕین
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Note / Reason */}
+                      <div className="p-2 bg-white rounded-xl border border-slate-200 text-xs text-slate-700 font-medium flex items-center gap-1.5">
+                        <span className="text-amber-600 font-bold">📝 تێبینی و هۆکار:</span>
+                        <span>{exc.note || 'هیچ تێبینییەک نەنووسراوە'}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Add New Excursion Manually by Admin */}
+            <form onSubmit={handleCreateExcursion} className="p-3.5 bg-amber-50/50 border border-amber-200 rounded-2xl space-y-3">
+              <span className="text-xs font-black text-amber-900 block">➕ تۆمارکردنی دەرچوونی نوێ بە دەستی لەلایەن ئەدمین</span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <select
+                  value={newExcEmpId}
+                  onChange={(e) => setNewExcEmpId(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
+                >
+                  <option value="">-- هەڵبژاردنی کارمەند --</option>
+                  {employees.filter(e => e.status !== 'resigned').map(emp => (
+                    <option key={emp.id} value={emp.id}>{emp.fullName3Part || emp.name}</option>
+                  ))}
+                </select>
+
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-500 font-bold">چوون:</span>
+                  <input
+                    type="time"
+                    value={newExcExitTime}
+                    onChange={(e) => setNewExcExitTime(e.target.value)}
+                    className="w-full px-2 py-1 bg-white border border-slate-300 rounded-xl text-xs font-mono text-center font-bold"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-500 font-bold">گەڕانەوە:</span>
+                  <input
+                    type="time"
+                    value={newExcReturnTime}
+                    onChange={(e) => setNewExcReturnTime(e.target.value)}
+                    className="w-full px-2 py-1 bg-white border border-slate-300 rounded-xl text-xs font-mono text-center font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="هۆکاری دەرچوون (بۆ نموونە: کڕینی کەلوپەل بۆ کۆگا)..."
+                  value={newExcNote}
+                  onChange={(e) => setNewExcNote(e.target.value)}
+                  className="flex-1 px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
+                />
+
+                <select
+                  value={newExcDecision}
+                  onChange={(e) => setNewExcDecision(e.target.value as any)}
+                  className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-black text-slate-900"
+                >
+                  <option value="work">🟢 ئیشی کۆمپانیا</option>
+                  <option value="deduct">🔴 لێبڕین / مۆڵەت</option>
+                </select>
+
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl shadow-sm cursor-pointer whitespace-nowrap"
+                >
+                  تۆمارکردن 💾
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
