@@ -1,4 +1,7 @@
-import { redirect } from 'next/navigation';  
-export default function RootPage() {  
-  redirect('/adminpanel');  
-} 
+'use client';
+
+import AdminPanelPortalPage from './adminpanel/page';
+
+export default function RootPage() {
+  return <AdminPanelPortalPage />;
+}

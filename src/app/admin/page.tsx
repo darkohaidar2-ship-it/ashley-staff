@@ -572,36 +572,9 @@ export default function AdminPage() {
 
       {/* 🧭 MASTER ERP ENTERPRISE NAVIGATION BAR */}
       <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-2.5 shadow-sm">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
           
-          {/* 📅 Hub 1: Attendance Central (Primary Default) */}
-          <button
-            onClick={() => {
-              setAdminActiveSection('attendance');
-              setAttendanceSubTab('daily');
-            }}
-            className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-              adminActiveSection === 'attendance' && attendanceSubTab === 'daily'
-                ? 'bg-emerald-900 text-white border-emerald-700 shadow-lg ring-4 ring-emerald-400/40 scale-[1.02]'
-                : 'bg-slate-50 hover:bg-emerald-50/60 text-slate-800 border-slate-200 hover:border-emerald-300'
-            }`}
-          >
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
-              adminActiveSection === 'attendance' && attendanceSubTab === 'daily'
-                ? 'bg-emerald-700 text-white shadow-inner'
-                : 'bg-emerald-100 text-emerald-900'
-            }`}>
-              <Calendar className="w-6 h-6" />
-            </div>
-            <span className="text-xs font-black tracking-tight block">ئامادەبوونی ڕۆژانە</span>
-            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
-              adminActiveSection === 'attendance' && attendanceSubTab === 'daily' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-emerald-100 text-emerald-900'
-            }`}>
-              📅 دەوامی ڕۆژ
-            </span>
-          </button>
-
-          {/* 📡 Hub 1.5: New GPS 31-Day Attendance Matrix */}
+          {/* 📡 Hub 1: PRIMARY STAFF ATTENDANCE TABLE (Main Matrix) */}
           <button
             onClick={() => setAdminActiveSection('gps_matrix')}
             className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
@@ -615,41 +588,17 @@ export default function AdminPage() {
                 ? 'bg-teal-700 text-white shadow-inner'
                 : 'bg-teal-100 text-teal-900'
             }`}>
-              <Smartphone className="w-6 h-6" />
+              <Calendar className="w-6 h-6" />
             </div>
-            <span className="text-xs font-black tracking-tight block">خشتەی تۆماری GPS نوێ</span>
+            <span className="text-xs font-black tracking-tight block">ئامادەبوونی کارمەندان</span>
             <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
               adminActiveSection === 'gps_matrix' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-teal-100 text-teal-900'
             }`}>
-              📡 ۳۱ ڕۆژەی مۆبایل
+              📡 ۳۱ ڕۆژەی مۆبایل و GPS
             </span>
           </button>
 
-          {/* 🔘 Hub 0: Overview Dashboard */}
-          <button
-            onClick={() => setAdminActiveSection('overview')}
-            className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-              adminActiveSection === 'overview'
-                ? 'bg-slate-900 text-white border-slate-800 shadow-lg ring-4 ring-indigo-400/40 scale-[1.02]'
-                : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
-            }`}
-          >
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
-              adminActiveSection === 'overview'
-                ? 'bg-indigo-600 text-white shadow-inner'
-                : 'bg-slate-200 text-slate-800'
-            }`}>
-              <LayoutDashboard className="w-6 h-6" />
-            </div>
-            <span className="text-xs font-black tracking-tight block">داشبۆردی گشتی</span>
-            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
-              adminActiveSection === 'overview' ? 'bg-indigo-300 text-slate-950 font-black' : 'bg-slate-200 text-slate-700'
-            }`}>
-              Executive 360°
-            </span>
-          </button>
-
-          {/* 🔵 Hub 2: HR & Staff */}
+          {/* 👥 Hub 2: HR & Staff */}
           <button
             onClick={() => setAdminActiveSection('hr')}
             className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
@@ -665,7 +614,7 @@ export default function AdminPage() {
             }`}>
               <Users className="w-6 h-6" />
             </div>
-            <span className="text-xs font-black tracking-tight block">کارمەندان و ستاف</span>
+            <span className="text-xs font-black tracking-tight block">ستاف و کارمەندان</span>
             <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
               adminActiveSection === 'hr' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-blue-100 text-blue-900'
             }`}>
@@ -673,31 +622,21 @@ export default function AdminPage() {
             </span>
           </button>
 
-          {/* 🟠 Hub 3: Overtime Master */}
+          {/* 📱 Hub 3: Mobile Devices & Geofence Map */}
           <button
-            onClick={() => setAdminActiveSection('overtime')}
-            className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-              adminActiveSection === 'overtime'
-                ? 'bg-amber-900 text-white border-amber-700 shadow-lg ring-4 ring-orange-400/40 scale-[1.02]'
-                : 'bg-slate-50 hover:bg-amber-50/60 text-slate-800 border-slate-200 hover:border-amber-300'
-            }`}
+            onClick={() => setShowMobileDeviceModal(true)}
+            className="group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50 hover:bg-orange-50/60 text-slate-800 border-slate-200 hover:border-orange-300"
           >
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
-              adminActiveSection === 'overtime'
-                ? 'bg-amber-600 text-white shadow-inner'
-                : 'bg-amber-100 text-amber-900'
-            }`}>
-              <Clock className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 bg-orange-100 text-orange-900">
+              <Smartphone className="w-6 h-6" />
             </div>
-            <span className="text-xs font-black tracking-tight block">کاتی زیادە (ئیزافە)</span>
-            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
-              adminActiveSection === 'overtime' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-amber-100 text-amber-900'
-            }`}>
-              ⚡ +{dashboardKpis.totalOtHours} کاتژمێر
+            <span className="text-xs font-black tracking-tight block">مۆبایلەکان و ئامێر</span>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 bg-orange-100 text-orange-900">
+              📱 پەیوەندی و قفڵ
             </span>
           </button>
 
-          {/* ⚙️ Hub 5: Settings & System */}
+          {/* ⚙️ Hub 4: Settings & System */}
           <button
             onClick={() => setAdminActiveSection('settings')}
             className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
@@ -717,7 +656,31 @@ export default function AdminPage() {
             <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
               adminActiveSection === 'settings' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-slate-200 text-slate-700'
             }`}>
-              ⚙️ ڕیسێت و کاتەکان
+              ⚙️ سیستەم و پاسۆرد
+            </span>
+          </button>
+
+          {/* 🗄️ Hub 5: ARCHIVE LOGIC VAULT (All Legacy Modules Preserved) */}
+          <button
+            onClick={() => setAdminActiveSection('archive')}
+            className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+              adminActiveSection === 'archive'
+                ? 'bg-purple-950 text-white border-purple-700 shadow-lg ring-4 ring-purple-400/40 scale-[1.02]'
+                : 'bg-purple-50/60 hover:bg-purple-100/80 text-purple-950 border-purple-200'
+            }`}
+          >
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
+              adminActiveSection === 'archive'
+                ? 'bg-purple-700 text-white shadow-inner'
+                : 'bg-purple-200 text-purple-900'
+            }`}>
+              <FolderArchive className="w-6 h-6" />
+            </div>
+            <span className="text-xs font-black tracking-tight block">لۆژیکە ئەرشیفەکان</span>
+            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
+              adminActiveSection === 'archive' ? 'bg-amber-300 text-slate-950 font-black' : 'bg-purple-200 text-purple-900'
+            }`}>
+              🗄️ لۆژیک و مۆدێلی کۆن
             </span>
           </button>
 
@@ -1476,9 +1439,76 @@ export default function AdminPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* 🚧 COMING SOON / WORK IN PROGRESS SECTION AT THE VERY BOTTOM */}
+      {/* 🗄️ SECTION 5: ARCHIVE LOGIC VAULT (All Legacy Modules Preserved Here) */}
       {/* ========================================================================= */}
-      {/* ========================================================================= */}
+      {adminActiveSection === 'archive' && (
+        <section className="panel-classic space-y-6">
+          <div className="p-4 bg-purple-900/10 border-2 border-purple-300/60 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-md">
+                <FolderArchive className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-sm sm:text-base font-black text-purple-950 flex items-center gap-2">
+                  <span>🗄️ ژووری لۆژیکە ئەرشیفەکان (Legacy Logic Vault)</span>
+                </h2>
+                <p className="text-xs text-purple-800/80 font-medium mt-0.5">
+                  سەرجەم خشتە، مۆدێل، و لۆژیکەکانی هەژمارکردنی ڕابردوو لێرەدا پارێزراون بۆ کاتی پێویست
+                </p>
+              </div>
+            </div>
+            <span className="px-3 py-1 rounded-full bg-purple-200 text-purple-900 text-xs font-mono font-bold">
+              Logic-Only Preserved
+            </span>
+          </div>
+
+          {/* Master 31-Day Attendance Sheet (Legacy Grid) */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-slate-800 font-black text-xs border-b border-slate-200 pb-2">
+              <Table className="w-4 h-4 text-purple-700" />
+              <span>١. خشتەی ئامادەبوونی ۳۱ ڕۆژەی تەقلیدی (Legacy Sheet Grid)</span>
+            </div>
+            <AttendanceSheetGrid employees={activeEmployees} attendanceLogs={allMergedAttendanceLogs} />
+          </div>
+
+          {/* Master Overtime Engine (Legacy OT) */}
+          <div className="space-y-3 pt-4 border-t border-slate-200">
+            <div className="flex items-center gap-2 text-slate-800 font-black text-xs border-b border-slate-200 pb-2">
+              <Clock className="w-4 h-4 text-amber-600" />
+              <span>٢. مۆدیولی هەژمارکردنی کاتی زیادە و ئیزافە (Legacy Overtime Engine)</span>
+            </div>
+            <AdminOvertimeModule employees={employees} />
+          </div>
+
+          {/* Master Logistics & Expenses */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-4 border-t border-slate-200">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-slate-800 font-black text-xs border-b border-slate-200 pb-2">
+                <Truck className="w-4 h-4 text-blue-600" />
+                <span>٣. لۆجستیك و گواستنەوە (Logistics Hub)</span>
+              </div>
+              <AdminLogisticsModule />
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-slate-800 font-black text-xs border-b border-slate-200 pb-2">
+                <DollarSign className="w-4 h-4 text-emerald-600" />
+                <span>٤. سندوق و خەرجییەکان (Expenses Module)</span>
+              </div>
+              <AdminExpensesModule />
+            </div>
+          </div>
+
+          {/* Analytics & Stats */}
+          <div className="space-y-3 pt-4 border-t border-slate-200">
+            <div className="flex items-center gap-2 text-slate-800 font-black text-xs border-b border-slate-200 pb-2">
+              <BarChart3 className="w-4 h-4 text-indigo-600" />
+              <span>٥. ئامار و ڕاپۆرتە گشتییەکان (Weekly & Monthly Analytics)</span>
+            </div>
+            <AdminWeeklyMonthlyStatsModule />
+          </div>
+        </section>
+      )}
+
       {/* ========================================================================= */}
       {/* 🧭 MASTER ERP MODULES & DIRECT PAGE NAVIGATION LINKS */}
       {/* ========================================================================= */}
