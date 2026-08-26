@@ -80,8 +80,7 @@ export default function AdminPage() {
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showMobileDeviceModal, setShowMobileDeviceModal] = useState(false);
-  const [adminActiveSection, setAdminActiveSection] = useState<'overview' | 'attendance' | 'gps_matrix' | 'hr' | 'overtime' | 'settings' | 'expenses' | 'logistics' | 'stats' | 'maps'>('attendance');
+  const [adminActiveSection, setAdminActiveSection] = useState<'overview' | 'attendance' | 'gps_matrix' | 'hr' | 'overtime' | 'settings' | 'expenses' | 'logistics' | 'stats' | 'maps' | 'archive'>('gps_matrix');
   const [attendanceSubTab, setAttendanceSubTab] = useState<'daily' | 'matrix'>('daily');
 
   // Live Desktop Clock for ERP Admin
