@@ -997,10 +997,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
+    // ----------------------------------------
     // POST /api/attendance/excursion-note (Employee Submits Absence/Exit Reason)
     // ----------------------------------------
     if (pathStr === 'excursion-note' && method === 'POST') {
-      const { userId, date, note, exitTime, returnTime } = await req.json();
+      const body = await req.json();
+      const { userId, userName, date, type, note, exitTime, returnTime, durationMinutes } = body;
       const dateStr = date || new Date().toISOString().split('T')[0];
       const settingsKey = `excursions_${dateStr}`;
 
@@ -1011,24 +1013,37 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .eq('id', settingsKey)
           .maybeSingle();
 
-        const currentList: any[] = Array.isArray(existing?.settings) ? existing.settings : [];
-        const excursionId = `exc-${userId}-${dateStr}-${Date.now().toString().slice(-4)}`;
+        let currentList: any[] = Array.isArray(existing?.settings) ? existing.settings : [];
+        const empId = userId || 'emp-02';
         
-        // Find employee name
-        const { data: user } = await supabase.from('users').select('name').eq('id', userId).maybeSingle();
-        const empName = user?.name || 'کارمەند';
+        // Find existing index
+        const existingIdx = currentList.findIndex((x: any) => x.userId === empId || x.id?.includes(empId));
 
-        currentList.push({
-          id: excursionId,
-          userId,
+        let empName = userName;
+        if (!empName) {
+          const { data: user } = await supabase.from('users').select('name').eq('id', empId).maybeSingle();
+          empName = user?.name || currentList[existingIdx]?.userName || 'کارمەند';
+        }
+
+        const newItem = {
+          id: existingIdx >= 0 ? currentList[existingIdx].id : `exc-${empId}-${dateStr}-${Date.now().toString().slice(-4)}`,
+          userId: empId,
           userName: empName,
           date: dateStr,
-          exitTime: exitTime || '--:--',
-          returnTime: returnTime || new Date().toTimeString().slice(0, 5),
+          type: type || currentList[existingIdx]?.type || 'excursion',
+          durationMinutes: durationMinutes || currentList[existingIdx]?.durationMinutes || 30,
+          exitTime: exitTime || currentList[existingIdx]?.exitTime || '--:--',
+          returnTime: returnTime || currentList[existingIdx]?.returnTime || new Date().toTimeString().slice(0, 5),
           note: note || '',
-          decision: 'deduct', // Default: لێبڕین (Deduct)
+          decision: currentList[existingIdx]?.decision || 'pending',
           createdAt: new Date().toISOString()
-        });
+        };
+
+        if (existingIdx >= 0) {
+          currentList[existingIdx] = { ...currentList[existingIdx], ...newItem };
+        } else {
+          currentList.push(newItem);
+        }
 
         await supabase.from('attendance_settings').upsert({
           id: settingsKey,
@@ -1040,7 +1055,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         const { data: att } = await supabase
           .from('attendance')
           .select('*')
-          .eq('user_id', userId)
+          .eq('user_id', empId)
           .eq('date', dateStr)
           .maybeSingle();
 
@@ -1051,7 +1066,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }).eq('id', att.id);
         }
 
-        return NextResponse.json({ success: true, message: 'تێبینی دەرچوون بە سەرکەوتوویی تۆمارکرا' });
+        return NextResponse.json({ success: true, item: newItem, message: 'تێبینی دەرچوون بە سەرکەوتوویی تۆمارکرا' });
       } catch (err: any) {
         console.warn('Excursion note save error:', err);
         return NextResponse.json({ error: err.message }, { status: 500 });
@@ -1074,9 +1089,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .maybeSingle();
 
         const excursions = Array.isArray(existing?.settings) ? existing.settings : [];
-        return NextResponse.json({ success: true, excursions });
+        return NextResponse.json({ success: true, date: dateStr, excursions });
       } catch (err: any) {
-        return NextResponse.json({ success: true, excursions: [] });
+        return NextResponse.json({ success: true, date: dateStr, excursions: [] });
       }
     }
 
@@ -1097,8 +1112,8 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
         let currentList: any[] = Array.isArray(existing?.settings) ? existing.settings : [];
         currentList = currentList.map((item: any) => {
-          if (item.id === excursionId) {
-            return { ...item, decision: decision || 'deduct' };
+          if (item.id === excursionId || (item.userId && excursionId.includes(item.userId))) {
+            return { ...item, decision: decision || 'work' };
           }
           return item;
         });
@@ -1109,10 +1124,11 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           updated_at: new Date().toISOString()
         });
 
-        return NextResponse.json({ success: true, message: 'بڕیاری ئەدمین بە سەرکەوتوویی پاشەکەوت کرا' });
+        return NextResponse.json({ success: true, decision, message: 'بڕیاری ئەدمین بە سەرکەوتوویی پاشەکەوت کرا' });
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
       }
+    }
     }
 
     // ----------------------------------------
@@ -2277,124 +2293,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
            }
         }
         return NextResponse.json({ success: true });
-      } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 });
-      }
-    }
-
-    // ----------------------------------------
-    // GET /api/attendance/excursions?date=YYYY-MM-DD
-    // ----------------------------------------
-    if (pathStr === 'excursions' && method === 'GET') {
-      const url = new URL(req.url);
-      const date = url.searchParams.get('date') || new Date().toISOString().split('T')[0];
-      const userId = url.searchParams.get('userId');
-
-      try {
-        const { data: settingRecord } = await supabase
-          .from('attendance_settings')
-          .select('*')
-          .eq('id', `excursions_${date}`)
-          .maybeSingle();
-
-        let list = Array.isArray(settingRecord?.settings) ? settingRecord.settings : [];
-        if (userId) {
-          list = list.filter((x: any) => x.userId === userId || x.userId === `emp-${userId.replace('emp-', '')}`);
-        }
-
-        return NextResponse.json({ success: true, date, excursions: list });
-      } catch (err: any) {
-        return NextResponse.json({ success: true, date, excursions: [] });
-      }
-    }
-
-    // ----------------------------------------
-    // POST /api/attendance/excursion-note (Employee submits note from mobile)
-    // ----------------------------------------
-    if (pathStr === 'excursion-note' && method === 'POST') {
-      try {
-        const body = await req.json();
-        const { userId, userName, date, type, note, exitTime, returnTime, durationMinutes } = body;
-        const targetDate = date || new Date().toISOString().split('T')[0];
-        const empId = userId || 'emp-02';
-
-        const { data: settingRecord } = await supabase
-          .from('attendance_settings')
-          .select('*')
-          .eq('id', `excursions_${targetDate}`)
-          .maybeSingle();
-
-        let list = Array.isArray(settingRecord?.settings) ? settingRecord.settings : [];
-
-        // Check if an existing item for this user exists
-        const existingIdx = list.findIndex((x: any) => x.userId === empId || x.id?.includes(empId));
-
-        const newItem = {
-          id: existingIdx >= 0 ? list[existingIdx].id : `exc-${empId}-${targetDate}-${Date.now().toString().slice(-4)}`,
-          userId: empId,
-          userName: userName || list[existingIdx]?.userName || 'کارمەند',
-          date: targetDate,
-          type: type || 'excursion', // 'late' | 'early' | 'excursion'
-          exitTime: exitTime || list[existingIdx]?.exitTime || '--:--',
-          returnTime: returnTime || list[existingIdx]?.returnTime || '--:--',
-          durationMinutes: durationMinutes || list[existingIdx]?.durationMinutes || 30,
-          note: note || 'تێبینی نوێکراوە',
-          decision: list[existingIdx]?.decision || 'pending', // 'pending' | 'work' | 'deduct'
-          createdAt: new Date().toISOString()
-        };
-
-        if (existingIdx >= 0) {
-          list[existingIdx] = { ...list[existingIdx], ...newItem };
-        } else {
-          list.push(newItem);
-        }
-
-        await supabase
-          .from('attendance_settings')
-          .upsert({
-            id: `excursions_${targetDate}`,
-            settings: list,
-            updated_at: new Date().toISOString()
-          });
-
-        return NextResponse.json({ success: true, item: newItem });
-      } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 });
-      }
-    }
-
-    // ----------------------------------------
-    // POST /api/attendance/excursion-decision (Admin decides: 'work' vs 'deduct')
-    // ----------------------------------------
-    if (pathStr === 'excursion-decision' && method === 'POST') {
-      try {
-        const body = await req.json();
-        const { excursionId, date, decision } = body;
-        const targetDate = date || new Date().toISOString().split('T')[0];
-
-        const { data: settingRecord } = await supabase
-          .from('attendance_settings')
-          .select('*')
-          .eq('id', `excursions_${targetDate}`)
-          .maybeSingle();
-
-        let list = Array.isArray(settingRecord?.settings) ? settingRecord.settings : [];
-        list = list.map((x: any) => {
-          if (x.id === excursionId || (x.userId && excursionId.includes(x.userId))) {
-            return { ...x, decision };
-          }
-          return x;
-        });
-
-        await supabase
-          .from('attendance_settings')
-          .upsert({
-            id: `excursions_${targetDate}`,
-            settings: list,
-            updated_at: new Date().toISOString()
-          });
-
-        return NextResponse.json({ success: true, decision });
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
       }
