@@ -203,11 +203,13 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         }
       } else {
         if (workedMinutes >= expectedMinutes) {
-          dotColor = 'green';
-          dotTooltip = '🟢 ٨ کاتژمێری دەوامی تەواو ئەنجامدراوە';
+          dotColor = null; // 🟢 Clean! No dot for normal completed days
+          dotTooltip = 'دەوامی ئاسایی (٨ کاتژمێری تەواو)';
         } else {
+          // Has deficit (late or early or short shift) -> Orange dot until resolved
           dotColor = 'orange';
-          dotTooltip = `🟠 کاتی کەمە: ${Math.round((expectedMinutes - workedMinutes) / 60 * 10) / 10} کاتژمێر کەمی هەیە`;
+          const deficitMins = expectedMinutes - workedMinutes;
+          dotTooltip = `🟠 کاتی کەمە: ${deficitMins} خولەک کەمی هەیە • چاوەڕوانی تێبینی و بڕیاری ئەدمین`;
         }
       }
     }
@@ -662,9 +664,45 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     </div>
                   </div>
                 </div>
+              ) : selectedLogDetail.info.workedMinutes < 480 ? (
+                <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 space-y-2.5">
+                  <div className="flex items-center justify-between border-b border-amber-200 pb-2">
+                    <div className="flex items-center gap-1.5 text-amber-900 font-black">
+                      <AlertTriangle className="w-4 h-4 text-amber-600" />
+                      <span>کاتی کەمی دەوام ({480 - selectedLogDetail.info.workedMinutes} خولەک کەمی هەیە)</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-950 font-mono font-black text-[10px]">
+                      درەنگ هاتن یان زوو ڕۆیشتن
+                    </span>
+                  </div>
+
+                  <div className="pt-1">
+                    <span className="text-[11px] font-black text-slate-700 block mb-1.5">
+                      ⚖️ بڕیاری بەڕێوەبەر لەسەر ئەم کەمییە:
+                    </span>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleInlineExcursionDecision(`exc-${selectedLogDetail.emp.id}-${selectedLogDetail.info.dateStr}`, selectedLogDetail.info.dateStr, 'work')}
+                        className="p-2 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>🟢 ئاساییە / بەخشین (بێ لێبڕین)</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleInlineExcursionDecision(`exc-${selectedLogDetail.emp.id}-${selectedLogDetail.info.dateStr}`, selectedLogDetail.info.dateStr, 'deduct')}
+                        className="p-2 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-white hover:bg-rose-50 text-rose-800 border border-rose-300"
+                      >
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span>🔴 سزا / لێبڕین لە دەوام</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 font-bold text-[11px] flex items-center gap-1.5">
-                  <span>✅ هیچ چوونە دەرەوەیەکی کاتی لە کاتی دەوامدا تۆمار نەکراوە.</span>
+                  <span>✅ هیچ چوونە دەرەوەیەک یان کەمییەک لە دەوامدا تۆمار نەکراوە (٨ کاتژمێری تەواو).</span>
                 </div>
               )}
             </div>

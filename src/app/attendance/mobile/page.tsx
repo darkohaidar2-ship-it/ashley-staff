@@ -102,12 +102,6 @@ export default function AutonomousMobileAppLight() {
   const [showMapModal, setShowMapModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // 📝 Excursion (Mid-Day Exit) Reason Modal
-  const [showExcursionModal, setShowExcursionModal] = useState(false);
-  const [excursionExitTime, setExcursionExitTime] = useState<string>('');
-  const [excursionNoteInput, setExcursionNoteInput] = useState<string>('');
-  const [isSubmittingNote, setIsSubmittingNote] = useState(false);
-
   // 2. Secret 10-Second Long-Press Admin Reset Modal
   const [pressProgress, setPressProgress] = useState(0); // 0 to 100
   const [showAdminResetModal, setShowAdminResetModal] = useState(false);
@@ -562,7 +556,16 @@ export default function AutonomousMobileAppLight() {
     }
   };
 
-  // 📝 Submit Excursion Explanation Note to Admin
+  // 📝 Anomaly & Excursion Note Modal State
+  const [showExcursionModal, setShowExcursionModal] = useState(false);
+  const [anomalyType, setAnomalyType] = useState<'late' | 'early' | 'excursion'>('late');
+  const [anomalyDuration, setAnomalyDuration] = useState<number>(30);
+  const [excursionExitTime, setExcursionExitTime] = useState<string>('');
+  const [excursionNoteInput, setExcursionNoteInput] = useState<string>('');
+  const [isSubmittingNote, setIsSubmittingNote] = useState(false);
+  const [submittedNotesToday, setSubmittedNotesToday] = useState<string[]>([]);
+
+  // 📝 Submit Anomaly / Excursion Explanation Note to Admin
   const handleSubmitExcursionNote = async (quickText?: string) => {
     const text = quickText || excursionNoteInput;
     if (!text || !text.trim()) {
@@ -571,21 +574,27 @@ export default function AutonomousMobileAppLight() {
     }
 
     setIsSubmittingNote(true);
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     try {
       await fetch('/api/attendance/excursion-note', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: employeeProfile?.id,
-          date: new Date().toISOString().split('T')[0],
+          userName: employeeProfile?.name,
+          date: todayStr,
+          type: anomalyType,
+          durationMinutes: anomalyDuration,
           note: text.trim(),
-          exitTime: excursionExitTime,
-          returnTime: new Date().toTimeString().slice(0, 5)
+          exitTime: excursionExitTime || (anomalyType === 'late' ? liveTodayShift.checkInTime : '--:--'),
+          returnTime: format(new Date(), 'HH:mm')
         })
       });
+
+      setSubmittedNotesToday(prev => [...prev, anomalyType]);
       setShowExcursionModal(false);
       setExcursionNoteInput('');
-      alert('✅ هۆکاری دەرچوونەکەت بۆ بەڕێوەبەر (ئەدمین) نێردرا.');
+      alert('✅ تێبینی و هۆکارەکەت بە سەرکەوتوویی بۆ بەڕێوەبەر (ئەدمین) نێردرا.');
     } catch (err) {
       setShowExcursionModal(false);
     } finally {
@@ -966,21 +975,75 @@ export default function AutonomousMobileAppLight() {
 
           </div>
 
-          {/* 🚪 Excursion Note Button for Employee */}
-          <button
-            type="button"
-            onClick={() => {
-              setExcursionExitTime(format(new Date(), 'HH:mm'));
-              setShowExcursionModal(true);
-            }}
-            className="w-full py-2.5 px-3 bg-amber-50 hover:bg-amber-100 active:bg-amber-200 border border-amber-300 rounded-2xl flex items-center justify-between text-xs font-black text-amber-900 transition-all shadow-xs cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <span className="p-1.5 bg-amber-200 text-amber-950 rounded-xl text-xs">📝</span>
-              <span>تۆمارکردنی هۆکاری دەرچوونی کاتی</span>
-            </div>
-            <span className="text-[10px] bg-amber-200/80 px-2 py-0.5 rounded-lg text-amber-950">کلیک بکە ➔</span>
-          </button>
+          {/* ⚠️ DYNAMIC ANOMALY & LATE PROMPT CARDS FOR EMPLOYEE */}
+          {(() => {
+            const checkIn = shiftStatus.checkInTime || liveTodayShift.checkInTime;
+            const checkOut = shiftStatus.checkOutTime || liveTodayShift.checkOutTime;
+            
+            // Check In after 08:10 -> Late Anomaly
+            let lateMinutes = 0;
+            if (checkIn && checkIn.includes(':')) {
+              const [h, m] = checkIn.split(':').map(Number);
+              const totalMins = (h || 0) * 60 + (m || 0);
+              if (totalMins > 8 * 60 + 10) {
+                lateMinutes = totalMins - 8 * 60;
+              }
+            }
+
+            const isLate = lateMinutes > 0 && !submittedNotesToday.includes('late');
+
+            return (
+              <div className="space-y-2">
+                {isLate && (
+                  <div className="p-3.5 bg-amber-50 border-2 border-amber-400 rounded-2xl text-right space-y-2 shadow-xs animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-950 font-mono">
+                        ⏰ {lateMinutes} خولەک درەنگ کەوتن
+                      </span>
+                      <span className="text-xs font-black text-amber-900 flex items-center gap-1">
+                        <span>⚠️ ئاگاداری دەوام</span>
+                      </span>
+                    </div>
+
+                    <p className="text-xs font-bold text-slate-800 leading-snug">
+                      بەڕێزت <span className="text-amber-900 font-black font-mono">{lateMinutes} خولەک</span> درەنگتر هاتووی بۆ دەوام، هۆکارەکەی چی بوو؟
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAnomalyType('late');
+                        setAnomalyDuration(lateMinutes);
+                        setShowExcursionModal(true);
+                      }}
+                      className="w-full py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-slate-950 rounded-xl text-xs font-black shadow-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <span>📝 دیاریکردنی هۆکاری درەنگ هاتن</span>
+                      <span>➔</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* 🚪 General Excursion / Mid-day Exit Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAnomalyType('excursion');
+                    setAnomalyDuration(30);
+                    setExcursionExitTime(format(new Date(), 'HH:mm'));
+                    setShowExcursionModal(true);
+                  }}
+                  className="w-full py-2.5 px-3 bg-white hover:bg-amber-50 active:bg-amber-100 border border-slate-200 hover:border-amber-300 rounded-2xl flex items-center justify-between text-xs font-black text-slate-800 transition-all shadow-2xs cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 bg-amber-100 text-amber-800 rounded-xl text-xs">🚪</span>
+                    <span>تۆمارکردنی هۆکاری دەرچوونی کاتی لە دەوام</span>
+                  </div>
+                  <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-lg text-slate-600">کلیک بکە ➔</span>
+                </button>
+              </div>
+            );
+          })()}
 
           {/* Bottom Clean Footer */}
           <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] font-bold text-slate-400 px-1">
@@ -1140,7 +1203,7 @@ export default function AutonomousMobileAppLight() {
       )}
 
       {/* ========================================================================= */}
-      {/* 📝 EXCURSION / MID-DAY ABSENCE REASON MODAL */}
+      {/* 📝 ANOMALY / LATE / EXCURSION REASON MODAL */}
       {/* ========================================================================= */}
       {showExcursionModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -1151,38 +1214,54 @@ export default function AutonomousMobileAppLight() {
                   📝
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900">هۆکاری دەرچوونی کاتی</h3>
-                  <p className="text-[11px] text-amber-700 font-bold">تۆ لە دەوام چووبوویتە دەرەوە</p>
+                  <h3 className="text-sm font-black text-slate-900">
+                    {anomalyType === 'late' ? 'هۆکاری درەنگ هاتن بۆ دەوام' : anomalyType === 'early' ? 'هۆکاری زوو ڕۆیشتنەوە' : 'هۆکاری دەرچوونی کاتی'}
+                  </h3>
+                  <p className="text-[11px] text-amber-700 font-bold">تۆمارکردنی ڕوونکردنەوە بۆ بەڕێوەبەر</p>
                 </div>
               </div>
             </div>
 
             <div className="bg-amber-50 rounded-2xl p-3 border border-amber-200 text-xs font-bold text-amber-900 space-y-1">
               <div className="flex justify-between">
-                <span>کاتی چوونە دەرەوە:</span>
-                <span className="font-mono font-black text-amber-800">{excursionExitTime || '--:--'}</span>
+                <span>بابەت:</span>
+                <span className="font-bold text-amber-950">
+                  {anomalyType === 'late' ? `درەنگ هاتن (${anomalyDuration} خولەک)` : anomalyType === 'early' ? `زوو ڕۆیشتن (${anomalyDuration} خولەک)` : `دەرچوون (${anomalyDuration} خولەک)`}
+                </span>
               </div>
               <div className="flex justify-between">
-                <span>کاتی گەڕانەوە:</span>
-                <span className="font-mono font-black text-amber-800">{currentTimeStr.slice(0, 5)}</span>
+                <span>کاتی تۆمارکراو:</span>
+                <span className="font-mono font-black text-amber-800">
+                  {anomalyType === 'late' ? (liveTodayShift.checkInTime || '08:35') : (excursionExitTime || currentTimeStr.slice(0, 5))}
+                </span>
               </div>
             </div>
 
             {/* Quick Reason Badges */}
             <div className="space-y-1.5">
-              <span className="text-[11px] font-black text-slate-600 block">هەڵبژاردنی خێرا:</span>
-              <div className="grid grid-cols-2 gap-1.5">
-                {[
-                  '💼 کاروباری فەرمی کۆمپانیا',
-                  '🍽️ نانخواردن / پشوو',
-                  '🏥 پشکنینی پزیشکی',
-                  '🚗 هاتوچۆی دەرەوە'
-                ].map((item) => (
+              <span className="text-[11px] font-black text-slate-600 block">هەڵبژاردنی خێرا لە هۆکارە باوەکان:</span>
+              <div className="grid grid-cols-1 gap-1.5">
+                {(anomalyType === 'late' ? [
+                  '🚗 قەرەباڵغی ڕێگا و ترافیک',
+                  '🏥 باری تەندروستی / سەردانی پزیشک',
+                  '⚙️ کێشەی ئۆتۆمبێل / هاتوچۆ',
+                  '🏢 ئەرک و کاری دەرەوەی کۆمپانیا',
+                  '📱 مۆبایلەکەم کوژابووەوە / کێشەی نێت'
+                ] : anomalyType === 'early' ? [
+                  '💼 تەواوکردنی ئەرک بە ڕەزامەندی بەڕێوەبەر',
+                  '👨‍👩‍👧 باری لەناکاوی خێزانی',
+                  '🤒 تێکچوونی باری تەندروستی'
+                ] : [
+                  '🛒 کڕینی کەلوپەل بۆ کۆمپانیا',
+                  '📦 گواستنەوەی کەلوپەل بۆ کۆگای هوانە',
+                  '🏛️ ڕایی کردنی مامەڵەی فەرمی کۆمپانیا',
+                  '🏥 سەردانی پزیشک / فریاکەوتن'
+                ]).map((item) => (
                   <button
                     key={item}
                     type="button"
                     onClick={() => handleSubmitExcursionNote(item)}
-                    className="p-2 text-[11px] font-black bg-slate-100 hover:bg-amber-100 hover:text-amber-900 hover:border-amber-300 border border-slate-200 rounded-xl transition-all text-slate-800 text-right cursor-pointer"
+                    className="p-2 text-xs font-black bg-slate-50 hover:bg-amber-100 hover:text-amber-950 hover:border-amber-300 border border-slate-200 rounded-xl transition-all text-slate-800 text-right cursor-pointer"
                   >
                     {item}
                   </button>
@@ -1197,7 +1276,7 @@ export default function AutonomousMobileAppLight() {
                 rows={2}
                 value={excursionNoteInput}
                 onChange={(e) => setExcursionNoteInput(e.target.value)}
-                placeholder="بۆ نموونە: چووم بۆ بانک..."
+                placeholder="هۆکاری تایبەتی خۆت بنووسە..."
                 className="w-full p-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-amber-500 focus:outline-hidden resize-none"
               />
             </div>

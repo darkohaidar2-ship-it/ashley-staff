@@ -2282,6 +2282,124 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       }
     }
 
+    // ----------------------------------------
+    // GET /api/attendance/excursions?date=YYYY-MM-DD
+    // ----------------------------------------
+    if (pathStr === 'excursions' && method === 'GET') {
+      const url = new URL(req.url);
+      const date = url.searchParams.get('date') || new Date().toISOString().split('T')[0];
+      const userId = url.searchParams.get('userId');
+
+      try {
+        const { data: settingRecord } = await supabase
+          .from('attendance_settings')
+          .select('*')
+          .eq('id', `excursions_${date}`)
+          .maybeSingle();
+
+        let list = Array.isArray(settingRecord?.settings) ? settingRecord.settings : [];
+        if (userId) {
+          list = list.filter((x: any) => x.userId === userId || x.userId === `emp-${userId.replace('emp-', '')}`);
+        }
+
+        return NextResponse.json({ success: true, date, excursions: list });
+      } catch (err: any) {
+        return NextResponse.json({ success: true, date, excursions: [] });
+      }
+    }
+
+    // ----------------------------------------
+    // POST /api/attendance/excursion-note (Employee submits note from mobile)
+    // ----------------------------------------
+    if (pathStr === 'excursion-note' && method === 'POST') {
+      try {
+        const body = await req.json();
+        const { userId, userName, date, type, note, exitTime, returnTime, durationMinutes } = body;
+        const targetDate = date || new Date().toISOString().split('T')[0];
+        const empId = userId || 'emp-02';
+
+        const { data: settingRecord } = await supabase
+          .from('attendance_settings')
+          .select('*')
+          .eq('id', `excursions_${targetDate}`)
+          .maybeSingle();
+
+        let list = Array.isArray(settingRecord?.settings) ? settingRecord.settings : [];
+
+        // Check if an existing item for this user exists
+        const existingIdx = list.findIndex((x: any) => x.userId === empId || x.id?.includes(empId));
+
+        const newItem = {
+          id: existingIdx >= 0 ? list[existingIdx].id : `exc-${empId}-${targetDate}-${Date.now().toString().slice(-4)}`,
+          userId: empId,
+          userName: userName || list[existingIdx]?.userName || 'کارمەند',
+          date: targetDate,
+          type: type || 'excursion', // 'late' | 'early' | 'excursion'
+          exitTime: exitTime || list[existingIdx]?.exitTime || '--:--',
+          returnTime: returnTime || list[existingIdx]?.returnTime || '--:--',
+          durationMinutes: durationMinutes || list[existingIdx]?.durationMinutes || 30,
+          note: note || 'تێبینی نوێکراوە',
+          decision: list[existingIdx]?.decision || 'pending', // 'pending' | 'work' | 'deduct'
+          createdAt: new Date().toISOString()
+        };
+
+        if (existingIdx >= 0) {
+          list[existingIdx] = { ...list[existingIdx], ...newItem };
+        } else {
+          list.push(newItem);
+        }
+
+        await supabase
+          .from('attendance_settings')
+          .upsert({
+            id: `excursions_${targetDate}`,
+            settings: list,
+            updated_at: new Date().toISOString()
+          });
+
+        return NextResponse.json({ success: true, item: newItem });
+      } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 500 });
+      }
+    }
+
+    // ----------------------------------------
+    // POST /api/attendance/excursion-decision (Admin decides: 'work' vs 'deduct')
+    // ----------------------------------------
+    if (pathStr === 'excursion-decision' && method === 'POST') {
+      try {
+        const body = await req.json();
+        const { excursionId, date, decision } = body;
+        const targetDate = date || new Date().toISOString().split('T')[0];
+
+        const { data: settingRecord } = await supabase
+          .from('attendance_settings')
+          .select('*')
+          .eq('id', `excursions_${targetDate}`)
+          .maybeSingle();
+
+        let list = Array.isArray(settingRecord?.settings) ? settingRecord.settings : [];
+        list = list.map((x: any) => {
+          if (x.id === excursionId || (x.userId && excursionId.includes(x.userId))) {
+            return { ...x, decision };
+          }
+          return x;
+        });
+
+        await supabase
+          .from('attendance_settings')
+          .upsert({
+            id: `excursions_${targetDate}`,
+            settings: list,
+            updated_at: new Date().toISOString()
+          });
+
+        return NextResponse.json({ success: true, decision });
+      } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 500 });
+      }
+    }
+
     if (pathStr === 'status' && method === 'GET') {
       try {
         const { data: attData, error: attErr } = await supabase.from('attendance').select('id', { count: 'exact' }).limit(1);
