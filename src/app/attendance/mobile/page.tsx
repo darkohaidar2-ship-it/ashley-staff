@@ -966,6 +966,22 @@ export default function AutonomousMobileAppLight() {
 
           </div>
 
+          {/* 🚪 Excursion Note Button for Employee */}
+          <button
+            type="button"
+            onClick={() => {
+              setExcursionExitTime(format(new Date(), 'HH:mm'));
+              setShowExcursionModal(true);
+            }}
+            className="w-full py-2.5 px-3 bg-amber-50 hover:bg-amber-100 active:bg-amber-200 border border-amber-300 rounded-2xl flex items-center justify-between text-xs font-black text-amber-900 transition-all shadow-xs cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 bg-amber-200 text-amber-950 rounded-xl text-xs">📝</span>
+              <span>تۆمارکردنی هۆکاری دەرچوونی کاتی</span>
+            </div>
+            <span className="text-[10px] bg-amber-200/80 px-2 py-0.5 rounded-lg text-amber-950">کلیک بکە ➔</span>
+          </button>
+
           {/* Bottom Clean Footer */}
           <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] font-bold text-slate-400 px-1">
             <span>🔒 پارێزراوە بۆ ئەم مۆبایلە</span>
