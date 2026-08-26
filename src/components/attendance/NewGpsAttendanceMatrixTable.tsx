@@ -188,18 +188,34 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
       workedMinutes = rawDiff;
 
-      if (empExcursion) {
-        const excMins = empExcursion.durationMinutes || 40;
-        if (empExcursion.decision === 'deduct') {
+      let finalExcursion = empExcursion;
+      if (!finalExcursion && rawLog) {
+        const embeddedNote = rawLog.check_out_edit_note || rawLog.check_in_edit_note || rawLog.notes || rawLog.edit_note;
+        if (embeddedNote) {
+          finalExcursion = {
+            id: `exc-${empId}-${targetDateStr}`,
+            userId: empId,
+            userName: empName,
+            date: targetDateStr,
+            note: embeddedNote,
+            durationMinutes: Math.max(20, expectedMinutes - workedMinutes),
+            decision: 'pending'
+          };
+        }
+      }
+
+      if (finalExcursion) {
+        const excMins = finalExcursion.durationMinutes || 35;
+        if (finalExcursion.decision === 'deduct') {
           workedMinutes = Math.max(0, workedMinutes - excMins);
           dotColor = 'red';
-          dotTooltip = `🔴 سزا / لێبڕین: ${excMins} خولەک لە دەوام بڕدراوە (${empExcursion.note || 'مۆڵەت'})`;
-        } else if (empExcursion.decision === 'work') {
+          dotTooltip = `🔴 سزا / لێبڕین: ${excMins} خولەک لە دەوام لێبڕدراوە (${finalExcursion.note || 'مۆڵەت'})`;
+        } else if (finalExcursion.decision === 'work') {
           dotColor = 'green';
-          dotTooltip = `🟢 ئیشی کۆمپانیا: موعتەمەد کراوە بە ٨ کاتژمێری تەواو (${empExcursion.note || 'کار'})`;
+          dotTooltip = `🟢 ئیشی کۆمپانیا: پەسەندکراوە بە ٨ کاتژمێری تەواو (${finalExcursion.note || 'کار'})`;
         } else {
           dotColor = 'orange';
-          dotTooltip = `🟠 کاتی کەمە: ${excMins} خولەک دەرچووە • چاوەڕوانی بڕیاری ئەدمین (${empExcursion.note || 'تێبینی'})`;
+          dotTooltip = `🟠 کاتی کەمە / تێبینی: ${excMins} خولەک • چاوەڕوانی بڕیاری ئەدمین (${finalExcursion.note || 'تێبینی'})`;
         }
       } else {
         if (workedMinutes >= expectedMinutes) {
