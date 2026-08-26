@@ -401,6 +401,11 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
       try {
         if (wipeAll) {
+          // SECURITY: Require explicit admin header for full wipe
+          const adminConfirm = req.headers.get('x-admin-wipe-confirm');
+          if (adminConfirm !== 'CONFIRMED_WIPE_ALL') {
+            return NextResponse.json({ error: 'پێویستە هەدەری ئەدمین بنێرێت بۆ سڕینەوەی هەموو داتا' }, { status: 403 });
+          }
           await supabase.from('attendance').delete().neq('id', '___non_existent___');
           await supabase.from('attendance_logs').delete().neq('id', '___non_existent___');
         } else {
@@ -2176,9 +2181,20 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if (pathStr === 'logs' && method === 'DELETE') {
       try {
+        // SECURITY: Require explicit admin header to prevent accidental mass deletion
+        const adminConfirm = req.headers.get('x-admin-wipe-confirm');
+        if (adminConfirm !== 'CONFIRMED_WIPE_ALL') {
+          // Default: Only delete TODAY's records (safe fallback)
+          const { dateStr } = getBaghdadDateTime();
+          await supabase.from('attendance_logs').delete().eq('log_date', dateStr);
+          await supabase.from('attendance').delete().eq('date', dateStr);
+          return NextResponse.json({ success: true, message: `تەنها تۆمارەکانی ئەمڕۆ (${dateStr}) سڕانەوە` });
+        }
+
+        // Full purge ONLY with explicit admin confirmation header
         await supabase.from('attendance_logs').delete().neq('id', '000');
         await supabase.from('attendance').delete().neq('id', '000');
-        return NextResponse.json({ success: true, message: 'All attendance records successfully purged from Supabase' });
+        return NextResponse.json({ success: true, message: 'هەموو تۆمارەکان بە ڕێگەپێدانی ئەدمین سڕانەوە' });
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
       }

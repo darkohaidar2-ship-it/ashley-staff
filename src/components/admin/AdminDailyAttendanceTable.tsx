@@ -545,7 +545,7 @@ export function AdminDailyAttendanceTable({
     try {
       await fetch('/api/attendance/reset-today', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-admin-wipe-confirm': 'CONFIRMED_WIPE_ALL' },
         body: JSON.stringify({ wipeAll: true })
       });
     } catch (e) {
