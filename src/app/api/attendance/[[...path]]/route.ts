@@ -833,7 +833,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const isCheckIn = event === 'ENTER';
 
       // 3. Find existing record for today
-      const rowId = `att-${userId}-${dateStr}`;
       const { data: existingRecord } = await supabase
         .from('attendance')
         .select('*')
@@ -841,9 +840,11 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         .eq('date', dateStr)
         .maybeSingle();
 
+      const rowId = existingRecord?.id || `${userId}-${dateStr}`;
       const nowIso = new Date().toISOString();
 
       let upsertPayload: any = {
+        id: rowId,
         user_id: userId,
         user_name: matchedName,
         date: dateStr,
@@ -851,10 +852,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         warehouse_name: targetWh.name,
         status: 'Present',
       };
-      
-      if (existingRecord?.id) {
-        upsertPayload.id = existingRecord.id;
-      }
 
       if (existingRecord) {
         if (existingRecord.check_in) upsertPayload.check_in = existingRecord.check_in;
