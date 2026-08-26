@@ -269,9 +269,17 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       try {
         await supabase
           .from('users')
-          .update({ device_token: deviceToken })
+          .update({ device_token: deviceToken, device_bound: true })
           .eq('id', userId);
-      } catch {}
+
+        // Delete unbind flag in attendance_settings
+        await supabase
+          .from('attendance_settings')
+          .delete()
+          .eq('id', `unbind_${userId}`);
+      } catch (e) {
+        console.warn('Device register update err:', e);
+      }
 
       return NextResponse.json({ success: true, user: { id: userId, name: user?.name || 'کارمەند' } });
     }
@@ -479,15 +487,23 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     // POST /api/attendance/unbind-device (Remote Admin Device Unbind)
     // ----------------------------------------
-    if (pathStr === 'unbind-device' && method === 'POST') {
+    if ((pathStr === 'unbind-device' || pathStr === 'admin/users/reset-device') && method === 'POST') {
       const { userId } = await req.json();
       if (!userId) return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
 
       try {
         await supabase
           .from('users')
-          .update({ device_token: null })
+          .update({ device_token: null, device_bound: false })
           .eq('id', userId);
+
+        await supabase
+          .from('attendance_settings')
+          .upsert({
+            id: `unbind_${userId}`,
+            settings: { unbound: true, unbindAt: Date.now() },
+            updated_at: new Date().toISOString()
+          });
       } catch (err) {
         console.warn('Supabase unbind-device error:', err);
       }
@@ -499,13 +515,31 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // GET /api/attendance/device-status (Mobile Periodic Status Checker)
     // ----------------------------------------
     if (pathStr === 'device-status' && method === 'GET') {
+      const noCacheHeaders = {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Vercel-CDN-Cache-Control': 'no-store',
+      };
+
       const url = new URL(req.url);
       const userId = url.searchParams.get('userId');
       const deviceToken = url.searchParams.get('deviceToken');
 
-      if (!userId) return NextResponse.json({ bound: true });
+      if (!userId) return NextResponse.json({ bound: true }, { headers: noCacheHeaders });
 
       try {
+        // 1. Check if unbind flag is set in attendance_settings
+        const { data: unbindMeta } = await supabase
+          .from('attendance_settings')
+          .select('*')
+          .eq('id', `unbind_${userId}`)
+          .maybeSingle();
+
+        if (unbindMeta?.settings?.unbound) {
+          return NextResponse.json({ bound: false, reason: 'unbound_by_admin' }, { headers: noCacheHeaders });
+        }
+
+        // 2. Check device_token in users table
         const { data: user } = await supabase
           .from('users')
           .select('device_token')
@@ -513,16 +547,15 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .maybeSingle();
 
         if (user) {
-          // If the server token is different or null, it means unbound
-          if (user.device_token !== deviceToken) {
-            return NextResponse.json({ bound: false, reason: 'unbound_by_admin' });
+          if (!user.device_token || (deviceToken && user.device_token !== deviceToken)) {
+            return NextResponse.json({ bound: false, reason: 'unbound_by_admin' }, { headers: noCacheHeaders });
           }
         }
       } catch (err) {
         console.warn('device-status error:', err);
       }
 
-      return NextResponse.json({ bound: true });
+      return NextResponse.json({ bound: true }, { headers: noCacheHeaders });
     }
 
     // ----------------------------------------

@@ -282,6 +282,7 @@ export default function AdminPage() {
   const [empSearch, setEmpSearch] = useState('');
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [showMobileDeviceModal, setShowMobileDeviceModal] = useState(false);
+  const [unboundEmpIds, setUnboundEmpIds] = useState<string[]>([]);
   const [faceEnrollEmp, setFaceEnrollEmp] = useState<Employee | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1847,7 +1848,7 @@ export default function AdminPage() {
 
             <div className="space-y-2.5">
               {employees.map((emp) => {
-                const isBound = Boolean((emp as any).deviceBound || emp.id === 'emp-02');
+                const isBound = !unboundEmpIds.includes(emp.id) && Boolean((emp as any).deviceBound || emp.id === 'emp-02');
                 return (
                   <div key={emp.id} className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200 transition-colors">
                     <div className="flex items-center gap-3">
@@ -1872,13 +1873,14 @@ export default function AdminPage() {
                     <button
                       onClick={async () => {
                         if (confirm(`ئایا دڵنیایت لە هەڵوەشاندنەوە و ڕیستکردنی مۆبایلی (${emp.fullName3Part || emp.name})؟ دەستبەجێ لە مۆبایلەکە لۆگ ئاوت دەبێت.`)) {
+                          setUnboundEmpIds(prev => Array.from(new Set([...prev, emp.id])));
                           try {
                             await fetch('/api/attendance/unbind-device', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ userId: emp.id })
                             });
-                            alert(`✅ بەستنەوەی مۆبایلی ${emp.name} بە سەرکەوتوویی هەڵوەشێنرایەوە.`);
+                            alert(`✅ بەستنەوەی مۆبایلی (${emp.fullName3Part || emp.name}) هەڵوەشێنرایەوە و مۆبایلەکە ڕاستەوخۆ لۆگ ئاوت بوو.`);
                           } catch {
                             alert('هەڵەیەک ڕوویدا');
                           }
