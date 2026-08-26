@@ -100,10 +100,15 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     });
 
     if (selectedLogDetail && selectedLogDetail.info) {
+      const newWorkedMins = decision === 'work' ? 480 : Math.max(0, 480 - (selectedLogDetail.info.excursion?.durationMinutes || 35));
+      const newWorkedHours = Math.round((newWorkedMins / 60) * 10) / 10;
       setSelectedLogDetail((prev: any) => ({
         ...prev,
         info: {
           ...prev.info,
+          workedMinutes: newWorkedMins,
+          workedHours: newWorkedHours,
+          dotColor: decision === 'work' ? 'green' : 'red',
           excursion: {
             ...(prev.info.excursion || {}),
             id: excId,
@@ -252,12 +257,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
         const excMins = finalExcursion.durationMinutes || 35;
         if (activeDecision === 'deduct') {
-          workedMinutes = Math.max(0, workedMinutes - excMins);
+          workedMinutes = Math.max(0, Math.min(workedMinutes, expectedMinutes - excMins));
           dotColor = 'red';
           dotTooltip = `🔴 سزا / لێبڕین: ${excMins} خولەک لە دەوام لێبڕدراوە (${finalExcursion.note || 'مۆڵەت'})`;
         } else if (activeDecision === 'work') {
+          // 🟢 لێخۆشبوون / بەخشین: دەگەڕێتەوە سەر ٨ کاتژمێری تەواو بۆ کارمەند!
+          workedMinutes = expectedMinutes; // 480 mins = 8.0h
           dotColor = 'green';
-          dotTooltip = `🟢 ئیشی کۆمپانیا / بەخشین: پەسەندکراوە بە ٨ کاتژمێری تەواو (${finalExcursion.note || 'کار'})`;
+          dotTooltip = `🟢 ئیشی کۆمپانیا / بەخشین: ٨ کاتژمێری تەواو پەسەندکراوە (${finalExcursion.note || 'کار'})`;
         } else {
           dotColor = 'orange';
           dotTooltip = `🟠 کاتی کەمە / تێبینی: ${excMins} خولەک • چاوەڕوانی بڕیاری ئەدمین (${finalExcursion.note || 'تێبینی'})`;
