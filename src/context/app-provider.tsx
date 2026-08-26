@@ -179,7 +179,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } catch {}
       }
 
+      let isFetching = false;
       const syncSupabaseAttendance = () => {
+        if (isFetching) return;
+        if (typeof document !== 'undefined' && document.hidden) return;
+        isFetching = true;
         fetch(`/api/attendance/logs?t=${Date.now()}`, { cache: 'no-store' })
           .then((res) => res.json())
           .then((supabaseLogs) => {
@@ -190,7 +194,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
               }
             }
           })
-          .catch((err) => console.error('Supabase real-time sync error:', err));
+          .catch((err) => console.warn('Supabase real-time sync notice:', err))
+          .finally(() => {
+            isFetching = false;
+          });
       };
 
       // Initial Fetch
@@ -219,8 +226,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.addEventListener('ashley_attendance_updated', syncSupabaseAttendance);
       window.addEventListener('storage', syncSupabaseAttendance);
 
-      // Fast Polling interval (every 2s)
-      const interval = setInterval(syncSupabaseAttendance, 2000);
+      // Polling interval (every 8s)
+      const interval = setInterval(syncSupabaseAttendance, 8000);
 
       return () => {
         supabase.removeChannel(channel);

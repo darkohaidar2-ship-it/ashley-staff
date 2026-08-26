@@ -46,8 +46,8 @@ export default function StandaloneGpsAttendancePage() {
         {/* 📊 Standalone 31-Day GPS Attendance Matrix Component */}
         <section className="bg-slate-900/60 p-4 sm:p-6 rounded-3xl border border-slate-800 shadow-2xl">
           <NewGpsAttendanceMatrixTable 
-            employees={employees.filter(e => e.status !== 'resigned' && e.isActive !== false)} 
-            attendanceLogs={allMergedAttendanceLogs} 
+            employees={(employees || []).filter(e => e?.status !== 'resigned' && e?.isActive !== false)} 
+            attendanceLogs={allMergedAttendanceLogs || []} 
           />
         </section>
 

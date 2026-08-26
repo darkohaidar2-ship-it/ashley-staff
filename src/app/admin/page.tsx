@@ -525,6 +525,8 @@ export default function AdminPage() {
           >
             <Settings className="w-3.5 h-3.5 text-amber-300" />
             <span>⚙️ ڕێکخستنەکان</span>
+          </button>
+
           {/* 📡 PROMINENT STANDALONE GPS MATRIX BUTTON */}
           <button 
             onClick={() => setAdminActiveSection('gps_matrix')} 

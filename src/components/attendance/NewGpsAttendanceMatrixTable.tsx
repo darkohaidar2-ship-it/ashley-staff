@@ -27,7 +27,7 @@ interface NewGpsAttendanceMatrixTableProps {
   attendanceLogs: AttendanceRecord[];
 }
 
-export function NewGpsAttendanceMatrixTable({ employees, attendanceLogs }: NewGpsAttendanceMatrixTableProps) {
+export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [] }: NewGpsAttendanceMatrixTableProps) {
   // Current Selected Month (Default to 2026-08 or active month)
   const [selectedMonth, setSelectedMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'));
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -43,8 +43,8 @@ export function NewGpsAttendanceMatrixTable({ employees, attendanceLogs }: NewGp
 
   // Filtered Employees
   const activeEmployees = useMemo(() => {
-    return employees.filter(e => {
-      if (e.status === 'resigned' || e.isActive === false) return false;
+    return (employees || []).filter(e => {
+      if (!e || e.status === 'resigned' || e.isActive === false) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const n1 = (e.name || '').toLowerCase();
