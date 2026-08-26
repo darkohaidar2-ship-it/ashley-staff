@@ -153,6 +153,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
   const method = req.method;
   const pathStr = path.join('/');
 
+  const noCacheHeaders = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+    'CDN-Cache-Control': 'no-store',
+    'Vercel-CDN-Cache-Control': 'no-store',
+  };
+
   try {
     // ----------------------------------------
     // GET /api/attendance/employees
@@ -1049,16 +1055,18 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if (pathStr === 'logs' && method === 'GET') {
       try {
+        const uniqueMap = new Map();
+
+        // 1. Fetch from `attendance` table
         const { data: attendance } = await supabase
           .from('attendance')
           .select('*')
           .order('date', { ascending: false });
 
-        const formatted: any[] = [];
         if (attendance && attendance.length > 0) {
           attendance.forEach(r => {
-            // 1. Unified Daily Shift Record
-            formatted.push({
+            // Unified Daily Shift Record
+            uniqueMap.set(r.id, {
               id: r.id,
               employeeId: r.user_id,
               userId: r.user_id,
@@ -1075,16 +1083,17 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
               status: r.status || 'Present'
             });
 
-            // 2. Explicit Check-In Event
+            // Explicit Check-In Event
             if (r.check_in_time) {
-              formatted.push({
-                id: `${r.id}-in`,
+              const inId = `${r.id}-in`;
+              uniqueMap.set(inId, {
+                id: inId,
                 employeeId: r.user_id,
                 userId: r.user_id,
                 employeeName: r.user_name,
                 userName: r.user_name,
                 name: r.user_name,
-                type: 'Check In',
+                type: 'هاتن (Check In)',
                 action: 'Check In',
                 date: r.date,
                 time: `${r.date} ${r.check_in_time}`,
@@ -1094,16 +1103,17 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
               });
             }
 
-            // 3. Explicit Check-Out Event
+            // Explicit Check-Out Event
             if (r.check_out_time) {
-              formatted.push({
-                id: `${r.id}-out`,
+              const outId = `${r.id}-out`;
+              uniqueMap.set(outId, {
+                id: outId,
                 employeeId: r.user_id,
                 userId: r.user_id,
                 employeeName: r.user_name,
                 userName: r.user_name,
                 name: r.user_name,
-                type: 'Check Out',
+                type: 'دەرچوون (Check Out)',
                 action: 'Check Out',
                 date: r.date,
                 time: `${r.date} ${r.check_out_time}`,
@@ -1115,7 +1125,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           });
         }
 
-        // Also fetch any standalone logs from attendance_logs table
+        // 2. Fetch standalone logs from `attendance_logs` table
         try {
           const { data: logsData } = await supabase
             .from('attendance_logs')
@@ -1124,21 +1134,22 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
           if (logsData && logsData.length > 0) {
             logsData.forEach(l => {
-              formatted.push({
+              const logTypeClean = l.log_type === 'Check Out' || l.log_type?.includes('Out') ? 'دەرچوون (Check Out)' : 'هاتن (Check In)';
+              uniqueMap.set(l.id, {
                 id: l.id,
                 employeeId: l.employee_id,
                 userId: l.employee_id,
                 employeeName: l.employee_name,
                 userName: l.employee_name,
                 name: l.employee_name,
-                type: l.log_type,
+                type: logTypeClean,
                 action: l.log_type,
                 date: l.log_date,
                 time: `${l.log_date} ${l.log_time_str}`,
-                checkInTime: l.log_type === 'Check In' ? l.log_time_str : undefined,
-                checkOutTime: l.log_type === 'Check Out' ? l.log_time_str : undefined,
+                checkInTime: (l.log_type === 'Check In' || l.log_type?.includes('In')) ? l.log_time_str : undefined,
+                checkOutTime: (l.log_type === 'Check Out' || l.log_type?.includes('Out')) ? l.log_time_str : undefined,
                 notes: l.notes,
-                warehouseName: l.location_address,
+                warehouseName: l.location_address || 'کۆمپانیای سەرەکی ئاشڵی',
                 status: 'verified'
               });
             });
@@ -1147,12 +1158,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           console.warn('attendance_logs fetch warning:', logsErr);
         }
 
-        return NextResponse.json(formatted);
+        const formatted = Array.from(uniqueMap.values());
+        return NextResponse.json(formatted, { headers: noCacheHeaders });
       } catch (err) {
         console.warn('Error fetching attendance logs:', err);
+        return NextResponse.json([], { headers: noCacheHeaders });
       }
-
-      return NextResponse.json([]);
     }
 
     // ----------------------------------------
@@ -1948,99 +1959,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
       if (error) throw error;
       return NextResponse.json({ success: true });
-    }
-
-    // ----------------------------------------
-    // GET /api/attendance/logs (Supabase Clean Pure GPS Attendance Logs)
-    // ----------------------------------------
-    if (pathStr === 'logs' && method === 'GET') {
-      try {
-        const uniqueMap = new Map();
-
-        // 1. Read from primary `attendance_logs` table
-        const { data: logs1 } = await supabase
-          .from('attendance_logs')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (logs1 && logs1.length > 0) {
-          logs1.forEach((r: any) => {
-            const item = {
-              id: r.id,
-              employeeId: r.employee_id || r.user_id,
-              userId: r.employee_id || r.user_id,
-              userName: r.employee_name || r.user_name,
-              name: r.employee_name || r.user_name,
-              type: r.log_type === 'Check Out' || r.type?.includes('Out') ? 'دەرچوون (Check Out)' : 'هاتن (Check In)',
-              time: `${r.log_date || r.date} ${r.log_time_str || r.time || '08:00'}`,
-              distance: r.location_address || 'داخل کۆمپانیا',
-              selfieUrl: r.selfie_url || r.check_in_selfie || r.check_out_selfie,
-              checkInSelfie: r.selfie_url || r.check_in_selfie,
-              checkOutSelfie: r.selfie_url || r.check_out_selfie,
-              status: 'verified',
-              createdAt: r.created_at || `${r.log_date} ${r.log_time_str}`,
-              originalTime: r.original_time || undefined,
-              editNote: r.edit_note || undefined,
-              notes: r.edit_note || undefined,
-            };
-            uniqueMap.set(r.id, item);
-          });
-        }
-
-        // 2. Also read from `attendance` table for live records
-        const { data: logs2 } = await supabase
-          .from('attendance')
-          .select('*')
-          .order('date', { ascending: false });
-
-        if (logs2 && logs2.length > 0) {
-          logs2.forEach((r: any) => {
-            if (r.check_in_time) {
-              const inId = `${r.id}-in`;
-              uniqueMap.set(inId, {
-                id: inId,
-                employeeId: r.user_id,
-                userId: r.user_id,
-                userName: r.user_name,
-                name: r.user_name,
-                type: 'هاتن (Check In)',
-                time: `${r.date} ${r.check_in_time}`,
-                distance: r.check_in_address || 'داخل کۆمپانیا',
-                selfieUrl: r.check_in_selfie,
-                checkInSelfie: r.check_in_selfie,
-                status: 'verified',
-                createdAt: r.check_in || `${r.date} ${r.check_in_time}`,
-                originalTime: r.check_in_original_time || undefined,
-                editNote: r.check_in_edit_note || undefined,
-              });
-            }
-            if (r.check_out_time) {
-              const outId = `${r.id}-out`;
-              uniqueMap.set(outId, {
-                id: outId,
-                employeeId: r.user_id,
-                userId: r.user_id,
-                userName: r.user_name,
-                name: r.user_name,
-                type: 'دەرچوون (Check Out)',
-                time: `${r.date} ${r.check_out_time}`,
-                distance: r.check_out_address || 'داخل کۆمپانیا',
-                selfieUrl: r.check_out_selfie,
-                checkOutSelfie: r.check_out_selfie,
-                status: 'verified',
-                createdAt: r.check_out || `${r.date} ${r.check_out_time}`,
-                originalTime: r.check_out_original_time || undefined,
-                editNote: r.check_out_edit_note || undefined,
-              });
-            }
-          });
-        }
-
-        const allLogs = Array.from(uniqueMap.values());
-        return NextResponse.json(allLogs);
-      } catch (err) {
-        return NextResponse.json([]);
-      }
     }
 
     // ----------------------------------------

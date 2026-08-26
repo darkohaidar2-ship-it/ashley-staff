@@ -211,19 +211,31 @@ export function AdminDailyAttendanceTable({
         if (lDate !== dateStr) return false;
         
         const logEmpId = (l.employeeId || l.userId || '').toString().trim().toLowerCase();
+        const rawLogEmpId = logEmpId.replace(/^emp-/, '').replace(/^0+/, '');
+        
         const empId = (emp.id || '').toString().trim().toLowerCase();
+        const rawEmpId = empId.replace(/^emp-/, '').replace(/^0+/, '');
+        
         const empNumId = (emp.employeeId || '').toString().trim().toLowerCase();
+        const rawEmpNumId = empNumId.replace(/^emp-/, '').replace(/^0+/, '');
         
         const logName = (l.name || l.userName || (l as any).employeeName || '').trim().toLowerCase();
         const empName1 = (emp.fullName3Part || '').trim().toLowerCase();
         const empName2 = (emp.name || '').trim().toLowerCase();
 
-        return (
+        const idMatch = 
           logEmpId === empId ||
+          (rawLogEmpId && rawEmpId && rawLogEmpId === rawEmpId) ||
+          (rawLogEmpId && rawEmpNumId && rawLogEmpId === rawEmpNumId) ||
           (empNumId && logEmpId.includes(empNumId)) ||
+          (empNumId && logEmpId === `emp-${empNumId}`) ||
+          (empId && logEmpId === `emp-${empId}`);
+
+        const nameMatch = 
           (logName && empName1 && (logName === empName1 || logName.includes(empName1) || empName1.includes(logName))) ||
-          (logName && empName2 && (logName === empName2 || logName.includes(empName2) || empName2.includes(logName)))
-        );
+          (logName && empName2 && (logName === empName2 || logName.includes(empName2) || empName2.includes(logName)));
+
+        return idMatch || nameMatch;
       });
 
       const directRec = dayLogs.find(l => (l as any).checkInTime || (l as any).checkOutTime);

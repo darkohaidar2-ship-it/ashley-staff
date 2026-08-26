@@ -180,7 +180,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       const syncSupabaseAttendance = () => {
-        fetch('/api/attendance/logs')
+        fetch(`/api/attendance/logs?t=${Date.now()}`, { cache: 'no-store' })
           .then((res) => res.json())
           .then((supabaseLogs) => {
             if (Array.isArray(supabaseLogs)) {
