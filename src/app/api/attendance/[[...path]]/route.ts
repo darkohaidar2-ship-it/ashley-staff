@@ -12,14 +12,14 @@ let GLOBAL_SAVED_LOCATIONS = [
     name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
     lat: 35.5571,
     lng: 45.4352,
-    radiusMeters: 100
+    radiusMeters: 350
   },
   {
     id: 'huana-warehouse-main',
     name: 'کۆگای سەرەکی هوانە (Huana Warehouse)',
     lat: 35.6012,
     lng: 45.3850,
-    radiusMeters: 120
+    radiusMeters: 350
   }
 ];
 
@@ -318,6 +318,8 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     // GET /api/attendance/today (Live Real-Time Sync for Mobile & Web)
     // ----------------------------------------
+    // GET /api/attendance/today (Live Real-Time Sync for Mobile & Web)
+    // ----------------------------------------
     if (pathStr === 'today' && method === 'GET') {
       const noCacheHeaders = {
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
@@ -326,22 +328,32 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       };
 
       const url = new URL(req.url);
-      const userId = url.searchParams.get('userId');
+      const userId = url.searchParams.get('userId') || '';
+      const userName = url.searchParams.get('userName') || '';
       const { dateStr } = getBaghdadDateTime();
 
-      if (!userId) {
-        return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+      if (!userId && !userName) {
+        return NextResponse.json({ error: 'userId or userName is required' }, { status: 400 });
       }
 
       try {
-        let query = supabase.from('attendance').select('*').eq('date', dateStr);
-        if (userId.startsWith('emp-')) {
-          const rawNum = userId.replace('emp-', '');
-          query = query.or(`user_id.eq.${userId},user_id.eq.${rawNum}`);
-        } else {
-          query = query.or(`user_id.eq.${userId},user_id.eq.emp-${userId}`);
-        }
-        const { data: record } = await query.maybeSingle();
+        const { data: allRecords } = await supabase
+          .from('attendance')
+          .select('*')
+          .eq('date', dateStr);
+
+        let record = (allRecords || []).find((r: any) => {
+          const rUser = (r.user_id || '').toString().toLowerCase();
+          const rName = (r.user_name || '').toString().toLowerCase();
+          const uId = userId.toLowerCase();
+          const uRaw = uId.replace('emp-', '');
+          const uName = userName.toLowerCase();
+
+          return (
+            (userId && (rUser === uId || rUser === uRaw || rUser === `emp-${uRaw}`)) ||
+            (userName && (rName === uName || rName.includes(uName) || uName.includes(rName)))
+          );
+        });
 
         if (record) {
           const inTime = record.check_in_time || (record.check_in ? (record.check_in.includes('T') ? record.check_in.split('T')[1].slice(0, 5) : record.check_in.slice(0, 5)) : null);
@@ -364,16 +376,22 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .order('created_at', { ascending: true });
 
         if (logs && logs.length > 0) {
-          const empLogs = logs.filter(l => {
+          const empLogs = logs.filter((l: any) => {
             const lEmp = (l.employee_id || '').toString().toLowerCase();
+            const lName = (l.employee_name || '').toString().toLowerCase();
             const target = userId.toLowerCase();
             const raw = target.replace('emp-', '');
-            return lEmp === target || lEmp === raw || lEmp === `emp-${raw}`;
+            const uName = userName.toLowerCase();
+
+            return (
+              (userId && (lEmp === target || lEmp === raw || lEmp === `emp-${raw}`)) ||
+              (userName && (lName === uName || lName.includes(uName) || uName.includes(lName)))
+            );
           });
 
           if (empLogs.length > 0) {
-            const inLog = empLogs.find(l => (l.log_type || '').includes('In') || (l.log_type || '').includes('هاتن'));
-            const outLog = empLogs.filter(l => (l.log_type || '').includes('Out') || (l.log_type || '').includes('دەرچوون') || (l.log_type || '').includes('ڕۆیشتن')).pop();
+            const inLog = empLogs.find((l: any) => (l.log_type || '').includes('In') || (l.log_type || '').includes('هاتن'));
+            const outLog = empLogs.filter((l: any) => (l.log_type || '').includes('Out') || (l.log_type || '').includes('دەرچوون') || (l.log_type || '').includes('ڕۆیشتن')).pop();
 
             return NextResponse.json({
               checkInTime: inLog?.log_time_str || null,
@@ -860,13 +878,18 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       }
 
       if (isCheckIn) {
-        // Clean Check-In: Guarantee check_in and check_in_time exist
+        // First Check-In of the day is permanently locked (00:00 to 23:59)
         const checkInTimeFinal = existingRecord?.check_in_time || timeStr;
         upsertPayload.check_in = existingRecord?.check_in || nowIso;
         upsertPayload.check_in_time = checkInTimeFinal;
-        if (lat !== undefined) upsertPayload.check_in_lat = parseFloat(lat);
-        if (lng !== undefined) upsertPayload.check_in_lng = parseFloat(lng);
-        upsertPayload.check_in_address = address || targetWh.name;
+        if (lat !== undefined && !existingRecord?.check_in_lat) upsertPayload.check_in_lat = parseFloat(lat);
+        if (lng !== undefined && !existingRecord?.check_in_lng) upsertPayload.check_in_lng = parseFloat(lng);
+        upsertPayload.check_in_address = existingRecord?.check_in_address || address || targetWh.name;
+
+        // Keep existing check_out if already recorded earlier
+        if (existingRecord?.check_out) upsertPayload.check_out = existingRecord.check_out;
+        if (existingRecord?.check_out_time) upsertPayload.check_out_time = existingRecord.check_out_time;
+        if (existingRecord?.check_out_address) upsertPayload.check_out_address = existingRecord.check_out_address;
 
         // Calculate Late Minutes (Standard shift starts at 08:15)
         const [inH, inM] = checkInTimeFinal.split(':').map(Number);
@@ -877,20 +900,18 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
         upsertPayload.late_minutes = isLate ? lateMinutes : 0;
         upsertPayload.status = isLate ? 'Late' : 'Present';
-
-        // Clear previous check-out since employee is back at work
-        upsertPayload.check_out = null;
-        upsertPayload.check_out_time = null;
-        upsertPayload.check_out_address = null;
-        upsertPayload.check_out_lat = null;
-        upsertPayload.check_out_lng = null;
       } else {
-        // Check-Out: Record departure
+        // Check-Out: Always record the LATEST exit of the day
         upsertPayload.check_out = nowIso;
         upsertPayload.check_out_time = timeStr;
         if (lat !== undefined) upsertPayload.check_out_lat = parseFloat(lat);
         if (lng !== undefined) upsertPayload.check_out_lng = parseFloat(lng);
         upsertPayload.check_out_address = address || targetWh.name;
+
+        // Preserve initial check_in
+        if (existingRecord?.check_in) upsertPayload.check_in = existingRecord.check_in;
+        if (existingRecord?.check_in_time) upsertPayload.check_in_time = existingRecord.check_in_time;
+        if (existingRecord?.status) upsertPayload.status = existingRecord.status;
       }
 
       // Upsert to attendance table
