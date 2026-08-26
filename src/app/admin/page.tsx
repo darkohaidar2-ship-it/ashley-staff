@@ -525,6 +525,13 @@ export default function AdminPage() {
           >
             <Settings className="w-3.5 h-3.5 text-amber-300" />
             <span>⚙️ ڕێکخستنەکان</span>
+          {/* 📡 PROMINENT STANDALONE GPS MATRIX BUTTON */}
+          <button 
+            onClick={() => setAdminActiveSection('gps_matrix')} 
+            className="btn-classic bg-teal-600 hover:bg-teal-700 text-white border-teal-400 rounded-xl px-3.5 py-1.5 flex items-center gap-1.5 shadow-md"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-teal-200" />
+            <span className="font-black">📡 خشتەی تۆماری GPS نوێ</span>
           </button>
 
           <button onClick={() => setShowMobileDeviceModal(true)} className="btn-classic bg-orange-600/40 hover:bg-orange-600/60 text-white border-orange-400/40 rounded-xl px-3 py-1.5 flex items-center gap-1.5 shadow-sm">
@@ -564,7 +571,7 @@ export default function AdminPage() {
 
       {/* 🧭 MASTER ERP ENTERPRISE NAVIGATION BAR */}
       <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-2.5 shadow-sm">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
           
           {/* 📅 Hub 1: Attendance Central (Primary Default) */}
           <button
