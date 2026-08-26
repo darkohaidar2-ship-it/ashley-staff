@@ -844,7 +844,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const nowIso = new Date().toISOString();
 
       let upsertPayload: any = {
-        id: existingRecord?.id || rowId,
         user_id: userId,
         user_name: matchedName,
         date: dateStr,
@@ -852,6 +851,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         warehouse_name: targetWh.name,
         status: 'Present',
       };
+      
+      if (existingRecord?.id) {
+        upsertPayload.id = existingRecord.id;
+      }
 
       if (existingRecord) {
         if (existingRecord.check_in) upsertPayload.check_in = existingRecord.check_in;
@@ -2007,12 +2010,15 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
       // 2. Insert/Upsert into `attendance` table in Supabase (Primary Guaranteed Table)
       let upsertPayload: any = {
-        id: existingRecord?.id || rowId,
         user_id: empId,
         user_name: empName,
         date: dateStr,
         status: 'Present'
       };
+      
+      if (existingRecord?.id) {
+        upsertPayload.id = existingRecord.id;
+      }
 
       const isCheckIn = !isCheckOut;
 
