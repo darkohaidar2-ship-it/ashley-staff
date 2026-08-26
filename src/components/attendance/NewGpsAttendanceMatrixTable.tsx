@@ -18,7 +18,8 @@ import {
   Utensils,
   DoorOpen,
   Check,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { getDaysInMonth, format, getDay } from 'date-fns';
 import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
