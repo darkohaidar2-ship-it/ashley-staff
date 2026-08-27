@@ -373,16 +373,20 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           updated_at: new Date().toISOString()
         });
 
-        await supabase
-          .from('users')
-          .update({ device_token: deviceToken, device_bound: true })
-          .eq('id', userId);
+        try {
+          await supabase
+            .from('users')
+            .update({ device_token: deviceToken })
+            .eq('id', userId);
+        } catch {}
 
         // Delete unbind flag
-        await supabase
-          .from('attendance_settings')
-          .delete()
-          .eq('id', `unbind_${userId}`);
+        try {
+          await supabase
+            .from('attendance_settings')
+            .delete()
+            .eq('id', `unbind_${userId}`);
+        } catch {}
 
         return NextResponse.json({
           success: true,
@@ -390,7 +394,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         });
       } catch (e: any) {
         console.warn('Device register update err:', e);
-        return NextResponse.json({ success: true, user: { id: userId, name: user?.name || 'کارمەند' } });
+        return NextResponse.json({ error: e.message || 'هەڵە لە تۆمارکردن' }, { status: 500 });
       }
     }
 
@@ -602,10 +606,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       if (!userId) return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
 
       try {
-        await supabase
-          .from('users')
-          .update({ device_token: null, device_bound: false })
-          .eq('id', userId);
+        try {
+          await supabase
+            .from('users')
+            .update({ device_token: null })
+            .eq('id', userId);
+        } catch {}
 
         const { data: regRow } = await supabase
           .from('attendance_settings')
