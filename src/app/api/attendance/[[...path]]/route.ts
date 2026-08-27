@@ -220,6 +220,21 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         'CDN-Cache-Control': 'no-store',
       };
 
+      const DEFAULT_EMPLOYEE_NAMES: Record<string, string> = {
+        'emp-01': 'سه هەند مەریوان حەمەسەعید',
+        'emp-02': 'دارکۆ حەیدەر حسێن',
+        'emp-03': 'شادیار هوشیار',
+        'emp-04': 'هەڤاڵ حبیب حەمەڕەزا',
+        'emp-05': 'عیماد سەباح نوری',
+        'emp-06': 'کامەران عومەر ڕووئوف',
+        'emp-07': 'ڕابەر محەمەد مەحمود',
+        'emp-08': 'دانەر محەمەد باسام',
+        'emp-09': 'ڕێبین سەباح نوری',
+        'emp-10': 'بەهرەمەند ڕزگار عزیز',
+        'emp-11': 'شادومان یادگار رحیم',
+        'emp-12': 'سەروەت قادر',
+      };
+
       try {
         // 1. Check resilient central registry in warehouses table
         const { data: regRow } = await supabase
@@ -246,8 +261,8 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
               authenticated: false,
               lockedEmployee: {
                 id: uId,
-                name: dbUser?.full_name || dbUser?.name || info.userName || 'کارمەند',
-                role: dbUser?.role || info.role || 'کارمەند'
+                name: dbUser?.full_name || dbUser?.name || DEFAULT_EMPLOYEE_NAMES[uId] || info.userName || 'کارمەند',
+                role: dbUser?.role || info.role || (uId === 'emp-02' ? 'Manager' : 'Employee')
               }
             }, { headers: noCacheHeaders });
           }
@@ -267,7 +282,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
               authenticated: false,
               lockedEmployee: {
                 id: user.id,
-                name: user.full_name || user.name,
+                name: user.full_name || user.name || DEFAULT_EMPLOYEE_NAMES[user.id] || 'کارمەند',
                 role: user.role
               }
             }, { headers: noCacheHeaders });
@@ -304,6 +319,21 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         'emp-10': '1010',
         'emp-11': '1011',
         'emp-12': '1012',
+      };
+
+      const DEFAULT_EMPLOYEE_NAMES: Record<string, string> = {
+        'emp-01': 'سه هەند مەریوان حەمەسەعید',
+        'emp-02': 'دارکۆ حەیدەر حسێن',
+        'emp-03': 'شادیار هوشیار',
+        'emp-04': 'هەڤاڵ حبیب حەمەڕەزا',
+        'emp-05': 'عیماد سەباح نوری',
+        'emp-06': 'کامەران عومەر ڕووئوف',
+        'emp-07': 'ڕابەر محەمەد مەحمود',
+        'emp-08': 'دانەر محەمەد باسام',
+        'emp-09': 'ڕێبین سەباح نوری',
+        'emp-10': 'بەهرەمەند ڕزگار عزیز',
+        'emp-11': 'شادومان یادگار رحیم',
+        'emp-12': 'سەروەت قادر',
       };
 
       let user: any = null;
@@ -362,7 +392,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         }
 
         // Save successful binding
-        const empName = user?.full_name || user?.name || 'کارمەند';
+        const empName = user?.full_name || user?.name || DEFAULT_EMPLOYEE_NAMES[userId] || 'کارمەند';
         registry[userId] = {
           userId,
           userName: empName,
