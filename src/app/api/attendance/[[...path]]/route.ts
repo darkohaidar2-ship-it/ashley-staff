@@ -941,10 +941,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         if (lng !== undefined && !existingRecord?.check_in_lng) upsertPayload.check_in_lng = parseFloat(lng);
         upsertPayload.check_in_address = existingRecord?.check_in_address || address || targetWh.name;
 
-        // Keep existing check_out if already recorded earlier
-        if (existingRecord?.check_out) upsertPayload.check_out = existingRecord.check_out;
-        if (existingRecord?.check_out_time) upsertPayload.check_out_time = existingRecord.check_out_time;
-        if (existingRecord?.check_out_address) upsertPayload.check_out_address = existingRecord.check_out_address;
+        // When checking in, they are currently at work: clear check_out
+        upsertPayload.check_out = null;
+        upsertPayload.check_out_time = null;
+        upsertPayload.check_out_address = null;
 
         // Calculate Late Minutes (Standard shift starts at 08:15)
         const [inH, inM] = checkInTimeFinal.split(':').map(Number);
@@ -988,7 +988,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           log_time_str: isCheckIn ? (existingRecord?.check_in_time || timeStr) : timeStr,
           location_address: `${targetWh.name}`,
           created_at: nowIso,
-          notes: `لەڕێگەی مۆبایل (${isCheckIn ? 'هاتن' : 'ڕۆیشتن'})`
+          edit_note: `لەڕێگەی مۆبایل (${isCheckIn ? 'هاتن' : 'ڕۆیشتن'})`
         });
       } catch (logErr) {
         console.warn('Auto log insert error:', logErr);
@@ -1084,7 +1084,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             log_date: dateStr,
             log_time_str: exitTime || '08:35',
             location_address: 'تێبینی مۆبایل',
-            notes: JSON.stringify(newItem),
+            edit_note: JSON.stringify(newItem),
             created_at: new Date().toISOString()
           });
         } catch (logErr) {
@@ -1109,6 +1109,69 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         return NextResponse.json({ success: true, item: newItem, message: 'تێبینی دەرچوون بە سەرکەوتوویی تۆمارکرا' });
       } catch (err: any) {
         console.warn('Excursion note save error:', err);
+        return NextResponse.json({ error: err.message }, { status: 500 });
+      }
+    }
+
+    // ----------------------------------------
+    // GET /api/attendance/today (Fetch today live status for employee)
+    // ----------------------------------------
+    if (pathStr === 'today' && method === 'GET') {
+      const url = new URL(req.url);
+      const rawUserId = url.searchParams.get('userId') || url.searchParams.get('employeeId');
+      const { dateStr } = getBaghdadDateTime();
+
+      if (!rawUserId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
+
+      const userId = rawUserId.trim();
+      const rawNum = userId.replace('emp-', '');
+
+      try {
+        const { data: record } = await supabase
+          .from('attendance')
+          .select('*')
+          .or(`user_id.eq.${userId},user_id.eq.${rawNum},user_id.eq.emp-${rawNum}`)
+          .eq('date', dateStr)
+          .maybeSingle();
+
+        let checkInTime = record?.check_in_time || null;
+        let checkOutTime = record?.check_out_time || null;
+        let warehouseName = record?.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی';
+        let status = record?.status || 'Present';
+
+        if (!checkInTime) {
+          const { data: todayLogs } = await supabase
+            .from('attendance_logs')
+            .select('*')
+            .or(`employee_id.eq.${userId},employee_id.eq.${rawNum},employee_id.eq.emp-${rawNum}`)
+            .eq('log_date', dateStr)
+            .order('created_at', { ascending: true });
+
+          if (todayLogs && todayLogs.length > 0) {
+            todayLogs.forEach(l => {
+              if (l.log_type === 'Check In' || l.log_type?.includes('In')) {
+                if (!checkInTime) checkInTime = l.log_time_str;
+              } else if (l.log_type === 'Check Out' || l.log_type?.includes('Out')) {
+                checkOutTime = l.log_time_str;
+              }
+            });
+          }
+        }
+
+        return NextResponse.json({
+          date: dateStr,
+          userId,
+          checkInTime,
+          checkOutTime,
+          warehouseName,
+          status
+        }, {
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            'CDN-Cache-Control': 'no-store',
+          }
+        });
+      } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
       }
     }

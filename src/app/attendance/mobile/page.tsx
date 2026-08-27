@@ -456,7 +456,42 @@ export default function AutonomousMobileAppLight() {
       localStorage.setItem('ashley_bound_employee_profile', JSON.stringify(profile));
       localStorage.setItem('ashley_bound_employee_id', selectedEmpId);
 
-      sendLocalNotification('🎉 بەخێربێیت', `مۆبایلەکەت بە ناوی ${profile.name} بە سەرکەوتوویی بەسترایەوە.`);
+      // Auto-record fresh check-in for the day upon successful login & binding
+      const todayIso = format(new Date(), 'yyyy-MM-dd');
+      const nowTimeStr = format(new Date(), 'HH:mm');
+      try {
+        const autoRes = await fetch('/api/attendance/autonomous-event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: selectedEmpId,
+            userName: fullName,
+            deviceToken: devToken,
+            event: 'ENTER',
+            lat: currentLat || 35.5571,
+            lng: currentLng || 45.4352,
+            distance: presence.distanceMeters || 0,
+            regionName: presence.matchedLocationName || 'کۆمپانیای سەرەکی ئاشڵی',
+            timestamp: new Date().toISOString(),
+          })
+        });
+        const autoData = await autoRes.json();
+        const finalInTime = autoData.time || nowTimeStr;
+        setLiveTodayShift({
+          checkInTime: finalInTime,
+          checkOutTime: null,
+          status: 'Present',
+          warehouseName: autoData.location || 'کۆمپانیای سەرەکی ئاشڵی'
+        });
+        localStorage.setItem(`ashley_shift_state_${todayIso}_${selectedEmpId}`, JSON.stringify({
+          checkInTime: finalInTime,
+          checkOutTime: null,
+          status: 'Present',
+          warehouseName: autoData.location || 'کۆمپانیای سەرەکی ئاشڵی'
+        }));
+      } catch {}
+
+      sendLocalNotification('🎉 بەخێربێیت', `مۆبایلەکەت بە ناوی ${profile.name} بە سەرکەوتوویی بەسترایەوە و هاتنت تۆمارکرا.`);
     } catch (err: any) {
       setAuthError(err.message || 'هەڵەیەک ڕوویدا لە کاتی چوونەژوورەوە');
     } finally {
