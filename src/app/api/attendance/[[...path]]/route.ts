@@ -221,20 +221,23 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       };
 
       try {
-        // 1. Check central registry in attendance_settings
+        // 1. Check resilient central registry in warehouses table
         const { data: regRow } = await supabase
-          .from('attendance_settings')
-          .select('*')
-          .eq('id', 'device_bindings_registry')
+          .from('warehouses')
+          .select('qr_code')
+          .eq('id', 'ashley_device_bindings')
           .maybeSingle();
 
-        const registry = regRow?.settings || {};
+        let registry: Record<string, any> = {};
+        if (regRow?.qr_code) {
+          try { registry = JSON.parse(regRow.qr_code); } catch {}
+        }
 
         for (const [uId, info] of Object.entries<any>(registry)) {
           if (!info || info.unbound) continue;
-          const matchToken = deviceToken && info.deviceToken && info.deviceToken === deviceToken;
-          const matchFp = fingerprint && info.fingerprint && info.fingerprint === fingerprint;
-          const matchIp = clientIp && info.ip && info.ip === clientIp && clientIp !== '127.0.0.1' && !clientIp.startsWith('::');
+          const matchToken = Boolean(deviceToken && info.deviceToken && info.deviceToken === deviceToken);
+          const matchFp = Boolean(fingerprint && info.fingerprint && info.fingerprint === fingerprint);
+          const matchIp = Boolean(clientIp && info.ip && info.ip === clientIp && clientIp !== '127.0.0.1' && !clientIp.startsWith('::'));
 
           if (matchToken || matchFp || matchIp) {
             const { data: dbUser } = await supabase.from('users').select('id, name, full_name, role').eq('id', uId).maybeSingle();
@@ -321,15 +324,18 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         return NextResponse.json({ error: `❌ کۆدی نهێنی (PIN) هەڵەیە! تکایە کۆدی دروست بنووسە.` }, { status: 401 });
       }
 
-      // Fetch Central Device Registry
+      // Fetch Central Device Registry from resilient store
       try {
         const { data: regRow } = await supabase
-          .from('attendance_settings')
-          .select('*')
-          .eq('id', 'device_bindings_registry')
+          .from('warehouses')
+          .select('qr_code')
+          .eq('id', 'ashley_device_bindings')
           .maybeSingle();
 
-        let registry = regRow?.settings || {};
+        let registry: Record<string, any> = {};
+        if (regRow?.qr_code) {
+          try { registry = JSON.parse(regRow.qr_code); } catch {}
+        }
 
         // RULE 1: Is this employee account already bound to a DIFFERENT device?
         const existingEmpBinding = registry[userId];
@@ -367,10 +373,13 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           unbound: false
         };
 
-        await supabase.from('attendance_settings').upsert({
-          id: 'device_bindings_registry',
-          settings: registry,
-          updated_at: new Date().toISOString()
+        await supabase.from('warehouses').upsert({
+          id: 'ashley_device_bindings',
+          name: 'Ashley Device & Hardware Registry',
+          qr_code: JSON.stringify(registry),
+          lat: 0,
+          lng: 0,
+          radius: 0
         });
 
         try {
@@ -378,14 +387,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             .from('users')
             .update({ device_token: deviceToken })
             .eq('id', userId);
-        } catch {}
-
-        // Delete unbind flag
-        try {
-          await supabase
-            .from('attendance_settings')
-            .delete()
-            .eq('id', `unbind_${userId}`);
         } catch {}
 
         return NextResponse.json({
@@ -614,28 +615,27 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         } catch {}
 
         const { data: regRow } = await supabase
-          .from('attendance_settings')
-          .select('*')
-          .eq('id', 'device_bindings_registry')
+          .from('warehouses')
+          .select('qr_code')
+          .eq('id', 'ashley_device_bindings')
           .maybeSingle();
 
-        let registry = regRow?.settings || {};
-        if (registry[userId]) {
-          delete registry[userId];
-          await supabase.from('attendance_settings').upsert({
-            id: 'device_bindings_registry',
-            settings: registry,
-            updated_at: new Date().toISOString()
-          });
+        let registry: Record<string, any> = {};
+        if (regRow?.qr_code) {
+          try { registry = JSON.parse(regRow.qr_code); } catch {}
         }
 
-        await supabase
-          .from('attendance_settings')
-          .upsert({
-            id: `unbind_${userId}`,
-            settings: { unbound: true, unbindAt: Date.now() },
-            updated_at: new Date().toISOString()
+        if (registry[userId]) {
+          delete registry[userId];
+          await supabase.from('warehouses').upsert({
+            id: 'ashley_device_bindings',
+            name: 'Ashley Device & Hardware Registry',
+            qr_code: JSON.stringify(registry),
+            lat: 0,
+            lng: 0,
+            radius: 0
           });
+        }
       } catch (err) {
         console.warn('Supabase unbind-device error:', err);
       }
@@ -660,34 +660,30 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       if (!userId) return NextResponse.json({ bound: true }, { headers: noCacheHeaders });
 
       try {
-        // 1. Check if unbind flag is set in attendance_settings
-        const { data: unbindMeta } = await supabase
-          .from('attendance_settings')
-          .select('*')
-          .eq('id', `unbind_${userId}`)
+        // Check central registry in warehouses
+        const { data: regRow } = await supabase
+          .from('warehouses')
+          .select('qr_code')
+          .eq('id', 'ashley_device_bindings')
           .maybeSingle();
 
-        if (unbindMeta?.settings?.unbound) {
+        let registry: Record<string, any> = {};
+        if (regRow?.qr_code) {
+          try { registry = JSON.parse(regRow.qr_code); } catch {}
+        }
+
+        const boundInfo = registry[userId];
+        if (!boundInfo || boundInfo.unbound) {
           return NextResponse.json({ bound: false, reason: 'unbound_by_admin' }, { headers: noCacheHeaders });
         }
 
-        // 2. Check device_token in users table
-        const { data: user } = await supabase
-          .from('users')
-          .select('device_token')
-          .eq('id', userId)
-          .maybeSingle();
-
-        if (user) {
-          if (!user.device_token || (deviceToken && user.device_token !== deviceToken)) {
-            return NextResponse.json({ bound: false, reason: 'unbound_by_admin' }, { headers: noCacheHeaders });
-          }
+        if (deviceToken && boundInfo.deviceToken && boundInfo.deviceToken !== deviceToken) {
+          return NextResponse.json({ bound: false, reason: 'unbound_by_admin' }, { headers: noCacheHeaders });
         }
       } catch (err) {
         console.warn('device-status error:', err);
       }
 
-      return NextResponse.json({ bound: true }, { headers: noCacheHeaders });
     }
 
     // ----------------------------------------
