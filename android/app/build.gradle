@@ -4,7 +4,7 @@ android {
     namespace = "com.ashley.staff.erp"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.ashley.staff.erp"
+        applicationId "com.ashley.attendance"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

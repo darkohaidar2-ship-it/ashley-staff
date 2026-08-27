@@ -203,35 +203,90 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
-    // POST /api/attendance/check-device
+    // POST & GET /api/attendance/check-device (Smart Device & IP Recognition)
     // ----------------------------------------
-    if (pathStr === 'check-device' && method === 'POST') {
-      const { deviceToken } = await req.json();
-      if (!deviceToken) return NextResponse.json({ error: 'Device token is required' }, { status: 400 });
-
-      const { data: user, error } = await supabase
-        .from('users')
-        .select('id, name, role')
-        .eq('device_token', deviceToken)
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (user) {
-        return NextResponse.json({ authenticated: true, user: { id: user.id, name: user.name, role: user.role } });
-      } else {
-        return NextResponse.json({ authenticated: false });
+    if (pathStr === 'check-device' && (method === 'POST' || method === 'GET')) {
+      let body: any = {};
+      if (method === 'POST') {
+        try { body = await req.json(); } catch {}
       }
+      const url = new URL(req.url);
+      const deviceToken = body.deviceToken || url.searchParams.get('deviceToken');
+      const fingerprint = body.fingerprint || url.searchParams.get('fingerprint');
+      const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || '';
+
+      const noCacheHeaders = {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+      };
+
+      try {
+        // 1. Check central registry in attendance_settings
+        const { data: regRow } = await supabase
+          .from('attendance_settings')
+          .select('*')
+          .eq('id', 'device_bindings_registry')
+          .maybeSingle();
+
+        const registry = regRow?.settings || {};
+
+        for (const [uId, info] of Object.entries<any>(registry)) {
+          if (!info || info.unbound) continue;
+          const matchToken = deviceToken && info.deviceToken && info.deviceToken === deviceToken;
+          const matchFp = fingerprint && info.fingerprint && info.fingerprint === fingerprint;
+          const matchIp = clientIp && info.ip && info.ip === clientIp && clientIp !== '127.0.0.1' && !clientIp.startsWith('::');
+
+          if (matchToken || matchFp || matchIp) {
+            const { data: dbUser } = await supabase.from('users').select('id, name, full_name, role').eq('id', uId).maybeSingle();
+            return NextResponse.json({
+              bound: true,
+              authenticated: false,
+              lockedEmployee: {
+                id: uId,
+                name: dbUser?.full_name || dbUser?.name || info.userName || 'کارمەند',
+                role: dbUser?.role || info.role || 'کارمەند'
+              }
+            }, { headers: noCacheHeaders });
+          }
+        }
+
+        // 2. Check users table
+        if (deviceToken) {
+          const { data: user } = await supabase
+            .from('users')
+            .select('id, name, full_name, role, device_token')
+            .eq('device_token', deviceToken)
+            .maybeSingle();
+
+          if (user) {
+            return NextResponse.json({
+              bound: true,
+              authenticated: false,
+              lockedEmployee: {
+                id: user.id,
+                name: user.full_name || user.name,
+                role: user.role
+              }
+            }, { headers: noCacheHeaders });
+          }
+        }
+      } catch (err) {
+        console.warn('check-device error:', err);
+      }
+
+      return NextResponse.json({ bound: false, lockedEmployee: null }, { headers: noCacheHeaders });
     }
 
     // ----------------------------------------
-    // POST /api/attendance/register-device
+    // POST /api/attendance/register-device (Strict 1-to-1 Device & Account Binding)
     // ----------------------------------------
     if (pathStr === 'register-device' && method === 'POST') {
-      const { userId, pin, deviceToken } = await req.json();
+      const { userId, pin, deviceToken, fingerprint } = await req.json();
       if (!userId || !pin || !deviceToken) {
         return NextResponse.json({ error: 'داخڵکردنی پین کۆد و زانیارییەکان مەرجە' }, { status: 400 });
       }
+
+      const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || '';
 
       const DEFAULT_EMPLOYEE_PINS: Record<string, string> = {
         'emp-01': '1001',
@@ -261,27 +316,82 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const validPin = user?.pin || user?.password || DEFAULT_EMPLOYEE_PINS[userId] || '1234';
       const cleanInputPin = String(pin).trim();
 
-      // Strict PIN comparison
-      if (cleanInputPin !== validPin && cleanInputPin !== '12355321' && cleanInputPin !== '1234' && cleanInputPin !== DEFAULT_EMPLOYEE_PINS[userId]) {
+      // Strict PIN comparison (or Master Admin Password 12355321)
+      if (cleanInputPin !== validPin && cleanInputPin !== '12355321' && cleanInputPin !== DEFAULT_EMPLOYEE_PINS[userId]) {
         return NextResponse.json({ error: `❌ کۆدی نهێنی (PIN) هەڵەیە! تکایە کۆدی دروست بنووسە.` }, { status: 401 });
       }
 
+      // Fetch Central Device Registry
       try {
+        const { data: regRow } = await supabase
+          .from('attendance_settings')
+          .select('*')
+          .eq('id', 'device_bindings_registry')
+          .maybeSingle();
+
+        let registry = regRow?.settings || {};
+
+        // RULE 1: Is this employee account already bound to a DIFFERENT device?
+        const existingEmpBinding = registry[userId];
+        if (
+          existingEmpBinding && 
+          !existingEmpBinding.unbound && 
+          existingEmpBinding.deviceToken && 
+          existingEmpBinding.deviceToken !== deviceToken
+        ) {
+          return NextResponse.json({
+            error: `❌ ئەم ئەکاونتە پێشتر بە مۆبایلێکی تر بەستراوەتەوە! تکایە داوا لە ئەدمین بکە مۆبایلە کۆنەکەت لە سیستەمەوە سفر بکاتەوە.`
+          }, { status: 403 });
+        }
+
+        // RULE 2: Is this device already bound to a DIFFERENT employee account?
+        for (const [otherId, otherInfo] of Object.entries<any>(registry)) {
+          if (otherId !== userId && otherInfo && !otherInfo.unbound) {
+            if (otherInfo.deviceToken === deviceToken || (fingerprint && otherInfo.fingerprint === fingerprint)) {
+              return NextResponse.json({
+                error: `❌ ئەم مۆبایلە پێشتر بە هەژماری (${otherInfo.userName || otherId}) بەستراوەتەوە! هەر مۆبایلێک تەنها بۆ یەک ئەکاونتە.`
+              }, { status: 403 });
+            }
+          }
+        }
+
+        // Save successful binding
+        const empName = user?.full_name || user?.name || 'کارمەند';
+        registry[userId] = {
+          userId,
+          userName: empName,
+          deviceToken,
+          fingerprint: fingerprint || null,
+          ip: clientIp,
+          boundAt: new Date().toISOString(),
+          unbound: false
+        };
+
+        await supabase.from('attendance_settings').upsert({
+          id: 'device_bindings_registry',
+          settings: registry,
+          updated_at: new Date().toISOString()
+        });
+
         await supabase
           .from('users')
           .update({ device_token: deviceToken, device_bound: true })
           .eq('id', userId);
 
-        // Delete unbind flag in attendance_settings
+        // Delete unbind flag
         await supabase
           .from('attendance_settings')
           .delete()
           .eq('id', `unbind_${userId}`);
-      } catch (e) {
-        console.warn('Device register update err:', e);
-      }
 
-      return NextResponse.json({ success: true, user: { id: userId, name: user?.name || 'کارمەند' } });
+        return NextResponse.json({
+          success: true,
+          user: { id: userId, name: empName, role: user?.role || 'Employee' }
+        });
+      } catch (e: any) {
+        console.warn('Device register update err:', e);
+        return NextResponse.json({ success: true, user: { id: userId, name: user?.name || 'کارمەند' } });
+      }
     }
 
     // ----------------------------------------
@@ -496,6 +606,22 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .from('users')
           .update({ device_token: null, device_bound: false })
           .eq('id', userId);
+
+        const { data: regRow } = await supabase
+          .from('attendance_settings')
+          .select('*')
+          .eq('id', 'device_bindings_registry')
+          .maybeSingle();
+
+        let registry = regRow?.settings || {};
+        if (registry[userId]) {
+          delete registry[userId];
+          await supabase.from('attendance_settings').upsert({
+            id: 'device_bindings_registry',
+            settings: registry,
+            updated_at: new Date().toISOString()
+          });
+        }
 
         await supabase
           .from('attendance_settings')
