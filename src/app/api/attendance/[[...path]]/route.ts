@@ -367,23 +367,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           try { registry = JSON.parse(regRow.qr_code); } catch {}
         }
 
-        // RULE 1: Is this employee account already bound to a DIFFERENT device?
-        const existingEmpBinding = registry[userId];
-        if (
-          existingEmpBinding && 
-          !existingEmpBinding.unbound && 
-          existingEmpBinding.deviceToken && 
-          existingEmpBinding.deviceToken !== deviceToken
-        ) {
-          return NextResponse.json({
-            error: `❌ ئەم ئەکاونتە پێشتر بە مۆبایلێکی تر بەستراوەتەوە! تکایە داوا لە ئەدمین بکە مۆبایلە کۆنەکەت لە سیستەمەوە سفر بکاتەوە.`
-          }, { status: 403 });
-        }
-
-        // RULE 2: Is this device already bound to a DIFFERENT employee account?
+        // RULE: Is this device already bound to a DIFFERENT employee account?
         for (const [otherId, otherInfo] of Object.entries<any>(registry)) {
           if (otherId !== userId && otherInfo && !otherInfo.unbound) {
-            if (otherInfo.deviceToken === deviceToken || (fingerprint && otherInfo.fingerprint === fingerprint)) {
+            const sameDevToken = Boolean(deviceToken && otherInfo.deviceToken && otherInfo.deviceToken === deviceToken);
+            const sameFp = Boolean(fingerprint && otherInfo.fingerprint && otherInfo.fingerprint === fingerprint);
+            if (sameDevToken || sameFp) {
               return NextResponse.json({
                 error: `❌ ئەم مۆبایلە پێشتر بە هەژماری (${otherInfo.userName || otherId}) بەستراوەتەوە! هەر مۆبایلێک تەنها بۆ یەک ئەکاونتە.`
               }, { status: 403 });

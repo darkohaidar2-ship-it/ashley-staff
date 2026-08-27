@@ -684,6 +684,7 @@ export default function AutonomousMobileAppLight() {
   const [profileEmergency, setProfileEmergency] = useState('0750 987 6543 (کەسی نزیک)');
   const [profilePin, setProfilePin] = useState('1002');
   const [showPinText, setShowPinText] = useState(false);
+  const [showLoginPin, setShowLoginPin] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
 
@@ -1050,22 +1051,97 @@ export default function AutonomousMobileAppLight() {
               </div>
             )}
 
-            <div className="space-y-1 text-right">
+            <div className="space-y-2 text-right">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-black text-slate-800">پین کۆد (PIN):</label>
-                <span className="text-[10px] text-orange-600 font-bold">* مەرجی سەرەکی</span>
+                <label className="text-xs font-black text-slate-800">کۆدی نهێنی (PIN):</label>
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPin(!showLoginPin)}
+                  className="text-[11px] text-orange-600 font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  {showLoginPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  <span>{showLoginPin ? 'شاردنەوە' : 'پیشاندان'}</span>
+                </button>
               </div>
+
+              {/* Visual 4-Digit Display Boxes (Clean LTR, No Caret/Jump Glitches) */}
+              <div className="flex items-center justify-center gap-2.5 py-1" dir="ltr">
+                {[0, 1, 2, 3].map((idx) => {
+                  const char = pinInput[idx];
+                  const isFilled = Boolean(char);
+                  const isCurrent = pinInput.length === idx;
+                  return (
+                    <div
+                      key={idx}
+                      className={`w-12 h-13 rounded-2xl border-2 flex items-center justify-center text-lg font-mono font-black transition-all ${
+                        isCurrent
+                          ? 'border-orange-500 bg-orange-50/60 shadow-xs ring-2 ring-orange-200'
+                          : isFilled
+                          ? 'border-slate-800 bg-slate-900 text-white shadow-xs'
+                          : 'border-slate-200 bg-slate-50 text-slate-300'
+                      }`}
+                    >
+                      {isFilled ? (showLoginPin ? char : '●') : ''}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Native Input (hidden/optional fallback for keyboard) */}
               <div className="relative">
                 <input
-                  type="password"
+                  type={showLoginPin ? "text" : "password"}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   maxLength={6}
-                  required
-                  placeholder="••••"
+                  dir="ltr"
+                  placeholder="یان لێرە بنووسە..."
                   value={pinInput}
-                  onChange={(e) => setPinInput(e.target.value)}
-                  className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-2xl text-base text-slate-900 font-mono font-black tracking-widest text-center focus:border-orange-500 focus:bg-white focus:outline-hidden transition-all"
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9]/g, '');
+                    setPinInput(val);
+                  }}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center font-mono font-bold text-xs text-slate-800 focus:border-orange-500 focus:bg-white focus:outline-hidden"
                 />
-                <Lock className="w-4 h-4 text-slate-400 absolute left-4 top-4" />
+              </div>
+
+              {/* Built-in Touch Keypad for 100% Instant Smooth Typing */}
+              <div className="grid grid-cols-3 gap-1.5 pt-1" dir="ltr">
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                  <button
+                    key={digit}
+                    type="button"
+                    onClick={() => {
+                      if (pinInput.length < 6) setPinInput(prev => prev + digit);
+                    }}
+                    className="py-2.5 bg-slate-100/80 hover:bg-slate-200 active:bg-orange-500 active:text-white rounded-xl font-mono font-black text-base text-slate-800 transition-all cursor-pointer shadow-2xs active:scale-95"
+                  >
+                    {digit}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setPinInput('')}
+                  className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl text-[11px] font-bold transition-all cursor-pointer"
+                >
+                  پاککردن
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (pinInput.length < 6) setPinInput(prev => prev + '0');
+                  }}
+                  className="py-2.5 bg-slate-100/80 hover:bg-slate-200 active:bg-orange-500 active:text-white rounded-xl font-mono font-black text-base text-slate-800 transition-all cursor-pointer shadow-2xs active:scale-95"
+                >
+                  0
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPinInput(prev => prev.slice(0, -1))}
+                  className="py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-rose-100 text-slate-700 rounded-xl text-sm font-black transition-all cursor-pointer flex items-center justify-center active:scale-95"
+                >
+                  ⌫
+                </button>
               </div>
             </div>
 
