@@ -106,18 +106,43 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
-        public void syncEmployee(String userId, String userName, String deviceToken) {
+        public void syncEmployee(String userId, String userName, String deviceToken, String checkInTime) {
             SharedPreferences prefs = context.getSharedPreferences("ashley_prefs", Context.MODE_PRIVATE);
-            prefs.edit()
+            SharedPreferences.Editor editor = prefs.edit()
                     .putString("userId", userId)
                     .putString("userName", userName)
-                    .putString("deviceToken", deviceToken)
-                    .apply();
+                    .putString("deviceToken", deviceToken);
+            if (checkInTime != null && !checkInTime.isEmpty()) {
+                editor.putString("checkInTime", checkInTime);
+            }
+            editor.apply();
 
             Intent serviceIntent = new Intent(context, BackgroundAttendanceService.class);
             serviceIntent.putExtra("userId", userId);
             serviceIntent.putExtra("userName", userName);
             serviceIntent.putExtra("deviceToken", deviceToken);
+            if (checkInTime != null && !checkInTime.isEmpty()) {
+                serviceIntent.putExtra("checkInTime", checkInTime);
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(serviceIntent);
+            } else {
+                context.startService(serviceIntent);
+            }
+        }
+
+        @JavascriptInterface
+        public void syncShift(String checkInTime, String checkOutTime) {
+            SharedPreferences prefs = context.getSharedPreferences("ashley_prefs", Context.MODE_PRIVATE);
+            SharedPreferences.Editor editor = prefs.edit();
+            if (checkInTime != null) editor.putString("checkInTime", checkInTime);
+            if (checkOutTime != null) editor.putString("checkOutTime", checkOutTime);
+            editor.apply();
+
+            Intent serviceIntent = new Intent(context, BackgroundAttendanceService.class);
+            if (checkInTime != null) serviceIntent.putExtra("checkInTime", checkInTime);
+            if (checkOutTime != null) serviceIntent.putExtra("checkOutTime", checkOutTime);
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(serviceIntent);

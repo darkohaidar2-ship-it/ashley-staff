@@ -34,7 +34,7 @@ public class BackgroundAttendanceService extends Service implements LocationList
     private static final String TAG = "AshleyBgAttendance";
     public static final String CHANNEL_ID = "ashley_attendance_bg_channel";
     public static final String ALERT_CHANNEL_ID = "ashley_attendance_alert_channel";
-    private static final int NOTIFICATION_ID = 1001;
+    public static final int NOTIFICATION_ID = 1001;
 
     private LocationManager locationManager;
     private PowerManager.WakeLock wakeLock;
@@ -78,16 +78,26 @@ public class BackgroundAttendanceService extends Service implements LocationList
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && intent.hasExtra("userId")) {
-            String userId = intent.getStringExtra("userId");
-            String userName = intent.getStringExtra("userName");
-            String deviceToken = intent.getStringExtra("deviceToken");
-
+        if (intent != null) {
             SharedPreferences.Editor editor = prefs.edit();
-            if (userId != null) editor.putString("userId", userId);
-            if (userName != null) editor.putString("userName", userName);
-            if (deviceToken != null) editor.putString("deviceToken", deviceToken);
+            if (intent.hasExtra("userId")) {
+                editor.putString("userId", intent.getStringExtra("userId"));
+            }
+            if (intent.hasExtra("userName")) {
+                editor.putString("userName", intent.getStringExtra("userName"));
+            }
+            if (intent.hasExtra("deviceToken")) {
+                editor.putString("deviceToken", intent.getStringExtra("deviceToken"));
+            }
+            if (intent.hasExtra("checkInTime")) {
+                editor.putString("checkInTime", intent.getStringExtra("checkInTime"));
+            }
+            if (intent.hasExtra("checkOutTime")) {
+                editor.putString("checkOutTime", intent.getStringExtra("checkOutTime"));
+            }
             editor.apply();
+
+            updateStickyNotification();
         }
         return START_STICKY;
     }
@@ -172,9 +182,14 @@ public class BackgroundAttendanceService extends Service implements LocationList
 
             if (!todayDateStr.equals(lastCheckInDate)) {
                 lastTriggerTime = now;
-                prefs.edit().putString("last_checkin_date", todayDateStr).apply();
+                prefs.edit()
+                        .putString("last_checkin_date", todayDateStr)
+                        .putString("checkInTime", currentTimeStr)
+                        .apply();
 
                 postAutonomousEvent("ENTER", userId, userName, deviceToken, lat, lng, Math.round(distance), locationName);
+
+                updateStickyNotification();
 
                 showKurdishAlertNotification(
                         "🎉 بەخێربێیت بۆ دەوام",
@@ -189,9 +204,14 @@ public class BackgroundAttendanceService extends Service implements LocationList
 
             if (todayDateStr.equals(lastCheckInDate) && !todayDateStr.equals(lastCheckOutDate)) {
                 lastTriggerTime = now;
-                prefs.edit().putString("last_checkout_date", todayDateStr).apply();
+                prefs.edit()
+                        .putString("last_checkout_date", todayDateStr)
+                        .putString("checkOutTime", currentTimeStr)
+                        .apply();
 
                 postAutonomousEvent("EXIT", userId, userName, deviceToken, lat, lng, Math.round(distance), locationName);
+
+                updateStickyNotification();
 
                 showKurdishAlertNotification(
                         "👋 تۆمارکردنی ڕۆیشتن لە دەوام",
@@ -266,27 +286,52 @@ public class BackgroundAttendanceService extends Service implements LocationList
         }
     }
 
+    public void updateStickyNotification() {
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) {
+            nm.notify(NOTIFICATION_ID, buildStickyNotification());
+        }
+    }
+
     private Notification buildStickyNotification() {
         Intent notificationIntent = new Intent(this, MainActivity.class);
+        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 this, 0, notificationIntent,
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
         );
 
         String userName = prefs.getString("userName", "سیستەمی ئاشڵی");
+        String checkInTime = prefs.getString("checkInTime", null);
+        String checkOutTime = prefs.getString("checkOutTime", null);
+        boolean isInside = prefs.getBoolean("is_inside", false);
+
+        String statusLine;
+        if (checkOutTime != null && !checkOutTime.isEmpty()) {
+            statusLine = "دەوامت تەواو کردووە 🏁 • کاتژمێر " + checkOutTime + " ڕۆیشتوویت";
+        } else if (checkInTime != null && !checkInTime.isEmpty()) {
+            statusLine = "لە دەوامیت 🟢 • کاتژمێر " + checkInTime + " هاتوویت";
+        } else if (isInside) {
+            statusLine = "لە دەوامیت 🟢 (لەناو کۆمپانیا)";
+        } else {
+            statusLine = "لە دەرەوەی دەوامیت ⚪ • چاودێری باکگراوند چالاکە";
+        }
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("سیستەمی ئاشڵی (Ashley Staff)")
-                .setContentText("چاودێری دەوام لە باکگراوند چالاکە 🟢 • " + userName)
+                .setContentText(statusLine)
+                .setSubText(userName)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .build();
     }
 
     private void showKurdishAlertNotification(String title, String message) {
         Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 this, (int) System.currentTimeMillis(), intent,
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT

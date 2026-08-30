@@ -447,6 +447,18 @@ export default function AutonomousMobileAppLight() {
     }
   }, [employeeProfile]);
 
+  // Sync live shift check-in / check-out times with Android Native Notification Bar
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).AshleyNativeBridge) {
+      try {
+        (window as any).AshleyNativeBridge.syncShift(
+          liveTodayShift.checkInTime || '',
+          liveTodayShift.checkOutTime || ''
+        );
+      } catch {}
+    }
+  }, [liveTodayShift]);
+
   // Shift calculation
   const shiftStatus = useMemo(() => {
     const checkIn = liveTodayShift.checkInTime || null;
