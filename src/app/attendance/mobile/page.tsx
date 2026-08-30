@@ -1301,47 +1301,44 @@ export default function AutonomousMobileAppLight() {
                   </span>
                 </div>
 
-                {/* Main 2-Column Live Action Shift Cards */}
+                {/* Main 2-Column Autonomous Live Shift Cards (No Manual Buttons) */}
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   
-                  {/* Check-In Card */}
-                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-center">
-                    <div className="flex items-center justify-center gap-1 text-[11px] font-black text-emerald-700">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
+                  {/* Check-In Autonomous Card */}
+                  <div className="p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200/90 space-y-2 text-center">
+                    <div className="flex items-center justify-center gap-1.5 text-[11px] font-black text-emerald-700">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                       <span>کاتی هاتن (Check-In)</span>
                     </div>
-                    <div className="text-base font-black font-mono text-slate-900">
+                    <div className="text-xl font-black font-mono text-slate-900 tracking-tight">
                       {liveTodayShift.checkInTime || '--:--'}
                     </div>
-                    <button
-                      type="button"
-                      disabled={triggerLoading !== null}
-                      onClick={() => handleTriggerAttendance('ENTER')}
-                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer"
-                    >
-                      {triggerLoading === 'ENTER' ? 'لە تۆمارکردندایە...' : '🟢 تۆمارکردنی هاتن'}
-                    </button>
+                    <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100/70 border border-emerald-200 text-emerald-800 text-[10px] font-black">
+                      <span>{liveTodayShift.checkInTime ? '✅ لە دەوامیت' : 'لە چاوەڕوانی گەیشتن'}</span>
+                    </div>
                   </div>
 
-                  {/* Check-Out Card */}
-                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-center">
-                    <div className="flex items-center justify-center gap-1 text-[11px] font-black text-orange-700">
-                      <Clock className="w-3.5 h-3.5" />
+                  {/* Check-Out Autonomous Card */}
+                  <div className="p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200/90 space-y-2 text-center">
+                    <div className="flex items-center justify-center gap-1.5 text-[11px] font-black text-blue-700">
+                      <Clock className="w-3.5 h-3.5 text-blue-600" />
                       <span>کاتی ڕۆیشتن (Check-Out)</span>
                     </div>
-                    <div className="text-base font-black font-mono text-slate-900">
-                      {liveTodayShift.checkOutTime || (liveTodayShift.checkInTime ? 'لە دەوامدایە' : '--:--')}
+                    <div className="text-xl font-black font-mono text-slate-900 tracking-tight">
+                      {liveTodayShift.checkOutTime || (liveTodayShift.checkInTime ? 'بەردەوامە' : '--:--')}
                     </div>
-                    <button
-                      type="button"
-                      disabled={triggerLoading !== null || !liveTodayShift.checkInTime}
-                      onClick={() => handleTriggerAttendance('EXIT')}
-                      className="w-full py-2 bg-orange-600 hover:bg-orange-700 active:bg-orange-800 disabled:opacity-50 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer"
-                    >
-                      {triggerLoading === 'EXIT' ? 'لە تۆمارکردندایە...' : '👋 تۆمارکردنی ڕۆیشتن'}
-                    </button>
+                    <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-100/70 border border-blue-200 text-blue-800 text-[10px] font-black">
+                      <span>{liveTodayShift.checkOutTime ? '🏁 دەوام تەواو' : (liveTodayShift.checkInTime ? '⏳ دەوام کراوەیە' : 'دەستپێنەکراوە')}</span>
+                    </div>
                   </div>
 
+                </div>
+
+                <div className="p-2.5 bg-blue-50/60 rounded-xl border border-blue-200/70 text-center">
+                  <p className="text-[11px] text-blue-900 font-bold flex items-center justify-center gap-1.5">
+                    <Radio className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
+                    <span>سیستەمەکە ١٠٠٪ ئۆتۆماتیکییە: بە گەیشتنت بە ئاشڵی کاتژمێری هاتن دەنووسێت</span>
+                  </p>
                 </div>
               </div>
 
