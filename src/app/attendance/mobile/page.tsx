@@ -435,6 +435,18 @@ export default function AutonomousMobileAppLight() {
     };
   }, [fetchLiveTodayAttendance]);
 
+  // Sync with Native Android Background Service
+  useEffect(() => {
+    if (employeeProfile?.id) {
+      const devToken = localStorage.getItem('ashley_device_token') || 'dev-auto';
+      if (typeof window !== 'undefined' && (window as any).AshleyNativeBridge) {
+        try {
+          (window as any).AshleyNativeBridge.syncEmployee(employeeProfile.id, employeeProfile.name, devToken);
+        } catch {}
+      }
+    }
+  }, [employeeProfile]);
+
   // Shift calculation
   const shiftStatus = useMemo(() => {
     const checkIn = liveTodayShift.checkInTime || null;
@@ -1230,6 +1242,36 @@ export default function AutonomousMobileAppLight() {
           {activeNavTab === 'attendance' && (
             <div className="space-y-4 animate-in fade-in duration-200">
               
+              {/* 🟢 Background Autoplay / Geofence Live Status Banner */}
+              <div className="p-3.5 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 rounded-2xl border border-emerald-200/80 shadow-2xs flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-xs">
+                    <Radio className="w-4 h-4 animate-pulse" />
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-black text-xs text-emerald-950">باکگراوند و ئۆتۆپلەی چالاکە (Background Active)</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                    </div>
+                    <p className="text-[10px] text-emerald-800 font-bold">تەنانەت ئەگەر ئەپەکە داخراو بێت، دەوام خۆی تۆمار دەبێت</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== 'undefined' && (window as any).AshleyNativeBridge) {
+                      (window as any).AshleyNativeBridge.openBatterySettings();
+                    } else {
+                      alert('بۆ ئەوەی مۆبایلەکەت لە باکگراوند هەرگیز ڕانەوەستێت، لە Settings > Battery دۆخی ئەپەکە بکە بە Unrestricted');
+                    }
+                  }}
+                  className="px-2.5 py-1.5 bg-white hover:bg-emerald-100/60 active:bg-emerald-200 text-emerald-900 rounded-xl border border-emerald-300 text-[10px] font-black shadow-2xs cursor-pointer flex items-center gap-1"
+                >
+                  <span>⚡ باتری</span>
+                </button>
+              </div>
+
               {/* Radar Presence Card */}
               <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
