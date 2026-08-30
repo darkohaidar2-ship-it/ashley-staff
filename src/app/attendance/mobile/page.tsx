@@ -1013,7 +1013,8 @@ export default function AutonomousMobileAppLight() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-between font-sans dir-rtl select-none pb-20" dir="rtl">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-between font-sans dir-rtl select-none pb-20 relative overflow-hidden" dir="rtl">
+      <div className="rgb-edge-light-top" />
       
       {/* ========================================================================= */}
       {/* AUTH SCREEN (Device Not Bound / Smart Recognition) */}
@@ -1208,7 +1209,7 @@ export default function AutonomousMobileAppLight() {
         <div className="flex-1 w-full max-w-md mx-auto flex flex-col justify-between p-4 sm:p-5 space-y-4">
           
           {/* Top Universal Clean Header */}
-          <div className="flex items-center justify-between p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+          <div className="flex items-center justify-between p-3 rgb-glow-card shadow-md">
             <div className="flex items-center gap-2.5">
               <div 
                 onMouseDown={startLongPress}
@@ -1255,17 +1256,18 @@ export default function AutonomousMobileAppLight() {
             <div className="space-y-4 animate-in fade-in duration-200">
               
               {/* 🟢 Background Autoplay / Geofence Live Status Banner */}
-              <div className="p-3.5 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 rounded-2xl border border-emerald-200/80 shadow-2xs flex items-center justify-between">
+              <div className="p-3.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl border border-indigo-500/40 shadow-lg shadow-indigo-500/10 flex items-center justify-between relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pink-500 via-cyan-400 to-emerald-400 animate-pulse" />
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-xs">
                     <Radio className="w-4 h-4 animate-pulse" />
                   </div>
                   <div className="text-right">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-black text-xs text-emerald-950">باکگراوند و ئۆتۆپلەی چالاکە (Background Active)</span>
+                      <span className="font-black text-xs text-white flex items-center gap-1.5"><span>باکگراوند و ئۆتۆپلەی (RGB Active)</span><span className="text-[10px] bg-gradient-to-r from-pink-500 to-cyan-400 text-white px-1.5 py-0.2 rounded-full font-bold">RGB</span></span>
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                     </div>
-                    <p className="text-[10px] text-emerald-800 font-bold">تەنانەت ئەگەر ئەپەکە داخراو بێت، دەوام خۆی تۆمار دەبێت</p>
+                    <p className="text-[10px] text-slate-300 font-bold">⚡ بە چوارچێوەی RGB و چاودێری زیرەکی باکگراوند</p>
                   </div>
                 </div>
 
