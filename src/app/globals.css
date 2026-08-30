@@ -310,84 +310,39 @@
 }
 
 /* ==========================================================================
-   🌈 RGB NEON GLOW & ANIMATED BORDER UTILITIES (CYBERPUNK / LUXURY ERP)
+   🪟 WINDOWS 11 FLUENT SHARP MOBILE UI (WinUI 3 / Acrylic / Mica)
    ========================================================================== */
 
-@keyframes rgbGlowShift {
-  0% {
-    background-position: 0% 50%;
-    filter: drop-shadow(0 0 6px rgba(255, 0, 128, 0.45));
-  }
-  50% {
-    background-position: 100% 50%;
-    filter: drop-shadow(0 0 10px rgba(0, 229, 255, 0.55));
-  }
-  100% {
-    background-position: 0% 50%;
-    filter: drop-shadow(0 0 6px rgba(255, 0, 128, 0.45));
-  }
+.win11-acrylic-card {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid rgba(203, 213, 225, 0.8) !important;
+  box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.05), 0 1px 3px 0 rgba(15, 23, 42, 0.03) !important;
 }
 
-.rgb-glow-card {
-  position: relative;
-  background: #ffffff;
-  border-radius: 1.25rem;
-  z-index: 1;
+.win11-dark-card {
+  background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%) !important;
+  border: 1px solid rgba(51, 65, 85, 0.7) !important;
+  box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.25) !important;
 }
 
-.rgb-glow-card::before {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: calc(1.25rem + 2px);
-  background: linear-gradient(
-    90deg,
-    #ff007a,
-    #7928ca,
-    #0070f3,
-    #00dfd8,
-    #00ff66,
-    #ffb700,
-    #ff007a
-  );
-  background-size: 300% 300%;
-  animation: rgbGlowShift 4s ease infinite;
-  z-index: -1;
-  opacity: 0.9;
+.win11-tab-active {
+  background: #ffffff !important;
+  color: #0067c0 !important;
+  box-shadow: 0 2px 8px rgba(0, 103, 192, 0.12), 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+  border: 1px solid rgba(203, 213, 225, 0.8) !important;
 }
 
-.rgb-edge-light-top {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #ff007a, #7928ca, #0070f3, #00dfd8, #00ff66, #ff007a);
-  background-size: 300% 100%;
-  animation: rgbGlowShift 3s linear infinite;
-  box-shadow: 0 0 12px rgba(0, 223, 216, 0.8), 0 0 24px rgba(255, 0, 122, 0.5);
-  z-index: 9999;
-  pointer-events: none;
+.win11-tab-inactive {
+  color: #64748b !important;
 }
 
-.rgb-pill-badge {
-  background: linear-gradient(90deg, #ff007a, #7928ca, #0070f3, #00dfd8, #00ff66, #ff007a);
-  background-size: 300% 300%;
-  animation: rgbGlowShift 4s ease infinite;
-  padding: 1.5px;
-  border-radius: 9999px;
-  display: inline-flex;
+.win11-tab-inactive:hover {
+  color: #1e293b !important;
+  background: rgba(241, 245, 249, 0.7) !important;
 }
 
-.rgb-pill-badge > span {
-  background: #ffffff;
-  border-radius: 9999px;
-  padding: 2px 8px;
-  font-weight: 800;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
 
 
 

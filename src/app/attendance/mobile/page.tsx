@@ -994,7 +994,7 @@ export default function AutonomousMobileAppLight() {
     return (
       <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 text-center font-sans dir-rtl" dir="rtl">
         <div className="max-w-md bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-2xl space-y-4">
-          <div className="w-16 h-16 rounded-2xl bg-orange-500/20 text-orange-400 flex items-center justify-center mx-auto text-2xl font-black">
+          <div className="w-16 h-16 rounded-2xl bg-blue-500/20 text-orange-400 flex items-center justify-center mx-auto text-2xl font-black">
             📱
           </div>
           <h1 className="text-lg font-black text-white">ئەم پەڕەیە تایبەتە بە مۆبایل</h1>
@@ -1003,7 +1003,7 @@ export default function AutonomousMobileAppLight() {
           </p>
           <a
             href="/admin"
-            className="inline-block w-full py-3.5 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white rounded-2xl font-black text-xs shadow-lg transition-all"
+            className="inline-block w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-2xl font-black text-xs shadow-lg transition-all"
           >
             چوون بۆ بەشی ئەدمین (Admin Panel)
           </a>
@@ -1013,23 +1013,22 @@ export default function AutonomousMobileAppLight() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-between font-sans dir-rtl select-none pb-20 relative overflow-hidden" dir="rtl">
-      <div className="rgb-edge-light-top" />
-      
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-between font-sans dir-rtl select-none pb-20 " dir="rtl">
+            
       {/* ========================================================================= */}
       {/* AUTH SCREEN (Device Not Bound / Smart Recognition) */}
       {/* ========================================================================= */}
       {!employeeProfile ? (
         <div className="flex-1 w-full max-w-sm mx-auto flex flex-col justify-center p-5 space-y-5">
           <div className="text-center space-y-2">
-            <div className="w-20 h-20 rounded-3xl mx-auto flex items-center justify-center overflow-hidden shadow-xl border-2 border-orange-400 p-1 bg-white">
+            <div className="w-20 h-20 rounded-3xl mx-auto flex items-center justify-center overflow-hidden shadow-xl border-2 border-blue-500 p-1 bg-white">
               <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-cover" />
             </div>
             
             {lockedEmployee ? (
               <div className="space-y-1">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-100 border border-orange-300 text-orange-900 text-[11px] font-black">
-                  <Smartphone className="w-3.5 h-3.5 text-orange-600" />
+                  <Smartphone className="w-3.5 h-3.5 text-blue-600" />
                   <span>📱 ناسینەوەی زیرەکی مۆبایل و ئامێر</span>
                 </div>
                 <h1 className="text-base font-black text-slate-900">سڵاو، {lockedEmployee.name}!</h1>
@@ -1046,9 +1045,9 @@ export default function AutonomousMobileAppLight() {
           <form onSubmit={handleDeviceBinding} className="space-y-3.5 bg-white p-5 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/60">
             
             {lockedEmployee ? (
-              <div className="p-3.5 bg-orange-50/80 rounded-2xl border border-orange-200 flex items-center justify-between text-right">
+              <div className="p-3.5 bg-blue-50/80 rounded-2xl border border-orange-200 flex items-center justify-between text-right">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-orange-500 text-white font-black text-sm flex items-center justify-center shadow-xs">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500 text-white font-black text-sm flex items-center justify-center shadow-xs">
                     {lockedEmployee.name.charAt(0)}
                   </div>
                   <div>
@@ -1082,7 +1081,7 @@ export default function AutonomousMobileAppLight() {
                 <button
                   type="button"
                   onClick={() => setShowLoginPin(!showLoginPin)}
-                  className="text-[11px] text-orange-600 font-bold flex items-center gap-1 cursor-pointer"
+                  className="text-[11px] text-blue-600 font-bold flex items-center gap-1 cursor-pointer"
                 >
                   {showLoginPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   <span>{showLoginPin ? 'شاردنەوە' : 'پیشاندان'}</span>
@@ -1100,7 +1099,7 @@ export default function AutonomousMobileAppLight() {
                       key={idx}
                       className={`w-12 h-13 rounded-2xl border-2 flex items-center justify-center text-lg font-mono font-black transition-all ${
                         isCurrent
-                          ? 'border-orange-500 bg-orange-50/60 shadow-xs ring-2 ring-orange-200'
+                          ? 'border-blue-600 bg-blue-50/60 shadow-xs ring-2 ring-blue-200'
                           : isFilled
                           ? 'border-slate-800 bg-slate-900 text-white shadow-xs'
                           : 'border-slate-200 bg-slate-50 text-slate-300'
@@ -1126,7 +1125,7 @@ export default function AutonomousMobileAppLight() {
                     const val = e.target.value.replace(/[^0-9]/g, '');
                     setPinInput(val);
                   }}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center font-mono font-bold text-xs text-slate-800 focus:border-orange-500 focus:bg-white focus:outline-hidden"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center font-mono font-bold text-xs text-slate-800 focus:border-blue-600 focus:bg-white focus:outline-hidden"
                 />
               </div>
 
@@ -1139,7 +1138,7 @@ export default function AutonomousMobileAppLight() {
                     onClick={() => {
                       if (pinInput.length < 6) setPinInput(prev => prev + digit);
                     }}
-                    className="py-2.5 bg-slate-100/80 hover:bg-slate-200 active:bg-orange-500 active:text-white rounded-xl font-mono font-black text-base text-slate-800 transition-all cursor-pointer shadow-2xs active:scale-95"
+                    className="py-2.5 bg-slate-100/80 hover:bg-slate-200 active:bg-blue-500 active:text-white rounded-xl font-mono font-black text-base text-slate-800 transition-all cursor-pointer shadow-2xs active:scale-95"
                   >
                     {digit}
                   </button>
@@ -1156,7 +1155,7 @@ export default function AutonomousMobileAppLight() {
                   onClick={() => {
                     if (pinInput.length < 6) setPinInput(prev => prev + '0');
                   }}
-                  className="py-2.5 bg-slate-100/80 hover:bg-slate-200 active:bg-orange-500 active:text-white rounded-xl font-mono font-black text-base text-slate-800 transition-all cursor-pointer shadow-2xs active:scale-95"
+                  className="py-2.5 bg-slate-100/80 hover:bg-slate-200 active:bg-blue-500 active:text-white rounded-xl font-mono font-black text-base text-slate-800 transition-all cursor-pointer shadow-2xs active:scale-95"
                 >
                   0
                 </button>
@@ -1179,7 +1178,7 @@ export default function AutonomousMobileAppLight() {
             <button
               type="submit"
               disabled={authLoading || (!selectedEmpId && !lockedEmployee)}
-              className="w-full py-4 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:opacity-50 text-white rounded-2xl text-xs font-black transition-all shadow-lg shadow-orange-500/30 cursor-pointer"
+              className="w-full py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 text-white rounded-2xl text-xs font-black transition-all shadow-lg shadow-blue-500/20 cursor-pointer"
             >
               {authLoading ? 'لە پشکنیندایە...' : 'چوونەژوورەوە بۆ ناو ئەکاونت'}
             </button>
@@ -1197,7 +1196,7 @@ export default function AutonomousMobileAppLight() {
               onClick={() => setShowMapModal(true)}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold shadow-2xs transition-all cursor-pointer"
             >
-              <Compass className="w-3.5 h-3.5 text-orange-500" />
+              <Compass className="w-3.5 h-3.5 text-blue-600" />
               <span>بینینی نەخشە 🗺️ (ئاشڵی و هوانە)</span>
             </button>
           </div>
@@ -1208,44 +1207,49 @@ export default function AutonomousMobileAppLight() {
         /* ========================================================================= */
         <div className="flex-1 w-full max-w-md mx-auto flex flex-col justify-between p-4 sm:p-5 space-y-4">
           
-          {/* Top Universal Clean Header */}
-          <div className="flex items-center justify-between p-3 rgb-glow-card shadow-md">
-            <div className="flex items-center gap-2.5">
+          {/* Top Windows 11 Fluent Branded Header */}
+          <div className="bg-white/95 backdrop-blur-md p-3.5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {/* Branded Sharp Ashley Logo */}
               <div 
                 onMouseDown={startLongPress}
                 onMouseUp={cancelLongPress}
                 onTouchStart={startLongPress}
                 onTouchEnd={cancelLongPress}
-                className="w-10 h-10 rounded-xl overflow-hidden border border-orange-400 shadow-2xs flex-shrink-0 relative cursor-pointer active:scale-95 transition-transform"
+                className="w-11 h-11 rounded-xl overflow-hidden border border-slate-200 bg-white shadow-2xs flex-shrink-0 relative cursor-pointer active:scale-95 transition-transform p-1 flex items-center justify-center"
                 title="١٠ چرکە دەست لەسەر دابگرە بۆ ڕیستکردنی ئەدمین"
               >
-                <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-cover" />
+                <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-contain" />
                 {pressProgress > 0 && pressProgress < 100 && (
                   <div 
-                    className="absolute inset-0 bg-red-600/60 transition-all"
+                    className="absolute inset-0 bg-blue-600/70 transition-all rounded-xl"
                     style={{ height: `${pressProgress}%` }}
                   />
                 )}
               </div>
 
               <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-black text-xs text-slate-900">{employeeProfile.name}</span>
-                  <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded-md">بەستراوە</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-black text-sm text-slate-900">{employeeProfile.name}</span>
+                  <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 font-bold px-2 py-0.5 rounded-md">
+                    {employeeProfile.role === 'Manager' ? 'بەڕێوەبەر' : 'کارمەند'}
+                  </span>
                 </div>
-                <span className="text-[10px] text-slate-500 font-mono font-bold block">
-                  {currentDateStr} • {currentTimeStr}
-                </span>
+                <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono font-bold mt-0.5">
+                  <span>{currentDateStr}</span>
+                  <span>•</span>
+                  <span className="text-blue-600">{currentTimeStr}</span>
+                </div>
               </div>
             </div>
 
             <button
               type="button"
               onClick={() => setShowMapModal(true)}
-              className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 transition-all cursor-pointer"
+              className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 border border-slate-200 transition-all cursor-pointer shadow-2xs"
               title="نەخشە"
             >
-              <Compass className="w-4 h-4 text-orange-500" />
+              <Compass className="w-4 h-4 text-blue-600" />
             </button>
           </div>
 
@@ -1255,19 +1259,18 @@ export default function AutonomousMobileAppLight() {
           {activeNavTab === 'attendance' && (
             <div className="space-y-4 animate-in fade-in duration-200">
               
-              {/* 🟢 Background Autoplay / Geofence Live Status Banner */}
-              <div className="p-3.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl border border-indigo-500/40 shadow-lg shadow-indigo-500/10 flex items-center justify-between relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pink-500 via-cyan-400 to-emerald-400 animate-pulse" />
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-xs">
+              {/* Windows 11 Fluent Background Autoplay Status Card */}
+              <div className="p-3.5 bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl border border-slate-700 shadow-sm flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
                     <Radio className="w-4 h-4 animate-pulse" />
                   </div>
                   <div className="text-right">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-black text-xs text-white flex items-center gap-1.5"><span>باکگراوند و ئۆتۆپلەی (RGB Active)</span><span className="text-[10px] bg-gradient-to-r from-pink-500 to-cyan-400 text-white px-1.5 py-0.2 rounded-full font-bold">RGB</span></span>
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                      <span className="font-black text-xs text-white">چاودێری ئۆتۆماتیکی باکگراوند (Auto Active)</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                     </div>
-                    <p className="text-[10px] text-slate-300 font-bold">⚡ بە چوارچێوەی RGB و چاودێری زیرەکی باکگراوند</p>
+                    <p className="text-[10px] text-slate-300 font-bold mt-0.5">تەنانەت کاتێک ئەپەکە داخراوە لە گیرفانتدا دەوام تۆمار دەکات</p>
                   </div>
                 </div>
 
@@ -1280,7 +1283,7 @@ export default function AutonomousMobileAppLight() {
                       alert('بۆ ئەوەی مۆبایلەکەت لە باکگراوند هەرگیز ڕانەوەستێت، لە Settings > Battery دۆخی ئەپەکە بکە بە Unrestricted');
                     }
                   }}
-                  className="px-2.5 py-1.5 bg-white hover:bg-emerald-100/60 active:bg-emerald-200 text-emerald-900 rounded-xl border border-emerald-300 text-[10px] font-black shadow-2xs cursor-pointer flex items-center gap-1"
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 active:bg-blue-600 text-slate-200 hover:text-white rounded-xl border border-slate-600 text-[10px] font-black transition-all cursor-pointer flex items-center gap-1"
                 >
                   <span>⚡ باتری</span>
                 </button>
@@ -1346,7 +1349,7 @@ export default function AutonomousMobileAppLight() {
               <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3 text-right">
                 <div className="flex items-center justify-between border-b pb-2 border-slate-100">
                   <div className="flex items-center gap-2">
-                    <History className="w-4 h-4 text-orange-500" />
+                    <History className="w-4 h-4 text-blue-600" />
                     <h3 className="font-black text-xs text-slate-900">مێژووی ئامادەبوونی ئەم مانگە</h3>
                   </div>
                   <span className="text-[10px] text-slate-500 font-mono font-bold">مانگی ٨ (ئابی ٢٠٢٦)</span>
@@ -1379,7 +1382,7 @@ export default function AutonomousMobileAppLight() {
                           <span>هاتن: <strong>{day.checkIn || '--:--'}</strong></span>
                           <span>ڕۆیشتن: <strong>{day.checkOut || (day.checkIn ? 'لە دەوامدایە' : '--:--')}</strong></span>
                         </div>
-                        <span className="font-bold text-orange-600">{day.workedHours}</span>
+                        <span className="font-bold text-blue-600">{day.workedHours}</span>
                       </div>
                     </div>
                   ))}
@@ -1399,7 +1402,7 @@ export default function AutonomousMobileAppLight() {
               <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Bell className="w-4 h-4 text-orange-500" />
+                    <Bell className="w-4 h-4 text-blue-600" />
                     <h3 className="font-black text-xs text-slate-900">ناوەندی ئاگادارکردنەوە و هۆکارەکان</h3>
                   </div>
                   {unreadNotifsCount > 0 && (
@@ -1499,7 +1502,7 @@ export default function AutonomousMobileAppLight() {
                             className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
                               notif.isSubmitted
                                 ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                                : 'bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white shadow-xs'
+                                : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-xs'
                             }`}
                           >
                             <Send className="w-3 h-3" />
@@ -1577,7 +1580,7 @@ export default function AutonomousMobileAppLight() {
                     type="tel"
                     value={profilePhone}
                     onChange={(e) => setProfilePhone(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono font-bold text-slate-900 focus:border-orange-500 focus:bg-white focus:outline-hidden text-right"
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono font-bold text-slate-900 focus:border-blue-600 focus:bg-white focus:outline-hidden text-right"
                   />
                 </div>
 
@@ -1588,7 +1591,7 @@ export default function AutonomousMobileAppLight() {
                     type="text"
                     value={profileAddress}
                     onChange={(e) => setProfileAddress(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 focus:border-orange-500 focus:bg-white focus:outline-hidden text-right"
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 focus:border-blue-600 focus:bg-white focus:outline-hidden text-right"
                   />
                 </div>
 
@@ -1599,7 +1602,7 @@ export default function AutonomousMobileAppLight() {
                     type="text"
                     value={profileEmergency}
                     onChange={(e) => setProfileEmergency(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 focus:border-orange-500 focus:bg-white focus:outline-hidden text-right"
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 focus:border-blue-600 focus:bg-white focus:outline-hidden text-right"
                   />
                 </div>
 
@@ -1610,7 +1613,7 @@ export default function AutonomousMobileAppLight() {
                     <button
                       type="button"
                       onClick={() => setShowPinText(!showPinText)}
-                      className="text-[10px] text-orange-600 font-bold flex items-center gap-1 cursor-pointer"
+                      className="text-[10px] text-blue-600 font-bold flex items-center gap-1 cursor-pointer"
                     >
                       {showPinText ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                       <span>{showPinText ? 'شاردنەوە' : 'پیشاندان'}</span>
@@ -1621,7 +1624,7 @@ export default function AutonomousMobileAppLight() {
                     maxLength={6}
                     value={profilePin}
                     onChange={(e) => setProfilePin(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono font-black text-slate-900 focus:border-orange-500 focus:bg-white focus:outline-hidden text-right"
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono font-black text-slate-900 focus:border-blue-600 focus:bg-white focus:outline-hidden text-right"
                   />
                 </div>
 
@@ -1684,16 +1687,16 @@ export default function AutonomousMobileAppLight() {
             onClick={() => setActiveNavTab('attendance')}
             className={`flex flex-col items-center justify-center py-1 px-3 rounded-2xl transition-all cursor-pointer ${
               activeNavTab === 'attendance'
-                ? 'text-orange-600 font-black'
+                ? 'text-blue-600 font-black'
                 : 'text-slate-400 hover:text-slate-600 font-bold'
             }`}
           >
             <div className="relative">
-              <Clock className={`w-6 h-6 transition-transform ${activeNavTab === 'attendance' ? 'scale-110 text-orange-500' : ''}`} />
+              <Clock className={`w-6 h-6 transition-transform ${activeNavTab === 'attendance' ? 'scale-110 text-blue-600' : ''}`} />
             </div>
             <span className="text-[11px] mt-0.5">ئامادەبوون</span>
             {activeNavTab === 'attendance' && (
-              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-0.5" />
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-0.5" />
             )}
           </button>
 
@@ -1703,12 +1706,12 @@ export default function AutonomousMobileAppLight() {
             onClick={() => setActiveNavTab('notifications')}
             className={`flex flex-col items-center justify-center py-1 px-3 rounded-2xl transition-all cursor-pointer relative ${
               activeNavTab === 'notifications'
-                ? 'text-orange-600 font-black'
+                ? 'text-blue-600 font-black'
                 : 'text-slate-400 hover:text-slate-600 font-bold'
             }`}
           >
             <div className="relative">
-              <Bell className={`w-6 h-6 transition-transform ${activeNavTab === 'notifications' ? 'scale-110 text-orange-500' : ''}`} />
+              <Bell className={`w-6 h-6 transition-transform ${activeNavTab === 'notifications' ? 'scale-110 text-blue-600' : ''}`} />
               {unreadNotifsCount > 0 && (
                 <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white font-mono font-black text-[10px] flex items-center justify-center border-2 border-white animate-pulse">
                   {unreadNotifsCount}
@@ -1717,7 +1720,7 @@ export default function AutonomousMobileAppLight() {
             </div>
             <span className="text-[11px] mt-0.5">ئاگادارییەکان</span>
             {activeNavTab === 'notifications' && (
-              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-0.5" />
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-0.5" />
             )}
           </button>
 
@@ -1727,16 +1730,16 @@ export default function AutonomousMobileAppLight() {
             onClick={() => setActiveNavTab('account')}
             className={`flex flex-col items-center justify-center py-1 px-3 rounded-2xl transition-all cursor-pointer ${
               activeNavTab === 'account'
-                ? 'text-orange-600 font-black'
+                ? 'text-blue-600 font-black'
                 : 'text-slate-400 hover:text-slate-600 font-bold'
             }`}
           >
             <div className="relative">
-              <User className={`w-6 h-6 transition-transform ${activeNavTab === 'account' ? 'scale-110 text-orange-500' : ''}`} />
+              <User className={`w-6 h-6 transition-transform ${activeNavTab === 'account' ? 'scale-110 text-blue-600' : ''}`} />
             </div>
             <span className="text-[11px] mt-0.5">هەژمارەکەم</span>
             {activeNavTab === 'account' && (
-              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-0.5" />
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-0.5" />
             )}
           </button>
         </nav>
@@ -1866,7 +1869,7 @@ export default function AutonomousMobileAppLight() {
                     }}
                     className={`w-full p-2.5 rounded-xl border text-right text-xs font-bold transition-all cursor-pointer ${
                       selectedQuickPreset === preset || reasonInput === preset
-                        ? 'bg-orange-50 border-orange-400 text-orange-950 shadow-xs'
+                        ? 'bg-blue-50 border-blue-500 text-orange-950 shadow-xs'
                         : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
                     }`}
                   >
@@ -1883,7 +1886,7 @@ export default function AutonomousMobileAppLight() {
                 value={reasonInput}
                 onChange={(e) => setReasonInput(e.target.value)}
                 placeholder="هۆکارەکەت لێرە بنووسە..."
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-orange-500 focus:bg-white focus:outline-hidden text-right"
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-blue-600 focus:bg-white focus:outline-hidden text-right"
               />
             </div>
 
@@ -1891,7 +1894,7 @@ export default function AutonomousMobileAppLight() {
               type="button"
               onClick={handleSubmitReason}
               disabled={isSubmittingReason || !reasonInput.trim()}
-              className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:opacity-50 text-white rounded-2xl text-xs font-black shadow-md cursor-pointer transition-all flex items-center justify-center gap-1.5"
+              className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 text-white rounded-2xl text-xs font-black shadow-md cursor-pointer transition-all flex items-center justify-center gap-1.5"
             >
               {isSubmittingReason ? <span>لە ناردندایە...</span> : <span>ناردنی هۆکار بۆ بەڕێوەبەر 🚀</span>}
             </button>
@@ -1926,7 +1929,7 @@ export default function AutonomousMobileAppLight() {
                 placeholder="گەڕان بەدوای ناوی کارمەند..."
                 value={employeeSearchQuery}
                 onChange={(e) => setEmployeeSearchQuery(e.target.value)}
-                className="w-full pl-3.5 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 focus:border-orange-500 focus:bg-white focus:outline-hidden text-right"
+                className="w-full pl-3.5 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 focus:border-blue-600 focus:bg-white focus:outline-hidden text-right"
               />
             </div>
 
@@ -1941,12 +1944,12 @@ export default function AutonomousMobileAppLight() {
                   }}
                   className={`w-full p-3 rounded-2xl border flex items-center justify-between transition-all cursor-pointer ${
                     selectedEmpId === emp.id
-                      ? 'bg-orange-50 border-orange-400 text-orange-950 shadow-xs ring-1 ring-orange-400'
+                      ? 'bg-blue-50 border-blue-500 text-orange-950 shadow-xs ring-1 ring-orange-400'
                       : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
                   }`}
                 >
                   <div className="flex items-center gap-2.5 text-right">
-                    <div className="w-8 h-8 rounded-xl bg-orange-500 text-white font-black text-xs flex items-center justify-center shadow-xs">
+                    <div className="w-8 h-8 rounded-xl bg-blue-500 text-white font-black text-xs flex items-center justify-center shadow-xs">
                       {emp.name.charAt(0)}
                     </div>
                     <div>
@@ -1956,7 +1959,7 @@ export default function AutonomousMobileAppLight() {
                   </div>
 
                   {selectedEmpId === emp.id && (
-                    <div className="w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center">
+                    <div className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center">
                       <Check className="w-3.5 h-3.5 stroke-[3]" />
                     </div>
                   )}
