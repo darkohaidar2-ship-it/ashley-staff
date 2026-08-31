@@ -393,6 +393,24 @@ export default function AutonomousMobileAppLight() {
     };
   });
 
+  const [todayLiveStats, setTodayLiveStats] = useState<{
+    totalWorkMinutes: number;
+    totalExcursionMinutes: number;
+    remainingMinutes: number;
+    overtimeMinutes: number;
+    isCurrentlyInside: boolean;
+    logs: Array<{ id: string; time: string; type: 'ENTER' | 'EXIT'; titleKurdish: string; location: string }>;
+    intervals: Array<{ inTime: string; outTime: string | null; durationMinutes: number; type: 'work' | 'excursion' }>;
+  }>({
+    totalWorkMinutes: 0,
+    totalExcursionMinutes: 0,
+    remainingMinutes: 480,
+    overtimeMinutes: 0,
+    isCurrentlyInside: false,
+    logs: [],
+    intervals: []
+  });
+
   // Fetch live today attendance from server API
   const fetchLiveTodayAttendance = useCallback(async () => {
     if (!employeeProfile?.id) return;
@@ -400,9 +418,21 @@ export default function AutonomousMobileAppLight() {
     const storageKey = `ashley_shift_state_${todayIso}_${employeeProfile.id}`;
 
     try {
-      const res = await fetch(`/api/attendance/today?userId=${employeeProfile.id}`);
+      const res = await fetch(`/api/attendance/today?userId=${employeeProfile.id}&userName=${encodeURIComponent(employeeProfile.name || '')}`);
       const data = await res.json();
       
+      if (data) {
+        setTodayLiveStats({
+          totalWorkMinutes: data.totalWorkMinutes || 0,
+          totalExcursionMinutes: data.totalExcursionMinutes || 0,
+          remainingMinutes: data.remainingMinutes !== undefined ? data.remainingMinutes : 480,
+          overtimeMinutes: data.overtimeMinutes || 0,
+          isCurrentlyInside: !!data.isCurrentlyInside,
+          logs: Array.isArray(data.logs) ? data.logs : [],
+          intervals: Array.isArray(data.intervals) ? data.intervals : []
+        });
+      }
+
       setLiveTodayShift(prev => {
         if (data && (data.checkInTime || data.checkOutTime)) {
           const newState = {
