@@ -13,9 +13,13 @@ import android.provider.Settings;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends BridgeActivity {
 
@@ -44,34 +48,39 @@ public class MainActivity extends BridgeActivity {
         startBackgroundService();
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        startBackgroundService();
+    }
+
     private void checkAndRequestPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            String[] permissions;
+            List<String> permissions = new ArrayList<>();
+            permissions.add(Manifest.permission.ACCESS_FINE_LOCATION);
+            permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION);
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                permissions = new String[]{
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION,
-                        Manifest.permission.POST_NOTIFICATIONS
-                };
-            } else {
-                permissions = new String[]{
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
-                };
+                permissions.add(Manifest.permission.POST_NOTIFICATIONS);
             }
 
-            boolean needsRequest = false;
+            List<String> needed = new ArrayList<>();
             for (String perm : permissions) {
                 if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
-                    needsRequest = true;
-                    break;
+                    needed.add(perm);
                 }
             }
 
-            if (needsRequest) {
-                ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE);
+            if (!needed.isEmpty()) {
+                ActivityCompat.requestPermissions(this, needed.toArray(new String[0]), PERMISSION_REQUEST_CODE);
             }
         }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        startBackgroundService();
     }
 
     private void requestIgnoreBatteryOptimizations() {
@@ -87,7 +96,7 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
-    private void startBackgroundService() {
+    public void startBackgroundService() {
         try {
             Intent serviceIntent = new Intent(this, BackgroundAttendanceService.class);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

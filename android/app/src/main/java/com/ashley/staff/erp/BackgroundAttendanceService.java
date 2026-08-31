@@ -8,6 +8,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ServiceInfo;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -32,9 +33,9 @@ import java.util.concurrent.Executors;
 public class BackgroundAttendanceService extends Service implements LocationListener {
 
     private static final String TAG = "AshleyBgAttendance";
-    public static final String CHANNEL_ID = "ashley_attendance_bg_channel";
-    public static final String ALERT_CHANNEL_ID = "ashley_attendance_alert_channel";
-    public static final int NOTIFICATION_ID = 1001;
+    public static final String CHANNEL_ID = "ashley_attendance_bg_channel_v2";
+    public static final String ALERT_CHANNEL_ID = "ashley_attendance_alert_channel_v2";
+    private static final int NOTIFICATION_ID = 1001;
 
     private LocationManager locationManager;
     private PowerManager.WakeLock wakeLock;
@@ -71,7 +72,19 @@ public class BackgroundAttendanceService extends Service implements LocationList
             Log.w(TAG, "WakeLock error: " + e.getMessage());
         }
 
-        startForeground(NOTIFICATION_ID, buildStickyNotification());
+        Notification notification = buildStickyNotification();
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
+            } else {
+                startForeground(NOTIFICATION_ID, notification);
+            }
+        } catch (Exception e) {
+            try {
+                startForeground(NOTIFICATION_ID, notification);
+            } catch (Exception ignored) {}
+        }
+
         startLocationUpdates();
         Log.i(TAG, "BackgroundAttendanceService started successfully.");
     }
@@ -111,7 +124,7 @@ public class BackgroundAttendanceService extends Service implements LocationList
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                         LocationManager.GPS_PROVIDER,
-                        15000L, // 15 seconds
+                        10000L, // 10 seconds
                         5f,     // 5 meters
                         this
                 );
@@ -121,7 +134,7 @@ public class BackgroundAttendanceService extends Service implements LocationList
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                         LocationManager.NETWORK_PROVIDER,
-                        15000L,
+                        10000L,
                         5f,
                         this
                 );
@@ -262,14 +275,16 @@ public class BackgroundAttendanceService extends Service implements LocationList
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationManager nm = (NotificationManager) getSystemService(NotificationManager.class);
             if (nm != null) {
-                // Sticky Service Channel (Silent)
+                // Persistent Status Channel
                 NotificationChannel serviceChannel = new NotificationChannel(
                         CHANNEL_ID,
-                        "Ashley Background Service",
-                        NotificationManager.IMPORTANCE_LOW
+                        "Ashley 24/7 Attendance Service",
+                        NotificationManager.IMPORTANCE_DEFAULT
                 );
-                serviceChannel.setDescription("سیستەمی چاودێری ئامادەبوونی باکگراوند");
-                serviceChannel.setShowBadge(false);
+                serviceChannel.setDescription("چاودێری بەردەوامی ئامادەبوونی ٢٤ کاتژمێری");
+                serviceChannel.setShowBadge(true);
+                serviceChannel.setSound(null, null);
+                serviceChannel.enableVibration(false);
                 nm.createNotificationChannel(serviceChannel);
 
                 // Alert Channel (Sound & Vibration)
@@ -301,7 +316,7 @@ public class BackgroundAttendanceService extends Service implements LocationList
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
         );
 
-        String userName = prefs.getString("userName", "سیستەمی ئاشڵی");
+        String userName = prefs.getString("userName", "کارمەند");
         String checkInTime = prefs.getString("checkInTime", null);
         String checkOutTime = prefs.getString("checkOutTime", null);
         boolean isInside = prefs.getBoolean("is_inside", false);
@@ -314,19 +329,25 @@ public class BackgroundAttendanceService extends Service implements LocationList
         } else if (isInside) {
             statusLine = "لە دەوامیت 🟢 (لەناو کۆمپانیا)";
         } else {
-            statusLine = "لە دەرەوەی دەوامیت ⚪ • چاودێری باکگراوند چالاکە";
+            statusLine = "مۆبایلەکە لە کاردایە 🟢 • چاودێری دەوامی ٢٤ سەعاتە";
         }
 
-        return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("سیستەمی ئاشڵی (Ashley Staff)")
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle("سیستەمی ئاشڵی (Ashley Staff) • " + userName)
                 .setContentText(statusLine)
-                .setSubText(userName)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setAutoCancel(false)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .build();
+                .setCategory(NotificationCompat.CATEGORY_SERVICE);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE);
+        }
+
+        return builder.build();
     }
 
     private void showKurdishAlertNotification(String title, String message) {
