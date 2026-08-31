@@ -39,7 +39,10 @@ import {
   MessageSquare,
   BadgeCheck,
   HelpCircle,
-  FileText
+  FileText,
+  BarChart3,
+  Timer,
+  Zap
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { 
@@ -81,6 +84,15 @@ const DEFAULT_COMPANY_LOCATIONS: GeofenceRegion[] = [
     radiusMeters: 120,
   },
 ];
+
+function formatMinutesKurdish(mins: number): string {
+  if (!mins || mins <= 0) return '٠ خولەک';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h > 0 && m > 0) return `${h} کاژێر و ${m} خولەک`;
+  if (h > 0) return `${h} کاژێر`;
+  return `${m} خولەک`;
+}
 
 export default function AutonomousMobileAppLight() {
   const [currentTimeStr, setCurrentTimeStr] = useState('');
