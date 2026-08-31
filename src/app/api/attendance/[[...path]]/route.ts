@@ -458,9 +458,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
-    // GET /api/attendance/today (Live Real-Time Sync for Mobile & Web)
-    // ----------------------------------------
-    // GET /api/attendance/today (Live Real-Time Sync for Mobile & Web)
+    // GET /api/attendance/today (Live Real-Time Multi-Movement & Intervals Sync)
     // ----------------------------------------
     if (pathStr === 'today' && method === 'GET') {
       const noCacheHeaders = {
@@ -472,13 +470,14 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const url = new URL(req.url);
       const userId = url.searchParams.get('userId') || '';
       const userName = url.searchParams.get('userName') || '';
-      const { dateStr } = getBaghdadDateTime();
+      const { dateStr, timeStr } = getBaghdadDateTime();
 
       if (!userId && !userName) {
         return NextResponse.json({ error: 'userId or userName is required' }, { status: 400 });
       }
 
       try {
+        // 1. Fetch attendance row for today
         const { data: allRecords } = await supabase
           .from('attendance')
           .select('*')
@@ -497,53 +496,131 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           );
         });
 
-        if (record) {
-          const inTime = record.check_in_time || (record.check_in ? (record.check_in.includes('T') ? record.check_in.split('T')[1].slice(0, 5) : record.check_in.slice(0, 5)) : null);
-          const outTime = record.check_out_time || (record.check_out ? (record.check_out.includes('T') ? record.check_out.split('T')[1].slice(0, 5) : record.check_out.slice(0, 5)) : null);
-
-          return NextResponse.json({
-            checkInTime: inTime || null,
-            checkOutTime: outTime || null,
-            status: record.status || 'Present',
-            warehouseName: record.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
-            date: dateStr
-          }, { headers: noCacheHeaders });
-        }
-
-        // Fallback: Check attendance_logs table for today
-        const { data: logs } = await supabase
+        // 2. Fetch all logs for today
+        const { data: logsData } = await supabase
           .from('attendance_logs')
           .select('*')
           .eq('log_date', dateStr)
           .order('created_at', { ascending: true });
 
-        if (logs && logs.length > 0) {
-          const empLogs = logs.filter((l: any) => {
-            const lEmp = (l.employee_id || '').toString().toLowerCase();
-            const lName = (l.employee_name || '').toString().toLowerCase();
-            const target = userId.toLowerCase();
-            const raw = target.replace('emp-', '');
-            const uName = userName.toLowerCase();
+        const empLogs = (logsData || []).filter((l: any) => {
+          const lEmp = (l.employee_id || '').toString().toLowerCase();
+          const lName = (l.employee_name || '').toString().toLowerCase();
+          const target = userId.toLowerCase();
+          const raw = target.replace('emp-', '');
+          const uName = userName.toLowerCase();
 
-            return (
-              (userId && (lEmp === target || lEmp === raw || lEmp === `emp-${raw}`)) ||
-              (userName && (lName === uName || lName.includes(uName) || uName.includes(lName)))
-            );
-          });
+          return (
+            (userId && (lEmp === target || lEmp === raw || lEmp === `emp-${raw}`)) ||
+            (userName && (lName === uName || lName.includes(uName) || uName.includes(lName)))
+          );
+        });
 
-          if (empLogs.length > 0) {
-            const inLog = empLogs.find((l: any) => (l.log_type || '').includes('In') || (l.log_type || '').includes('هاتن'));
-            const outLog = empLogs.filter((l: any) => (l.log_type || '').includes('Out') || (l.log_type || '').includes('دەرچوون') || (l.log_type || '').includes('ڕۆیشتن')).pop();
+        // Compute chronological logs & intervals
+        const chronologicalLogs = empLogs.map((l: any) => ({
+          id: l.id,
+          time: l.log_time_str || (l.created_at ? l.created_at.split('T')[1].slice(0, 5) : '08:30'),
+          type: (l.log_type || '').includes('In') || (l.log_type || '').includes('هاتن') ? 'ENTER' : 'EXIT',
+          titleKurdish: (l.log_type || '').includes('In') || (l.log_type || '').includes('هاتن') ? 'هاتن / گەڕانەوە' : 'دەرچوون / ئیستیراحەت',
+          location: l.location_address || 'کۆمپانیای سەرەکی ئاشڵی',
+          createdAt: l.created_at
+        }));
 
-            return NextResponse.json({
-              checkInTime: inLog?.log_time_str || null,
-              checkOutTime: outLog?.log_time_str || null,
-              status: 'Present',
-              warehouseName: inLog?.location_address || 'کۆمپانیای سەرەکی ئاشڵی',
-              date: dateStr
-            }, { headers: noCacheHeaders });
+        let firstCheckIn = record?.check_in_time || null;
+        let lastCheckOut = record?.check_out_time || null;
+        let isCurrentlyInside = false;
+
+        if (chronologicalLogs.length > 0) {
+          const firstIn = chronologicalLogs.find(x => x.type === 'ENTER');
+          if (firstIn && !firstCheckIn) firstCheckIn = firstIn.time;
+          
+          const lastLog = chronologicalLogs[chronologicalLogs.length - 1];
+          isCurrentlyInside = lastLog.type === 'ENTER';
+          if (isCurrentlyInside) {
+            lastCheckOut = null;
+          } else {
+            lastCheckOut = lastLog.time;
           }
         }
+
+        // Calculate intervals (Work Sessions vs Excursions)
+        const intervals: Array<{ inTime: string; outTime: string | null; durationMinutes: number; type: 'work' | 'excursion' }> = [];
+        let activeIn: string | null = null;
+        let activeOut: string | null = null;
+        let totalWorkMinutes = 0;
+        let totalExcursionMinutes = 0;
+
+        const parseMinutes = (t: string) => {
+          const [h, m] = t.split(':').map(Number);
+          return (h || 0) * 60 + (m || 0);
+        };
+
+        const nowMinutes = parseMinutes(timeStr);
+
+        for (let i = 0; i < chronologicalLogs.length; i++) {
+          const item = chronologicalLogs[i];
+          if (item.type === 'ENTER') {
+            if (activeOut) {
+              // Excursion ended
+              const excDuration = Math.max(0, parseMinutes(item.time) - parseMinutes(activeOut));
+              totalExcursionMinutes += excDuration;
+              intervals.push({
+                inTime: activeOut,
+                outTime: item.time,
+                durationMinutes: excDuration,
+                type: 'excursion'
+              });
+              activeOut = null;
+            }
+            activeIn = item.time;
+          } else if (item.type === 'EXIT') {
+            if (activeIn) {
+              // Work session ended
+              const workDuration = Math.max(0, parseMinutes(item.time) - parseMinutes(activeIn));
+              totalWorkMinutes += workDuration;
+              intervals.push({
+                inTime: activeIn,
+                outTime: item.time,
+                durationMinutes: workDuration,
+                type: 'work'
+              });
+              activeIn = null;
+            }
+            activeOut = item.time;
+          }
+        }
+
+        // Ongoing active session
+        if (activeIn) {
+          const ongoingDuration = Math.max(0, nowMinutes - parseMinutes(activeIn));
+          totalWorkMinutes += ongoingDuration;
+          intervals.push({
+            inTime: activeIn,
+            outTime: null,
+            durationMinutes: ongoingDuration,
+            type: 'work'
+          });
+        }
+
+        const standardShiftMinutes = 480; // 8 hours
+        const remainingMinutes = Math.max(0, standardShiftMinutes - totalWorkMinutes);
+        const overtimeMinutes = Math.max(0, totalWorkMinutes - standardShiftMinutes);
+
+        return NextResponse.json({
+          checkInTime: firstCheckIn,
+          checkOutTime: lastCheckOut,
+          isCurrentlyInside,
+          status: record?.status || (firstCheckIn ? 'Present' : null),
+          warehouseName: record?.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
+          date: dateStr,
+          logs: chronologicalLogs,
+          intervals,
+          totalWorkMinutes,
+          totalExcursionMinutes,
+          remainingMinutes,
+          overtimeMinutes,
+          standardShiftMinutes
+        }, { headers: noCacheHeaders });
       } catch (err) {
         console.warn('Get today attendance error:', err);
       }
@@ -551,9 +628,16 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       return NextResponse.json({
         checkInTime: null,
         checkOutTime: null,
+        isCurrentlyInside: false,
         status: null,
         warehouseName: null,
-        date: dateStr
+        date: dateStr,
+        logs: [],
+        intervals: [],
+        totalWorkMinutes: 0,
+        totalExcursionMinutes: 0,
+        remainingMinutes: 480,
+        overtimeMinutes: 0
       }, { headers: noCacheHeaders });
     }
 

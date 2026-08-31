@@ -1342,6 +1342,122 @@ export default function AutonomousMobileAppLight() {
                 </div>
               </div>
 
+              {/* 📊 LIVE WORK TIMELINE & EXCURSIONS GRAPH */}
+              <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-xs space-y-3.5 text-right">
+                <div className="flex items-center justify-between border-b pb-2 border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-blue-600" />
+                    <h3 className="font-black text-xs text-slate-900">گرافی ئاماری دەوامی ئەمڕۆ و جووڵەکان</h3>
+                  </div>
+                  <span className="text-[10px] bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full border border-blue-200">
+                    {todayLiveStats.isCurrentlyInside ? '🟢 لەناو کۆمپانیا' : '⚪ دەرەوەی کۆمپانیا'}
+                  </span>
+                </div>
+
+                {/* Multi-Segmented Visual Progress Bar */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+                    <span>پێشکەوتنی دەوام (٨ کاژێر)</span>
+                    <span className="font-mono text-blue-700 font-black">
+                      {Math.min(100, Math.round((todayLiveStats.totalWorkMinutes / 480) * 100))}%
+                    </span>
+                  </div>
+                  
+                  {/* Visual Bar with colored chunks */}
+                  <div className="w-full h-3.5 bg-slate-100 rounded-full overflow-hidden flex border border-slate-200">
+                    {todayLiveStats.totalWorkMinutes > 0 ? (
+                      <div 
+                        className="h-full bg-emerald-500 transition-all"
+                        style={{ width: `${Math.min(100, (todayLiveStats.totalWorkMinutes / 480) * 100)}%` }}
+                        title="دەوامی چالاک"
+                      />
+                    ) : (
+                      <div className="h-full w-full bg-slate-200/60" />
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-[9px] text-slate-400 font-bold pt-0.5">
+                    <span>دەستپێک (٠٨:٣٠)</span>
+                    <span>تەواوبوون (١٦:٣٠)</span>
+                  </div>
+                </div>
+
+                {/* 4 Sharp Windows 11 KPI Cards */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  
+                  {/* KPI 1: Active Work Hours */}
+                  <div className="p-3 bg-emerald-50/70 border border-emerald-200/90 rounded-2xl text-center space-y-0.5">
+                    <div className="flex items-center justify-center gap-1 text-[10px] font-black text-emerald-800">
+                      <Clock className="w-3 h-3 text-emerald-600" />
+                      <span>کۆی دەوامی چالاک</span>
+                    </div>
+                    <div className="text-sm font-black font-mono text-emerald-950">
+                      {formatMinutesKurdish(todayLiveStats.totalWorkMinutes)}
+                    </div>
+                  </div>
+
+                  {/* KPI 2: Total Excursions / Outside Time */}
+                  <div className="p-3 bg-amber-50/70 border border-amber-200/90 rounded-2xl text-center space-y-0.5">
+                    <div className="flex items-center justify-center gap-1 text-[10px] font-black text-amber-800">
+                      <Compass className="w-3 h-3 text-amber-600" />
+                      <span>کاتی چوونەدەرەوە</span>
+                    </div>
+                    <div className="text-sm font-black font-mono text-amber-950">
+                      {formatMinutesKurdish(todayLiveStats.totalExcursionMinutes)}
+                    </div>
+                  </div>
+
+                  {/* KPI 3: Remaining Time */}
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-center space-y-0.5">
+                    <div className="flex items-center justify-center gap-1 text-[10px] font-black text-slate-700">
+                      <Timer className="w-3 h-3 text-slate-500" />
+                      <span>ماوە بۆ ٨ کاژێر</span>
+                    </div>
+                    <div className="text-sm font-black font-mono text-slate-900">
+                      {todayLiveStats.remainingMinutes > 0 ? formatMinutesKurdish(todayLiveStats.remainingMinutes) : 'تەواوکراوە ✅'}
+                    </div>
+                  </div>
+
+                  {/* KPI 4: Overtime (ئیزافە) */}
+                  <div className="p-3 bg-blue-50/70 border border-blue-200/90 rounded-2xl text-center space-y-0.5">
+                    <div className="flex items-center justify-center gap-1 text-[10px] font-black text-blue-800">
+                      <Zap className="w-3 h-3 text-blue-600" />
+                      <span>ئیزافە (Overtime)</span>
+                    </div>
+                    <div className="text-sm font-black font-mono text-blue-950">
+                      {todayLiveStats.overtimeMinutes > 0 ? formatMinutesKurdish(todayLiveStats.overtimeMinutes) : '٠ خولەک'}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Today's Movement Chronological Table */}
+                {todayLiveStats.logs && todayLiveStats.logs.length > 0 && (
+                  <div className="pt-2 space-y-1.5">
+                    <span className="text-[11px] font-black text-slate-800 block">خشتەی تۆماری جووڵەکانی ئەمڕۆ (GPS Logs):</span>
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-0.5">
+                      {todayLiveStats.logs.map((log, idx) => (
+                        <div 
+                          key={log.id || idx}
+                          className="p-2 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${log.type === 'ENTER' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                            <div>
+                              <span className="font-bold text-slate-800 text-[11px]">{log.titleKurdish || (log.type === 'ENTER' ? 'هاتن' : 'دەرچوون')}</span>
+                              <p className="text-[9px] text-slate-500 truncate max-w-[160px]">{log.location}</p>
+                            </div>
+                          </div>
+                          <span className="font-mono font-black text-slate-900 text-[11px] bg-white border border-slate-200 px-2 py-0.5 rounded-lg shadow-2xs">
+                            {log.time}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Monthly Attendance Records List */}
               <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3 text-right">
                 <div className="flex items-center justify-between border-b pb-2 border-slate-100">

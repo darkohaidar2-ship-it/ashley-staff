@@ -61,12 +61,11 @@ public class BackgroundAttendanceService extends Service implements LocationList
 
         createNotificationChannels();
 
-        // Acquire partial wake lock to maintain location monitoring
         try {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             if (pm != null) {
                 wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Ashley::BgWakeLock");
-                wakeLock.acquire(10 * 60 * 1000L /*10 minutes max per acquisition*/);
+                wakeLock.acquire(10 * 60 * 1000L);
             }
         } catch (Exception e) {
             Log.w(TAG, "WakeLock error: " + e.getMessage());
@@ -120,21 +119,19 @@ public class BackgroundAttendanceService extends Service implements LocationList
             locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
             if (locationManager == null) return;
 
-            // GPS Provider
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                         LocationManager.GPS_PROVIDER,
-                        10000L, // 10 seconds
+                        8000L,  // 8 seconds
                         5f,     // 5 meters
                         this
                 );
             }
 
-            // Network Provider as fallback
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                         LocationManager.NETWORK_PROVIDER,
-                        10000L,
+                        8000L,
                         5f,
                         this
                 );
@@ -175,62 +172,66 @@ public class BackgroundAttendanceService extends Service implements LocationList
         String deviceToken = prefs.getString("deviceToken", "dev-auto");
 
         if (userId == null || userId.isEmpty()) {
-            return; // No employee bound yet
+            return;
         }
 
         String todayDateStr = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
         String currentTimeStr = new SimpleDateFormat("HH:mm", Locale.US).format(new Date());
 
+        boolean wasInside = prefs.getBoolean("is_inside", false);
         String lastCheckInDate = prefs.getString("last_checkin_date", "");
-        String lastCheckOutDate = prefs.getString("last_checkout_date", "");
         long now = System.currentTimeMillis();
 
-        if (now - lastTriggerTime < 20000) {
-            return; // Cooldown 20 seconds
+        if (now - lastTriggerTime < 15000) {
+            return; // 15 seconds cooldown between triggers
         }
 
-        // Case 1: Entered Geofence -> Auto Check-In
-        if (isInside) {
+        // Case 1: Entered Geofence (Was outside, now inside)
+        if (isInside && !wasInside) {
+            lastTriggerTime = now;
             prefs.edit().putBoolean("is_inside", true).apply();
 
-            if (!todayDateStr.equals(lastCheckInDate)) {
-                lastTriggerTime = now;
+            String firstCheckIn = prefs.getString("checkInTime", "");
+            boolean isInitialTodayCheckIn = firstCheckIn.isEmpty() || !todayDateStr.equals(lastCheckInDate);
+
+            if (isInitialTodayCheckIn) {
                 prefs.edit()
                         .putString("last_checkin_date", todayDateStr)
                         .putString("checkInTime", currentTimeStr)
+                        .remove("checkOutTime")
                         .apply();
-
-                postAutonomousEvent("ENTER", userId, userName, deviceToken, lat, lng, Math.round(distance), locationName);
-
-                updateStickyNotification();
 
                 showKurdishAlertNotification(
                         "🎉 بەخێربێیت بۆ دەوام",
-                        "سڵاو " + userName + "! هاتنت بە سەرکەوتوویی لە باکگراوند لە کاتژمێر " + currentTimeStr + " تۆمارکرا."
+                        "سڵاو " + userName + "! هاتنی سەرەکی لە کاتژمێر " + currentTimeStr + " تۆمارکرا."
                 );
-            }
-        }
-        // Case 2: Exited Geofence -> Auto Check-Out
-        else {
-            boolean wasInside = prefs.getBoolean("is_inside", false);
-            prefs.edit().putBoolean("is_inside", false).apply();
-
-            if (todayDateStr.equals(lastCheckInDate) && !todayDateStr.equals(lastCheckOutDate)) {
-                lastTriggerTime = now;
-                prefs.edit()
-                        .putString("last_checkout_date", todayDateStr)
-                        .putString("checkOutTime", currentTimeStr)
-                        .apply();
-
-                postAutonomousEvent("EXIT", userId, userName, deviceToken, lat, lng, Math.round(distance), locationName);
-
-                updateStickyNotification();
-
+            } else {
+                prefs.edit().remove("checkOutTime").apply();
                 showKurdishAlertNotification(
-                        "👋 تۆمارکردنی ڕۆیشتن لە دەوام",
-                        userName + " گیان، ڕۆیشتنت لە دەوام لە کاتژمێر " + currentTimeStr + " لە باکگراوند تۆمارکرا. ماندوو نەبیت!"
+                        "🏢 گەڕانەوە بۆ دەوام",
+                        "سڵاو " + userName + "! گەڕانەوەت لە کاتژمێر " + currentTimeStr + " تۆمارکرا."
                 );
             }
+
+            postAutonomousEvent("ENTER", userId, userName, deviceToken, lat, lng, Math.round(distance), locationName);
+            updateStickyNotification();
+        }
+        // Case 2: Exited Geofence (Was inside, now outside)
+        else if (!isInside && wasInside) {
+            lastTriggerTime = now;
+            prefs.edit()
+                    .putBoolean("is_inside", false)
+                    .putString("last_checkout_date", todayDateStr)
+                    .putString("checkOutTime", currentTimeStr)
+                    .apply();
+
+            postAutonomousEvent("EXIT", userId, userName, deviceToken, lat, lng, Math.round(distance), locationName);
+            updateStickyNotification();
+
+            showKurdishAlertNotification(
+                    "👋 چوونەدەرەوە لە دەوام",
+                    userName + " گیان، دەرچوونت لە کاتژمێر " + currentTimeStr + " لە باکگراوند تۆمارکرا."
+            );
         }
     }
 
@@ -275,7 +276,6 @@ public class BackgroundAttendanceService extends Service implements LocationList
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationManager nm = (NotificationManager) getSystemService(NotificationManager.class);
             if (nm != null) {
-                // Persistent Status Channel
                 NotificationChannel serviceChannel = new NotificationChannel(
                         CHANNEL_ID,
                         "Ashley 24/7 Attendance Service",
@@ -287,7 +287,6 @@ public class BackgroundAttendanceService extends Service implements LocationList
                 serviceChannel.enableVibration(false);
                 nm.createNotificationChannel(serviceChannel);
 
-                // Alert Channel (Sound & Vibration)
                 NotificationChannel alertChannel = new NotificationChannel(
                         ALERT_CHANNEL_ID,
                         "Ashley Attendance Alerts",
@@ -322,14 +321,18 @@ public class BackgroundAttendanceService extends Service implements LocationList
         boolean isInside = prefs.getBoolean("is_inside", false);
 
         String statusLine;
-        if (checkOutTime != null && !checkOutTime.isEmpty()) {
-            statusLine = "دەوامت تەواو کردووە 🏁 • کاتژمێر " + checkOutTime + " ڕۆیشتوویت";
-        } else if (checkInTime != null && !checkInTime.isEmpty()) {
-            statusLine = "لە دەوامیت 🟢 • کاتژمێر " + checkInTime + " هاتوویت";
-        } else if (isInside) {
-            statusLine = "لە دەوامیت 🟢 (لەناو کۆمپانیا)";
+        if (isInside) {
+            if (checkInTime != null && !checkInTime.isEmpty()) {
+                statusLine = "لە دەوامیت 🟢 • کاتژمێر " + checkInTime + " هاتوویت";
+            } else {
+                statusLine = "لە دەوامیت 🟢 (لەناو کۆمپانیا)";
+            }
         } else {
-            statusLine = "مۆبایلەکە لە کاردایە 🟢 • چاودێری دەوامی ٢٤ سەعاتە";
+            if (checkOutTime != null && !checkOutTime.isEmpty()) {
+                statusLine = "دەوامت تەواو کردووە 🏁 • کاتژمێر " + checkOutTime + " دەرچوویت";
+            } else {
+                statusLine = "مۆبایلەکە لە کاردایە 🟢 • چاودێری دەوامی ٢٤ سەعاتە";
+            }
         }
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)

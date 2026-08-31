@@ -425,6 +425,55 @@ export default function AdminAttendancePage() {
             </CardHeader>
             <CardContent className="p-6 space-y-6">
               
+              {/* 📊 TOP ATTENDANCE KPI STATS */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="p-4 bg-white/70 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-2xs text-center space-y-1">
+                  <div className="flex items-center justify-center gap-1.5 text-xs font-black text-slate-500">
+                    <Users className="w-3.5 h-3.5 text-blue-600" />
+                    <span>ئامادەبووانی ئەمڕۆ</span>
+                  </div>
+                  <div className="text-xl font-black font-mono text-slate-900">
+                    {filteredAttendance.filter(r => r.status === 'Present').length} / {users.filter(u => u.role !== 'admin').length}
+                  </div>
+                </div>
+
+                <div className="p-4 bg-white/70 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-2xs text-center space-y-1">
+                  <div className="flex items-center justify-center gap-1.5 text-xs font-black text-slate-500">
+                    <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>کۆی کاژێری دەوامی تۆمارکراو</span>
+                  </div>
+                  <div className="text-xl font-black font-mono text-emerald-700">
+                    {Math.round(filteredAttendance.reduce((acc, curr) => {
+                      if (!curr.checkInTime) return acc;
+                      const [inH, inM] = curr.checkInTime.split(':').map(Number);
+                      const [outH, outM] = (curr.checkOutTime || '16:30').split(':').map(Number);
+                      const diff = Math.max(0, ((outH * 60 + outM) - (inH * 60 + inM)) / 60);
+                      return acc + diff;
+                    }, 0))} کاژێر
+                  </div>
+                </div>
+
+                <div className="p-4 bg-white/70 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-2xs text-center space-y-1">
+                  <div className="flex items-center justify-center gap-1.5 text-xs font-black text-slate-500">
+                    <Zap className="w-3.5 h-3.5 text-amber-600" />
+                    <span>کۆی ئیزافە (Overtime)</span>
+                  </div>
+                  <div className="text-xl font-black font-mono text-amber-700">
+                    {filteredAttendance.reduce((acc, curr) => acc + (curr.overtimeMinutes || 0), 0)} خولەک
+                  </div>
+                </div>
+
+                <div className="p-4 bg-white/70 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-2xs text-center space-y-1">
+                  <div className="flex items-center justify-center gap-1.5 text-xs font-black text-slate-500">
+                    <Compass className="w-3.5 h-3.5 text-rose-600" />
+                    <span>کۆی دواکەوتن</span>
+                  </div>
+                  <div className="text-xl font-black font-mono text-rose-700">
+                    {filteredAttendance.reduce((acc, curr) => acc + (curr.lateMinutes || 0), 0)} خولەک
+                  </div>
+                </div>
+              </div>
+
               {/* Filter controls */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-slate-100/50 rounded-2xl border border-white/60">
                 <div className="space-y-1">
