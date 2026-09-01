@@ -22,7 +22,9 @@ import {
   AlertTriangle,
   Move,
   BarChart3,
-  X
+  X,
+  Crown,
+  Award
 } from 'lucide-react';
 import { getDaysInMonth, format, getDay, addMonths, subMonths } from 'date-fns';
 import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
@@ -41,8 +43,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   const [selectedPaletteStatus, setSelectedPaletteStatus] = useState<string>('Present');
   const [draggedStatus, setDraggedStatus] = useState<string | null>(null);
 
-  // Dynamic Manual Overrides Map for cell statuses: Map<empId_dateStr, { status: string; checkInTime?: string; checkOutTime?: string }>
+  // Dynamic Manual Overrides Map for cell statuses
   const [manualStatusMap, setManualStatusMap] = useState<Record<string, { status: string; checkInTime?: string; checkOutTime?: string }>>({});
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
 
   const [yearStr, monthStr] = selectedMonth.split('-');
   const year = parseInt(yearStr || '2026', 10);
@@ -56,9 +60,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       const dateStr = `${selectedMonth}-${dayStr}`;
       const dateObj = new Date(year, month - 1, dayNum);
       const isFriday = getDay(dateObj) === 5;
-      return { dayNum, dateStr, isFriday };
+      const isFuture = dateStr > todayStr;
+      const isToday = dateStr === todayStr;
+      return { dayNum, dateStr, isFriday, isFuture, isToday };
     });
-  }, [totalDays, year, month, selectedMonth]);
+  }, [totalDays, year, month, selectedMonth, todayStr]);
 
   // Fetch saved manual records from server
   const loadSavedRecords = useCallback(async () => {
@@ -111,8 +117,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     }
   };
 
+  // 👑 Hierarchy Sorting: Highest importance (Darko / Manager) to least importance (Staff / Workers)
   const activeEmployees = useMemo(() => {
-    return (employees || []).filter(e => {
+    const list = (employees || []).filter(e => {
       if (!e || e.status === 'resigned' || e.isActive === false) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -123,20 +130,50 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       }
       return true;
     });
+
+    const getRank = (emp: Employee): number => {
+      const id = (emp.id || '').toLowerCase();
+      const role = (emp.role || '').toLowerCase();
+      const name = (emp.fullName3Part || emp.name || '').toLowerCase();
+
+      // Top 1: Darko / General Manager / Executive
+      if (id === 'emp-02' || name.includes('دارکۆ') || name.includes('darko') || role === 'manager') return 1;
+      
+      // Top 2: Branch Managers / Officers / Supervisors
+      if (role.includes('manager') || role.includes('بەڕێوەبەر') || role.includes('لێپرسراو') || role.includes('admin')) return 2;
+      
+      // Top 3: Accountants & Warehouse Supervisors
+      if (role.includes('ژمێریار') || role.includes('accountant') || role.includes('کۆگا') || role.includes('warehouse')) return 3;
+      
+      // Top 4: Technical & Field Specialists
+      if (role.includes('ئەندازیار') || role.includes('engineer') || role.includes('سەرپەرشتیار') || role.includes('supervisor')) return 4;
+      
+      // Top 5: Staff / Regular Workers
+      return 5;
+    };
+
+    return [...list].sort((a, b) => {
+      const rankA = getRank(a);
+      const rankB = getRank(b);
+      if (rankA !== rankB) return rankA - rankB;
+      return (a.fullName3Part || a.name || '').localeCompare(b.fullName3Part || b.name || '', 'ckb');
+    });
   }, [employees, searchQuery]);
 
-  const getGpsLogsForEmpAndDay = (emp: Employee, dayItem: { dayNum: number; dateStr: string; isFriday: boolean }) => {
-    const { dateStr, isFriday } = dayItem;
+  const getGpsLogsForEmpAndDay = (emp: Employee, dayItem: { dayNum: number; dateStr: string; isFriday: boolean; isFuture: boolean; isToday: boolean }) => {
+    const { dateStr, isFriday, isFuture, isToday } = dayItem;
     const empId = (emp.id || '').toString().trim().toLowerCase();
     const empNum = empId.replace('emp-', '');
     const empName = (emp.name || emp.fullName3Part || '').trim().toLowerCase();
 
-    // Check manual override first
+    // 1. Check manual override first (if admin explicitly dragged a status onto this cell)
     const override = manualStatusMap[`${emp.id}_${dateStr}`] || manualStatusMap[`${empNum}_${dateStr}`] || manualStatusMap[`emp-${empNum}_${dateStr}`];
     if (override) {
       return {
         hasRecord: true,
         isFriday,
+        isFuture,
+        isToday,
         checkInTime: override.checkInTime || '',
         checkOutTime: override.checkOutTime || '',
         status: override.status,
@@ -145,6 +182,37 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       };
     }
 
+    // 2. Check if it's Friday (Official Holiday)
+    if (isFriday) {
+      return {
+        hasRecord: false,
+        isFriday: true,
+        isFuture,
+        isToday,
+        checkInTime: '',
+        checkOutTime: '',
+        status: 'Holiday',
+        warehouseName: 'کۆمپانیای سەرەکی ئاشڵی',
+        workedHours: 0,
+      };
+    }
+
+    // 3. 🚫 FUTURE DAYS: Must NOT be green or red. Must be blank neutral '-'
+    if (isFuture) {
+      return {
+        hasRecord: false,
+        isFriday: false,
+        isFuture: true,
+        isToday: false,
+        checkInTime: '',
+        checkOutTime: '',
+        status: 'Future',
+        warehouseName: '',
+        workedHours: 0,
+      };
+    }
+
+    // 4. Past or Today: Search actual GPS logs from server
     const dayRecords = attendanceLogs.filter(log => {
       const logDate = log.date || (log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || '');
       if (logDate !== dateStr) return false;
@@ -163,7 +231,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     let checkInTime = '';
     let checkOutTime = '';
     let warehouseName = 'کۆمپانیای سەرەکی ئاشڵی';
-    let status = isFriday ? 'Holiday' : 'Absent';
 
     dayRecords.forEach((r: any) => {
       const inCandidate = r.checkInTime || r.check_in_time || (r.checkIn ? (r.checkIn.includes(' ') ? r.checkIn.split(' ')[1]?.slice(0, 5) : r.checkIn.includes('T') ? r.checkIn.split('T')[1]?.slice(0, 5) : r.checkIn.slice(0, 5)) : '');
@@ -172,15 +239,22 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       if (inCandidate && !checkInTime) checkInTime = inCandidate.slice(0, 5);
       if (outCandidate) checkOutTime = outCandidate.slice(0, 5);
       if (r.warehouseName || r.warehouse_name) warehouseName = r.warehouseName || r.warehouse_name;
-      if (r.status) status = r.status;
     });
 
     const hasRecord = Boolean(checkInTime || checkOutTime);
-    if (hasRecord) status = 'Present';
+    let status = 'Absent';
+
+    if (hasRecord) {
+      status = 'Present';
+    } else if (isToday) {
+      status = 'Pending'; // Today hasn't ended yet
+    }
 
     return {
       hasRecord,
-      isFriday,
+      isFriday: false,
+      isFuture: false,
+      isToday,
       checkInTime,
       checkOutTime,
       status,
@@ -251,7 +325,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </span>
               </div>
               <p className="text-[11px] text-slate-300 font-medium mt-0.5">
-                سیستەمی Drag & Drop بۆ دیاریکردنی مۆڵەت و غیاب لەگەڵ چاودێری ڕاستەوخۆی GPS.
+                سیستەمی Drag & Drop بۆ دیاریکردنی مۆڵەت و غیاب — بە ڕیزبەندی پێگەی کارگێڕی (Hierarchy Ranking).
               </p>
             </div>
           </div>
@@ -324,79 +398,118 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         <table className="w-full text-xs text-right border-collapse">
           <thead className="sticky top-0 bg-slate-100 border-b-2 border-slate-300 z-20">
             <tr>
-              <th className="sticky right-0 bg-slate-200 text-slate-950 font-black px-3 py-2.5 border-l border-slate-300 z-30 min-w-[180px]">
-                👤 ناوی کارمەند
+              <th className="sticky right-0 bg-slate-200 text-slate-950 font-black px-3 py-2.5 border-l border-slate-300 z-30 min-w-[190px]">
+                👤 ناوی کارمەند (ڕیزبەندی گرنگی)
               </th>
               {daysArray.map((d) => (
                 <th 
                   key={d.dateStr} 
                   className={`text-center font-black p-1 border-l border-slate-300 min-w-[42px] ${
+                    d.isToday ? 'bg-amber-100 text-amber-950 border-b-2 border-b-amber-500 font-black' :
                     d.isFriday ? 'bg-emerald-100 text-emerald-950 font-black' : 'text-slate-800'
                   }`}
                 >
                   <div className="text-[10px]">{d.dayNum}</div>
-                  <div className="text-[8px] font-bold">{d.isFriday ? '🌴 هەینی' : ''}</div>
+                  <div className="text-[8px] font-bold">
+                    {d.isToday ? '⚡ ئەمڕۆ' : d.isFriday ? '🌴 هەینی' : ''}
+                  </div>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {activeEmployees.map((emp) => (
-              <tr key={emp.id} className="hover:bg-blue-50/40 transition-colors">
-                <td className="sticky right-0 bg-white z-10 px-3 py-2 border-l border-slate-300 font-bold shadow-xs">
-                  <div className="text-xs font-black text-slate-900">{emp.fullName3Part || emp.name}</div>
-                  <div className="text-[9px] font-mono text-slate-400">{emp.id}</div>
-                </td>
-                {daysArray.map((d) => {
-                  const info = getGpsLogsForEmpAndDay(emp, d);
-                  const isFriday = d.isFriday;
+            {activeEmployees.map((emp, index) => {
+              const isDarko = emp.id === 'emp-02' || (emp.fullName3Part || emp.name || '').includes('دارکۆ');
+              const isManager = emp.role === 'Manager' || isDarko;
 
-                  let badgeColor = 'bg-slate-50 text-slate-400 border-slate-200';
-                  let badgeText = '-';
-
-                  if (info.status === 'Present' || info.checkInTime) {
-                    badgeColor = 'bg-emerald-600 text-white border-emerald-700 font-black';
-                    badgeText = info.checkInTime || 'ئامادە';
-                  } else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
-                    badgeColor = 'bg-amber-400 text-amber-950 border-amber-500 font-black';
-                    badgeText = 'مۆڵەت';
-                  } else if (info.status === 'Absent' || info.status === 'غیاب') {
-                    badgeColor = 'bg-rose-600 text-white border-rose-700 font-black';
-                    badgeText = 'غیاب';
-                  } else if (info.status === 'Holiday' || isFriday) {
-                    badgeColor = 'bg-teal-100 text-teal-900 border-teal-300 font-black';
-                    badgeText = '🌴';
-                  }
-
-                  return (
-                    <td 
-                      key={d.dateStr}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = 'copy';
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        const dropped = e.dataTransfer.getData('text/plain') || draggedStatus;
-                        if (dropped) {
-                          handleCellStatusChange(emp.id, emp.name, d.dateStr, dropped);
-                        }
-                      }}
-                      onClick={() => handleCellStatusChange(emp.id, emp.name, d.dateStr, selectedPaletteStatus)}
-                      onDoubleClick={() => setSelectedLogDetail({ date: d.dateStr, emp, info })}
-                      title={`Drag & Drop بکە یان کلیک بکە بۆ دیاریکردنی ${selectedPaletteStatus} (دبل کلیک بۆ گرافی ٢٤ کاتژمێری)`}
-                      className={`p-1 text-center border-l border-slate-200 cursor-pointer hover:bg-amber-100/60 transition-all ${
-                        isFriday ? 'bg-emerald-50/50' : ''
-                      }`}
-                    >
-                      <div className={`w-full py-1 rounded-none text-[9px] border shadow-2xs transition-all ${badgeColor}`}>
-                        {badgeText}
+              return (
+                <tr key={emp.id} className={`hover:bg-blue-50/40 transition-colors ${isDarko ? 'bg-amber-50/30' : ''}`}>
+                  <td className="sticky right-0 bg-white z-10 px-3 py-2 border-l border-slate-300 font-bold shadow-xs">
+                    <div className="flex items-center gap-1.5">
+                      {isDarko ? (
+                        <Crown className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                      ) : isManager ? (
+                        <Award className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                      ) : (
+                        <span className="text-[10px] font-mono text-slate-400 font-normal">{index + 1}.</span>
+                      )}
+                      <div>
+                        <div className="text-xs font-black text-slate-900">{emp.fullName3Part || emp.name}</div>
+                        <div className="text-[9px] font-mono text-slate-400">
+                          {isDarko ? 'بەڕێوەبەری سەرەکی' : emp.role || 'Staff'} ({emp.id})
+                        </div>
                       </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+                    </div>
+                  </td>
+                  {daysArray.map((d) => {
+                    const info = getGpsLogsForEmpAndDay(emp, d);
+                    const isFriday = d.isFriday;
+                    const isFuture = d.isFuture;
+
+                    let badgeColor = 'bg-slate-50 text-slate-400 border-slate-200';
+                    let badgeText = '-';
+
+                    // 1. Future Day: clean neutral empty slot (NOT green, NOT red!)
+                    if (isFuture && info.status === 'Future') {
+                      badgeColor = 'bg-slate-50/60 text-slate-300 border-dashed border-slate-200 font-normal';
+                      badgeText = '-';
+                    }
+                    // 2. Friday Holiday
+                    else if (info.status === 'Holiday' || isFriday) {
+                      badgeColor = 'bg-teal-50 text-teal-800 border-teal-200 font-black';
+                      badgeText = '🌴';
+                    }
+                    // 3. Present / Check-in
+                    else if (info.status === 'Present' || info.checkInTime) {
+                      badgeColor = 'bg-emerald-600 text-white border-emerald-700 font-black';
+                      badgeText = info.checkInTime || 'ئامادە';
+                    }
+                    // 4. Leave / مۆڵەت
+                    else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
+                      badgeColor = 'bg-amber-400 text-amber-950 border-amber-500 font-black';
+                      badgeText = 'مۆڵەت';
+                    }
+                    // 5. Absent / غیاب
+                    else if (info.status === 'Absent' || info.status === 'غیاب') {
+                      badgeColor = 'bg-rose-600 text-white border-rose-700 font-black';
+                      badgeText = 'غیاب';
+                    }
+                    // 6. Today Pending
+                    else if (info.status === 'Pending') {
+                      badgeColor = 'bg-slate-100 text-slate-500 border-slate-300 font-bold';
+                      badgeText = '-';
+                    }
+
+                    return (
+                      <td 
+                        key={d.dateStr}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'copy';
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const dropped = e.dataTransfer.getData('text/plain') || draggedStatus;
+                          if (dropped) {
+                            handleCellStatusChange(emp.id, emp.name, d.dateStr, dropped);
+                          }
+                        }}
+                        onClick={() => handleCellStatusChange(emp.id, emp.name, d.dateStr, selectedPaletteStatus)}
+                        onDoubleClick={() => setSelectedLogDetail({ date: d.dateStr, emp, info })}
+                        title={`Drag & Drop بکە یان کلیک بکە بۆ دیاریکردنی ${selectedPaletteStatus} (دبل کلیک بۆ گرافی ٢٤ کاتژمێری)`}
+                        className={`p-1 text-center border-l border-slate-200 cursor-pointer hover:bg-amber-100/60 transition-all ${
+                          d.isToday ? 'bg-amber-50/40' : isFriday ? 'bg-emerald-50/50' : ''
+                        }`}
+                      >
+                        <div className={`w-full py-1 rounded-none text-[9px] border shadow-2xs transition-all ${badgeColor}`}>
+                          {badgeText}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
