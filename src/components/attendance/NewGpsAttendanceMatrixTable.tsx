@@ -24,7 +24,15 @@ import {
   BarChart3,
   X,
   Crown,
-  Award
+  Award,
+  Printer,
+  FileSpreadsheet,
+  Clock,
+  UserCheck,
+  CheckCircle2,
+  Trash2,
+  Camera,
+  Filter
 } from 'lucide-react';
 import { getDaysInMonth, format, getDay, addMonths, subMonths } from 'date-fns';
 import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
@@ -37,7 +45,19 @@ interface NewGpsAttendanceMatrixTableProps {
 export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [] }: NewGpsAttendanceMatrixTableProps) {
   const [selectedMonth, setSelectedMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'));
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedLogDetail, setSelectedLogDetail] = useState<any | null>(null);
+  
+  // Cell Click Modal State for In-depth Editing & 24h Visual Graph
+  const [selectedDayModal, setSelectedDayModal] = useState<{
+    emp: Employee;
+    dayItem: { dayNum: number; dateStr: string; isFriday: boolean; isFuture: boolean; isToday: boolean };
+    info: any;
+  } | null>(null);
+
+  // Modal Form States
+  const [modalStatus, setModalStatus] = useState<string>('Present');
+  const [modalCheckIn, setModalCheckIn] = useState<string>('08:30');
+  const [modalCheckOut, setModalCheckOut] = useState<string>('16:30');
+  const [isSavingModal, setIsSavingModal] = useState<boolean>(false);
 
   // Status Drag & Drop Quick Palette
   const [selectedPaletteStatus, setSelectedPaletteStatus] = useState<string>('Present');
@@ -45,6 +65,13 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
   // Dynamic Manual Overrides Map for cell statuses
   const [manualStatusMap, setManualStatusMap] = useState<Record<string, { status: string; checkInTime?: string; checkOutTime?: string }>>({});
+
+  // 🖨️ Custom Range Print / Google Sheets Export Modal State
+  const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
+  const [printStartDay, setPrintStartDay] = useState<number>(1);
+  const [printEndDay, setPrintEndDay] = useState<number>(31);
+  const [printEmployeeFilter, setPrintEmployeeFilter] = useState<'all' | 'managers' | 'custom'>('all');
+  const [selectedPrintEmpIds, setSelectedPrintEmpIds] = useState<string[]>([]);
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
 
@@ -65,6 +92,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       return { dayNum, dateStr, isFriday, isFuture, isToday };
     });
   }, [totalDays, year, month, selectedMonth, todayStr]);
+
+  // Adjust printEndDay if month days change
+  useEffect(() => {
+    setPrintEndDay(totalDays);
+  }, [totalDays]);
 
   // Fetch saved manual records from server
   const loadSavedRecords = useCallback(async () => {
@@ -90,32 +122,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     const interval = setInterval(loadSavedRecords, 4000);
     return () => clearInterval(interval);
   }, [loadSavedRecords]);
-
-  // Handle Drag & Drop / Click Cell Status Change
-  const handleCellStatusChange = async (userId: string, userName: string, dateStr: string, status: string) => {
-    const key = `${userId}_${dateStr}`;
-    
-    // Optimistic Update
-    setManualStatusMap(prev => ({
-      ...prev,
-      [key]: {
-        status,
-        checkInTime: status === 'Present' ? '08:30' : (status === 'Leave' || status === 'مۆڵەت') ? 'مۆڵەت' : undefined,
-        checkOutTime: status === 'Present' ? '16:30' : (status === 'Leave' || status === 'مۆڵەت') ? 'مۆڵەت' : undefined
-      }
-    }));
-
-    try {
-      await fetch('/api/attendance/admin/manual-record', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, userName, date: dateStr, status })
-      });
-      loadSavedRecords();
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   // 👑 Hierarchy Sorting: Highest importance (Darko / Manager) to least importance (Staff / Workers)
   const activeEmployees = useMemo(() => {
@@ -160,13 +166,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     });
   }, [employees, searchQuery]);
 
-  const getGpsLogsForEmpAndDay = (emp: Employee, dayItem: { dayNum: number; dateStr: string; isFriday: boolean; isFuture: boolean; isToday: boolean }) => {
+  // Lookup record function for any employee & day
+  const getGpsLogsForEmpAndDay = useCallback((emp: Employee, dayItem: { dayNum: number; dateStr: string; isFriday: boolean; isFuture: boolean; isToday: boolean }) => {
     const { dateStr, isFriday, isFuture, isToday } = dayItem;
     const empId = (emp.id || '').toString().trim().toLowerCase();
     const empNum = empId.replace('emp-', '');
     const empName = (emp.name || emp.fullName3Part || '').trim().toLowerCase();
 
-    // 1. Check manual override first (if admin explicitly dragged a status onto this cell)
+    // 1. Check manual override first
     const override = manualStatusMap[`${emp.id}_${dateStr}`] || manualStatusMap[`${empNum}_${dateStr}`] || manualStatusMap[`emp-${empNum}_${dateStr}`];
     if (override) {
       return {
@@ -182,7 +189,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       };
     }
 
-    // 2. Check if it's Friday (Official Holiday)
+    // 2. Friday Holiday
     if (isFriday) {
       return {
         hasRecord: false,
@@ -197,7 +204,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       };
     }
 
-    // 3. 🚫 FUTURE DAYS: Must NOT be green or red. Must be blank neutral '-'
+    // 3. Future Days
     if (isFuture) {
       return {
         hasRecord: false,
@@ -247,7 +254,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     if (hasRecord) {
       status = 'Present';
     } else if (isToday) {
-      status = 'Pending'; // Today hasn't ended yet
+      status = 'Pending';
     }
 
     return {
@@ -261,48 +268,127 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       warehouseName,
       workedHours: hasRecord ? 8 : 0,
     };
+  }, [manualStatusMap, attendanceLogs]);
+
+  // Open Cell Click Modal
+  const handleCellClick = (emp: Employee, dayItem: { dayNum: number; dateStr: string; isFriday: boolean; isFuture: boolean; isToday: boolean }) => {
+    const info = getGpsLogsForEmpAndDay(emp, dayItem);
+    setSelectedDayModal({ emp, dayItem, info });
+    setModalStatus(info.status === 'Future' || info.status === 'Pending' ? 'Present' : info.status);
+    setModalCheckIn(info.checkInTime || '08:30');
+    setModalCheckOut(info.checkOutTime || '16:30');
   };
 
-  const handleExportCsv = () => {
-    let csv = '\uFEFF';
-    const dayHeaders = daysArray.map(d => `"ڕۆژی ${d.dayNum}"`).join(',');
-    csv += `"ناوی کارمەند","پلە","ژمارەی مۆبایل",${dayHeaders},"کۆی ئامادەبوون","کۆی کاژێر"\n`;
+  // Save Modal Changes
+  const handleSaveModal = async () => {
+    if (!selectedDayModal) return;
+    setIsSavingModal(true);
+    const { emp, dayItem } = selectedDayModal;
+    const key = `${emp.id}_${dayItem.dateStr}`;
 
-    activeEmployees.forEach(emp => {
-      let daysCount = 0;
-      let totalHours = 0;
-      const dayCols = daysArray.map(d => {
-        const info = getGpsLogsForEmpAndDay(emp, d);
-        if (info.hasRecord) {
-          daysCount++;
-          totalHours += info.workedHours;
-          return `"${info.checkInTime || 'ئامادە'}"`;
-        } else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
-          return '"مۆڵەت"';
-        } else if (info.status === 'Absent' || info.status === 'غیاب') {
-          return '"غیاب"';
-        } else if (info.isFriday || info.status === 'Holiday') {
-          return '"پشوو (هەینی)"';
+    try {
+      // Optimistic Update
+      setManualStatusMap(prev => ({
+        ...prev,
+        [key]: {
+          status: modalStatus,
+          checkInTime: modalStatus === 'Present' ? modalCheckIn : modalStatus === 'Leave' ? 'مۆڵەت' : undefined,
+          checkOutTime: modalStatus === 'Present' ? modalCheckOut : modalStatus === 'Leave' ? 'مۆڵەت' : undefined
         }
-        return '"-"';
+      }));
+
+      await fetch('/api/attendance/admin/manual-record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: emp.id,
+          userName: emp.fullName3Part || emp.name,
+          date: dayItem.dateStr,
+          status: modalStatus,
+          checkInTime: modalStatus === 'Present' ? modalCheckIn : undefined,
+          checkOutTime: modalStatus === 'Present' ? modalCheckOut : undefined
+        })
       });
 
-      const row = [
-        `"${emp.fullName3Part || emp.name}"`,
-        `"${emp.role || 'Staff'}"`,
-        `"${emp.phone || ''}"`,
-        ...dayCols,
-        daysCount,
-        `${totalHours}h`
-      ];
-      csv += row.join(',') + '\n';
+      loadSavedRecords();
+      setSelectedDayModal(null);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSavingModal(false);
+    }
+  };
+
+  // Delete / Reset this day's record
+  const handleDeleteDayRecord = async () => {
+    if (!selectedDayModal) return;
+    if (!confirm('ئایا دڵنیایت لە سڕینەوەی تۆماری ئەم ڕۆژە؟')) return;
+    const { emp, dayItem } = selectedDayModal;
+    const key = `${emp.id}_${dayItem.dateStr}`;
+
+    setManualStatusMap(prev => {
+      const copy = { ...prev };
+      delete copy[key];
+      return copy;
     });
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Ashley_GPS_Matrix_${selectedMonth}.csv`;
-    link.click();
+    try {
+      await fetch('/api/attendance/admin/manual-record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: emp.id,
+          userName: emp.fullName3Part || emp.name,
+          date: dayItem.dateStr,
+          status: 'Absent'
+        })
+      });
+      loadSavedRecords();
+      setSelectedDayModal(null);
+    } catch (e) {}
+  };
+
+  // Drag & Drop Instant Drop
+  const handleDirectDrop = async (userId: string, userName: string, dateStr: string, status: string) => {
+    const key = `${userId}_${dateStr}`;
+    setManualStatusMap(prev => ({
+      ...prev,
+      [key]: {
+        status,
+        checkInTime: status === 'Present' ? '08:30' : status === 'Leave' ? 'مۆڵەت' : undefined,
+        checkOutTime: status === 'Present' ? '16:30' : status === 'Leave' ? 'مۆڵەت' : undefined
+      }
+    }));
+
+    try {
+      await fetch('/api/attendance/admin/manual-record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, userName, date: dateStr, status })
+      });
+      loadSavedRecords();
+    } catch (e) {}
+  };
+
+  // 🖨️ Filtered Employees for Print
+  const printEmployees = useMemo(() => {
+    if (printEmployeeFilter === 'managers') {
+      return activeEmployees.filter(e => e.role === 'Manager' || e.id === 'emp-02' || (e.fullName3Part || e.name || '').includes('دارکۆ'));
+    }
+    if (printEmployeeFilter === 'custom' && selectedPrintEmpIds.length > 0) {
+      return activeEmployees.filter(e => selectedPrintEmpIds.includes(e.id));
+    }
+    return activeEmployees;
+  }, [activeEmployees, printEmployeeFilter, selectedPrintEmpIds]);
+
+  // 🖨️ Filtered Days for Print
+  const printDays = useMemo(() => {
+    return daysArray.filter(d => d.dayNum >= printStartDay && d.dayNum <= printEndDay);
+  }, [daysArray, printStartDay, printEndDay]);
+
+  // Trigger Native Browser Print Window
+  const handlePrintWindow = () => {
+    window.print();
   };
 
   return (
@@ -325,12 +411,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </span>
               </div>
               <p className="text-[11px] text-slate-300 font-medium mt-0.5">
-                سیستەمی Drag & Drop بۆ دیاریکردنی مۆڵەت و غیاب — بە ڕیزبەندی پێگەی کارگێڕی (Hierarchy Ranking).
+                کلیک لەسەر هەر خانەیەک بکە بۆ بینینی هێڵکاری ٢٤ کاتژمێری و وێنە و گۆڕینی فەرمانی کات.
               </p>
             </div>
           </div>
 
-          {/* Month Navigator & Export */}
+          {/* Month Navigator & Print Controls */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1 bg-slate-800 px-2 py-1 border border-slate-600 rounded-none">
               <Calendar className="w-3.5 h-3.5 text-blue-400" />
@@ -341,9 +427,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 className="bg-transparent text-white font-bold font-mono focus:outline-none cursor-pointer text-xs"
               />
             </div>
-            <button onClick={handleExportCsv} className="px-3 py-1.5 rounded-none bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black flex items-center gap-1 shadow-xs cursor-pointer">
-              <Download className="w-3.5 h-3.5" />
-              <span>Excel</span>
+            
+            {/* 🖨️ Prominent Print & Custom Range Button */}
+            <button 
+              onClick={() => setShowPrintModal(true)} 
+              className="px-3.5 py-1.5 rounded-none bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-black flex items-center gap-1.5 shadow-md cursor-pointer border border-blue-400 transition-transform active:scale-95"
+            >
+              <Printer className="w-3.5 h-3.5 text-white" />
+              <span>🖨️ چاپکردنی تایبەت (وەک Google Sheet)</span>
             </button>
           </div>
         </div>
@@ -353,7 +444,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] font-black text-amber-400 flex items-center gap-1">
               <Move className="w-3.5 h-3.5" />
-              <span>پالێتی Drag & Drop (ڕایبکێشە بۆ سەر هەر ڕۆژێک یان کلیک بکە):</span>
+              <span>پالێتی Drag & Drop (ڕایبکێشە بۆ سەر هەر خانەیەک):</span>
             </span>
             {[
               { key: 'Present', label: '🟢 ئامادەبوو', bg: 'bg-emerald-600 text-white border-emerald-700' },
@@ -369,10 +460,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   setDraggedStatus(p.key);
                 }}
                 onDragEnd={() => setDraggedStatus(null)}
-                onClick={() => setSelectedPaletteStatus(p.key)}
-                className={`px-3 py-1 rounded-none text-[10px] font-black border transition-all cursor-grab active:cursor-grabbing select-none flex items-center gap-1 shadow-2xs ${p.bg} ${
-                  selectedPaletteStatus === p.key ? 'ring-2 ring-blue-400 scale-105 shadow-md' : 'opacity-85 hover:opacity-100'
-                }`}
+                className={`px-3 py-1 rounded-none text-[10px] font-black border transition-all cursor-grab active:cursor-grabbing select-none flex items-center gap-1 shadow-2xs ${p.bg} opacity-90 hover:opacity-100`}
               >
                 <span>{p.label}</span>
               </div>
@@ -449,7 +537,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     let badgeColor = 'bg-slate-50 text-slate-400 border-slate-200';
                     let badgeText = '-';
 
-                    // 1. Future Day: clean neutral empty slot (NOT green, NOT red!)
+                    // 1. Future Day: clean neutral empty slot
                     if (isFuture && info.status === 'Future') {
                       badgeColor = 'bg-slate-50/60 text-slate-300 border-dashed border-slate-200 font-normal';
                       badgeText = '-';
@@ -491,13 +579,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           e.preventDefault();
                           const dropped = e.dataTransfer.getData('text/plain') || draggedStatus;
                           if (dropped) {
-                            handleCellStatusChange(emp.id, emp.name, d.dateStr, dropped);
+                            handleDirectDrop(emp.id, emp.name, d.dateStr, dropped);
                           }
                         }}
-                        onClick={() => handleCellStatusChange(emp.id, emp.name, d.dateStr, selectedPaletteStatus)}
-                        onDoubleClick={() => setSelectedLogDetail({ date: d.dateStr, emp, info })}
-                        title={`Drag & Drop بکە یان کلیک بکە بۆ دیاریکردنی ${selectedPaletteStatus} (دبل کلیک بۆ گرافی ٢٤ کاتژمێری)`}
-                        className={`p-1 text-center border-l border-slate-200 cursor-pointer hover:bg-amber-100/60 transition-all ${
+                        onClick={() => handleCellClick(emp, d)}
+                        title="کلیک بکە بۆ کردنەوەی وردەکاری ٢٤ کاتژمێری و وێنە و دەستکاریکردنی کات"
+                        className={`p-1 text-center border-l border-slate-200 cursor-pointer hover:bg-blue-100/70 hover:scale-[1.02] transition-all ${
                           d.isToday ? 'bg-amber-50/40' : isFriday ? 'bg-emerald-50/50' : ''
                         }`}
                       >
@@ -514,23 +601,25 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         </table>
       </div>
 
-      {/* 🪟 WINDOWS 11 SHARP MODAL: 24-HOUR TIMELINE VIEW */}
-      {selectedLogDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-none border-2 border-slate-700 shadow-2xl max-w-xl w-full p-0 text-right">
+      {/* ========================================================================= */}
+      {/* 🪟 WINDOWS 11 SHARP MODAL: CELL CLICK IN-DEPTH 24-HOUR DETAILS & EDITOR */}
+      {/* ========================================================================= */}
+      {selectedDayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-none border-2 border-slate-700 shadow-2xl max-w-2xl w-full p-0 text-right font-sans">
             
             {/* Title Bar */}
             <div className="flex items-center justify-between bg-slate-900 text-white px-4 py-2.5 border-b border-slate-700">
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-blue-400" />
                 <h3 className="font-black text-xs text-white">
-                  پەنجەرەی چالاکی ٢٤ کاتژمێری: {selectedLogDetail.emp?.name}
+                  پەنجەرەی وردەکاری و گرافی ٢٤ کاتژمێری: {selectedDayModal.emp.fullName3Part || selectedDayModal.emp.name}
                 </h3>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-[11px] font-mono text-slate-400">{selectedLogDetail.date}</span>
+                <span className="text-[11px] font-mono text-amber-300 font-bold">{selectedDayModal.dayItem.dateStr}</span>
                 <button 
-                  onClick={() => setSelectedLogDetail(null)}
+                  onClick={() => setSelectedDayModal(null)}
                   className="w-6 h-6 bg-slate-800 hover:bg-rose-600 text-white flex items-center justify-center cursor-pointer text-xs font-mono transition-colors"
                 >
                   ✕
@@ -538,21 +627,107 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               </div>
             </div>
 
-            <div className="p-4 space-y-4">
-              {/* 24-Hour Timeline Bar */}
+            <div className="p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+              
+              {/* Employee Info Header */}
+              <div className="p-3 bg-slate-50 border border-slate-300 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 bg-slate-900 text-white font-black flex items-center justify-center text-sm border border-slate-700 shadow-xs">
+                    {(selectedDayModal.emp.name || '').slice(0, 2)}
+                  </div>
+                  <div>
+                    <span className="text-xs font-black text-slate-900 block">{selectedDayModal.emp.fullName3Part || selectedDayModal.emp.name}</span>
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono mt-0.5">
+                      <span>کۆد: {selectedDayModal.emp.id}</span>
+                      <span>•</span>
+                      <span>پلە: {selectedDayModal.emp.role || 'Staff'}</span>
+                      <span>•</span>
+                      <span>مۆبایل: {selectedDayModal.emp.phone || '-'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-left text-xs">
+                  <span className="text-[10px] text-slate-400 block font-bold">📍 لۆکەیشنی GPS:</span>
+                  <span className="font-bold text-slate-800">{selectedDayModal.info.warehouseName || 'کۆمپانیای سەرەکی ئاشڵی'}</span>
+                </div>
+              </div>
+
+              {/* Status Selector Palette */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-slate-700 block">حاڵەتی فەرمانی ئەم ڕۆژە:</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { key: 'Present', label: '🟢 ئامادەبوو', bg: 'bg-emerald-600 text-white border-emerald-700' },
+                    { key: 'Leave', label: '🟡 مۆڵەت', bg: 'bg-amber-400 text-amber-950 border-amber-500' },
+                    { key: 'Absent', label: '🔴 غیاب', bg: 'bg-rose-600 text-white border-rose-700' },
+                    { key: 'Holiday', label: '🌴 پشوو', bg: 'bg-teal-600 text-white border-teal-700' }
+                  ].map(s => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setModalStatus(s.key)}
+                      className={`py-2 px-3 rounded-none text-xs font-black border transition-all cursor-pointer ${s.bg} ${
+                        modalStatus === s.key ? 'ring-2 ring-blue-600 shadow-md scale-105' : 'opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Time Inputs (Only active if Present) */}
+              {modalStatus === 'Present' && (
+                <div className="grid grid-cols-2 gap-3 p-3 bg-blue-50/60 border border-blue-200">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-700 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-blue-600" />
+                      <span>کاتی هاتن (Check-in):</span>
+                    </label>
+                    <input 
+                      type="time" 
+                      value={modalCheckIn}
+                      onChange={(e) => setModalCheckIn(e.target.value)}
+                      className="w-full text-xs font-bold bg-white border border-slate-300 p-2 rounded-none outline-none font-mono text-center"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-700 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-blue-600" />
+                      <span>کاتی دەرچوون (Check-out):</span>
+                    </label>
+                    <input 
+                      type="time" 
+                      value={modalCheckOut}
+                      onChange={(e) => setModalCheckOut(e.target.value)}
+                      className="w-full text-xs font-bold bg-white border border-slate-300 p-2 rounded-none outline-none font-mono text-center"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* 24-Hour Interactive Timeline Visual Graph */}
               <div className="space-y-2 p-3 bg-slate-100 rounded-none border border-slate-300">
-                <span className="text-xs font-black text-slate-800 block">گرافی دەوامی ٢٤ کاتژمێری ئەم ڕۆژە:</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-800">📊 گرافی ٢٤ کاتژمێری چالاکی دەوامی ئەم ڕۆژە:</span>
+                  <span className="text-[10px] font-bold text-blue-700">دەوامی فەرمی: 08:30 بۆ 16:30</span>
+                </div>
+
                 <div className="relative w-full h-12 bg-white rounded-none overflow-hidden border border-slate-300">
-                  <div className="absolute top-0 bottom-0 bg-blue-100/60 border-x-2 border-dashed border-blue-400/80 pointer-events-none" style={{ left: '35.4%', width: '33.3%' }} />
-                  {selectedLogDetail.info?.checkInTime && (
+                  {/* Official Shift Guide Window */}
+                  <div className="absolute top-0 bottom-0 bg-blue-100/70 border-x-2 border-dashed border-blue-400/80 pointer-events-none" style={{ left: '35.4%', width: '33.3%' }} />
+                  
+                  {modalStatus === 'Present' && (
                     <div 
-                      className="absolute top-1 bottom-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-none flex items-center justify-center text-[9px] font-mono font-bold shadow-xs border border-emerald-700"
+                      className="absolute top-1 bottom-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-none flex items-center justify-center text-[10px] font-mono font-bold shadow-xs border border-emerald-700"
                       style={{ left: '35.4%', width: '33.3%' }}
                     >
-                      {selectedLogDetail.info.checkInTime} - {selectedLogDetail.info.checkOutTime || '16:30'}
+                      {modalCheckIn} - {modalCheckOut} (٨ کاتژمێر)
                     </div>
                   )}
                 </div>
+
                 <div className="flex items-center justify-between text-[8px] font-mono text-slate-500 font-bold">
                   <span>00:00</span>
                   <span>04:00</span>
@@ -564,25 +739,183 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-50 border border-slate-300 flex items-center justify-between text-xs">
-                <div>
-                  <span className="font-black text-slate-900">{selectedLogDetail.emp?.name}</span>
-                  <p className="text-[10px] text-slate-500">📍 {selectedLogDetail.info?.warehouseName || 'کۆمپانیای سەرەکی ئاشڵی'}</p>
-                </div>
-                <div className="text-left font-mono">
-                  <div className="font-bold text-emerald-800">هاتن: {selectedLogDetail.info?.checkInTime || '-'}</div>
-                  <div className="text-slate-600">ڕۆشتن: {selectedLogDetail.info?.checkOutTime || '-'}</div>
+              {/* Modal Bottom Buttons */}
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={handleDeleteDayRecord}
+                  className="px-3 py-2 rounded-none bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 text-xs font-black flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>سڕینەوەی ئەم ڕۆژە</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDayModal(null)}
+                    className="px-4 py-2 rounded-none bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold cursor-pointer"
+                  >
+                    داخستن
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveModal}
+                    disabled={isSavingModal}
+                    className="px-6 py-2 rounded-none bg-slate-900 hover:bg-slate-800 active:bg-black text-white text-xs font-black shadow-md cursor-pointer flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{isSavingModal ? 'لە پاشەکەوتکردندایە...' : '💾 پاشەکەوتکردنی گۆڕانکاری'}</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-200 flex justify-end">
-                <button 
-                  onClick={() => setSelectedLogDetail(null)} 
-                  className="rounded-none px-6 py-1.5 text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white cursor-pointer"
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🖨️ WINDOWS 11 SHARP MODAL: CUSTOM RANGE PRINT & GOOGLE SHEETS EXPORT */}
+      {/* ========================================================================= */}
+      {showPrintModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-none border-2 border-slate-700 shadow-2xl max-w-4xl w-full p-0 text-right font-sans">
+            
+            {/* Title Bar */}
+            <div className="flex items-center justify-between bg-slate-900 text-white px-4 py-2.5 border-b border-slate-700">
+              <div className="flex items-center gap-2">
+                <Printer className="w-4 h-4 text-blue-400" />
+                <h3 className="font-black text-xs text-white">
+                  🖨️ چاپکردنی تایبەت و هەناردەکردنی خشتە وەک Google Sheets
+                </h3>
+              </div>
+              <button 
+                onClick={() => setShowPrintModal(false)}
+                className="w-6 h-6 bg-slate-800 hover:bg-rose-600 text-white flex items-center justify-center cursor-pointer text-xs font-mono transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+              
+              {/* Range Filters Box */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-50 border border-slate-300">
+                {/* Date Range Start */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-700">لە ڕۆژی (Start Day):</label>
+                  <select 
+                    value={printStartDay}
+                    onChange={(e) => setPrintStartDay(Number(e.target.value))}
+                    className="w-full text-xs font-bold bg-white border border-slate-300 p-1.5 rounded-none font-mono"
+                  >
+                    {daysArray.map(d => (
+                      <option key={d.dayNum} value={d.dayNum}>ڕۆژی {d.dayNum}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Date Range End */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-700">بۆ ڕۆژی (End Day):</label>
+                  <select 
+                    value={printEndDay}
+                    onChange={(e) => setPrintEndDay(Number(e.target.value))}
+                    className="w-full text-xs font-bold bg-white border border-slate-300 p-1.5 rounded-none font-mono"
+                  >
+                    {daysArray.map(d => (
+                      <option key={d.dayNum} value={d.dayNum}>ڕۆژی {d.dayNum}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Employee Filter */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-700">دەستەی کارمەندان:</label>
+                  <select 
+                    value={printEmployeeFilter}
+                    onChange={(e) => setPrintEmployeeFilter(e.target.value as any)}
+                    className="w-full text-xs font-bold bg-white border border-slate-300 p-1.5 rounded-none"
+                  >
+                    <option value="all">👥 هەموو ستاف و کارمەندان ({activeEmployees.length})</option>
+                    <option value="managers">👑 تەنها بەڕێوەبەر و لێپرسراوان</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Printable Live Preview Table (Styled as Google Sheet) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-800">📄 پێشبینینی خشتەی چاپکراو (Google Sheets Preview):</span>
+                  <span className="text-[10px] font-mono font-bold text-slate-500">
+                    {printDays.length} ڕۆژ هەڵبژێردراوە ({printStartDay} تا {printEndDay})
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto border-2 border-slate-400 bg-white max-h-60 overflow-y-auto">
+                  <table className="w-full text-[10px] text-right border-collapse">
+                    <thead className="bg-slate-200 border-b-2 border-slate-400 sticky top-0">
+                      <tr>
+                        <th className="p-2 font-black border-l border-slate-300 min-w-[140px]">ناوی کارمەند</th>
+                        {printDays.map(d => (
+                          <th key={d.dateStr} className="p-1 text-center font-black border-l border-slate-300 min-w-[32px]">
+                            {d.dayNum}
+                          </th>
+                        ))}
+                        <th className="p-2 text-center font-black border-l border-slate-300">کۆی ئامادەبوون</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-300">
+                      {printEmployees.map((emp, i) => {
+                        let presentDaysCount = 0;
+                        return (
+                          <tr key={emp.id} className="hover:bg-slate-50">
+                            <td className="p-1.5 font-bold border-l border-slate-300">
+                              {i + 1}. {emp.fullName3Part || emp.name}
+                            </td>
+                            {printDays.map(d => {
+                              const info = getGpsLogsForEmpAndDay(emp, d);
+                              if (info.hasRecord) presentDaysCount++;
+                              return (
+                                <td key={d.dateStr} className="p-1 text-center border-l border-slate-300 font-mono">
+                                  {info.hasRecord ? (info.checkInTime || 'ئامادە') : info.status === 'Leave' ? 'مۆڵەت' : info.isFriday ? '🌴' : '-'}
+                                </td>
+                              );
+                            })}
+                            <td className="p-1 text-center font-black border-l border-slate-300 font-mono text-emerald-700">
+                              {presentDaysCount} ڕۆژ
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setShowPrintModal(false)}
+                  className="px-4 py-2 rounded-none bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold cursor-pointer"
                 >
                   داخستن
                 </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePrintWindow}
+                    className="px-6 py-2 rounded-none bg-blue-700 hover:bg-blue-800 text-white text-xs font-black flex items-center gap-1.5 shadow-md cursor-pointer"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>🖨️ چاپکردن دەستبەجێ (Print Now)</span>
+                  </button>
+                </div>
               </div>
+
             </div>
           </div>
         </div>
