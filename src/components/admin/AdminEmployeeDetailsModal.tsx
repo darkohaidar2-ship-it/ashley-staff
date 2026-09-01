@@ -328,8 +328,12 @@ export function AdminEmployeeDetailsModal({
         {/* 🌟 HEADER: EMPLOYEE PROFILE 360 BANNER */}
         <div className="p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white flex items-center justify-between border-b border-indigo-800">
           <div className="flex items-center gap-3">
-            <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-800 border-2 border-white/40 flex items-center justify-center text-white text-xl font-black shadow-lg">
-              {employee.fullName3Part ? employee.fullName3Part.charAt(0) : employee.name.charAt(0)}
+            <div className="w-14 h-14 rounded-none bg-slate-800 border-2 border-blue-400 overflow-hidden flex items-center justify-center text-white text-lg font-black shadow-md flex-shrink-0">
+              {employee.photoUrl ? (
+                <img src={employee.photoUrl} alt={employee.name} className="w-full h-full object-cover" />
+              ) : (
+                <span>{employee.fullName3Part ? employee.fullName3Part.charAt(0) : employee.name.charAt(0)}</span>
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">

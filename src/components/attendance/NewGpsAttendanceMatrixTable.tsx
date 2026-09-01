@@ -693,21 +693,29 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               return (
                 <tr key={emp.id} className={`hover:bg-blue-50/40 transition-colors ${isDarko ? 'bg-amber-50/30' : ''}`}>
                   <td className="sticky right-0 bg-white z-10 px-3 py-2 border-l border-slate-300 font-bold shadow-xs">
-                    <div className="flex items-center gap-1.5">
-                      {isDarko ? (
-                        <Crown className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                      ) : isManager ? (
-                        <Award className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
-                      ) : (
-                        <span className="text-[10px] font-mono text-slate-400 font-normal">{index + 1}.</span>
-                      )}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedEmp360(emp)}
+                      className="flex items-center gap-2 text-right hover:text-blue-700 cursor-pointer group transition-colors w-full"
+                      title="کلیک بکە بۆ کردنەوەی فایلی تەواوی HR و وێنە و زانیاریەکانی کارمەند"
+                    >
+                      <div className="w-8 h-8 rounded-none bg-slate-800 border border-slate-600 overflow-hidden flex items-center justify-center text-white text-xs font-black flex-shrink-0 group-hover:border-blue-600">
+                        {emp.photoUrl ? (
+                          <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span>{emp.name.slice(0, 1)}</span>
+                        )}
+                      </div>
                       <div>
-                        <div className="text-xs font-black text-slate-900">{emp.fullName3Part || emp.name}</div>
+                        <div className="text-xs font-black text-slate-900 group-hover:text-blue-700 flex items-center gap-1">
+                          <span>{emp.fullName3Part || emp.name}</span>
+                          <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
                         <div className="text-[9px] font-mono text-slate-400">
                           {isDarko ? 'بەڕێوەبەری سەرەکی' : emp.role || 'Staff'} ({emp.id})
                         </div>
                       </div>
-                    </div>
+                    </button>
                   </td>
                   {daysArray.map((d) => {
                     const info = getGpsLogsForEmpAndDay(emp, d);
@@ -1044,6 +1052,18 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             </div>
           </div>
         </div>
+      )}
+
+    
+      {/* 🌟 EMPLOYEE 360 HR DOSSIER MODAL */}
+      {selectedEmp360 && (
+        <AdminEmployeeDetailsModal
+          employee={selectedEmp360}
+          selectedMonth={selectedMonth}
+          attendanceLogs={attendanceLogs}
+          adminNotes={{}}
+          onClose={() => setSelectedEmp360(null)}
+        />
       )}
 
     </div>

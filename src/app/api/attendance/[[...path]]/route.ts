@@ -2432,6 +2432,62 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       }
     }
 
+    
+    // ----------------------------------------
+    // POST /api/attendance/profile (Sync Mobile HR Profile & Photo to Supabase)
+    // ----------------------------------------
+    if (pathStr === 'profile' && method === 'POST') {
+      try {
+        const body = await req.json();
+        const { userId, name, phone, address, emergencyContact, nationalId, bloodType, birthDate, photoUrl, pin } = body;
+        
+        if (!userId) {
+          return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+        }
+
+        const cleanEmpId = userId.toString().trim();
+        const rawNum = cleanEmpId.replace('emp-', '');
+        
+        let finalPhotoUrl = photoUrl;
+        if (photoUrl && typeof photoUrl === 'string' && photoUrl.startsWith('data:image')) {
+          const uploaded = await uploadSelfieToStorage(cleanEmpId, 'profile', 'avatar', photoUrl);
+          if (uploaded) finalPhotoUrl = uploaded;
+        }
+
+        const userUpdatePayload: any = {
+          full_name: name,
+          phone: phone,
+          address: address,
+          emergency_contact: emergencyContact,
+          national_id: nationalId,
+          blood_type: bloodType,
+          birth_date: birthDate,
+          photo_url: finalPhotoUrl,
+        };
+        if (pin) userUpdatePayload.pin = pin;
+
+        // 1. Update in users table
+        await supabase.from('users').update(userUpdatePayload).or(`id.eq.${cleanEmpId},id.eq.${rawNum},id.eq.emp-${rawNum}`);
+
+        // 2. Update in employees table
+        await supabase.from('employees').update({
+          name: name,
+          fullName3Part: name,
+          phone: phone,
+          photoUrl: finalPhotoUrl,
+          nationalId: nationalId,
+          bloodType: bloodType,
+          emergencyContact: emergencyContact,
+          address: address,
+          dateOfBirth: birthDate
+        }).or(`id.eq.${cleanEmpId},id.eq.${rawNum},id.eq.emp-${rawNum}`);
+
+        return NextResponse.json({ success: true, photoUrl: finalPhotoUrl, message: 'پڕۆفایل بە سەرکەوتوویی لە سوپابەیس نوێکرایەوە' });
+      } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 500 });
+      }
+    }
+
     if (pathStr === 'admin/users/update-role' && method === 'POST') {
       const { userId, role } = await req.json();
       if (!userId || !role) return NextResponse.json({ error: 'userId and role required' }, { status: 400 });

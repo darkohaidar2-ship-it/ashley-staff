@@ -1850,100 +1850,129 @@ export default function AutonomousMobileAppLight() {
           {/* TAB 3: 👤 هەژمارەکەم (MY ACCOUNT & PROFILE MANAGEMENT) */}
           {/* ======================================================================= */}
           {activeNavTab === 'account' && (
-            <div className="space-y-4 animate-in fade-in duration-200 text-right">
+            <div className="space-y-4 animate-in fade-in duration-200 pb-16">
               
-              {/* Profile Card Header */}
-              <div className="p-5 bg-white rounded-none border border-slate-200 shadow-sm text-center space-y-3">
-                <div className="relative w-20 h-20 mx-auto">
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-orange-400 to-amber-500 text-white font-black text-2xl flex items-center justify-center shadow-md border-4 border-white">
-                    {employeeProfile.name.charAt(0)}
+              {/* Profile Card with Photo Uploader */}
+              <div className="p-4 bg-slate-900 border border-slate-700 text-white rounded-none shadow-md flex items-center gap-4">
+                <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
+                  <div className="w-16 h-16 rounded-none bg-slate-800 border-2 border-blue-500 overflow-hidden flex items-center justify-center text-white font-black text-xl shadow-md">
+                    {profilePhotoUrl ? (
+                      <img src={profilePhotoUrl} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{employeeProfile.name.slice(0, 2)}</span>
+                    )}
                   </div>
-                  <button 
-                    type="button"
-                    onClick={() => alert('وێنەی پرۆفایل لە لایەن ئەدمینەوە پەسەند دەکرێت')}
-                    className="absolute bottom-0 right-0 p-1.5 rounded-full bg-slate-900 text-white shadow-md hover:scale-105 transition-transform cursor-pointer"
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 border border-white text-white rounded-none flex items-center justify-center shadow-xs">
+                    <Camera className="w-3 h-3" />
+                  </div>
+                  <input ref={avatarInputRef} type="file" accept="image/*" capture="user" onChange={handleAvatarChange} className="hidden" />
                 </div>
 
                 <div>
-                  <h3 className="font-black text-sm text-slate-900">{employeeProfile.name}</h3>
-                  <div className="flex items-center justify-center gap-2 mt-1">
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-orange-100 text-orange-900 font-mono">
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-sm text-white">{employeeProfile.name}</span>
+                    <span className="text-[9px] bg-blue-950 text-blue-300 border border-blue-500 font-bold px-1.5 py-0.5 rounded-none">
                       {employeeProfile.role || 'کارمەند'}
                     </span>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900">
-                      🟢 مۆبایل قوفڵ و بەستراوە
-                    </span>
                   </div>
+                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">کۆدی فەرمی: {employeeProfile.id}</p>
+                  <button 
+                    type="button" 
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="text-[10px] text-blue-400 hover:underline font-bold mt-1 block"
+                  >
+                    📸 گۆڕینی وێنەی پرۆفایل (HR Avatar)
+                  </button>
                 </div>
               </div>
 
-              {/* Editable Profile Information Form */}
-              <form onSubmit={handleSaveProfile} className="p-5 bg-white rounded-none border border-slate-200 shadow-sm space-y-3.5">
-                
-                {/* Locked Full Name */}
+              <form onSubmit={handleSaveProfile} className="p-4 bg-white border border-slate-300 rounded-none shadow-xs space-y-3">
+                <h3 className="text-xs font-black text-slate-900 border-b border-slate-200 pb-2">
+                  📋 زانیارییە کەسی و کارگێڕییەکان (HR Dossier):
+                </h3>
+
+                {/* Full Name */}
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-black text-slate-700">ناوی سیانی کارمەند:</label>
-                    <span className="text-[10px] text-slate-400 font-bold flex items-center gap-0.5">
-                      <Lock className="w-3 h-3 text-slate-400" />
-                      <span>قوفڵکراوە</span>
-                    </span>
-                  </div>
+                  <label className="text-[11px] font-black text-slate-700">👤 ناوی سیانی / فەرمی:</label>
                   <input
                     type="text"
                     disabled
                     value={employeeProfile.name}
-                    className="w-full p-3 bg-slate-100 border border-slate-200 rounded-none text-xs font-bold text-slate-500 cursor-not-allowed text-right"
+                    className="w-full p-2.5 bg-slate-100 border border-slate-300 rounded-none text-xs font-bold text-slate-600 text-right cursor-not-allowed"
                   />
-                  <p className="text-[10px] text-slate-400">ناوی سیانی تەنها لە لایەن ئەدمینەوە دەگۆڕدرێت.</p>
                 </div>
 
-                {/* Editable Phone */}
+                {/* Primary Phone */}
                 <div className="space-y-1">
-                  <label className="text-xs font-black text-slate-700">📱 ژمارەی مۆبایل:</label>
+                  <label className="text-[11px] font-black text-slate-700">📱 ژمارەی مۆبایل:</label>
                   <input
                     type="tel"
                     value={profilePhone}
                     onChange={(e) => setProfilePhone(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-none text-xs font-mono font-bold text-slate-900 focus:border-blue-600 focus:bg-white focus:outline-hidden text-right"
+                    placeholder="0750XXXXXXX"
+                    className="w-full p-2.5 bg-white border border-slate-300 rounded-none text-xs font-mono font-bold text-slate-900 focus:border-blue-600 text-right outline-none"
                   />
                 </div>
 
-                {/* Editable Address */}
+                {/* Emergency Contact */}
                 <div className="space-y-1">
-                  <label className="text-xs font-black text-slate-700">🏠 ناونیشانی نیشتەجێبوون:</label>
-                  <input
-                    type="text"
-                    value={profileAddress}
-                    onChange={(e) => setProfileAddress(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-none text-xs font-bold text-slate-900 focus:border-blue-600 focus:bg-white focus:outline-hidden text-right"
-                  />
-                </div>
-
-                {/* Editable Emergency Contact */}
-                <div className="space-y-1">
-                  <label className="text-xs font-black text-slate-700">🚨 پەیوەندی کاتی فریاگوزاری:</label>
+                  <label className="text-[11px] font-black text-slate-700">🚨 پەیوەندی فریاگوزاری (ناو و ژمارە):</label>
                   <input
                     type="text"
                     value={profileEmergency}
                     onChange={(e) => setProfileEmergency(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-none text-xs font-bold text-slate-900 focus:border-blue-600 focus:bg-white focus:outline-hidden text-right"
+                    placeholder="ناوی کەسی نزیک - 0750XXXXXXX"
+                    className="w-full p-2.5 bg-white border border-slate-300 rounded-none text-xs font-bold text-slate-900 focus:border-blue-600 text-right outline-none"
                   />
                 </div>
 
-                {/* Editable Secret PIN */}
+                {/* Residential Address */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700">🏠 ناونیشانی نیشتەجێبوون:</label>
+                  <input
+                    type="text"
+                    value={profileAddress}
+                    onChange={(e) => setProfileAddress(e.target.value)}
+                    placeholder="سلێمانی، گەڕەکی..."
+                    className="w-full p-2.5 bg-white border border-slate-300 rounded-none text-xs font-bold text-slate-900 focus:border-blue-600 text-right outline-none"
+                  />
+                </div>
+
+                {/* National ID & Blood Type Grid */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-black text-slate-700">🆔 کارتی نیشتمانی:</label>
+                    <input
+                      type="text"
+                      value={profileNationalId}
+                      onChange={(e) => setProfileNationalId(e.target.value)}
+                      placeholder="ژمارەی ناسنامە"
+                      className="w-full p-2 bg-white border border-slate-300 rounded-none text-xs font-mono font-bold text-slate-900 outline-none text-center"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-black text-slate-700">🩸 گرووپی خوێن:</label>
+                    <select
+                      value={profileBloodType}
+                      onChange={(e) => setProfileBloodType(e.target.value)}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-none text-xs font-bold text-slate-900 outline-none text-center"
+                    >
+                      {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Secret PIN */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-black text-slate-700">🔑 پین کۆدی نهێنی (PIN):</label>
+                    <label className="text-[11px] font-black text-slate-700">🔑 پین کۆدی نهێنی (PIN):</label>
                     <button
                       type="button"
                       onClick={() => setShowPinText(!showPinText)}
                       className="text-[10px] text-blue-600 font-bold flex items-center gap-1 cursor-pointer"
                     >
-                      {showPinText ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                       <span>{showPinText ? 'شاردنەوە' : 'پیشاندان'}</span>
                     </button>
                   </div>
@@ -1952,36 +1981,27 @@ export default function AutonomousMobileAppLight() {
                     maxLength={6}
                     value={profilePin}
                     onChange={(e) => setProfilePin(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-none text-xs font-mono font-black text-slate-900 focus:border-blue-600 focus:bg-white focus:outline-hidden text-right"
+                    className="w-full p-2.5 bg-white border border-slate-300 rounded-none text-xs font-mono font-black text-slate-900 focus:border-blue-600 outline-none text-center tracking-widest"
                   />
                 </div>
 
-                {/* Official Work Location */}
-                <div className="space-y-1">
-                  <label className="text-xs font-black text-slate-700">🏢 لقی فەرمی کارکردن:</label>
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-none text-xs font-bold text-slate-800 flex items-center justify-between">
-                    <span>کۆمپانیای سەرەکی ئاشڵی (Ashley Base)</span>
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-bold">فەرمی</span>
-                  </div>
-                </div>
-
                 {profileSaveSuccess && (
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-none text-emerald-800 text-xs font-bold text-center flex items-center justify-center gap-1.5 animate-in fade-in">
+                  <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold text-center flex items-center justify-center gap-1.5 animate-in fade-in rounded-none">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>گۆڕانکارییەکان بە سەرکەوتوویی پاشەکەوت کران</span>
+                    <span>گۆڕانکارییەکان بە سەرکەوتوویی لە سوپابەیس پاشەکەوت کران</span>
                   </div>
                 )}
 
                 <button
                   type="submit"
                   disabled={isSavingProfile}
-                  className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 active:bg-black text-white rounded-none text-xs font-black shadow-md cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                  className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:bg-black text-white rounded-none text-xs font-black shadow-md cursor-pointer transition-all flex items-center justify-center gap-1.5 mt-2"
                 >
-                  {isSavingProfile ? <span>لە پاشەکەوتکردندایە...</span> : <span>💾 پاشەکەوتکردنی گۆڕانکارییەکان</span>}
+                  {isSavingProfile ? <span>لە پاشەکەوتکردندایە...</span> : <span>💾 پاشەکەوتکردنی زانیارییەکان بۆ HR</span>}
                 </button>
 
                 {/* 🔒 Master Admin Password Logout Button */}
-                <div className="pt-3 border-t border-slate-200">
+                <div className="pt-2 border-t border-slate-200">
                   <button
                     type="button"
                     onClick={() => {
@@ -1989,10 +2009,10 @@ export default function AutonomousMobileAppLight() {
                       setAdminLogoutError(null);
                       setShowLogoutConfirmModal(true);
                     }}
-                    className="w-full py-3.5 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-200 rounded-none text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                    className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-none text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <Lock className="w-4 h-4 text-rose-600" />
-                    <span>🔒 دەرچوون لە ئەکاونت (Logout بە پاسۆردی ئەدمین)</span>
+                    <Lock className="w-3.5 h-3.5 text-rose-600" />
+                    <span>🔒 دەرچوون لە ئەکاونت (Logout)</span>
                   </button>
                 </div>
               </form>
