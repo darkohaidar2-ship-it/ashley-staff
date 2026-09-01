@@ -10,32 +10,32 @@ import {
   FileText, 
   Smartphone, 
   RefreshCw, 
-  Sparkles,
-  ShieldCheck,
-  Building2,
-  ChevronRight,
-  ChevronLeft,
-  Utensils,
-  DoorOpen,
-  Check,
-  AlertCircle,
-  AlertTriangle,
-  Move,
-  BarChart3,
-  X,
-  Crown,
-  Award,
-  Printer,
-  FileSpreadsheet,
-  Clock,
-  UserCheck,
-  CheckCircle2,
-  Trash2,
-  Camera,
-  Filter
+  Sparkles, 
+  ShieldCheck, 
+  Building2, 
+  ChevronRight, 
+  ChevronLeft, 
+  Utensils, 
+  DoorOpen, 
+  Check, 
+  AlertCircle, 
+  AlertTriangle, 
+  Move, 
+  BarChart3, 
+  X, 
+  Crown, 
+  Award, 
+  Printer, 
+  FileSpreadsheet, 
+  Clock, 
+  UserCheck, 
+  CheckCircle2, 
+  Trash2, 
+  Camera, 
+  Filter,
+  ExternalLink
 } from 'lucide-react';
-import { getDaysInMonth, format, getDay, addMonths, subMonths } from 'date-fns';
-import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
+import { getDaysInMonth, format, getDay } from 'date-fns';
 
 interface NewGpsAttendanceMatrixTableProps {
   employees: Employee[];
@@ -63,7 +63,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   const [selectedPaletteStatus, setSelectedPaletteStatus] = useState<string>('Present');
   const [draggedStatus, setDraggedStatus] = useState<string | null>(null);
 
-  // Dynamic Manual Overrides Map for cell statuses
+  // Dynamic Manual Overrides Map for cell statuses: Map<empId_dateStr, { status: string; checkInTime?: string; checkOutTime?: string }>
   const [manualStatusMap, setManualStatusMap] = useState<Record<string, { status: string; checkInTime?: string; checkOutTime?: string }>>({});
 
   // 🖨️ Custom Range Print / Google Sheets Export Modal State
@@ -98,7 +98,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     setPrintEndDay(totalDays);
   }, [totalDays]);
 
-  // Fetch saved manual records from server
+  // Fetch saved manual records from server & Supabase
   const loadSavedRecords = useCallback(async () => {
     try {
       const res = await fetch(`/api/attendance/admin/report?t=${Date.now()}`, { cache: 'no-store' });
@@ -106,11 +106,13 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         const data = await res.json();
         const map: Record<string, any> = {};
         (data.attendance || []).forEach((r: any) => {
-          map[`${r.userId}_${r.date}`] = {
-            status: r.status,
-            checkInTime: r.checkInTime,
-            checkOutTime: r.checkOutTime
-          };
+          if (r.status && r.status !== 'empty' && r.status !== 'delete' && r.status !== 'Empty') {
+            map[`${r.userId}_${r.date}`] = {
+              status: r.status,
+              checkInTime: r.checkInTime,
+              checkOutTime: r.checkOutTime
+            };
+          }
         });
         setManualStatusMap(map);
       }
@@ -176,6 +178,20 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     // 1. Check manual override first
     const override = manualStatusMap[`${emp.id}_${dateStr}`] || manualStatusMap[`${empNum}_${dateStr}`] || manualStatusMap[`emp-${empNum}_${dateStr}`];
     if (override) {
+      if (override.status === 'empty' || override.status === 'Empty' || override.status === 'delete') {
+        return {
+          hasRecord: false,
+          isFriday,
+          isFuture,
+          isToday,
+          checkInTime: '',
+          checkOutTime: '',
+          status: 'Empty',
+          warehouseName: '',
+          workedHours: 0,
+        };
+      }
+
       return {
         hasRecord: true,
         isFriday,
@@ -204,7 +220,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       };
     }
 
-    // 3. Future Days
+    // 3. Future Days -> Clean neutral empty slot
     if (isFuture) {
       return {
         hasRecord: false,
@@ -213,7 +229,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         isToday: false,
         checkInTime: '',
         checkOutTime: '',
-        status: 'Future',
+        status: 'Empty',
         warehouseName: '',
         workedHours: 0,
       };
@@ -249,12 +265,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     });
 
     const hasRecord = Boolean(checkInTime || checkOutTime);
-    let status = 'Absent';
+    let status = 'Empty';
 
     if (hasRecord) {
       status = 'Present';
-    } else if (isToday) {
-      status = 'Pending';
     }
 
     return {
@@ -270,16 +284,16 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     };
   }, [manualStatusMap, attendanceLogs]);
 
-  // Open Cell Click Modal
+  // Open Cell Click Modal (Does NOT overwrite arbitrarily)
   const handleCellClick = (emp: Employee, dayItem: { dayNum: number; dateStr: string; isFriday: boolean; isFuture: boolean; isToday: boolean }) => {
     const info = getGpsLogsForEmpAndDay(emp, dayItem);
     setSelectedDayModal({ emp, dayItem, info });
-    setModalStatus(info.status === 'Future' || info.status === 'Pending' ? 'Present' : info.status);
+    setModalStatus(info.status === 'Empty' ? 'Present' : info.status);
     setModalCheckIn(info.checkInTime || '08:30');
     setModalCheckOut(info.checkOutTime || '16:30');
   };
 
-  // Save Modal Changes
+  // Save Modal Changes to Supabase
   const handleSaveModal = async () => {
     if (!selectedDayModal) return;
     setIsSavingModal(true);
@@ -319,18 +333,22 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     }
   };
 
-  // Delete / Reset this day's record
+  // 🗑️ Delete / Clear Record -> Sets to Empty '-' and Deletes from Supabase
   const handleDeleteDayRecord = async () => {
     if (!selectedDayModal) return;
-    if (!confirm('ئایا دڵنیایت لە سڕینەوەی تۆماری ئەم ڕۆژە؟')) return;
+    if (!confirm('ئایا دڵنیایت لە سڕینەوەی ئەم داتایە بە تەواوی؟ خانەکە بەتاڵ دەبێتەوە.')) return;
     const { emp, dayItem } = selectedDayModal;
     const key = `${emp.id}_${dayItem.dateStr}`;
 
-    setManualStatusMap(prev => {
-      const copy = { ...prev };
-      delete copy[key];
-      return copy;
-    });
+    // Optimistic Clean Blank Update
+    setManualStatusMap(prev => ({
+      ...prev,
+      [key]: {
+        status: 'Empty',
+        checkInTime: undefined,
+        checkOutTime: undefined
+      }
+    }));
 
     try {
       await fetch('/api/attendance/admin/manual-record', {
@@ -340,7 +358,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           userId: emp.id,
           userName: emp.fullName3Part || emp.name,
           date: dayItem.dateStr,
-          status: 'Absent'
+          action: 'delete',
+          status: 'empty'
         })
       });
       loadSavedRecords();
@@ -386,9 +405,170 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     return daysArray.filter(d => d.dayNum >= printStartDay && d.dayNum <= printEndDay);
   }, [daysArray, printStartDay, printEndDay]);
 
-  // Trigger Native Browser Print Window
-  const handlePrintWindow = () => {
-    window.print();
+  // 🖨️ OPEN PURE CLEAN PRINT IN SEPARATED NEW TAB
+  const handleOpenCleanPrintNewTab = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('تکایە ڕێگە بدە بە کردنەوەی پەنجەرەی نوێ (Pop-up blocker) لە برۆوسەرەکەتدا.');
+      return;
+    }
+
+    const rowsHtml = printEmployees.map((emp, idx) => {
+      let presentCount = 0;
+      let leaveCount = 0;
+      let totalWorkedHours = 0;
+
+      const dayCells = printDays.map(d => {
+        const info = getGpsLogsForEmpAndDay(emp, d);
+        let cellText = '-';
+        let cellStyle = 'color: #888; font-weight: normal;';
+
+        if (info.hasRecord || info.status === 'Present') {
+          presentCount++;
+          totalWorkedHours += 8;
+          cellText = info.checkInTime || 'ئامادە';
+          cellStyle = 'color: #059669; font-weight: bold; background-color: #ecfdf5;';
+        } else if (info.status === 'Leave') {
+          leaveCount++;
+          cellText = 'مۆڵەت';
+          cellStyle = 'color: #d97706; font-weight: bold; background-color: #fffbeb;';
+        } else if (info.status === 'Absent') {
+          cellText = 'غیاب';
+          cellStyle = 'color: #dc2626; font-weight: bold; background-color: #fef2f2;';
+        } else if (info.isFriday || info.status === 'Holiday') {
+          cellText = 'پشوو';
+          cellStyle = 'color: #0d9488; font-weight: bold; background-color: #f0fdfa;';
+        }
+
+        return `<td style="border: 1px solid #94a3b8; padding: 5px 3px; text-align: center; font-size: 10px; ${cellStyle}">${cellText}</td>`;
+      }).join('');
+
+      return `
+        <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+          <td style="border: 1px solid #94a3b8; padding: 6px 8px; font-weight: bold; text-align: right; font-size: 11px; white-space: nowrap;">
+            ${idx + 1}. ${emp.fullName3Part || emp.name}
+            <span style="font-size: 9px; color: #64748b; font-family: monospace; display: block;">${emp.role || 'Staff'} (${emp.id})</span>
+          </td>
+          ${dayCells}
+          <td style="border: 1px solid #94a3b8; padding: 5px; text-align: center; font-weight: bold; font-family: monospace; color: #047857; background-color: #f0fdf4;">${presentCount} ڕۆژ</td>
+          <td style="border: 1px solid #94a3b8; padding: 5px; text-align: center; font-weight: bold; font-family: monospace; color: #b45309; background-color: #fffbeb;">${leaveCount}</td>
+          <td style="border: 1px solid #94a3b8; padding: 5px; text-align: center; font-weight: bold; font-family: monospace; color: #1e3a8a; background-color: #eff6ff;">${totalWorkedHours}h</td>
+        </tr>
+      `;
+    }).join('');
+
+    const headersHtml = printDays.map(d => `
+      <th style="border: 1px solid #64748b; padding: 4px 2px; text-align: center; background-color: ${d.isFriday ? '#d1fae5' : '#e2e8f0'}; font-size: 10px; min-width: 28px;">
+        <div>${d.dayNum}</div>
+        <div style="font-size: 7px; font-weight: normal; color: #475569;">${d.isFriday ? 'هەینی' : ''}</div>
+      </th>
+    `).join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ckb">
+      <head>
+        <meta charset="UTF-8">
+        <title>Ashley Attendance Sheet - ${selectedMonth} (Days ${printStartDay}-${printEndDay})</title>
+        <style>
+          @page {
+            size: A4 landscape;
+            margin: 8mm;
+          }
+          body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            color: #0f172a;
+            background-color: #ffffff;
+            direction: rtl;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 10px;
+          }
+          @media print {
+            .no-print { display: none !important; }
+            body { padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        
+        {/* Top Clean Controls for the User */}
+        <div class="no-print" style="margin-bottom: 12px; padding: 10px; background: #f1f5f9; border: 1px solid #cbd5e1; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong style="font-size: 13px;">🖨️ پەڕەی فەرمی ئامادەبوونی کارمەندان (Ashley Google Sheet Print View)</strong>
+            <span style="font-size: 11px; color: #64748b; margin-right: 8px;">ئەم پەڕەیە بە تەواوی ڕێکخراوە و شتی زیادەی تێدا نییە.</span>
+          </div>
+          <button onclick="window.print()" style="background: #1e3a8a; color: white; border: none; padding: 8px 18px; font-weight: bold; font-size: 12px; cursor: pointer; border-radius: 2px;">
+            🖨️ دەستبەجێ پرێنت بکە (Print)
+          </button>
+        </div>
+
+        {/* Company Sheet Header */}
+        <div style="border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: flex-end;">
+          <div>
+            <h1 style="margin: 0; font-size: 16px; font-weight: 900; color: #0f172a;">کۆمپانیای ئاشڵی (Ashley Industrial Company)</h1>
+            <h2 style="margin: 2px 0 0 0; font-size: 12px; font-weight: 700; color: #334155;">
+              ڕاپۆرتی ئامادەبوونی کارمەندان — مانگی ${selectedMonth} (ڕۆژانی ${printStartDay} تا ${printEndDay})
+            </h2>
+          </div>
+          <div style="text-align: left; font-size: 10px; font-family: monospace; color: #475569;">
+            <div>بەرواری چاپ: ${todayStr}</div>
+            <div>دەوامی فەرمی: 08:30 بۆ 16:30</div>
+          </div>
+        </div>
+
+        {/* The Google Sheets Grid Table */}
+        <table>
+          <thead>
+            <tr style="background-color: #cbd5e1;">
+              <th style="border: 1px solid #64748b; padding: 6px 8px; text-align: right; font-size: 11px; min-width: 140px;">ناوی کارمەند</th>
+              ${headersHtml}
+              <th style="border: 1px solid #64748b; padding: 4px; text-align: center; font-size: 10px;">ئامادە</th>
+              <th style="border: 1px solid #64748b; padding: 4px; text-align: center; font-size: 10px;">مۆڵەت</th>
+              <th style="border: 1px solid #64748b; padding: 4px; text-align: center; font-size: 10px;">کۆی کاژێر</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        {/* Signatures & Approvals Footer */}
+        <div style="margin-top: 30px; display: flex; justify-content: space-around; text-align: center; font-size: 11px; font-weight: bold; border-top: 1px solid #cbd5e1; padding-top: 15px;">
+          <div>
+            <div>ئامادەکاری ئامادەبوون (HR):</div>
+            <div style="margin-top: 25px; border-bottom: 1px dotted #94a3b8; width: 140px; margin-left: auto; margin-right: auto;"></div>
+          </div>
+          <div>
+            <div>بەڕێوەبەری ژمێریاری و وردبینی:</div>
+            <div style="margin-top: 25px; border-bottom: 1px dotted #94a3b8; width: 140px; margin-left: auto; margin-right: auto;"></div>
+          </div>
+          <div>
+            <div>پەسەندکردنی بەڕێوەبەری سەرەکی (دارکۆ حەیدەر):</div>
+            <div style="margin-top: 25px; border-bottom: 1px dotted #94a3b8; width: 160px; margin-left: auto; margin-right: auto;"></div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 500);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    setShowPrintModal(false);
   };
 
   return (
@@ -411,7 +591,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </span>
               </div>
               <p className="text-[11px] text-slate-300 font-medium mt-0.5">
-                کلیک لەسەر هەر خانەیەک بکە بۆ بینینی هێڵکاری ٢٤ کاتژمێری و وێنە و گۆڕینی فەرمانی کات.
+                کلیک لەسەر هەر خانەیەک بکە بۆ بینینی هێڵکاری، وێنە و گۆڕینی فەرمان — لەگەڵ خەزنی ئۆتۆماتیکی لە سوپابەیس.
               </p>
             </div>
           </div>
@@ -434,7 +614,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               className="px-3.5 py-1.5 rounded-none bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-black flex items-center gap-1.5 shadow-md cursor-pointer border border-blue-400 transition-transform active:scale-95"
             >
               <Printer className="w-3.5 h-3.5 text-white" />
-              <span>🖨️ چاپکردنی تایبەت (وەک Google Sheet)</span>
+              <span>🖨️ چاپکردنی تایبەت (Google Sheets)</span>
             </button>
           </div>
         </div>
@@ -444,7 +624,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] font-black text-amber-400 flex items-center gap-1">
               <Move className="w-3.5 h-3.5" />
-              <span>پالێتی Drag & Drop (ڕایبکێشە بۆ سەر هەر خانەیەک):</span>
+              <span>پالێتی Drag & Drop:</span>
             </span>
             {[
               { key: 'Present', label: '🟢 ئامادەبوو', bg: 'bg-emerald-600 text-white border-emerald-700' },
@@ -532,39 +712,33 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   {daysArray.map((d) => {
                     const info = getGpsLogsForEmpAndDay(emp, d);
                     const isFriday = d.isFriday;
-                    const isFuture = d.isFuture;
 
-                    let badgeColor = 'bg-slate-50 text-slate-400 border-slate-200';
+                    let badgeColor = 'bg-slate-50 text-slate-300 border-dashed border-slate-200 font-normal';
                     let badgeText = '-';
 
-                    // 1. Future Day: clean neutral empty slot
-                    if (isFuture && info.status === 'Future') {
-                      badgeColor = 'bg-slate-50/60 text-slate-300 border-dashed border-slate-200 font-normal';
-                      badgeText = '-';
-                    }
-                    // 2. Friday Holiday
-                    else if (info.status === 'Holiday' || isFriday) {
+                    // 1. Friday Holiday
+                    if (info.status === 'Holiday' || isFriday) {
                       badgeColor = 'bg-teal-50 text-teal-800 border-teal-200 font-black';
                       badgeText = '🌴';
                     }
-                    // 3. Present / Check-in
+                    // 2. Present / Check-in
                     else if (info.status === 'Present' || info.checkInTime) {
                       badgeColor = 'bg-emerald-600 text-white border-emerald-700 font-black';
                       badgeText = info.checkInTime || 'ئامادە';
                     }
-                    // 4. Leave / مۆڵەت
+                    // 3. Leave / مۆڵەت
                     else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
                       badgeColor = 'bg-amber-400 text-amber-950 border-amber-500 font-black';
                       badgeText = 'مۆڵەت';
                     }
-                    // 5. Absent / غیاب
+                    // 4. Absent / غیاب
                     else if (info.status === 'Absent' || info.status === 'غیاب') {
                       badgeColor = 'bg-rose-600 text-white border-rose-700 font-black';
                       badgeText = 'غیاب';
                     }
-                    // 6. Today Pending
-                    else if (info.status === 'Pending') {
-                      badgeColor = 'bg-slate-100 text-slate-500 border-slate-300 font-bold';
+                    // 5. Empty / Clean Blank / Future
+                    else {
+                      badgeColor = 'bg-slate-50 text-slate-300 border-dashed border-slate-200 font-normal';
                       badgeText = '-';
                     }
 
@@ -583,8 +757,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           }
                         }}
                         onClick={() => handleCellClick(emp, d)}
-                        title="کلیک بکە بۆ کردنەوەی وردەکاری ٢٤ کاتژمێری و وێنە و دەستکاریکردنی کات"
-                        className={`p-1 text-center border-l border-slate-200 cursor-pointer hover:bg-blue-100/70 hover:scale-[1.02] transition-all ${
+                        title="کلیک بکە بۆ بینینی وردەکاری، وێنە و گۆڕینی کات"
+                        className={`p-1 text-center border-l border-slate-200 cursor-pointer hover:bg-blue-100/70 transition-all ${
                           d.isToday ? 'bg-amber-50/40' : isFriday ? 'bg-emerald-50/50' : ''
                         }`}
                       >
@@ -715,7 +889,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </div>
 
                 <div className="relative w-full h-12 bg-white rounded-none overflow-hidden border border-slate-300">
-                  {/* Official Shift Guide Window */}
                   <div className="absolute top-0 bottom-0 bg-blue-100/70 border-x-2 border-dashed border-blue-400/80 pointer-events-none" style={{ left: '35.4%', width: '33.3%' }} />
                   
                   {modalStatus === 'Present' && (
@@ -747,7 +920,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   className="px-3 py-2 rounded-none bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 text-xs font-black flex items-center gap-1 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>سڕینەوەی ئەم ڕۆژە</span>
+                  <span>سڕینەوەی ئەم داتایە (بەتاڵکردن)</span>
                 </button>
 
                 <div className="flex items-center gap-2">
@@ -765,7 +938,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     className="px-6 py-2 rounded-none bg-slate-900 hover:bg-slate-800 active:bg-black text-white text-xs font-black shadow-md cursor-pointer flex items-center gap-1.5"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{isSavingModal ? 'لە پاشەکەوتکردندایە...' : '💾 پاشەکەوتکردنی گۆڕانکاری'}</span>
+                    <span>{isSavingModal ? 'لە پاشەکەوتکردندایە...' : '💾 پاشەکەوتکردن لە سوپابەیس'}</span>
                   </button>
                 </div>
               </div>
@@ -776,18 +949,18 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       )}
 
       {/* ========================================================================= */}
-      {/* 🖨️ WINDOWS 11 SHARP MODAL: CUSTOM RANGE PRINT & GOOGLE SHEETS EXPORT */}
+      {/* 🖨️ WINDOWS 11 SHARP MODAL: CUSTOM RANGE PRINT (SEPARATED NEW TAB) */}
       {/* ========================================================================= */}
       {showPrintModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-none border-2 border-slate-700 shadow-2xl max-w-4xl w-full p-0 text-right font-sans">
+          <div className="bg-white rounded-none border-2 border-slate-700 shadow-2xl max-w-xl w-full p-0 text-right font-sans">
             
             {/* Title Bar */}
             <div className="flex items-center justify-between bg-slate-900 text-white px-4 py-2.5 border-b border-slate-700">
               <div className="flex items-center gap-2">
                 <Printer className="w-4 h-4 text-blue-400" />
                 <h3 className="font-black text-xs text-white">
-                  🖨️ چاپکردنی تایبەت و هەناردەکردنی خشتە وەک Google Sheets
+                  🖨️ چاپکردنی تایبەت لە تابی نوێ (Clean Google Sheets View)
                 </h3>
               </div>
               <button 
@@ -798,10 +971,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               </button>
             </div>
 
-            <div className="p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="p-5 space-y-4">
               
               {/* Range Filters Box */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-50 border border-slate-300">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-300">
                 {/* Date Range Start */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-700">لە ڕۆژی (Start Day):</label>
@@ -831,7 +1004,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </div>
 
                 {/* Employee Filter */}
-                <div className="space-y-1">
+                <div className="space-y-1 sm:col-span-2">
                   <label className="text-[10px] font-black text-slate-700">دەستەی کارمەندان:</label>
                   <select 
                     value={printEmployeeFilter}
@@ -844,54 +1017,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </div>
               </div>
 
-              {/* Printable Live Preview Table (Styled as Google Sheet) */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-slate-800">📄 پێشبینینی خشتەی چاپکراو (Google Sheets Preview):</span>
-                  <span className="text-[10px] font-mono font-bold text-slate-500">
-                    {printDays.length} ڕۆژ هەڵبژێردراوە ({printStartDay} تا {printEndDay})
-                  </span>
-                </div>
-
-                <div className="overflow-x-auto border-2 border-slate-400 bg-white max-h-60 overflow-y-auto">
-                  <table className="w-full text-[10px] text-right border-collapse">
-                    <thead className="bg-slate-200 border-b-2 border-slate-400 sticky top-0">
-                      <tr>
-                        <th className="p-2 font-black border-l border-slate-300 min-w-[140px]">ناوی کارمەند</th>
-                        {printDays.map(d => (
-                          <th key={d.dateStr} className="p-1 text-center font-black border-l border-slate-300 min-w-[32px]">
-                            {d.dayNum}
-                          </th>
-                        ))}
-                        <th className="p-2 text-center font-black border-l border-slate-300">کۆی ئامادەبوون</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-300">
-                      {printEmployees.map((emp, i) => {
-                        let presentDaysCount = 0;
-                        return (
-                          <tr key={emp.id} className="hover:bg-slate-50">
-                            <td className="p-1.5 font-bold border-l border-slate-300">
-                              {i + 1}. {emp.fullName3Part || emp.name}
-                            </td>
-                            {printDays.map(d => {
-                              const info = getGpsLogsForEmpAndDay(emp, d);
-                              if (info.hasRecord) presentDaysCount++;
-                              return (
-                                <td key={d.dateStr} className="p-1 text-center border-l border-slate-300 font-mono">
-                                  {info.hasRecord ? (info.checkInTime || 'ئامادە') : info.status === 'Leave' ? 'مۆڵەت' : info.isFriday ? '🌴' : '-'}
-                                </td>
-                              );
-                            })}
-                            <td className="p-1 text-center font-black border-l border-slate-300 font-mono text-emerald-700">
-                              {presentDaysCount} ڕۆژ
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+              <div className="p-3 bg-blue-50 border border-blue-200 text-xs font-bold text-blue-900 leading-relaxed">
+                ℹ️ کاتێک کلیک لەسەر دوگمەی خوارەوە دەکەیت، پەڕەکە بە **شێوازی فەرمی Google Sheets لە پەنجەرەیەکی تەواو جیاواز (Separated New Tab)** دەکرێتەوە بە بێ هیچ دوگمە و شتێکی زیادە بۆ ئەوەی چاپەکە لەسەر کاغەز زۆر خاوێن بێت.
               </div>
 
               {/* Action Buttons */}
@@ -904,16 +1031,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   داخستن
                 </button>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handlePrintWindow}
-                    className="px-6 py-2 rounded-none bg-blue-700 hover:bg-blue-800 text-white text-xs font-black flex items-center gap-1.5 shadow-md cursor-pointer"
-                  >
-                    <Printer className="w-4 h-4" />
-                    <span>🖨️ چاپکردن دەستبەجێ (Print Now)</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenCleanPrintNewTab}
+                  className="px-6 py-2.5 rounded-none bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white text-xs font-black flex items-center gap-2 shadow-md cursor-pointer transition-transform active:scale-95"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>🖨️ کردنەوە لە تابی نوێ و چاپکردن</span>
+                </button>
               </div>
 
             </div>

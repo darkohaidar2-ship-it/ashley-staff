@@ -1716,53 +1716,51 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     
     // ----------------------------------------
-    // POST /api/attendance/admin/manual-record (Manual 31-Day Status / Leave / Absent / Present)
+    // POST /api/attendance/admin/manual-record (Supabase Auto-Sync & Delete)
     // ----------------------------------------
     if (pathStr === 'admin/manual-record' && method === 'POST') {
       try {
-        const { userId, userName, date, status, checkInTime, checkOutTime, note } = await req.json();
+        const { userId, userName, date, status, checkInTime, checkOutTime, action } = await req.json();
         if (!userId || !date) {
-          return NextResponse.json({ error: 'userId and date are required' }, { status: 400 });
+          return NextResponse.json({ error: 'userId and date required' }, { status: 400 });
         }
 
-        const recId = `${userId}-${date}`;
+        const cleanEmpId = (userId || '').toString().trim();
+        const rawNum = cleanEmpId.replace('emp-', '');
+        const idVariations = [cleanEmpId, rawNum, `emp-${rawNum}`];
+
+        // 🗑️ If action is delete OR status is empty/delete -> Remove completely from Supabase
+        if (action === 'delete' || status === 'empty' || status === 'delete' || status === 'None' || status === 'Empty') {
+          for (const idVar of idVariations) {
+            await supabase.from('attendance').delete().eq('user_id', idVar).eq('date', date);
+            await supabase.from('attendance_logs').delete().eq('employee_id', idVar).eq('log_date', date);
+          }
+          return NextResponse.json({ success: true, message: 'تۆماری ئەم ڕۆژە بە سەرکەوتوویی لە سوپابەیس سڕایەوە و بەتاڵ کرا' });
+        }
+
+        // 💾 Otherwise Upsert to Supabase
+        const rowId = `att-${cleanEmpId}-${date}`;
         const upsertData: any = {
-          id: recId,
-          user_id: userId,
+          id: rowId,
+          user_id: cleanEmpId,
           user_name: userName || 'کارمەند',
           date: date,
           status: status || 'Present',
           warehouse_name: 'کۆمپانیای سەرەکی ئاشڵی',
+          check_in_time: status === 'Present' ? (checkInTime || '08:30') : status === 'Leave' ? 'مۆڵەت' : null,
+          check_out_time: status === 'Present' ? (checkOutTime || '16:30') : status === 'Leave' ? 'مۆڵەت' : null,
+          late_minutes: 0,
+          early_out_minutes: 0,
+          overtime_minutes: 0,
         };
 
-        if (checkInTime) upsertData.check_in_time = checkInTime;
-        if (checkOutTime) upsertData.check_out_time = checkOutTime;
-        if (status === 'Absent' || status === 'غیاب') {
-          upsertData.check_in_time = null;
-          upsertData.check_out_time = null;
-        } else if ((status === 'Leave' || status === 'مۆڵەت') && !checkInTime) {
-          upsertData.check_in_time = 'مۆڵەت';
-          upsertData.check_out_time = 'مۆڵەت';
+        const { error: upsertErr } = await supabase.from('attendance').upsert(upsertData);
+        if (upsertErr) {
+          console.error('Error upserting manual record to Supabase:', upsertErr);
+          return NextResponse.json({ error: upsertErr.message }, { status: 500 });
         }
 
-        const { error } = await supabase.from('attendance').upsert(upsertData);
-        if (error) throw error;
-
-        // Log manual change
-        try {
-          await supabase.from('attendance_logs').insert({
-            id: `manual-${userId}-${date}-${Date.now()}`,
-            employee_id: userId,
-            employee_name: userName || 'کارمەند',
-            log_type: status || 'Manual Edit',
-            log_date: date,
-            log_time_str: checkInTime || '08:30',
-            location_address: note || 'دەستکاری دەستی لەلایەن ئەدمینەوە',
-            created_at: new Date().toISOString()
-          });
-        } catch {}
-
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, message: 'تۆمارەکە لە داتابەیسی سوپابەیس پاشەکەوت کرا', record: upsertData });
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
       }
