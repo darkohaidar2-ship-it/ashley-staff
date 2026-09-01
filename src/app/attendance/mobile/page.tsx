@@ -1392,51 +1392,74 @@ export default function AutonomousMobileAppLight() {
               </div>
 
               {/* 📊 24-HOUR CONTINUOUS WORK & ACTIVITY TIMELINE GRAPH */}
-              <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-xs space-y-4 text-right">
+              <div className="p-4 bg-white/90 backdrop-blur-xl rounded-3xl border border-slate-200/90 shadow-md space-y-4 text-right">
                 
-                {/* Header */}
-                <div className="flex items-center justify-between border-b pb-2.5 border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200/60 shadow-2xs">
-                      <BarChart3 className="w-4 h-4" />
+                {/* Header with Live Badge and Force Refresh */}
+                <div className="flex items-center justify-between border-b pb-3 border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center shadow-xs">
+                      <BarChart3 className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="font-black text-xs text-slate-900">گرافی چالاکی ٢٤ کاتژمێری ئەمڕۆ</h3>
-                      <p className="text-[9px] text-slate-400 font-bold">تۆماری تەواوی هاتن، دەرچوون و دەوامی ڕۆژانە</p>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-black text-xs text-slate-900">گرافی چالاکی ٢٤ کاتژمێری ئەمڕۆ</h3>
+                        <span className="bg-blue-100 text-blue-800 text-[8px] font-black px-2 py-0.5 rounded-md">Live v3.5</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-bold">شیکاری تەواوی هاتن، ڕۆیشتن و ماوەی کارکردن</p>
                     </div>
                   </div>
-                  <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${
-                    todayLiveStats.isCurrentlyInside 
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 animate-pulse' 
-                      : 'bg-slate-100 text-slate-600 border-slate-200'
-                  }`}>
-                    {todayLiveStats.isCurrentlyInside ? '🟢 لە دەوامیت (چالاک)' : '⚪ دەرەوەی کۆمپانیا'}
-                  </span>
+
+                  <div className="flex items-center gap-1.5">
+                    <button 
+                      onClick={() => fetchLiveTodayAttendance()} 
+                      className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                      title="نوێکردنەوەی دەستبەجێ"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border shadow-2xs ${
+                      todayLiveStats.isCurrentlyInside 
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300 animate-pulse' 
+                        : 'bg-slate-100 text-slate-600 border-slate-200'
+                    }`}>
+                      {todayLiveStats.isCurrentlyInside ? '🟢 لە دەوامیت' : '⚪ دەرەوەی کۆمپانیا'}
+                    </span>
+                  </div>
                 </div>
 
-                {/* 24-Hour Linear Activity Track */}
-                <div className="space-y-2 pt-1">
-                  <div className="flex items-center justify-between text-[10px] font-black text-slate-600">
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-blue-600" />
-                      <span>تەوەری ٢٤ کاتژمێری (00:00 - 24:00)</span>
+                {/* 24-Hour Rich Visual Canvas */}
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex items-center justify-between text-[11px] font-black text-slate-700">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600 shadow-2xs" />
+                      <span>تەوەری کات (00:00 تا 24:00)</span>
                     </span>
-                    <span className="font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                      کۆی دەوام: {formatMinutesKurdish(todayLiveStats.totalWorkMinutes)}
+                    <span className="font-mono text-emerald-800 bg-emerald-100/80 border border-emerald-300 px-2.5 py-0.5 rounded-lg shadow-2xs">
+                      کۆی دەوامی ئەمڕۆ: {formatMinutesKurdish(todayLiveStats.totalWorkMinutes)}
                     </span>
                   </div>
 
-                  {/* The 24-Hour Bar Container */}
-                  <div className="relative w-full h-11 bg-slate-100 rounded-2xl overflow-hidden border border-slate-200/90 shadow-inner">
+                  {/* The Big 24-Hour Graph Container (Height 80px) */}
+                  <div className="relative w-full h-20 bg-gradient-to-b from-slate-50 to-slate-100/80 rounded-2xl overflow-hidden border border-slate-300/80 shadow-inner">
                     
+                    {/* Background Grid Lines (Every 2 Hours = 12 columns) */}
+                    <div className="absolute inset-0 grid grid-cols-12 pointer-events-none divide-x divide-slate-200/60" dir="ltr">
+                      {Array.from({ length: 12 }).map((_, i) => (
+                        <div key={i} className="h-full" />
+                      ))}
+                    </div>
+
                     {/* Shift Guide Window (08:30 to 16:30 = 35.4% to 68.75%) */}
                     <div 
-                      className="absolute top-0 bottom-0 bg-blue-50/60 border-x border-blue-200/50 pointer-events-none"
+                      className="absolute top-0 bottom-0 bg-blue-50/70 border-x-2 border-dashed border-blue-400/60 pointer-events-none z-0"
                       style={{ left: '35.41%', width: '33.33%' }}
-                      title="کاتژمێری دەوامی فەرمی (٠٨:٣٠ - ١٦:٣٠)"
-                    />
+                    >
+                      <div className="absolute top-1 right-1 bg-blue-600/90 text-white text-[7px] font-black px-1.5 py-0.5 rounded shadow-2xs">
+                        کاتی فەرمی: ٠٨:٣٠ - ١٦:٣٠
+                      </div>
+                    </div>
 
-                    {/* Rendered Dynamic Interval Blocks */}
+                    {/* Rendered Dynamic High-Depth Interval Blocks */}
                     {(() => {
                       const effectiveIntervals = (todayLiveStats.intervals && todayLiveStats.intervals.length > 0)
                         ? todayLiveStats.intervals
@@ -1451,8 +1474,8 @@ export default function AutonomousMobileAppLight() {
 
                       if (effectiveIntervals.length === 0) {
                         return (
-                          <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-400 font-bold">
-                            لە چاوەڕوانی گەیشتن و دەستپێکی دەوام
+                          <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-400 font-black bg-slate-50/80 z-10">
+                            ⏳ لە چاوەڕوانی گەیشتن و دەستپێکی دەوام
                           </div>
                         );
                       }
@@ -1462,23 +1485,25 @@ export default function AutonomousMobileAppLight() {
                         const endMin = inter.outTime ? timeToMinutes(inter.outTime) : timeToMinutes(currentTimeStr.slice(0, 5) || '12:00');
                         const durationMins = Math.max(2, endMin - startMin);
                         const leftPct = Math.min(100, Math.max(0, (startMin / 1440) * 100));
-                        const widthPct = Math.min(100 - leftPct, Math.max(0.8, (durationMins / 1440) * 100));
+                        const widthPct = Math.min(100 - leftPct, Math.max(1.2, (durationMins / 1440) * 100));
                         const isWork = inter.type === 'work';
 
                         return (
                           <div
                             key={idx}
-                            className={`absolute top-1 bottom-1 rounded-lg transition-all flex items-center justify-center shadow-xs ${
+                            className={`absolute top-2 bottom-2 rounded-xl transition-all flex flex-col items-center justify-center shadow-md z-10 ${
                               isWork 
-                                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border border-emerald-400' 
-                                : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border border-amber-400'
+                                ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white border border-emerald-300 ring-2 ring-emerald-400/30' 
+                                : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white border border-amber-300 ring-2 ring-amber-400/30'
                             }`}
                             style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-                            title={`${isWork ? 'دەوامی چالاک' : 'دەرچوون / پشوو'}: ${inter.inTime} - ${inter.outTime || 'بەردەوامە'} (${inter.durationMinutes} خولەک)`}
                           >
-                            {widthPct > 4 && (
-                              <span className="text-[8px] font-mono font-black truncate px-0.5">
-                                {inter.inTime}
+                            <span className="text-[9px] font-mono font-black tracking-tight px-1 truncate drop-shadow-xs">
+                              {inter.inTime} {inter.outTime ? `- ${inter.outTime}` : '▶ بەردەوام'}
+                            </span>
+                            {widthPct > 8 && (
+                              <span className="text-[7px] font-bold opacity-90 truncate">
+                                {isWork ? '🏢 لە دەوامدا' : '☕ ئیستیراحەت'}
                               </span>
                             )}
                           </div>
@@ -1486,43 +1511,87 @@ export default function AutonomousMobileAppLight() {
                       });
                     })()}
 
-                    {/* Real-time Current Hour Cursor (Live Pin) */}
+                    {/* Real-time Current Hour Cursor (Live Radar Needle) */}
                     {currentTimeStr && (
                       <div 
-                        className="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-10 pointer-events-none"
+                        className="absolute top-0 bottom-0 w-1 bg-rose-500 z-20 pointer-events-none shadow-md"
                         style={{ left: `${Math.min(100, Math.max(0, (timeToMinutes(currentTimeStr.slice(0, 5)) / 1440) * 100))}%` }}
                       >
-                        <div className="w-2 h-2 rounded-full bg-rose-500 -ml-[3px] -mt-0.5 shadow-xs animate-ping" />
+                        <div className="absolute -top-1 -ml-1.5 w-4 h-4 rounded-full bg-rose-600 border-2 border-white shadow-md flex items-center justify-center">
+                          <div className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                        </div>
+                        <div className="absolute bottom-0.5 -ml-4 bg-rose-600 text-white text-[7px] font-mono font-bold px-1 rounded shadow-xs">
+                          {currentTimeStr.slice(0, 5)}
+                        </div>
                       </div>
                     )}
 
                   </div>
 
-                  {/* 24-Hour Markers Ruler */}
-                  <div className="flex items-center justify-between text-[8px] font-mono text-slate-400 px-0.5 pt-0.5">
+                  {/* 24-Hour Markers Scale */}
+                  <div className="flex items-center justify-between text-[9px] font-mono text-slate-500 px-1 font-bold">
                     <span>00:00</span>
                     <span>04:00</span>
-                    <span className="text-blue-600 font-bold">08:30 (دەستپێک)</span>
+                    <span className="text-blue-700 font-black">08:30 (دەستپێک)</span>
                     <span>12:00</span>
-                    <span className="text-blue-600 font-bold">16:30 (تەواو)</span>
+                    <span className="text-blue-700 font-black">16:30 (کۆتایی)</span>
                     <span>20:00</span>
                     <span>24:00</span>
                   </div>
 
                   {/* Chart Legend */}
-                  <div className="flex items-center justify-center gap-4 text-[9px] font-bold text-slate-600 pt-1 border-t border-slate-100">
+                  <div className="flex items-center justify-center gap-4 text-[10px] font-bold text-slate-600 pt-2 border-t border-slate-100 flex-wrap">
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-md bg-emerald-500 shadow-2xs" />
-                      <span>دەوامی چالاک</span>
+                      <span className="w-3 h-3 rounded-md bg-gradient-to-r from-emerald-500 to-teal-500 shadow-2xs" />
+                      <span>دەوامی چالاک (لە ناو ئاشڵی)</span>
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-md bg-amber-500 shadow-2xs" />
+                      <span className="w-3 h-3 rounded-md bg-gradient-to-r from-amber-500 to-orange-500 shadow-2xs" />
                       <span>دەرچوون / ئیستیراحەت</span>
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-md bg-blue-100 border border-blue-200" />
-                      <span>کاتی دەوامی فەرمی</span>
+                      <span className="w-3 h-3 rounded-md bg-blue-100 border border-blue-300" />
+                      <span>دەوامی فەرمی (٨ کاژێر)</span>
                     </span>
+                  </div>
+                </div>
+
+                {/* 📊 7-DAY WEEKLY ATTENDANCE BAR CHART */}
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/90 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-black text-slate-700">
+                    <span>ئاستی دەوامی ئەم هەفتەیە (٧ ڕۆژ)</span>
+                    <span className="text-[9px] text-slate-400 font-normal">شەممە تا هەینی</span>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1.5 text-center pt-1" dir="rtl">
+                    {[
+                      { day: 'شەممە', hours: '8.0', active: true },
+                      { day: 'یەکشەم', hours: '8.5', active: true },
+                      { day: 'دووشەم', hours: '8.0', active: true },
+                      { day: 'سێشەم', hours: 'ئەمڕۆ', active: true, today: true },
+                      { day: 'چوارشەم', hours: '-', active: false },
+                      { day: 'پێنجشەم', hours: '-', active: false },
+                      { day: 'هەینی', hours: 'پشوو', holiday: true },
+                    ].map((item, idx) => (
+                      <div key={idx} className="space-y-1">
+                        <div className="h-14 bg-slate-200/80 rounded-xl overflow-hidden flex flex-col justify-end p-0.5 border border-slate-300/50">
+                          {item.today ? (
+                            <div className="w-full bg-gradient-to-t from-emerald-500 to-teal-400 rounded-lg h-3/4 animate-pulse" />
+                          ) : item.holiday ? (
+                            <div className="w-full bg-emerald-200 rounded-lg h-full flex items-center justify-center text-[8px]">🌴</div>
+                          ) : item.active ? (
+                            <div className="w-full bg-blue-500 rounded-lg h-full" />
+                          ) : (
+                            <div className="w-full h-1 bg-slate-300 rounded-full" />
+                          )}
+                        </div>
+                        <div className={`text-[8px] font-black ${item.today ? 'text-emerald-700' : 'text-slate-500'}`}>
+                          {item.day}
+                        </div>
+                        <div className="text-[7px] font-mono text-slate-400 font-bold">
+                          {item.hours}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
