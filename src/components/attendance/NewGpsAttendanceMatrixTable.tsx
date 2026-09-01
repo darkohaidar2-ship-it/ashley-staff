@@ -6,36 +6,21 @@ import {
   Calendar, 
   MapPin, 
   Search, 
-  Download, 
-  FileText, 
   Smartphone, 
-  RefreshCw, 
-  Sparkles, 
-  ShieldCheck, 
-  Building2, 
-  ChevronRight, 
-  ChevronLeft, 
-  Utensils, 
-  DoorOpen, 
-  Check, 
-  AlertCircle, 
-  AlertTriangle, 
   Move, 
   BarChart3, 
   X, 
   Crown, 
   Award, 
   Printer, 
-  FileSpreadsheet, 
   Clock, 
-  UserCheck, 
   CheckCircle2, 
   Trash2, 
   Camera, 
-  Filter,
   ExternalLink
 } from 'lucide-react';
 import { getDaysInMonth, format, getDay } from 'date-fns';
+import { AdminEmployeeDetailsModal } from '@/components/admin/AdminEmployeeDetailsModal';
 
 interface NewGpsAttendanceMatrixTableProps {
   employees: Employee[];
@@ -46,6 +31,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   const [selectedMonth, setSelectedMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'));
   const [searchQuery, setSearchQuery] = useState<string>('');
   
+  // 🌟 Employee 360 HR Dossier Modal State
+  const [selectedEmp360, setSelectedEmp360] = useState<Employee | null>(null);
+
   // Cell Click Modal State for In-depth Editing & 24h Visual Graph
   const [selectedDayModal, setSelectedDayModal] = useState<{
     emp: Employee;
@@ -63,7 +51,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   const [selectedPaletteStatus, setSelectedPaletteStatus] = useState<string>('Present');
   const [draggedStatus, setDraggedStatus] = useState<string | null>(null);
 
-  // Dynamic Manual Overrides Map for cell statuses: Map<empId_dateStr, { status: string; checkInTime?: string; checkOutTime?: string }>
+  // Dynamic Manual Overrides Map for cell statuses
   const [manualStatusMap, setManualStatusMap] = useState<Record<string, { status: string; checkInTime?: string; checkOutTime?: string }>>({});
 
   // 🖨️ Custom Range Print / Google Sheets Export Modal State
@@ -497,7 +485,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       </head>
       <body>
         
-        {/* Top Clean Controls for the User */}
         <div class="no-print" style="margin-bottom: 12px; padding: 10px; background: #f1f5f9; border: 1px solid #cbd5e1; display: flex; justify-content: space-between; align-items: center;">
           <div>
             <strong style="font-size: 13px;">🖨️ پەڕەی فەرمی ئامادەبوونی کارمەندان (Ashley Google Sheet Print View)</strong>
@@ -508,7 +495,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           </button>
         </div>
 
-        {/* Company Sheet Header */}
         <div style="border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: flex-end;">
           <div>
             <h1 style="margin: 0; font-size: 16px; font-weight: 900; color: #0f172a;">کۆمپانیای ئاشڵی (Ashley Industrial Company)</h1>
@@ -522,7 +508,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           </div>
         </div>
 
-        {/* The Google Sheets Grid Table */}
         <table>
           <thead>
             <tr style="background-color: #cbd5e1;">
@@ -538,7 +523,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           </tbody>
         </table>
 
-        {/* Signatures & Approvals Footer */}
         <div style="margin-top: 30px; display: flex; justify-content: space-around; text-align: center; font-size: 11px; font-weight: bold; border-top: 1px solid #cbd5e1; padding-top: 15px;">
           <div>
             <div>ئامادەکاری ئامادەبوون (HR):</div>
@@ -591,7 +575,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </span>
               </div>
               <p className="text-[11px] text-slate-300 font-medium mt-0.5">
-                کلیک لەسەر هەر خانەیەک بکە بۆ بینینی هێڵکاری، وێنە و گۆڕینی فەرمان — لەگەڵ خەزنی ئۆتۆماتیکی لە سوپابەیس.
+                کلیک لەسەر ناوی کارمەند بکە بۆ کردنەوەی پەڕەی HR و وێنە — کلیک لەسەر خانەکان بکە بۆ دەستکاری.
               </p>
             </div>
           </div>
@@ -666,8 +650,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         <table className="w-full text-xs text-right border-collapse">
           <thead className="sticky top-0 bg-slate-100 border-b-2 border-slate-300 z-20">
             <tr>
-              <th className="sticky right-0 bg-slate-200 text-slate-950 font-black px-3 py-2.5 border-l border-slate-300 z-30 min-w-[190px]">
-                👤 ناوی کارمەند (ڕیزبەندی گرنگی)
+              <th className="sticky right-0 bg-slate-200 text-slate-950 font-black px-3 py-2.5 border-l border-slate-300 z-30 min-w-[200px]">
+                👤 ناوی کارمەند (فایلی HR)
               </th>
               {daysArray.map((d) => (
                 <th 
@@ -1054,8 +1038,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         </div>
       )}
 
-    
+      {/* ========================================================================= */}
       {/* 🌟 EMPLOYEE 360 HR DOSSIER MODAL */}
+      {/* ========================================================================= */}
       {selectedEmp360 && (
         <AdminEmployeeDetailsModal
           employee={selectedEmp360}
