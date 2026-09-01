@@ -85,6 +85,13 @@ const DEFAULT_COMPANY_LOCATIONS: GeofenceRegion[] = [
   },
 ];
 
+
+function timeToMinutes(t: string): number {
+  if (!t) return 0;
+  const parts = t.split(':').map(Number);
+  return (parts[0] || 0) * 60 + (parts[1] || 0);
+}
+
 function formatMinutesKurdish(mins: number): string {
   if (!mins || mins <= 0) return '٠ خولەک';
   const h = Math.floor(mins / 60);
@@ -1384,43 +1391,123 @@ export default function AutonomousMobileAppLight() {
                 </div>
               </div>
 
-              {/* 📊 LIVE WORK TIMELINE & EXCURSIONS GRAPH */}
-              <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-xs space-y-3.5 text-right">
-                <div className="flex items-center justify-between border-b pb-2 border-slate-100">
+              {/* 📊 24-HOUR CONTINUOUS WORK & ACTIVITY TIMELINE GRAPH */}
+              <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-xs space-y-4 text-right">
+                
+                {/* Header */}
+                <div className="flex items-center justify-between border-b pb-2.5 border-slate-100">
                   <div className="flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-blue-600" />
-                    <h3 className="font-black text-xs text-slate-900">گرافی ئاماری دەوامی ئەمڕۆ و جووڵەکان</h3>
+                    <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200/60 shadow-2xs">
+                      <BarChart3 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-xs text-slate-900">گرافی چالاکی ٢٤ کاتژمێری ئەمڕۆ</h3>
+                      <p className="text-[9px] text-slate-400 font-bold">تۆماری تەواوی هاتن، دەرچوون و دەوامی ڕۆژانە</p>
+                    </div>
                   </div>
-                  <span className="text-[10px] bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full border border-blue-200">
-                    {todayLiveStats.isCurrentlyInside ? '🟢 لەناو کۆمپانیا' : '⚪ دەرەوەی کۆمپانیا'}
+                  <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${
+                    todayLiveStats.isCurrentlyInside 
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 animate-pulse' 
+                      : 'bg-slate-100 text-slate-600 border-slate-200'
+                  }`}>
+                    {todayLiveStats.isCurrentlyInside ? '🟢 لە دەوامیت (چالاک)' : '⚪ دەرەوەی کۆمپانیا'}
                   </span>
                 </div>
 
-                {/* Multi-Segmented Visual Progress Bar */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
-                    <span>پێشکەوتنی دەوام (٨ کاژێر)</span>
-                    <span className="font-mono text-blue-700 font-black">
-                      {Math.min(100, Math.round((todayLiveStats.totalWorkMinutes / 480) * 100))}%
+                {/* 24-Hour Linear Activity Track */}
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between text-[10px] font-black text-slate-600">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-blue-600" />
+                      <span>تەوەری ٢٤ کاتژمێری (00:00 - 24:00)</span>
+                    </span>
+                    <span className="font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                      کۆی دەوام: {formatMinutesKurdish(todayLiveStats.totalWorkMinutes)}
                     </span>
                   </div>
-                  
-                  {/* Visual Bar with colored chunks */}
-                  <div className="w-full h-3.5 bg-slate-100 rounded-full overflow-hidden flex border border-slate-200">
-                    {todayLiveStats.totalWorkMinutes > 0 ? (
-                      <div 
-                        className="h-full bg-emerald-500 transition-all"
-                        style={{ width: `${Math.min(100, (todayLiveStats.totalWorkMinutes / 480) * 100)}%` }}
-                        title="دەوامی چالاک"
-                      />
+
+                  {/* The 24-Hour Bar Container */}
+                  <div className="relative w-full h-11 bg-slate-100 rounded-2xl overflow-hidden border border-slate-200/90 shadow-inner">
+                    
+                    {/* Shift Guide Window (08:30 to 16:30 = 35.4% to 68.75%) */}
+                    <div 
+                      className="absolute top-0 bottom-0 bg-blue-50/60 border-x border-blue-200/50 pointer-events-none"
+                      style={{ left: '35.41%', width: '33.33%' }}
+                      title="کاتژمێری دەوامی فەرمی (٠٨:٣٠ - ١٦:٣٠)"
+                    />
+
+                    {/* Rendered Dynamic Interval Blocks */}
+                    {todayLiveStats.intervals && todayLiveStats.intervals.length > 0 ? (
+                      todayLiveStats.intervals.map((inter, idx) => {
+                        const startMin = timeToMinutes(inter.inTime);
+                        const endMin = inter.outTime ? timeToMinutes(inter.outTime) : timeToMinutes(currentTimeStr.slice(0, 5) || '12:00');
+                        const durationMins = Math.max(2, endMin - startMin);
+                        const leftPct = Math.min(100, Math.max(0, (startMin / 1440) * 100));
+                        const widthPct = Math.min(100 - leftPct, Math.max(0.8, (durationMins / 1440) * 100));
+                        const isWork = inter.type === 'work';
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`absolute top-1 bottom-1 rounded-lg transition-all flex items-center justify-center shadow-xs ${
+                              isWork 
+                                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border border-emerald-400' 
+                                : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border border-amber-400'
+                            }`}
+                            style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                            title={`${isWork ? 'دەوامی چالاک' : 'دەرچوون / پشوو'}: ${inter.inTime} - ${inter.outTime || 'بەردەوامە'} (${inter.durationMinutes} خولەک)`}
+                          >
+                            {widthPct > 5 && (
+                              <span className="text-[8px] font-mono font-black truncate px-0.5">
+                                {inter.inTime}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })
                     ) : (
-                      <div className="h-full w-full bg-slate-200/60" />
+                      <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-400 font-bold">
+                        لە چاوەڕوانی گەیشتن و دەستپێکی دەوام
+                      </div>
                     )}
+
+                    {/* Real-time Current Hour Cursor (Live Pin) */}
+                    {currentTimeStr && (
+                      <div 
+                        className="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-10 pointer-events-none"
+                        style={{ left: `${Math.min(100, Math.max(0, (timeToMinutes(currentTimeStr.slice(0, 5)) / 1440) * 100))}%` }}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-rose-500 -ml-[3px] -mt-0.5 shadow-xs animate-ping" />
+                      </div>
+                    )}
+
                   </div>
-                  
-                  <div className="flex items-center justify-between text-[9px] text-slate-400 font-bold pt-0.5">
-                    <span>دەستپێک (٠٨:٣٠)</span>
-                    <span>تەواوبوون (١٦:٣٠)</span>
+
+                  {/* 24-Hour Markers Ruler */}
+                  <div className="flex items-center justify-between text-[8px] font-mono text-slate-400 px-0.5 pt-0.5">
+                    <span>00:00</span>
+                    <span>04:00</span>
+                    <span className="text-blue-600 font-bold">08:30 (دەستپێک)</span>
+                    <span>12:00</span>
+                    <span className="text-blue-600 font-bold">16:30 (تەواو)</span>
+                    <span>20:00</span>
+                    <span>24:00</span>
+                  </div>
+
+                  {/* Chart Legend */}
+                  <div className="flex items-center justify-center gap-4 text-[9px] font-bold text-slate-600 pt-1 border-t border-slate-100">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-md bg-emerald-500 shadow-2xs" />
+                      <span>دەوامی چالاک</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-md bg-amber-500 shadow-2xs" />
+                      <span>دەرچوون / ئیستیراحەت</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-md bg-blue-100 border border-blue-200" />
+                      <span>کاتی دەوامی فەرمی</span>
+                    </span>
                   </div>
                 </div>
 
@@ -1428,7 +1515,7 @@ export default function AutonomousMobileAppLight() {
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   
                   {/* KPI 1: Active Work Hours */}
-                  <div className="p-3 bg-emerald-50/70 border border-emerald-200/90 rounded-2xl text-center space-y-0.5">
+                  <div className="p-3 bg-emerald-50/70 border border-emerald-200/90 rounded-2xl text-center space-y-0.5 shadow-2xs">
                     <div className="flex items-center justify-center gap-1 text-[10px] font-black text-emerald-800">
                       <Clock className="w-3 h-3 text-emerald-600" />
                       <span>کۆی دەوامی چالاک</span>
@@ -1439,7 +1526,7 @@ export default function AutonomousMobileAppLight() {
                   </div>
 
                   {/* KPI 2: Total Excursions / Outside Time */}
-                  <div className="p-3 bg-amber-50/70 border border-amber-200/90 rounded-2xl text-center space-y-0.5">
+                  <div className="p-3 bg-amber-50/70 border border-amber-200/90 rounded-2xl text-center space-y-0.5 shadow-2xs">
                     <div className="flex items-center justify-center gap-1 text-[10px] font-black text-amber-800">
                       <Compass className="w-3 h-3 text-amber-600" />
                       <span>کاتی چوونەدەرەوە</span>
@@ -1450,7 +1537,7 @@ export default function AutonomousMobileAppLight() {
                   </div>
 
                   {/* KPI 3: Remaining Time */}
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-center space-y-0.5">
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-center space-y-0.5 shadow-2xs">
                     <div className="flex items-center justify-center gap-1 text-[10px] font-black text-slate-700">
                       <Timer className="w-3 h-3 text-slate-500" />
                       <span>ماوە بۆ ٨ کاژێر</span>
@@ -1461,7 +1548,7 @@ export default function AutonomousMobileAppLight() {
                   </div>
 
                   {/* KPI 4: Overtime (ئیزافە) */}
-                  <div className="p-3 bg-blue-50/70 border border-blue-200/90 rounded-2xl text-center space-y-0.5">
+                  <div className="p-3 bg-blue-50/70 border border-blue-200/90 rounded-2xl text-center space-y-0.5 shadow-2xs">
                     <div className="flex items-center justify-center gap-1 text-[10px] font-black text-blue-800">
                       <Zap className="w-3 h-3 text-blue-600" />
                       <span>ئیزافە (Overtime)</span>
@@ -1475,19 +1562,21 @@ export default function AutonomousMobileAppLight() {
 
                 {/* Today's Movement Chronological Table */}
                 {todayLiveStats.logs && todayLiveStats.logs.length > 0 && (
-                  <div className="pt-2 space-y-1.5">
-                    <span className="text-[11px] font-black text-slate-800 block">خشتەی تۆماری جووڵەکانی ئەمڕۆ (GPS Logs):</span>
-                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-0.5">
+                  <div className="pt-2 space-y-2 border-t border-slate-100">
+                    <span className="text-[11px] font-black text-slate-800 block">خشتەی جووڵەکانی ٢٤ کاتژمێری ئەمڕۆ (GPS Timeline):</span>
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
                       {todayLiveStats.logs.map((log, idx) => (
                         <div 
                           key={log.id || idx}
-                          className="p-2 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs"
+                          className="p-2.5 bg-slate-50 hover:bg-slate-100/80 transition-colors border border-slate-200 rounded-xl flex items-center justify-between text-xs"
                         >
-                          <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${log.type === 'ENTER' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                          <div className="flex items-center gap-2.5">
+                            <span className={`w-2.5 h-2.5 rounded-full ${log.type === 'ENTER' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                             <div>
-                              <span className="font-bold text-slate-800 text-[11px]">{log.titleKurdish || (log.type === 'ENTER' ? 'هاتن' : 'دەرچوون')}</span>
-                              <p className="text-[9px] text-slate-500 truncate max-w-[160px]">{log.location}</p>
+                              <span className="font-bold text-slate-800 text-[11px]">
+                                {log.titleKurdish || (log.type === 'ENTER' ? 'هاتن / گەڕانەوە' : 'دەرچوون / ئیستیراحەت')}
+                              </span>
+                              <p className="text-[9px] text-slate-500 truncate max-w-[170px]">{log.location}</p>
                             </div>
                           </div>
                           <span className="font-mono font-black text-slate-900 text-[11px] bg-white border border-slate-200 px-2 py-0.5 rounded-lg shadow-2xs">

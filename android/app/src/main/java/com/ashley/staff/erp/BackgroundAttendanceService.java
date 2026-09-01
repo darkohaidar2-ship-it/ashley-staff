@@ -1,5 +1,6 @@
 package com.ashley.staff.erp;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -16,6 +17,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.util.Log;
 import androidx.core.app.NotificationCompat;
 
@@ -27,19 +29,20 @@ import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class BackgroundAttendanceService extends Service implements LocationListener {
 
     private static final String TAG = "AshleyBgAttendance";
-    public static final String CHANNEL_ID = "ashley_attendance_bg_channel_v2";
-    public static final String ALERT_CHANNEL_ID = "ashley_attendance_alert_channel_v2";
+    public static final String CHANNEL_ID = "ashley_attendance_bg_channel_v3";
+    public static final String ALERT_CHANNEL_ID = "ashley_attendance_alert_channel_v3";
     private static final int NOTIFICATION_ID = 1001;
 
     private LocationManager locationManager;
     private PowerManager.WakeLock wakeLock;
-    private ExecutorService executorService;
+    private ScheduledExecutorService scheduledExecutor;
     private SharedPreferences prefs;
 
     // Company Locations
@@ -52,20 +55,21 @@ public class BackgroundAttendanceService extends Service implements LocationList
     private static final float HUANA_RADIUS = 120f; // meters
 
     private long lastTriggerTime = 0;
+    private long lastFastPollTime = 0;
 
     @Override
     public void onCreate() {
         super.onCreate();
         prefs = getSharedPreferences("ashley_prefs", Context.MODE_PRIVATE);
-        executorService = Executors.newSingleThreadExecutor();
+        scheduledExecutor = Executors.newScheduledThreadPool(2);
 
         createNotificationChannels();
 
         try {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             if (pm != null) {
-                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Ashley::BgWakeLock");
-                wakeLock.acquire(10 * 60 * 1000L);
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Ashley::BgWakeLockV2");
+                wakeLock.acquire();
             }
         } catch (Exception e) {
             Log.w(TAG, "WakeLock error: " + e.getMessage());
@@ -84,8 +88,9 @@ public class BackgroundAttendanceService extends Service implements LocationList
             } catch (Exception ignored) {}
         }
 
-        startLocationUpdates();
-        Log.i(TAG, "BackgroundAttendanceService started successfully.");
+        startUltraFastLocationUpdates();
+        startPeriodicGeofenceEngine();
+        Log.i(TAG, "BackgroundAttendanceService started with Ultra-Fast Location Engine.");
     }
 
     @Override
@@ -114,16 +119,17 @@ public class BackgroundAttendanceService extends Service implements LocationList
         return START_STICKY;
     }
 
-    private void startLocationUpdates() {
+    private void startUltraFastLocationUpdates() {
         try {
             locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
             if (locationManager == null) return;
 
+            // Request real-time updates every 2 seconds with 0 distance threshold for instant detection
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                         LocationManager.GPS_PROVIDER,
-                        8000L,  // 8 seconds
-                        5f,     // 5 meters
+                        2000L,  // 2 seconds
+                        0f,     // 0 meters
                         this
                 );
             }
@@ -131,8 +137,8 @@ public class BackgroundAttendanceService extends Service implements LocationList
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                         LocationManager.NETWORK_PROVIDER,
-                        8000L,
-                        5f,
+                        2000L,
+                        0f,
                         this
                 );
             }
@@ -141,6 +147,31 @@ public class BackgroundAttendanceService extends Service implements LocationList
         } catch (Exception e) {
             Log.e(TAG, "Error starting location updates: " + e.getMessage());
         }
+    }
+
+    // Active polling loop every 3 seconds to guarantee instant response even when stationary
+    private void startPeriodicGeofenceEngine() {
+        scheduledExecutor.scheduleWithFixedDelay(() -> {
+            try {
+                if (locationManager == null) return;
+
+                Location loc = null;
+                try {
+                    if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                        loc = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                    }
+                    if (loc == null && locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                        loc = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                    }
+                } catch (SecurityException ignored) {}
+
+                if (loc != null) {
+                    onLocationChanged(loc);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Periodic geofence error: " + e.getMessage());
+            }
+        }, 3, 3, TimeUnit.SECONDS);
     }
 
     @Override
@@ -166,7 +197,7 @@ public class BackgroundAttendanceService extends Service implements LocationList
         handleGeofenceLogic(isInsideAny, lat, lng, closestDistance, matchedName);
     }
 
-    private void handleGeofenceLogic(boolean isInside, double lat, double lng, float distance, String locationName) {
+    private synchronized void handleGeofenceLogic(boolean isInside, double lat, double lng, float distance, String locationName) {
         String userId = prefs.getString("userId", null);
         String userName = prefs.getString("userName", "کارمەند");
         String deviceToken = prefs.getString("deviceToken", "dev-auto");
@@ -182,8 +213,8 @@ public class BackgroundAttendanceService extends Service implements LocationList
         String lastCheckInDate = prefs.getString("last_checkin_date", "");
         long now = System.currentTimeMillis();
 
-        if (now - lastTriggerTime < 15000) {
-            return; // 15 seconds cooldown between triggers
+        if (now - lastTriggerTime < 8000) {
+            return; // 8 seconds cooldown between transitions
         }
 
         // Case 1: Entered Geofence (Was outside, now inside)
@@ -230,13 +261,13 @@ public class BackgroundAttendanceService extends Service implements LocationList
 
             showKurdishAlertNotification(
                     "👋 چوونەدەرەوە لە دەوام",
-                    userName + " گیان، دەرچوونت لە کاتژمێر " + currentTimeStr + " لە باکگراوند تۆمارکرا."
+                    userName + " گیان، دەرچوونت لە کاتژمێر " + currentTimeStr + " تۆمارکرا."
             );
         }
     }
 
     private void postAutonomousEvent(String event, String userId, String userName, String deviceToken, double lat, double lng, int distance, String regionName) {
-        executorService.execute(() -> {
+        scheduledExecutor.execute(() -> {
             try {
                 URL url = new URL("https://ashley-staff.vercel.app/api/attendance/autonomous-event");
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -244,8 +275,8 @@ public class BackgroundAttendanceService extends Service implements LocationList
                 conn.setRequestProperty("Content-Type", "application/json; utf-8");
                 conn.setRequestProperty("Accept", "application/json");
                 conn.setDoOutput(true);
-                conn.setConnectTimeout(10000);
-                conn.setReadTimeout(10000);
+                conn.setConnectTimeout(8000);
+                conn.setReadTimeout(8000);
 
                 JSONObject json = new JSONObject();
                 json.put("userId", userId);
@@ -278,10 +309,10 @@ public class BackgroundAttendanceService extends Service implements LocationList
             if (nm != null) {
                 NotificationChannel serviceChannel = new NotificationChannel(
                         CHANNEL_ID,
-                        "Ashley 24/7 Attendance Service",
-                        NotificationManager.IMPORTANCE_DEFAULT
+                        "Ashley 24/7 Persistent Attendance",
+                        NotificationManager.IMPORTANCE_LOW
                 );
-                serviceChannel.setDescription("چاودێری بەردەوامی ئامادەبوونی ٢٤ کاتژمێری");
+                serviceChannel.setDescription("چاودێری دەوامی بەردەوامی ٢٤ کاتژمێری");
                 serviceChannel.setShowBadge(true);
                 serviceChannel.setSound(null, null);
                 serviceChannel.enableVibration(false);
@@ -329,7 +360,7 @@ public class BackgroundAttendanceService extends Service implements LocationList
             }
         } else {
             if (checkOutTime != null && !checkOutTime.isEmpty()) {
-                statusLine = "دەوامت تەواو کردووە 🏁 • کاتژمێر " + checkOutTime + " دەرچوویت";
+                statusLine = "دەرچوویت 🏁 • کاتژمێر " + checkOutTime + " تۆمارکرا";
             } else {
                 statusLine = "مۆبایلەکە لە کاردایە 🟢 • چاودێری دەوامی ٢٤ سەعاتە";
             }
@@ -342,7 +373,7 @@ public class BackgroundAttendanceService extends Service implements LocationList
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setAutoCancel(false)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE);
 
@@ -350,7 +381,9 @@ public class BackgroundAttendanceService extends Service implements LocationList
             builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE);
         }
 
-        return builder.build();
+        Notification notif = builder.build();
+        notif.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
+        return notif;
     }
 
     private void showKurdishAlertNotification(String title, String message) {
@@ -378,6 +411,26 @@ public class BackgroundAttendanceService extends Service implements LocationList
     }
 
     @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        // Auto-restart service if app task is swiped away from recent apps
+        Intent restartServiceIntent = new Intent(getApplicationContext(), this.getClass());
+        restartServiceIntent.setPackage(getPackageName());
+        PendingIntent restartServicePendingIntent = PendingIntent.getService(
+                getApplicationContext(), 1, restartServiceIntent,
+                PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE
+        );
+        AlarmManager alarmService = (AlarmManager) getApplicationContext().getSystemService(Context.ALARM_SERVICE);
+        if (alarmService != null) {
+            alarmService.set(
+                    AlarmManager.ELAPSED_REALTIME,
+                    SystemClock.elapsedRealtime() + 1000,
+                    restartServicePendingIntent
+            );
+        }
+        super.onTaskRemoved(rootIntent);
+    }
+
+    @Override
     public void onDestroy() {
         super.onDestroy();
         if (locationManager != null) {
@@ -386,8 +439,8 @@ public class BackgroundAttendanceService extends Service implements LocationList
         if (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();
         }
-        if (executorService != null) {
-            executorService.shutdown();
+        if (scheduledExecutor != null) {
+            scheduledExecutor.shutdown();
         }
         Log.i(TAG, "BackgroundAttendanceService destroyed.");
     }
