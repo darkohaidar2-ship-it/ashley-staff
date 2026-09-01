@@ -566,7 +566,7 @@ export default function AdminPage() {
   if (!authChecked || !sessionUser) {
     return (
       <div className="min-h-screen w-screen flex items-center justify-center bg-slate-900 text-white font-sans dir-rtl" dir="rtl">
-        <div className="text-center space-y-3 p-6 bg-slate-800/80 border border-slate-700 rounded-3xl shadow-2xl">
+        <div className="text-center space-y-3 p-6 bg-slate-800/80 border border-slate-700 rounded-none shadow-2xl">
           <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-sm font-bold text-slate-300">پشکنینی دەسەڵاتی بەڕێوەبەر... (پارێزراو)</p>
           <p className="text-xs text-slate-500">تکایە لە ڕێگەی دەروازەی /adminpanel لۆگین بکە</p>
@@ -579,9 +579,9 @@ export default function AdminPage() {
     <div className="space-y-4 text-slate-900 font-sans dir-rtl select-none pb-12 p-2 sm:p-4" dir="rtl">
       
       {/* 🌟 TOP ENTERPRISE HEADER BAR */}
-      <div className="panel-classic p-3 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl shadow-lg border-2 border-slate-700 flex flex-wrap items-center justify-between gap-3">
+      <div className="panel-classic p-3 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-none shadow-lg border-2 border-slate-700 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl overflow-hidden shadow-md shadow-orange-500/20 flex-shrink-0 border border-orange-400/40">
+          <div className="w-11 h-11 rounded-none overflow-hidden shadow-md shadow-orange-500/20 flex-shrink-0 border border-orange-400/40">
             <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-cover" />
           </div>
           <div>
@@ -596,14 +596,14 @@ export default function AdminPage() {
 
         {/* TOP QUICK CONTROLS */}
         <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
-          <div className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/20 text-white font-bold hidden md:block">
+          <div className="px-3 py-1.5 rounded-none bg-white/10 border border-white/20 text-white font-bold hidden md:block">
             ⏰ {currentTimeStr || '2026-08-18 | 08:35'}
           </div>
 
           {/* ⚙️ SETTINGS BUTTON */}
           <button 
             onClick={() => setAdminActiveSection('settings')} 
-            className={`btn-classic px-3 py-1.5 rounded-xl flex items-center gap-1.5 font-bold transition-all shadow-sm ${
+            className={`btn-classic px-3 py-1.5 rounded-none flex items-center gap-1.5 font-bold transition-all shadow-sm ${
               adminActiveSection === 'settings' 
                 ? 'bg-amber-400 text-slate-950 border-amber-300 ring-2 ring-amber-300 font-black' 
                 : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
@@ -617,33 +617,33 @@ export default function AdminPage() {
           {/* 📡 PROMINENT STANDALONE GPS MATRIX BUTTON */}
           <button 
             onClick={() => setAdminActiveSection('gps_matrix')} 
-            className="btn-classic bg-teal-600 hover:bg-teal-700 text-white border-teal-400 rounded-xl px-3.5 py-1.5 flex items-center gap-1.5 shadow-md"
+            className="btn-classic bg-teal-600 hover:bg-teal-700 text-white border-teal-400 rounded-none px-3.5 py-1.5 flex items-center gap-1.5 shadow-md"
           >
             <Smartphone className="w-3.5 h-3.5 text-teal-200" />
             <span className="font-black">📡 خشتەی تۆماری GPS نوێ</span>
           </button>
 
-          <button onClick={() => setShowMobileDeviceModal(true)} className="btn-classic bg-orange-600/40 hover:bg-orange-600/60 text-white border-orange-400/40 rounded-xl px-3 py-1.5 flex items-center gap-1.5 shadow-sm">
+          <button onClick={() => setShowMobileDeviceModal(true)} className="btn-classic bg-orange-600/40 hover:bg-orange-600/60 text-white border-orange-400/40 rounded-none px-3 py-1.5 flex items-center gap-1.5 shadow-sm">
             <Smartphone className="w-3.5 h-3.5 text-orange-300" />
             <span>مۆبایلەکان 📱</span>
           </button>
 
-          <button onClick={() => setShowExcursionModal(true)} className="btn-classic bg-amber-600/50 hover:bg-amber-600/80 text-white border-amber-400/50 rounded-xl px-3 py-1.5 flex items-center gap-1.5 shadow-sm">
+          <button onClick={() => setShowExcursionModal(true)} className="btn-classic bg-amber-600/50 hover:bg-amber-600/80 text-white border-amber-400/50 rounded-none px-3 py-1.5 flex items-center gap-1.5 shadow-sm">
             <DoorOpen className="w-3.5 h-3.5 text-amber-300" />
             <span>دەرچوونی کاتی (ئیجازە) 🚪</span>
           </button>
 
-          <button onClick={() => setShowPasswordModal(true)} className="btn-classic bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5">
+          <button onClick={() => setShowPasswordModal(true)} className="btn-classic bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-none px-3 py-1.5 flex items-center gap-1.5">
             <KeyRound className="w-3.5 h-3.5 text-amber-300" />
             <span>پاسۆرد</span>
           </button>
 
-          <button onClick={() => setShowMapPicker(true)} className="btn-classic bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5">
+          <button onClick={() => setShowMapPicker(true)} className="btn-classic bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-none px-3 py-1.5 flex items-center gap-1.5">
             <MapPin className="w-3.5 h-3.5 text-cyan-300" />
             <span>نەخشە</span>
           </button>
 
-          <button onClick={exportStateAsJson} className="btn-classic bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5">
+          <button onClick={exportStateAsJson} className="btn-classic bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-none px-3 py-1.5 flex items-center gap-1.5">
             <Download className="w-3.5 h-3.5 text-emerald-300" />
             <span>باکئەپ</span>
           </button>
@@ -655,7 +655,7 @@ export default function AdminPage() {
                 router.replace('/adminpanel');
               }
             }}
-            className="btn-classic-danger py-1.5 px-3 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md"
+            className="btn-classic-danger py-1.5 px-3 rounded-none text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md"
           >
             <LogOut className="w-3.5 h-3.5 text-white" />
             <span>دەرچوون</span>
@@ -664,19 +664,19 @@ export default function AdminPage() {
       </div>
 
       {/* 🧭 MASTER ERP ENTERPRISE NAVIGATION BAR */}
-      <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-2.5 shadow-sm">
+      <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-none p-2.5 shadow-sm">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
           
           {/* 📡 Hub 1: PRIMARY STAFF ATTENDANCE TABLE (Main Matrix) */}
           <button
             onClick={() => setAdminActiveSection('gps_matrix')}
-            className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+            className={`group relative p-3 rounded-none border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'gps_matrix'
                 ? 'bg-teal-900 text-white border-teal-700 shadow-lg ring-4 ring-teal-400/40 scale-[1.02]'
                 : 'bg-slate-50 hover:bg-teal-50/60 text-slate-800 border-slate-200 hover:border-teal-300'
             }`}
           >
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
+            <div className={`w-12 h-12 rounded-none flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
               adminActiveSection === 'gps_matrix'
                 ? 'bg-teal-700 text-white shadow-inner'
                 : 'bg-teal-100 text-teal-900'
@@ -694,13 +694,13 @@ export default function AdminPage() {
           {/* 👥 Hub 2: HR & Staff */}
           <button
             onClick={() => setAdminActiveSection('hr')}
-            className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+            className={`group relative p-3 rounded-none border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'hr'
                 ? 'bg-blue-900 text-white border-blue-700 shadow-lg ring-4 ring-blue-400/40 scale-[1.02]'
                 : 'bg-slate-50 hover:bg-blue-50/60 text-slate-800 border-slate-200 hover:border-blue-300'
             }`}
           >
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
+            <div className={`w-12 h-12 rounded-none flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
               adminActiveSection === 'hr'
                 ? 'bg-blue-700 text-white shadow-inner'
                 : 'bg-blue-100 text-blue-900'
@@ -718,9 +718,9 @@ export default function AdminPage() {
           {/* 📱 Hub 3: Mobile Devices & Geofence Map */}
           <button
             onClick={() => setShowMobileDeviceModal(true)}
-            className="group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50 hover:bg-orange-50/60 text-slate-800 border-slate-200 hover:border-orange-300"
+            className="group relative p-3 rounded-none border transition-all flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50 hover:bg-orange-50/60 text-slate-800 border-slate-200 hover:border-orange-300"
           >
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 bg-orange-100 text-orange-900">
+            <div className="w-12 h-12 rounded-none flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 bg-orange-100 text-orange-900">
               <Smartphone className="w-6 h-6" />
             </div>
             <span className="text-xs font-black tracking-tight block">مۆبایلەکان و ئامێر</span>
@@ -732,13 +732,13 @@ export default function AdminPage() {
           {/* ⚙️ Hub 4: Settings & System */}
           <button
             onClick={() => setAdminActiveSection('settings')}
-            className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+            className={`group relative p-3 rounded-none border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'settings'
                 ? 'bg-slate-950 text-white border-slate-700 shadow-lg ring-4 ring-slate-400/40 scale-[1.02]'
                 : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
             }`}
           >
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
+            <div className={`w-12 h-12 rounded-none flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
               adminActiveSection === 'settings'
                 ? 'bg-slate-700 text-white shadow-inner'
                 : 'bg-slate-200 text-slate-800'
@@ -756,13 +756,13 @@ export default function AdminPage() {
           {/* 🗄️ Hub 5: ARCHIVE LOGIC VAULT (All Legacy Modules Preserved) */}
           <button
             onClick={() => setAdminActiveSection('archive')}
-            className={`group relative p-3 rounded-2xl border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+            className={`group relative p-3 rounded-none border transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               adminActiveSection === 'archive'
                 ? 'bg-purple-950 text-white border-purple-700 shadow-lg ring-4 ring-purple-400/40 scale-[1.02]'
                 : 'bg-purple-50/60 hover:bg-purple-100/80 text-purple-950 border-purple-200'
             }`}
           >
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
+            <div className={`w-12 h-12 rounded-none flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${
               adminActiveSection === 'archive'
                 ? 'bg-purple-700 text-white shadow-inner'
                 : 'bg-purple-200 text-purple-900'
@@ -788,8 +788,8 @@ export default function AdminPage() {
           
           {/* Top 4 Key Metric Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-white p-3 rounded-2xl border-2 border-blue-200 shadow-sm flex items-center gap-3">
-              <div className="p-3 bg-blue-100 rounded-xl text-blue-900">
+            <div className="bg-white p-3 rounded-none border-2 border-blue-200 shadow-sm flex items-center gap-3">
+              <div className="p-3 bg-blue-100 rounded-none text-blue-900">
                 <Users className="w-6 h-6" />
               </div>
               <div>
@@ -800,8 +800,8 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="bg-white p-3 rounded-2xl border-2 border-amber-200 shadow-sm flex items-center gap-3">
-              <div className="p-3 bg-amber-100 rounded-xl text-amber-900">
+            <div className="bg-white p-3 rounded-none border-2 border-amber-200 shadow-sm flex items-center gap-3">
+              <div className="p-3 bg-amber-100 rounded-none text-amber-900">
                 <Clock className="w-6 h-6" />
               </div>
               <div>
@@ -812,8 +812,8 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="bg-white p-3 rounded-2xl border-2 border-emerald-200 shadow-sm flex items-center gap-3">
-              <div className="p-3 bg-emerald-100 rounded-xl text-emerald-900">
+            <div className="bg-white p-3 rounded-none border-2 border-emerald-200 shadow-sm flex items-center gap-3">
+              <div className="p-3 bg-emerald-100 rounded-none text-emerald-900">
                 <DollarSign className="w-6 h-6" />
               </div>
               <div>
@@ -824,8 +824,8 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="bg-white p-3 rounded-2xl border-2 border-purple-200 shadow-sm flex items-center gap-3">
-              <div className="p-3 bg-purple-100 rounded-xl text-purple-900">
+            <div className="bg-white p-3 rounded-none border-2 border-purple-200 shadow-sm flex items-center gap-3">
+              <div className="p-3 bg-purple-100 rounded-none text-purple-900">
                 <Award className="w-6 h-6" />
               </div>
               <div>
@@ -838,7 +838,7 @@ export default function AdminPage() {
           </div>
 
           {/* 👥 MASTER MONTHLY STAFF OVERVIEW TABLE (CLICKABLE ROWS) */}
-          <div className="bg-white border-2 border-slate-300 rounded-2xl shadow-md overflow-hidden">
+          <div className="bg-white border-2 border-slate-300 rounded-none shadow-md overflow-hidden">
             <div className="bg-slate-900 text-white p-3 px-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-blue-400" />
@@ -982,8 +982,8 @@ export default function AdminPage() {
       {adminActiveSection === 'attendance' && (
         <section className="panel-classic space-y-4">
           {/* Top Sub-tabs Switcher */}
-          <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white rounded-2xl border border-slate-200 shadow-sm">
-            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white rounded-none border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-none border border-slate-200">
               <button
                 type="button"
                 onClick={() => setAttendanceSubTab('daily')}
@@ -1027,7 +1027,7 @@ export default function AdminPage() {
               />
 
               {/* Table 2: Live Check-In / Out Real-Time Activity Stream Table */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
+              <div className="bg-white rounded-none border border-slate-200 p-4 shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800">
@@ -1043,7 +1043,7 @@ export default function AdminPage() {
                   </span>
                 </div>
 
-                <div className="table-classic-wrapper rounded-xl border border-slate-200 overflow-hidden">
+                <div className="table-classic-wrapper rounded-none border border-slate-200 overflow-hidden">
                   <table className="table-classic w-full text-xs">
                     <thead>
                       <tr className="bg-slate-900 text-white font-black text-right">
@@ -1140,7 +1140,7 @@ export default function AdminPage() {
 
           <div className="space-y-4">
               {/* Search and Filters & Export */}
-              <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white rounded-none border border-slate-200 shadow-sm">
                 <div className="flex items-center gap-2 flex-1 max-w-md">
                   <Search className="w-4 h-4 text-slate-400" />
                   <input
@@ -1252,7 +1252,7 @@ export default function AdminPage() {
               </div>
 
               {/* Staff Management Table */}
-              <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm bg-white">
+              <div className="border border-slate-300 rounded-none overflow-hidden shadow-sm bg-white">
                 <table className="w-full text-right text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-200 border-b border-slate-300 text-slate-900 font-black">
@@ -1369,9 +1369,9 @@ export default function AdminPage() {
         <div className="space-y-6 animate-fade-in">
           
           {/* Section Banner */}
-          <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-700 shadow-md flex flex-wrap items-center justify-between gap-4">
+          <div className="p-4 bg-slate-900 text-white rounded-none border border-slate-700 shadow-md flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-slate-800 rounded-xl border border-slate-600">
+              <div className="p-3 bg-slate-800 rounded-none border border-slate-600">
                 <Settings className="w-6 h-6 text-amber-400" />
               </div>
               <div>
@@ -1383,7 +1383,7 @@ export default function AdminPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={exportStateAsJson}
-                className="btn-classic bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+                className="btn-classic bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-none px-3 py-1.5 flex items-center gap-1.5 text-xs font-bold cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5 text-emerald-300" />
                 <span>داگرتنی کۆپی باکئەپ (JSON)</span>
@@ -1394,7 +1394,7 @@ export default function AdminPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
             {/* CARD 1: 🗑️ MASTER ATTENDANCE WIPE & RESET */}
-            <div className="bg-white p-5 rounded-2xl border-2 border-rose-200 shadow-sm space-y-3">
+            <div className="bg-white p-5 rounded-none border-2 border-rose-200 shadow-sm space-y-3">
               <div className="flex items-center gap-2 text-rose-600 border-b border-rose-100 pb-2.5">
                 <Trash2 className="w-5 h-5" />
                 <h3 className="text-sm font-black">سڕینەوە و ڕیسێتی سەرجەم داتاکانی ئامادەبوون</h3>
@@ -1440,7 +1440,7 @@ export default function AdminPage() {
                   }
                   alert('✅ سەرجەم داتاکانی ئامادەبوون و تۆمارەکان بە سەرکەوتوویی لە داتابەیس و سیستم پاککرانەوە.');
                 }}
-                className="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs rounded-none shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Trash2 className="w-4 h-4" />
                 <span>🗑️ سڕینەوەی سەرجەم داتاکانی دەوام و ئامادەبوون (Wipe All Attendance)</span>
@@ -1448,7 +1448,7 @@ export default function AdminPage() {
             </div>
 
             {/* CARD 2: 🗺️ GEOFENCE LOCATIONS */}
-            <div className="bg-white p-5 rounded-2xl border-2 border-cyan-200 shadow-sm space-y-3">
+            <div className="bg-white p-5 rounded-none border-2 border-cyan-200 shadow-sm space-y-3">
               <div className="flex items-center justify-between border-b border-cyan-100 pb-2.5">
                 <div className="flex items-center gap-2 text-cyan-700">
                   <MapPin className="w-5 h-5" />
@@ -1460,7 +1460,7 @@ export default function AdminPage() {
               </div>
               <div className="space-y-1.5 text-xs text-slate-700">
                 {companyLocations.map((loc, i) => (
-                  <div key={loc.id || i} className="p-2 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <div key={loc.id || i} className="p-2 rounded-none bg-slate-50 border border-slate-200 flex items-center justify-between">
                     <span className="font-bold">🏢 {loc.name}</span>
                     <span className="text-[11px] font-mono text-cyan-800 font-bold bg-cyan-50 px-2 py-0.5 rounded border border-cyan-200">
                       مەودا: {loc.radiusMeters}m
@@ -1471,7 +1471,7 @@ export default function AdminPage() {
               <button
                 type="button"
                 onClick={() => setShowMapPicker(true)}
-                className="w-full py-2.5 px-4 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-2.5 px-4 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white font-black text-xs rounded-none shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Map className="w-4 h-4" />
                 <span>🗺️ دیاریکردن و دەستکاریکردنی لۆکەیشنەکان لەسەر نەخشە</span>
@@ -1479,7 +1479,7 @@ export default function AdminPage() {
             </div>
 
             {/* CARD 3: ⏰ SHIFT TIMINGS */}
-            <div className="bg-white p-5 rounded-2xl border-2 border-amber-200 shadow-sm space-y-3">
+            <div className="bg-white p-5 rounded-none border-2 border-amber-200 shadow-sm space-y-3">
               <div className="flex items-center gap-2 text-amber-700 border-b border-amber-100 pb-2.5">
                 <Clock className="w-5 h-5" />
                 <h3 className="text-sm font-black">کاتەکانی دەوامی فەرمی ڕۆژانە</h3>
@@ -1508,7 +1508,7 @@ export default function AdminPage() {
             </div>
 
             {/* CARD 4: 🔑 ADMIN PASSWORD & SECURITY */}
-            <div className="bg-white p-5 rounded-2xl border-2 border-indigo-200 shadow-sm space-y-3">
+            <div className="bg-white p-5 rounded-none border-2 border-indigo-200 shadow-sm space-y-3">
               <div className="flex items-center gap-2 text-indigo-700 border-b border-indigo-100 pb-2.5">
                 <KeyRound className="w-5 h-5" />
                 <h3 className="text-sm font-black">پاراستن و تێپەڕەوشەی بەڕێوەبەر</h3>
@@ -1519,7 +1519,7 @@ export default function AdminPage() {
               <button
                 type="button"
                 onClick={() => setShowPasswordModal(true)}
-                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs rounded-none shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <KeyRound className="w-4 h-4" />
                 <span>🔑 گۆڕینی وشەی تێپەڕی ئەدمین (Change Password)</span>
@@ -1536,9 +1536,9 @@ export default function AdminPage() {
       {/* ========================================================================= */}
       {adminActiveSection === 'archive' && (
         <section className="panel-classic space-y-6">
-          <div className="p-4 bg-purple-900/10 border-2 border-purple-300/60 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+          <div className="p-4 bg-purple-900/10 border-2 border-purple-300/60 rounded-none flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-md">
+              <div className="w-12 h-12 rounded-none bg-purple-600 text-white flex items-center justify-center shadow-md">
                 <FolderArchive className="w-6 h-6" />
               </div>
               <div>
@@ -1606,7 +1606,7 @@ export default function AdminPage() {
       {/* 🧭 MASTER ERP MODULES & DIRECT PAGE NAVIGATION LINKS */}
       {/* ========================================================================= */}
       <div className="mt-8 pt-6 border-t-2 border-dashed border-slate-200">
-        <div className="bg-slate-50/90 rounded-2xl border border-slate-200 p-4 space-y-4 shadow-sm">
+        <div className="bg-slate-50/90 rounded-none border border-slate-200 p-4 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-slate-800">
               <Sparkles className="w-5 h-5 text-amber-500" />
@@ -1620,10 +1620,10 @@ export default function AdminPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
             
             {/* 1. Master Warehouse & Inventory Suite */}
-            <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-xs hover:border-blue-300 transition-colors">
+            <div className="p-4 bg-white rounded-none border border-slate-200 space-y-3 shadow-xs hover:border-blue-300 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-700">
+                  <div className="w-10 h-10 rounded-none bg-blue-50 flex items-center justify-center text-blue-700">
                     <Table className="w-5 h-5" />
                   </div>
                   <div>
@@ -1639,25 +1639,25 @@ export default function AdminPage() {
               <div className="grid grid-cols-2 gap-1.5 pt-1 text-xs font-bold">
                 <Link
                   href="/public-inventory"
-                  className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
                   <span>📦</span> <span>جەردی کەرەستە</span>
                 </Link>
                 <Link
                   href="/sold-items"
-                  className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
                   <span>📂</span> <span>کەرەستەی فرۆشراو</span>
                 </Link>
                 <Link
                   href="/pdf-archive"
-                  className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
                   <span>🧾</span> <span>ئەرشیفی پسوولە</span>
                 </Link>
                 <Link
                   href="/report-designer"
-                  className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
                   <span>🎨</span> <span>دیزاینی ڕاپۆرت</span>
                 </Link>
@@ -1665,10 +1665,10 @@ export default function AdminPage() {
             </div>
 
             {/* 2. Expenses Suite */}
-            <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-xs hover:border-emerald-300 transition-colors">
+            <div className="p-4 bg-white rounded-none border border-slate-200 space-y-3 shadow-xs hover:border-emerald-300 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-700">
+                  <div className="w-10 h-10 rounded-none bg-emerald-50 flex items-center justify-center text-emerald-700">
                     <DollarSign className="w-5 h-5" />
                   </div>
                   <div>
@@ -1684,13 +1684,13 @@ export default function AdminPage() {
               <div className="grid grid-cols-2 gap-1.5 pt-1 text-xs font-bold">
                 <Link
                   href="/ashley-expenses"
-                  className="p-2 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
                   <span>💰</span> <span>سندوقی خەرجی</span>
                 </Link>
                 <Link
                   href="/ashley-expenses-settings"
-                  className="p-2 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
                   <span>⚙️</span> <span>پۆلێنی خەرجی</span>
                 </Link>
@@ -1698,10 +1698,10 @@ export default function AdminPage() {
             </div>
 
             {/* 3. Settings & Shift Administration */}
-            <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-xs hover:border-purple-300 transition-colors">
+            <div className="p-4 bg-white rounded-none border border-slate-200 space-y-3 shadow-xs hover:border-purple-300 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-700">
+                  <div className="w-10 h-10 rounded-none bg-purple-50 flex items-center justify-center text-purple-700">
                     <Settings className="w-5 h-5" />
                   </div>
                   <div>
@@ -1717,25 +1717,25 @@ export default function AdminPage() {
               <div className="grid grid-cols-2 gap-1.5 pt-1 text-xs font-bold">
                 <Link
                   href="/settings"
-                  className="p-2 rounded-xl bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
                   <span>⚙️</span> <span>ڕێکخستنی گشتی</span>
                 </Link>
                 <Link
                   href="/admin/attendance"
-                  className="p-2 rounded-xl bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
                   <span>⏰</span> <span>تۆمار و کاتەکان</span>
                 </Link>
                 <Link
                   href="/map-management"
-                  className="p-2 rounded-xl bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
                   <span>🗺️</span> <span>نەخشەی کارگە</span>
                 </Link>
                 <Link
                   href="/attendance/mobile"
-                  className="p-2 rounded-xl bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
                   <span>📱</span> <span>ئەپی مۆبایل</span>
                 </Link>
@@ -1765,7 +1765,7 @@ export default function AdminPage() {
       {/* ADD/EDIT EMPLOYEE MODAL */}
       {showEmpModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl border-2 border-slate-400 shadow-2xl max-w-md w-full p-5 space-y-4 text-right">
+          <div className="bg-white rounded-none border-2 border-slate-400 shadow-2xl max-w-md w-full p-5 space-y-4 text-right">
             <h3 className="text-sm font-black text-slate-900 border-b border-slate-200 pb-2">
               {editingEmp ? 'دەستکاریکردنی زانیاری کارمەند' : 'زیادکردنی کارمەندی نوێ'}
             </h3>
@@ -1902,10 +1902,10 @@ export default function AdminPage() {
       {/* 📱 MODAL: REMOTE MOBILE DEVICE BINDING MANAGEMENT */}
       {showMobileDeviceModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 border-2 border-slate-700 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+          <div className="bg-white rounded-none max-w-xl w-full p-6 border-2 border-slate-700 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b pb-3 border-slate-200">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-orange-100 text-orange-600 rounded-2xl">
+                <div className="p-2.5 bg-orange-100 text-orange-600 rounded-none">
                   <Smartphone className="w-6 h-6" />
                 </div>
                 <div>
@@ -1924,7 +1924,7 @@ export default function AdminPage() {
               const unboundCount = Math.max(0, employees.length - boundCount);
               return (
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 flex items-center justify-between">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-none text-emerald-900 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       <span className="text-xs font-black">مۆبایلی بەستراوە (Active):</span>
@@ -1932,7 +1932,7 @@ export default function AdminPage() {
                     <span className="font-mono font-black text-sm">{boundCount}</span>
                   </div>
 
-                  <div className="p-3 bg-slate-100 border border-slate-200 rounded-2xl text-slate-700 flex items-center justify-between">
+                  <div className="p-3 bg-slate-100 border border-slate-200 rounded-none text-slate-700 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Smartphone className="w-4 h-4 text-slate-500" />
                       <span className="text-xs font-black">نەبەستراوە (ئامادە):</span>
@@ -1947,9 +1947,9 @@ export default function AdminPage() {
               {employees.map((emp) => {
                 const isBound = !unboundEmpIds.includes(emp.id) && Boolean((emp as any).deviceBound || emp.id === 'emp-02');
                 return (
-                  <div key={emp.id} className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200 transition-colors">
+                  <div key={emp.id} className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100 rounded-none border border-slate-200 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-xl font-black flex items-center justify-center text-sm border ${
+                      <div className={`w-9 h-9 rounded-none font-black flex items-center justify-center text-sm border ${
                         isBound ? 'bg-emerald-500/10 text-emerald-600 border-emerald-200' : 'bg-slate-200 text-slate-500 border-slate-300'
                       }`}>
                         📱
@@ -1983,7 +1983,7 @@ export default function AdminPage() {
                           }
                         }
                       }}
-                      className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-200 rounded-xl text-xs font-black transition-colors cursor-pointer"
+                      className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-200 rounded-none text-xs font-black transition-colors cursor-pointer"
                     >
                       🔓 هەڵوەشاندنەوەی مۆبایل
                     </button>
@@ -1998,11 +1998,11 @@ export default function AdminPage() {
       {/* 🚪 MODAL: 📝 EXCURSIONS & TEMPORARY ABSENCE MANAGEMENT */}
       {showExcursionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-4 shadow-2xl border border-slate-200">
+          <div className="bg-white rounded-none p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-4 shadow-2xl border border-slate-200">
             {/* Header */}
             <div className="flex items-center justify-between border-b pb-3 border-slate-200">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-amber-100 text-amber-700 rounded-2xl">
+                <div className="p-2.5 bg-amber-100 text-amber-700 rounded-none">
                   <DoorOpen className="w-6 h-6" />
                 </div>
                 <div>
@@ -2016,7 +2016,7 @@ export default function AdminPage() {
             </div>
 
             {/* Date Selector & KPI Counters */}
-            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 rounded-none border border-slate-200">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-amber-600" />
                 <span className="text-xs font-black text-slate-700">بەروار:</span>
@@ -2024,7 +2024,7 @@ export default function AdminPage() {
                   type="date"
                   value={excursionDate}
                   onChange={(e) => setExcursionDate(e.target.value)}
-                  className="px-2.5 py-1 bg-white border border-slate-300 rounded-xl text-xs font-bold font-mono text-slate-900"
+                  className="px-2.5 py-1 bg-white border border-slate-300 rounded-none text-xs font-bold font-mono text-slate-900"
                 />
               </div>
 
@@ -2048,7 +2048,7 @@ export default function AdminPage() {
                 <span>وەرگرتنی تۆمارەکان لە سێرڤەر...</span>
               </div>
             ) : excursionsList.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 font-bold text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+              <div className="text-center py-8 text-slate-400 font-bold text-xs bg-slate-50 rounded-none border border-dashed border-slate-300">
                 📭 هیچ دەرچوونێکی کاتی بۆ ئەم بەروارە ({excursionDate}) تۆمار نەکراوە.
               </div>
             ) : (
@@ -2058,10 +2058,10 @@ export default function AdminPage() {
                   const isPending = exc.decision === 'pending';
 
                   return (
-                    <div key={exc.id} className="p-3.5 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200 transition-all space-y-2">
+                    <div key={exc.id} className="p-3.5 bg-slate-50 hover:bg-slate-100/80 rounded-none border border-slate-200 transition-all space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-xl bg-amber-500 text-white font-black text-xs flex items-center justify-center">
+                          <div className="w-8 h-8 rounded-none bg-amber-500 text-white font-black text-xs flex items-center justify-center">
                             {(exc.userName || '').charAt(0)}
                           </div>
                           <div>
@@ -2077,7 +2077,7 @@ export default function AdminPage() {
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => handleExcursionDecision(exc.id, 'work')}
-                            className={`px-2.5 py-1 rounded-xl text-[11px] font-black transition-all cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-none text-[11px] font-black transition-all cursor-pointer ${
                               isWork 
                                 ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-400' 
                                 : 'bg-slate-200 hover:bg-emerald-100 text-slate-700'
@@ -2088,7 +2088,7 @@ export default function AdminPage() {
 
                           <button
                             onClick={() => handleExcursionDecision(exc.id, 'deduct')}
-                            className={`px-2.5 py-1 rounded-xl text-[11px] font-black transition-all cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-none text-[11px] font-black transition-all cursor-pointer ${
                               !isWork && !isPending
                                 ? 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-400' 
                                 : 'bg-slate-200 hover:bg-rose-100 text-slate-700'
@@ -2100,7 +2100,7 @@ export default function AdminPage() {
                       </div>
 
                       {/* Note / Reason */}
-                      <div className="p-2 bg-white rounded-xl border border-slate-200 text-xs text-slate-700 font-medium flex items-center gap-1.5">
+                      <div className="p-2 bg-white rounded-none border border-slate-200 text-xs text-slate-700 font-medium flex items-center gap-1.5">
                         <span className="text-amber-600 font-bold">📝 تێبینی و هۆکار:</span>
                         <span>{exc.note || 'هیچ تێبینییەک نەنووسراوە'}</span>
                       </div>
@@ -2111,13 +2111,13 @@ export default function AdminPage() {
             )}
 
             {/* Add New Excursion Manually by Admin */}
-            <form onSubmit={handleCreateExcursion} className="p-3.5 bg-amber-50/50 border border-amber-200 rounded-2xl space-y-3">
+            <form onSubmit={handleCreateExcursion} className="p-3.5 bg-amber-50/50 border border-amber-200 rounded-none space-y-3">
               <span className="text-xs font-black text-amber-900 block">➕ تۆمارکردنی دەرچوونی نوێ بە دەستی لەلایەن ئەدمین</span>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <select
                   value={newExcEmpId}
                   onChange={(e) => setNewExcEmpId(e.target.value)}
-                  className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
+                  className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-none text-xs font-bold text-slate-900"
                 >
                   <option value="">-- هەڵبژاردنی کارمەند --</option>
                   {employees.filter(e => e.status !== 'resigned').map(emp => (
@@ -2131,7 +2131,7 @@ export default function AdminPage() {
                     type="time"
                     value={newExcExitTime}
                     onChange={(e) => setNewExcExitTime(e.target.value)}
-                    className="w-full px-2 py-1 bg-white border border-slate-300 rounded-xl text-xs font-mono text-center font-bold"
+                    className="w-full px-2 py-1 bg-white border border-slate-300 rounded-none text-xs font-mono text-center font-bold"
                   />
                 </div>
 
@@ -2141,7 +2141,7 @@ export default function AdminPage() {
                     type="time"
                     value={newExcReturnTime}
                     onChange={(e) => setNewExcReturnTime(e.target.value)}
-                    className="w-full px-2 py-1 bg-white border border-slate-300 rounded-xl text-xs font-mono text-center font-bold"
+                    className="w-full px-2 py-1 bg-white border border-slate-300 rounded-none text-xs font-mono text-center font-bold"
                   />
                 </div>
               </div>
@@ -2152,13 +2152,13 @@ export default function AdminPage() {
                   placeholder="هۆکاری دەرچوون (بۆ نموونە: کڕینی کەلوپەل بۆ کۆگا)..."
                   value={newExcNote}
                   onChange={(e) => setNewExcNote(e.target.value)}
-                  className="flex-1 px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
+                  className="flex-1 px-3 py-1.5 bg-white border border-slate-300 rounded-none text-xs font-bold text-slate-900"
                 />
 
                 <select
                   value={newExcDecision}
                   onChange={(e) => setNewExcDecision(e.target.value as any)}
-                  className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-black text-slate-900"
+                  className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-none text-xs font-black text-slate-900"
                 >
                   <option value="work">🟢 ئیشی کۆمپانیا</option>
                   <option value="deduct">🔴 لێبڕین / مۆڵەت</option>
@@ -2166,7 +2166,7 @@ export default function AdminPage() {
 
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl shadow-sm cursor-pointer whitespace-nowrap"
+                  className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-none shadow-sm cursor-pointer whitespace-nowrap"
                 >
                   تۆمارکردن 💾
                 </button>

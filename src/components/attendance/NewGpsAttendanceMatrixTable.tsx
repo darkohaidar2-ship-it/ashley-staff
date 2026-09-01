@@ -19,9 +19,12 @@ import {
   DoorOpen,
   Check,
   AlertCircle,
-  AlertTriangle
+  AlertTriangle,
+  Move,
+  BarChart3,
+  X
 } from 'lucide-react';
-import { getDaysInMonth, format, getDay } from 'date-fns';
+import { getDaysInMonth, format, getDay, addMonths, subMonths } from 'date-fns';
 import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
 
 interface NewGpsAttendanceMatrixTableProps {
@@ -34,151 +37,77 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedLogDetail, setSelectedLogDetail] = useState<any | null>(null);
 
-  const [excursionsMap, setExcursionsMap] = useState<{ [dateStr: string]: any[] }>({});
-  const [localDecisions, setLocalDecisions] = useState<{ [key: string]: 'work' | 'deduct' }>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('ashley_matrix_decisions');
-        if (saved) return JSON.parse(saved);
-      } catch {}
-    }
-    return {};
-  });
-  const [savingDecisionId, setSavingDecisionId] = useState<string | null>(null);
+  // Status Drag & Drop Quick Palette
+  const [selectedPaletteStatus, setSelectedPaletteStatus] = useState<string>('Present');
+  const [draggedStatus, setDraggedStatus] = useState<string | null>(null);
+
+  // Dynamic Manual Overrides Map for cell statuses: Map<empId_dateStr, { status: string; checkInTime?: string; checkOutTime?: string }>
+  const [manualStatusMap, setManualStatusMap] = useState<Record<string, { status: string; checkInTime?: string; checkOutTime?: string }>>({});
 
   const [yearStr, monthStr] = selectedMonth.split('-');
   const year = parseInt(yearStr || '2026', 10);
-  const month = parseInt(monthStr || '08', 10);
+  const month = parseInt(monthStr || '09', 10);
   const totalDays = getDaysInMonth(new Date(year, month - 1, 1));
-  const daysArray = Array.from({ length: totalDays }, (_, i) => i + 1);
+  
+  const daysArray = useMemo(() => {
+    return Array.from({ length: totalDays }, (_, i) => {
+      const dayNum = i + 1;
+      const dayStr = dayNum < 10 ? `0${dayNum}` : `${dayNum}`;
+      const dateStr = `${selectedMonth}-${dayStr}`;
+      const dateObj = new Date(year, month - 1, dayNum);
+      const isFriday = getDay(dateObj) === 5;
+      return { dayNum, dateStr, isFriday };
+    });
+  }, [totalDays, year, month, selectedMonth]);
 
-  const fetchMonthExcursions = useCallback(async () => {
+  // Fetch saved manual records from server
+  const loadSavedRecords = useCallback(async () => {
     try {
-      const datesToFetch = [
-        `${selectedMonth}-25`,
-        `${selectedMonth}-26`,
-        `${selectedMonth}-27`,
-        format(new Date(), 'yyyy-MM-dd')
-      ];
-
-      const results = await Promise.all(
-        datesToFetch.map(d =>
-          fetch(`/api/attendance/excursions?date=${d}`)
-            .then(res => res.json())
-            .then(data => ({ date: d, items: data.excursions || [] }))
-            .catch(() => ({ date: d, items: [] }))
-        )
-      );
-
-      const map: { [key: string]: any[] } = {};
-      const fetchedDecisions: { [key: string]: 'work' | 'deduct' } = {};
-
-      results.forEach(r => {
-        if (r.items.length > 0) {
-          map[r.date] = r.items;
-          r.items.forEach((item: any) => {
-            if (item.decision === 'work' || item.decision === 'deduct') {
-              fetchedDecisions[item.id] = item.decision;
-              if (item.userId) {
-                fetchedDecisions[`${r.date}_${item.userId}_${item.id}`] = item.decision;
-                fetchedDecisions[`${r.date}_${item.userId}`] = item.decision;
-              }
-            }
-          });
-        }
-      });
-
-      setExcursionsMap(map);
-
-      setLocalDecisions(prev => {
-        const merged = { ...fetchedDecisions, ...prev };
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('ashley_matrix_decisions', JSON.stringify(merged));
-        }
-        return merged;
-      });
+      const res = await fetch(`/api/attendance/admin/report?t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        const map: Record<string, any> = {};
+        (data.attendance || []).forEach((r: any) => {
+          map[`${r.userId}_${r.date}`] = {
+            status: r.status,
+            checkInTime: r.checkInTime,
+            checkOutTime: r.checkOutTime
+          };
+        });
+        setManualStatusMap(map);
+      }
     } catch {}
-  }, [selectedMonth]);
+  }, []);
 
   useEffect(() => {
-    fetchMonthExcursions();
-  }, [fetchMonthExcursions, selectedMonth]);
+    loadSavedRecords();
+    const interval = setInterval(loadSavedRecords, 4000);
+    return () => clearInterval(interval);
+  }, [loadSavedRecords]);
 
-  const handleInlineExcursionDecision = async (excId: string, dateStr: string, empId: string, decision: 'work' | 'deduct') => {
-    setSavingDecisionId(excId);
-
-    // Instant local state & localStorage update for real-time persistence across refresh
-    const decisionKeySpecific = `${dateStr}_${empId}_${excId}`;
-    const decisionKeyGeneral = `${dateStr}_${empId}`;
+  // Handle Drag & Drop / Click Cell Status Change
+  const handleCellStatusChange = async (userId: string, userName: string, dateStr: string, status: string) => {
+    const key = `${userId}_${dateStr}`;
     
-    setLocalDecisions(prev => {
-      const updated = {
-        ...prev,
-        [decisionKeySpecific]: decision,
-        [decisionKeyGeneral]: decision,
-        [excId]: decision
-      };
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('ashley_matrix_decisions', JSON.stringify(updated));
+    // Optimistic Update
+    setManualStatusMap(prev => ({
+      ...prev,
+      [key]: {
+        status,
+        checkInTime: status === 'Present' ? '08:30' : (status === 'Leave' || status === 'مۆڵەت') ? 'مۆڵەت' : undefined,
+        checkOutTime: status === 'Present' ? '16:30' : (status === 'Leave' || status === 'مۆڵەت') ? 'مۆڵەت' : undefined
       }
-      return updated;
-    });
-
-    setExcursionsMap(prev => {
-      const list = prev[dateStr] || [];
-      const idx = list.findIndex(x => x.id === excId);
-      let updated: any[];
-      if (idx >= 0) {
-        updated = list.map((x, i) => i === idx ? { ...x, decision } : x);
-      } else {
-        updated = [...list, { id: excId, userId: empId, date: dateStr, decision }];
-      }
-      return { ...prev, [dateStr]: updated };
-    });
-
-    if (selectedLogDetail && selectedLogDetail.info) {
-      setSelectedLogDetail((prev: any) => {
-        if (!prev || !prev.info) return prev;
-        const currentExcList = prev.info.excursions || (prev.info.excursion ? [prev.info.excursion] : []);
-        const updatedExcList = currentExcList.map((exc: any) => {
-          if (exc.id === excId) return { ...exc, decision };
-          return exc;
-        });
-
-        // Recalculate modal hours based on updated decisions
-        let totalPardonedMins = 0;
-        let totalDeductedMins = 0;
-        updatedExcList.forEach((exc: any) => {
-          const dec = exc.id === excId ? decision : (localDecisions[`${dateStr}_${empId}_${exc.id}`] || exc.decision);
-          const dur = exc.durationMinutes || 45;
-          if (dec === 'work') totalPardonedMins += dur;
-          else if (dec === 'deduct') totalDeductedMins += dur;
-        });
-
-        const newWorkedMins = Math.min(480, (prev.info.rawDiffBase || 390) + totalPardonedMins);
-        const newWorkedHours = Math.round((newWorkedMins / 60) * 10) / 10;
-
-        return {
-          ...prev,
-          info: {
-            ...prev.info,
-            workedMinutes: newWorkedMins,
-            workedHours: newWorkedHours,
-            excursions: updatedExcList,
-            excursion: updatedExcList[0] || null
-          }
-        };
-      });
-    }
+    }));
 
     try {
-      await fetch('/api/attendance/excursion-decision', {
+      await fetch('/api/attendance/admin/manual-record', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ excursionId: excId, date: dateStr, decision, userId: empId })
+        body: JSON.stringify({ userId, userName, date: dateStr, status })
       });
-    } catch {} finally {
-      setSavingDecisionId(null);
+      loadSavedRecords();
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -196,23 +125,29 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     });
   }, [employees, searchQuery]);
 
-  const timeToMinutes = (t: string): number => {
-    if (!t || !t.includes(':')) return 0;
-    const [h, m] = t.split(':').map(Number);
-    return (h || 0) * 60 + (m || 0);
-  };
-
-  const getGpsLogsForEmpAndDay = (emp: Employee, dayNum: number) => {
-    const formattedDay = dayNum.toString().padStart(2, '0');
-    const targetDateStr = `${selectedMonth}-${formattedDay}`;
-
+  const getGpsLogsForEmpAndDay = (emp: Employee, dayItem: { dayNum: number; dateStr: string; isFriday: boolean }) => {
+    const { dateStr, isFriday } = dayItem;
     const empId = (emp.id || '').toString().trim().toLowerCase();
     const empNum = empId.replace('emp-', '');
     const empName = (emp.name || emp.fullName3Part || '').trim().toLowerCase();
 
+    // Check manual override first
+    const override = manualStatusMap[`${emp.id}_${dateStr}`] || manualStatusMap[`${empNum}_${dateStr}`] || manualStatusMap[`emp-${empNum}_${dateStr}`];
+    if (override) {
+      return {
+        hasRecord: true,
+        isFriday,
+        checkInTime: override.checkInTime || '',
+        checkOutTime: override.checkOutTime || '',
+        status: override.status,
+        warehouseName: 'کۆمپانیای سەرەکی ئاشڵی',
+        workedHours: override.status === 'Present' ? 8 : 0,
+      };
+    }
+
     const dayRecords = attendanceLogs.filter(log => {
       const logDate = log.date || (log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || '');
-      if (logDate !== targetDateStr) return false;
+      if (logDate !== dateStr) return false;
 
       const logEmpId = (log.employeeId || log.userId || '').toString().trim().toLowerCase();
       const logName = (log.name || log.userName || (log as any).employeeName || '').trim().toLowerCase();
@@ -227,12 +162,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
     let checkInTime = '';
     let checkOutTime = '';
-    let warehouseName = '';
-    let status = 'Present';
-    let rawLog: any = null;
+    let warehouseName = 'کۆمپانیای سەرەکی ئاشڵی';
+    let status = isFriday ? 'Holiday' : 'Absent';
 
     dayRecords.forEach((r: any) => {
-      rawLog = r;
       const inCandidate = r.checkInTime || r.check_in_time || (r.checkIn ? (r.checkIn.includes(' ') ? r.checkIn.split(' ')[1]?.slice(0, 5) : r.checkIn.includes('T') ? r.checkIn.split('T')[1]?.slice(0, 5) : r.checkIn.slice(0, 5)) : '');
       const outCandidate = r.checkOutTime || r.check_out_time || (r.checkOut ? (r.checkOut.includes(' ') ? r.checkOut.split(' ')[1]?.slice(0, 5) : r.checkOut.includes('T') ? r.checkOut.split('T')[1]?.slice(0, 5) : r.checkOut.slice(0, 5)) : '');
 
@@ -240,212 +173,45 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       if (outCandidate) checkOutTime = outCandidate.slice(0, 5);
       if (r.warehouseName || r.warehouse_name) warehouseName = r.warehouseName || r.warehouse_name;
       if (r.status) status = r.status;
-
-      if (r.type?.includes('In') || r.type?.includes('هاتن') || r.action === 'Check In' || r.log_type?.includes('In')) {
-        const t = inCandidate || r.log_time_str || (r.time ? (r.time.includes(' ') ? r.time.split(' ')[1]?.slice(0, 5) : r.time.slice(0, 5)) : '');
-        if (t && !checkInTime) checkInTime = t.slice(0, 5);
-      }
-      if (r.type?.includes('Out') || r.type?.includes('دەرچوون') || r.action === 'Check Out' || r.log_type?.includes('Out')) {
-        const t = outCandidate || r.log_time_str || (r.time ? (r.time.includes(' ') ? r.time.split(' ')[1]?.slice(0, 5) : r.time.slice(0, 5)) : '');
-        if (t) checkOutTime = t.slice(0, 5);
-      }
-    });
-
-    const dayExcursions = excursionsMap[targetDateStr] || [];
-    let empExcursions = dayExcursions.filter(x => {
-      const xId = (x.userId || '').toString().toLowerCase();
-      const xName = (x.userName || '').trim().toLowerCase();
-      return xId === empId || xId === empNum || (xName && (xName === empName || xName.includes(empName) || empName.includes(xName)));
     });
 
     const hasRecord = Boolean(checkInTime || checkOutTime);
-    const isCurrentlyPresent = Boolean(checkInTime && !checkOutTime);
-    let workedMinutes = 0;
-    let expectedMinutes = 480;
-    let dotColor: 'green' | 'orange' | 'red' | null = null;
-    let dotTooltip = '';
-    let rawDiffBase = 0;
-
-    if (hasRecord) {
-      if (isCurrentlyPresent) {
-        // Active shift in progress for today
-        workedMinutes = 0;
-        dotColor = null;
-        dotTooltip = `🟢 لە ناو دەوامدایە (هاتن: ${checkInTime})`;
-        empExcursions = [];
-      } else {
-        const inMins = timeToMinutes(checkInTime || '08:00');
-        const outMins = timeToMinutes(checkOutTime || '17:00');
-        
-        let rawDiff = Math.max(0, outMins - inMins);
-        if (inMins < 12 * 60 && outMins > 13 * 60) {
-          rawDiff = Math.max(0, rawDiff - 60);
-        }
-
-        rawDiffBase = rawDiff;
-
-        if (empExcursions.length === 0 && rawLog) {
-          const embeddedNote = rawLog.check_out_edit_note || rawLog.check_in_edit_note || rawLog.notes || rawLog.edit_note;
-          if (embeddedNote) {
-            empExcursions = [{
-              id: `exc-${empId}-${targetDateStr}`,
-              userId: empId,
-              userName: empName,
-              date: targetDateStr,
-              note: embeddedNote,
-              durationMinutes: Math.max(20, expectedMinutes - rawDiff),
-              decision: 'pending'
-            }];
-          }
-        }
-
-        if (empExcursions.length === 0 && rawDiff < expectedMinutes) {
-          empExcursions = [{
-            id: `exc-${empId}-${targetDateStr}`,
-            userId: empId,
-            userName: empName,
-            date: targetDateStr,
-            note: 'درەنگ کەوتن یان کەمی کاتی دەوام',
-            durationMinutes: expectedMinutes - rawDiff,
-            decision: 'pending'
-          }];
-        }
-
-        if (empExcursions.length > 0) {
-          let totalDeficitMins = 0;
-          let pardonedMins = 0;
-          let deductedMins = 0;
-          let pendingCount = 0;
-
-          const enrichedList = empExcursions.map((exc) => {
-            const itemKeySpecific = `${targetDateStr}_${empId}_${exc.id}`;
-            const activeDec = localDecisions[itemKeySpecific] || 
-                              localDecisions[exc.id] || 
-                              (empExcursions.length === 1 ? localDecisions[`${targetDateStr}_${empId}`] : undefined) || 
-                              exc.decision || 'pending';
-            const dur = exc.durationMinutes || (exc.type === 'late' ? 35 : 45);
-            totalDeficitMins += dur;
-
-            if (activeDec === 'work') {
-              pardonedMins += dur;
-            } else if (activeDec === 'deduct') {
-              deductedMins += dur;
-            } else {
-              pendingCount++;
-            }
-
-            return { ...exc, decision: activeDec, durationMinutes: dur };
-          });
-
-          empExcursions = enrichedList;
-
-          // Base worked time
-          const baseMins = Math.max(0, expectedMinutes - totalDeficitMins);
-          workedMinutes = Math.min(expectedMinutes, baseMins + pardonedMins);
-
-          if (pendingCount > 0) {
-            dotColor = 'orange';
-            dotTooltip = `🟠 ${pendingCount} تێبینی / دەرچوون چاوەڕوانی بڕیاری ئەدمینە`;
-          } else if (pardonedMins >= totalDeficitMins) {
-            workedMinutes = expectedMinutes; // 8.0h full!
-            dotColor = 'green';
-            dotTooltip = `🟢 هەموو کەمی و دەرچوونەکان وەک کاری فەرمی / لێخۆشبوون پەسەند کراون (٨ کاتژمێری تەواو)`;
-          } else if (deductedMins > 0 && pardonedMins === 0) {
-            dotColor = 'red';
-            dotTooltip = `🔴 سزا و لێبڕینی ${deductedMins} خولەک جێبەجێکراوە`;
-          } else {
-            dotColor = pardonedMins > 0 ? 'green' : 'orange';
-            dotTooltip = `بڕیاری بەشەکی: ${pardonedMins} خولەک بەخشراوە، ${deductedMins} خولەک لێبڕدراوە`;
-          }
-        } else {
-          workedMinutes = rawDiff;
-          if (workedMinutes >= expectedMinutes) {
-            dotColor = null; // 🟢 Clean! No dot for normal completed days
-            dotTooltip = 'دەوامی ئاسایی (٨ کاتژمێری تەواو)';
-          } else {
-            dotColor = 'orange';
-            const deficitMins = expectedMinutes - workedMinutes;
-            dotTooltip = `🟠 کاتی کەمە: ${deficitMins} خولەک کەمی هەیە • چاوەڕوانی تێبینی و بڕیاری ئەدمین`;
-          }
-        }
-      }
-    }
-
-    const workedHours = Math.round((workedMinutes / 60) * 10) / 10;
+    if (hasRecord) status = 'Present';
 
     return {
       hasRecord,
-      isCurrentlyPresent,
+      isFriday,
       checkInTime,
       checkOutTime,
+      status,
       warehouseName,
-      status: isCurrentlyPresent ? 'Present (In Progress)' : status,
-      rawLog,
-      dateStr: targetDateStr,
-      excursion: empExcursions[0] || null,
-      excursions: empExcursions,
-      rawDiffBase,
-      workedMinutes,
-      workedHours,
-      dotColor,
-      dotTooltip
+      workedHours: hasRecord ? 8 : 0,
     };
   };
 
-  const monthKpis = useMemo(() => {
-    let totalCheckIns = 0;
-    let lateCount = 0;
-    let totalWorkedHoursSum = 0;
-
-    let totalWorkingDaysInMonth = 0;
-    daysArray.forEach(d => {
-      const dateObj = new Date(year, month - 1, d);
-      if (getDay(dateObj) !== 5) totalWorkingDaysInMonth++;
-    });
-
-    activeEmployees.forEach(emp => {
-      daysArray.forEach(d => {
-        const info = getGpsLogsForEmpAndDay(emp, d);
-        if (info.hasRecord) {
-          totalCheckIns++;
-          totalWorkedHoursSum += info.workedHours;
-          if (info.status === 'Late') lateCount++;
-        }
-      });
-    });
-
-    return {
-      totalStaff: activeEmployees.length,
-      totalCheckIns,
-      lateCount,
-      totalWorkedHoursSum: Math.round(totalWorkedHoursSum * 10) / 10,
-      totalWorkingDaysInMonth,
-      onTimeRate: totalCheckIns > 0 ? Math.round(((totalCheckIns - lateCount) / totalCheckIns) * 100) : 100
-    };
-  }, [activeEmployees, attendanceLogs, daysArray, selectedMonth, excursionsMap]);
-
   const handleExportCsv = () => {
-    let csv = `\uFEFFناوی لیست: خشتەی تۆماری GPS نوێ (31-Day GPS Attendance Matrix), مانگ: ${selectedMonth}\n\n`;
-    const headers = ['ناوی کارمەند', 'پلە/ئەرک', 'مۆبایل', ...daysArray.map(d => `${d}/${monthStr}`), 'کۆی دەوام (ڕۆژ)', 'کۆی کاتژمێر (Actual)', 'پێویست (Target)', 'جیاوازی (Balance)'];
-    csv += headers.join(',') + '\n';
+    let csv = '\uFEFF';
+    const dayHeaders = daysArray.map(d => `"ڕۆژی ${d.dayNum}"`).join(',');
+    csv += `"ناوی کارمەند","پلە","ژمارەی مۆبایل",${dayHeaders},"کۆی ئامادەبوون","کۆی کاژێر"\n`;
 
     activeEmployees.forEach(emp => {
       let daysCount = 0;
       let totalHours = 0;
-
       const dayCols = daysArray.map(d => {
         const info = getGpsLogsForEmpAndDay(emp, d);
         if (info.hasRecord) {
           daysCount++;
           totalHours += info.workedHours;
-          return `${info.checkInTime || ''} - ${info.checkOutTime || ''} (${info.workedHours}h)`;
+          return `"${info.checkInTime || 'ئامادە'}"`;
+        } else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
+          return '"مۆڵەت"';
+        } else if (info.status === 'Absent' || info.status === 'غیاب') {
+          return '"غیاب"';
+        } else if (info.isFriday || info.status === 'Holiday') {
+          return '"پشوو (هەینی)"';
         }
-        return '---';
+        return '"-"';
       });
-
-      const targetHours = daysCount * 8;
-      const balance = Math.round((totalHours - targetHours) * 10) / 10;
-      const balanceStr = balance >= 0 ? `+${balance}h` : `${balance}h`;
 
       const row = [
         `"${emp.fullName3Part || emp.name}"`,
@@ -453,9 +219,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         `"${emp.phone || ''}"`,
         ...dayCols,
         daysCount,
-        `${totalHours}h`,
-        `${targetHours}h`,
-        `"${balanceStr}"`
+        `${totalHours}h`
       ];
       csv += row.join(',') + '\n';
     });
@@ -467,73 +231,35 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     link.click();
   };
 
-  const handleExportPdf = () => {
-    const columns: ExportTableColumn[] = [
-      { header: 'ناوی کارمەند', key: 'name', align: 'right', width: '130px' },
-      { header: 'دەوام (ڕۆژ)', key: 'days', align: 'center', width: '80px' },
-      { header: 'کۆی کاتژمێر', key: 'hours', align: 'center', width: '80px' },
-      { header: 'پێویست', key: 'target', align: 'center', width: '80px' },
-      { header: 'جیاوازی', key: 'balance', align: 'center', width: '80px' }
-    ];
-
-    const data = activeEmployees.map(emp => {
-      let daysCount = 0;
-      let totalHours = 0;
-      daysArray.forEach(d => {
-        const info = getGpsLogsForEmpAndDay(emp, d);
-        if (info.hasRecord) {
-          daysCount++;
-          totalHours += info.workedHours;
-        }
-      });
-      const targetHours = daysCount * 8;
-      const balance = Math.round((totalHours - targetHours) * 10) / 10;
-      return {
-        name: emp.fullName3Part || emp.name,
-        days: `${daysCount}`,
-        hours: `${totalHours}`,
-        target: `${targetHours}`,
-        balance: balance >= 0 ? `+${balance}` : `${balance}`
-      };
-    });
-
-    exportToPDF({
-      title: `خشتەی ئامادەبوونی کارمەندان (GPS Matrix) - ${selectedMonth}`,
-      subtitle: 'Ashley Industrial Company',
-      period: `مانگی ${selectedMonth}`,
-      columns,
-      data,
-      orientation: 'landscape',
-      fileName: `Ashley_GPS_Attendance_${selectedMonth}`
-    });
-  };
-
   return (
-    <div className="space-y-4 font-sans" dir="rtl">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 text-white shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="space-y-3 font-sans select-none" dir="rtl">
+      
+      {/* 🪟 Windows 11 Sharp Matrix Header Container */}
+      <div className="bg-slate-900 border-2 border-slate-700 rounded-none p-4 text-white shadow-md">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400">
-              <Smartphone className="w-6 h-6" />
+            <div className="w-10 h-10 rounded-none bg-blue-600 border border-blue-400 flex items-center justify-center text-white shadow-xs">
+              <Smartphone className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
+                <h2 className="text-sm sm:text-base font-black tracking-wide text-white">
                   خشتەی ۳۱ ڕۆژەی ئامادەبوونی کارمەندان (31-Day GPS Matrix)
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-teal-500/20 text-teal-300 border border-teal-500/30 font-mono">
-                  شێفتی فەرمی: 8:00 بۆ 17:00
+                <span className="px-2 py-0.5 rounded-none text-[9px] font-black bg-blue-950 text-blue-300 border border-blue-500 font-mono">
+                  شێفتی فەرمی: 8:30 بۆ 16:30
                 </span>
               </div>
-              <p className="text-xs text-slate-300 mt-0.5">
-                تەواوی داتاکان ڕاستەوخۆ لە مۆبایلی کارمەندان و داتابەیسی سێرڤەرەوە دەخوێندرێنەوە.
+              <p className="text-[11px] text-slate-300 font-medium mt-0.5">
+                سیستەمی Drag & Drop بۆ دیاریکردنی مۆڵەت و غیاب لەگەڵ چاودێری ڕاستەوخۆی GPS.
               </p>
             </div>
           </div>
 
+          {/* Month Navigator & Export */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700">
-              <Calendar className="w-4 h-4 text-teal-400" />
+            <div className="flex items-center gap-1 bg-slate-800 px-2 py-1 border border-slate-600 rounded-none">
+              <Calendar className="w-3.5 h-3.5 text-blue-400" />
               <input
                 type="month"
                 value={selectedMonth}
@@ -541,396 +267,210 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 className="bg-transparent text-white font-bold font-mono focus:outline-none cursor-pointer text-xs"
               />
             </div>
-            <button onClick={handleExportPdf} className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm cursor-pointer">
-              <FileText className="w-3.5 h-3.5" />
-              <span>PDF</span>
-            </button>
-            <button onClick={handleExportCsv} className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm cursor-pointer">
+            <button onClick={handleExportCsv} className="px-3 py-1.5 rounded-none bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black flex items-center gap-1 shadow-xs cursor-pointer">
               <Download className="w-3.5 h-3.5" />
               <span>Excel</span>
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4 pt-3 border-t border-slate-800">
-          <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60">
-            <span className="text-[11px] text-slate-400 font-bold block">کۆی کارمەندان</span>
-            <span className="text-sm font-black text-white font-mono">{monthKpis.totalStaff}</span>
+        {/* Status Drag & Drop Quick Palette Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-800">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-black text-amber-400 flex items-center gap-1">
+              <Move className="w-3.5 h-3.5" />
+              <span>پالێتی Drag & Drop (ڕایبکێشە بۆ سەر هەر ڕۆژێک یان کلیک بکە):</span>
+            </span>
+            {[
+              { key: 'Present', label: '🟢 ئامادەبوو', bg: 'bg-emerald-600 text-white border-emerald-700' },
+              { key: 'Leave', label: '🟡 مۆڵەت', bg: 'bg-amber-400 text-amber-950 border-amber-500' },
+              { key: 'Absent', label: '🔴 غیاب', bg: 'bg-rose-600 text-white border-rose-700' },
+              { key: 'Holiday', label: '🌴 پشوو (هەینی)', bg: 'bg-teal-600 text-white border-teal-700' }
+            ].map(p => (
+              <div
+                key={p.key}
+                draggable={true}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/plain', p.key);
+                  setDraggedStatus(p.key);
+                }}
+                onDragEnd={() => setDraggedStatus(null)}
+                onClick={() => setSelectedPaletteStatus(p.key)}
+                className={`px-3 py-1 rounded-none text-[10px] font-black border transition-all cursor-grab active:cursor-grabbing select-none flex items-center gap-1 shadow-2xs ${p.bg} ${
+                  selectedPaletteStatus === p.key ? 'ring-2 ring-blue-400 scale-105 shadow-md' : 'opacity-85 hover:opacity-100'
+                }`}
+              >
+                <span>{p.label}</span>
+              </div>
+            ))}
           </div>
-          <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60">
-            <span className="text-[11px] text-slate-400 font-bold block">کۆی کاتژمێری کارکردنی مانگ</span>
-            <span className="text-sm font-black text-teal-300 font-mono">{monthKpis.totalWorkedHoursSum}h</span>
-          </div>
-          <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60">
-            <span className="text-[11px] text-slate-400 font-bold block">کۆی دەوامی دواکەوتوو</span>
-            <span className="text-sm font-black text-amber-300 font-mono">{monthKpis.lateCount}</span>
-          </div>
-          <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60">
-            <span className="text-[11px] text-slate-400 font-bold block">ڕێژەی پابەندبوون</span>
-            <span className="text-sm font-black text-emerald-400 font-mono">{monthKpis.onTimeRate}%</span>
-          </div>
-        </div>
-      </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white border border-slate-200 rounded-2xl shadow-sm">
-        <div className="flex items-center gap-2 flex-1 max-w-sm">
-          <div className="relative w-full">
-            <Search className="w-3.5 h-3.5 absolute right-3 top-2.5 text-slate-400" />
+          {/* Quick Search */}
+          <div className="relative min-w-[200px]">
+            <Search className="w-3.5 h-3.5 absolute right-2.5 top-2 text-slate-400" />
             <input
               type="text"
               placeholder="گەڕان بەدوای کارمەند..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-3 pr-8 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none"
+              className="w-full pl-2 pr-7 py-1 rounded-none bg-slate-800 border border-slate-600 text-xs font-bold text-white focus:outline-none placeholder-slate-400"
             />
           </div>
         </div>
-        <div className="flex items-center gap-4 text-xs font-bold text-slate-700">
-          <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> <span>٨ کاتژمێری تەواو</span></div>
-          <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> <span>کەمی</span></div>
-          <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> <span>سزا</span></div>
-        </div>
       </div>
 
-      <div className="w-full overflow-x-auto border-2 border-slate-300 rounded-2xl shadow-md bg-white max-h-[72vh] overflow-y-auto">
+      {/* 🪟 Windows 11 Sharp Matrix Table */}
+      <div className="w-full overflow-x-auto border-2 border-slate-300 rounded-none shadow-sm bg-white max-h-[72vh] overflow-y-auto">
         <table className="w-full text-xs text-right border-collapse">
           <thead className="sticky top-0 bg-slate-100 border-b-2 border-slate-300 z-20">
             <tr>
-              <th className="sticky right-0 bg-slate-200 text-slate-950 font-black px-3 py-2.5 border-l border-slate-300 z-30 min-w-[200px]">👤 ناوی کارمەند</th>
-              {daysArray.map((dayNum) => {
-                const dateObj = new Date(year, month - 1, dayNum);
-                const dayOfWeek = getDay(dateObj);
-                const isFriday = dayOfWeek === 5;
-                return (
-                  <th key={dayNum} className={`text-center font-mono font-black p-2 border-l border-slate-300 min-w-[60px] ${isFriday ? 'bg-amber-100 text-amber-950' : 'text-slate-800'}`}>
-                    <div className="text-xs">{dayNum}</div>
-                  </th>
-                );
-              })}
-              <th className="bg-teal-100 text-teal-950 font-black text-center px-2 py-2 border-l border-slate-300 min-w-[65px]">ڕۆژ</th>
-              <th className="bg-emerald-100 text-emerald-950 font-black text-center px-2 py-2 border-l border-slate-300 min-w-[80px]">کۆ (Actual)</th>
-              <th className="bg-slate-200 text-slate-950 font-black text-center px-2 py-2 border-l border-slate-300 min-w-[80px]">پێویست</th>
-              <th className="bg-indigo-100 text-indigo-950 font-black text-center px-2 py-2 border-l border-slate-300 min-w-[80px]">جیاوازی</th>
+              <th className="sticky right-0 bg-slate-200 text-slate-950 font-black px-3 py-2.5 border-l border-slate-300 z-30 min-w-[180px]">
+                👤 ناوی کارمەند
+              </th>
+              {daysArray.map((d) => (
+                <th 
+                  key={d.dateStr} 
+                  className={`text-center font-black p-1 border-l border-slate-300 min-w-[42px] ${
+                    d.isFriday ? 'bg-emerald-100 text-emerald-950 font-black' : 'text-slate-800'
+                  }`}
+                >
+                  <div className="text-[10px]">{d.dayNum}</div>
+                  <div className="text-[8px] font-bold">{d.isFriday ? '🌴 هەینی' : ''}</div>
+                </th>
+              ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200 font-mono">
-            {activeEmployees.map((emp, idx) => {
-              let empDays = 0;
-              let empHours = 0;
-              return (
-                <tr key={emp.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                  <td className="sticky right-0 bg-white p-2.5 border-l border-slate-300 z-10 font-sans">
-                    <span className="font-black text-xs text-slate-900">{emp.fullName3Part || emp.name}</span>
-                  </td>
-                  {daysArray.map((dayNum) => {
-                    const info = getGpsLogsForEmpAndDay(emp, dayNum);
-                    if (info.hasRecord) { empDays++; empHours += info.workedHours; }
-                    return (
-                      <td key={dayNum} onClick={() => info.hasRecord && setSelectedLogDetail({ emp, info, dayNum })} className="p-1 border-l border-slate-200 text-center cursor-pointer hover:bg-teal-50">
-                        {info.hasRecord ? (
-                          <div className="relative">
-                            {info.dotColor && <div className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${info.dotColor === 'green' ? 'bg-emerald-500' : info.dotColor === 'red' ? 'bg-rose-500' : 'bg-amber-500'}`} />}
-                            <div className="text-[9px] font-black">{info.checkInTime}</div>
-                            <div className="text-[9px] font-black">
-                              {info.isCurrentlyPresent ? (
-                                <span className="text-emerald-800 bg-emerald-100 px-1 py-0.5 rounded font-sans text-[8px] border border-emerald-300 font-bold">
-                                  لە دەوامە
-                                </span>
-                              ) : (
-                                `${info.workedHours}h`
-                              )}
-                            </div>
-                          </div>
-                        ) : <span className="text-slate-300">-</span>}
-                      </td>
-                    );
-                  })}
-                  <td className="p-2 border-l text-center font-black">{empDays}</td>
-                  <td className="p-2 border-l text-center font-black">{Math.round(empHours * 10) / 10}h</td>
-                  <td className="p-2 border-l text-center font-black text-slate-700 bg-slate-100">{empDays * 8}h</td>
-                  <td className={`p-2 border-l text-center font-black ${
-                    empHours >= (empDays * 8) ? 'text-emerald-700 bg-emerald-50' : 'text-rose-700 bg-rose-50'
-                  }`}>
-                    {Math.round((empHours - (empDays * 8)) * 10) / 10 >= 0 ? `+${Math.round((empHours - (empDays * 8)) * 10) / 10}` : Math.round((empHours - (empDays * 8)) * 10) / 10}h
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
+          <tbody className="divide-y divide-slate-200">
+            {activeEmployees.map((emp) => (
+              <tr key={emp.id} className="hover:bg-blue-50/40 transition-colors">
+                <td className="sticky right-0 bg-white z-10 px-3 py-2 border-l border-slate-300 font-bold shadow-xs">
+                  <div className="text-xs font-black text-slate-900">{emp.fullName3Part || emp.name}</div>
+                  <div className="text-[9px] font-mono text-slate-400">{emp.id}</div>
+                </td>
+                {daysArray.map((d) => {
+                  const info = getGpsLogsForEmpAndDay(emp, d);
+                  const isFriday = d.isFriday;
 
-          {/* 🏁 BOTTOM SUMMARY FOOTER ROW */}
-          <tfoot className="sticky bottom-0 bg-slate-900 text-white font-mono font-black text-xs border-t-2 border-slate-700 z-20">
-            <tr>
-              <td className="sticky right-0 bg-slate-950 p-2.5 border-l border-slate-800 text-amber-300 font-sans z-30">
-                📊 کۆی گشتی هەموو کارمەندان
-              </td>
+                  let badgeColor = 'bg-slate-50 text-slate-400 border-slate-200';
+                  let badgeText = '-';
 
-              {daysArray.map((dayNum) => {
-                let dayStaffCount = 0;
-                let dayHoursSum = 0;
-
-                activeEmployees.forEach(emp => {
-                  const info = getGpsLogsForEmpAndDay(emp, dayNum);
-                  if (info.hasRecord) {
-                    dayStaffCount++;
-                    dayHoursSum += info.workedHours;
+                  if (info.status === 'Present' || info.checkInTime) {
+                    badgeColor = 'bg-emerald-600 text-white border-emerald-700 font-black';
+                    badgeText = info.checkInTime || 'ئامادە';
+                  } else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
+                    badgeColor = 'bg-amber-400 text-amber-950 border-amber-500 font-black';
+                    badgeText = 'مۆڵەت';
+                  } else if (info.status === 'Absent' || info.status === 'غیاب') {
+                    badgeColor = 'bg-rose-600 text-white border-rose-700 font-black';
+                    badgeText = 'غیاب';
+                  } else if (info.status === 'Holiday' || isFriday) {
+                    badgeColor = 'bg-teal-100 text-teal-900 border-teal-300 font-black';
+                    badgeText = '🌴';
                   }
-                });
 
-                return (
-                  <td key={dayNum} className="p-1 border-l border-slate-800 text-center text-[10px]">
-                    {dayStaffCount > 0 ? (
-                      <div>
-                        <div className="text-teal-300 font-bold">{dayStaffCount} ستاف</div>
-                        <div className="text-slate-400 text-[9px]">{Math.round(dayHoursSum)}h</div>
+                  return (
+                    <td 
+                      key={d.dateStr}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'copy';
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const dropped = e.dataTransfer.getData('text/plain') || draggedStatus;
+                        if (dropped) {
+                          handleCellStatusChange(emp.id, emp.name, d.dateStr, dropped);
+                        }
+                      }}
+                      onClick={() => handleCellStatusChange(emp.id, emp.name, d.dateStr, selectedPaletteStatus)}
+                      onDoubleClick={() => setSelectedLogDetail({ date: d.dateStr, emp, info })}
+                      title={`Drag & Drop بکە یان کلیک بکە بۆ دیاریکردنی ${selectedPaletteStatus} (دبل کلیک بۆ گرافی ٢٤ کاتژمێری)`}
+                      className={`p-1 text-center border-l border-slate-200 cursor-pointer hover:bg-amber-100/60 transition-all ${
+                        isFriday ? 'bg-emerald-50/50' : ''
+                      }`}
+                    >
+                      <div className={`w-full py-1 rounded-none text-[9px] border shadow-2xs transition-all ${badgeColor}`}>
+                        {badgeText}
                       </div>
-                    ) : (
-                      <span className="text-slate-600">-</span>
-                    )}
-                  </td>
-                );
-              })}
-
-              <td className="p-2 border-l border-slate-800 text-center text-teal-300">
-                {monthKpis.totalCheckIns} دەوام
-              </td>
-
-              <td className="p-2 border-l border-slate-800 text-center text-emerald-300">
-                {monthKpis.totalWorkedHoursSum}h
-              </td>
-
-              <td className="p-2 border-l border-slate-800 text-center text-slate-300">
-                {monthKpis.totalCheckIns * 8}h
-              </td>
-
-              <td className="p-2 border-l border-slate-800 text-center text-amber-300">
-                {Math.round((monthKpis.totalWorkedHoursSum - (monthKpis.totalCheckIns * 8)) * 10) / 10}h
-              </td>
-            </tr>
-          </tfoot>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
 
-      {/* 🔍 LOG DETAILS & EXCURSION DECISION MODAL */}
+      {/* 🪟 WINDOWS 11 SHARP MODAL: 24-HOUR TIMELINE VIEW */}
       {selectedLogDetail && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl border border-slate-300 shadow-2xl max-w-lg w-full p-6 space-y-4 font-sans max-h-[90vh] overflow-y-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-teal-100 text-teal-800 flex items-center justify-center font-black">
-                  {(selectedLogDetail.emp.name || '').charAt(0)}
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900">وردەکاری دەوامی ڕۆژ و کاتژمێری کارکردن</h3>
-                  <span className="text-xs text-slate-500 font-bold">{selectedLogDetail.emp.fullName3Part || selectedLogDetail.emp.name}</span>
-                </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-none border-2 border-slate-700 shadow-2xl max-w-xl w-full p-0 text-right">
+            
+            {/* Title Bar */}
+            <div className="flex items-center justify-between bg-slate-900 text-white px-4 py-2.5 border-b border-slate-700">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-blue-400" />
+                <h3 className="font-black text-xs text-white">
+                  پەنجەرەی چالاکی ٢٤ کاتژمێری: {selectedLogDetail.emp?.name}
+                </h3>
               </div>
-              <button
-                onClick={() => setSelectedLogDetail(null)}
-                className="text-slate-400 hover:text-slate-700 font-black text-sm p-1 cursor-pointer"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-mono text-slate-400">{selectedLogDetail.date}</span>
+                <button 
+                  onClick={() => setSelectedLogDetail(null)}
+                  className="w-6 h-6 bg-slate-800 hover:bg-rose-600 text-white flex items-center justify-center cursor-pointer text-xs font-mono transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-2.5 text-xs">
-              <div className="flex justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="text-slate-500 font-bold">📅 بەروار:</span>
-                <span className="font-mono font-black text-slate-900">{selectedLogDetail.info.dateStr}</span>
-              </div>
-
-              {/* Shift Times Grid */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                  <span className="text-emerald-800 font-bold block text-[11px]">🟢 کاتی هاتن (Check-In):</span>
-                  <span className="font-mono font-black text-sm text-emerald-950">
-                    {selectedLogDetail.info.checkInTime || 'تۆمار نەکراوە'}
-                  </span>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-orange-50 border border-orange-200">
-                  <span className="text-orange-800 font-bold block text-[11px]">🟠 کاتی ڕۆیشتن (Check-Out):</span>
-                  <span className="font-mono font-black text-sm text-orange-950">
-                    {selectedLogDetail.info.checkOutTime || (selectedLogDetail.info.isCurrentlyPresent ? '🟢 لە دەوامدایە (دەرنەچووە)' : 'تۆمار نەکراوە')}
-                  </span>
-                </div>
-              </div>
-
-              {/* Lunch Break Note */}
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50/60 border border-amber-200 text-amber-900 font-bold">
-                <div className="flex items-center gap-1.5">
-                  <Utensils className="w-4 h-4 text-amber-600" />
-                  <span>پشووی نانخواردن و فەرمی (12:00 بۆ 13:00):</span>
-                </div>
-                <span className="font-mono text-xs font-black">١ کاتژمێر پشوو (لێدەرکراوە)</span>
-              </div>
-
-              {/* Net Worked Hours */}
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900 text-white">
-                <div>
-                  <span className="text-xs text-slate-300 font-bold block">کۆی کاتژمێری کارکردنی ئەنجامدراو:</span>
-                  <span className="text-[10px] text-teal-300">
-                    {selectedLogDetail.info.isCurrentlyPresent ? 'دەوامی بەردەوام (ڕۆژ تەواو نەبووە)' : 'پێویست بۆ دەوامی تەواو: ٨ کاتژمێر'}
-                  </span>
-                </div>
-                <span className="font-mono font-black text-base text-teal-300">
-                  {selectedLogDetail.info.isCurrentlyPresent ? 'لە دەوامدایە (Active)' : `${selectedLogDetail.info.workedHours} کاتژمێر`}
-                </span>
-              </div>
-
-              {/* 🟢 ACTIVE SHIFT RUNNING NOTICE */}
-              {selectedLogDetail.info.isCurrentlyPresent ? (
-                <div className="p-3.5 rounded-2xl bg-emerald-50 border-2 border-emerald-300 text-emerald-950 font-bold text-xs flex items-center justify-between shadow-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-                    <span>کارمەند ئێستا لە دەوامدایە (هاتن: {selectedLogDetail.info.checkInTime}) و ڕۆژەکە تەواو نەبووە.</span>
-                  </div>
-                  <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2.5 py-1 rounded-lg font-black">
-                    دەوامی چالاک
-                  </span>
-                </div>
-              ) : selectedLogDetail.info.excursions && selectedLogDetail.info.excursions.length > 0 ? (
-                <div className="space-y-3">
-                  {selectedLogDetail.info.excursions.length > 1 && (
-                    <div className="p-2.5 rounded-xl bg-orange-50 border border-orange-200 text-orange-950 font-black text-xs flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <AlertTriangle className="w-4 h-4 text-orange-600" />
-                        <span>ئەم کارمەندە {selectedLogDetail.info.excursions.length} حاڵەتی دەرچوونی هەیە لەم ڕۆژەدا:</span>
-                      </div>
-                      <span className="text-[10px] bg-orange-200 text-orange-900 px-2 py-0.5 rounded-md font-bold">
-                        بڕیاری جیاواز بۆ هەریەکەیان
-                      </span>
+            <div className="p-4 space-y-4">
+              {/* 24-Hour Timeline Bar */}
+              <div className="space-y-2 p-3 bg-slate-100 rounded-none border border-slate-300">
+                <span className="text-xs font-black text-slate-800 block">گرافی دەوامی ٢٤ کاتژمێری ئەم ڕۆژە:</span>
+                <div className="relative w-full h-12 bg-white rounded-none overflow-hidden border border-slate-300">
+                  <div className="absolute top-0 bottom-0 bg-blue-100/60 border-x-2 border-dashed border-blue-400/80 pointer-events-none" style={{ left: '35.4%', width: '33.3%' }} />
+                  {selectedLogDetail.info?.checkInTime && (
+                    <div 
+                      className="absolute top-1 bottom-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-none flex items-center justify-center text-[9px] font-mono font-bold shadow-xs border border-emerald-700"
+                      style={{ left: '35.4%', width: '33.3%' }}
+                    >
+                      {selectedLogDetail.info.checkInTime} - {selectedLogDetail.info.checkOutTime || '16:30'}
                     </div>
                   )}
-
-                  {selectedLogDetail.info.excursions.map((exc: any, excIdx: number) => {
-                    const itemDecision = (
-                      localDecisions[`${selectedLogDetail.info.dateStr}_${selectedLogDetail.emp.id}_${exc.id}`] ||
-                      localDecisions[exc.id] ||
-                      (selectedLogDetail.info.excursions.length === 1 ? localDecisions[`${selectedLogDetail.info.dateStr}_${selectedLogDetail.emp.id}`] : undefined) ||
-                      exc.decision ||
-                      'pending'
-                    );
-
-                    return (
-                      <div key={exc.id || excIdx} className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 space-y-2.5">
-                        <div className="flex items-center justify-between border-b border-amber-200 pb-2">
-                          <div className="flex items-center gap-1.5 text-amber-900 font-black">
-                            <DoorOpen className="w-4 h-4 text-amber-600" />
-                            <span>
-                              {selectedLogDetail.info.excursions.length > 1 
-                                ? `حاڵەتی #${excIdx + 1}: ${exc.title || 'دەرچوونی کاتی لە دەوام'}` 
-                                : 'دەرچوونی کاتی لە کاتی دەوامدا (Excursion)'}
-                            </span>
-                          </div>
-                          <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-950 font-mono font-black text-[10px]">
-                            ⏰ {exc.exitTime || '--:--'} ➔ {exc.returnTime || '--:--'} ({exc.durationMinutes || 45} خولەک)
-                          </span>
-                        </div>
-
-                        <div className="p-2.5 bg-white rounded-xl border border-amber-200 space-y-1">
-                          <span className="text-slate-500 font-bold text-[11px] block">📝 تێبینی و هۆکاری کارمەند:</span>
-                          <p className="font-bold text-slate-900 text-xs">
-                            «{exc.note || 'تێبینی نووسراوی کارمەند بۆ ئەم کاتە'}»
-                          </p>
-                        </div>
-
-                        {/* Admin Decision Toggle for this specific excursion */}
-                        <div className="pt-1">
-                          <span className="text-[11px] font-black text-slate-700 block mb-1.5">
-                            ⚖️ بڕیاری بەڕێوەبەر بۆ ئەم کاتە ({exc.durationMinutes || 45} خولەک):
-                          </span>
-
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              onClick={() => handleInlineExcursionDecision(exc.id, selectedLogDetail.info.dateStr, selectedLogDetail.emp.id, 'work')}
-                              disabled={savingDecisionId === exc.id}
-                              className={`p-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                                itemDecision === 'work'
-                                  ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400'
-                                  : 'bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300'
-                              }`}
-                            >
-                              <Check className="w-4 h-4" />
-                              <span>🟢 لێخۆشبوون ({exc.durationMinutes || 45} خولەک)</span>
-                            </button>
-
-                            <button
-                              onClick={() => handleInlineExcursionDecision(exc.id, selectedLogDetail.info.dateStr, selectedLogDetail.emp.id, 'deduct')}
-                              disabled={savingDecisionId === exc.id}
-                              className={`p-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                                itemDecision === 'deduct'
-                                  ? 'bg-rose-600 text-white shadow-md ring-2 ring-rose-400'
-                                  : 'bg-white hover:bg-rose-50 text-rose-800 border border-rose-300'
-                              }`}
-                            >
-                              <AlertCircle className="w-4 h-4" />
-                              <span>🔴 سزا / لێبڕین</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
-              ) : selectedLogDetail.info.workedMinutes < 480 ? (
-                <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 space-y-2.5">
-                  <div className="flex items-center justify-between border-b border-amber-200 pb-2">
-                    <div className="flex items-center gap-1.5 text-amber-900 font-black">
-                      <AlertTriangle className="w-4 h-4 text-amber-600" />
-                      <span>کاتی کەمی دەوام ({480 - selectedLogDetail.info.workedMinutes} خولەک کەمی هەیە)</span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-950 font-mono font-black text-[10px]">
-                      درەنگ هاتن یان زوو ڕۆیشتن
-                    </span>
-                  </div>
-
-                  <div className="pt-1">
-                    <span className="text-[11px] font-black text-slate-700 block mb-1.5">
-                      ⚖️ بڕیاری بەڕێوەبەر لەسەر ئەم کەمییە:
-                    </span>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => handleInlineExcursionDecision(`exc-${selectedLogDetail.emp.id}-${selectedLogDetail.info.dateStr}`, selectedLogDetail.info.dateStr, selectedLogDetail.emp.id, 'work')}
-                        className={`p-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                          localDecisions[`${selectedLogDetail.info.dateStr}_${selectedLogDetail.emp.id}`] === 'work'
-                            ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400'
-                            : 'bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300'
-                        }`}
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>🟢 ئاساییە / بەخشین (٨ کاتژمێر)</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleInlineExcursionDecision(`exc-${selectedLogDetail.emp.id}-${selectedLogDetail.info.dateStr}`, selectedLogDetail.info.dateStr, selectedLogDetail.emp.id, 'deduct')}
-                        className={`p-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                          localDecisions[`${selectedLogDetail.info.dateStr}_${selectedLogDetail.emp.id}`] === 'deduct'
-                            ? 'bg-rose-600 text-white shadow-md ring-2 ring-rose-400'
-                            : 'bg-white hover:bg-rose-50 text-rose-800 border border-rose-300'
-                        }`}
-                      >
-                        <AlertCircle className="w-4 h-4" />
-                        <span>🔴 سزا / لێبڕین لە دەوام</span>
-                      </button>
-                    </div>
-                  </div>
+                <div className="flex items-center justify-between text-[8px] font-mono text-slate-500 font-bold">
+                  <span>00:00</span>
+                  <span>04:00</span>
+                  <span className="text-blue-700 font-black">08:30 (دەستپێک)</span>
+                  <span>12:00</span>
+                  <span className="text-blue-700 font-black">16:30 (تەواو)</span>
+                  <span>20:00</span>
+                  <span>24:00</span>
                 </div>
-              ) : (
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 font-bold text-[11px] flex items-center gap-1.5">
-                  <span>✅ هیچ چوونە دەرەوەیەک یان کەمییەک لە دەوامدا تۆمار نەکراوە (٨ کاتژمێری تەواو).</span>
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-300 flex items-center justify-between text-xs">
+                <div>
+                  <span className="font-black text-slate-900">{selectedLogDetail.emp?.name}</span>
+                  <p className="text-[10px] text-slate-500">📍 {selectedLogDetail.info?.warehouseName || 'کۆمپانیای سەرەکی ئاشڵی'}</p>
                 </div>
-              )}
+                <div className="text-left font-mono">
+                  <div className="font-bold text-emerald-800">هاتن: {selectedLogDetail.info?.checkInTime || '-'}</div>
+                  <div className="text-slate-600">ڕۆشتن: {selectedLogDetail.info?.checkOutTime || '-'}</div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-200 flex justify-end">
+                <button 
+                  onClick={() => setSelectedLogDetail(null)} 
+                  className="rounded-none px-6 py-1.5 text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white cursor-pointer"
+                >
+                  داخستن
+                </button>
+              </div>
             </div>
-
-            <button
-              onClick={() => setSelectedLogDetail(null)}
-              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-black text-xs cursor-pointer shadow-md transition-colors"
-            >
-              داخستن
-            </button>
           </div>
         </div>
       )}
