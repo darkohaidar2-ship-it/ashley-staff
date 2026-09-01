@@ -51,6 +51,17 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+            <!-- Auto-Respawn when Notification is swiped -->
+        <receiver
+            android:name=".NotificationDismissReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- 60-Second Periodic Watchdog Heartbeat -->
+        <receiver
+            android:name=".ServiceWatchdogReceiver"
+            android:enabled="true"
+            android:exported="false" />
     </application>
 
     <!-- Permissions for Autonomous Attendance & Geofencing -->

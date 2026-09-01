@@ -36,8 +36,8 @@ import java.util.concurrent.TimeUnit;
 public class BackgroundAttendanceService extends Service implements LocationListener {
 
     private static final String TAG = "AshleyBgAttendance";
-    public static final String CHANNEL_ID = "ashley_attendance_bg_channel_v3";
-    public static final String ALERT_CHANNEL_ID = "ashley_attendance_alert_channel_v3";
+    public static final String CHANNEL_ID = "ashley_attendance_bg_channel_v4";
+    public static final String ALERT_CHANNEL_ID = "ashley_attendance_alert_channel_v4";
     private static final int NOTIFICATION_ID = 1001;
 
     private LocationManager locationManager;
@@ -55,7 +55,6 @@ public class BackgroundAttendanceService extends Service implements LocationList
     private static final float HUANA_RADIUS = 120f; // meters
 
     private long lastTriggerTime = 0;
-    private long lastFastPollTime = 0;
 
     @Override
     public void onCreate() {
@@ -68,11 +67,11 @@ public class BackgroundAttendanceService extends Service implements LocationList
         try {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             if (pm != null) {
-                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Ashley::BgWakeLockV2");
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Ashley::BgWakeLockV3");
                 wakeLock.acquire();
             }
         } catch (Exception e) {
-            Log.w(TAG, "WakeLock error: " + e.getMessage());
+            Log.w(TAG, "WakeLock acquire error: " + e.getMessage());
         }
 
         Notification notification = buildStickyNotification();
@@ -90,7 +89,8 @@ public class BackgroundAttendanceService extends Service implements LocationList
 
         startUltraFastLocationUpdates();
         startPeriodicGeofenceEngine();
-        Log.i(TAG, "BackgroundAttendanceService started with Ultra-Fast Location Engine.");
+        scheduleWatchdogAlarm();
+        Log.i(TAG, "BackgroundAttendanceService started with Auto-Respawn & Watchdog.");
     }
 
     @Override
@@ -124,12 +124,11 @@ public class BackgroundAttendanceService extends Service implements LocationList
             locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
             if (locationManager == null) return;
 
-            // Request real-time updates every 2 seconds with 0 distance threshold for instant detection
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                         LocationManager.GPS_PROVIDER,
                         2000L,  // 2 seconds
-                        0f,     // 0 meters
+                        0f,     // 0 meters threshold
                         this
                 );
             }
@@ -149,7 +148,6 @@ public class BackgroundAttendanceService extends Service implements LocationList
         }
     }
 
-    // Active polling loop every 3 seconds to guarantee instant response even when stationary
     private void startPeriodicGeofenceEngine() {
         scheduledExecutor.scheduleWithFixedDelay(() -> {
             try {
@@ -172,6 +170,28 @@ public class BackgroundAttendanceService extends Service implements LocationList
                 Log.w(TAG, "Periodic geofence error: " + e.getMessage());
             }
         }, 3, 3, TimeUnit.SECONDS);
+    }
+
+    private void scheduleWatchdogAlarm() {
+        try {
+            AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+            Intent watchdogIntent = new Intent(this, ServiceWatchdogReceiver.class);
+            PendingIntent pendingWatchdog = PendingIntent.getBroadcast(
+                    this, 2002, watchdogIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+
+            if (alarmManager != null) {
+                alarmManager.setRepeating(
+                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                        SystemClock.elapsedRealtime() + 60000,
+                        60000,
+                        pendingWatchdog
+                );
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Watchdog alarm setup error: " + e.getMessage());
+        }
     }
 
     @Override
@@ -346,6 +366,13 @@ public class BackgroundAttendanceService extends Service implements LocationList
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
         );
 
+        // Delete Intent: Catches when user swipes notification away and auto-respawns it instantly!
+        Intent deleteIntent = new Intent(this, NotificationDismissReceiver.class);
+        PendingIntent deletePendingIntent = PendingIntent.getBroadcast(
+                this, 1001, deleteIntent,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+        );
+
         String userName = prefs.getString("userName", "کارمەند");
         String checkInTime = prefs.getString("checkInTime", null);
         String checkOutTime = prefs.getString("checkOutTime", null);
@@ -371,6 +398,7 @@ public class BackgroundAttendanceService extends Service implements LocationList
                 .setContentText(statusLine)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(pendingIntent)
+                .setDeleteIntent(deletePendingIntent) // AUTO-RESPAWN ON SWIPE!
                 .setOngoing(true)
                 .setAutoCancel(false)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -412,7 +440,6 @@ public class BackgroundAttendanceService extends Service implements LocationList
 
     @Override
     public void onTaskRemoved(Intent rootIntent) {
-        // Auto-restart service if app task is swiped away from recent apps
         Intent restartServiceIntent = new Intent(getApplicationContext(), this.getClass());
         restartServiceIntent.setPackage(getPackageName());
         PendingIntent restartServicePendingIntent = PendingIntent.getService(
@@ -423,7 +450,7 @@ public class BackgroundAttendanceService extends Service implements LocationList
         if (alarmService != null) {
             alarmService.set(
                     AlarmManager.ELAPSED_REALTIME,
-                    SystemClock.elapsedRealtime() + 1000,
+                    SystemClock.elapsedRealtime() + 500,
                     restartServicePendingIntent
             );
         }
