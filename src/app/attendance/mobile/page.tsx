@@ -2059,7 +2059,6 @@ export default function AutonomousMobileAppLight() {
 
         </nav>
       )}
-      )}
 
       {/* ========================================================================= */}
       {/* 🔒 MASTER ADMIN PASSWORD LOGOUT CONFIRMATION MODAL */}
