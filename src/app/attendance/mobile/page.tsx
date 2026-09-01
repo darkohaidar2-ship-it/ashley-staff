@@ -72,16 +72,16 @@ const DEFAULT_COMPANY_LOCATIONS: GeofenceRegion[] = [
   {
     id: 'ashley-base-main',
     name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
-    lat: 35.5571,
-    lng: 45.4352,
-    radiusMeters: 100,
+    lat: 35.508918,
+    lng: 45.452935,
+    radiusMeters: 160,
   },
   {
     id: 'huana-warehouse-loc',
-    name: 'کۆگای هوانە (Huana Warehouse)',
-    lat: 35.6012,
-    lng: 45.3850,
-    radiusMeters: 120,
+    name: 'کۆگای سەرەکی هوانە (Huana Warehouse)',
+    lat: 35.562431,
+    lng: 45.474792,
+    radiusMeters: 160,
   },
 ];
 
@@ -476,7 +476,7 @@ export default function AutonomousMobileAppLight() {
 
   useEffect(() => {
     fetchLiveTodayAttendance();
-    const interval = setInterval(fetchLiveTodayAttendance, 4000);
+    const interval = setInterval(fetchLiveTodayAttendance, 2000);
     window.addEventListener('ashley_attendance_updated', fetchLiveTodayAttendance);
     return () => {
       clearInterval(interval);
@@ -1437,8 +1437,27 @@ export default function AutonomousMobileAppLight() {
                     />
 
                     {/* Rendered Dynamic Interval Blocks */}
-                    {todayLiveStats.intervals && todayLiveStats.intervals.length > 0 ? (
-                      todayLiveStats.intervals.map((inter, idx) => {
+                    {(() => {
+                      const effectiveIntervals = (todayLiveStats.intervals && todayLiveStats.intervals.length > 0)
+                        ? todayLiveStats.intervals
+                        : (liveTodayShift.checkInTime || todayLiveStats.isCurrentlyInside)
+                          ? [{
+                              inTime: liveTodayShift.checkInTime || '08:30',
+                              outTime: liveTodayShift.checkOutTime || null,
+                              durationMinutes: Math.max(5, timeToMinutes(currentTimeStr.slice(0, 5) || '12:00') - timeToMinutes(liveTodayShift.checkInTime || '08:30')),
+                              type: 'work' as const
+                            }]
+                          : [];
+
+                      if (effectiveIntervals.length === 0) {
+                        return (
+                          <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-400 font-bold">
+                            لە چاوەڕوانی گەیشتن و دەستپێکی دەوام
+                          </div>
+                        );
+                      }
+
+                      return effectiveIntervals.map((inter, idx) => {
                         const startMin = timeToMinutes(inter.inTime);
                         const endMin = inter.outTime ? timeToMinutes(inter.outTime) : timeToMinutes(currentTimeStr.slice(0, 5) || '12:00');
                         const durationMins = Math.max(2, endMin - startMin);
@@ -1457,19 +1476,15 @@ export default function AutonomousMobileAppLight() {
                             style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
                             title={`${isWork ? 'دەوامی چالاک' : 'دەرچوون / پشوو'}: ${inter.inTime} - ${inter.outTime || 'بەردەوامە'} (${inter.durationMinutes} خولەک)`}
                           >
-                            {widthPct > 5 && (
+                            {widthPct > 4 && (
                               <span className="text-[8px] font-mono font-black truncate px-0.5">
                                 {inter.inTime}
                               </span>
                             )}
                           </div>
                         );
-                      })
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-400 font-bold">
-                        لە چاوەڕوانی گەیشتن و دەستپێکی دەوام
-                      </div>
-                    )}
+                      });
+                    })()}
 
                     {/* Real-time Current Hour Cursor (Live Pin) */}
                     {currentTimeStr && (

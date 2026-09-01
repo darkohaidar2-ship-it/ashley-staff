@@ -551,6 +551,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         let totalExcursionMinutes = 0;
 
         const parseMinutes = (t: string) => {
+          if (!t) return 0;
           const [h, m] = t.split(':').map(Number);
           return (h || 0) * 60 + (m || 0);
         };
@@ -561,7 +562,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           const item = chronologicalLogs[i];
           if (item.type === 'ENTER') {
             if (activeOut) {
-              // Excursion ended
               const excDuration = Math.max(0, parseMinutes(item.time) - parseMinutes(activeOut));
               totalExcursionMinutes += excDuration;
               intervals.push({
@@ -575,7 +575,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             activeIn = item.time;
           } else if (item.type === 'EXIT') {
             if (activeIn) {
-              // Work session ended
               const workDuration = Math.max(0, parseMinutes(item.time) - parseMinutes(activeIn));
               totalWorkMinutes += workDuration;
               intervals.push({
@@ -590,7 +589,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }
         }
 
-        // Ongoing active session
+        // Active ongoing work session
         if (activeIn) {
           const ongoingDuration = Math.max(0, nowMinutes - parseMinutes(activeIn));
           totalWorkMinutes += ongoingDuration;
@@ -600,6 +599,20 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             durationMinutes: ongoingDuration,
             type: 'work'
           });
+        } else if (intervals.length === 0 && firstCheckIn) {
+          // Fallback if checkInTime is recorded on record but logs were not yet populated
+          const startM = parseMinutes(firstCheckIn);
+          if (lastCheckOut) {
+            const endM = parseMinutes(lastCheckOut);
+            const dur = Math.max(0, endM - startM);
+            totalWorkMinutes = dur;
+            intervals.push({ inTime: firstCheckIn, outTime: lastCheckOut, durationMinutes: dur, type: 'work' });
+          } else {
+            const dur = Math.max(0, nowMinutes - startM);
+            totalWorkMinutes = dur;
+            intervals.push({ inTime: firstCheckIn, outTime: null, durationMinutes: dur, type: 'work' });
+            isCurrentlyInside = true;
+          }
         }
 
         const standardShiftMinutes = 480; // 8 hours
@@ -1701,6 +1714,60 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
+    
+    // ----------------------------------------
+    // POST /api/attendance/admin/manual-record (Manual 31-Day Status / Leave / Absent / Present)
+    // ----------------------------------------
+    if (pathStr === 'admin/manual-record' && method === 'POST') {
+      try {
+        const { userId, userName, date, status, checkInTime, checkOutTime, note } = await req.json();
+        if (!userId || !date) {
+          return NextResponse.json({ error: 'userId and date are required' }, { status: 400 });
+        }
+
+        const recId = `${userId}-${date}`;
+        const upsertData: any = {
+          id: recId,
+          user_id: userId,
+          user_name: userName || 'کارمەند',
+          date: date,
+          status: status || 'Present',
+          warehouse_name: 'کۆمپانیای سەرەکی ئاشڵی',
+        };
+
+        if (checkInTime) upsertData.check_in_time = checkInTime;
+        if (checkOutTime) upsertData.check_out_time = checkOutTime;
+        if (status === 'Absent' || status === 'غیاب') {
+          upsertData.check_in_time = null;
+          upsertData.check_out_time = null;
+        } else if ((status === 'Leave' || status === 'مۆڵەت') && !checkInTime) {
+          upsertData.check_in_time = 'مۆڵەت';
+          upsertData.check_out_time = 'مۆڵەت';
+        }
+
+        const { error } = await supabase.from('attendance').upsert(upsertData);
+        if (error) throw error;
+
+        // Log manual change
+        try {
+          await supabase.from('attendance_logs').insert({
+            id: `manual-${userId}-${date}-${Date.now()}`,
+            employee_id: userId,
+            employee_name: userName || 'کارمەند',
+            log_type: status || 'Manual Edit',
+            log_date: date,
+            log_time_str: checkInTime || '08:30',
+            location_address: note || 'دەستکاری دەستی لەلایەن ئەدمینەوە',
+            created_at: new Date().toISOString()
+          });
+        } catch {}
+
+        return NextResponse.json({ success: true });
+      } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 500 });
+      }
+    }
+
     // GET /api/attendance/admin/report
     // ----------------------------------------
     if (pathStr === 'admin/report' && method === 'GET') {
