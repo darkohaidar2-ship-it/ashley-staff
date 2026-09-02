@@ -29,14 +29,19 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        try {
+                try {
             if (this.bridge != null && this.bridge.getWebView() != null) {
                 WebView webView = this.bridge.getWebView();
-                webView.clearCache(true);
                 WebSettings settings = webView.getSettings();
-                settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+                settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK); // Offline-first cache mode
                 settings.setJavaScriptEnabled(true);
                 settings.setDomStorageEnabled(true);
+                settings.setDatabaseEnabled(true);
+                settings.setAllowFileAccess(true);
+                settings.setAllowContentAccess(true);
+                settings.setAllowFileAccessFromFileURLs(true);
+                settings.setAllowUniversalAccessFromFileURLs(true);
+                settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
                 // Inject Native JavaScript Bridge
                 webView.addJavascriptInterface(new AshleyNativeBridge(this), "AshleyNativeBridge");

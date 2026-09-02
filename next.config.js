@@ -104,6 +104,19 @@ const nextConfig = {
     '*.cloudworkstations.dev',
     '*.cluster-*.cloudworkstations.dev'
   ],
+  
+  async headers() {
+    return [
+      {
+        source: '/ashley-attendance.apk',
+        headers: [
+          { key: 'Content-Type', value: 'application/vnd.android.package-archive' },
+          { key: 'Content-Disposition', value: 'attachment; filename="ashley-attendance.apk"' },
+          { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }
+        ],
+      },
+    ];
+  },
   async redirects() {
     return [
       {
