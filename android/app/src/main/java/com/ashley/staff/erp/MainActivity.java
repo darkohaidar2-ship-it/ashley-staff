@@ -5,14 +5,20 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -24,16 +30,18 @@ import java.util.List;
 public class MainActivity extends BridgeActivity {
 
     private static final int PERMISSION_REQUEST_CODE = 2027;
+    private static final String TARGET_URL = "https://ashley-staff.vercel.app/attendance/mobile";
+    private boolean isLoadedSuccessfully = false;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-                try {
+        try {
             if (this.bridge != null && this.bridge.getWebView() != null) {
                 WebView webView = this.bridge.getWebView();
                 WebSettings settings = webView.getSettings();
-                settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK); // Offline-first cache mode
+                settings.setCacheMode(WebSettings.LOAD_DEFAULT);
                 settings.setJavaScriptEnabled(true);
                 settings.setDomStorageEnabled(true);
                 settings.setDatabaseEnabled(true);
@@ -41,10 +49,46 @@ public class MainActivity extends BridgeActivity {
                 settings.setAllowContentAccess(true);
                 settings.setAllowFileAccessFromFileURLs(true);
                 settings.setAllowUniversalAccessFromFileURLs(true);
-                settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                }
 
                 // Inject Native JavaScript Bridge
                 webView.addJavascriptInterface(new AshleyNativeBridge(this), "AshleyNativeBridge");
+
+                // Custom Client to prevent fatal error popups and retry gracefully
+                webView.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                        super.onPageStarted(view, url, favicon);
+                    }
+
+                    @Override
+                    public void onPageFinished(WebView view, String url) {
+                        super.onPageFinished(view, url);
+                        isLoadedSuccessfully = true;
+                    }
+
+                    @Override
+                    public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                        handleOfflineFallback(view);
+                    }
+
+                    @Override
+                    public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                        if (request.isForMainFrame()) {
+                            handleOfflineFallback(view);
+                        }
+                    }
+
+                    private void handleOfflineFallback(WebView view) {
+                        if (!isLoadedSuccessfully) {
+                            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                view.loadUrl(TARGET_URL);
+                            }, 3000);
+                        }
+                    }
+                });
             }
         } catch (Exception ignored) {}
 
