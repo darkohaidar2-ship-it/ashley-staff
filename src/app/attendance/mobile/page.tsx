@@ -2117,10 +2117,10 @@ export default function AutonomousMobileAppLight() {
 
                 <button
                   type="submit"
-                  disabled={isSavingProfile}
+                  disabled={profileSaving}
                   className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:bg-black text-white rounded-none text-xs font-black shadow-md cursor-pointer transition-all flex items-center justify-center gap-1.5 mt-2"
                 >
-                  {isSavingProfile ? <span>لە پاشەکەوتکردندایە...</span> : <span>💾 پاشەکەوتکردنی زانیارییەکان بۆ HR</span>}
+                  {profileSaving ? <span>لە پاشەکەوتکردندایە...</span> : <span>💾 پاشەکەوتکردنی زانیارییەکان بۆ HR</span>}
                 </button>
 
                 {/* 🔒 Master Admin Password Logout Button */}
