@@ -915,15 +915,7 @@ export default function AutonomousMobileAppLight() {
   const [selectedQuickPreset, setSelectedQuickPreset] = useState<string | null>(null);
   const [isSubmittingReason, setIsSubmittingReason] = useState(false);
 
-  // 👤 Employee Account / Profile State
-  const [profilePhone, setProfilePhone] = useState('0770 123 4567');
-  const [profileAddress, setProfileAddress] = useState('سلێمانی، شەقامی بازنەیی مەملەکەت');
-  const [profileEmergency, setProfileEmergency] = useState('0750 987 6543 (کەسی نزیک)');
-  const [profilePin, setProfilePin] = useState('1002');
-  const [showPinText, setShowPinText] = useState(false);
   const [showLoginPin, setShowLoginPin] = useState(false);
-  const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
 
   // 📅 Month Attendance History List for Tab 1
   const [monthAttendanceList, setMonthAttendanceList] = useState<Array<{
@@ -1105,40 +1097,7 @@ export default function AutonomousMobileAppLight() {
     }
   };
 
-  // Profile Save
-  const handleSaveProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!employeeProfile?.id) return;
-    setIsSavingProfile(true);
 
-    try {
-      await fetch('/api/attendance/update-profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: (employeeProfile?.id || 'emp-auto'),
-          phone: profilePhone,
-          address: profileAddress,
-          emergencyContact: profileEmergency,
-          pin: profilePin
-        })
-      });
-
-      localStorage.setItem(`ashley_account_${(employeeProfile?.id || 'emp-auto')}`, JSON.stringify({
-        phone: profilePhone,
-        address: profileAddress,
-        emergency: profileEmergency,
-        pin: profilePin
-      }));
-
-      setProfileSaveSuccess(true);
-      setTimeout(() => setProfileSaveSuccess(false), 3000);
-    } catch {
-      alert('هەڵەیەک ڕوویدا لە کاتی پاشەکەوتکردندا');
-    } finally {
-      setIsSavingProfile(false);
-    }
-  };
 
   // Secret 10-Second Long-Press Logic for Admin Reset
   const startLongPress = () => {
