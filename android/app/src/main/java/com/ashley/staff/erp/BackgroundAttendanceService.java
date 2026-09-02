@@ -289,15 +289,6 @@ public class BackgroundAttendanceService extends Service implements LocationList
     private void postAutonomousEvent(String event, String userId, String userName, String deviceToken, double lat, double lng, int distance, String regionName) {
         scheduledExecutor.execute(() -> {
             try {
-                URL url = new URL("https://ashley-staff.vercel.app/api/attendance/autonomous-event");
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json; utf-8");
-                conn.setRequestProperty("Accept", "application/json");
-                conn.setDoOutput(true);
-                conn.setConnectTimeout(8000);
-                conn.setReadTimeout(8000);
-
                 JSONObject json = new JSONObject();
                 json.put("userId", userId);
                 json.put("userName", userName);
@@ -309,18 +300,82 @@ public class BackgroundAttendanceService extends Service implements LocationList
                 json.put("regionName", regionName);
                 json.put("timestamp", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(new Date()));
 
-                try (OutputStream os = conn.getOutputStream()) {
-                    byte[] input = json.toString().getBytes("utf-8");
-                    os.write(input, 0, input.length);
+                boolean success = sendEventHttp(json);
+                if (!success) {
+                    Log.w(TAG, "No internet connection. Caching event offline.");
+                    queueOfflineEvent(json);
+                } else {
+                    Log.i(TAG, "Autonomous event sent online: " + event);
+                    drainOfflineEvents(); // Drain any previous offline events as well
                 }
-
-                int responseCode = conn.getResponseCode();
-                Log.i(TAG, "Autonomous event sent: " + event + " -> HTTP " + responseCode);
-                conn.disconnect();
             } catch (Exception e) {
-                Log.e(TAG, "Error posting autonomous event: " + e.getMessage());
+                Log.e(TAG, "Error in postAutonomousEvent: " + e.getMessage());
             }
         });
+    }
+
+private void queueOfflineEvent(JSONObject json) {
+        try {
+            String existingQueueStr = prefs.getString("offline_events_queue", "[]");
+            org.json.JSONArray queue = new org.json.JSONArray(existingQueueStr);
+            queue.put(json);
+            prefs.edit().putString("offline_events_queue", queue.toString()).apply();
+            Log.i(TAG, "Event queued offline. Total pending: " + queue.length());
+        } catch (Exception e) {
+            Log.e(TAG, "Error saving offline event: " + e.getMessage());
+        }
+    }
+
+    private void drainOfflineEvents() {
+        scheduledExecutor.execute(() -> {
+            try {
+                String existingQueueStr = prefs.getString("offline_events_queue", "[]");
+                org.json.JSONArray queue = new org.json.JSONArray(existingQueueStr);
+                if (queue.length() == 0) return;
+
+                Log.i(TAG, "Attempting to sync " + queue.length() + " offline events...");
+                org.json.JSONArray remaining = new org.json.JSONArray();
+
+                for (int i = 0; i < queue.length(); i++) {
+                    JSONObject item = queue.getJSONObject(i);
+                    boolean sent = sendEventHttp(item);
+                    if (!sent) {
+                        remaining.put(item);
+                    }
+                }
+
+                prefs.edit().putString("offline_events_queue", remaining.toString()).apply();
+                if (remaining.length() < queue.length()) {
+                    Log.i(TAG, "Offline events drained successfully. Remaining: " + remaining.length());
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error draining offline events: " + e.getMessage());
+            }
+        });
+    }
+
+    private boolean sendEventHttp(JSONObject json) {
+        try {
+            URL url = new URL("https://ashley-staff.vercel.app/api/attendance/autonomous-event");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json; utf-8");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(6000);
+            conn.setReadTimeout(6000);
+
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = json.toString().getBytes("utf-8");
+                os.write(input, 0, input.length);
+            }
+
+            int responseCode = conn.getResponseCode();
+            conn.disconnect();
+            return (responseCode >= 200 && responseCode < 300);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private void createNotificationChannels() {

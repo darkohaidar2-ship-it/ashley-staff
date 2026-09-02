@@ -103,8 +103,105 @@ function formatMinutesKurdish(mins: number): string {
 
 export default function AutonomousMobileAppLight() {
   const [currentTimeStr, setCurrentTimeStr] = useState('');
+  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [offlinePendingCount, setOfflinePendingCount] = useState<number>(0);
+  const [isSyncingOffline, setIsSyncingOffline] = useState<boolean>(false);
+  const [syncFeedbackMessage, setSyncFeedbackMessage] = useState<string | null>(null);
   const [currentDateStr, setCurrentDateStr] = useState('');
   const [isDesktop, setIsDesktop] = useState(false);
+
+  
+  // 📶 Offline Queue Management & Auto-Sync
+  const updatePendingCount = useCallback(() => {
+    try {
+      const q = JSON.parse(localStorage.getItem('ashley_offline_sync_queue') || '[]');
+      setOfflinePendingCount(q.length);
+    } catch {}
+  }, []);
+
+  const drainOfflineQueue = useCallback(async () => {
+    if (typeof window === 'undefined' || !navigator.onLine) return;
+    try {
+      const raw = localStorage.getItem('ashley_offline_sync_queue');
+      const queue = JSON.parse(raw || '[]');
+      if (!Array.isArray(queue) || queue.length === 0) return;
+
+      setIsSyncingOffline(true);
+      const remaining: any[] = [];
+
+      for (const item of queue) {
+        try {
+          const endpoint = item.endpoint || '/api/attendance/logs';
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item.payload)
+          });
+          if (!res.ok) remaining.push(item);
+        } catch (e) {
+          remaining.push(item);
+        }
+      }
+
+      localStorage.setItem('ashley_offline_sync_queue', JSON.stringify(remaining));
+      setOfflinePendingCount(remaining.length);
+
+      if (remaining.length === 0 && queue.length > 0) {
+        setSyncFeedbackMessage('📶 هەموو داتاکانی ئۆفلاین بە سەرکەوتوویی لەگەڵ سێرڤەر هاوکات کران (Synced)');
+        setTimeout(() => setSyncFeedbackMessage(null), 4000);
+      }
+    } catch (err) {
+      console.error('Offline drain error:', err);
+    } finally {
+      setIsSyncingOffline(false);
+    }
+  }, []);
+
+  const enqueueOfflineAction = useCallback((endpoint: string, payload: any) => {
+    try {
+      const raw = localStorage.getItem('ashley_offline_sync_queue');
+      const queue = JSON.parse(raw || '[]');
+      queue.push({
+        id: 'off-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+        endpoint,
+        payload,
+        timestamp: Date.now()
+      });
+      localStorage.setItem('ashley_offline_sync_queue', JSON.stringify(queue));
+      setOfflinePendingCount(queue.length);
+
+      if (navigator.onLine) {
+        drainOfflineQueue();
+      }
+    } catch (e) {
+      console.error('Failed to enqueue offline item:', e);
+    }
+  }, [drainOfflineQueue]);
+
+  useEffect(() => {
+    updatePendingCount();
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      drainOfflineQueue();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    const interval = setInterval(() => {
+      if (navigator.onLine) drainOfflineQueue();
+    }, 15000);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      clearInterval(interval);
+    };
+  }, [drainOfflineQueue, updatePendingCount]);
 
   // 📱 3 Main Bottom Navigation Tabs (Social Media Style)
   const [activeNavTab, setActiveNavTab] = useState<'attendance' | 'notifications' | 'account'>('attendance');
