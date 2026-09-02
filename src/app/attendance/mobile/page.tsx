@@ -42,7 +42,8 @@ import {
   FileText,
   BarChart3,
   Timer,
-  Zap
+  Zap,
+  UserCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { 
@@ -219,6 +220,72 @@ export default function AutonomousMobileAppLight() {
     return () => window.removeEventListener('resize', checkDevice);
   }, []);
 
+  
+  // 👤 HR Profile & Avatar State
+  const [profilePhone, setProfilePhone] = useState('');
+  const [profileEmergency, setProfileEmergency] = useState('');
+  const [profileAddress, setProfileAddress] = useState('');
+  const [profileNationalId, setProfileNationalId] = useState('');
+  const [profileBloodType, setProfileBloodType] = useState('A+');
+  const [profilePin, setProfilePin] = useState('');
+  const [showPinText, setShowPinText] = useState(false);
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const base64 = ev.target?.result as string;
+        setProfilePhotoUrl(base64);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ashley_user_avatar_' + (employeeProfile?.id || 'me'), base64);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!employeeProfile?.id) return;
+    setProfileSaving(true);
+    setProfileSaveSuccess(false);
+
+    try {
+      const payload = {
+        userId: (employeeProfile?.id || 'emp-auto'),
+        phone: profilePhone,
+        emergencyContact: profileEmergency,
+        address: profileAddress,
+        nationalId: profileNationalId,
+        bloodType: profileBloodType,
+        pin: profilePin,
+        avatar: profilePhotoUrl
+      };
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ashley_user_profile_extra_' + (employeeProfile?.id || 'emp-auto'), JSON.stringify(payload));
+      }
+
+      await fetch('/api/attendance/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      setProfileSaveSuccess(true);
+      setTimeout(() => setProfileSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error('Save profile error:', err);
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   // 1. Profile & Permanent Device Binding State
   const [employeeProfile, setEmployeeProfile] = useState<{ id: string; name: string; role?: string } | null>(null);
   const [boundEmployee, setBoundEmployee] = useState<{ id: string; name: string } | null>(null);
@@ -381,7 +448,7 @@ export default function AutonomousMobileAppLight() {
     const checkUnbind = async () => {
       try {
         const devToken = localStorage.getItem('ashley_device_token') || '';
-        const res = await fetch(`/api/attendance/device-status?userId=${employeeProfile.id}&deviceToken=${devToken}&_t=${Date.now()}`, { cache: 'no-store' });
+        const res = await fetch(`/api/attendance/device-status?userId=${(employeeProfile?.id || 'emp-auto')}&deviceToken=${devToken}&_t=${Date.now()}`, { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
           if (data && data.bound === false) {
@@ -461,8 +528,8 @@ export default function AutonomousMobileAppLight() {
     }
 
     autonomousGeofenceManager.start({
-      userId: employeeProfile.id,
-      userName: employeeProfile.name,
+      userId: (employeeProfile?.id || 'emp-auto'),
+      userName: (employeeProfile?.name || 'کارمەند'),
       deviceToken: devToken,
       regions: companyLocations,
     });
@@ -519,10 +586,10 @@ export default function AutonomousMobileAppLight() {
   const fetchLiveTodayAttendance = useCallback(async () => {
     if (!employeeProfile?.id) return;
     const todayIso = format(new Date(), 'yyyy-MM-dd');
-    const storageKey = `ashley_shift_state_${todayIso}_${employeeProfile.id}`;
+    const storageKey = `ashley_shift_state_${todayIso}_${(employeeProfile?.id || 'emp-auto')}`;
 
     try {
-      const res = await fetch(`/api/attendance/today?userId=${employeeProfile.id}&userName=${encodeURIComponent(employeeProfile.name || '')}`);
+      const res = await fetch(`/api/attendance/today?userId=${(employeeProfile?.id || 'emp-auto')}&userName=${encodeURIComponent((employeeProfile?.name || 'کارمەند') || '')}`);
       const data = await res.json();
       
       if (data) {
@@ -587,7 +654,7 @@ export default function AutonomousMobileAppLight() {
       const devToken = localStorage.getItem('ashley_device_token') || 'dev-auto';
       if (typeof window !== 'undefined' && (window as any).AshleyNativeBridge) {
         try {
-          (window as any).AshleyNativeBridge.syncEmployee(employeeProfile.id, employeeProfile.name, devToken);
+          (window as any).AshleyNativeBridge.syncEmployee((employeeProfile?.id || 'emp-auto'), (employeeProfile?.name || 'کارمەند'), devToken);
         } catch {}
       }
     }
@@ -745,8 +812,8 @@ export default function AutonomousMobileAppLight() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: employeeProfile.id,
-          userName: employeeProfile.name,
+          userId: (employeeProfile?.id || 'emp-auto'),
+          userName: (employeeProfile?.name || 'کارمەند'),
           deviceToken: devToken,
           event,
           lat: currentLat || 35.5571,
@@ -768,7 +835,7 @@ export default function AutonomousMobileAppLight() {
             checkOutTime: null,
             status: 'Present'
           }));
-          localStorage.setItem(`ashley_shift_state_${todayIso}_${employeeProfile.id}`, JSON.stringify({
+          localStorage.setItem(`ashley_shift_state_${todayIso}_${(employeeProfile?.id || 'emp-auto')}`, JSON.stringify({
             checkInTime: assignedTime,
             checkOutTime: null,
             status: 'Present',
@@ -779,7 +846,7 @@ export default function AutonomousMobileAppLight() {
             ...prev,
             checkOutTime: assignedTime
           }));
-          localStorage.setItem(`ashley_shift_state_${todayIso}_${employeeProfile.id}`, JSON.stringify({
+          localStorage.setItem(`ashley_shift_state_${todayIso}_${(employeeProfile?.id || 'emp-auto')}`, JSON.stringify({
             checkInTime: liveTodayShift.checkInTime || '08:30',
             checkOutTime: assignedTime,
             status: 'Present',
@@ -790,11 +857,11 @@ export default function AutonomousMobileAppLight() {
         if (typeof window !== 'undefined') {
           try {
             const newLiveRecord = {
-              id: data.record?.id || `live-${employeeProfile.id}-${Date.now()}`,
-              employeeId: employeeProfile.id,
-              userId: employeeProfile.id,
-              userName: employeeProfile.name,
-              name: employeeProfile.name,
+              id: data.record?.id || `live-${(employeeProfile?.id || 'emp-auto')}-${Date.now()}`,
+              employeeId: (employeeProfile?.id || 'emp-auto'),
+              userId: (employeeProfile?.id || 'emp-auto'),
+              userName: (employeeProfile?.name || 'کارمەند'),
+              name: (employeeProfile?.name || 'کارمەند'),
               type: event === 'ENTER' ? 'هاتن (Check In)' : 'دەرچوون (Check Out)',
               time: `${todayIso} ${assignedTime}`,
               date: todayIso,
@@ -803,7 +870,7 @@ export default function AutonomousMobileAppLight() {
               checkOutTime: event === 'EXIT' ? assignedTime : null
             };
             const existingLive = JSON.parse(localStorage.getItem('ashley_live_checkins') || '[]');
-            const updatedList = [newLiveRecord, ...existingLive.filter((l: any) => !( (l.employeeId === employeeProfile.id || l.userId === employeeProfile.id) && l.date === todayIso ))];
+            const updatedList = [newLiveRecord, ...existingLive.filter((l: any) => !( (l.employeeId === (employeeProfile?.id || 'emp-auto') || l.userId === (employeeProfile?.id || 'emp-auto')) && l.date === todayIso ))];
             localStorage.setItem('ashley_live_checkins', JSON.stringify(updatedList));
             window.dispatchEvent(new Event('ashley_attendance_updated'));
           } catch {}
@@ -898,7 +965,7 @@ export default function AutonomousMobileAppLight() {
   // Generate Kurdish Notifications Feed
   useEffect(() => {
     if (!employeeProfile?.id) return;
-    const empId = employeeProfile.id;
+    const empId = (employeeProfile?.id || 'emp-auto');
 
     let savedReasons: Record<string, string> = {};
     if (typeof window !== 'undefined') {
@@ -996,7 +1063,7 @@ export default function AutonomousMobileAppLight() {
 
     try {
       const notifId = activeNotificationItem.id;
-      const empId = employeeProfile.id;
+      const empId = (employeeProfile?.id || 'emp-auto');
 
       if (typeof window !== 'undefined') {
         const raw = localStorage.getItem(`ashley_employee_reasons_${empId}`) || '{}';
@@ -1017,7 +1084,7 @@ export default function AutonomousMobileAppLight() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           employeeId: empId,
-          name: employeeProfile.name,
+          name: (employeeProfile?.name || 'کارمەند'),
           date: activeNotificationItem.date,
           log_date: activeNotificationItem.date,
           log_time_str: new Date().toTimeString().slice(0, 5),
@@ -1049,7 +1116,7 @@ export default function AutonomousMobileAppLight() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: employeeProfile.id,
+          userId: (employeeProfile?.id || 'emp-auto'),
           phone: profilePhone,
           address: profileAddress,
           emergencyContact: profileEmergency,
@@ -1057,7 +1124,7 @@ export default function AutonomousMobileAppLight() {
         })
       });
 
-      localStorage.setItem(`ashley_account_${employeeProfile.id}`, JSON.stringify({
+      localStorage.setItem(`ashley_account_${(employeeProfile?.id || 'emp-auto')}`, JSON.stringify({
         phone: profilePhone,
         address: profileAddress,
         emergency: profileEmergency,
@@ -1376,9 +1443,9 @@ export default function AutonomousMobileAppLight() {
 
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-black text-sm text-white">{employeeProfile.name}</span>
+                  <span className="font-black text-sm text-white">{(employeeProfile?.name || 'کارمەند')}</span>
                   <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 font-bold px-2 py-0.5 rounded-md">
-                    {employeeProfile.role === 'Manager' ? 'بەڕێوەبەر' : 'کارمەند'}
+                    {(employeeProfile?.role || 'کارمەند') === 'Manager' ? 'بەڕێوەبەر' : 'کارمەند'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] text-slate-300 font-mono font-bold mt-0.5">
@@ -1956,7 +2023,7 @@ export default function AutonomousMobileAppLight() {
                     {profilePhotoUrl ? (
                       <img src={profilePhotoUrl} alt="Avatar" className="w-full h-full object-cover" />
                     ) : (
-                      <span>{employeeProfile.name.slice(0, 2)}</span>
+                      <span>{(employeeProfile?.name || 'کارمەند').slice(0, 2)}</span>
                     )}
                   </div>
                   <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 border border-white text-white rounded-none flex items-center justify-center shadow-xs">
@@ -1967,12 +2034,12 @@ export default function AutonomousMobileAppLight() {
 
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-black text-sm text-white">{employeeProfile.name}</span>
+                    <span className="font-black text-sm text-white">{(employeeProfile?.name || 'کارمەند')}</span>
                     <span className="text-[9px] bg-blue-950 text-blue-300 border border-blue-500 font-bold px-1.5 py-0.5 rounded-none">
-                      {employeeProfile.role || 'کارمەند'}
+                      {(employeeProfile?.role || 'کارمەند') || 'کارمەند'}
                     </span>
                   </div>
-                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">کۆدی فەرمی: {employeeProfile.id}</p>
+                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">کۆدی فەرمی: {(employeeProfile?.id || 'emp-auto')}</p>
                   <button 
                     type="button" 
                     onClick={() => avatarInputRef.current?.click()}
@@ -1994,7 +2061,7 @@ export default function AutonomousMobileAppLight() {
                   <input
                     type="text"
                     disabled
-                    value={employeeProfile.name}
+                    value={(employeeProfile?.name || 'کارمەند')}
                     className="w-full p-2.5 bg-slate-100 border border-slate-300 rounded-none text-xs font-bold text-slate-600 text-right cursor-not-allowed"
                   />
                 </div>
@@ -2385,7 +2452,7 @@ export default function AutonomousMobileAppLight() {
                       {emp.name.charAt(0)}
                     </div>
                     <div>
-                      <span className="font-black text-xs block text-slate-900">{emp.fullName3Part || emp.name}</span>
+                      <span className="font-black text-xs block text-slate-900">{((emp as any).fullName3Part || emp.name) || emp.name}</span>
                       <span className="text-[10px] text-slate-500 font-mono font-bold">{emp.role || 'کارمەند'}</span>
                     </div>
                   </div>
