@@ -11,8 +11,7 @@ public class NotificationDismissReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
-        Log.w(TAG, "Notification was swiped/dismissed by user. Immediately respawning service & notification...");
-        
+        Log.i(TAG, "Notification was swiped/dismissed. Checking service state...");
         try {
             Intent serviceIntent = new Intent(context, BackgroundAttendanceService.class);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -20,8 +19,8 @@ public class NotificationDismissReceiver extends BroadcastReceiver {
             } else {
                 context.startService(serviceIntent);
             }
-        } catch (Exception e) {
-            Log.e(TAG, "Error respawning service on dismiss: " + e.getMessage());
+        } catch (Throwable t) {
+            Log.w(TAG, "Safe catch on notification dismiss restart: " + t.getMessage());
         }
     }
 }

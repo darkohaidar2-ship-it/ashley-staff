@@ -640,7 +640,7 @@ export default function AutonomousMobileAppLight() {
 
   useEffect(() => {
     fetchLiveTodayAttendance();
-    const interval = setInterval(fetchLiveTodayAttendance, 2000);
+    const interval = setInterval(fetchLiveTodayAttendance, 12000);
     window.addEventListener('ashley_attendance_updated', fetchLiveTodayAttendance);
     return () => {
       clearInterval(interval);

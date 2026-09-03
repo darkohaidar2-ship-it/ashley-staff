@@ -11,17 +11,18 @@ public class ServiceWatchdogReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
-        Log.i(TAG, "Watchdog heartbeat received. Ensuring BackgroundAttendanceService is active...");
-        
-        try {
-            Intent serviceIntent = new Intent(context, BackgroundAttendanceService.class);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(serviceIntent);
-            } else {
-                context.startService(serviceIntent);
+        if (!BackgroundAttendanceService.isServiceRunning) {
+            Log.i(TAG, "Watchdog found service inactive. Restarting...");
+            try {
+                Intent serviceIntent = new Intent(context, BackgroundAttendanceService.class);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent);
+                } else {
+                    context.startService(serviceIntent);
+                }
+            } catch (Throwable t) {
+                Log.w(TAG, "Watchdog start suppressed by OS background limitations: " + t.getMessage());
             }
-        } catch (Exception e) {
-            Log.e(TAG, "Watchdog error: " + e.getMessage());
         }
     }
 }

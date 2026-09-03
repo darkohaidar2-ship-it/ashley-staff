@@ -36,9 +36,11 @@ import java.util.concurrent.TimeUnit;
 public class BackgroundAttendanceService extends Service implements LocationListener {
 
     private static final String TAG = "AshleyBgAttendance";
-    public static final String CHANNEL_ID = "ashley_attendance_bg_channel_v4";
-    public static final String ALERT_CHANNEL_ID = "ashley_attendance_alert_channel_v4";
+    public static final String CHANNEL_ID = "ashley_attendance_bg_channel_v5";
+    public static final String ALERT_CHANNEL_ID = "ashley_attendance_alert_channel_v5";
     private static final int NOTIFICATION_ID = 1001;
+
+    public static volatile boolean isServiceRunning = false;
 
     private LocationManager locationManager;
     private PowerManager.WakeLock wakeLock;
@@ -48,27 +50,29 @@ public class BackgroundAttendanceService extends Service implements LocationList
     // Company Locations
     private static final double ASHLEY_BASE_LAT = 35.508918;
     private static final double ASHLEY_BASE_LNG = 45.452935;
-    private static final float ASHLEY_BASE_RADIUS = 100f; // meters
+    private static final float ASHLEY_BASE_RADIUS = 160f; // meters
 
     private static final double HUANA_LAT = 35.562431;
     private static final double HUANA_LNG = 45.474792;
-    private static final float HUANA_RADIUS = 120f; // meters
+    private static final float HUANA_RADIUS = 160f; // meters
 
     private long lastTriggerTime = 0;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        isServiceRunning = true;
         prefs = getSharedPreferences("ashley_prefs", Context.MODE_PRIVATE);
-        scheduledExecutor = Executors.newScheduledThreadPool(2);
+        scheduledExecutor = Executors.newScheduledThreadPool(1);
 
         createNotificationChannels();
 
         try {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             if (pm != null) {
-                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Ashley::BgWakeLockV3");
-                wakeLock.acquire();
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Ashley::BgWakeLockV5");
+                wakeLock.setReferenceCounted(false);
+                wakeLock.acquire(10 * 60 * 1000L); // 10 min safe timeout
             }
         } catch (Exception e) {
             Log.w(TAG, "WakeLock acquire error: " + e.getMessage());
@@ -87,48 +91,51 @@ public class BackgroundAttendanceService extends Service implements LocationList
             } catch (Exception ignored) {}
         }
 
-        startUltraFastLocationUpdates();
+        startSmartLocationUpdates();
         startPeriodicGeofenceEngine();
-        scheduleWatchdogAlarm();
-        Log.i(TAG, "BackgroundAttendanceService started with Auto-Respawn & Watchdog.");
+        Log.i(TAG, "BackgroundAttendanceService created successfully.");
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        isServiceRunning = true;
         if (intent != null) {
-            SharedPreferences.Editor editor = prefs.edit();
-            if (intent.hasExtra("userId")) {
-                editor.putString("userId", intent.getStringExtra("userId"));
-            }
-            if (intent.hasExtra("userName")) {
-                editor.putString("userName", intent.getStringExtra("userName"));
-            }
-            if (intent.hasExtra("deviceToken")) {
-                editor.putString("deviceToken", intent.getStringExtra("deviceToken"));
-            }
-            if (intent.hasExtra("checkInTime")) {
-                editor.putString("checkInTime", intent.getStringExtra("checkInTime"));
-            }
-            if (intent.hasExtra("checkOutTime")) {
-                editor.putString("checkOutTime", intent.getStringExtra("checkOutTime"));
-            }
-            editor.apply();
+            try {
+                SharedPreferences.Editor editor = prefs.edit();
+                if (intent.hasExtra("userId")) {
+                    editor.putString("userId", intent.getStringExtra("userId"));
+                }
+                if (intent.hasExtra("userName")) {
+                    editor.putString("userName", intent.getStringExtra("userName"));
+                }
+                if (intent.hasExtra("deviceToken")) {
+                    editor.putString("deviceToken", intent.getStringExtra("deviceToken"));
+                }
+                if (intent.hasExtra("checkInTime")) {
+                    editor.putString("checkInTime", intent.getStringExtra("checkInTime"));
+                }
+                if (intent.hasExtra("checkOutTime")) {
+                    editor.putString("checkOutTime", intent.getStringExtra("checkOutTime"));
+                }
+                editor.apply();
 
-            updateStickyNotification();
+                updateStickyNotification();
+            } catch (Exception ignored) {}
         }
         return START_STICKY;
     }
 
-    private void startUltraFastLocationUpdates() {
+    private void startSmartLocationUpdates() {
         try {
             locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
             if (locationManager == null) return;
 
+            // Stable 15s intervals, 5m threshold - Prevents battery drain & OS process kill
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                         LocationManager.GPS_PROVIDER,
-                        2000L,  // 2 seconds
-                        0f,     // 0 meters threshold
+                        15000L,
+                        5.0f,
                         this
                 );
             }
@@ -136,8 +143,8 @@ public class BackgroundAttendanceService extends Service implements LocationList
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                         LocationManager.NETWORK_PROVIDER,
-                        2000L,
-                        0f,
+                        15000L,
+                        5.0f,
                         this
                 );
             }
@@ -149,6 +156,7 @@ public class BackgroundAttendanceService extends Service implements LocationList
     }
 
     private void startPeriodicGeofenceEngine() {
+        if (scheduledExecutor == null || scheduledExecutor.isShutdown()) return;
         scheduledExecutor.scheduleWithFixedDelay(() -> {
             try {
                 if (locationManager == null) return;
@@ -166,32 +174,12 @@ public class BackgroundAttendanceService extends Service implements LocationList
                 if (loc != null) {
                     onLocationChanged(loc);
                 }
+
+                drainOfflineEvents();
             } catch (Exception e) {
-                Log.w(TAG, "Periodic geofence error: " + e.getMessage());
+                Log.w(TAG, "Periodic geofence loop notice: " + e.getMessage());
             }
-        }, 3, 3, TimeUnit.SECONDS);
-    }
-
-    private void scheduleWatchdogAlarm() {
-        try {
-            AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
-            Intent watchdogIntent = new Intent(this, ServiceWatchdogReceiver.class);
-            PendingIntent pendingWatchdog = PendingIntent.getBroadcast(
-                    this, 2002, watchdogIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-            );
-
-            if (alarmManager != null) {
-                alarmManager.setRepeating(
-                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                        SystemClock.elapsedRealtime() + 60000,
-                        60000,
-                        pendingWatchdog
-                );
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Watchdog alarm setup error: " + e.getMessage());
-        }
+        }, 10, 20, TimeUnit.SECONDS);
     }
 
     @Override
@@ -233,8 +221,8 @@ public class BackgroundAttendanceService extends Service implements LocationList
         String lastCheckInDate = prefs.getString("last_checkin_date", "");
         long now = System.currentTimeMillis();
 
-        if (now - lastTriggerTime < 8000) {
-            return; // 8 seconds cooldown between transitions
+        if (now - lastTriggerTime < 15000) {
+            return; // 15 seconds cooldown
         }
 
         // Case 1: Entered Geofence (Was outside, now inside)
@@ -287,6 +275,7 @@ public class BackgroundAttendanceService extends Service implements LocationList
     }
 
     private void postAutonomousEvent(String event, String userId, String userName, String deviceToken, double lat, double lng, int distance, String regionName) {
+        if (scheduledExecutor == null || scheduledExecutor.isShutdown()) return;
         scheduledExecutor.execute(() -> {
             try {
                 JSONObject json = new JSONObject();
@@ -302,11 +291,10 @@ public class BackgroundAttendanceService extends Service implements LocationList
 
                 boolean success = sendEventHttp(json);
                 if (!success) {
-                    Log.w(TAG, "No internet connection. Caching event offline.");
+                    Log.w(TAG, "No internet. Caching event offline.");
                     queueOfflineEvent(json);
                 } else {
-                    Log.i(TAG, "Autonomous event sent online: " + event);
-                    drainOfflineEvents(); // Drain any previous offline events as well
+                    drainOfflineEvents();
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Error in postAutonomousEvent: " + e.getMessage());
@@ -314,44 +302,29 @@ public class BackgroundAttendanceService extends Service implements LocationList
         });
     }
 
-private void queueOfflineEvent(JSONObject json) {
+    private void queueOfflineEvent(JSONObject json) {
         try {
             String existingQueueStr = prefs.getString("offline_events_queue", "[]");
             org.json.JSONArray queue = new org.json.JSONArray(existingQueueStr);
             queue.put(json);
             prefs.edit().putString("offline_events_queue", queue.toString()).apply();
-            Log.i(TAG, "Event queued offline. Total pending: " + queue.length());
-        } catch (Exception e) {
-            Log.e(TAG, "Error saving offline event: " + e.getMessage());
-        }
+        } catch (Exception ignored) {}
     }
 
     private void drainOfflineEvents() {
-        scheduledExecutor.execute(() -> {
-            try {
-                String existingQueueStr = prefs.getString("offline_events_queue", "[]");
-                org.json.JSONArray queue = new org.json.JSONArray(existingQueueStr);
-                if (queue.length() == 0) return;
+        try {
+            String existingQueueStr = prefs.getString("offline_events_queue", "[]");
+            org.json.JSONArray queue = new org.json.JSONArray(existingQueueStr);
+            if (queue.length() == 0) return;
 
-                Log.i(TAG, "Attempting to sync " + queue.length() + " offline events...");
-                org.json.JSONArray remaining = new org.json.JSONArray();
-
-                for (int i = 0; i < queue.length(); i++) {
-                    JSONObject item = queue.getJSONObject(i);
-                    boolean sent = sendEventHttp(item);
-                    if (!sent) {
-                        remaining.put(item);
-                    }
-                }
-
-                prefs.edit().putString("offline_events_queue", remaining.toString()).apply();
-                if (remaining.length() < queue.length()) {
-                    Log.i(TAG, "Offline events drained successfully. Remaining: " + remaining.length());
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "Error draining offline events: " + e.getMessage());
+            org.json.JSONArray remaining = new org.json.JSONArray();
+            for (int i = 0; i < queue.length(); i++) {
+                JSONObject item = queue.getJSONObject(i);
+                boolean sent = sendEventHttp(item);
+                if (!sent) remaining.put(item);
             }
-        });
+            prefs.edit().putString("offline_events_queue", remaining.toString()).apply();
+        } catch (Exception ignored) {}
     }
 
     private boolean sendEventHttp(JSONObject json) {
@@ -362,8 +335,8 @@ private void queueOfflineEvent(JSONObject json) {
             conn.setRequestProperty("Content-Type", "application/json; utf-8");
             conn.setRequestProperty("Accept", "application/json");
             conn.setDoOutput(true);
-            conn.setConnectTimeout(6000);
-            conn.setReadTimeout(6000);
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(5000);
 
             try (OutputStream os = conn.getOutputStream()) {
                 byte[] input = json.toString().getBytes("utf-8");
@@ -407,10 +380,12 @@ private void queueOfflineEvent(JSONObject json) {
     }
 
     public void updateStickyNotification() {
-        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm != null) {
-            nm.notify(NOTIFICATION_ID, buildStickyNotification());
-        }
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                nm.notify(NOTIFICATION_ID, buildStickyNotification());
+            }
+        } catch (Exception ignored) {}
     }
 
     private Notification buildStickyNotification() {
@@ -421,7 +396,6 @@ private void queueOfflineEvent(JSONObject json) {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
         );
 
-        // Delete Intent: Catches when user swipes notification away and auto-respawns it instantly!
         Intent deleteIntent = new Intent(this, NotificationDismissReceiver.class);
         PendingIntent deletePendingIntent = PendingIntent.getBroadcast(
                 this, 1001, deleteIntent,
@@ -453,7 +427,7 @@ private void queueOfflineEvent(JSONObject json) {
                 .setContentText(statusLine)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(pendingIntent)
-                .setDeleteIntent(deletePendingIntent) // AUTO-RESPAWN ON SWIPE!
+                .setDeleteIntent(deletePendingIntent)
                 .setOngoing(true)
                 .setAutoCancel(false)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -470,61 +444,47 @@ private void queueOfflineEvent(JSONObject json) {
     }
 
     private void showKurdishAlertNotification(String title, String message) {
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent pendingIntent = PendingIntent.getActivity(
-                this, (int) System.currentTimeMillis(), intent,
-                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
-        );
-
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle(title)
-                .setContentText(message)
-                .setStyle(new NotificationCompat.BigTextStyle().bigText(message))
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setDefaults(NotificationCompat.DEFAULT_ALL)
-                .setAutoCancel(true)
-                .setContentIntent(pendingIntent);
-
-        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm != null) {
-            nm.notify((int) System.currentTimeMillis(), builder.build());
-        }
-    }
-
-    @Override
-    public void onTaskRemoved(Intent rootIntent) {
-        Intent restartServiceIntent = new Intent(getApplicationContext(), this.getClass());
-        restartServiceIntent.setPackage(getPackageName());
-        PendingIntent restartServicePendingIntent = PendingIntent.getService(
-                getApplicationContext(), 1, restartServiceIntent,
-                PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE
-        );
-        AlarmManager alarmService = (AlarmManager) getApplicationContext().getSystemService(Context.ALARM_SERVICE);
-        if (alarmService != null) {
-            alarmService.set(
-                    AlarmManager.ELAPSED_REALTIME,
-                    SystemClock.elapsedRealtime() + 500,
-                    restartServicePendingIntent
+        try {
+            Intent intent = new Intent(this, MainActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            PendingIntent pendingIntent = PendingIntent.getActivity(
+                    this, (int) System.currentTimeMillis(), intent,
+                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
             );
-        }
-        super.onTaskRemoved(rootIntent);
+
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentTitle(title)
+                    .setContentText(message)
+                    .setStyle(new NotificationCompat.BigTextStyle().bigText(message))
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setDefaults(NotificationCompat.DEFAULT_ALL)
+                    .setAutoCancel(true)
+                    .setContentIntent(pendingIntent);
+
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                nm.notify((int) System.currentTimeMillis(), builder.build());
+            }
+        } catch (Exception ignored) {}
     }
 
     @Override
     public void onDestroy() {
+        isServiceRunning = false;
+        try {
+            if (locationManager != null) {
+                locationManager.removeUpdates(this);
+            }
+            if (wakeLock != null && wakeLock.isHeld()) {
+                wakeLock.release();
+            }
+            if (scheduledExecutor != null) {
+                scheduledExecutor.shutdown();
+            }
+        } catch (Exception ignored) {}
         super.onDestroy();
-        if (locationManager != null) {
-            locationManager.removeUpdates(this);
-        }
-        if (wakeLock != null && wakeLock.isHeld()) {
-            wakeLock.release();
-        }
-        if (scheduledExecutor != null) {
-            scheduledExecutor.shutdown();
-        }
-        Log.i(TAG, "BackgroundAttendanceService destroyed.");
+        Log.i(TAG, "BackgroundAttendanceService destroyed cleanly.");
     }
 
     @Override
