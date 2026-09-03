@@ -20,6 +20,8 @@ import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
+import android.content.pm.PackageManager;
 
 import org.json.JSONObject;
 
@@ -80,15 +82,18 @@ public class BackgroundAttendanceService extends Service implements LocationList
 
         Notification notification = buildStickyNotification();
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            boolean hasLocation = ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                                  ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && hasLocation) {
                 startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
             } else {
                 startForeground(NOTIFICATION_ID, notification);
             }
-        } catch (Exception e) {
+        } catch (Throwable t) {
             try {
                 startForeground(NOTIFICATION_ID, notification);
-            } catch (Exception ignored) {}
+            } catch (Throwable ignored) {}
         }
 
         startSmartLocationUpdates();
