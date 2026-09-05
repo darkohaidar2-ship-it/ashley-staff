@@ -53,6 +53,7 @@ import {
   type GeofenceRegion 
 } from '@/lib/background-geofence';
 import { MobileAttendanceMapModal } from '@/components/maps/MobileAttendanceMapModal';
+import { extractFaceDescriptor, loadFaceModels, matchFaceDescriptors } from '@/lib/face-recognition';
 
 const ASHLEY_DEFAULT_EMPLOYEES = [
   { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', fullName3Part: 'سه هەند مەریوان حەمەسەعید', role: 'Employee', pin: '1001', deviceBound: false },
@@ -794,6 +795,133 @@ export default function AutonomousMobileAppLight() {
   const [triggerLoading, setTriggerLoading] = useState<string | null>(null);
   const lastManualActionRef = useRef<number>(0);
 
+  // Load enrolled face descriptor for current employee
+  const loadUserFaceStatus = useCallback(async () => {
+    if (!employeeProfile?.id) return;
+    try {
+      const res = await fetch(`/api/attendance/face/status?userId=${employeeProfile.id}&_t=${Date.now()}`);
+      const data = await res.json();
+      if (data?.hasFaceRegistered && Array.isArray(data.descriptor)) {
+        setHasRegisteredFace(true);
+        setRegisteredFaceDesc(data.descriptor);
+      } else {
+        setHasRegisteredFace(false);
+        setRegisteredFaceDesc(null);
+      }
+    } catch {
+      setHasRegisteredFace(false);
+    }
+  }, [employeeProfile?.id]);
+
+  useEffect(() => {
+    loadUserFaceStatus();
+  }, [loadUserFaceStatus]);
+
+  // Open Face Scanner Modal
+  const openFaceScanner = async (action: 'ENTER' | 'EXIT' | 'ENROLL') => {
+    setFaceModalAction(action);
+    setFaceVerifiedSuccess(false);
+    setFaceScanStatus('لە بارکردنی ژیریی دەستکردی دەموچاو...');
+    setShowFaceModal(true);
+
+    const ready = await loadFaceModels();
+    setFaceModelsLoaded(ready);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false
+      });
+      faceStreamRef.current = stream;
+      if (faceVideoRef.current) {
+        faceVideoRef.current.srcObject = stream;
+        await faceVideoRef.current.play();
+      }
+      setIsFaceScanning(true);
+      setFaceScanStatus('سەیری کامێرای پێشەوە بکە...');
+    } catch (err) {
+      setFaceScanStatus('تکایە ڕێگە بە کامێرا بدە بۆ ناسینەوەی دەموچاو');
+    }
+  };
+
+  const closeFaceScanner = () => {
+    if (faceStreamRef.current) {
+      faceStreamRef.current.getTracks().forEach(t => t.stop());
+      faceStreamRef.current = null;
+    }
+    if (faceIntervalRef.current) {
+      clearInterval(faceIntervalRef.current);
+      faceIntervalRef.current = null;
+    }
+    setIsFaceScanning(false);
+    setShowFaceModal(false);
+  };
+
+  // Face Scan Loop
+  useEffect(() => {
+    if (!showFaceModal || !isFaceScanning || !faceVideoRef.current) return;
+
+    faceIntervalRef.current = setInterval(async () => {
+      if (!faceVideoRef.current || faceVerifiedSuccess) return;
+
+      try {
+        const result = await extractFaceDescriptor(faceVideoRef.current);
+        if (!result || !result.descriptor) {
+          setFaceScanStatus('سەیری ناو بازنەکە بکە...');
+          return;
+        }
+
+        // ENROLL MODE
+        if (faceModalAction === 'ENROLL') {
+          setFaceScanStatus('دەموچاو دۆزرایەوە! لە پاشەکەوتکردندایە...');
+          setFaceVerifiedSuccess(true);
+
+          await fetch('/api/attendance/face/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: employeeProfile?.id,
+              userName: employeeProfile?.name,
+              descriptor: result.descriptor
+            })
+          });
+
+          setRegisteredFaceDesc(result.descriptor);
+          setHasRegisteredFace(true);
+          setFaceScanStatus('🎉 دەموچاوت بە سەرکەوتوویی تۆمارکرا!');
+          setTimeout(closeFaceScanner, 1800);
+          return;
+        }
+
+        // VERIFY ATTENDANCE MODE (ENTER / EXIT)
+        setFaceScanStatus('لە پشکنینی ناسنامەی دەموچاو...');
+
+        let isMatch = true;
+        if (registeredFaceDesc && registeredFaceDesc.length > 0) {
+          const matchResult = matchFaceDescriptors(result.descriptor, registeredFaceDesc, 0.48);
+          isMatch = matchResult.isMatch;
+        }
+
+        if (isMatch) {
+          setFaceVerifiedSuccess(true);
+          setFaceScanStatus(`✅ ناسنامە پەسەندکرا: ${employeeProfile?.name || 'کارمەند'}`);
+
+          // Execute Attendance Action
+          await handleTriggerAttendance(faceModalAction === 'EXIT' ? 'EXIT' : 'ENTER');
+          setTimeout(closeFaceScanner, 1800);
+        } else {
+          setFaceScanStatus('⚠️ دەموچاو یەکناگرێتەوە لەگەڵ ئەم کارمەندە!');
+        }
+      } catch (err) {
+        console.warn('Face loop error:', err);
+      }
+    }, 600);
+
+    return () => {
+      if (faceIntervalRef.current) clearInterval(faceIntervalRef.current);
+    };
+  }, [showFaceModal, isFaceScanning, faceModalAction, registeredFaceDesc, faceVerifiedSuccess, employeeProfile]);
+
   const handleTriggerAttendance = async (event: 'ENTER' | 'EXIT') => {
     if (!employeeProfile?.id) return;
     lastManualActionRef.current = Date.now();
@@ -1431,33 +1559,30 @@ export default function AutonomousMobileAppLight() {
           {activeNavTab === 'attendance' && (
             <div className="space-y-4 animate-in fade-in duration-200">
               
-              {/* Windows 11 Fluent Background Autoplay Status Card */}
-              <div className="p-3.5 bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-none border border-slate-700 shadow-sm flex items-center justify-between">
+              {/* 📸 Biometric Face ID Active Status Card */}
+              <div className="p-3 bg-slate-900 text-white rounded-none border border-slate-700 shadow-sm flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
-                    <Radio className="w-4 h-4 animate-pulse" />
+                  <div className="w-9 h-9 rounded-none bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                    <Camera className="w-4 h-4" />
                   </div>
                   <div className="text-right">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-black text-xs text-white">چاودێری ئۆتۆماتیکی باکگراوند (Auto Active)</span>
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span className="font-black text-xs text-white">سیستەمی ناسینەوەی دەموچاو (Face ID)</span>
+                      <span className={`w-2 h-2 rounded-full ${hasRegisteredFace ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
                     </div>
-                    <p className="text-[10px] text-slate-300 font-bold mt-0.5">تەنانەت کاتێک ئەپەکە داخراوە لە گیرفانتدا دەوام تۆمار دەکات</p>
+                    <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                      {hasRegisteredFace ? '✅ ناسنامەی دەموچاو چالاکە' : '⚠️ هێشتا دەموچاوت تۆمار نەکردووە'}
+                    </p>
                   </div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => {
-                    if (typeof window !== 'undefined' && (window as any).AshleyNativeBridge) {
-                      (window as any).AshleyNativeBridge.openBatterySettings();
-                    } else {
-                      alert('بۆ ئەوەی مۆبایلەکەت لە باکگراوند هەرگیز ڕانەوەستێت، لە Settings > Battery دۆخی ئەپەکە بکە بە Unrestricted');
-                    }
-                  }}
-                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 active:bg-blue-600 text-slate-200 hover:text-white rounded-xl border border-slate-600 text-[10px] font-black transition-all cursor-pointer flex items-center gap-1"
+                  onClick={() => openFaceScanner('ENROLL')}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-none text-[10px] font-black transition-all cursor-pointer flex items-center gap-1 shadow-xs"
                 >
-                  <span>⚡ باتری</span>
+                  <Sparkles className="w-3 h-3" />
+                  <span>{hasRegisteredFace ? 'نوێکردنەوە' : 'تۆمارکردن'}</span>
                 </button>
               </div>
 
@@ -1473,44 +1598,112 @@ export default function AutonomousMobileAppLight() {
                   </span>
                 </div>
 
-                {/* Main 2-Column Autonomous Live Shift Cards (No Manual Buttons) */}
-                <div className="grid grid-cols-2 gap-3 pt-1">
+                {/* 🎯 INTERACTIVE MANUAL & FACE ID ATTENDANCE ACTION PANEL */}
+                <div className="space-y-3 pt-1">
                   
-                  {/* Check-In Autonomous Card */}
-                  <div className="p-3.5 bg-slate-50/90 rounded-none border border-slate-200/90 space-y-2 text-center">
-                    <div className="flex items-center justify-center gap-1.5 text-[11px] font-black text-emerald-700">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>کاتی هاتن (Check-In)</span>
+                  {/* Current Shift Quick Summary */}
+                  <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 border border-slate-200 text-center">
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-bold block">کاتی هاتن (Check-In)</span>
+                      <span className="text-base font-black font-mono text-emerald-700">
+                        {liveTodayShift.checkInTime || '--:--'}
+                      </span>
                     </div>
-                    <div className="text-xl font-black font-mono text-slate-900 tracking-tight">
-                      {liveTodayShift.checkInTime || '--:--'}
-                    </div>
-                    <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100/70 border border-emerald-200 text-emerald-800 text-[10px] font-black">
-                      <span>{liveTodayShift.checkInTime ? '✅ لە دەوامیت' : 'لە چاوەڕوانی گەیشتن'}</span>
-                    </div>
-                  </div>
-
-                  {/* Check-Out Autonomous Card */}
-                  <div className="p-3.5 bg-slate-50/90 rounded-none border border-slate-200/90 space-y-2 text-center">
-                    <div className="flex items-center justify-center gap-1.5 text-[11px] font-black text-blue-700">
-                      <Clock className="w-3.5 h-3.5 text-blue-600" />
-                      <span>کاتی ڕۆیشتن (Check-Out)</span>
-                    </div>
-                    <div className="text-xl font-black font-mono text-slate-900 tracking-tight">
-                      {liveTodayShift.checkOutTime || (liveTodayShift.checkInTime ? 'بەردەوامە' : '--:--')}
-                    </div>
-                    <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-100/70 border border-blue-200 text-blue-800 text-[10px] font-black">
-                      <span>{liveTodayShift.checkOutTime ? '🏁 دەوام تەواو' : (liveTodayShift.checkInTime ? '⏳ دەوام کراوەیە' : 'دەستپێنەکراوە')}</span>
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-bold block">کاتی ڕۆیشتن (Check-Out)</span>
+                      <span className="text-base font-black font-mono text-slate-800">
+                        {liveTodayShift.checkOutTime || (liveTodayShift.checkInTime ? 'بەردەوامە' : '--:--')}
+                      </span>
                     </div>
                   </div>
 
-                </div>
+                  {/* Two Main Big Attendance Buttons */}
+                  <div className="grid grid-cols-2 gap-2.5">
+                    
+                    {/* 🟢 CHECK-IN BUTTON */}
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openFaceScanner('ENTER')}
+                        disabled={!!triggerLoading}
+                        className="w-full py-3.5 px-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-none font-black text-xs shadow-md flex flex-col items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <Camera className="w-4 h-4" />
+                          <span>تۆمارکردنی هاتن</span>
+                        </div>
+                        <span className="text-[9px] text-emerald-100 font-normal">📸 بە ناسینەوەی دەموچاو</span>
+                      </button>
 
-                <div className="p-2.5 bg-blue-50/60 rounded-xl border border-blue-200/70 text-center">
-                  <p className="text-[11px] text-blue-900 font-bold flex items-center justify-center gap-1.5">
-                    <Radio className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
-                    <span>سیستەمەکە ١٠٠٪ ئۆتۆماتیکییە: بە گەیشتنت بە ئاشڵی کاتژمێری هاتن دەنووسێت</span>
-                  </p>
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerAttendance('ENTER')}
+                        disabled={!!triggerLoading}
+                        className="w-full py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-none text-[10px] font-bold cursor-pointer transition-all text-center flex items-center justify-center gap-1"
+                      >
+                        <Zap className="w-3 h-3 text-emerald-600" />
+                        <span>⚡ یان تۆمارکردنی دەستی</span>
+                      </button>
+                    </div>
+
+                    {/* 🔴 CHECK-OUT BUTTON */}
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openFaceScanner('EXIT')}
+                        disabled={!!triggerLoading || !liveTodayShift.checkInTime}
+                        className="w-full py-3.5 px-2 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-none font-black text-xs shadow-md flex flex-col items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-4 h-4" />
+                          <span>تۆمارکردنی ڕۆیشتن</span>
+                        </div>
+                        <span className="text-[9px] text-rose-100 font-normal">🏁 کۆتایی دەوامی ئەمڕۆ</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerAttendance('EXIT')}
+                        disabled={!!triggerLoading || !liveTodayShift.checkInTime}
+                        className="w-full py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 rounded-none text-[10px] font-bold cursor-pointer transition-all text-center flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Zap className="w-3 h-3 text-rose-600" />
+                        <span>⚡ یان دەستی تەواوبوون</span>
+                      </button>
+                    </div>
+
+                  </div>
+
+                  {/* ☕ EXCURSION / BREAK CONTROLS (FOR TEMPORARY OUTS & RETURNS) */}
+                  <div className="p-2.5 bg-amber-50/70 border border-amber-200 rounded-none flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-right">
+                      <DoorOpen className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <div>
+                        <span className="text-[11px] font-black text-amber-900 block">چوونەدەرەوەی کاتی و ئیستیراحەت:</span>
+                        <span className="text-[9px] text-amber-700">بۆ چوونەدەرەوەی نیوەڕۆ یان کاروباری دەرەوە</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerAttendance('EXIT')}
+                        disabled={!!triggerLoading || !liveTodayShift.checkInTime}
+                        className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white rounded-none text-[10px] font-black cursor-pointer shadow-xs disabled:opacity-50"
+                      >
+                        ☕ چوونەدەرەوە
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerAttendance('ENTER')}
+                        disabled={!!triggerLoading}
+                        className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-none text-[10px] font-black cursor-pointer shadow-xs disabled:opacity-50"
+                      >
+                        🏢 گەڕانەوە
+                      </button>
+                    </div>
+                  </div>
+
                 </div>
               </div>
 
@@ -2143,6 +2336,84 @@ export default function AutonomousMobileAppLight() {
             </div>
           )}
 
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 📸 FACE BIOMETRIC RECOGNITION SCANNER MODAL */}
+      {/* ========================================================================= */}
+      {showFaceModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-4 select-none">
+          <div className="relative w-full max-w-sm bg-slate-900 border-2 border-slate-700 rounded-none shadow-2xl p-5 flex flex-col items-center space-y-4 text-center">
+            
+            {/* Modal Header */}
+            <div className="w-full flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div className="flex items-center gap-2">
+                <Camera className="w-4 h-4 text-blue-400" />
+                <span className="text-xs font-black text-white">
+                  {faceModalAction === 'ENROLL' 
+                    ? 'تۆمارکردنی ناسنامەی دەموچاو (Enroll Face)' 
+                    : (faceModalAction === 'EXIT' ? '🔴 ڕۆیشتن بە دەموچاو' : '🟢 هاتن بە دەموچاو')}
+                </span>
+              </div>
+              <button 
+                type="button" 
+                onClick={closeFaceScanner}
+                className="p-1 rounded-none text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Circular Camera Viewfinder */}
+            <div className="relative w-64 h-64 rounded-full overflow-hidden border-4 border-blue-500/60 shadow-2xl flex items-center justify-center bg-black">
+              <video
+                ref={faceVideoRef}
+                playsInline
+                muted
+                className="w-full h-full object-cover scale-x-[-1]"
+              />
+
+              {/* Scanning Target Ring */}
+              <div className={`absolute inset-2 rounded-full border-2 border-dashed transition-all duration-300 pointer-events-none ${
+                faceVerifiedSuccess ? 'border-emerald-400 shadow-xl shadow-emerald-500/50' : 'border-blue-400 animate-spin-slow'
+              }`} />
+
+              {/* Laser line */}
+              {!faceVerifiedSuccess && (
+                <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent animate-bounce pointer-events-none" />
+              )}
+
+              {/* Verified Success Overlay */}
+              {faceVerifiedSuccess && (
+                <div className="absolute inset-0 bg-emerald-950/80 backdrop-blur-xs flex flex-col items-center justify-center animate-in zoom-in-95 duration-200">
+                  <CheckCircle2 className="w-16 h-16 text-emerald-400 animate-bounce" />
+                  <span className="text-xs font-black text-white mt-2">پەسەندکرا!</span>
+                </div>
+              )}
+            </div>
+
+            {/* Status Text HUD */}
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-800 border border-slate-700 rounded-full text-xs font-black text-white shadow-xs">
+                <span className={`w-2 h-2 rounded-full ${faceVerifiedSuccess ? 'bg-emerald-400' : 'bg-blue-400 animate-ping'}`} />
+                <span>{faceScanStatus}</span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-bold">
+                سەیری کامێراکە بکە و ڕوخسارت لە ناو بازنەکە ڕاگرە
+              </p>
+            </div>
+
+            {/* Cancel Button */}
+            <button
+              type="button"
+              onClick={closeFaceScanner}
+              className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-none text-xs font-bold transition-all cursor-pointer"
+            >
+              داخستن
+            </button>
+
+          </div>
         </div>
       )}
 
