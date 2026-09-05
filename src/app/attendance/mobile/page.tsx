@@ -105,6 +105,19 @@ function formatMinutesKurdish(mins: number): string {
 
 export default function AutonomousMobileAppLight() {
   const [currentTimeStr, setCurrentTimeStr] = useState('');
+
+  // 📸 Face ID Biometric Attendance States
+  const [showFaceModal, setShowFaceModal] = useState(false);
+  const [faceModalAction, setFaceModalAction] = useState<'ENTER' | 'EXIT' | 'ENROLL'>('ENTER');
+  const [faceModelsLoaded, setFaceModelsLoaded] = useState(false);
+  const [isFaceScanning, setIsFaceScanning] = useState(false);
+  const [faceScanStatus, setFaceScanStatus] = useState<string>('سەیری کامێرا بکە...');
+  const [faceVerifiedSuccess, setFaceVerifiedSuccess] = useState(false);
+  const [registeredFaceDesc, setRegisteredFaceDesc] = useState<number[] | null>(null);
+  const [hasRegisteredFace, setHasRegisteredFace] = useState(false);
+  const faceVideoRef = useRef<HTMLVideoElement | null>(null);
+  const faceStreamRef = useRef<MediaStream | null>(null);
+  const faceIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [offlinePendingCount, setOfflinePendingCount] = useState<number>(0);
   const [isSyncingOffline, setIsSyncingOffline] = useState<boolean>(false);
