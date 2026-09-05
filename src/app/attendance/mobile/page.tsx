@@ -113,6 +113,7 @@ export default function AutonomousMobileAppLight() {
   const [isFaceScanning, setIsFaceScanning] = useState(false);
   const [faceScanStatus, setFaceScanStatus] = useState<string>('سەیری کامێرا بکە...');
   const [faceVerifiedSuccess, setFaceVerifiedSuccess] = useState(false);
+  const [faceHoldProgress, setFaceHoldProgress] = useState(0);
   const [registeredFaceDesc, setRegisteredFaceDesc] = useState<number[] | null>(null);
   const [hasRegisteredFace, setHasRegisteredFace] = useState(false);
   const faceVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -834,6 +835,7 @@ export default function AutonomousMobileAppLight() {
   const openFaceScanner = async (action: 'ENTER' | 'EXIT' | 'ENROLL') => {
     setFaceModalAction(action);
     setFaceVerifiedSuccess(false);
+    setFaceHoldProgress(0);
     setFaceScanStatus('لە بارکردنی ژیریی دەستکردی دەموچاو...');
     setShowFaceModal(true);
 
@@ -870,9 +872,15 @@ export default function AutonomousMobileAppLight() {
     setShowFaceModal(false);
   };
 
-  // Face Scan Loop
+  // 📸 Face Scan Loop with 2-Second Circular Progress Ring
+  const holdCounterRef = useRef<number>(0);
+  const candidateDescRef = useRef<number[] | null>(null);
+
   useEffect(() => {
     if (!showFaceModal || !isFaceScanning || !faceVideoRef.current) return;
+    holdCounterRef.current = 0;
+    candidateDescRef.current = null;
+    setFaceHoldProgress(0);
 
     faceIntervalRef.current = setInterval(async () => {
       if (!faceVideoRef.current || faceVerifiedSuccess) return;
@@ -880,14 +888,40 @@ export default function AutonomousMobileAppLight() {
       try {
         const result = await extractFaceDescriptor(faceVideoRef.current);
         if (!result || !result.descriptor) {
-          setFaceScanStatus('سەیری ناو بازنەکە بکە...');
+          // Face lost or moved outside circle: reset 2-second progress smoothly
+          if (holdCounterRef.current > 0) {
+            holdCounterRef.current = Math.max(0, holdCounterRef.current - 15);
+            setFaceHoldProgress(Math.round((holdCounterRef.current / 100) * 100));
+          }
+          setFaceScanStatus('ڕوخسارت لە ناو بازنەکە جێگیر بکە...');
           return;
         }
 
+        candidateDescRef.current = result.descriptor;
+
+        // Face is present inside circle: increment progress (10 steps over 2000ms)
+        holdCounterRef.current = Math.min(100, holdCounterRef.current + 10);
+        const currentPct = Math.min(100, Math.round(holdCounterRef.current));
+        setFaceHoldProgress(currentPct);
+
+        if (currentPct < 100) {
+          setFaceScanStatus(`بۆ ٢ چرکە جێگیربە... ${currentPct}٪`);
+          return;
+        }
+
+        // Full 2 seconds reached (100% filled)!
+        const finalDescriptor = candidateDescRef.current;
+        if (!finalDescriptor) return;
+
         // ENROLL MODE
         if (faceModalAction === 'ENROLL') {
-          setFaceScanStatus('دەموچاو دۆزرایەوە! لە پاشەکەوتکردندایە...');
           setFaceVerifiedSuccess(true);
+          setFaceScanStatus('🎉 دەموچاو و ناسنامە بە سەرکەوتوویی پێکەوە بەسترانەوە!');
+
+          let devToken = 'dev-auto';
+          try {
+            devToken = localStorage.getItem('ashley_device_token') || 'dev-auto';
+          } catch {}
 
           await fetch('/api/attendance/face/register', {
             method: 'POST',
@@ -895,40 +929,39 @@ export default function AutonomousMobileAppLight() {
             body: JSON.stringify({
               userId: employeeProfile?.id,
               userName: employeeProfile?.name,
-              descriptor: result.descriptor
+              deviceToken: devToken,
+              descriptor: finalDescriptor,
+              boundAt: new Date().toISOString()
             })
           });
 
-          setRegisteredFaceDesc(result.descriptor);
+          setRegisteredFaceDesc(finalDescriptor);
           setHasRegisteredFace(true);
-          setFaceScanStatus('🎉 دەموچاوت بە سەرکەوتوویی تۆمارکرا!');
           setTimeout(closeFaceScanner, 1800);
           return;
         }
 
         // VERIFY ATTENDANCE MODE (ENTER / EXIT)
-        setFaceScanStatus('لە پشکنینی ناسنامەی دەموچاو...');
-
         let isMatch = true;
         if (registeredFaceDesc && registeredFaceDesc.length > 0) {
-          const matchResult = matchFaceDescriptors(result.descriptor, registeredFaceDesc, 0.48);
+          const matchResult = matchFaceDescriptors(finalDescriptor, registeredFaceDesc, 0.48);
           isMatch = matchResult.isMatch;
         }
 
         if (isMatch) {
           setFaceVerifiedSuccess(true);
           setFaceScanStatus(`✅ ناسنامە پەسەندکرا: ${employeeProfile?.name || 'کارمەند'}`);
-
-          // Execute Attendance Action
           await handleTriggerAttendance(faceModalAction === 'EXIT' ? 'EXIT' : 'ENTER');
           setTimeout(closeFaceScanner, 1800);
         } else {
-          setFaceScanStatus('⚠️ دەموچاو یەکناگرێتەوە لەگەڵ ئەم کارمەندە!');
+          setFaceScanStatus('⚠️ دەموچاو لەگەڵ ئەم کارمەندە ناگونجێت!');
+          holdCounterRef.current = 0;
+          setFaceHoldProgress(0);
         }
       } catch (err) {
         console.warn('Face loop error:', err);
       }
-    }, 600);
+    }, 200);
 
     return () => {
       if (faceIntervalRef.current) clearInterval(faceIntervalRef.current);
@@ -1614,6 +1647,27 @@ export default function AutonomousMobileAppLight() {
                 {/* 🎯 INTERACTIVE MANUAL & FACE ID ATTENDANCE ACTION PANEL */}
                 <div className="space-y-3 pt-1">
                   
+                  {/* 🔒 MANDATORY FACE ENROLLMENT REQUIREMENT GUARD */}
+                  {!hasRegisteredFace && (
+                    <div className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-300 rounded-none text-center space-y-3 shadow-md animate-in fade-in">
+                      <div className="flex items-center justify-center gap-2 text-xs font-black text-amber-900">
+                        <ShieldAlert className="w-5 h-5 text-amber-600 animate-pulse" />
+                        <span>پێویستە سەرەتا دەموچاوت تۆمار بکەیت!</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800 font-bold leading-relaxed">
+                        بۆ ئاسایش و بەستنەوەی ڕوخساری کارمەند بەم مۆبایلە، ناتوانیت دەوام تۆمار بکەیت تا دەموچاوت داخڵ نەکەیت (تەنها ٢ چرکە دەخایەنێت).
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openFaceScanner('ENROLL')}
+                        className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white rounded-none text-xs font-black shadow-lg shadow-amber-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 animate-bounce"
+                      >
+                        <Camera className="w-4 h-4" />
+                        <span>📸 تۆمارکردنی سەرەتایی دەموچاو (Face Enrollment)</span>
+                      </button>
+                    </div>
+                  )}
+                  
                   {/* Current Shift Quick Summary */}
                   <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 border border-slate-200 text-center">
                     <div>
@@ -1638,7 +1692,7 @@ export default function AutonomousMobileAppLight() {
                       <button
                         type="button"
                         onClick={() => openFaceScanner('ENTER')}
-                        disabled={!!triggerLoading}
+                        disabled={!!triggerLoading || !hasRegisteredFace}
                         className="w-full py-3.5 px-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-none font-black text-xs shadow-md flex flex-col items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 disabled:opacity-50"
                       >
                         <div className="flex items-center gap-1.5">
@@ -2378,32 +2432,63 @@ export default function AutonomousMobileAppLight() {
               </button>
             </div>
 
-            {/* Circular Camera Viewfinder */}
-            <div className="relative w-64 h-64 rounded-full overflow-hidden border-4 border-blue-500/60 shadow-2xl flex items-center justify-center bg-black">
-              <video
-                ref={faceVideoRef}
-                playsInline
-                muted
-                className="w-full h-full object-cover scale-x-[-1]"
-              />
+            {/* Circular Camera Viewfinder with 2-Second Filling Progress Ring */}
+            <div className="relative w-72 h-72 flex items-center justify-center select-none">
+              
+              {/* Camera Video Inside Rounded Circle */}
+              <div className="w-60 h-60 rounded-full overflow-hidden bg-black shadow-2xl relative flex items-center justify-center border-2 border-slate-800">
+                <video
+                  ref={faceVideoRef}
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover scale-x-[-1]"
+                />
 
-              {/* Scanning Target Ring */}
-              <div className={`absolute inset-2 rounded-full border-2 border-dashed transition-all duration-300 pointer-events-none ${
-                faceVerifiedSuccess ? 'border-emerald-400 shadow-xl shadow-emerald-500/50' : 'border-blue-400 animate-spin-slow'
-              }`} />
+                {/* Laser scanline */}
+                {!faceVerifiedSuccess && (
+                  <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent animate-bounce pointer-events-none shadow-lg shadow-blue-500" />
+                )}
 
-              {/* Laser line */}
-              {!faceVerifiedSuccess && (
-                <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent animate-bounce pointer-events-none" />
-              )}
+                {/* Verified Success Overlay */}
+                {faceVerifiedSuccess && (
+                  <div className="absolute inset-0 bg-emerald-950/85 backdrop-blur-xs flex flex-col items-center justify-center animate-in zoom-in-95 duration-200 z-20">
+                    <CheckCircle2 className="w-16 h-16 text-emerald-400 animate-bounce" />
+                    <span className="text-xs font-black text-white mt-2">پەسەندکرا!</span>
+                  </div>
+                )}
+              </div>
 
-              {/* Verified Success Overlay */}
-              {faceVerifiedSuccess && (
-                <div className="absolute inset-0 bg-emerald-950/80 backdrop-blur-xs flex flex-col items-center justify-center animate-in zoom-in-95 duration-200">
-                  <CheckCircle2 className="w-16 h-16 text-emerald-400 animate-bounce" />
-                  <span className="text-xs font-black text-white mt-2">پەسەندکرا!</span>
-                </div>
-              )}
+              {/* 2-Second SVG Circular Progress Ring Wrapped Around Camera */}
+              <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 100 100">
+                {/* Background Track Ring */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="45"
+                  fill="transparent"
+                  stroke="rgba(255, 255, 255, 0.15)"
+                  strokeWidth="5"
+                />
+                {/* Active Filling Progress Ring (2 Seconds) */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="45"
+                  fill="transparent"
+                  stroke={faceVerifiedSuccess ? '#10b981' : (faceHoldProgress > 0 ? '#3b82f6' : 'rgba(59, 130, 246, 0.3)')}
+                  strokeWidth="5"
+                  strokeDasharray="282.74"
+                  strokeDashoffset={282.74 - (282.74 * faceHoldProgress) / 100}
+                  strokeLinecap="round"
+                  className="transition-all duration-150 ease-linear"
+                />
+              </svg>
+
+              {/* Progress Percentage Indicator Badge */}
+              <div className="absolute bottom-2 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-[11px] font-mono font-black text-white shadow-md">
+                {faceHoldProgress > 0 ? `${faceHoldProgress}%` : '٢ چرکە'}
+              </div>
+
             </div>
 
             {/* Status Text HUD */}

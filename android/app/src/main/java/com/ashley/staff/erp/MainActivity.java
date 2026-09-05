@@ -13,6 +13,8 @@ import android.provider.Settings;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
+import android.webkit.WebChromeClient;
+import android.webkit.PermissionRequest;
 import android.webkit.WebView;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
@@ -45,6 +47,19 @@ public class MainActivity extends BridgeActivity {
                 settings.setDatabaseEnabled(true);
                 settings.setAllowFileAccess(true);
                 settings.setAllowContentAccess(true);
+                settings.setMediaPlaybackRequiresUserGesture(false);
+
+                // Automatically grant WebRTC camera permission to WebView
+                webView.setWebChromeClient(new WebChromeClient() {
+                    @Override
+                    public void onPermissionRequest(final PermissionRequest request) {
+                        MainActivity.this.runOnUiThread(() -> {
+                            try {
+                                request.grant(request.getResources());
+                            } catch (Exception ignored) {}
+                        });
+                    }
+                });
 
                 // Inject Native JavaScript Bridge into Capacitor WebView WITHOUT replacing BridgeWebViewClient
                 webView.addJavascriptInterface(new AshleyNativeBridge(this), "AshleyNativeBridge");
@@ -73,6 +88,7 @@ public class MainActivity extends BridgeActivity {
     private void checkAndRequestPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             List<String> permissions = new ArrayList<>();
+            permissions.add(Manifest.permission.CAMERA);
             permissions.add(Manifest.permission.ACCESS_FINE_LOCATION);
             permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION);
 
