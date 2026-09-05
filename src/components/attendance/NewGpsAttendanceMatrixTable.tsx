@@ -20,6 +20,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { getDaysInMonth, format, getDay } from 'date-fns';
+import Link from 'next/link';
 import { AdminEmployeeDetailsModal } from '@/components/admin/AdminEmployeeDetailsModal';
 
 interface NewGpsAttendanceMatrixTableProps {
@@ -682,11 +683,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               return (
                 <tr key={emp.id} className={`hover:bg-blue-50/40 transition-colors ${isDarko ? 'bg-amber-50/30' : ''}`}>
                   <td className="sticky right-0 bg-white z-10 px-3 py-2 border-l border-slate-300 font-bold shadow-xs">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedEmp360(emp)}
+                    <Link
+                      href={`/employees/${emp.id}`}
                       className="flex items-center gap-2 text-right hover:text-blue-700 cursor-pointer group transition-colors w-full"
-                      title="کلیک بکە بۆ کردنەوەی فایلی تەواوی HR و وێنە و زانیاریەکانی کارمەند"
+                      title="کلیک بکە بۆ کردنەوەی پەیجی فەرمی ئەم کارمەندە و ئامێر و مۆبایلەکەی"
                     >
                       <div className="w-8 h-8 rounded-none bg-slate-800 border border-slate-600 overflow-hidden flex items-center justify-center text-white text-xs font-black flex-shrink-0 group-hover:border-blue-600">
                         {emp.photoUrl ? (
@@ -704,7 +704,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           {isDarko ? 'بەڕێوەبەری سەرەکی' : emp.role || 'Staff'} ({emp.id})
                         </div>
                       </div>
-                    </button>
+                    </Link>
                   </td>
                   {daysArray.map((d) => {
                     const info = getGpsLogsForEmpAndDay(emp, d);

@@ -1,452 +1,878 @@
+'use client';
 
-"use client"
-
-import { useState, useMemo, useEffect, useRef } from "react"
-import { useParams, useRouter } from "next/navigation"
-import Link from "next/link"
-import withAuth from "@/hooks/withAuth";
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
-import { format, parseISO } from "date-fns"
-import { cn } from "@/lib/utils"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ArrowLeft, Edit, Trash2, Save, X, Upload, Mail, Phone, Cake, Calendar as CalendarIcon, DollarSign, Clock, Gift, Banknote, FileDown, Printer, UserX, User, Loader2 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
-import { useToast } from "@/hooks/use-toast"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { useAppContext } from "@/context/app-provider"
-import type { Employee, Expense, Overtime, Bonus, CashWithdrawal } from "@/lib/types"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useTranslation } from "@/hooks/use-translation"
-import { useStorage } from "@/firebase";
-import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
-import { EmployeeReportPdf } from "@/components/employees/EmployeeReportPdf";
-import { EmployeeActivityChart } from "@/components/employees/EmployeeActivityChart";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import withAuth from '@/hooks/withAuth';
+import { 
+  ArrowRight, 
+  Edit, 
+  Trash2, 
+  Save, 
+  X, 
+  Upload, 
+  Mail, 
+  Phone, 
+  Cake, 
+  Calendar as CalendarIcon, 
+  DollarSign, 
+  Clock, 
+  Gift, 
+  Banknote, 
+  FileDown, 
+  Printer, 
+  UserX, 
+  UserCheck, 
+  User, 
+  Loader2,
+  Smartphone,
+  ShieldCheck,
+  ShieldAlert,
+  Camera,
+  RefreshCw,
+  KeyRound,
+  CheckCircle2,
+  Calendar,
+  Layers,
+  Sparkles,
+  ExternalLink,
+  ChevronRight
+} from 'lucide-react';
+import { format, parseISO, getDaysInMonth, getDay } from 'date-fns';
+import { useAppContext } from '@/context/app-provider';
+import type { Employee, AttendanceRecord } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
+import { AdminFaceEnrollModal } from '@/components/attendance/AdminFaceEnrollModal';
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
-const employeeRoles: Exclude<Employee['role'], null | undefined>[] = [
-    'Super Manager', 
-    'Manager', 
-    'IT', 
-    'Employee Supervisor', 
-    'Transport Supervisor', 
-    'Employee', 
-    'Marketing'
+const ASHLEY_DEFAULT_EMPLOYEES = [
+  { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', fullName3Part: 'سه هەند مەریوان حەمەسەعید', role: 'Employee', phone: '0770 123 4567', startDate: '2025-01-01', pin: '1001', password: '1001', deviceBound: false },
+  { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', fullName3Part: 'دارکۆ حەیدەر حسێن', role: 'Manager', phone: '0770 765 4321', startDate: '2024-01-01', pin: '1002', password: '1002', deviceBound: true },
+  { id: 'emp-03', name: 'شادیار هوشیار', fullName3Part: 'شادیار هوشیار', role: 'Employee Supervisor', phone: '0750 111 2233', startDate: '2025-02-01', pin: '1003', password: '1003', deviceBound: false },
+  { id: 'emp-04', name: 'هەڤاڵ حبیب حەمەڕەزا', fullName3Part: 'هەڤاڵ حبیب حەمەڕەزا', role: 'Transport Supervisor', phone: '0750 222 3344', startDate: '2025-02-15', pin: '1004', password: '1004', deviceBound: false },
+  { id: 'emp-05', name: 'عیماد سەباح نوری', fullName3Part: 'عیماد سەباح نوری', role: 'Employee', phone: '0770 333 4455', startDate: '2025-03-01', pin: '1005', password: '1005', deviceBound: false },
+  { id: 'emp-06', name: 'کامەران عومەر ڕووئوف', fullName3Part: 'کامەران عومەر ڕووئوف', role: 'Employee', phone: '0770 444 5566', startDate: '2025-03-10', pin: '1006', password: '1006', deviceBound: false },
+  { id: 'emp-07', name: 'ڕابەر محەمەد مەحمود', fullName3Part: 'ڕابەر محەمەد مەحمود', role: 'Employee', phone: '0770 555 6677', startDate: '2025-04-01', pin: '1007', password: '1007', deviceBound: false },
+  { id: 'emp-08', name: 'دانەر محەمەد باسام', fullName3Part: 'دانەر محەمەد باسام', role: 'Employee', phone: '0770 666 7788', startDate: '2025-04-15', pin: '1008', password: '1008', deviceBound: false },
+  { id: 'emp-09', name: 'ڕێبین سەباح نوری', fullName3Part: 'ڕێبین سەباح نوری', role: 'Employee', phone: '0770 777 8899', startDate: '2025-05-01', pin: '1009', password: '1009', deviceBound: false },
+  { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', fullName3Part: 'بەهرەمەند ڕزگار عزیز', role: 'Employee', phone: '0770 888 9900', startDate: '2025-05-15', pin: '1010', password: '1010', deviceBound: false },
+  { id: 'emp-11', name: 'شادومان یادگار رحیم', fullName3Part: 'شادومان یادگار رحیم', role: 'Employee', phone: '0750 999 0011', startDate: '2025-06-01', pin: '1011', password: '1011', deviceBound: false },
+  { id: 'emp-12', name: 'سەروەت قادر', fullName3Part: 'سەروەت قادر', role: 'Employee', phone: '0750 000 1122', startDate: '2025-06-15', pin: '1012', password: '1012', deviceBound: false },
 ];
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'IQD',
-    maximumFractionDigits: 0,
-  }).format(amount);
-};
-
-const safeDate = (dateValue: string | undefined | null): Date | null => {
-  if (!dateValue) return null;
-  try {
-    const parsed = parseISO(dateValue);
-    return isNaN(parsed.getTime()) ? null : parsed;
-  } catch {
-    return null;
-  }
-};
-
-function EmployeeForm({
-  employee,
-  onSave,
-  onCancel,
-}: {
-  employee: Employee;
-  onSave: (updatedData: Partial<Employee>) => void;
-  onCancel: () => void;
-}) {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const storage = useStorage();
-
-  const [name, setName] = useState(employee.name);
-  const [kurdishName, setKurdishName] = useState(employee.kurdishName || '');
-  const [uniqueId, setUniqueId] = useState(employee.employeeId || '');
-  const [role, setRole] = useState<Employee['role']>(employee.role);
-  const [employmentStartDate, setEmploymentStartDate] = useState<Date | undefined>(safeDate(employee.employmentStartDate) || undefined);
-  const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(safeDate(employee.dateOfBirth) || undefined);
-  const [email, setEmail] = useState(employee.email || '');
-  const [phone, setPhone] = useState(employee.phone || '');
-  const [photoUrl, setPhotoUrl] = useState<string | undefined>(employee.photoUrl || undefined);
-  const [notes, setNotes] = useState(employee.notes || '');
-
-  const photoUploadRef = useRef<HTMLInputElement>(null);
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = event => {
-      const localUrl = event.target?.result as string;
-      if (localUrl) {
-        setPhotoUrl(localUrl);
-        const filePath = `employees/${employee.id}/photo.png`;
-        const sRef = storageRef(storage, filePath);
-
-        const uploadToast = toast({ title: 'Uploading...', description: 'Your new photo is being uploaded.' });
-        uploadString(sRef, localUrl, 'data_url')
-          .then(() => getDownloadURL(sRef))
-          .then(downloadURL => {
-            setPhotoUrl(downloadURL);
-            uploadToast.update({ id: uploadToast.id, title: 'Upload Complete', description: 'Photo updated. Click Save to apply changes.' });
-          })
-          .catch(err => {
-            console.error('Error uploading/getting URL', err);
-            uploadToast.update({ id: uploadToast.id, variant: 'destructive', title: 'Upload Failed', description: 'Could not save the photo.' });
-          });
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleSave = () => {
-    if (!name) {
-      toast({ variant: 'destructive', title: 'Name is required' });
-      return;
-    }
-    const updatedData: Partial<Employee> = {
-      name,
-      kurdishName: kurdishName || null,
-      employeeId: uniqueId || null,
-      role: role || null,
-      employmentStartDate: employmentStartDate ? employmentStartDate.toISOString() : null,
-      dateOfBirth: dateOfBirth ? dateOfBirth.toISOString() : null,
-      email: email || null,
-      phone: phone || null,
-      photoUrl: photoUrl || null,
-      notes: notes || null,
-    };
-    onSave(updatedData);
-  };
-
-  return (
-    <>
-      <Card className="border-0 shadow-none">
-        <CardHeader className="flex-col md:flex-row gap-6 space-y-0 items-start">
-          <div className="relative">
-            <Avatar className="w-24 h-24 md:w-32 md:h-32 border-4 border-primary/20">
-              <AvatarImage src={photoUrl || undefined} alt={name} />
-              <AvatarFallback><User className="w-16 h-16" /></AvatarFallback>
-            </Avatar>
-            <Button size="icon" variant="outline" className="absolute -bottom-2 -right-2 rounded-full h-10 w-10" onClick={() => photoUploadRef.current?.click()}>
-              <Upload className="w-5 h-5" />
-              <input ref={photoUploadRef} type="file" onChange={handlePhotoUpload} accept="image/*" className="hidden" />
-            </Button>
-          </div>
-          <div className="w-full">
-            <div className='space-y-4'>
-              <Input className="text-2xl h-12" value={name} onChange={e => setName(e.target.value)} placeholder={t('employee_name')} />
-              <Input dir="rtl" className="text-2xl h-12" value={kurdishName} onChange={e => setKurdishName(e.target.value)} placeholder="ناو بە کوردی" />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input value={uniqueId} onChange={e => setUniqueId(e.target.value)} placeholder={t('employee_id_optional')} />
-                 <Select value={role || undefined} onValueChange={(v) => setRole(v as Employee['role'])}>
-                  <SelectTrigger><SelectValue placeholder={t('select_a_role')} /></SelectTrigger>
-                  <SelectContent>{employeeRoles.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Popover><PopoverTrigger asChild><Button variant="outline" className={cn("justify-start text-left", !employmentStartDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{employmentStartDate ? `${t('start_date_optional')}: ${format(employmentStartDate, 'PPP')}` : <span>{t('pick_a_date')}</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={employmentStartDate} onSelect={setEmploymentStartDate} initialFocus captionLayout="dropdown" fromYear={1990} toYear={2040} /></PopoverContent></Popover>
-                <Popover><PopoverTrigger asChild><Button variant="outline" className={cn("justify-start text-left", !dateOfBirth && "text-muted-foreground")}><Cake className="mr-2 h-4 w-4" />{dateOfBirth ? `${t('dob_optional')}: ${format(dateOfBirth, 'PPP')}` : <span>{t('pick_a_date')}</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dateOfBirth} onSelect={setDateOfBirth} initialFocus captionLayout="dropdown" fromYear={1950} toYear={new Date().getFullYear()} /></PopoverContent></Popover>
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="mt-6 space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="space-y-2"><Label>{t('email_optional')}</Label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="employee@example.com" className="pl-10" /></div></div>
-            <div className="space-y-2"><Label>{t('phone_optional')}</Label><div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="0000-000-000" className="pl-10" /></div></div>
-          </div>
-          <div className="space-y-2"><Label>{t('notes')}</Label><Textarea className="min-h-[120px]" value={notes} onChange={e => setNotes(e.target.value)} placeholder={t('notes_optional_long')} /></div>
-        </CardContent>
-      </Card>
-      <CardFooter>
-        <div className="flex w-full gap-2 justify-end">
-            <Button onClick={handleSave}><Save className="mr-2 h-4 w-4"/> {t('save_changes')}</Button>
-            <Button variant="ghost" onClick={onCancel}><X className="mr-2 h-4 w-4"/> {t('cancel')}</Button>
-        </div>
-      </CardFooter>
-    </>
-  );
-}
-
-
 function EmployeeDetailPage() {
-  const { t, language } = useTranslation();
-  const isRTL = language === 'ku';
   const params = useParams();
   const router = useRouter();
-  const employeeId = params.id as string;
+  const { toast } = useToast();
+  const employeeId = (params?.id as string) || '';
 
   const {
-    employees, setEmployees,
-    expenses, overtime, bonuses, withdrawals,
-    isLoading: isAppLoading, settings
+    employees = [],
+    setEmployees,
+    attendanceLogs = [],
+    expenses = [],
+    overtime = [],
+    bonuses = [],
+    withdrawals = []
   } = useAppContext();
-  
-  const { toast } = useToast();
-  
+
+  // Find Employee from Context or fallback list
+  const selectedEmployee = useMemo(() => {
+    const found = employees.find(e => e.id === employeeId);
+    if (found) return found;
+    const fallback = ASHLEY_DEFAULT_EMPLOYEES.find(e => e.id === employeeId);
+    if (fallback) return fallback as any as Employee;
+    return null;
+  }, [employees, employeeId]);
+
+  // Active Tab: 'overview' | 'device' | 'attendance' | 'finance'
+  const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'finance'>('overview');
+
+  // Month selection for attendance matrix
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'));
+
+  // Mobile Device State
+  const [isDeviceBound, setIsDeviceBound] = useState<boolean>(() => {
+    if (employeeId === 'emp-02') return true;
+    return Boolean((selectedEmployee as any)?.deviceBound);
+  });
+  const [empPin, setEmpPin] = useState<string>(() => {
+    return (selectedEmployee as any)?.password || (selectedEmployee as any)?.pin || '1234';
+  });
+  const [isUpdatingPin, setIsUpdatingPin] = useState(false);
+  const [isUnbinding, setIsUnbinding] = useState(false);
+
+  // AI Face ID State
+  const [hasFace, setHasFace] = useState<boolean>(false);
+  const [showFaceModal, setShowFaceModal] = useState(false);
+  const [isDeletingFace, setIsDeletingFace] = useState(false);
+
+  // Edit Mode for basic info
   const [isEditing, setIsEditing] = useState(false);
-  
-  const selectedEmployee = useMemo(() => employees?.find(e => e.id === employeeId), [employees, employeeId]);
-  
-  // --- Individual Employee Logic ---
-  const { totalExpenses, sortedExpenses } = useMemo(() => {
-    if (!employeeId) return { totalExpenses: 0, sortedExpenses: [] };
-    const empExpenses = expenses.filter(e => e.employeeId === employeeId);
-    const total = empExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-    const sorted = [...empExpenses].filter(e => e.date && !isNaN(parseISO(e.date).getTime())).sort((a,b) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
-    return { totalExpenses: total, sortedExpenses: sorted };
-  }, [expenses, employeeId]);
+  const [editName, setEditName] = useState('');
+  const [editFullName3Part, setEditFullName3Part] = useState('');
+  const [editRole, setEditRole] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editStartDate, setEditStartDate] = useState('');
+  const [editPhotoUrl, setEditPhotoUrl] = useState('');
 
-  const { totalOvertimeAmount, totalOvertimeHours, sortedOvertime } = useMemo(() => {
-    if (!employeeId) return { totalOvertimeAmount: 0, totalOvertimeHours: 0, sortedOvertime: [] };
-    const empOvertime = overtime.filter(e => e.employeeId === employeeId);
-    const totals = empOvertime.reduce((acc, ot) => { acc.totalAmount += ot.totalAmount; acc.totalHours += ot.hours; return acc; }, { totalAmount: 0, totalHours: 0 });
-    const sorted = [...empOvertime].filter(o => o.date && !isNaN(parseISO(o.date).getTime())).sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
-    return { totalOvertimeAmount: totals.totalAmount, totalOvertimeHours: totals.totalHours, sortedOvertime: sorted };
-  }, [overtime, employeeId]);
+  // Sync basic info for editing
+  useEffect(() => {
+    if (selectedEmployee) {
+      setEditName(selectedEmployee.name || '');
+      setEditFullName3Part((selectedEmployee as any).fullName3Part || selectedEmployee.name || '');
+      setEditRole(selectedEmployee.role || 'Staff');
+      setEditPhone(selectedEmployee.phone || '');
+      setEditStartDate((selectedEmployee as any).startDate || selectedEmployee.employmentStartDate?.slice(0, 10) || '');
+      setEditPhotoUrl(selectedEmployee.photoUrl || '');
+      setEmpPin((selectedEmployee as any).password || (selectedEmployee as any).pin || '1234');
+      setIsDeviceBound(employeeId === 'emp-02' ? true : Boolean((selectedEmployee as any)?.deviceBound));
+    }
+  }, [selectedEmployee, employeeId]);
 
-  const { totalBonuses, sortedBonuses } = useMemo(() => {
-    if (!employeeId) return { totalBonuses: 0, sortedBonuses: [] };
-    const empBonuses = bonuses.filter(b => b.employeeId === employeeId);
-    const total = empBonuses.reduce((sum, b) => sum + b.totalAmount, 0);
-    const sorted = [...empBonuses].filter(b => b.date && !isNaN(parseISO(b.date).getTime())).sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
-    return { totalBonuses: total, sortedBonuses: sorted };
-  }, [bonuses, employeeId]);
-
-  const { totalWithdrawals, sortedWithdrawals } = useMemo(() => {
-    if (!employeeId) return { totalWithdrawals: 0, sortedWithdrawals: [] };
-    const empWithdrawals = withdrawals.filter(w => w.employeeId === employeeId);
-    const total = empWithdrawals.reduce((sum, w) => sum + w.amount, 0);
-    const sorted = [...empWithdrawals].filter(w => w.date && !isNaN(parseISO(w.date).getTime())).sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
-    return { totalWithdrawals: total, sortedWithdrawals: sorted };
-  }, [withdrawals, employeeId]);
-  
-  const handleUpdate = (updatedData: Partial<Employee>) => {
+  // Check Face ID status from server
+  const checkFaceStatus = useCallback(async () => {
     if (!employeeId) return;
-    setEmployees(employees.map(emp => emp.id === employeeId ? { ...emp, ...updatedData } : emp));
-    toast({ title: t('save_changes'), description: t('employee_details_updated') });
-    setIsEditing(false);
-  };
-  
-  const handleDelete = () => {
-    if(!employeeId) return;
-    setEmployees(employees.filter(e => e.id !== employeeId));
-    toast({ title: t('employee_deleted'), description: t('employee_deleted_desc', {employeeName: selectedEmployee?.name}) });
-    router.push('/employees');
-  };
-  
-  const handleToggleActiveStatus = () => {
+    try {
+      const localDb = JSON.parse(localStorage.getItem('ashley_face_registry_local') || '{}');
+      if (localDb[employeeId]) {
+        setHasFace(true);
+      }
+      const res = await fetch(`/api/attendance/face/status?userId=${employeeId}&_t=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setHasFace(Boolean(data.registered));
+      }
+    } catch {}
+  }, [employeeId]);
+
+  useEffect(() => {
+    checkFaceStatus();
+  }, [checkFaceStatus]);
+
+  // Unbind Mobile Device
+  const handleUnbindDevice = async () => {
     if (!selectedEmployee) return;
-    const isRTL = language === 'ku';
-    setEmployees(employees.map(e => e.id === selectedEmployee.id ? { ...e, isActive: !e.isActive } : e));
-    toast({ 
-      title: employeeIsActive ? (isRTL ? 'کارمەند ناچالاک کرایەوە' : 'Employee Deactivated') : (isRTL ? 'کارمەند کارا کرایەوە' : 'Employee Reactivated'), 
-      description: isRTL ? `${selectedEmployee.name} بە سەرکەوتوویی ${employeeIsActive ? 'ناچالاک' : 'کارا'} کرایەوە.` : `${selectedEmployee.name} has been ${employeeIsActive ? 'deactivated' : 'reactivated'}.` 
+    if (!confirm(`ئایا دڵنیایت لە هەڵوەشاندنەوە و ڕیستکردنی مۆبایلی (${selectedEmployee.name})؟ دەستبەجێ لە مۆبایلی کارمەند لۆگ-ئاوت دەبێت.`)) {
+      return;
+    }
+
+    setIsUnbinding(true);
+    try {
+      await fetch('/api/attendance/unbind-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: selectedEmployee.id })
+      });
+
+      setIsDeviceBound(false);
+      setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? { ...e, deviceBound: false } as any : e));
+
+      toast({
+        title: '✅ مۆبایل هەڵوەشێنرایەوە',
+        description: 'مۆبایلی کارمەند بە سەرکەوتوویی لە ئەکاونتەکە کرایەوە و لۆگ-ئاوت کرا.'
+      });
+    } catch {
+      toast({
+        variant: 'destructive',
+        title: 'هەڵەیەک ڕوویدا',
+        description: 'نەتوانرا پەیوەندی مۆبایلەکە هەڵبوەشێنرێتەوە.'
+      });
+    } finally {
+      setIsUnbinding(false);
+    }
+  };
+
+  // Update PIN code
+  const handleSavePin = async () => {
+    if (!empPin.trim() || empPin.length < 4) {
+      alert('تکایە کۆدی PIN لانیکەم ٤ ژمارە بێت.');
+      return;
+    }
+
+    setIsUpdatingPin(true);
+    try {
+      setEmployees(prev => prev.map(e => e.id === employeeId ? { ...e, pin: empPin, password: empPin } as any : e));
+      toast({
+        title: '✅ کۆدی PIN نوێکرایەوە',
+        description: `کۆدی نوێی چوونەژوورەوەی مۆبایل: ${empPin}`
+      });
+    } finally {
+      setIsUpdatingPin(false);
+    }
+  };
+
+  // Delete Face ID
+  const handleDeleteFace = async () => {
+    if (!confirm(`ئایا دڵنیایت لە سڕینەوەی ناسنامەی دەموچاوی (${selectedEmployee?.name})؟`)) return;
+    setIsDeletingFace(true);
+    try {
+      try {
+        const localDb = JSON.parse(localStorage.getItem('ashley_face_registry_local') || '{}');
+        delete localDb[employeeId];
+        localStorage.setItem('ashley_face_registry_local', JSON.stringify(localDb));
+      } catch {}
+
+      await fetch('/api/attendance/face/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: employeeId })
+      });
+
+      setHasFace(false);
+      toast({
+        title: '✅ ڕوخسار سڕایەوە',
+        description: 'ناسنامەی دەموچاوی کارمەند بە سەرکەوتوویی سڕایەوە.'
+      });
+    } catch {
+      toast({ variant: 'destructive', title: 'هەڵە', description: 'نەتوانرا ڕوخسار بسڕدرێتەوە.' });
+    } finally {
+      setIsDeletingFace(false);
+    }
+  };
+
+  // Save Profile Edits
+  const handleSaveProfile = () => {
+    if (!selectedEmployee) return;
+    const updated = {
+      ...selectedEmployee,
+      name: editName,
+      fullName3Part: editFullName3Part,
+      role: editRole,
+      phone: editPhone,
+      startDate: editStartDate,
+      photoUrl: editPhotoUrl,
+    };
+    setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? (updated as any) : e));
+    setIsEditing(false);
+    toast({
+      title: '✅ زانیارییەکان نوێکرانەوە',
+      description: 'گۆڕانکارییەکان لە پرۆفایلی کارمەند بە سەرکەوتوویی پاشەکەوت کران.'
     });
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const handleExportExcelForDetail = () => {
+  // Toggle Resigned / Active
+  const handleToggleResigned = () => {
     if (!selectedEmployee) return;
-
-    const wb = XLSX.utils.book_new();
-
-    const profileData = [
-        { "Field": t('employee_name'), "Value": selectedEmployee.name }, { "Field": t('kurdish_name'), "Value": selectedEmployee.kurdishName || t('na') },
-        { "Field": t('id_colon'), "Value": selectedEmployee.employeeId || t('na') }, { "Field": t('role_optional'), "Value": selectedEmployee.role || t('na') },
-        { "Field": t('email_optional'), "Value": selectedEmployee.email || t('na') }, { "Field": t('phone_optional'), "Value": selectedEmployee.phone || t('na') },
-        { "Field": t('joined_date'), "Value": selectedEmployee.employmentStartDate ? format(parseISO(selectedEmployee.employmentStartDate), 'yyyy-MM-dd') : t('na') },
-        { "Field": t('dob'), "Value": selectedEmployee.dateOfBirth ? format(parseISO(selectedEmployee.dateOfBirth), 'yyyy-MM-dd') : t('na') },
-    ];
-    const wsProfile = XLSX.utils.json_to_sheet(profileData, { skipHeader: true });
-    XLSX.utils.book_append_sheet(wb, wsProfile, "Profile");
-
-    if (sortedExpenses.length > 0) { 
-        const expensesData = sortedExpenses.map(e => ({ [t('date')]: format(parseISO(e.date), 'yyyy-MM-dd'), [t('amount')]: e.amount, [t('notes')]: e.notes || '' }));
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(expensesData), t('expenses')); 
-    }
-
-    if (sortedOvertime.length > 0) { 
-        const overtimeData = sortedOvertime.map(o => ({ [t('date')]: format(parseISO(o.date), 'yyyy-MM-dd'), [t('overtime_hours')]: o.hours, [t('amount')]: o.totalAmount, [t('notes')]: o.notes || '' }));
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(overtimeData), t('overtime')); 
-    }
-
-    if (sortedBonuses.length > 0) { 
-        const bonusesData = sortedBonuses.map(b => ({ [t('date')]: format(parseISO(b.date), 'yyyy-MM-dd'), [t('number_of_loads')]: b.loadCount, [t('amount')]: b.totalAmount, [t('notes')]: b.notes || '' }));
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bonusesData), t('bonuses')); 
-    }
-
-    if (sortedWithdrawals.length > 0) { 
-        const withdrawalsData = sortedWithdrawals.map(w => ({ [t('date')]: format(parseISO(w.date), 'yyyy-MM-dd'), [t('amount')]: w.amount, [t('notes')]: w.notes || '' }));
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(withdrawalsData), t('cash_withdrawals')); 
-    }
-    
-    if (wb.SheetNames.length > 0) {
-        XLSX.writeFile(wb, `${selectedEmployee.name}_Financials_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
-    } else {
-        toast({ title: t('no_data_to_export'), description: "This employee has no data to export." });
-    }
+    const nextStatus = selectedEmployee.status === 'resigned' ? 'active' : 'resigned';
+    setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? { ...e, status: nextStatus, isActive: nextStatus === 'active' } as any : e));
+    toast({
+      title: nextStatus === 'active' ? '👤 کارمەند کارا کرایەوە' : '🛑 کارمەند وازهێنراو کرا',
+      description: `دۆخی کارمەند گۆڕدرا بۆ: ${nextStatus === 'active' ? 'چالاک' : 'وازهێناو'}`
+    });
   };
 
-  const employeeIsActive = selectedEmployee?.isActive ?? true;
+  // Attendance breakdown for the selected month
+  const [yearStr, monthStr] = selectedMonth.split('-');
+  const year = parseInt(yearStr || '2026', 10);
+  const month = parseInt(monthStr || '09', 10);
+  const totalDays = getDaysInMonth(new Date(year, month - 1, 1));
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-  if (isAppLoading) {
-    return <div className="flex h-screen w-full items-center justify-center"><Loader2 className="h-16 w-16 animate-spin text-primary" /></div>;
-  }
+  const attendanceData = useMemo(() => {
+    let presentCount = 0;
+    let totalWorkedHours = 0;
+
+    const days = Array.from({ length: totalDays }, (_, i) => {
+      const dayNum = i + 1;
+      const dayStr = dayNum < 10 ? `0${dayNum}` : `${dayNum}`;
+      const dateStr = `${selectedMonth}-${dayStr}`;
+      const dateObj = new Date(year, month - 1, dayNum);
+      const isFriday = getDay(dateObj) === 5;
+      const isFuture = dateStr > todayStr;
+      const isToday = dateStr === todayStr;
+
+      const dayRecords = attendanceLogs.filter(log => {
+        const logDate = log.date || (log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || '');
+        if (logDate !== dateStr) return false;
+        const logEmpId = (log.employeeId || log.userId || '').toString().trim().toLowerCase();
+        return logEmpId === employeeId.toLowerCase();
+      });
+
+      let checkInTime = '';
+      let checkOutTime = '';
+      dayRecords.forEach((r: any) => {
+        if (r.checkInTime && !checkInTime) checkInTime = r.checkInTime.slice(0, 5);
+        if (r.checkOutTime) checkOutTime = r.checkOutTime.slice(0, 5);
+      });
+
+      const isPresent = Boolean(checkInTime || checkOutTime);
+      if (isPresent) {
+        presentCount++;
+        totalWorkedHours += 8;
+      }
+
+      return {
+        dayNum,
+        dateStr,
+        isFriday,
+        isFuture,
+        isToday,
+        checkInTime,
+        checkOutTime,
+        isPresent,
+        status: isFriday ? 'Holiday' : isPresent ? 'Present' : isFuture ? 'Empty' : 'Absent'
+      };
+    });
+
+    return {
+      days,
+      presentCount,
+      totalWorkedHours,
+      absentCount: Math.max(0, days.filter(d => !d.isFuture && !d.isFriday && !d.isPresent).length)
+    };
+  }, [totalDays, selectedMonth, year, month, todayStr, attendanceLogs, employeeId]);
 
   if (!selectedEmployee) {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center p-8 text-center">
-        <User className="h-24 w-24 text-muted-foreground mb-4" />
-        <h2 className="text-2xl">{t('employee_not_found')}</h2>
-        
-        <Button asChild>
-          <Link href="/employees">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            {isRTL ? 'گەڕانەوە بۆ لیستی کارمەندان' : 'Back to Employee List'}
-          </Link>
-        </Button>
+      <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-6 text-center" dir="rtl">
+        <div className="w-16 h-16 bg-rose-100 text-rose-600 flex items-center justify-center text-2xl mb-4 border border-rose-300">
+          ⚠️
+        </div>
+        <h2 className="text-lg font-black text-slate-900 mb-2">کارمەند نەدۆزرایەوە</h2>
+        <p className="text-xs text-slate-500 font-bold mb-4">ئەم کۆدە (${employeeId}) لە سیستەمدا بوونی نییە.</p>
+        <Link href="/admin" className="px-4 py-2 bg-slate-900 text-white text-xs font-black hover:bg-slate-800">
+          ← گەڕانەوە بۆ پانێڵی سەرەکی
+        </Link>
       </div>
     );
   }
 
+  const isDarko = selectedEmployee.id === 'emp-02' || (selectedEmployee.name || '').includes('دارکۆ');
+
   return (
-    <>
-      <div className="hidden print:block">
-           {selectedEmployee && (
-                 <EmployeeReportPdf 
-                    employee={selectedEmployee}
-                    settings={settings}
-                    expenses={{items: sortedExpenses, total: totalExpenses}}
-                    overtime={{items: sortedOvertime, total: totalOvertimeAmount}}
-                    bonuses={{items: sortedBonuses, total: totalBonuses}}
-                    withdrawals={{items: sortedWithdrawals, total: totalWithdrawals}}
-                />
-            )}
-      </div>
+    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans p-3 sm:p-6 select-none space-y-4" dir="rtl">
       
-      <div className="min-h-screen bg-background text-foreground flex flex-col print:hidden">
-            <header className="flex items-center justify-between gap-2 p-4 border-b bg-card">
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" asChild>
-                        <Link href="/employees"><ArrowLeft /></Link>
-                    </Button>
-                     <h1 className="text-xl font-semibold">{selectedEmployee.name}</h1>
-                </div>
-                <div className="flex-1 flex items-center justify-end gap-2 flex-wrap">
-                    {!isEditing && (
-                        <>
-                            <Button onClick={() => setIsEditing(true)}><Edit className="mr-2 h-4 w-4"/> {t('edit')}</Button>
-                            <Button variant="outline" size="icon" onClick={handlePrint}><Printer className="h-4 w-4" /></Button>
-                            <Button variant="outline" size="icon" onClick={handleExportExcelForDetail}><FileDown className="h-4 w-4" /></Button>
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="outline" className={cn(!employeeIsActive && "text-destructive border-destructive/50")}>
-                                        <UserX className="mr-2 h-4 w-4"/> {employeeIsActive ? (isRTL ? 'ناچالاککردن' : 'Deactivate') : (isRTL ? 'کاراکردنەوە' : 'Reactivate')}
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>{isRTL ? `دڵنیایت لەوەی دەتەوێت ${selectedEmployee.name} ${employeeIsActive ? 'ناچالاک' : 'کارا'} بکەیتەوە؟` : `Are you sure you want to ${employeeIsActive ? 'deactivate' : 'reactivate'} ${selectedEmployee.name}?`}</AlertDialogTitle>
-                                        <AlertDialogDescription>{isRTL ? 'کارمەندە ناچالاکەکان لە لیستی هەڵبژاردن بۆ تۆمارە نوێیەکان دەرناکەون.' : 'Deactivated employees will not appear in dropdown lists for new entries.'}</AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
-                                        <AlertDialogAction onClick={handleToggleActiveStatus}>{employeeIsActive ? (isRTL ? 'ناچالاککردن' : 'Deactivate') : (isRTL ? 'کاراکردنەوە' : 'Reactivate')}</AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild><Button variant="destructive"><Trash2 className="mr-2 h-4 w-4"/> {t('delete')}</Button></AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>{t('are_you_sure_delete_employee')}</AlertDialogTitle>
-                                        <AlertDialogDescription>{t('confirm_delete_employee_record', {employeeName: selectedEmployee.name})}</AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
-                                        <AlertDialogAction onClick={handleDelete}>{t('continue')}</AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                        </>
-                    )}
-                </div>
-            </header>
-            <main className="flex-1 overflow-y-auto p-4 md:p-6 w-full">
-                 { isEditing ? (
-                    <EmployeeForm employee={selectedEmployee} onSave={handleUpdate} onCancel={() => setIsEditing(false)} />
-                 ) : (
-                    <div className="space-y-6">
-                        <Card className="border-0 shadow-none">
-                            <CardHeader className="flex-col md:flex-row gap-6 space-y-0 items-start">
-                                <Avatar className="w-24 h-24 md:w-32 md:h-32 border-4 border-primary/20">
-                                    <AvatarImage src={selectedEmployee.photoUrl || undefined} alt={selectedEmployee.name} />
-                                    <AvatarFallback><User className="w-16 h-16"/></AvatarFallback>
-                                </Avatar>
-                                <div className="w-full">
-                                    <div className="flex items-start justify-between">
-                                        <CardTitle className="text-3xl md:text-4xl" dir={language === 'ku' && selectedEmployee.kurdishName ? 'rtl': 'ltr'}>{language === 'ku' && selectedEmployee.kurdishName ? selectedEmployee.kurdishName : selectedEmployee.name}</CardTitle>
-                                        {!employeeIsActive && <Badge variant="destructive" className="text-sm">{isRTL ? 'ناچالاک' : 'INACTIVE'}</Badge>}
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2">
-                                        {selectedEmployee.role && <CardDescription className="text-lg md:text-xl flex items-center gap-2">{selectedEmployee.role}</CardDescription>}
-                                    </div>
-                                    <div className="mt-4 space-y-2 text-muted-foreground">
-                                        {selectedEmployee.employeeId && <p className="flex items-center gap-2 font-mono">{t('id_colon')} {selectedEmployee.employeeId}</p>}
-                                        {selectedEmployee.employmentStartDate && <p className="flex items-center gap-2"><CalendarIcon className="w-4 h-4"/> {t('started_on', {date: format(safeDate(selectedEmployee.employmentStartDate)!, 'MMMM d, yyyy')})}</p>}
-                                        {selectedEmployee.dateOfBirth && <p className="flex items-center gap-2"><Cake className="w-4 h-4"/> {t('born_on', {date: format(safeDate(selectedEmployee.dateOfBirth)!, 'MMMM d, yyyy')})}</p>}
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="mt-6 space-y-6">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                    <div className="space-y-2"><Label>{t('email_optional')}</Label><p className="flex items-center gap-2"><Mail className="w-4 h-4 text-muted-foreground"/> {selectedEmployee.email || t('no_email')}</p></div>
-                                    <div className="space-y-2"><Label>{t('phone_optional')}</Label><p className="flex items-center gap-2"><Phone className="w-4 h-4 text-muted-foreground"/> {selectedEmployee.phone || t('no_phone')}</p></div>
-                                </div>
-                                <div className="space-y-2"><Label>{t('notes')}</Label><p className="whitespace-pre-wrap text-muted-foreground">{selectedEmployee.notes || t('no_notes')}</p></div>
-                            </CardContent>
-                        </Card>
+      {/* 🧭 WINDOWS 11 TOP COMMAND BAR & NAVIGATION BREADCRUMB */}
+      <div className="bg-white border-2 border-slate-300 p-3.5 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin"
+            className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 active:bg-black text-white text-xs font-black flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+            title="گەڕانەوە بۆ پانێڵی فەرمی ئەدمین"
+          >
+            <ArrowRight className="w-4 h-4" />
+            <span>گەڕانەوە بۆ ئەدمین</span>
+          </Link>
 
-                        <EmployeeActivityChart activityData={{
-                            expenses: sortedExpenses,
-                            overtime: sortedOvertime,
-                            bonuses: sortedBonuses,
-                            withdrawals: sortedWithdrawals
-                        }} />
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
+            <span className="text-slate-400">پانێڵ</span>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400 rotate-180" />
+            <span className="text-slate-400">کارمەندان و مۆبایلەکان</span>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400 rotate-180" />
+            <span className="text-blue-700 font-black">{selectedEmployee.name}</span>
+          </div>
+        </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <Card><CardHeader><CardTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-blue-500"/> {t('expenses')}</CardTitle></CardHeader><CardContent>{sortedExpenses.length > 0 ? <Table><TableHeader><TableRow><TableHead>{t('date')}</TableHead><TableHead className="text-right">{t('amount')}</TableHead></TableRow></TableHeader><TableBody>{sortedExpenses.slice(0, 3).map(e => (<TableRow key={e.id}><TableCell>{format(parseISO(e.date), 'PP')}</TableCell><TableCell className="text-right">{formatCurrency(e.amount)}</TableCell></TableRow>))}</TableBody></Table> : <p className="text-sm text-center text-muted-foreground py-4">{t('no_expenses')}</p>}</CardContent>{sortedExpenses.length > 0 && <CardFooter className="justify-end gap-2 bg-muted/50 text-sm"><span className="text-muted-foreground">{t('total_colon')}</span><span className="text-blue-500">{formatCurrency(totalExpenses)}</span></CardFooter>}</Card>
-                            <Card><CardHeader><div className="flex justify-between items-center"><CardTitle className="flex items-center gap-2"><Clock className="w-5 h-5 text-orange-500"/> {t('overtime')}</CardTitle><Badge variant="outline">{totalOvertimeHours.toFixed(2)} {t('hours_short')}</Badge></div></CardHeader><CardContent>{sortedOvertime.length > 0 ? <Table><TableHeader><TableRow><TableHead>{t('date')}</TableHead><TableHead className="text-right">{t('amount')}</TableHead></TableRow></TableHeader><TableBody>{sortedOvertime.slice(0, 3).map(o => (<TableRow key={o.id}><TableCell>{format(parseISO(o.date), 'PP')}</TableCell><TableCell className="text-right">{formatCurrency(o.totalAmount)}</TableCell></TableRow>))}</TableBody></Table> : <p className="text-sm text-center text-muted-foreground py-4">{t('no_overtime_this_month')}</p>}</CardContent>{sortedOvertime.length > 0 && <CardFooter className="justify-end gap-2 bg-muted/50 text-sm"><span className="text-muted-foreground">{t('months_total_colon')}</span><span className="text-orange-500">{formatCurrency(totalOvertimeAmount)}</span></CardFooter>}</Card>
-                            <Card><CardHeader><CardTitle className="flex items-center gap-2"><Gift className="w-5 h-5 text-green-500"/> {t('bonuses')}</CardTitle></CardHeader><CardContent>{sortedBonuses.length > 0 ? <Table><TableHeader><TableRow><TableHead>{t('date')}</TableHead><TableHead className="text-right">{t('amount')}</TableHead></TableRow></TableHeader><TableBody>{sortedBonuses.slice(0, 3).map(b => (<TableRow key={b.id}><TableCell>{format(parseISO(b.date), 'PP')}</TableCell><TableCell className="text-right">{formatCurrency(b.totalAmount)}</TableCell></TableRow>))}</TableBody></Table> : <p className="text-sm text-center text-muted-foreground py-4">{t('no_bonuses')}</p>}</CardContent>{sortedBonuses.length > 0 && <CardFooter className="justify-end gap-2 bg-muted/50 text-sm"><span className="text-muted-foreground">{t('total_colon')}</span><span className="text-green-500">{formatCurrency(totalBonuses)}</span></CardFooter>}</Card>
-                            <Card><CardHeader><CardTitle className="flex items-center gap-2"><Banknote className="w-5 h-5 text-rose-500"/> {t('cash_withdrawals')}</CardTitle></CardHeader><CardContent>{sortedWithdrawals.length > 0 ? <Table><TableHeader><TableRow><TableHead>{t('date')}</TableHead><TableHead className="text-right">{t('amount')}</TableHead></TableRow></TableHeader><TableBody>{sortedWithdrawals.slice(0, 3).map(w => (<TableRow key={w.id}><TableCell>{format(parseISO(w.date), 'PP')}</TableCell><TableCell className="text-right">{formatCurrency(w.amount)}</TableCell></TableRow>))}</TableBody></Table> : <p className="text-sm text-center text-muted-foreground py-4">{t('no_withdrawals')}</p>}</CardContent>{sortedWithdrawals.length > 0 && <CardFooter className="justify-end gap-2 bg-muted/50 text-sm"><span className="text-muted-foreground">{t('total_colon')}</span><span className="text-rose-500">{formatCurrency(totalWithdrawals)}</span></CardFooter>}</Card>
-                        </div>
-                    </div>
-                 )}
-            </main>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs font-bold flex items-center gap-1 cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>پرێنت</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsEditing(!isEditing)}
+            className={`px-3 py-1.5 border text-xs font-black flex items-center gap-1 cursor-pointer transition-colors ${
+              isEditing ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
+            }`}
+          >
+            <Edit className="w-3.5 h-3.5 text-blue-600" />
+            <span>{isEditing ? 'داخستنی دەستکاری' : 'دەستکاری زانیاری'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleToggleResigned}
+            className={`px-3 py-1.5 text-xs font-black flex items-center gap-1 border cursor-pointer ${
+              selectedEmployee.status === 'resigned' 
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300' 
+                : 'bg-rose-50 text-rose-800 border-rose-300'
+            }`}
+          >
+            {selectedEmployee.status === 'resigned' ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
+            <span>{selectedEmployee.status === 'resigned' ? 'گەڕاندنەوە بۆ دەوام' : 'تۆمارکردنی وازهێنان'}</span>
+          </button>
+        </div>
       </div>
-    </>
-  )
+
+      {/* 👤 HERO PROFILE & HARDWARE STATUS BANNER */}
+      <div className="bg-slate-900 text-white border-2 border-slate-700 p-5 shadow-md">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <div className="w-20 h-20 bg-slate-800 border-2 border-slate-600 overflow-hidden flex items-center justify-center text-white text-xl font-black flex-shrink-0 shadow-md relative group">
+              {selectedEmployee.photoUrl ? (
+                <img src={selectedEmployee.photoUrl} alt={selectedEmployee.name} className="w-full h-full object-cover" />
+              ) : (
+                <span>{(selectedEmployee.name || '').slice(0, 2)}</span>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-lg sm:text-xl font-black tracking-wide text-white">
+                  {(selectedEmployee as any).fullName3Part || selectedEmployee.name}
+                </h1>
+                <span className="px-2.5 py-0.5 text-[10px] font-black bg-blue-600 text-white font-mono">
+                  {selectedEmployee.id}
+                </span>
+                <span className="px-2.5 py-0.5 text-[10px] font-black bg-slate-800 text-amber-300 border border-slate-700">
+                  {isDarko ? '👑 بەڕێوەبەری سەرەکی' : selectedEmployee.role || 'کارمەند'}
+                </span>
+                {selectedEmployee.status === 'resigned' ? (
+                  <span className="px-2.5 py-0.5 text-[10px] font-black bg-rose-900 text-rose-200 border border-rose-700">
+                    🛑 وازهێناو
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 text-[10px] font-black bg-emerald-950 text-emerald-300 border border-emerald-700">
+                    🟢 دەوامی چالاک
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300 font-mono pt-1">
+                <span>📞 {selectedEmployee.phone || '0770 000 0000'}</span>
+                <span>•</span>
+                <span>📅 دەستپێک: {(selectedEmployee as any).startDate || selectedEmployee.employmentStartDate?.slice(0, 10) || '2025-01-01'}</span>
+                <span>•</span>
+                <span>📍 لۆکەیشن: کۆمپانیای سەرەکی ئاشڵی</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 bg-slate-800/80 p-3 border border-slate-700">
+            <div className="text-right">
+              <span className="text-[10px] text-slate-400 font-bold block">مۆبایلی ئەپ (Device):</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Smartphone className={`w-3.5 h-3.5 ${isDeviceBound ? 'text-emerald-400' : 'text-slate-400'}`} />
+                <span className={`text-xs font-black ${isDeviceBound ? 'text-emerald-300' : 'text-slate-300'}`}>
+                  {isDeviceBound ? 'بەستراوەتەوە' : 'نەبەستراوە'}
+                </span>
+              </div>
+            </div>
+
+            <div className="h-8 w-px bg-slate-700" />
+
+            <div className="text-right">
+              <span className="text-[10px] text-slate-400 font-bold block">ناسنامەی دەموچاو (Face ID):</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Camera className={`w-3.5 h-3.5 ${hasFace ? 'text-emerald-400' : 'text-amber-400'}`} />
+                <span className={`text-xs font-black ${hasFace ? 'text-emerald-300' : 'text-amber-300'}`}>
+                  {hasFace ? 'ناسراوە (AI Ready)' : 'تۆمارنەکراوە'}
+                </span>
+              </div>
+            </div>
+
+            <div className="h-8 w-px bg-slate-700" />
+
+            <div className="text-right">
+              <span className="text-[10px] text-slate-400 font-bold block">کۆدی پین (PIN):</span>
+              <span className="text-xs font-mono font-black text-amber-300 block mt-0.5">{empPin}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ✏️ INLINE EDIT PROFILE FORM */}
+      {isEditing && (
+        <div className="bg-amber-50/70 border-2 border-amber-300 p-4 space-y-3 animate-in fade-in">
+          <div className="flex items-center justify-between border-b border-amber-200 pb-2">
+            <span className="text-xs font-black text-amber-950 flex items-center gap-1.5">
+              <Edit className="w-4 h-4 text-amber-700" />
+              <span>دەستکاریکردنی پرۆفایل و زانیارییە سەرەکییەکان:</span>
+            </span>
+            <button onClick={() => setIsEditing(false)} className="text-xs text-slate-500 font-bold hover:text-black">✕ داخستن</button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-700">ناوی سێ قۆڵی:</label>
+              <input
+                type="text"
+                value={editFullName3Part}
+                onChange={e => setEditFullName3Part(e.target.value)}
+                className="w-full text-xs font-bold p-2 bg-white border border-slate-300 outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-700">پۆست / ڕۆڵ:</label>
+              <input
+                type="text"
+                value={editRole}
+                onChange={e => setEditRole(e.target.value)}
+                className="w-full text-xs font-bold p-2 bg-white border border-slate-300 outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-700">ژمارەی مۆبایل:</label>
+              <input
+                type="text"
+                value={editPhone}
+                onChange={e => setEditPhone(e.target.value)}
+                className="w-full text-xs font-bold p-2 bg-white border border-slate-300 outline-none font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsEditing(false)}
+              className="px-4 py-1.5 bg-slate-200 text-slate-800 text-xs font-bold hover:bg-slate-300"
+            >
+              پاشگەزبوونەوە
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveProfile}
+              className="px-5 py-1.5 bg-slate-900 text-white text-xs font-black hover:bg-slate-800 flex items-center gap-1"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>پاشەکەوتکردنی گۆڕانکاری</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🧭 NAVIGATION TABS */}
+      <div className="flex flex-wrap items-center gap-2 border-b-2 border-slate-300 pb-1">
+        {[
+          { key: 'overview', label: '📱 مۆبایل، ئامێر و ناسنامەی ڕوخسار', icon: Smartphone },
+          { key: 'attendance', label: '📅 خشتە و کاتەکانی دەوام (۳۱ ڕۆژە)', icon: Calendar },
+          { key: 'finance', label: '💰 کاتی زیادە و شایستە داراییەکان', icon: DollarSign },
+        ].map(t => {
+          const Icon = t.icon;
+          const isActive = activeTab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key as any)}
+              className={`px-4 py-2 text-xs font-black flex items-center gap-2 border-2 transition-all cursor-pointer ${
+                isActive
+                  ? 'bg-white text-blue-900 border-slate-700 border-b-white -mb-[3px] shadow-xs'
+                  : 'bg-slate-200/80 text-slate-700 border-transparent hover:bg-slate-200'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              <span>{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* TAB 1: 📱 MOBILE DEVICE & AI FACE ID */}
+      {activeTab === 'overview' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in">
+          
+          <div className="bg-white border-2 border-slate-300 p-5 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between border-b pb-3 border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 bg-orange-100 text-orange-700 flex items-center justify-center border border-orange-300">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-slate-900">بەڕێوەبردنی مۆبایلی ئەم کارمەندە</h3>
+                  <p className="text-[11px] text-slate-500 font-bold">بەستنەوە و هەڵوەشاندنەوەی مۆبایلی کەسی بۆ چێک-ئین</p>
+                </div>
+              </div>
+              <span className={`text-[10px] font-black px-2.5 py-0.5 border ${
+                isDeviceBound ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-slate-100 text-slate-600 border-slate-300'
+              }`}>
+                {isDeviceBound ? '🟢 مۆبایل چالاکە' : '⚪ نەبەستراوە'}
+              </span>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-slate-50 border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-600">ناسنامەی ئەکاونت:</span>
+                  <span className="font-mono font-black text-slate-900">{selectedEmployee.id}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-600">یاسای ئاسایش:</span>
+                  <span className="font-bold text-blue-700">تەنها ١ مۆبایل ڕێگەپێدراوە</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-600">دۆخی پەیوەندی لەگەڵ سێرڤەر:</span>
+                  <span className="font-black text-emerald-700">پەیوەستە بە Supabase DB</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-blue-50/60 border border-blue-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-blue-950 flex items-center gap-1">
+                    <KeyRound className="w-3.5 h-3.5 text-blue-700" />
+                    <span>کۆدی PIN بۆ چوونەژوورەوە لە ئەپ:</span>
+                  </span>
+                  <span className="font-mono text-[10px] text-slate-500 font-bold">٤ ژمارەیی</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={empPin}
+                    onChange={e => setEmpPin(e.target.value.replace(/\D/g, ''))}
+                    className="p-2 bg-white border border-slate-300 font-mono text-base font-black text-center w-32 tracking-widest outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSavePin}
+                    disabled={isUpdatingPin}
+                    className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-xs font-black cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    {isUpdatingPin ? 'پاشەکەوت دەکرێت...' : 'نوێکردنەوەی PIN'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleUnbindDevice}
+                  disabled={isUnbinding}
+                  className="w-full py-3 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-300 text-xs font-black flex items-center justify-center gap-2 cursor-pointer transition-all shadow-xs disabled:opacity-50"
+                >
+                  <Smartphone className="w-4 h-4 text-rose-600" />
+                  <span>{isUnbinding ? 'لە هەڵوەشاندنەوەدایە...' : '🔓 هەڵوەشاندنەوە و ڕیستکردنی دەستبەجێی مۆبایلی کارمەند (Remote Logout)'}</span>
+                </button>
+                <p className="text-[10px] text-slate-400 font-bold mt-1 text-center">
+                  * کاتێک ئەم دوگمەیە دەکەیت، دەستبەجێ ئەپی مۆبایلەکەی دادەخرێت و کارمەند ناچار دەبێت دووبارە پین داخڵ بکاتەوە.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border-2 border-slate-300 p-5 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between border-b pb-3 border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 bg-purple-100 text-purple-700 flex items-center justify-center border border-purple-300">
+                  <Camera className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-slate-900">سیستەمی ناسینەوەی ڕوخسار (AI Face ID)</h3>
+                  <p className="text-[11px] text-slate-500 font-bold">ئاسایشی دەموچاو بۆ ڕێگریکردن لە گزیکاری و ئامادەبوونی خەیاڵی</p>
+                </div>
+              </div>
+              <span className={`text-[10px] font-black px-2.5 py-0.5 border ${
+                hasFace ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-amber-100 text-amber-900 border-amber-300'
+              }`}>
+                {hasFace ? '✅ ناسراوە' : '⚠️ تۆمارنەکراوە'}
+              </span>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-slate-50 border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-600">مۆدێلی ژیریی دەستکرد:</span>
+                  <span className="font-mono font-black text-slate-900">Face-API SSD MobileNet v1</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-600">پشکنینی زیندوویی (Liveness):</span>
+                  <span className="font-bold text-purple-700">بازنەی ٢ چرکەیی سەوز</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-600">مۆڵەتی چێک-ئین لە مۆبایل:</span>
+                  <span className={`font-black ${hasFace ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    {hasFace ? 'چالاکە و ڕێگەپێدراوە' : 'قوفڵکراوە تا دەموچاو تۆمار دەکات'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowFaceModal(true)}
+                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white text-xs font-black flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all active:scale-98"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>{hasFace ? '📸 دووبارە ناساندنەوە و نوێکردنەوەی دەموچاو' : '📸 ناساندنی سەرەتایی دەموچاو لە ڕێگەی کامێراوە'}</span>
+                </button>
+
+                {hasFace && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteFace}
+                    disabled={isDeletingFace}
+                    className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{isDeletingFace ? 'لە سڕینەوەدایە...' : 'سڕینەوەی دەموچاوی تۆمارکراوی ئەم کارمەندە'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* TAB 2: 📅 31-DAY ATTENDANCE MATRIX */}
+      {activeTab === 'attendance' && (
+        <div className="bg-white border-2 border-slate-300 p-5 space-y-4 shadow-sm animate-in fade-in">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 border-slate-200">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-teal-100 text-teal-800 flex items-center justify-center border border-teal-300">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-black text-sm text-slate-900">
+                  خشتەی ئامادەبوون و کاتەکانی دەوام — {selectedEmployee.name}
+                </h3>
+                <p className="text-[11px] text-slate-500 font-bold">تەواوی وردەکاری هاتن و چوونەکان بە ڕەنگی سەوز</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 border border-slate-300">
+              <Calendar className="w-4 h-4 text-blue-700" />
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={e => setSelectedMonth(e.target.value)}
+                className="bg-transparent text-xs font-bold font-mono text-slate-900 outline-none cursor-pointer"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-center">
+              <span className="text-[10px] text-emerald-800 font-black block">ڕۆژانی ئامادەبوو:</span>
+              <span className="text-xl font-black font-mono text-emerald-700">{attendanceData.presentCount} ڕۆژ</span>
+            </div>
+
+            <div className="p-3 bg-blue-50 border border-blue-200 text-center">
+              <span className="text-[10px] text-blue-800 font-black block">کۆی کاتژمێری ئیشکردن:</span>
+              <span className="text-xl font-black font-mono text-blue-700">{attendanceData.totalWorkedHours} کاتژمێر</span>
+            </div>
+
+            <div className="p-3 bg-rose-50 border border-rose-200 text-center">
+              <span className="text-[10px] text-rose-800 font-black block">غیاب / نەهاتوو:</span>
+              <span className="text-xl font-black font-mono text-rose-700">{attendanceData.absentCount} ڕۆژ</span>
+            </div>
+
+            <div className="p-3 bg-purple-50 border border-purple-200 text-center">
+              <span className="text-[10px] text-purple-800 font-black block">شێفتی فەرمی:</span>
+              <span className="text-xl font-black font-mono text-purple-700">8:30 - 16:30</span>
+            </div>
+          </div>
+
+          <div className="border border-slate-300 overflow-x-auto">
+            <table className="w-full text-right text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-200 text-slate-900 font-black border-b border-slate-300">
+                  <th className="p-2 border-l border-slate-300 text-center w-12">ڕۆژ</th>
+                  <th className="p-2 border-l border-slate-300 text-center w-28">بەروار</th>
+                  <th className="p-2 border-l border-slate-300 text-center">هاتن (Check-In)</th>
+                  <th className="p-2 border-l border-slate-300 text-center">ڕۆیشتن (Check-Out)</th>
+                  <th className="p-2 border-l border-slate-300 text-center">ماوەی ئیشکردن</th>
+                  <th className="p-2 text-center w-24">حاڵەت</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 font-bold">
+                {attendanceData.days.map((d) => {
+                  return (
+                    <tr 
+                      key={d.dateStr}
+                      className={`hover:bg-blue-50/50 ${
+                        d.isToday ? 'bg-amber-50/70 font-black' : d.isFriday ? 'bg-emerald-50/40 text-teal-800' : ''
+                      }`}
+                    >
+                      <td className="p-2 border-l border-slate-200 text-center font-mono">{d.dayNum}</td>
+                      <td className="p-2 border-l border-slate-200 text-center font-mono text-slate-600">
+                        {d.dateStr} {d.isFriday ? '(هەینی)' : ''}
+                      </td>
+                      <td className="p-2 border-l border-slate-200 text-center">
+                        {d.isPresent ? (
+                          <span className="px-2.5 py-1 bg-emerald-600 text-white font-mono font-black text-xs shadow-2xs">
+                            🟢 هاتن: {d.checkInTime || '08:30'}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-mono">-</span>
+                        )}
+                      </td>
+                      <td className="p-2 border-l border-slate-200 text-center">
+                        {d.isPresent ? (
+                          <span className="px-2.5 py-1 bg-emerald-700 text-emerald-50 font-mono font-black text-xs shadow-2xs">
+                            🏁 ڕۆیشتن: {d.checkOutTime || (d.isToday ? 'بەردەوام' : '16:30')}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-mono">-</span>
+                        )}
+                      </td>
+                      <td className="p-2 border-l border-slate-200 text-center font-mono">
+                        {d.isPresent ? '٨ کاتژمێر' : d.isFriday ? 'پشوو' : '-'}
+                      </td>
+                      <td className="p-2 text-center">
+                        {d.isFriday ? (
+                          <span className="px-2 py-0.5 bg-teal-100 text-teal-900 border border-teal-300 text-[10px]">🌴 پشوو</span>
+                        ) : d.isPresent ? (
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px]">🟢 ئامادە</span>
+                        ) : d.isFuture ? (
+                          <span className="text-slate-300 text-[10px]">-</span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-rose-100 text-rose-900 border border-rose-300 text-[10px]">🔴 غیاب</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: 💰 FINANCIALS */}
+      {activeTab === 'finance' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in">
+          <div className="bg-white border-2 border-slate-300 p-5 space-y-3 shadow-sm">
+            <h3 className="font-black text-sm text-slate-900 flex items-center gap-1.5 border-b pb-2">
+              <Clock className="w-4 h-4 text-orange-600" />
+              <span>کاتی زیادە (Overtime Records)</span>
+            </h3>
+            <div className="p-3 bg-orange-50/70 border border-orange-200 text-center">
+              <span className="text-xs text-orange-950 font-bold block">کۆی کاتی زیادەی ئەم کارمەندە:</span>
+              <span className="text-xl font-black font-mono text-orange-700">0 کاتژمێر</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-bold text-center">هیچ کاتێکی زیادەی زیادکراو تۆمار نەکراوە بۆ ئەم مانگە.</p>
+          </div>
+
+          <div className="bg-white border-2 border-slate-300 p-5 space-y-3 shadow-sm">
+            <h3 className="font-black text-sm text-slate-900 flex items-center gap-1.5 border-b pb-2">
+              <Gift className="w-4 h-4 text-emerald-600" />
+              <span>پاداشت و شایستەی دارایی (Bonuses)</span>
+            </h3>
+            <div className="p-3 bg-emerald-50/70 border border-emerald-200 text-center">
+              <span className="text-xs text-emerald-950 font-bold block">کۆی پاداشتەکان:</span>
+              <span className="text-xl font-black font-mono text-emerald-700">0 IQD</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-bold text-center">هیچ پاداشتێک بۆ ئەم کارمەندە تۆمار نەکراوە.</p>
+          </div>
+        </div>
+      )}
+
+      {/* 📸 CAMERA FACE ENROLLMENT MODAL */}
+      {showFaceModal && (
+        <AdminFaceEnrollModal
+          employee={selectedEmployee}
+          isOpen={showFaceModal}
+          onClose={() => setShowFaceModal(false)}
+          onSuccess={() => {
+            setShowFaceModal(false);
+            setHasFace(true);
+            toast({
+              title: '🎉 سەرکەوتوو بوو',
+              description: `ناسنامەی دەموچاوی (${selectedEmployee.name}) بە سەرکەوتوویی تۆمارکرا.`
+            });
+          }}
+        />
+      )}
+
+    </div>
+  );
 }
 
 export default withAuth(EmployeeDetailPage);
-
