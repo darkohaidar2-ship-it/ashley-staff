@@ -414,8 +414,13 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         if (info.hasRecord || info.status === 'Present') {
           presentCount++;
           totalWorkedHours += 8;
-          cellText = info.checkInTime || 'ئامادە';
-          cellStyle = 'color: #059669; font-weight: bold; background-color: #ecfdf5;';
+          const inT = info.checkInTime || '08:30';
+          const outT = info.checkOutTime || (d.isToday ? 'بەردەوام' : '16:30');
+          cellText = `
+            <div style="background: #059669; color: #ffffff; padding: 1px 2px; font-weight: 800; font-size: 7.5px; border-radius: 1px; margin-bottom: 1px; white-space: nowrap;">هاتن ${inT}</div>
+            <div style="background: #047857; color: #ecfdf5; padding: 1px 2px; font-weight: 800; font-size: 7.5px; border-radius: 1px; white-space: nowrap;">چوون ${outT}</div>
+          `;
+          cellStyle = 'background-color: #ecfdf5; padding: 2px 1px; border: 1px solid #6ee7b7; text-align: center;';
         } else if (info.status === 'Leave') {
           leaveCount++;
           cellText = 'مۆڵەت';
@@ -428,7 +433,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           cellStyle = 'color: #0d9488; font-weight: bold; background-color: #f0fdfa;';
         }
 
-        return `<td style="border: 1px solid #94a3b8; padding: 5px 3px; text-align: center; font-size: 10px; ${cellStyle}">${cellText}</td>`;
+        return `<td style="border: 1px solid #94a3b8; padding: 3px 2px; text-align: center; font-size: 9px; ${cellStyle}">${cellText}</td>`;
       }).join('');
 
       return `
@@ -446,7 +451,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     }).join('');
 
     const headersHtml = printDays.map(d => `
-      <th style="border: 1px solid #64748b; padding: 4px 2px; text-align: center; background-color: ${d.isFriday ? '#d1fae5' : '#e2e8f0'}; font-size: 10px; min-width: 28px;">
+      <th style="border: 1px solid #64748b; padding: 4px 2px; text-align: center; background-color: ${d.isFriday ? '#d1fae5' : '#e2e8f0'}; font-size: 10px; min-width: 48px;">
         <div>${d.dayNum}</div>
         <div style="font-size: 7px; font-weight: normal; color: #475569;">${d.isFriday ? 'هەینی' : ''}</div>
       </th>
@@ -656,7 +661,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               {daysArray.map((d) => (
                 <th 
                   key={d.dateStr} 
-                  className={`text-center font-black p-1 border-l border-slate-300 min-w-[42px] ${
+                  className={`text-center font-black p-1 border-l border-slate-300 min-w-[54px] sm:min-w-[62px] ${
                     d.isToday ? 'bg-amber-100 text-amber-950 border-b-2 border-b-amber-500 font-black' :
                     d.isFriday ? 'bg-emerald-100 text-emerald-950 font-black' : 'text-slate-800'
                   }`}
@@ -704,6 +709,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   {daysArray.map((d) => {
                     const info = getGpsLogsForEmpAndDay(emp, d);
                     const isFriday = d.isFriday;
+                    const isPresent = info.status === 'Present' || Boolean(info.checkInTime);
+                    const inTime = info.checkInTime || '08:30';
+                    const outTime = info.checkOutTime || (d.isToday ? 'بەردەوام' : '16:30');
 
                     let badgeColor = 'bg-slate-50 text-slate-300 border-dashed border-slate-200 font-normal';
                     let badgeText = '-';
@@ -714,9 +722,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       badgeText = '🌴';
                     }
                     // 2. Present / Check-in
-                    else if (info.status === 'Present' || info.checkInTime) {
+                    else if (isPresent) {
                       badgeColor = 'bg-emerald-600 text-white border-emerald-700 font-black';
-                      badgeText = info.checkInTime || 'ئامادە';
+                      badgeText = inTime;
                     }
                     // 3. Leave / مۆڵەت
                     else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
@@ -749,14 +757,29 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           }
                         }}
                         onClick={() => handleCellClick(emp, d)}
-                        title="کلیک بکە بۆ بینینی وردەکاری، وێنە و گۆڕینی کات"
-                        className={`p-1 text-center border-l border-slate-200 cursor-pointer hover:bg-blue-100/70 transition-all ${
-                          d.isToday ? 'bg-amber-50/40' : isFriday ? 'bg-emerald-50/50' : ''
+                        title={`کلیک بکە بۆ بینینی وردەکاری و دەستکاری\nهاتن: ${info.checkInTime || '08:30'}\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '16:30')}`}
+                        className={`p-0.5 text-center border-l border-slate-200 cursor-pointer hover:bg-emerald-100/60 transition-all ${
+                          d.isToday ? 'bg-amber-50/50 ring-1 ring-inset ring-amber-400' : isFriday ? 'bg-emerald-50/40' : ''
                         }`}
                       >
-                        <div className={`w-full py-1 rounded-none text-[9px] border shadow-2xs transition-all ${badgeColor}`}>
-                          {badgeText}
-                        </div>
+                        {isPresent ? (
+                          <div className="w-full flex flex-col gap-0.5 p-0.5 rounded-none border border-emerald-500 bg-emerald-50 shadow-2xs hover:shadow-xs transition-all">
+                            {/* هاتن - سەوز */}
+                            <div className="bg-emerald-600 text-white text-[8px] font-black py-0.5 px-1 rounded-none flex items-center justify-between leading-none shadow-2xs">
+                              <span className="font-bold opacity-90">هاتن</span>
+                              <span className="font-mono font-black text-[9px] tracking-tight">{inTime}</span>
+                            </div>
+                            {/* ڕۆیشتن - سەوز */}
+                            <div className="bg-emerald-700 text-emerald-50 text-[8px] font-black py-0.5 px-1 rounded-none flex items-center justify-between leading-none shadow-2xs">
+                              <span className="font-bold opacity-90">ڕۆیشتن</span>
+                              <span className="font-mono font-black text-[9px] tracking-tight">{outTime}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className={`w-full py-2 rounded-none text-[9px] border shadow-2xs transition-all ${badgeColor}`}>
+                            {badgeText}
+                          </div>
+                        )}
                       </td>
                     );
                   })}

@@ -635,6 +635,23 @@ export default function AutonomousMobileAppLight() {
           return newState;
         }
 
+        // When server has no record for today (database wiped to 0), reset state & local storage cleanly
+        if (data && !data.checkInTime && !data.checkOutTime) {
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.removeItem(storageKey);
+              localStorage.removeItem('ashley_live_checkins');
+              localStorage.removeItem('ashley_offline_sync_queue');
+            } catch {}
+          }
+          return {
+            checkInTime: null,
+            checkOutTime: null,
+            status: null,
+            warehouseName: null,
+          };
+        }
+
         if (prev.checkInTime) {
           return prev;
         }
