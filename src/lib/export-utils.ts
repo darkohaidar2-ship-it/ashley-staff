@@ -1028,3 +1028,441 @@ export function exportMonthlyMultiPageDailyPDF(options: MonthDailyReportOptions)
   printWindow.document.write(html);
   printWindow.document.close();
 }
+
+/**
+ * 🌟 OFFICIAL ASHLEY LETTERHEAD PDF EXPORT
+ * Complete formal company report with Ashley logo, executive KPI cards, 
+ * attendance & financials matrix, and Darko Haydar's approval stamp/signature.
+ */
+export interface AshleyOfficialReportRow {
+  index?: number;
+  empId: string;
+  name: string;
+  role: string;
+  presentDays: number;
+  totalHours: number;
+  lateCount: number;
+  absentCount: number;
+  leaveCount: number;
+  overtimeHours?: number;
+  overtimeAmount?: number;
+  expensesAmount?: number;
+  rate?: number;
+}
+
+export interface AshleyOfficialReportOptions {
+  month: string;
+  issueDate?: string;
+  rows: AshleyOfficialReportRow[];
+  kpis?: {
+    totalStaff: number;
+    totalWorkHours: number;
+    totalLateCount: number;
+    totalOvertimeHours?: number;
+    totalOvertimeCost?: number;
+    totalExpensesCost?: number;
+    avgRate?: number;
+  };
+}
+
+export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportOptions) {
+  const {
+    month,
+    issueDate = new Date().toISOString().split('T')[0],
+    rows = [],
+    kpis = {
+      totalStaff: rows.length,
+      totalWorkHours: rows.reduce((s, r) => s + (r.totalHours || 0), 0),
+      totalLateCount: rows.reduce((s, r) => s + (r.lateCount || 0), 0),
+      totalOvertimeHours: rows.reduce((s, r) => s + (r.overtimeHours || 0), 0),
+      totalOvertimeCost: rows.reduce((s, r) => s + (r.overtimeAmount || 0), 0),
+      totalExpensesCost: rows.reduce((s, r) => s + (r.expensesAmount || 0), 0),
+      avgRate: rows.length > 0 ? Math.round(rows.reduce((s, r) => s + (r.rate || 100), 0) / rows.length) : 100,
+    }
+  } = options;
+
+  const printWindow = window.open('', '_blank', 'width=1300,height=900');
+  if (!printWindow) {
+    alert('تکایە ڕێگە بدە بە کردنەوەی پەنجەرەی نوێ (Pop-up) بۆ کردنەوەی ڕاپۆرتی فەرمی');
+    return;
+  }
+
+  const rowsHtml = rows.map((r, idx) => `
+    <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'}; page-break-inside: avoid;">
+      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-family: monospace; font-weight: bold; color: #64748b;">${idx + 1}</td>
+      <td style="border: 1px solid #94a3b8; padding: 6px 8px; font-weight: 900; text-align: right; color: #0f172a; white-space: nowrap;">
+        ${r.name}
+        <span style="display: block; font-size: 8.5px; font-family: monospace; color: #64748b; font-weight: normal;">ID: ${r.empId}</span>
+      </td>
+      <td style="border: 1px solid #94a3b8; padding: 6px 8px; font-weight: bold; color: #334155; text-align: right;">${r.role || 'کارمەند'}</td>
+      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: #047857; background-color: #f0fdf4;">${r.presentDays} ڕۆژ</td>
+      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: #1e3a8a; background-color: #eff6ff;">${r.totalHours}h</td>
+      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: ${r.lateCount > 0 ? '#d97706' : '#64748b'}; background-color: ${r.lateCount > 0 ? '#fffbeb' : 'transparent'};">
+        ${r.lateCount > 0 ? `⚠️ ${r.lateCount} جار` : '٠'}
+      </td>
+      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: ${r.absentCount > 0 ? '#dc2626' : '#64748b'}; background-color: ${r.absentCount > 0 ? '#fef2f2' : 'transparent'};">
+        ${r.absentCount > 0 ? `${r.absentCount}` : '-'}
+      </td>
+      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: #d97706; background-color: #fffbeb;">
+        ${r.overtimeHours ? `+${r.overtimeHours}h` : '-'}
+      </td>
+      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: #047857;">
+        ${r.overtimeAmount ? `${Number(r.overtimeAmount).toLocaleString()} IQD` : '-'}
+      </td>
+      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: #b91c1c;">
+        ${r.expensesAmount ? `${Number(r.expensesAmount).toLocaleString()} IQD` : '-'}
+      </td>
+      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: #0f172a; background-color: #f1f5f9;">
+        %${r.rate !== undefined ? r.rate : 100}
+      </td>
+    </tr>
+  `).join('');
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ku" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>ڕاپۆرتی فەرمی مانگانەی کۆمپانیای ئاشڵی - ${month}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800;900&display=swap');
+    
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
+      margin: 0;
+      padding: 12px;
+      color: #0f172a;
+      background: #ffffff;
+      direction: rtl;
+    }
+
+    .report-container {
+      width: 100%;
+      max-width: 1150px;
+      margin: 0 auto;
+      border: 2px solid #0f172a;
+      padding: 16px 20px;
+      background: #ffffff;
+    }
+
+    .letterhead {
+      border-bottom: 3px double #0f172a;
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .meta-box {
+      font-size: 10px;
+      font-family: Consolas, monospace;
+      color: #334155;
+      line-height: 1.6;
+    }
+
+    .center-branding {
+      text-align: center;
+    }
+
+    .center-branding img {
+      height: 58px;
+      margin-bottom: 3px;
+    }
+
+    .center-branding h1 {
+      margin: 0;
+      font-size: 19px;
+      font-weight: 900;
+      color: #0f172a;
+      letter-spacing: 0.5px;
+    }
+
+    .center-branding h2 {
+      margin: 2px 0 0 0;
+      font-size: 12px;
+      font-weight: 700;
+      color: #475569;
+      font-family: sans-serif;
+    }
+
+    .doc-badge {
+      display: inline-block;
+      margin-top: 5px;
+      background: #0f172a;
+      color: #ffffff;
+      padding: 3px 14px;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+    }
+
+    /* KPI STRIP */
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .kpi-card {
+      border: 1px solid #cbd5e1;
+      padding: 6px 8px;
+      text-align: center;
+      background: #f8fafc;
+    }
+
+    .kpi-card .label {
+      font-size: 9px;
+      font-weight: bold;
+      color: #64748b;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .kpi-card .val {
+      font-size: 14px;
+      font-weight: 900;
+      font-family: Consolas, monospace;
+      color: #0f172a;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9.5px;
+      margin-top: 6px;
+    }
+
+    thead {
+      display: table-header-group;
+    }
+
+    th {
+      background: #1e293b;
+      color: #ffffff;
+      padding: 6px 8px;
+      border: 1px solid #475569;
+      text-align: center;
+      font-weight: 900;
+      font-size: 9.5px;
+    }
+
+    tr {
+      page-break-inside: avoid;
+    }
+
+    /* SIGNATURE BLOCK */
+    .signatures-block {
+      margin-top: 25px;
+      padding-top: 15px;
+      border-top: 2px dashed #cbd5e1;
+      display: flex;
+      justify-content: space-around;
+      text-align: center;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .sig-col {
+      width: 220px;
+    }
+
+    .sig-col .title {
+      font-size: 11px;
+      font-weight: 900;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+
+    .sig-col .line {
+      margin-top: 30px;
+      border-bottom: 1.5px dotted #94a3b8;
+      width: 140px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* OFFICIAL ROUND SEAL */
+    .seal-circle {
+      margin: 8px auto 0 auto;
+      width: 100px;
+      height: 100px;
+      border: 3.5px double #1e3a8a;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #1e3a8a;
+      font-weight: 900;
+      line-height: 1.15;
+      background: rgba(224, 242, 254, 0.35);
+      transform: rotate(-6deg);
+      box-shadow: inset 0 0 10px rgba(30, 58, 138, 0.12);
+    }
+
+    .print-bar {
+      position: fixed;
+      bottom: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f172a;
+      color: white;
+      padding: 8px 20px;
+      border-radius: 30px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 99999;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .print-btn {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 6px 18px;
+      border-radius: 20px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    @media print {
+      body { padding: 0; }
+      .no-print { display: none !important; }
+      .report-container { border: none; padding: 0; }
+      @page {
+        size: A4 landscape;
+        margin: 8mm;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="print-bar no-print">
+    <span>🖨️ ڕاپۆرتی فەرمی ئامادەیە (Official Letterhead)</span>
+    <button class="print-btn" onclick="window.print()">دەستبەجێ پرێنت بکە / Save as PDF</button>
+  </div>
+
+  <div class="report-container">
+    
+    <!-- Ashley Official Letterhead Header -->
+    <div class="letterhead">
+      <div class="meta-box">
+        <div><strong>کۆدی دەرچوون:</strong> ASH-DIR-${month}-902</div>
+        <div><strong>بەرواری دەرچوون:</strong> ${issueDate}</div>
+        <div><strong>شێفتی فەرمی:</strong> 08:30 - 16:30</div>
+      </div>
+
+      <div class="center-branding">
+        <img src="/ashley-logo.png" alt="Ashley Logo" onerror="this.style.display='none'" />
+        <h1>کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی</h1>
+        <h2>Ashley Industrial & Commercial Co.</h2>
+        <div class="doc-badge">ڕاپۆرتی مانگانەی گشتی ئامادەبوون، دەوام و دارایی — مانگی ${month}</div>
+      </div>
+
+      <div class="meta-box" style="text-align: left;">
+        <div><strong>ژمارەی کارمەندان:</strong> ${kpis.totalStaff} کارمەند</div>
+        <div><strong>پابەندبوون:</strong> %${kpis.avgRate}</div>
+        <div><strong>دۆخی بەڵگەنامە:</strong> فەرمی و پەسەندکراو</div>
+      </div>
+    </div>
+
+    <!-- Executive KPI Summary Cards -->
+    <div class="kpi-strip">
+      <div class="kpi-card" style="border-top: 3px solid #2563eb;">
+        <span class="label">کۆی کارمەندانی چالاک</span>
+        <span class="val" style="color: #1e3a8a;">${kpis.totalStaff} کەس</span>
+      </div>
+      <div class="kpi-card" style="border-top: 3px solid #059669;">
+        <span class="label">کۆی کاتژمێرەکانی ئیشکردن</span>
+        <span class="val" style="color: #047857;">${kpis.totalWorkHours.toLocaleString()}h</span>
+      </div>
+      <div class="kpi-card" style="border-top: 3px solid #d97706;">
+        <span class="label">حاڵەتی درەنگکەوتن</span>
+        <span class="val" style="color: #b45309;">${kpis.totalLateCount} جار</span>
+      </div>
+      <div class="kpi-card" style="border-top: 3px solid #7c3aed;">
+        <span class="label">کۆی کاتی زیادە (ئیزافە)</span>
+        <span class="val" style="color: #6d28d9;">+${kpis.totalOvertimeHours || 0}h</span>
+      </div>
+      <div class="kpi-card" style="border-top: 3px solid #047857;">
+        <span class="label">شایستەی پارەی ئیزافە</span>
+        <span class="val" style="color: #047857;">${(kpis.totalOvertimeCost || 0).toLocaleString()} IQD</span>
+      </div>
+    </div>
+
+    <!-- Official Records Table -->
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 32px;">#</th>
+          <th>ناوی کارمەند</th>
+          <th>پۆست / ئەرک</th>
+          <th>ئامادەبوو</th>
+          <th>کۆی کاژێر</th>
+          <th>درەنگ</th>
+          <th>غیاب</th>
+          <th>کاتی زیادە</th>
+          <th>پارەی ئیزافە</th>
+          <th>مەسروفات / سلفە</th>
+          <th>ڕێژە ٪</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+
+    <!-- Official Executive Signatures Block -->
+    <div class="signatures-block">
+      <div class="sig-col">
+        <div class="title">ئامادەکاری سەرچاوە مرۆییەکان (HR):</div>
+        <div style="font-size: 9.5px; color: #64748b;">تۆماری ئەلیکترۆنی و وردبینی دەوام</div>
+        <div class="line"></div>
+      </div>
+
+      <div class="sig-col">
+        <div class="title">بەڕێوەبەری ژمێریاری و وردبینی دارایی:</div>
+        <div style="font-size: 9.5px; color: #64748b;">پەسەندکردنی شایستە و خەرجییەکان</div>
+        <div class="line"></div>
+      </div>
+
+      <div class="sig-col">
+        <div class="title" style="color: #1e3a8a;">پەسەندکردنی بەڕێوەبەری سەرەکی:</div>
+        <div style="font-size: 12px; font-weight: 900; color: #0f172a; margin-top: 2px;">دارکۆ حەیدەر عەزیز</div>
+        <div style="font-size: 9px; color: #475569; font-weight: bold;">General Manager • Ashley Industrial Co.</div>
+        
+        <!-- Official Ashley Company Stamp -->
+        <div class="seal-circle">
+          <div style="font-size: 6px; color: #b45309;">★ ★ ★</div>
+          <div style="font-size: 8px; font-weight: 900; color: #1e3a8a;">کۆمپانیای ئاشڵی</div>
+          <div style="font-size: 7px; font-weight: 900; color: #047857; background: #ecfdf5; padding: 1px 4px; border: 0.5px solid #10b981; margin: 1px 0;">پەسەندکراوە</div>
+          <div style="font-size: 6px; font-family: monospace; color: #1e3a8a;">ASHLEY APPROVED</div>
+          <div style="font-size: 6px; color: #b45309;">★ ★ ★</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 600);
+    };
+  </script>
+</body>
+</html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+}

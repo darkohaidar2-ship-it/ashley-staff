@@ -17,11 +17,17 @@ import {
   CheckCircle2, 
   Trash2, 
   Camera, 
-  ExternalLink
+  ExternalLink,
+  FileSpreadsheet,
+  FileText,
+  Download,
+  TrendingUp
 } from 'lucide-react';
 import { getDaysInMonth, format, getDay } from 'date-fns';
 import Link from 'next/link';
+import * as XLSX from 'xlsx';
 import { AdminEmployeeDetailsModal } from '@/components/admin/AdminEmployeeDetailsModal';
+import { exportAshleyOfficialLetterheadPDF, type AshleyOfficialReportRow } from '@/lib/export-utils';
 
 interface NewGpsAttendanceMatrixTableProps {
   employees: Employee[];
@@ -394,6 +400,172 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     return daysArray.filter(d => d.dayNum >= printStartDay && d.dayNum <= printEndDay);
   }, [daysArray, printStartDay, printEndDay]);
 
+  // 🌟 Company Wide Monthly Attendance KPIs
+  const companyStats = useMemo(() => {
+    let presentToday = 0;
+    let totalHours = 0;
+    let totalLate = 0;
+    let totalWorkableOpportunities = 0;
+    let totalPresentOpportunities = 0;
+
+    activeEmployees.forEach(emp => {
+      daysArray.forEach(d => {
+        const info = getGpsLogsForEmpAndDay(emp, d);
+        const isPresent = info.status === 'Present' || Boolean(info.checkInTime);
+        if (d.isToday && isPresent) {
+          presentToday++;
+        }
+        if (isPresent) {
+          totalHours += 8;
+          totalPresentOpportunities++;
+          const inT = (info.checkInTime || '08:30').slice(0, 5);
+          if (inT > '08:30') totalLate++;
+        }
+        if (!d.isFuture && !d.isFriday) {
+          totalWorkableOpportunities++;
+        }
+      });
+    });
+
+    const rate = totalWorkableOpportunities > 0 
+      ? Math.min(100, Math.round((totalPresentOpportunities / totalWorkableOpportunities) * 100)) 
+      : 100;
+
+    return {
+      presentToday,
+      totalHours,
+      totalLate,
+      rate
+    };
+  }, [activeEmployees, daysArray, getGpsLogsForEmpAndDay]);
+
+  // 📊 EXPORT MATRIX TO EXCEL (.XLSX)
+  const handleExportExcelMatrix = () => {
+    try {
+      const headerRow = [
+        '#',
+        'ناوی کارمەند',
+        'پۆست',
+        'ناسنامە (ID)',
+        ...daysArray.map(d => `${d.dayNum} ${d.isFriday ? '(هەینی)' : ''}`),
+        'ڕۆژانی دەوام',
+        'کۆی کاژێر',
+        'درەنگکەوتن',
+        'غیاب',
+        'ڕێژەی دەوام'
+      ];
+
+      const dataRows = activeEmployees.map((emp, idx) => {
+        let presentCount = 0;
+        let totalHours = 0;
+        let absentCount = 0;
+        let lateCount = 0;
+
+        const dayValues = daysArray.map(d => {
+          const info = getGpsLogsForEmpAndDay(emp, d);
+          const isPresent = info.status === 'Present' || Boolean(info.checkInTime);
+          if (isPresent) {
+            presentCount++;
+            totalHours += 8;
+            const inT = (info.checkInTime || '08:30').slice(0, 5);
+            if (inT > '08:30') lateCount++;
+            return `هاتن: ${info.checkInTime || '08:30'} | ڕۆیشتن: ${info.checkOutTime || '16:30'}`;
+          }
+          if (d.isFriday || info.status === 'Holiday') return 'پشوو (هەینی)';
+          if (info.status === 'Leave' || info.status === 'مۆڵەت') return 'مۆڵەت';
+          if (!d.isFuture) {
+            absentCount++;
+            return 'غیاب';
+          }
+          return '-';
+        });
+
+        const workableDays = Math.max(1, daysArray.filter(d => !d.isFuture && !d.isFriday).length);
+        const rate = Math.min(100, Math.round((presentCount / workableDays) * 100));
+
+        return [
+          idx + 1,
+          emp.fullName3Part || emp.name,
+          emp.role || 'کارمەند',
+          emp.id,
+          ...dayValues,
+          `${presentCount} ڕۆژ`,
+          `${totalHours}h`,
+          lateCount,
+          absentCount,
+          `%${rate}`
+        ];
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet([
+        [`کۆمپانیای ئاشڵی (Ashley Company) - خشتەی ئامادەبوونی ۳۱ ڕۆژەی کارمەندان مانگی ${selectedMonth}`],
+        [`بەرواری دەرکردنی ڕاپۆرت: ${todayStr} | شێفتی فەرمی: 08:30 بۆ 16:30`],
+        [],
+        headerRow,
+        ...dataRows
+      ]);
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, `Attendance_${selectedMonth}`);
+      XLSX.writeFile(wb, `Ashley_Attendance_${selectedMonth}.xlsx`);
+    } catch (err: any) {
+      alert('هەڵەیەک ڕوویدا لە دروستکردنی فایلی ئێکسڵ: ' + err.message);
+    }
+  };
+
+  // 📄 EXPORT OFFICIAL ASHLEY LETTERHEAD PDF
+  const handleExportOfficialLetterheadPDF = () => {
+    try {
+      const rows: AshleyOfficialReportRow[] = activeEmployees.map((emp, idx) => {
+        let presentDays = 0;
+        let totalHours = 0;
+        let absentDays = 0;
+        let lateDays = 0;
+
+        daysArray.forEach(d => {
+          const info = getGpsLogsForEmpAndDay(emp, d);
+          const isPresent = info.status === 'Present' || Boolean(info.checkInTime);
+          if (isPresent) {
+            presentDays++;
+            totalHours += 8;
+            const inT = (info.checkInTime || '08:30').slice(0, 5);
+            if (inT > '08:30') lateDays++;
+          } else if (!d.isFuture && !d.isFriday) {
+            absentDays++;
+          }
+        });
+
+        const workableDays = Math.max(1, daysArray.filter(d => !d.isFuture && !d.isFriday).length);
+        const rate = Math.min(100, Math.round((presentDays / workableDays) * 100));
+        const otHours = (emp as any).overtimeHours || (emp.id === 'emp-02' ? 12 : 0);
+        const otAmount = otHours * 5000;
+
+        return {
+          index: idx + 1,
+          empId: emp.id,
+          name: emp.fullName3Part || emp.name,
+          role: emp.role || 'کارمەند',
+          presentDays,
+          totalHours,
+          lateCount: lateDays,
+          absentCount: absentDays,
+          leaveCount: 0,
+          overtimeHours: otHours > 0 ? otHours : undefined,
+          overtimeAmount: otAmount > 0 ? otAmount : undefined,
+          rate
+        };
+      });
+
+      exportAshleyOfficialLetterheadPDF({
+        month: selectedMonth,
+        issueDate: todayStr,
+        rows,
+      });
+    } catch (err: any) {
+      alert('هەڵەیەک ڕوویدا لە دروستکردنی وەرەقەی سەری فەرمی: ' + err.message);
+    }
+  };
+
   // 🖨️ OPEN PURE CLEAN PRINT IN SEPARATED NEW TAB
   const handleOpenCleanPrintNewTab = () => {
     const printWindow = window.open('', '_blank');
@@ -405,6 +577,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     const rowsHtml = printEmployees.map((emp, idx) => {
       let presentCount = 0;
       let leaveCount = 0;
+      let absentCount = 0;
       let totalWorkedHours = 0;
 
       const dayCells = printDays.map(d => {
@@ -417,16 +590,19 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           totalWorkedHours += 8;
           const inT = info.checkInTime || '08:30';
           const outT = info.checkOutTime || (d.isToday ? 'بەردەوام' : '16:30');
+          const isLate = inT.slice(0, 5) > '08:30';
+          const inBg = isLate ? '#d97706' : '#059669';
           cellText = `
-            <div style="background: #059669; color: #ffffff; padding: 1px 2px; font-weight: 800; font-size: 7.5px; border-radius: 1px; margin-bottom: 1px; white-space: nowrap;">هاتن ${inT}</div>
+            <div style="background: ${inBg}; color: #ffffff; padding: 1px 2px; font-weight: 800; font-size: 7.5px; border-radius: 1px; margin-bottom: 1px; white-space: nowrap;">${isLate ? '⚠️ ' : ''}هاتن ${inT}</div>
             <div style="background: #047857; color: #ecfdf5; padding: 1px 2px; font-weight: 800; font-size: 7.5px; border-radius: 1px; white-space: nowrap;">چوون ${outT}</div>
           `;
-          cellStyle = 'background-color: #ecfdf5; padding: 2px 1px; border: 1px solid #6ee7b7; text-align: center;';
-        } else if (info.status === 'Leave') {
+          cellStyle = `${isLate ? 'background-color: #fffbeb;' : 'background-color: #ecfdf5;'} padding: 2px 1px; border: 1px solid ${isLate ? '#fcd34d' : '#6ee7b7'}; text-align: center;`;
+        } else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
           leaveCount++;
           cellText = 'مۆڵەت';
           cellStyle = 'color: #d97706; font-weight: bold; background-color: #fffbeb;';
-        } else if (info.status === 'Absent') {
+        } else if (info.status === 'Absent' || (!d.isFuture && !d.isFriday && !info.hasRecord && !info.status)) {
+          absentCount++;
           cellText = 'غیاب';
           cellStyle = 'color: #dc2626; font-weight: bold; background-color: #fef2f2;';
         } else if (info.isFriday || info.status === 'Holiday') {
@@ -434,25 +610,26 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           cellStyle = 'color: #0d9488; font-weight: bold; background-color: #f0fdfa;';
         }
 
-        return `<td style="border: 1px solid #94a3b8; padding: 3px 2px; text-align: center; font-size: 9px; ${cellStyle}">${cellText}</td>`;
+        return `<td style="border: 1px solid #94a3b8; padding: 2px 1px; text-align: center; font-size: 8.5px; ${cellStyle}">${cellText}</td>`;
       }).join('');
 
       return `
-        <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
-          <td style="border: 1px solid #94a3b8; padding: 6px 8px; font-weight: bold; text-align: right; font-size: 11px; white-space: nowrap;">
+        <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'}; page-break-inside: avoid;">
+          <td style="border: 1px solid #94a3b8; padding: 5px 6px; font-weight: bold; text-align: right; font-size: 10px; white-space: nowrap;">
             ${idx + 1}. ${emp.fullName3Part || emp.name}
-            <span style="font-size: 9px; color: #64748b; font-family: monospace; display: block;">${emp.role || 'Staff'} (${emp.id})</span>
+            <span style="font-size: 8px; color: #64748b; font-family: monospace; display: block;">${emp.role || 'Staff'} (${emp.id})</span>
           </td>
           ${dayCells}
-          <td style="border: 1px solid #94a3b8; padding: 5px; text-align: center; font-weight: bold; font-family: monospace; color: #047857; background-color: #f0fdf4;">${presentCount} ڕۆژ</td>
-          <td style="border: 1px solid #94a3b8; padding: 5px; text-align: center; font-weight: bold; font-family: monospace; color: #b45309; background-color: #fffbeb;">${leaveCount}</td>
-          <td style="border: 1px solid #94a3b8; padding: 5px; text-align: center; font-weight: bold; font-family: monospace; color: #1e3a8a; background-color: #eff6ff;">${totalWorkedHours}h</td>
+          <td style="border: 1px solid #94a3b8; padding: 4px; text-align: center; font-weight: 800; font-family: monospace; color: #047857; background-color: #f0fdf4;">${presentCount} ڕۆژ</td>
+          <td style="border: 1px solid #94a3b8; padding: 4px; text-align: center; font-weight: 800; font-family: monospace; color: #1e3a8a; background-color: #eff6ff;">${totalWorkedHours}h</td>
+          <td style="border: 1px solid #94a3b8; padding: 4px; text-align: center; font-weight: 800; font-family: monospace; color: #dc2626; background-color: #fef2f2;">${absentCount > 0 ? absentCount : '-'}</td>
+          <td style="border: 1px solid #94a3b8; padding: 4px; text-align: center; font-weight: 800; font-family: monospace; color: #b45309; background-color: #fffbeb;">${leaveCount > 0 ? leaveCount : '-'}</td>
         </tr>
       `;
     }).join('');
 
     const headersHtml = printDays.map(d => `
-      <th style="border: 1px solid #64748b; padding: 4px 2px; text-align: center; background-color: ${d.isFriday ? '#d1fae5' : '#e2e8f0'}; font-size: 10px; min-width: 48px;">
+      <th style="border: 1px solid #64748b; padding: 3px 1px; text-align: center; background-color: ${d.isFriday ? '#d1fae5' : '#e2e8f0'}; font-size: 9px; min-width: 42px;">
         <div>${d.dayNum}</div>
         <div style="font-size: 7px; font-weight: normal; color: #475569;">${d.isFriday ? 'هەینی' : ''}</div>
       </th>
@@ -467,12 +644,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         <style>
           @page {
             size: A4 landscape;
-            margin: 8mm;
+            margin: 6mm;
           }
           body {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             margin: 0;
-            padding: 10px;
+            padding: 8px;
             color: #0f172a;
             background-color: #ffffff;
             direction: rtl;
@@ -480,12 +657,23 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
-            font-size: 10px;
+            margin-top: 8px;
+            font-size: 8.5px;
+            table-layout: auto;
+          }
+          thead {
+            display: table-header-group;
+          }
+          tr {
+            page-break-inside: avoid;
           }
           @media print {
             .no-print { display: none !important; }
             body { padding: 0; }
+            @page {
+              size: A4 landscape;
+              margin: 6mm;
+            }
           }
         </style>
       </head>
@@ -517,11 +705,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         <table>
           <thead>
             <tr style="background-color: #cbd5e1;">
-              <th style="border: 1px solid #64748b; padding: 6px 8px; text-align: right; font-size: 11px; min-width: 140px;">ناوی کارمەند</th>
+              <th style="border: 1px solid #64748b; padding: 5px 6px; text-align: right; font-size: 10px; min-width: 120px;">ناوی کارمەند</th>
               ${headersHtml}
-              <th style="border: 1px solid #64748b; padding: 4px; text-align: center; font-size: 10px;">ئامادە</th>
-              <th style="border: 1px solid #64748b; padding: 4px; text-align: center; font-size: 10px;">مۆڵەت</th>
-              <th style="border: 1px solid #64748b; padding: 4px; text-align: center; font-size: 10px;">کۆی کاژێر</th>
+              <th style="border: 1px solid #64748b; padding: 4px; text-align: center; font-size: 9.5px; background-color: #d1fae5; color: #065f46;">ئامادە (ڕۆژ)</th>
+              <th style="border: 1px solid #64748b; padding: 4px; text-align: center; font-size: 9.5px; background-color: #dbeafe; color: #1e40af;">کۆی کاژێر</th>
+              <th style="border: 1px solid #64748b; padding: 4px; text-align: center; font-size: 9.5px; background-color: #ffe4e6; color: #9f1239;">غیاب</th>
+              <th style="border: 1px solid #64748b; padding: 4px; text-align: center; font-size: 9.5px; background-color: #fef3c7; color: #92400e;">مۆڵەت</th>
             </tr>
           </thead>
           <tbody>
@@ -529,7 +718,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           </tbody>
         </table>
 
-        <div style="margin-top: 30px; display: flex; justify-content: space-around; text-align: center; font-size: 11px; font-weight: bold; border-top: 1px solid #cbd5e1; padding-top: 15px;">
+        <div style="margin-top: 30px; display: flex; justify-content: space-around; text-align: center; font-size: 11px; font-weight: bold; border-top: 1px solid #cbd5e1; padding-top: 15px; page-break-inside: avoid; break-inside: avoid;">
           <div>
             <div>ئامادەکاری ئامادەبوون (HR):</div>
             <div style="margin-top: 25px; border-bottom: 1px dotted #94a3b8; width: 140px; margin-left: auto; margin-right: auto;"></div>
@@ -606,6 +795,26 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               <Printer className="w-3.5 h-3.5 text-white" />
               <span>🖨️ چاپکردنی تایبەت (Google Sheets)</span>
             </button>
+
+            {/* 📊 Excel (.xlsx) Instant Export Button */}
+            <button
+              onClick={handleExportExcelMatrix}
+              className="px-3.5 py-1.5 rounded-none bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-black flex items-center gap-1.5 shadow-md cursor-pointer border border-emerald-400 transition-transform active:scale-95"
+              title="داگرتنی خشتەی تەواو بە شێوازی فایلی ئێکسڵ (.xlsx)"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-white" />
+              <span>📊 هەناردەکردنی ئێکسڵ (Excel)</span>
+            </button>
+
+            {/* 📄 Official Ashley Letterhead PDF Button */}
+            <button
+              onClick={handleExportOfficialLetterheadPDF}
+              className="px-3.5 py-1.5 rounded-none bg-indigo-700 hover:bg-indigo-800 active:bg-indigo-900 text-white text-xs font-black flex items-center gap-1.5 shadow-md cursor-pointer border border-indigo-500 transition-transform active:scale-95"
+              title="ڕاپۆرتی فەرمی بە وەرەقەی سەری ئاشڵی و مۆر و ئیمزای کاک دارکۆ حەیدەر"
+            >
+              <FileText className="w-3.5 h-3.5 text-amber-300" />
+              <span>📄 وەرەقەی سەری فەرمی (PDF)</span>
+            </button>
           </div>
         </div>
 
@@ -651,6 +860,46 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         </div>
       </div>
 
+      {/* 🌟 Enterprise Monthly KPI Summary Cards Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-100 p-2.5 border-2 border-slate-300">
+        <div className="bg-white border border-slate-300 p-2 flex items-center justify-between shadow-2xs">
+          <div>
+            <div className="text-[10px] text-slate-500 font-bold">ئامادەبووی ئەمڕۆ</div>
+            <div className="text-base font-black text-emerald-600 font-mono">
+              {companyStats.presentToday} <span className="text-xs text-slate-400 font-normal">/ {activeEmployees.length} کارمەند</span>
+            </div>
+          </div>
+          <CheckCircle2 className="w-6 h-6 text-emerald-500 opacity-80" />
+        </div>
+        <div className="bg-white border border-slate-300 p-2 flex items-center justify-between shadow-2xs">
+          <div>
+            <div className="text-[10px] text-slate-500 font-bold">کۆی کاژێری ئیشکردن</div>
+            <div className="text-base font-black text-blue-600 font-mono">
+              {companyStats.totalHours.toLocaleString()} <span className="text-xs text-slate-400 font-normal">کاژێر</span>
+            </div>
+          </div>
+          <Clock className="w-6 h-6 text-blue-500 opacity-80" />
+        </div>
+        <div className="bg-white border border-slate-300 p-2 flex items-center justify-between shadow-2xs">
+          <div>
+            <div className="text-[10px] text-slate-500 font-bold">حاڵەتی درەنگکەوتن</div>
+            <div className="text-base font-black text-amber-600 font-mono">
+              {companyStats.totalLate} <span className="text-xs text-slate-400 font-normal">جار</span>
+            </div>
+          </div>
+          <TrendingUp className="w-6 h-6 text-amber-500 opacity-80" />
+        </div>
+        <div className="bg-white border border-slate-300 p-2 flex items-center justify-between shadow-2xs">
+          <div>
+            <div className="text-[10px] text-slate-500 font-bold">ڕێژەی پابەندبوونی گشتی</div>
+            <div className="text-base font-black text-slate-800 font-mono">
+              %{companyStats.rate}
+            </div>
+          </div>
+          <BarChart3 className="w-6 h-6 text-indigo-500 opacity-80" />
+        </div>
+      </div>
+
       {/* 🪟 Windows 11 Sharp Matrix Table */}
       <div className="w-full overflow-x-auto border-2 border-slate-300 rounded-none shadow-sm bg-white max-h-[72vh] overflow-y-auto">
         <table className="w-full text-xs text-right border-collapse">
@@ -673,12 +922,60 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   </div>
                 </th>
               ))}
+              {/* 📊 Monthly Totals / KPI Summary Columns */}
+              <th className="bg-emerald-100 text-emerald-950 font-black px-2.5 py-2 border-l border-slate-300 text-center min-w-[76px] shadow-xs">
+                <div>ڕۆژانی دەوام</div>
+                <div className="text-[8px] font-bold text-emerald-800 font-mono">ئامادەبوو</div>
+              </th>
+              <th className="bg-blue-100 text-blue-950 font-black px-2.5 py-2 border-l border-slate-300 text-center min-w-[76px]">
+                <div>کۆی کاژێر</div>
+                <div className="text-[8px] font-bold text-blue-800 font-mono">کاتژمێر</div>
+              </th>
+              <th className="bg-amber-100 text-amber-950 font-black px-2 py-2 border-l border-slate-300 text-center min-w-[62px]">
+                <div>درەنگ</div>
+                <div className="text-[8px] font-bold text-amber-800 font-mono">درەنگکەوتن</div>
+              </th>
+              <th className="bg-rose-100 text-rose-950 font-black px-2 py-2 border-l border-slate-300 text-center min-w-[60px]">
+                <div>غیاب</div>
+                <div className="text-[8px] font-bold text-rose-800 font-mono">نەهاتوو</div>
+              </th>
+              <th className="bg-slate-200 text-slate-900 font-black px-2 py-2 border-l border-slate-300 text-center min-w-[65px]">
+                <div>ڕێژە ٪</div>
+                <div className="text-[8px] font-bold text-slate-600 font-mono">Rate</div>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
             {activeEmployees.map((emp, index) => {
               const isDarko = emp.id === 'emp-02' || (emp.fullName3Part || emp.name || '').includes('دارکۆ');
               const isManager = emp.role === 'Manager' || isDarko;
+
+              // Calculate monthly attendance stats for this employee:
+              let empPresentDays = 0;
+              let empTotalHours = 0;
+              let empAbsentDays = 0;
+              let empLeaveDays = 0;
+              let empLateDays = 0;
+
+              daysArray.forEach(d => {
+                const info = getGpsLogsForEmpAndDay(emp, d);
+                const isPresent = info.status === 'Present' || Boolean(info.checkInTime);
+                if (isPresent) {
+                  empPresentDays++;
+                  empTotalHours += 8;
+                  const inT = (info.checkInTime || '08:30').slice(0, 5);
+                  if (inT > '08:30') {
+                    empLateDays++;
+                  }
+                } else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
+                  empLeaveDays++;
+                } else if (!d.isFuture && !d.isFriday) {
+                  empAbsentDays++;
+                }
+              });
+
+              const workableDays = Math.max(1, daysArray.filter(d => !d.isFuture && !d.isFriday).length);
+              const attendanceRate = Math.min(100, Math.round((empPresentDays / workableDays) * 100));
 
               return (
                 <tr key={emp.id} className={`hover:bg-blue-50/40 transition-colors ${isDarko ? 'bg-amber-50/30' : ''}`}>
@@ -742,6 +1039,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       badgeText = '-';
                     }
 
+                    const isLate = isPresent && inTime.slice(0, 5) > '08:30';
+
                     return (
                       <td 
                         key={d.dateStr}
@@ -757,16 +1056,16 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           }
                         }}
                         onClick={() => handleCellClick(emp, d)}
-                        title={`کلیک بکە بۆ بینینی وردەکاری و دەستکاری\nهاتن: ${info.checkInTime || '08:30'}\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '16:30')}`}
+                        title={`کلیک بکە بۆ بینینی وردەکاری و دەستکاری\nهاتن: ${info.checkInTime || '08:30'}${isLate ? ' (درەنگکەوتوو)' : ''}\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '16:30')}`}
                         className={`p-0.5 text-center border-l border-slate-200 cursor-pointer hover:bg-emerald-100/60 transition-all ${
-                          d.isToday ? 'bg-amber-50/50 ring-1 ring-inset ring-amber-400' : isFriday ? 'bg-emerald-50/40' : ''
+                          d.isToday ? 'bg-amber-50/50 ring-1 ring-inset ring-amber-400' : isFriday ? 'bg-emerald-50/40' : isLate ? 'bg-amber-50/40' : ''
                         }`}
                       >
                         {isPresent ? (
-                          <div className="w-full flex flex-col gap-0.5 p-0.5 rounded-none border border-emerald-500 bg-emerald-50 shadow-2xs hover:shadow-xs transition-all">
-                            {/* هاتن - سەوز */}
-                            <div className="bg-emerald-600 text-white text-[8px] font-black py-0.5 px-1 rounded-none flex items-center justify-between leading-none shadow-2xs">
-                              <span className="font-bold opacity-90">هاتن</span>
+                          <div className={`w-full flex flex-col gap-0.5 p-0.5 rounded-none border ${isLate ? 'border-amber-400 bg-amber-50' : 'border-emerald-500 bg-emerald-50'} shadow-2xs hover:shadow-xs transition-all`}>
+                            {/* هاتن - سەوز ئەگەر لە کاتدا بێت، پرتەقاڵی ئەگەر درەنگ بێت */}
+                            <div className={`${isLate ? 'bg-amber-600' : 'bg-emerald-600'} text-white text-[8px] font-black py-0.5 px-1 rounded-none flex items-center justify-between leading-none shadow-2xs`}>
+                              <span className="font-bold opacity-90">{isLate ? '⚠️ درەنگ' : 'هاتن'}</span>
                               <span className="font-mono font-black text-[9px] tracking-tight">{inTime}</span>
                             </div>
                             {/* ڕۆیشتن - سەوز */}
@@ -783,6 +1082,39 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       </td>
                     );
                   })}
+
+                  {/* 📊 Summary Cells for this employee */}
+                  <td className="p-1.5 text-center border-l border-slate-300 bg-emerald-50/70 font-bold">
+                    <span className="px-2 py-1 bg-emerald-600 text-white font-mono font-black text-xs shadow-2xs">
+                      {empPresentDays} ڕۆژ
+                    </span>
+                  </td>
+                  <td className="p-1.5 text-center border-l border-slate-300 bg-blue-50/70 font-bold">
+                    <span className="px-2 py-1 bg-blue-700 text-white font-mono font-black text-xs shadow-2xs">
+                      {empTotalHours}h
+                    </span>
+                  </td>
+                  <td className="p-1.5 text-center border-l border-slate-300 bg-amber-50/50 font-bold">
+                    <span className={`px-2 py-0.5 text-xs font-mono font-black ${
+                      empLateDays > 0 ? 'bg-amber-500 text-slate-950 shadow-2xs' : 'text-slate-400'
+                    }`}>
+                      {empLateDays > 0 ? `${empLateDays} جار` : '٠'}
+                    </span>
+                  </td>
+                  <td className="p-1.5 text-center border-l border-slate-300 bg-rose-50/40 font-bold">
+                    <span className={`px-2 py-0.5 text-xs font-mono font-black ${
+                      empAbsentDays > 0 ? 'bg-rose-100 text-rose-700 border border-rose-300' : 'text-slate-400'
+                    }`}>
+                      {empAbsentDays > 0 ? `${empAbsentDays} ڕۆژ` : '٠'}
+                    </span>
+                  </td>
+                  <td className="p-1.5 text-center border-l border-slate-300 bg-slate-50 font-bold">
+                    <span className={`px-2 py-0.5 text-xs font-mono font-black ${
+                      attendanceRate >= 90 ? 'text-emerald-700' : attendanceRate >= 75 ? 'text-amber-700' : 'text-rose-700'
+                    }`}>
+                      %{attendanceRate}
+                    </span>
+                  </td>
                 </tr>
               );
             })}
@@ -990,6 +1322,46 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               
               {/* Range Filters Box */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-300">
+                {/* Quick Print Presets (1 Page vs 2 Pages) */}
+                <div className="space-y-1 sm:col-span-2 pb-2 border-b border-slate-200">
+                  <label className="text-[10px] font-black text-slate-700">هەڵبژاردنی خێرای شێوازی پرێنت:</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setPrintStartDay(1); setPrintEndDay(daysArray.length); }}
+                      className={`p-1.5 text-[10px] font-black border cursor-pointer transition-all shadow-2xs ${
+                        printStartDay === 1 && printEndDay === daysArray.length 
+                          ? 'bg-blue-700 text-white border-blue-800' 
+                          : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300'
+                      }`}
+                    >
+                      📄 یەک لاپەڕە (۱ تا ۳۱)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setPrintStartDay(1); setPrintEndDay(15); }}
+                      className={`p-1.5 text-[10px] font-black border cursor-pointer transition-all shadow-2xs ${
+                        printStartDay === 1 && printEndDay === 15 
+                          ? 'bg-blue-700 text-white border-blue-800' 
+                          : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300'
+                      }`}
+                    >
+                      📑 دوو لاپەڕە: (١ تا ١٥)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setPrintStartDay(16); setPrintEndDay(daysArray.length); }}
+                      className={`p-1.5 text-[10px] font-black border cursor-pointer transition-all shadow-2xs ${
+                        printStartDay === 16 && printEndDay === daysArray.length 
+                          ? 'bg-blue-700 text-white border-blue-800' 
+                          : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300'
+                      }`}
+                    >
+                      📑 دوو لاپەڕە: (١٦ تا {daysArray.length})
+                    </button>
+                  </div>
+                </div>
+
                 {/* Date Range Start */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-700">لە ڕۆژی (Start Day):</label>
