@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   MapPin, 
   CheckCircle2, 
@@ -12,12 +12,19 @@ import {
   KeyRound, 
   DoorOpen, 
   LogOut, 
-  ChevronDown 
+  ChevronDown,
+  Camera,
+  ScanFace,
+  UserCheck,
+  UserX,
+  ArrowRight,
+  AlertTriangle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { getDistanceMeters, sendLocalNotification, type GeofenceRegion } from '@/lib/background-geofence';
+import { extractFaceDescriptor, loadFaceModels, matchFaceDescriptors } from '@/lib/face-recognition';
 
-// Default Employees Fallback
+// Default Employees Fallback with Official PINs
 const ASHLEY_DEFAULT_EMPLOYEES = [
   { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', role: 'Employee', pin: '1001' },
   { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', role: 'Manager', pin: '1002' },
@@ -32,6 +39,21 @@ const ASHLEY_DEFAULT_EMPLOYEES = [
   { id: 'emp-11', name: 'شادومان یادگار رحیم', role: 'Employee', pin: '1011' },
   { id: 'emp-12', name: 'سەروەت قادر', role: 'Employee', pin: '1012' },
 ];
+
+const OFFICIAL_PIN_MAP: Record<string, string> = {
+  'emp-01': '1001',
+  'emp-02': '1002', // کاک دارکۆ حەیدەر
+  'emp-03': '1003',
+  'emp-04': '1004',
+  'emp-05': '1005',
+  'emp-06': '1006',
+  'emp-07': '1007',
+  'emp-08': '1008',
+  'emp-09': '1009',
+  'emp-10': '1010',
+  'emp-11': '1011',
+  'emp-12': '1012',
+};
 
 // Factory & Warehouse Geofence Regions
 const COMPANY_LOCATIONS: GeofenceRegion[] = [
@@ -74,24 +96,137 @@ const OVERTIME_CHIPS = [
   '👔 بە داوای بەڕێوەبەر',
 ];
 
+// =========================================================================
+// 🎵 CUSTOM WEB AUDIO SYNTHESIZER (Guaranteed Offline & Zero Latency)
+// =========================================================================
+
+// 1. Welcome Music: 2-second pleasant chime sequence
+function playWelcomeMusic() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const notes = [
+      { f: 523.25, t: 0.0, d: 0.35 },  // C5
+      { f: 659.25, t: 0.28, d: 0.4 },  // E5
+      { f: 783.99, t: 0.60, d: 0.5 },  // G5
+      { f: 1046.50, t: 1.0, d: 0.9 }   // C6 (gentle resolution)
+    ];
+    notes.forEach(({ f, t, d }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, ctx.currentTime + t);
+      gain.gain.setValueAtTime(0, ctx.currentTime + t);
+      gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + t + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + d);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + t);
+      osc.stop(ctx.currentTime + t + d);
+    });
+  } catch {}
+}
+
+// 2. Check-In Chime: Energetic ascending 3-tone chime
+function playCheckInMusic() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const notes = [
+      { f: 587.33, t: 0.0, d: 0.22 },  // D5
+      { f: 739.99, t: 0.14, d: 0.25 }, // F#5
+      { f: 880.00, t: 0.28, d: 0.55 }  // A5
+    ];
+    notes.forEach(({ f, t, d }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(f, ctx.currentTime + t);
+      gain.gain.setValueAtTime(0.28, ctx.currentTime + t);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + d);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + t);
+      osc.stop(ctx.currentTime + t + d);
+    });
+  } catch {}
+}
+
+// 3. Check-Out Chime: Warm harmonic departure chord
+function playCheckOutMusic() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const notes = [
+      { f: 880.00, t: 0.0, d: 0.3 },   // A5
+      { f: 659.25, t: 0.18, d: 0.35 }, // E5
+      { f: 523.25, t: 0.38, d: 0.65 }  // C5
+    ];
+    notes.forEach(({ f, t, d }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, ctx.currentTime + t);
+      gain.gain.setValueAtTime(0.25, ctx.currentTime + t);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + d);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + t);
+      osc.stop(ctx.currentTime + t + d);
+    });
+  } catch {}
+}
+
+// 4. Reject Sound: Polite low buzz for mismatch or invalid entry
+function playRejectSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    [0.0, 0.18].forEach(t => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(240, ctx.currentTime + t);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime + t);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.14);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + t);
+      osc.stop(ctx.currentTime + t + 0.14);
+    });
+  } catch {}
+}
+
 export default function MobileAttendanceOneTap() {
   // Real-time Clock
   const [currentTimeStr, setCurrentTimeStr] = useState('');
   const [currentDateStr, setCurrentDateStr] = useState('');
 
-  // Employee Profile & Device Binding
+  // Bound Employee Profile
   const [employeeProfile, setEmployeeProfile] = useState<{ id: string; name: string; role?: string } | null>(null);
   const [allEmployees, setAllEmployees] = useState(ASHLEY_DEFAULT_EMPLOYEES);
+
+  // 2-Factor Authentication States
+  const [authStep, setAuthStep] = useState<'PIN' | 'FACE_SCAN'>('PIN');
   const [selectedEmpId, setSelectedEmpId] = useState('');
   const [pinInput, setPinInput] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
+  // Face Scan 2FA States
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const scanLoopRef = useRef<NodeJS.Timeout | null>(null);
+  const [isFaceModelsLoaded, setIsFaceModelsLoaded] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [faceStatusText, setFaceStatusText] = useState('تکایە دەموچاوت ڕێک لە ناو بازنەکەدا ڕابگرە');
+  const [faceScanSuccess, setFaceScanSuccess] = useState(false);
+  const [faceMismatchError, setFaceMismatchError] = useState<string | null>(null);
+  const [hasRegisteredFace, setHasRegisteredFace] = useState<boolean | null>(null);
+  const [registeredDescriptor, setRegisteredDescriptor] = useState<number[] | null>(null);
+  const [isCheckingServerFace, setIsCheckingServerFace] = useState(false);
+
   // GPS Geofence State
   const [currentLat, setCurrentLat] = useState<number | null>(null);
   const [currentLng, setCurrentLng] = useState<number | null>(null);
   const [distanceMeters, setDistanceMeters] = useState<number>(0);
-  const [isInsideGeofence, setIsInsideGeofence] = useState<boolean>(true); // Default true to prevent false blocking
+  const [isInsideGeofence, setIsInsideGeofence] = useState<boolean>(true);
   const [matchedLocationName, setMatchedLocationName] = useState<string>('کۆمپانیای سەرەکی ئاشڵی');
 
   // Today's Live Shift State
@@ -112,14 +247,14 @@ export default function MobileAttendanceOneTap() {
   const [triggerLoading, setTriggerLoading] = useState<boolean>(false);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
 
-  // Reason / Note Modal State for Late / Early / Overtime
+  // Reason Modal State for Late / Early / Overtime
   const [showReasonModal, setShowReasonModal] = useState(false);
   const [reasonType, setReasonType] = useState<'LATE_IN' | 'EARLY_OUT' | 'OVERTIME_OUT'>('LATE_IN');
   const [pendingAction, setPendingAction] = useState<'ENTER' | 'EXIT'>('ENTER');
   const [selectedChip, setSelectedChip] = useState<string>('');
   const [customReason, setCustomReason] = useState<string>('');
 
-  // Monthly Attendance Records for this employee
+  // Monthly Attendance Records
   const [monthlyLogs, setMonthlyLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
 
@@ -157,38 +292,19 @@ export default function MobileAttendanceOneTap() {
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
-          setAllEmployees(data.filter((e: any) => e.name && e.name !== 'Admin'));
+          const valid = data.filter((e: any) => e.name && e.name !== 'Admin');
+          // Merge with official PIN map to guarantee all employees have their official PIN
+          const mapped = valid.map((e: any) => ({
+            ...e,
+            pin: e.pin || OFFICIAL_PIN_MAP[e.id] || (e.id === 'emp-02' ? '1002' : '1001'),
+          }));
+          setAllEmployees(mapped);
         }
       })
       .catch(() => {});
   }, []);
 
-  // 3. Audio Chime Helper
-  const playSoundChime = (success: boolean) => {
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      if (success) {
-        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.4);
-      } else {
-        osc.frequency.setValueAtTime(300, ctx.currentTime);
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.3);
-      }
-    } catch {}
-  };
-
-  // 4. GPS Geolocation Tracking
+  // 3. GPS Geolocation Tracking
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
 
@@ -221,7 +337,6 @@ export default function MobileAttendanceOneTap() {
         setMatchedLocationName(matchedName);
       },
       () => {
-        // Fall back to safe true on indoor or restricted permissions
         setIsInsideGeofence(true);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
@@ -230,7 +345,7 @@ export default function MobileAttendanceOneTap() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  // 5. Fetch Live Today Shift Status from Server
+  // 4. Fetch Live Today Shift Status from Server
   const fetchTodayShift = useCallback(async () => {
     if (!employeeProfile?.id) return;
     const todayIso = format(new Date(), 'yyyy-MM-dd');
@@ -258,7 +373,7 @@ export default function MobileAttendanceOneTap() {
     }
   }, [employeeProfile, matchedLocationName]);
 
-  // 6. Fetch monthly attendance history for this employee
+  // 5. Fetch monthly attendance history
   const fetchMonthlyHistory = useCallback(async () => {
     if (!employeeProfile?.id) return;
     setLoadingLogs(true);
@@ -287,12 +402,12 @@ export default function MobileAttendanceOneTap() {
     if (employeeProfile?.id) {
       fetchTodayShift();
       fetchMonthlyHistory();
-  const interval = setInterval(fetchTodayShift, 10000);
+      const interval = setInterval(fetchTodayShift, 10000);
       return () => clearInterval(interval);
     }
   }, [employeeProfile, fetchTodayShift, fetchMonthlyHistory]);
 
-  // 7. Calculate elapsed work minutes if checked in (deducting 12:00-13:00 lunch break)
+  // 6. Calculate elapsed work minutes if checked in (deducting 12:00-13:00 lunch break)
   useEffect(() => {
     if (!liveTodayShift.checkInTime) {
       setWorkedMinutes(0);
@@ -327,59 +442,238 @@ export default function MobileAttendanceOneTap() {
     return () => clearInterval(interval);
   }, [liveTodayShift]);
 
-  // 8. Device Binding Handler (One-time PIN)
-  const handleBindDevice = async (e: React.FormEvent) => {
+  // =========================================================================
+  // 🔐 2FA STEP 1: PIN VERIFICATION
+  // =========================================================================
+  const handleStep1PinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError(null);
+
     if (!selectedEmpId) {
-      setAuthError('تکایە ناوی خۆت هەڵبژێرە');
-      return;
-    }
-    if (!pinInput || pinInput.length < 4) {
-      setAuthError('تکایە پین کۆدی ٤ ژمارەیی بنووسە');
+      setAuthError('تکایە سەرەتا ناوی خۆت هەڵبژێرە');
+      playRejectSound();
       return;
     }
 
-    setAuthLoading(true);
-    setAuthError(null);
+    if (!pinInput || pinInput.length < 4) {
+      setAuthError('تکایە پین کۆدی ٤ ژمارەیی بنووسە');
+      playRejectSound();
+      return;
+    }
 
     const emp = allEmployees.find(e => e.id === selectedEmpId);
     if (!emp) {
       setAuthError('کارمەند نەدۆزرایەوە');
-      setAuthLoading(false);
+      playRejectSound();
       return;
     }
 
-    const validPin = (emp as any).pin || (emp as any).password || '1001';
-    if (pinInput.trim() !== validPin && pinInput.trim() !== '12355321') {
+    const officialPin = OFFICIAL_PIN_MAP[emp.id] || (emp as any).pin || (emp.id === 'emp-02' ? '1002' : '1001');
+    const isDarko = emp.id === 'emp-02' || (emp.name && emp.name.includes('دارکۆ'));
+    const isPinMatch = 
+      pinInput.trim() === officialPin ||
+      pinInput.trim() === '12355321' || // Master Admin PIN
+      (isDarko && (pinInput.trim() === '1002' || pinInput.trim() === '1001'));
+
+    if (!isPinMatch) {
       setAuthError('❌ کۆدی نهێنی (PIN) هەڵەیە! تکایە کۆدی دروست بنووسە.');
-      setAuthLoading(false);
+      playRejectSound();
       return;
     }
 
-    const profileData = { id: emp.id, name: emp.name, role: emp.role || 'Employee' };
-    localStorage.setItem('ashley_bound_employee_profile', JSON.stringify(profileData));
-    setEmployeeProfile(profileData);
-    setAuthLoading(false);
-    playSoundChime(true);
-    sendLocalNotification('🎉 بەخێربێیت', `مۆبایلەکەت بە ناوی (${emp.name}) بەستراوەتەوە.`);
+    // Step 1 Passed! Advance to Step 2 (Face Scan)
+    setAuthLoading(true);
+    setIsCheckingServerFace(true);
+
+    try {
+      // Check server for existing registered face
+      const res = await fetch(`/api/attendance/face/status?userId=${emp.id}`);
+      const data = await res.json();
+      if (data?.hasFaceRegistered && Array.isArray(data?.descriptor)) {
+        setHasRegisteredFace(true);
+        setRegisteredDescriptor(data.descriptor);
+      } else {
+        setHasRegisteredFace(false);
+        setRegisteredDescriptor(null);
+      }
+    } catch {
+      setHasRegisteredFace(false);
+    } finally {
+      setIsCheckingServerFace(false);
+      setAuthLoading(false);
+      setAuthStep('FACE_SCAN');
+    }
   };
 
-  // 9. Unbind / Logout Handler
+  // =========================================================================
+  // 📸 2FA STEP 2: CAMERA & LIVE AI FACE RECOGNITION
+  // =========================================================================
+  const stopCamera = useCallback(() => {
+    if (scanLoopRef.current) {
+      clearInterval(scanLoopRef.current);
+      scanLoopRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(t => t.stop());
+      mediaStreamRef.current = null;
+    }
+    setCameraActive(false);
+  }, []);
+
+  const startFaceScan = useCallback(async () => {
+    if (authStep !== 'FACE_SCAN') return;
+    setFaceMismatchError(null);
+    setFaceScanSuccess(false);
+    setFaceStatusText('خەریکی ئامادەکردنی کامێرا و ژیری دەستکرد...');
+
+    try {
+      // 1. Load AI Models
+      await loadFaceModels();
+      setIsFaceModelsLoaded(true);
+
+      // 2. Open User Webcam
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } }
+      });
+      mediaStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setCameraActive(true);
+      setFaceStatusText('تکایە دەموچاوت ڕێک لە ناو بازنەکەدا ڕابگرە');
+
+      // 3. Live AI Detection Loop
+      let consecutiveMatches = 0;
+      let consecutiveMismatches = 0;
+      let isProcessing = false;
+
+      const selectedEmp = allEmployees.find(e => e.id === selectedEmpId);
+      if (!selectedEmp) return;
+
+      scanLoopRef.current = setInterval(async () => {
+        if (isProcessing || !videoRef.current) return;
+        isProcessing = true;
+
+        try {
+          const result = await extractFaceDescriptor(videoRef.current);
+          if (!result || !result.descriptor) {
+            setFaceStatusText('دەموچاو نابینرێت، نزیکتر بەرەوە...');
+            isProcessing = false;
+            return;
+          }
+
+          const liveDescriptor = result.descriptor;
+
+          // SCENARIO A: Employee NOT registered yet -> Auto-Enrollment (ڕوخسار + PIN + IP مۆبایل)
+          if (!hasRegisteredFace || !registeredDescriptor) {
+            setFaceStatusText('📌 دەموچاوت تۆمار دەکرێت بە ئەکاونتەکەت...');
+            stopCamera();
+
+            // Save to server
+            let devToken = localStorage.getItem('ashley_device_token');
+            if (!devToken) {
+              devToken = 'dev-' + Math.random().toString(36).substring(2, 10);
+              localStorage.setItem('ashley_device_token', devToken);
+            }
+
+            await fetch('/api/attendance/face/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: selectedEmp.id,
+                userName: selectedEmp.name,
+                descriptor: liveDescriptor,
+                pin: pinInput.trim(),
+                deviceToken: devToken,
+              })
+            });
+
+            // Bind profile locally
+            const profileData = { id: selectedEmp.id, name: selectedEmp.name, role: selectedEmp.role || 'Employee' };
+            localStorage.setItem('ashley_bound_employee_profile', JSON.stringify(profileData));
+            setEmployeeProfile(profileData);
+            setFaceScanSuccess(true);
+            playWelcomeMusic();
+            sendLocalNotification('🎉 بەخێربێیت', `مۆبایل و ڕوخسارت بە ناوی (${selectedEmp.name}) بەستراوەتەوە.`);
+            return;
+          }
+
+          // SCENARIO B: Face is ALREADY registered -> Verification & Match Check
+          const matchResult = matchFaceDescriptors(liveDescriptor, registeredDescriptor, 0.48);
+
+          if (matchResult.isMatch) {
+            consecutiveMatches++;
+            consecutiveMismatches = 0;
+            setFaceStatusText(`خۆت دەناسرێیتەوە... (%${matchResult.similarityPercent})`);
+
+            if (consecutiveMatches >= 2) {
+              stopCamera();
+              setFaceScanSuccess(true);
+              playWelcomeMusic();
+
+              const profileData = { id: selectedEmp.id, name: selectedEmp.name, role: selectedEmp.role || 'Employee' };
+              localStorage.setItem('ashley_bound_employee_profile', JSON.stringify(profileData));
+              setEmployeeProfile(profileData);
+              sendLocalNotification('🎉 بەخێربێیت', `بەخێربێیت ${selectedEmp.name}`);
+              return;
+            }
+          } else {
+            consecutiveMismatches++;
+            if (consecutiveMismatches >= 3) {
+              playRejectSound();
+              setFaceMismatchError(`ببورە، تۆ ${selectedEmp.name} نیت، ببورە!`);
+              setFaceStatusText('شکستی هێنا لە ناسینەوەی ڕوخسار');
+              consecutiveMatches = 0;
+            }
+          }
+        } catch (err: any) {
+          console.warn('Face loop tick error:', err);
+        } finally {
+          isProcessing = false;
+        }
+      }, 400);
+
+    } catch (err: any) {
+      setFaceStatusText('هەڵە لە کردنەوەی کامێرا: ' + err.message);
+      setCameraActive(false);
+    }
+  }, [authStep, selectedEmpId, allEmployees, hasRegisteredFace, registeredDescriptor, pinInput, stopCamera]);
+
+  useEffect(() => {
+    if (authStep === 'FACE_SCAN') {
+      startFaceScan();
+    } else {
+      stopCamera();
+    }
+    return () => stopCamera();
+  }, [authStep, startFaceScan, stopCamera]);
+
+  // 7. Unbind / Logout Handler
   const handleLogout = (e: React.FormEvent) => {
     e.preventDefault();
-    if (logoutPin.trim() === '12355321' || (employeeProfile && logoutPin.trim() === (allEmployees.find(e => e.id === employeeProfile.id) as any)?.pin)) {
+    const currentEmp = allEmployees.find(e => e.id === employeeProfile?.id);
+    const validPin = OFFICIAL_PIN_MAP[employeeProfile?.id || ''] || (currentEmp as any)?.pin || '1001';
+    
+    if (logoutPin.trim() === '12355321' || logoutPin.trim() === validPin) {
       localStorage.removeItem('ashley_bound_employee_profile');
       setEmployeeProfile(null);
+      setAuthStep('PIN');
+      setSelectedEmpId('');
+      setPinInput('');
       setShowLogoutModal(false);
       setLogoutPin('');
       setLogoutError(null);
-      playSoundChime(true);
+      playCheckOutMusic();
     } else {
       setLogoutError('پاسۆردی بەڕێوەبەر یان پینی کارمەند هەڵەیە');
+      playRejectSound();
     }
   };
 
-  // 10. THE HERO 1-TAP ATTENDANCE PUNCH (Check-In & Check-Out with Note Support)
+  // =========================================================================
+  // ⚡ THE HERO 1-TAP ATTENDANCE PUNCH (Check-In & Check-Out with Sound)
+  // =========================================================================
   const handleOneTapAttendance = async (action: 'ENTER' | 'EXIT', reasonNote?: string) => {
     if (!employeeProfile?.id) return;
 
@@ -424,6 +718,7 @@ export default function MobileAttendanceOneTap() {
         setLiveTodayShift(updatedShift);
         localStorage.setItem(`ashley_shift_state_${todayIso}_${employeeProfile.id}`, JSON.stringify(updatedShift));
         setFeedbackToast(reasonNote ? `🎉 هاتنت لە کاتژمێر (${assignedTime}) تۆمارکرا (تێبینی: ${reasonNote}).` : `🎉 دەستخۆش! هاتنت لە کاتژمێر (${assignedTime}) بە سەرکەوتوویی تۆمارکرا.`);
+        playCheckInMusic();
       } else {
         const updatedShift = {
           checkInTime: liveTodayShift.checkInTime || '08:00',
@@ -434,9 +729,9 @@ export default function MobileAttendanceOneTap() {
         setLiveTodayShift(updatedShift);
         localStorage.setItem(`ashley_shift_state_${todayIso}_${employeeProfile.id}`, JSON.stringify(updatedShift));
         setFeedbackToast(reasonNote ? `👋 ڕۆیشتنت لە کاتژمێر (${assignedTime}) تۆمارکرا (تێبینی: ${reasonNote}).` : `👋 دەستخۆش و ماندوو نەبیت! ڕۆیشتنت لە کاتژمێر (${assignedTime}) تۆمارکرا.`);
+        playCheckOutMusic();
       }
 
-      playSoundChime(true);
       setTimeout(() => setFeedbackToast(null), 6000);
       await fetchTodayShift();
       await fetchMonthlyHistory();
@@ -447,14 +742,14 @@ export default function MobileAttendanceOneTap() {
     }
   };
 
-  // 11. Check-In & Check-Out Click Interceptors (Timing Rules)
+  // Timing Rule Interceptors
   const handleCheckInClick = () => {
     if (!isInsideGeofence) {
-      alert(`⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${distanceMeters} مەتر دووریت).\nدەبێت لە ناو کارگە بیت بۆ تۆمارکردنی هاتن.`);
+      alert(`⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${distanceMeters} مەتر دووریت).\nتکایە بگە بە شوێنی کارگە بۆ تۆمارکردنی هاتن.`);
       return;
     }
     const currentHm = format(new Date(), 'HH:mm');
-    // Shift starts at 08:00, grace period up to 08:15. If after 08:15 -> Prompt for Reason
+    // Shift starts at 08:00. If > 08:15 -> Prompt for late reason
     if (currentHm > '08:15') {
       setPendingAction('ENTER');
       setReasonType('LATE_IN');
@@ -463,7 +758,10 @@ export default function MobileAttendanceOneTap() {
       setShowReasonModal(true);
       return;
     }
-    handleOneTapAttendance('ENTER');
+
+    if (confirm('ئایا دڵنیایت لە دەستپێکردنی دەوام و تۆمارکردنی هاتن؟')) {
+      handleOneTapAttendance('ENTER');
+    }
   };
 
   const handleCheckOutClick = () => {
@@ -473,7 +771,6 @@ export default function MobileAttendanceOneTap() {
     }
     const currentHm = format(new Date(), 'HH:mm');
     // Shift ends at 17:00.
-    // If earlier than 16:45 -> Prompt for early departure reason
     if (currentHm < '16:45') {
       setPendingAction('EXIT');
       setReasonType('EARLY_OUT');
@@ -481,9 +778,7 @@ export default function MobileAttendanceOneTap() {
       setCustomReason('');
       setShowReasonModal(true);
       return;
-    } 
-    // If later than 17:15 -> Prompt for overtime reason
-    else if (currentHm > '17:15') {
+    } else if (currentHm > '17:15') {
       setPendingAction('EXIT');
       setReasonType('OVERTIME_OUT');
       setSelectedChip(OVERTIME_CHIPS[0]);
@@ -513,82 +808,198 @@ export default function MobileAttendanceOneTap() {
     return `${m} خولەک`;
   }, [workedMinutes]);
 
-  // ==========================================
-  // VIEW 1: ONE-TIME BINDING SCREEN
-  // ==========================================
+  // =========================================================================
+  // VIEW 1: MODERN LIGHT 2-FACTOR AUTHENTICATION SCREEN (PIN + FACE SCAN)
+  // =========================================================================
   if (!employeeProfile) {
+    const selectedEmp = allEmployees.find(e => e.id === selectedEmpId);
+
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4 dir-rtl select-none" dir="rtl">
-        <div className="w-full max-w-sm bg-slate-900 border-2 border-slate-700 p-6 rounded-2xl shadow-2xl space-y-5">
+      <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col items-center justify-center p-4 dir-rtl select-none" dir="rtl">
+        <div className="w-full max-w-sm bg-white border border-slate-200 p-6 rounded-3xl shadow-xl space-y-5">
+          
+          {/* Company Branding */}
           <div className="text-center space-y-2">
-            <div className="w-16 h-16 mx-auto rounded-2xl overflow-hidden border-2 border-orange-500/50 shadow-lg shadow-orange-500/20 bg-black p-1">
+            <div className="w-16 h-16 mx-auto rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white p-2 flex items-center justify-center">
               <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-base font-black text-white">سیستەمی دەوامی ئاشڵی</h1>
-            <p className="text-xs text-slate-400">بەستنەوەی مۆبایل بە ناوی کارمەند (تەنها یەکجار)</p>
+            <h1 className="text-lg font-black text-slate-900">سیستەمی دەوامی ئاشڵی</h1>
+            <p className="text-xs text-slate-500 font-medium">
+              چوونەژوورەوەی پارێزراوی دوو فاکتەری (PIN + دەموچاو)
+            </p>
           </div>
 
-          <form onSubmit={handleBindDevice} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">ناوی کارمەند:</label>
-              <div className="relative">
-                <select
-                  value={selectedEmpId}
-                  onChange={(e) => setSelectedEmpId(e.target.value)}
-                  required
-                  className="w-full bg-slate-800 border-2 border-slate-600 text-white text-xs font-bold p-3 rounded-xl focus:border-emerald-500 focus:outline-none appearance-none"
-                >
-                  <option value="">-- هەڵبژاردنی ناوەکەت --</option>
-                  {allEmployees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      👤 {emp.name} ({emp.role || 'کارمەند'})
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-4 h-4 text-slate-400 absolute left-3 top-3.5 pointer-events-none" />
-              </div>
+          {/* 2FA Step Indicator Tabs */}
+          <div className="flex items-center justify-center gap-2 pb-1 border-b border-slate-100">
+            <div className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full ${
+              authStep === 'PIN' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
+            }`}>
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>١. پین کۆد</span>
             </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">پین کۆدی ٤ ژمارەیی (PIN):</label>
-              <div className="relative">
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={8}
-                  value={pinInput}
-                  onChange={(e) => setPinInput(e.target.value)}
-                  placeholder="بۆ نموونە: 1002"
-                  required
-                  className="w-full bg-slate-800 border-2 border-slate-600 text-white text-center font-mono text-base font-bold p-3 rounded-xl tracking-widest focus:border-emerald-500 focus:outline-none"
-                />
-                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-              </div>
+            <div className="w-4 h-0.5 bg-slate-200" />
+            <div className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full ${
+              authStep === 'FACE_SCAN' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
+            }`}>
+              <ScanFace className="w-3.5 h-3.5" />
+              <span>٢. سکانی دەموچاو</span>
             </div>
+          </div>
 
-            {authError && (
-              <div className="p-2.5 rounded-xl bg-rose-950/80 border border-rose-500 text-rose-200 text-xs font-bold text-center">
-                {authError}
+          {/* ------------------------------------------------------------- */}
+          {/* STEP 1: EMPLOYEE SELECTION & PIN ENTRY                        */}
+          {/* ------------------------------------------------------------- */}
+          {authStep === 'PIN' && (
+            <form onSubmit={handleStep1PinSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1.5">
+                  ناوی کارمەند:
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedEmpId}
+                    onChange={(e) => {
+                      setSelectedEmpId(e.target.value);
+                      setAuthError(null);
+                    }}
+                    required
+                    className="w-full bg-white border-2 border-slate-300 text-slate-900 text-xs font-bold p-3.5 rounded-xl focus:border-emerald-600 focus:outline-none appearance-none shadow-xs"
+                  >
+                    <option value="" className="text-slate-500 bg-white">-- ناوی خۆت هەڵبژێرە --</option>
+                    {allEmployees.map((emp) => (
+                      <option key={emp.id} value={emp.id} className="text-slate-900 bg-white font-bold py-1">
+                        👤 {emp.name} ({emp.role || 'کارمەند'})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-slate-500 absolute left-3 top-4 pointer-events-none" />
+                </div>
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={authLoading}
-              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs py-3.5 rounded-xl shadow-lg shadow-emerald-900/40 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {authLoading ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>بەستنەوە و چوونەژوورەوە</span>
-                </>
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1.5">
+                  پین کۆدی ٤ ژمارەیی (PIN):
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={8}
+                    value={pinInput}
+                    onChange={(e) => {
+                      setPinInput(e.target.value);
+                      setAuthError(null);
+                    }}
+                    placeholder="بۆ نموونە: 1002"
+                    required
+                    className="w-full bg-white border-2 border-slate-300 text-slate-900 text-center font-mono text-base font-black p-3.5 rounded-xl tracking-widest focus:border-emerald-600 focus:outline-none shadow-xs placeholder:text-slate-300"
+                  />
+                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-4" />
+                </div>
+              </div>
+
+              {authError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs font-bold text-center">
+                  {authError}
+                </div>
               )}
-            </button>
-          </form>
 
-          <p className="text-[10px] text-center text-slate-500">
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-xs py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {authLoading ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <span>بەردەوامبە بۆ سکانی دەموچاو</span>
+                    <ArrowRight className="w-4 h-4 rotate-180" />
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+
+          {/* ------------------------------------------------------------- */}
+          {/* STEP 2: CAMERA FACE SCAN (WITH RECOGNITION & REJECTION)        */}
+          {/* ------------------------------------------------------------- */}
+          {authStep === 'FACE_SCAN' && (
+            <div className="space-y-4 text-center">
+              <div>
+                <p className="text-xs font-bold text-slate-500">کارمەندی هەڵبژێردراو:</p>
+                <h3 className="text-sm font-black text-slate-900 mt-0.5">
+                  👤 {selectedEmp?.name}
+                </h3>
+              </div>
+
+              {/* Video Scanner Container */}
+              <div className="relative w-52 h-52 mx-auto rounded-full overflow-hidden border-4 border-emerald-500 shadow-xl bg-slate-900 flex items-center justify-center">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover scale-x-[-1]"
+                />
+                
+                {/* Visual Face Alignment Ring */}
+                <div className="absolute inset-2 rounded-full border-2 border-dashed border-white/60 pointer-events-none animate-pulse" />
+
+                {!cameraActive && (
+                  <div className="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center text-white text-xs p-3">
+                    <RefreshCw className="w-6 h-6 animate-spin mb-2 text-emerald-400" />
+                    <span>خەریکی پەیوەندی بە کامێرا...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Face Status Description */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold">
+                {faceMismatchError ? (
+                  <div className="text-rose-700 flex items-center justify-center gap-1.5 font-black animate-shake">
+                    <UserX className="w-4 h-4 flex-shrink-0" />
+                    <span>{faceMismatchError}</span>
+                  </div>
+                ) : faceScanSuccess ? (
+                  <div className="text-emerald-700 flex items-center justify-center gap-1.5 font-black">
+                    <UserCheck className="w-4 h-4 flex-shrink-0" />
+                    <span>پەسەندکرا! بەخێربێیت {selectedEmp?.name}</span>
+                  </div>
+                ) : (
+                  <div className="text-slate-700 flex items-center justify-center gap-1.5">
+                    <ScanFace className="w-4 h-4 text-emerald-600 animate-spin flex-shrink-0" />
+                    <span>{faceStatusText}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopCamera();
+                    setAuthStep('PIN');
+                  }}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2.5 rounded-xl border border-slate-200 cursor-pointer"
+                >
+                  گەڕانەوە بۆ PIN
+                </button>
+                {faceMismatchError && (
+                  <button
+                    type="button"
+                    onClick={startFaceScan}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-2.5 rounded-xl cursor-pointer"
+                  >
+                    دووبارە سکان بکەرەوە
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <p className="text-[10px] text-center text-slate-400">
             Ashley Furniture Industry • سلێمانی - هەولێر
           </p>
         </div>
@@ -596,56 +1007,56 @@ export default function MobileAttendanceOneTap() {
     );
   }
 
-  // ==========================================
-  // VIEW 2: ULTRA-SIMPLE 1-TAP ATTENDANCE
-  // ==========================================
+  // =========================================================================
+  // VIEW 2: ULTRA-SIMPLE MODERN LIGHT ATTENDANCE DASHBOARD
+  // =========================================================================
   const isCheckedIn = Boolean(liveTodayShift.checkInTime && !liveTodayShift.checkOutTime);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col max-w-md mx-auto dir-rtl select-none pb-8" dir="rtl">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col max-w-md mx-auto dir-rtl select-none pb-8" dir="rtl">
       
-      {/* 🌟 TOP COMPACT HEADER */}
-      <header className="p-3.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between sticky top-0 z-50 backdrop-blur-md">
+      {/* 🌟 TOP MODERN LIGHT HEADER */}
+      <header className="p-3.5 bg-white border-b border-slate-200 flex items-center justify-between sticky top-0 z-50 shadow-xs">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-orange-600/20 border border-orange-500/40 flex items-center justify-center font-black text-orange-400 text-xs shadow-sm">
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center justify-center font-black text-emerald-800 text-xs shadow-xs">
             {employeeProfile.name.charAt(0)}
           </div>
           <div>
-            <h2 className="text-xs font-black text-white leading-tight">{employeeProfile.name}</h2>
-            <p className="text-[10px] text-emerald-400 font-bold">{employeeProfile.role || 'کارمەندی فەرمی'}</p>
+            <h2 className="text-xs font-black text-slate-900 leading-tight">{employeeProfile.name}</h2>
+            <p className="text-[10px] text-emerald-700 font-bold">{employeeProfile.role || 'کارمەندی فەرمی'}</p>
           </div>
         </div>
 
         <button 
           onClick={() => setShowLogoutModal(true)}
-          className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[10px] flex items-center gap-1 font-bold cursor-pointer"
+          className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[10px] flex items-center gap-1 font-bold cursor-pointer transition-colors"
           title="ڕیستکردن یان دەرچوون"
         >
-          <LogOut className="w-3.5 h-3.5 text-rose-400" />
+          <LogOut className="w-3.5 h-3.5 text-rose-600" />
           <span>دەرچوون</span>
         </button>
       </header>
 
       <main className="p-4 space-y-4 flex-1">
 
-        {/* 🕒 LIVE REAL-TIME CLOCK & DATE */}
-        <div className="text-center p-4 bg-gradient-to-b from-slate-900 to-slate-900/60 border border-slate-800 rounded-2xl shadow-md">
-          <p className="text-[11px] font-mono text-slate-400 font-bold mb-1">
-            📅 {currentDateStr || '2026-09-06'}
+        {/* 🕒 LIVE REAL-TIME CLOCK & DATE (Clean Light Theme) */}
+        <div className="text-center p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
+          <p className="text-[11px] font-mono text-slate-500 font-bold mb-1">
+            📅 {currentDateStr || '2026-09-07'}
           </p>
-          <div className="text-3xl sm:text-4xl font-black font-mono tracking-wider text-amber-300 flex items-center justify-center gap-1.5">
-            <Clock className="w-6 h-6 text-amber-400 animate-pulse" />
-            <span>{currentTimeStr || '08:30:00'}</span>
+          <div className="text-3xl sm:text-4xl font-black font-mono tracking-wider text-slate-900 flex items-center justify-center gap-1.5">
+            <Clock className="w-6 h-6 text-emerald-600 animate-pulse" />
+            <span>{currentTimeStr || '08:00:00'}</span>
           </div>
         </div>
 
-        {/* 📍 GPS GEOFENCE STATUS */}
-        <div className={`p-3 rounded-xl border flex items-center gap-2.5 ${
+        {/* 📍 GPS GEOFENCE STATUS (Clean Light Badge) */}
+        <div className={`p-3 rounded-2xl border flex items-center gap-2.5 shadow-xs ${
           isInsideGeofence 
-            ? 'bg-emerald-950/50 border-emerald-500/50 text-emerald-200' 
-            : 'bg-amber-950/50 border-amber-500/50 text-amber-200'
+            ? 'bg-emerald-50 border-emerald-300 text-emerald-900' 
+            : 'bg-amber-50 border-amber-300 text-amber-900'
         }`}>
-          <MapPin className={`w-5 h-5 flex-shrink-0 ${isInsideGeofence ? 'text-emerald-400' : 'text-amber-400'}`} />
+          <MapPin className={`w-5 h-5 flex-shrink-0 ${isInsideGeofence ? 'text-emerald-700' : 'text-amber-700'}`} />
           <div className="text-xs leading-tight">
             <p className="font-black">
               {isInsideGeofence 
@@ -660,27 +1071,27 @@ export default function MobileAttendanceOneTap() {
 
         {/* 🔔 FEEDBACK TOAST */}
         {feedbackToast && (
-          <div className="p-3 rounded-xl bg-emerald-600 text-white font-black text-xs text-center shadow-lg animate-bounce">
+          <div className="p-3.5 rounded-2xl bg-emerald-600 text-white font-black text-xs text-center shadow-md animate-bounce">
             {feedbackToast}
           </div>
         )}
 
         {/* ============================================================ */}
-        {/* 🚀 THE HERO 1-TAP ATTENDANCE ACTION BUTTON */}
+        {/* 🚀 THE HERO 1-TAP ATTENDANCE ACTION BUTTON                   */}
         {/* ============================================================ */}
         <div className="pt-2">
           {!liveTodayShift.checkInTime ? (
-            /* STATE 1: NOT CHECKED IN YET -> BIG GREEN CHECK-IN BUTTON */
+            /* STATE 1: NOT CHECKED IN YET -> BIG CRISP GREEN CHECK-IN BUTTON */
             <button
               onClick={handleCheckInClick}
               disabled={triggerLoading || !isInsideGeofence}
-              className={`w-full p-6 rounded-2xl shadow-xl transition-all flex flex-col items-center justify-center gap-2 cursor-pointer ${
+              className={`w-full p-6 rounded-3xl shadow-lg transition-all flex flex-col items-center justify-center gap-2 cursor-pointer ${
                 !isInsideGeofence 
-                  ? 'bg-slate-800 border-2 border-slate-700 text-slate-400 opacity-60 cursor-not-allowed shadow-none' 
-                  : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-98 text-white shadow-emerald-950/60 border-2 border-emerald-400/40'
+                  ? 'bg-slate-200 border-2 border-slate-300 text-slate-500 opacity-70 cursor-not-allowed shadow-none' 
+                  : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-98 text-white shadow-emerald-700/20 border-2 border-emerald-500'
               }`}
             >
-              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center">
                 {triggerLoading ? (
                   <RefreshCw className="w-8 h-8 animate-spin" />
                 ) : (
@@ -695,18 +1106,18 @@ export default function MobileAttendanceOneTap() {
               </span>
             </button>
           ) : isCheckedIn ? (
-            /* STATE 2: CURRENTLY AT WORK -> BIG RED CHECK-OUT BUTTON */
+            /* STATE 2: CURRENTLY AT WORK -> BIG CRISP RED CHECK-OUT BUTTON */
             <div className="space-y-3">
-              <div className="p-3.5 bg-emerald-950/60 border-2 border-emerald-500/50 rounded-2xl flex items-center justify-between text-xs">
+              <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-2xl flex items-center justify-between text-xs shadow-xs">
                 <div>
-                  <span className="text-[10px] text-emerald-400 block font-bold">کاتی دەستپێکردنی دەوام:</span>
-                  <span className="font-mono text-base font-black text-emerald-300">
+                  <span className="text-[10px] text-emerald-800 block font-black">کاتی دەستپێکردنی دەوام:</span>
+                  <span className="font-mono text-base font-black text-emerald-900">
                     🟢 {liveTodayShift.checkInTime}
                   </span>
                 </div>
                 <div className="text-left font-mono">
-                  <span className="text-[10px] text-slate-400 block font-bold">ماوەی کارکردن (بەبێ پشووی نیوەڕۆ):</span>
-                  <span className="text-xs font-black text-amber-300">
+                  <span className="text-[10px] text-slate-600 block font-bold">ماوەی کارکردن (بەبێ پشووی نیوەڕۆ):</span>
+                  <span className="text-xs font-black text-amber-800">
                     ⏱️ {formattedWorkedHours}
                   </span>
                 </div>
@@ -715,13 +1126,13 @@ export default function MobileAttendanceOneTap() {
               <button
                 onClick={handleCheckOutClick}
                 disabled={triggerLoading || !isInsideGeofence}
-                className={`w-full p-6 rounded-2xl shadow-xl transition-all flex flex-col items-center justify-center gap-2 cursor-pointer ${
+                className={`w-full p-6 rounded-3xl shadow-lg transition-all flex flex-col items-center justify-center gap-2 cursor-pointer ${
                   !isInsideGeofence 
-                    ? 'bg-slate-800 border-2 border-slate-700 text-slate-400 opacity-60 cursor-not-allowed shadow-none' 
-                    : 'bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 active:scale-98 text-white shadow-rose-950/60 border-2 border-rose-400/40'
+                    ? 'bg-slate-200 border-2 border-slate-300 text-slate-500 opacity-70 cursor-not-allowed shadow-none' 
+                    : 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 active:scale-98 text-white shadow-rose-700/20 border-2 border-rose-500'
                 }`}
               >
-                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
+                <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center">
                   {triggerLoading ? (
                     <RefreshCw className="w-8 h-8 animate-spin" />
                   ) : (
@@ -738,33 +1149,33 @@ export default function MobileAttendanceOneTap() {
             </div>
           ) : (
             /* STATE 3: SHIFT COMPLETED TODAY */
-            <div className="p-5 bg-gradient-to-b from-slate-900 to-slate-900/80 border-2 border-slate-700 rounded-2xl text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
+            <div className="p-5 bg-white border-2 border-slate-200 rounded-3xl text-center space-y-3 shadow-sm">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-white">دەوامی ئەمڕۆت تەواو بووە 🎉</h3>
-                <p className="text-xs text-slate-400 mt-0.5">دەستخۆش و ماندوو نەبیت!</p>
+                <h3 className="text-sm font-black text-slate-900">دەوامی ئەمڕۆت تەواو بووە 🎉</h3>
+                <p className="text-xs text-slate-500 mt-0.5 font-medium">دەستخۆش و ماندوو نەبیت!</p>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 text-center p-2.5 bg-slate-950 rounded-xl font-mono text-xs border border-slate-800">
+              <div className="grid grid-cols-3 gap-2 text-center p-3 bg-slate-50 rounded-2xl font-mono text-xs border border-slate-200">
                 <div>
                   <span className="text-[10px] text-slate-500 block">هاتن</span>
-                  <span className="text-emerald-400 font-bold">{liveTodayShift.checkInTime}</span>
+                  <span className="text-emerald-700 font-black">{liveTodayShift.checkInTime}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-500 block">ڕۆیشتن</span>
-                  <span className="text-rose-400 font-bold">{liveTodayShift.checkOutTime}</span>
+                  <span className="text-rose-700 font-black">{liveTodayShift.checkOutTime}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-500 block">کۆی کارکردن</span>
-                  <span className="text-amber-300 font-bold">{formattedWorkedHours}</span>
+                  <span className="text-amber-800 font-black">{formattedWorkedHours}</span>
                 </div>
               </div>
 
               <button
                 onClick={handleCheckOutClick}
-                className="text-xs text-slate-400 hover:text-white underline cursor-pointer pt-1 block mx-auto"
+                className="text-xs text-emerald-700 font-bold hover:underline cursor-pointer pt-1 block mx-auto"
               >
                 نوێکردنەوەی کاتی ڕۆیشتن
               </button>
@@ -773,26 +1184,26 @@ export default function MobileAttendanceOneTap() {
         </div>
 
         {/* ============================================================ */}
-        {/* 📊 EMPLOYEE'S OWN MONTHLY ATTENDANCE LOG */}
+        {/* 📊 EMPLOYEE'S OWN MONTHLY ATTENDANCE LOG (Clean Light Table) */}
         {/* ============================================================ */}
         <div className="pt-3">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-black text-slate-300 flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-amber-400" />
+            <h3 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-emerald-600" />
               <span>مێژووی دەوامی ئەم مانگەی تۆ</span>
             </h3>
             <button 
               onClick={fetchMonthlyHistory} 
-              className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+              className="text-[10px] text-slate-600 hover:text-slate-900 font-bold flex items-center gap-1 cursor-pointer"
             >
               <RefreshCw className={`w-3 h-3 ${loadingLogs ? 'animate-spin' : ''}`} />
               <span>نوێکردنەوە</span>
             </button>
           </div>
 
-          <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-900 shadow-sm">
+          <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-800/80 text-slate-400 text-[10px] font-black border-b border-slate-800">
+              <thead className="bg-slate-100 text-slate-700 text-[10px] font-black border-b border-slate-200">
                 <tr>
                   <th className="p-2.5">بەروار</th>
                   <th className="p-2.5 text-center">هاتن</th>
@@ -800,25 +1211,25 @@ export default function MobileAttendanceOneTap() {
                   <th className="p-2.5 text-center">دۆخ</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-bold font-mono text-[11px]">
+              <tbody className="divide-y divide-slate-100 font-bold font-mono text-[11px]">
                 {monthlyLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-6 text-center text-slate-500 font-sans">
+                    <td colSpan={4} className="p-6 text-center text-slate-400 font-sans">
                       تۆماری ئامادەبوون بۆ ئەم مانگە نییە.
                     </td>
                   </tr>
                 ) : (
                   monthlyLogs.map((log, idx) => (
-                    <tr key={log.id || idx} className="hover:bg-slate-800/40">
-                      <td className="p-2.5 text-slate-300">{log.date || log.time?.split(' ')[0]}</td>
-                      <td className="p-2.5 text-center text-emerald-400 font-bold">
+                    <tr key={log.id || idx} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-2.5 text-slate-700">{log.date || log.time?.split(' ')[0]}</td>
+                      <td className="p-2.5 text-center text-emerald-700 font-black">
                         {log.checkInTime || log.check_in_time || '—'}
                       </td>
-                      <td className="p-2.5 text-center text-rose-400 font-bold">
+                      <td className="p-2.5 text-center text-rose-700 font-black">
                         {log.checkOutTime || log.check_out_time || '—'}
                       </td>
                       <td className="p-2.5 text-center">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-600 text-emerald-300 font-sans">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 font-sans">
                           ئامادەبوو
                         </span>
                       </td>
@@ -832,25 +1243,25 @@ export default function MobileAttendanceOneTap() {
 
       </main>
 
-      {/* ⚠️ REASON / EXPLANATION MODAL (LATE / EARLY / OVERTIME) */}
+      {/* ⚠️ REASON / EXPLANATION MODAL (LATE / EARLY / OVERTIME - Light Mode) */}
       {showReasonModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-slate-700 p-5 rounded-2xl max-w-sm w-full space-y-4 text-right">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 p-5 rounded-3xl max-w-sm w-full space-y-4 text-right shadow-2xl">
             
             <div className="text-center space-y-1">
               <div className={`w-12 h-12 rounded-full mx-auto flex items-center justify-center ${
-                reasonType === 'LATE_IN' ? 'bg-amber-500/20 text-amber-400' :
-                reasonType === 'EARLY_OUT' ? 'bg-rose-500/20 text-rose-400' :
-                'bg-emerald-500/20 text-emerald-400'
+                reasonType === 'LATE_IN' ? 'bg-amber-100 text-amber-700' :
+                reasonType === 'EARLY_OUT' ? 'bg-rose-100 text-rose-700' :
+                'bg-emerald-100 text-emerald-700'
               }`}>
                 <Clock className="w-6 h-6" />
               </div>
-              <h4 className="text-sm font-black text-white">
+              <h4 className="text-sm font-black text-slate-900">
                 {reasonType === 'LATE_IN' && '⚠️ ڕوونکردنەوەی درەنگکەوتن (دوای 08:15)'}
                 {reasonType === 'EARLY_OUT' && '⚠️ ڕوونکردنەوەی دەرچوونی زوو (پێش 16:45)'}
                 {reasonType === 'OVERTIME_OUT' && '⏱️ تۆمارکردنی کاتی زیادە / ئیزافە (دوای 17:15)'}
               </h4>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500">
                 {reasonType === 'LATE_IN' && 'دەوامی فەرمی لە 08:00 دەستپێدەکات. تکایە هۆکاری درەنگکەوتن دیاری بکە:'}
                 {reasonType === 'EARLY_OUT' && 'کاتی فەرمی ڕۆیشتن 17:00یە. تکایە هۆکاری دەرچوونی پێشوەختە دیاری بکە:'}
                 {reasonType === 'OVERTIME_OUT' && 'دەستخۆش بۆ کاتی زیادە! تکایە هۆکاری مانەوە دیاری بکە:'}
@@ -859,7 +1270,7 @@ export default function MobileAttendanceOneTap() {
 
             {/* Quick Reason Chips */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-300 block">هەڵبژاردنی خێرا (بە ١ کلیک):</label>
+              <label className="text-[11px] font-black text-slate-700 block">هەڵبژاردنی خێرا (بە ١ کلیک):</label>
               <div className="grid grid-cols-1 gap-1.5">
                 {(reasonType === 'LATE_IN' ? LATE_IN_CHIPS : reasonType === 'EARLY_OUT' ? EARLY_OUT_CHIPS : OVERTIME_CHIPS).map((chip) => (
                   <button
@@ -868,12 +1279,12 @@ export default function MobileAttendanceOneTap() {
                     onClick={() => setSelectedChip(chip)}
                     className={`p-2.5 rounded-xl text-xs font-bold text-right border transition-all cursor-pointer flex items-center justify-between ${
                       selectedChip === chip 
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-200 shadow-sm' 
-                        : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+                        ? 'bg-amber-50 border-amber-400 text-amber-900 shadow-xs' 
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                     }`}
                   >
                     <span>{chip}</span>
-                    {selectedChip === chip && <CheckCircle2 className="w-4 h-4 text-amber-400" />}
+                    {selectedChip === chip && <CheckCircle2 className="w-4 h-4 text-amber-600" />}
                   </button>
                 ))}
               </div>
@@ -881,13 +1292,13 @@ export default function MobileAttendanceOneTap() {
 
             {/* Custom Reason Note Input */}
             <div className="space-y-1">
-              <label className="text-[11px] font-bold text-slate-300 block">تێبینی زیاتر (ئارەزوومەندانە):</label>
+              <label className="text-[11px] font-black text-slate-700 block">تێبینی زیاتر (ئارەزوومەندانە):</label>
               <input
                 type="text"
                 value={customReason}
                 onChange={(e) => setCustomReason(e.target.value)}
                 placeholder="وردەکاری یان هۆکاری تر..."
-                className="w-full bg-slate-800 border border-slate-700 text-white text-xs p-2.5 rounded-xl focus:border-amber-500 focus:outline-none"
+                className="w-full bg-white border border-slate-300 text-slate-900 text-xs p-2.5 rounded-xl focus:border-amber-600 focus:outline-none"
               />
             </div>
 
@@ -897,7 +1308,7 @@ export default function MobileAttendanceOneTap() {
                 type="button"
                 onClick={submitReasonAttendance}
                 disabled={triggerLoading || !selectedChip}
-                className="flex-1 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white font-black text-xs py-3 rounded-xl shadow-md cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs py-3 rounded-xl shadow-md cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>پەسەندکردن و تۆمارکردن</span>
@@ -905,7 +1316,7 @@ export default function MobileAttendanceOneTap() {
               <button
                 type="button"
                 onClick={() => setShowReasonModal(false)}
-                className="px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs py-3 rounded-xl cursor-pointer"
+                className="px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-3 rounded-xl border border-slate-200 cursor-pointer"
               >
                 پاشگەزبوونەوە
               </button>
@@ -915,16 +1326,16 @@ export default function MobileAttendanceOneTap() {
         </div>
       )}
 
-      {/* 🔒 UNBIND / LOGOUT MODAL */}
+      {/* 🔒 UNBIND / LOGOUT MODAL (Light Mode) */}
       {showLogoutModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-slate-700 p-5 rounded-2xl max-w-xs w-full space-y-4 text-center">
-            <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 mx-auto flex items-center justify-center">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 p-5 rounded-3xl max-w-xs w-full space-y-4 text-center shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 mx-auto flex items-center justify-center">
               <Lock className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="text-sm font-black text-white">دەرچوون یان گۆڕینی مۆبایل</h4>
-              <p className="text-xs text-slate-400 mt-1">تکایە پین کۆدی کارمەند یان پاسۆردی ئەدمین بنووسە:</p>
+              <h4 className="text-sm font-black text-slate-900">دەرچوون یان گۆڕینی مۆبایل</h4>
+              <p className="text-xs text-slate-500 mt-1">تکایە پین کۆدی کارمەند یان پاسۆردی ئەدمین بنووسە:</p>
             </div>
 
             <form onSubmit={handleLogout} className="space-y-3">
@@ -934,21 +1345,21 @@ export default function MobileAttendanceOneTap() {
                 onChange={(e) => setLogoutPin(e.target.value)}
                 placeholder="PIN"
                 autoFocus
-                className="w-full bg-slate-800 border-2 border-slate-600 text-white text-center font-mono text-base p-2.5 rounded-xl focus:border-rose-500 focus:outline-none"
+                className="w-full bg-white border-2 border-slate-300 text-slate-900 text-center font-mono text-base font-bold p-2.5 rounded-xl focus:border-rose-500 focus:outline-none"
               />
-              {logoutError && <p className="text-xs text-rose-400 font-bold">{logoutError}</p>}
+              {logoutError && <p className="text-xs text-rose-600 font-bold">{logoutError}</p>}
 
               <div className="flex gap-2">
                 <button
                   type="submit"
-                  className="flex-1 bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs py-2.5 rounded-xl cursor-pointer"
+                  className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs py-2.5 rounded-xl cursor-pointer"
                 >
                   دەرچوون
                 </button>
                 <button
                   type="button"
                   onClick={() => { setShowLogoutModal(false); setLogoutError(null); }}
-                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs py-2.5 rounded-xl cursor-pointer"
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2.5 rounded-xl border border-slate-200 cursor-pointer"
                 >
                   پاشگەزبوونەوە
                 </button>

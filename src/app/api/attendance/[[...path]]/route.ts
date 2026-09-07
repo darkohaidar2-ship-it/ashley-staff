@@ -165,18 +165,18 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if (pathStr === 'employees' && method === 'GET') {
       const fallbackEmployees = [
-        { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', fullName3Part: 'سه هەند مەریوان حەمەسەعید', role: 'Employee' },
-        { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', fullName3Part: 'دارکۆ حەیدەر حسێن', role: 'Manager' },
-        { id: 'emp-03', name: 'شادیار هوشیار', fullName3Part: 'شادیار هوشیار', role: 'Employee Supervisor' },
-        { id: 'emp-04', name: 'هەڤاڵ حبیب حەمەڕەزا', fullName3Part: 'هەڤاڵ حبیب حەمەڕەزا', role: 'Transport Supervisor' },
-        { id: 'emp-05', name: 'عیماد سەباح نوری', fullName3Part: 'عیماد سەباح نوری', role: 'Employee' },
-        { id: 'emp-06', name: 'کامەران عومەر ڕووئوف', fullName3Part: 'کامەران عومەر ڕووئوف', role: 'Employee' },
-        { id: 'emp-07', name: 'ڕابەر محەمەد مەحمود', fullName3Part: 'ڕابەر محەمەد مەحمود', role: 'Employee' },
-        { id: 'emp-08', name: 'دانەر محەمەد باسام', fullName3Part: 'دانەر محەمەد باسام', role: 'Employee' },
-        { id: 'emp-09', name: 'ڕێبین سەباح نوری', fullName3Part: 'ڕێبین سەباح نوری', role: 'Employee' },
-        { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', fullName3Part: 'بەهرەمەند ڕزگار عزیز', role: 'Employee' },
-        { id: 'emp-11', name: 'شادومان یادگار رحیم', fullName3Part: 'شادومان یادگار رحیم', role: 'Employee' },
-        { id: 'emp-12', name: 'سەروەت قادر', fullName3Part: 'سەروەت قادر', role: 'Employee' },
+        { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', fullName3Part: 'سه هەند مەریوان حەمەسەعید', role: 'Employee', pin: '1001' },
+        { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', fullName3Part: 'دارکۆ حەیدەر حسێن', role: 'Manager', pin: '1002' },
+        { id: 'emp-03', name: 'شادیار هوشیار', fullName3Part: 'شادیار هوشیار', role: 'Employee Supervisor', pin: '1003' },
+        { id: 'emp-04', name: 'هەڤاڵ حبیب حەمەڕەزا', fullName3Part: 'هەڤاڵ حبیب حەمەڕەزا', role: 'Transport Supervisor', pin: '1004' },
+        { id: 'emp-05', name: 'عیماد سەباح نوری', fullName3Part: 'عیماد سەباح نوری', role: 'Employee', pin: '1005' },
+        { id: 'emp-06', name: 'کامەران عومەر ڕووئوف', fullName3Part: 'کامەران عومەر ڕووئوف', role: 'Employee', pin: '1006' },
+        { id: 'emp-07', name: 'ڕابەر محەمەد مەحمود', fullName3Part: 'ڕابەر محەمەد مەحمود', role: 'Employee', pin: '1007' },
+        { id: 'emp-08', name: 'دانەر محەمەد باسام', fullName3Part: 'دانەر محەمەد باسام', role: 'Employee', pin: '1008' },
+        { id: 'emp-09', name: 'ڕێبین سەباح نوری', fullName3Part: 'ڕێبین سەباح نوری', role: 'Employee', pin: '1009' },
+        { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', fullName3Part: 'بەهرەمەند ڕزگار عزیز', role: 'Employee', pin: '1010' },
+        { id: 'emp-11', name: 'شادومان یادگار رحیم', fullName3Part: 'شادومان یادگار رحیم', role: 'Employee', pin: '1011' },
+        { id: 'emp-12', name: 'سەروەت قادر', fullName3Part: 'سەروەت قادر', role: 'Employee', pin: '1012' },
       ];
 
       try {
@@ -1957,7 +1957,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // AI Face Recognition Endpoints (ڕوخسارناسینەوەی زیرەک)
     // ----------------------------------------
     if (pathStr === 'face/register' && method === 'POST') {
-      const { userId, userName, descriptor } = await req.json();
+      const body = await req.json();
+      const { userId, userName, descriptor, pin, deviceToken } = body;
+      const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || body.clientIp || '';
       if (!userId || !descriptor) {
         return NextResponse.json({ error: 'userId and face descriptor required' }, { status: 400 });
       }
@@ -1983,6 +1985,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           id: userId,
           name: userName || registry[userId]?.name || 'کارمەند',
           descriptor: descriptor,
+          pin: pin || registry[userId]?.pin || null,
+          clientIp: clientIp || registry[userId]?.clientIp || null,
+          deviceToken: deviceToken || registry[userId]?.deviceToken || null,
+          enrolledAt: registry[userId]?.enrolledAt || new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
 
