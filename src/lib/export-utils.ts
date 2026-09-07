@@ -1356,7 +1356,7 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
       <div class="meta-box">
         <div><strong>کۆدی دەرچوون:</strong> ASH-DIR-${month}-902</div>
         <div><strong>بەرواری دەرچوون:</strong> ${issueDate}</div>
-        <div><strong>شێفتی فەرمی:</strong> 08:30 - 16:30</div>
+        <div><strong>شێفتی فەرمی:</strong> 08:00 - 17:00 (پشووی نیوەڕۆ: 12:00 - 13:00)</div>
       </div>
 
       <div class="center-branding">

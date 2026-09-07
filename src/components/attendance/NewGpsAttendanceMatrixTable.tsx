@@ -50,8 +50,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
   // Modal Form States
   const [modalStatus, setModalStatus] = useState<string>('Present');
-  const [modalCheckIn, setModalCheckIn] = useState<string>('08:30');
-  const [modalCheckOut, setModalCheckOut] = useState<string>('16:30');
+  const [modalCheckIn, setModalCheckIn] = useState<string>('08:00');
+  const [modalCheckOut, setModalCheckOut] = useState<string>('17:00');
+  const [modalAdminNote, setModalAdminNote] = useState<string>('');
   const [isSavingModal, setIsSavingModal] = useState<boolean>(false);
 
   // Status Drag & Drop Quick Palette
@@ -59,7 +60,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   const [draggedStatus, setDraggedStatus] = useState<string | null>(null);
 
   // Dynamic Manual Overrides Map for cell statuses
-  const [manualStatusMap, setManualStatusMap] = useState<Record<string, { status: string; checkInTime?: string; checkOutTime?: string }>>({});
+  const [manualStatusMap, setManualStatusMap] = useState<Record<string, { status: string; checkInTime?: string; checkOutTime?: string; rawCheckIn?: string; rawCheckOut?: string; note?: string; adminNote?: string }>>({});
 
   // 🖨️ Custom Range Print / Google Sheets Export Modal State
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
@@ -248,6 +249,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
     let checkInTime = '';
     let checkOutTime = '';
+    let rawCheckIn = '';
+    let rawCheckOut = '';
+    let note = '';
+    let adminNote = '';
     let warehouseName = 'کۆمپانیای سەرەکی ئاشڵی';
 
     dayRecords.forEach((r: any) => {
@@ -256,14 +261,41 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
       if (inCandidate && !checkInTime) checkInTime = inCandidate.slice(0, 5);
       if (outCandidate) checkOutTime = outCandidate.slice(0, 5);
+      if (r.rawCheckInTime || r.raw_check_in_time) rawCheckIn = (r.rawCheckInTime || r.raw_check_in_time).slice(0, 5);
+      if (r.rawCheckOutTime || r.raw_check_out_time) rawCheckOut = (r.rawCheckOutTime || r.raw_check_out_time).slice(0, 5);
+      if (r.note || r.check_in_note || r.check_out_note || r.edit_note || r.editNote) {
+        note = r.note || r.check_in_note || r.check_out_note || r.edit_note || r.editNote;
+      }
+      if (r.adminNote || r.admin_note) adminNote = r.adminNote || r.admin_note;
       if (r.warehouseName || r.warehouse_name) warehouseName = r.warehouseName || r.warehouse_name;
     });
+
+    if (!rawCheckIn && checkInTime) rawCheckIn = checkInTime;
+    if (!rawCheckOut && checkOutTime) rawCheckOut = checkOutTime;
 
     const hasRecord = Boolean(checkInTime || checkOutTime);
     let status = 'Empty';
 
     if (hasRecord) {
       status = 'Present';
+    }
+
+    // Calculate worked hours deducting 12:00 to 13:00 lunch break
+    let workedHours = 0;
+    if (checkInTime && checkOutTime) {
+      const [inH, inM] = checkInTime.split(':').map(Number);
+      const [outH, outM] = checkOutTime.split(':').map(Number);
+      const inTotal = inH * 60 + (inM || 0);
+      const outTotal = outH * 60 + (outM || 0);
+      if (outTotal > inTotal) {
+        const gross = outTotal - inTotal;
+        const breakStart = 12 * 60; // 720
+        const breakEnd = 13 * 60;   // 780
+        const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
+        workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
+      }
+    } else if (hasRecord) {
+      workedHours = 8;
     }
 
     return {
@@ -273,9 +305,13 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       isToday,
       checkInTime,
       checkOutTime,
+      rawCheckIn,
+      rawCheckOut,
+      note,
+      adminNote,
       status,
       warehouseName,
-      workedHours: hasRecord ? 8 : 0,
+      workedHours,
     };
   }, [manualStatusMap, attendanceLogs]);
 
@@ -284,15 +320,16 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     const info = getGpsLogsForEmpAndDay(emp, dayItem);
     setSelectedDayModal({ emp, dayItem, info });
     setModalStatus(info.status === 'Empty' ? 'Present' : info.status);
-    setModalCheckIn(info.checkInTime || '08:30');
-    setModalCheckOut(info.checkOutTime || '16:30');
+    setModalCheckIn(info.checkInTime || '08:00');
+    setModalCheckOut(info.checkOutTime || '17:00');
+    setModalAdminNote(info.adminNote || '');
   };
 
   // Save Modal Changes to Supabase
   const handleSaveModal = async () => {
     if (!selectedDayModal) return;
     setIsSavingModal(true);
-    const { emp, dayItem } = selectedDayModal;
+    const { emp, dayItem, info } = selectedDayModal;
     const key = `${emp.id}_${dayItem.dateStr}`;
 
     try {
@@ -302,7 +339,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         [key]: {
           status: modalStatus,
           checkInTime: modalStatus === 'Present' ? modalCheckIn : modalStatus === 'Leave' ? 'مۆڵەت' : undefined,
-          checkOutTime: modalStatus === 'Present' ? modalCheckOut : modalStatus === 'Leave' ? 'مۆڵەت' : undefined
+          checkOutTime: modalStatus === 'Present' ? modalCheckOut : modalStatus === 'Leave' ? 'مۆڵەت' : undefined,
+          adminNote: modalAdminNote,
+          note: info.note,
+          rawCheckIn: info.rawCheckIn,
+          rawCheckOut: info.rawCheckOut,
         }
       }));
 
@@ -315,7 +356,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           date: dayItem.dateStr,
           status: modalStatus,
           checkInTime: modalStatus === 'Present' ? modalCheckIn : undefined,
-          checkOutTime: modalStatus === 'Present' ? modalCheckOut : undefined
+          checkOutTime: modalStatus === 'Present' ? modalCheckOut : undefined,
+          adminNote: modalAdminNote || undefined,
         })
       });
 
@@ -369,8 +411,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       ...prev,
       [key]: {
         status,
-        checkInTime: status === 'Present' ? '08:30' : status === 'Leave' ? 'مۆڵەت' : undefined,
-        checkOutTime: status === 'Present' ? '16:30' : status === 'Leave' ? 'مۆڵەت' : undefined
+        checkInTime: status === 'Present' ? '08:00' : status === 'Leave' ? 'مۆڵەت' : undefined,
+        checkOutTime: status === 'Present' ? '17:00' : status === 'Leave' ? 'مۆڵەت' : undefined
       }
     }));
 
@@ -416,10 +458,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           presentToday++;
         }
         if (isPresent) {
-          totalHours += 8;
+          totalHours += (info.workedHours !== undefined ? info.workedHours : 8);
           totalPresentOpportunities++;
-          const inT = (info.checkInTime || '08:30').slice(0, 5);
-          if (inT > '08:30') totalLate++;
+          const inT = (info.checkInTime || '08:00').slice(0, 5);
+          if (inT > '08:15') totalLate++;
         }
         if (!d.isFuture && !d.isFriday) {
           totalWorkableOpportunities++;
@@ -466,10 +508,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           const isPresent = info.status === 'Present' || Boolean(info.checkInTime);
           if (isPresent) {
             presentCount++;
-            totalHours += 8;
-            const inT = (info.checkInTime || '08:30').slice(0, 5);
-            if (inT > '08:30') lateCount++;
-            return `هاتن: ${info.checkInTime || '08:30'} | ڕۆیشتن: ${info.checkOutTime || '16:30'}`;
+            totalHours += (info.workedHours !== undefined ? info.workedHours : 8);
+            const inT = (info.checkInTime || '08:00').slice(0, 5);
+            if (inT > '08:15') lateCount++;
+            return `هاتن: ${info.checkInTime || '08:00'} | ڕۆیشتن: ${info.checkOutTime || '17:00'}`;
           }
           if (d.isFriday || info.status === 'Holiday') return 'پشوو (هەینی)';
           if (info.status === 'Leave' || info.status === 'مۆڵەت') return 'مۆڵەت';
@@ -499,7 +541,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
       const ws = XLSX.utils.aoa_to_sheet([
         [`کۆمپانیای ئاشڵی (Ashley Company) - خشتەی ئامادەبوونی ۳۱ ڕۆژەی کارمەندان مانگی ${selectedMonth}`],
-        [`بەرواری دەرکردنی ڕاپۆرت: ${todayStr} | شێفتی فەرمی: 08:30 بۆ 16:30`],
+        [`بەرواری دەرکردنی ڕاپۆرت: ${todayStr} | شێفتی فەرمی: 08:00 بۆ 17:00 (پشووی نیوەڕۆ: 12:00 - 13:00)`],
         [],
         headerRow,
         ...dataRows
@@ -527,9 +569,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           const isPresent = info.status === 'Present' || Boolean(info.checkInTime);
           if (isPresent) {
             presentDays++;
-            totalHours += 8;
-            const inT = (info.checkInTime || '08:30').slice(0, 5);
-            if (inT > '08:30') lateDays++;
+            totalHours += (info.workedHours !== undefined ? info.workedHours : 8);
+            const inT = (info.checkInTime || '08:00').slice(0, 5);
+            if (inT > '08:15') lateDays++;
           } else if (!d.isFuture && !d.isFriday) {
             absentDays++;
           }
@@ -962,9 +1004,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 const isPresent = info.status === 'Present' || Boolean(info.checkInTime);
                 if (isPresent) {
                   empPresentDays++;
-                  empTotalHours += 8;
-                  const inT = (info.checkInTime || '08:30').slice(0, 5);
-                  if (inT > '08:30') {
+                  empTotalHours += (info.workedHours !== undefined ? info.workedHours : 8);
+                  const inT = (info.checkInTime || '08:00').slice(0, 5);
+                  if (inT > '08:15') {
                     empLateDays++;
                   }
                 } else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
@@ -1007,8 +1049,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     const info = getGpsLogsForEmpAndDay(emp, d);
                     const isFriday = d.isFriday;
                     const isPresent = info.status === 'Present' || Boolean(info.checkInTime);
-                    const inTime = info.checkInTime || '08:30';
-                    const outTime = info.checkOutTime || (d.isToday ? 'بەردەوام' : '16:30');
+                    const inTime = info.checkInTime || '08:00';
+                    const outTime = info.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00');
 
                     let badgeColor = 'bg-slate-50 text-slate-300 border-dashed border-slate-200 font-normal';
                     let badgeText = '-';
@@ -1039,7 +1081,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       badgeText = '-';
                     }
 
-                    const isLate = isPresent && inTime.slice(0, 5) > '08:30';
+                    const isLate = isPresent && inTime.slice(0, 5) > '08:15';
 
                     return (
                       <td 
@@ -1056,7 +1098,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           }
                         }}
                         onClick={() => handleCellClick(emp, d)}
-                        title={`کلیک بکە بۆ بینینی وردەکاری و دەستکاری\nهاتن: ${info.checkInTime || '08:30'}${isLate ? ' (درەنگکەوتوو)' : ''}\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '16:30')}`}
+                        title={`کلیک بکە بۆ بینینی وردەکاری و دەستکاری\nهاتن: ${info.checkInTime || '08:00'}${isLate ? ' (درەنگکەوتوو)' : ''}\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00')}`}
                         className={`p-0.5 text-center border-l border-slate-200 cursor-pointer hover:bg-emerald-100/60 transition-all ${
                           d.isToday ? 'bg-amber-50/50 ring-1 ring-inset ring-amber-400' : isFriday ? 'bg-emerald-50/40' : isLate ? 'bg-amber-50/40' : ''
                         }`}
@@ -1198,31 +1240,70 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </div>
               </div>
 
+              {/* 📌 ORIGINAL RECORD & EMPLOYEE NOTE (READ-ONLY BANNER) */}
+              <div className="p-3 bg-slate-50 border border-slate-300 space-y-2 text-xs">
+                <div className="flex items-center justify-between font-mono">
+                  <span className="font-black text-slate-700">📌 کاتی ڕاستەقینەی مۆبایل:</span>
+                  <div className="flex gap-2">
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold border border-emerald-300">
+                      هاتن: {selectedDayModal.info.rawCheckIn || '08:00'}
+                    </span>
+                    <span className="px-2 py-0.5 bg-rose-100 text-rose-800 font-bold border border-rose-300">
+                      ڕۆیشتن: {selectedDayModal.info.rawCheckOut || '17:00'}
+                    </span>
+                  </div>
+                </div>
+                {selectedDayModal.info.note ? (
+                  <div className="p-2 rounded bg-amber-50 border border-amber-300 text-amber-900 font-bold flex items-center gap-1.5">
+                    <span>💬 تێبینی مۆبایلی کارمەند:</span>
+                    <span>{selectedDayModal.info.note}</span>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-500">
+                    ℹ️ هیچ تێبینییەکی درەنگکەوتن یان کاتی زیادە لە مۆبایلەوە تۆمار نەکراوە.
+                  </div>
+                )}
+              </div>
+
               {/* Time Inputs (Only active if Present) */}
               {modalStatus === 'Present' && (
-                <div className="grid grid-cols-2 gap-3 p-3 bg-blue-50/60 border border-blue-200">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-700 flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-blue-600" />
-                      <span>کاتی هاتن (Check-in):</span>
-                    </label>
-                    <input 
-                      type="time" 
-                      value={modalCheckIn}
-                      onChange={(e) => setModalCheckIn(e.target.value)}
-                      className="w-full text-xs font-bold bg-white border border-slate-300 p-2 rounded-none outline-none font-mono text-center"
-                    />
+                <div className="space-y-2 p-3 bg-blue-50/60 border border-blue-200">
+                  <span className="text-xs font-black text-blue-900 block">✏️ کاتی ڕێکخراوی ئەدمین (Adjusted by Admin):</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-700 flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-blue-600" />
+                        <span>کاتی ڕێکخراوی هاتن:</span>
+                      </label>
+                      <input 
+                        type="time" 
+                        value={modalCheckIn}
+                        onChange={(e) => setModalCheckIn(e.target.value)}
+                        className="w-full text-xs font-bold bg-white border border-slate-300 p-2 rounded-none outline-none font-mono text-center"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-700 flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-blue-600" />
+                        <span>کاتی ڕێکخراوی ڕۆیشتن:</span>
+                      </label>
+                      <input 
+                        type="time" 
+                        value={modalCheckOut}
+                        onChange={(e) => setModalCheckOut(e.target.value)}
+                        className="w-full text-xs font-bold bg-white border border-slate-300 p-2 rounded-none outline-none font-mono text-center"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-700 flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-blue-600" />
-                      <span>کاتی دەرچوون (Check-out):</span>
-                    </label>
-                    <input 
-                      type="time" 
-                      value={modalCheckOut}
-                      onChange={(e) => setModalCheckOut(e.target.value)}
-                      className="w-full text-xs font-bold bg-white border border-slate-300 p-2 rounded-none outline-none font-mono text-center"
+
+                  <div className="space-y-1 pt-1">
+                    <label className="text-[10px] font-black text-slate-700 block">تێبینی یان هۆکاری ڕێکخستنی ئەدمین:</label>
+                    <input
+                      type="text"
+                      value={modalAdminNote}
+                      onChange={(e) => setModalAdminNote(e.target.value)}
+                      placeholder="بۆ نموونە: بەخشراوە لە درەنگکەوتن، تێبینی کارگێڕی..."
+                      className="w-full text-xs bg-white border border-slate-300 p-2 rounded-none outline-none"
                     />
                   </div>
                 </div>
@@ -1232,16 +1313,16 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               <div className="space-y-2 p-3 bg-slate-100 rounded-none border border-slate-300">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black text-slate-800">📊 گرافی ٢٤ کاتژمێری چالاکی دەوامی ئەم ڕۆژە:</span>
-                  <span className="text-[10px] font-bold text-blue-700">دەوامی فەرمی: 08:30 بۆ 16:30</span>
+                  <span className="text-[10px] font-bold text-blue-700">دەوامی فەرمی: 08:00 بۆ 17:00 (پشووی نیوەڕۆ: 12:00 - 13:00)</span>
                 </div>
 
                 <div className="relative w-full h-12 bg-white rounded-none overflow-hidden border border-slate-300">
-                  <div className="absolute top-0 bottom-0 bg-blue-100/70 border-x-2 border-dashed border-blue-400/80 pointer-events-none" style={{ left: '35.4%', width: '33.3%' }} />
+                  <div className="absolute top-0 bottom-0 bg-blue-100/70 border-x-2 border-dashed border-blue-400/80 pointer-events-none" style={{ left: '33.3%', width: '37.5%' }} />
                   
                   {modalStatus === 'Present' && (
                     <div 
                       className="absolute top-1 bottom-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-none flex items-center justify-center text-[10px] font-mono font-bold shadow-xs border border-emerald-700"
-                      style={{ left: '35.4%', width: '33.3%' }}
+                      style={{ left: '33.3%', width: '37.5%' }}
                     >
                       {modalCheckIn} - {modalCheckOut} (٨ کاتژمێر)
                     </div>
@@ -1251,9 +1332,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 <div className="flex items-center justify-between text-[8px] font-mono text-slate-500 font-bold">
                   <span>00:00</span>
                   <span>04:00</span>
-                  <span className="text-blue-700 font-black">08:30 (دەستپێک)</span>
-                  <span>12:00</span>
-                  <span className="text-blue-700 font-black">16:30 (تەواو)</span>
+                  <span className="text-blue-700 font-black">08:00 (دەستپێک)</span>
+                  <span className="text-amber-700 font-black">12:00 - 13:00 (پشوو)</span>
+                  <span className="text-blue-700 font-black">17:00 (تەواو)</span>
                   <span>20:00</span>
                   <span>24:00</span>
                 </div>

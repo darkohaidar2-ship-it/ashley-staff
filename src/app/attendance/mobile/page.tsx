@@ -51,6 +51,29 @@ const COMPANY_LOCATIONS: GeofenceRegion[] = [
   },
 ];
 
+// Quick Reason Chips for Late / Early / Overtime
+const LATE_IN_CHIPS = [
+  '🚗 قەرەباڵغی جادە',
+  '🔧 تێکچوونی ئۆتۆمبێل',
+  '🏥 باری تەندروستی / نەخۆشی',
+  '🏢 چوونی ئەرکی دەرەوە',
+  '🌧️ کەشوهەوا / کێشەی ڕێگا',
+];
+
+const EARLY_OUT_CHIPS = [
+  '🏥 مۆڵەتی نەخۆشی',
+  '🏠 کاری بەپەلەی خێزانی',
+  '📞 بە فەرمانی سەرپەرشتیار',
+  '🏢 ئەرکی فەرمی دەرەوە',
+];
+
+const OVERTIME_CHIPS = [
+  '📦 داگرتن یان بارکردن',
+  '🛠️ تەواوکردنی کاری بەش',
+  '🚚 سەردانی کۆگا و گەراج',
+  '👔 بە داوای بەڕێوەبەر',
+];
+
 export default function MobileAttendanceOneTap() {
   // Real-time Clock
   const [currentTimeStr, setCurrentTimeStr] = useState('');
@@ -88,6 +111,13 @@ export default function MobileAttendanceOneTap() {
   const [workedMinutes, setWorkedMinutes] = useState<number>(0);
   const [triggerLoading, setTriggerLoading] = useState<boolean>(false);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
+
+  // Reason / Note Modal State for Late / Early / Overtime
+  const [showReasonModal, setShowReasonModal] = useState(false);
+  const [reasonType, setReasonType] = useState<'LATE_IN' | 'EARLY_OUT' | 'OVERTIME_OUT'>('LATE_IN');
+  const [pendingAction, setPendingAction] = useState<'ENTER' | 'EXIT'>('ENTER');
+  const [selectedChip, setSelectedChip] = useState<string>('');
+  const [customReason, setCustomReason] = useState<string>('');
 
   // Monthly Attendance Records for this employee
   const [monthlyLogs, setMonthlyLogs] = useState<any[]>([]);
@@ -257,12 +287,12 @@ export default function MobileAttendanceOneTap() {
     if (employeeProfile?.id) {
       fetchTodayShift();
       fetchMonthlyHistory();
-      const interval = setInterval(fetchTodayShift, 10000);
+  const interval = setInterval(fetchTodayShift, 10000);
       return () => clearInterval(interval);
     }
   }, [employeeProfile, fetchTodayShift, fetchMonthlyHistory]);
 
-  // 7. Calculate elapsed work minutes if checked in
+  // 7. Calculate elapsed work minutes if checked in (deducting 12:00-13:00 lunch break)
   useEffect(() => {
     if (!liveTodayShift.checkInTime) {
       setWorkedMinutes(0);
@@ -271,14 +301,26 @@ export default function MobileAttendanceOneTap() {
     const calcDuration = () => {
       const [inH, inM] = liveTodayShift.checkInTime!.split(':').map(Number);
       const inTotal = inH * 60 + inM;
+      let outTotal: number;
       if (liveTodayShift.checkOutTime) {
         const [outH, outM] = liveTodayShift.checkOutTime.split(':').map(Number);
-        setWorkedMinutes(Math.max(0, (outH * 60 + outM) - inTotal));
+        outTotal = outH * 60 + outM;
       } else {
         const now = new Date();
-        const nowTotal = now.getHours() * 60 + now.getMinutes();
-        setWorkedMinutes(Math.max(0, nowTotal - inTotal));
+        outTotal = now.getHours() * 60 + now.getMinutes();
       }
+
+      if (outTotal <= inTotal) {
+        setWorkedMinutes(0);
+        return;
+      }
+
+      const grossMinutes = outTotal - inTotal;
+      // 12:00 to 13:00 (720 to 780 minutes) is lunch break
+      const breakStart = 12 * 60;
+      const breakEnd = 13 * 60;
+      const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
+      setWorkedMinutes(Math.max(0, grossMinutes - overlap));
     };
     calcDuration();
     const interval = setInterval(calcDuration, 30000);
@@ -337,8 +379,8 @@ export default function MobileAttendanceOneTap() {
     }
   };
 
-  // 10. THE HERO 1-TAP ATTENDANCE PUNCH (Check-In & Check-Out)
-  const handleOneTapAttendance = async (action: 'ENTER' | 'EXIT') => {
+  // 10. THE HERO 1-TAP ATTENDANCE PUNCH (Check-In & Check-Out with Note Support)
+  const handleOneTapAttendance = async (action: 'ENTER' | 'EXIT', reasonNote?: string) => {
     if (!employeeProfile?.id) return;
 
     setTriggerLoading(true);
@@ -364,6 +406,7 @@ export default function MobileAttendanceOneTap() {
           lng: currentLng || 45.452935,
           distance: distanceMeters,
           regionName: matchedLocationName,
+          note: reasonNote || null,
           timestamp: new Date().toISOString(),
         }),
       });
@@ -380,21 +423,21 @@ export default function MobileAttendanceOneTap() {
         };
         setLiveTodayShift(updatedShift);
         localStorage.setItem(`ashley_shift_state_${todayIso}_${employeeProfile.id}`, JSON.stringify(updatedShift));
-        setFeedbackToast(`🎉 دەستخۆش! هاتنت لە کاتژمێر (${assignedTime}) بە سەرکەوتوویی تۆمارکرا.`);
+        setFeedbackToast(reasonNote ? `🎉 هاتنت لە کاتژمێر (${assignedTime}) تۆمارکرا (تێبینی: ${reasonNote}).` : `🎉 دەستخۆش! هاتنت لە کاتژمێر (${assignedTime}) بە سەرکەوتوویی تۆمارکرا.`);
       } else {
         const updatedShift = {
-          checkInTime: liveTodayShift.checkInTime || '08:15',
+          checkInTime: liveTodayShift.checkInTime || '08:00',
           checkOutTime: assignedTime,
           status: 'Present',
           warehouseName: data.location || matchedLocationName,
         };
         setLiveTodayShift(updatedShift);
         localStorage.setItem(`ashley_shift_state_${todayIso}_${employeeProfile.id}`, JSON.stringify(updatedShift));
-        setFeedbackToast(`👋 دەستخۆش و ماندوو نەبیت! ڕۆیشتنت لە کاتژمێر (${assignedTime}) تۆمارکرا.`);
+        setFeedbackToast(reasonNote ? `👋 ڕۆیشتنت لە کاتژمێر (${assignedTime}) تۆمارکرا (تێبینی: ${reasonNote}).` : `👋 دەستخۆش و ماندوو نەبیت! ڕۆیشتنت لە کاتژمێر (${assignedTime}) تۆمارکرا.`);
       }
 
       playSoundChime(true);
-      setTimeout(() => setFeedbackToast(null), 5000);
+      setTimeout(() => setFeedbackToast(null), 6000);
       await fetchTodayShift();
       await fetchMonthlyHistory();
     } catch (err: any) {
@@ -402,6 +445,62 @@ export default function MobileAttendanceOneTap() {
     } finally {
       setTriggerLoading(false);
     }
+  };
+
+  // 11. Check-In & Check-Out Click Interceptors (Timing Rules)
+  const handleCheckInClick = () => {
+    if (!isInsideGeofence) {
+      alert(`⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${distanceMeters} مەتر دووریت).\nدەبێت لە ناو کارگە بیت بۆ تۆمارکردنی هاتن.`);
+      return;
+    }
+    const currentHm = format(new Date(), 'HH:mm');
+    // Shift starts at 08:00, grace period up to 08:15. If after 08:15 -> Prompt for Reason
+    if (currentHm > '08:15') {
+      setPendingAction('ENTER');
+      setReasonType('LATE_IN');
+      setSelectedChip(LATE_IN_CHIPS[0]);
+      setCustomReason('');
+      setShowReasonModal(true);
+      return;
+    }
+    handleOneTapAttendance('ENTER');
+  };
+
+  const handleCheckOutClick = () => {
+    if (!isInsideGeofence) {
+      alert(`⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${distanceMeters} مەتر دووریت).\nدەبێت لە ناو کارگە بیت بۆ تۆمارکردنی ڕۆیشتن.`);
+      return;
+    }
+    const currentHm = format(new Date(), 'HH:mm');
+    // Shift ends at 17:00.
+    // If earlier than 16:45 -> Prompt for early departure reason
+    if (currentHm < '16:45') {
+      setPendingAction('EXIT');
+      setReasonType('EARLY_OUT');
+      setSelectedChip(EARLY_OUT_CHIPS[0]);
+      setCustomReason('');
+      setShowReasonModal(true);
+      return;
+    } 
+    // If later than 17:15 -> Prompt for overtime reason
+    else if (currentHm > '17:15') {
+      setPendingAction('EXIT');
+      setReasonType('OVERTIME_OUT');
+      setSelectedChip(OVERTIME_CHIPS[0]);
+      setCustomReason('');
+      setShowReasonModal(true);
+      return;
+    }
+
+    if (confirm('ئایا دڵنیایت لە تەواوبوونی دەوام و تۆمارکردنی ڕۆیشتن؟')) {
+      handleOneTapAttendance('EXIT');
+    }
+  };
+
+  const submitReasonAttendance = () => {
+    const finalNote = customReason.trim() ? `${selectedChip} (${customReason.trim()})` : selectedChip;
+    handleOneTapAttendance(pendingAction, finalNote);
+    setShowReasonModal(false);
   };
 
   // Format Worked Hours
@@ -573,9 +672,13 @@ export default function MobileAttendanceOneTap() {
           {!liveTodayShift.checkInTime ? (
             /* STATE 1: NOT CHECKED IN YET -> BIG GREEN CHECK-IN BUTTON */
             <button
-              onClick={() => handleOneTapAttendance('ENTER')}
-              disabled={triggerLoading}
-              className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-98 text-white p-6 rounded-2xl shadow-xl shadow-emerald-950/60 border-2 border-emerald-400/40 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              onClick={handleCheckInClick}
+              disabled={triggerLoading || !isInsideGeofence}
+              className={`w-full p-6 rounded-2xl shadow-xl transition-all flex flex-col items-center justify-center gap-2 cursor-pointer ${
+                !isInsideGeofence 
+                  ? 'bg-slate-800 border-2 border-slate-700 text-slate-400 opacity-60 cursor-not-allowed shadow-none' 
+                  : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-98 text-white shadow-emerald-950/60 border-2 border-emerald-400/40'
+              }`}
             >
               <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
                 {triggerLoading ? (
@@ -585,10 +688,10 @@ export default function MobileAttendanceOneTap() {
                 )}
               </div>
               <span className="text-lg font-black tracking-wide">
-                🟢 تۆمارکردنی هاتن (Check In)
+                {!isInsideGeofence ? '⚠️ تۆ لە دەرەوەی کارگەیت' : '🟢 تۆمارکردنی هاتن (Check In)'}
               </span>
               <span className="text-xs text-emerald-100 font-medium">
-                کلیک بکە بۆ دەستپێکردنی دەوامی ئەمڕۆت
+                {!isInsideGeofence ? `دەبێت بچیتە ناو بازنەی کارگە (${distanceMeters} مەتر دووریت)` : 'دەوامی فەرمی: 08:00 - کلیک بکە بۆ دەستپێکردن'}
               </span>
             </button>
           ) : isCheckedIn ? (
@@ -602,7 +705,7 @@ export default function MobileAttendanceOneTap() {
                   </span>
                 </div>
                 <div className="text-left font-mono">
-                  <span className="text-[10px] text-slate-400 block font-bold">ماوەی کارکردن:</span>
+                  <span className="text-[10px] text-slate-400 block font-bold">ماوەی کارکردن (بەبێ پشووی نیوەڕۆ):</span>
                   <span className="text-xs font-black text-amber-300">
                     ⏱️ {formattedWorkedHours}
                   </span>
@@ -610,13 +713,13 @@ export default function MobileAttendanceOneTap() {
               </div>
 
               <button
-                onClick={() => {
-                  if (confirm('ئایا دڵنیایت لە تەواوبوونی دەوام و تۆمارکردنی ڕۆیشتن؟')) {
-                    handleOneTapAttendance('EXIT');
-                  }
-                }}
-                disabled={triggerLoading}
-                className="w-full bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 active:scale-98 text-white p-6 rounded-2xl shadow-xl shadow-rose-950/60 border-2 border-rose-400/40 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                onClick={handleCheckOutClick}
+                disabled={triggerLoading || !isInsideGeofence}
+                className={`w-full p-6 rounded-2xl shadow-xl transition-all flex flex-col items-center justify-center gap-2 cursor-pointer ${
+                  !isInsideGeofence 
+                    ? 'bg-slate-800 border-2 border-slate-700 text-slate-400 opacity-60 cursor-not-allowed shadow-none' 
+                    : 'bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 active:scale-98 text-white shadow-rose-950/60 border-2 border-rose-400/40'
+                }`}
               >
                 <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
                   {triggerLoading ? (
@@ -626,10 +729,10 @@ export default function MobileAttendanceOneTap() {
                   )}
                 </div>
                 <span className="text-lg font-black tracking-wide">
-                  🔴 تۆمارکردنی ڕۆیشتن (Check Out)
+                  {!isInsideGeofence ? '⚠️ تۆ لە دەرەوەی کارگەیت' : '🔴 تۆمارکردنی ڕۆیشتن (Check Out)'}
                 </span>
                 <span className="text-xs text-rose-100 font-medium">
-                  کلیک بکە لە کاتی تەواوبوونی دەوام و چوونەدەرەوە
+                  {!isInsideGeofence ? `دەبێت لە ناو کارگە بیت بۆ دەرچوون (${distanceMeters} مەتر دووریت)` : 'کاتی کۆتایی دەوام: 17:00 - کلیک بکە لە کاتی دەرچوون'}
                 </span>
               </button>
             </div>
@@ -660,7 +763,7 @@ export default function MobileAttendanceOneTap() {
               </div>
 
               <button
-                onClick={() => handleOneTapAttendance('EXIT')}
+                onClick={handleCheckOutClick}
                 className="text-xs text-slate-400 hover:text-white underline cursor-pointer pt-1 block mx-auto"
               >
                 نوێکردنەوەی کاتی ڕۆیشتن
@@ -728,6 +831,89 @@ export default function MobileAttendanceOneTap() {
         </div>
 
       </main>
+
+      {/* ⚠️ REASON / EXPLANATION MODAL (LATE / EARLY / OVERTIME) */}
+      {showReasonModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-slate-700 p-5 rounded-2xl max-w-sm w-full space-y-4 text-right">
+            
+            <div className="text-center space-y-1">
+              <div className={`w-12 h-12 rounded-full mx-auto flex items-center justify-center ${
+                reasonType === 'LATE_IN' ? 'bg-amber-500/20 text-amber-400' :
+                reasonType === 'EARLY_OUT' ? 'bg-rose-500/20 text-rose-400' :
+                'bg-emerald-500/20 text-emerald-400'
+              }`}>
+                <Clock className="w-6 h-6" />
+              </div>
+              <h4 className="text-sm font-black text-white">
+                {reasonType === 'LATE_IN' && '⚠️ ڕوونکردنەوەی درەنگکەوتن (دوای 08:15)'}
+                {reasonType === 'EARLY_OUT' && '⚠️ ڕوونکردنەوەی دەرچوونی زوو (پێش 16:45)'}
+                {reasonType === 'OVERTIME_OUT' && '⏱️ تۆمارکردنی کاتی زیادە / ئیزافە (دوای 17:15)'}
+              </h4>
+              <p className="text-xs text-slate-400">
+                {reasonType === 'LATE_IN' && 'دەوامی فەرمی لە 08:00 دەستپێدەکات. تکایە هۆکاری درەنگکەوتن دیاری بکە:'}
+                {reasonType === 'EARLY_OUT' && 'کاتی فەرمی ڕۆیشتن 17:00یە. تکایە هۆکاری دەرچوونی پێشوەختە دیاری بکە:'}
+                {reasonType === 'OVERTIME_OUT' && 'دەستخۆش بۆ کاتی زیادە! تکایە هۆکاری مانەوە دیاری بکە:'}
+              </p>
+            </div>
+
+            {/* Quick Reason Chips */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-300 block">هەڵبژاردنی خێرا (بە ١ کلیک):</label>
+              <div className="grid grid-cols-1 gap-1.5">
+                {(reasonType === 'LATE_IN' ? LATE_IN_CHIPS : reasonType === 'EARLY_OUT' ? EARLY_OUT_CHIPS : OVERTIME_CHIPS).map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => setSelectedChip(chip)}
+                    className={`p-2.5 rounded-xl text-xs font-bold text-right border transition-all cursor-pointer flex items-center justify-between ${
+                      selectedChip === chip 
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-200 shadow-sm' 
+                        : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    <span>{chip}</span>
+                    {selectedChip === chip && <CheckCircle2 className="w-4 h-4 text-amber-400" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Reason Note Input */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-slate-300 block">تێبینی زیاتر (ئارەزوومەندانە):</label>
+              <input
+                type="text"
+                value={customReason}
+                onChange={(e) => setCustomReason(e.target.value)}
+                placeholder="وردەکاری یان هۆکاری تر..."
+                className="w-full bg-slate-800 border border-slate-700 text-white text-xs p-2.5 rounded-xl focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+
+            {/* Modal Buttons */}
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={submitReasonAttendance}
+                disabled={triggerLoading || !selectedChip}
+                className="flex-1 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white font-black text-xs py-3 rounded-xl shadow-md cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>پەسەندکردن و تۆمارکردن</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowReasonModal(false)}
+                className="px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs py-3 rounded-xl cursor-pointer"
+              >
+                پاشگەزبوونەوە
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* 🔒 UNBIND / LOGOUT MODAL */}
       {showLogoutModal && (
