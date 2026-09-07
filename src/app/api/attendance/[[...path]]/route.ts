@@ -1894,11 +1894,397 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       return NextResponse.json({ success: true });
     }
 
+    // ----------------------------------------
+    // RESET DEVICE BINDING
+    // ----------------------------------------
     if (pathStr === 'admin/users/reset-device' && method === 'POST') {
       const { userId } = await req.json();
       if (!userId) return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
 
-      const { error } = await supabase.from('users').update({ device_token: null }).eq('id', userId);
+      // 1. Clear in users table
+      try {
+        await supabase.from('users').update({ device_token: null }).eq('id', userId);
+      } catch (err) {
+        console.warn('reset-device users table:', err);
+      }
+
+      // 2. Clear in warehouses table (ashley_device_bindings)
+      try {
+        const { data: regRow } = await supabase
+          .from('warehouses')
+          .select('qr_code')
+          .eq('id', 'ashley_device_bindings')
+          .maybeSingle();
+
+        if (regRow?.qr_code) {
+          let registry = JSON.parse(regRow.qr_code);
+          delete registry[userId];
+          Object.keys(registry).forEach(key => {
+            if (registry[key]?.userId === userId) {
+              delete registry[key];
+            }
+          });
+          await supabase.from('warehouses').upsert({
+            id: 'ashley_device_bindings',
+            name: 'Ashley Device & Hardware Registry',
+            qr_code: JSON.stringify(registry),
+            lat: 0,
+            lng: 0,
+            radius: 0,
+          });
+        }
+      } catch (err) {
+        console.error('Error clearing ashley_device_bindings:', err);
+      }
+
+      // 3. Clear device IP and token in ashley_face_registry
+      try {
+        const { data: faceRow } = await supabase
+          .from('warehouses')
+          .select('qr_code')
+          .eq('id', 'ashley_face_registry')
+          .maybeSingle();
+
+        if (faceRow?.qr_code) {
+          let faceReg = JSON.parse(faceRow.qr_code);
+          if (faceReg[userId]) {
+            faceReg[userId].clientIp = null;
+            faceReg[userId].deviceToken = null;
+            await supabase.from('warehouses').upsert({
+              id: 'ashley_face_registry',
+              name: 'Ashley AI Face Database Registry',
+              qr_code: JSON.stringify(faceReg),
+              lat: 0,
+              lng: 0,
+              radius: 0,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error updating face registry on reset-device:', err);
+      }
+
+      return NextResponse.json({ success: true, message: 'مۆبایلەکە بە سەرکەوتوویی لە ئەکاونتەکە جیاکرایەوە و سفرکرایەوە' });
+    }
+
+    // ----------------------------------------
+    // RESET FACE ID REGISTRATION
+    // ----------------------------------------
+    if (pathStr === 'admin/users/reset-face' && method === 'POST') {
+      const { userId } = await req.json();
+      if (!userId) return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+
+      // 1. Clear in users table
+      try {
+        await supabase.from('users').update({ face_descriptor: null }).eq('id', userId);
+      } catch (err) {
+        console.warn('reset-face users table:', err);
+      }
+
+      // 2. Clear in warehouses table (ashley_face_registry)
+      try {
+        const { data: faceRow } = await supabase
+          .from('warehouses')
+          .select('qr_code')
+          .eq('id', 'ashley_face_registry')
+          .maybeSingle();
+
+        if (faceRow?.qr_code) {
+          let faceReg = JSON.parse(faceRow.qr_code);
+          delete faceReg[userId];
+          await supabase.from('warehouses').upsert({
+            id: 'ashley_face_registry',
+            name: 'Ashley AI Face Database Registry',
+            qr_code: JSON.stringify(faceReg),
+            lat: 0,
+            lng: 0,
+            radius: 0,
+          });
+        }
+      } catch (err) {
+        console.error('Error clearing ashley_face_registry:', err);
+      }
+
+      return NextResponse.json({ success: true, message: 'دەموچاوەکە بە سەرکەوتوویی لە ئەکاونتەکە سڕایەوە و سفرکرایەوە' });
+    }
+
+    // ----------------------------------------
+    // RESET ALL (DEVICE & FACE)
+    // ----------------------------------------
+    if (pathStr === 'admin/users/reset-all' && method === 'POST') {
+      const { userId } = await req.json();
+      if (!userId) return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+
+      try {
+        await supabase.from('users').update({ device_token: null, face_descriptor: null }).eq('id', userId);
+      } catch {}
+
+      try {
+        const { data: regRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_device_bindings').maybeSingle();
+        if (regRow?.qr_code) {
+          let registry = JSON.parse(regRow.qr_code);
+          delete registry[userId];
+          Object.keys(registry).forEach(key => {
+            if (registry[key]?.userId === userId) delete registry[key];
+          });
+          await supabase.from('warehouses').upsert({
+            id: 'ashley_device_bindings',
+            name: 'Ashley Device & Hardware Registry',
+            qr_code: JSON.stringify(registry),
+            lat: 0,
+            lng: 0,
+            radius: 0,
+          });
+        }
+      } catch {}
+
+      try {
+        const { data: faceRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_face_registry').maybeSingle();
+        if (faceRow?.qr_code) {
+          let faceReg = JSON.parse(faceRow.qr_code);
+          delete faceReg[userId];
+          await supabase.from('warehouses').upsert({
+            id: 'ashley_face_registry',
+            name: 'Ashley AI Face Database Registry',
+            qr_code: JSON.stringify(faceReg),
+            lat: 0,
+            lng: 0,
+            radius: 0,
+          });
+        }
+      } catch {}
+
+      return NextResponse.json({ success: true, message: 'هەردوو مۆبایل و دەموچاو بە سەرکەوتوویی سفرکرانەوە' });
+    }
+
+    // ----------------------------------------
+    // GET /api/attendance/admin/security-status
+    // ----------------------------------------
+    if (pathStr === 'admin/security-status' && method === 'GET') {
+      const baseEmployees = [
+        { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', pin: '1001', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', pin: '1002', role: 'Manager', hourlyRate: 0 },
+        { id: 'emp-03', name: 'شادیار هوشیار', pin: '1003', role: 'Employee Supervisor', hourlyRate: 0 },
+        { id: 'emp-04', name: 'هەڤاڵ حبیب حەمەڕەزا', pin: '1004', role: 'Transport Supervisor', hourlyRate: 0 },
+        { id: 'emp-05', name: 'عیماد سەباح نوری', pin: '1005', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-06', name: 'کامەران عومەر ڕووئوف', pin: '1006', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-07', name: 'ڕابەر محەمەد مەحمود', pin: '1007', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-08', name: 'دانەر محەمەد باسام', pin: '1008', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-09', name: 'ڕێبین سەباح نوری', pin: '1009', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', pin: '1010', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-11', name: 'شادومان یادگار رحیم', pin: '1011', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-12', name: 'سەروەت قادر', pin: '1012', role: 'Employee', hourlyRate: 0 },
+      ];
+
+      let deviceRegistry = {};
+      try {
+        const { data: dRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_device_bindings').maybeSingle();
+        if (dRow?.qr_code) deviceRegistry = JSON.parse(dRow.qr_code);
+      } catch {}
+
+      let faceRegistry = {};
+      try {
+        const { data: fRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_face_registry').maybeSingle();
+        if (fRow?.qr_code) faceRegistry = JSON.parse(fRow.qr_code);
+      } catch {}
+
+      let dbUsers = [];
+      try {
+        const { data: uRows } = await supabase.from('users').select('*').neq('role', 'admin');
+        if (uRows && uRows.length > 0) dbUsers = uRows;
+      } catch {}
+
+      const allEmpList = baseEmployees.map(baseEmp => {
+        const dbU = dbUsers.find(u => u.id === baseEmp.id);
+        const devEntry = deviceRegistry[baseEmp.id];
+        const isDeviceBound = !!(devEntry && !devEntry.unbound && devEntry.deviceToken) || !!(dbU?.device_token);
+        const faceEntry = faceRegistry[baseEmp.id];
+        const isFaceRegistered = !!(faceEntry && (faceEntry.descriptor || (faceEntry.descriptors && faceEntry.descriptors.length > 0))) || !!(dbU?.face_descriptor);
+
+        return {
+          id: baseEmp.id,
+          name: dbU?.name || baseEmp.name,
+          pin: dbU?.pin || baseEmp.pin,
+          role: dbU?.role || baseEmp.role,
+          hourlyRate: dbU?.hourly_rate ?? baseEmp.hourlyRate,
+          isDeviceBound,
+          deviceInfo: isDeviceBound ? {
+            ip: devEntry?.ip || faceEntry?.clientIp || 'Registered',
+            deviceToken: devEntry?.deviceToken || dbU?.device_token || 'Bound',
+            boundAt: devEntry?.boundAt || faceEntry?.registeredAt || null,
+            fingerprint: devEntry?.fingerprint || null
+          } : null,
+          isFaceRegistered,
+          faceInfo: isFaceRegistered ? {
+            descriptorsCount: faceEntry?.descriptors?.length || (faceEntry?.descriptor ? 1 : (dbU?.face_descriptor ? 1 : 0)),
+            registeredAt: faceEntry?.registeredAt || null,
+            clientIp: faceEntry?.clientIp || null
+          } : null
+        };
+      });
+
+      return NextResponse.json({
+        success: true,
+        totalEmployees: allEmpList.length,
+        boundDevicesCount: allEmpList.filter(e => e.isDeviceBound).length,
+        registeredFacesCount: allEmpList.filter(e => e.isFaceRegistered).length,
+        employees: allEmpList
+      }, { headers: noCacheHeaders });
+    }
+
+    // ----------------------------------------
+    // GET /api/attendance/admin/report
+    // ----------------------------------------
+    if (pathStr === 'admin/report' && method === 'GET') {
+      const baseEmployees = [
+        { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', pin: '1001', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', pin: '1002', role: 'Manager', hourlyRate: 0 },
+        { id: 'emp-03', name: 'شادیار هوشیار', pin: '1003', role: 'Employee Supervisor', hourlyRate: 0 },
+        { id: 'emp-04', name: 'هەڤاڵ حبیب حەمەڕەزا', pin: '1004', role: 'Transport Supervisor', hourlyRate: 0 },
+        { id: 'emp-05', name: 'عیماد سەباح نوری', pin: '1005', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-06', name: 'کامەران عومەر ڕووئوف', pin: '1006', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-07', name: 'ڕابەر محەمەد مەحمود', pin: '1007', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-08', name: 'دانەر محەمەد باسام', pin: '1008', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-09', name: 'ڕێبین سەباح نوری', pin: '1009', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', pin: '1010', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-11', name: 'شادومان یادگار رحیم', pin: '1011', role: 'Employee', hourlyRate: 0 },
+        { id: 'emp-12', name: 'سەروەت قادر', pin: '1012', role: 'Employee', hourlyRate: 0 },
+      ];
+
+      let deviceRegistry = {};
+      try {
+        const { data: dRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_device_bindings').maybeSingle();
+        if (dRow?.qr_code) deviceRegistry = JSON.parse(dRow.qr_code);
+      } catch {}
+
+      let faceRegistry = {};
+      try {
+        const { data: fRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_face_registry').maybeSingle();
+        if (fRow?.qr_code) faceRegistry = JSON.parse(fRow.qr_code);
+      } catch {}
+
+      let dbUsers = [];
+      try {
+        const { data: uRows } = await supabase.from('users').select('*').neq('role', 'admin');
+        if (uRows && uRows.length > 0) dbUsers = uRows;
+      } catch {}
+
+      const allUsers = baseEmployees.map(baseEmp => {
+        const dbU = dbUsers.find(u => u.id === baseEmp.id);
+        const devEntry = deviceRegistry[baseEmp.id];
+        const isDeviceBound = !!(devEntry && !devEntry.unbound && devEntry.deviceToken) || !!(dbU?.device_token);
+        const faceEntry = faceRegistry[baseEmp.id];
+        const isFaceRegistered = !!(faceEntry && (faceEntry.descriptor || (faceEntry.descriptors && faceEntry.descriptors.length > 0))) || !!(dbU?.face_descriptor);
+
+        return {
+          id: baseEmp.id,
+          name: dbU?.name || baseEmp.name,
+          pin: dbU?.pin || baseEmp.pin,
+          role: dbU?.role || baseEmp.role,
+          hourlyRate: dbU?.hourly_rate ?? baseEmp.hourlyRate,
+          deviceToken: isDeviceBound ? (devEntry?.deviceToken || dbU?.device_token || 'bound') : null,
+          deviceBound: isDeviceBound,
+          faceRegistered: isFaceRegistered,
+          deviceInfo: isDeviceBound ? {
+            ip: devEntry?.ip || faceEntry?.clientIp || null,
+            boundAt: devEntry?.boundAt || null
+          } : null,
+          faceInfo: isFaceRegistered ? {
+            count: faceEntry?.descriptors?.length || (faceEntry?.descriptor ? 1 : 1),
+            registeredAt: faceEntry?.registeredAt || null
+          } : null
+        };
+      });
+
+      // Attendance records
+      let attendanceRecords = [];
+      try {
+        const { data: attData } = await supabase
+          .from('attendance')
+          .select('*')
+          .order('date', { ascending: false })
+          .limit(500);
+
+        if (attData) {
+          attendanceRecords = attData.map(a => ({
+            id: a.id,
+            userId: a.user_id,
+            userName: a.user_name || allUsers.find(u => u.id === a.user_id)?.name || 'Unknown',
+            date: a.date,
+            checkIn: a.check_in,
+            checkInTime: a.check_in_time,
+            checkInSelfie: a.check_in_selfie,
+            checkInAddress: a.check_in_address,
+            checkOut: a.check_out,
+            checkOutTime: a.check_out_time,
+            checkOutSelfie: a.check_out_selfie,
+            checkOutAddress: a.check_out_address,
+            warehouseId: a.warehouse_id,
+            warehouseName: a.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
+            lateMinutes: a.late_minutes || 0,
+            earlyOutMinutes: a.early_out_minutes || 0,
+            overtimeMinutes: a.overtime_minutes || 0,
+            status: a.status || 'Present'
+          }));
+        }
+      } catch (err) {
+        console.warn('Error fetching attendance in admin/report:', err);
+      }
+
+      // Warehouses
+      let physicalWarehouses = [];
+      try {
+        const { data: whData } = await supabase
+          .from('warehouses')
+          .select('*')
+          .not('id', 'in', '("ashley_device_bindings","ashley_face_registry")');
+
+        if (whData) physicalWarehouses = whData;
+      } catch {}
+
+      // Holidays
+      let holidaysList = [];
+      try {
+        const { data: hData } = await supabase.from('holidays').select('*');
+        if (hData) holidaysList = hData;
+      } catch {}
+
+      // Shifts
+      let defaultShiftObj = { checkInTime: '08:30', checkOutTime: '16:30' };
+      let shiftOverridesObj = {};
+      try {
+        const { data: sRow } = await supabase.from('shifts').select('*').eq('id', 'default').maybeSingle();
+        if (sRow) {
+          defaultShiftObj = { checkInTime: sRow.check_in_time || '08:30', checkOutTime: sRow.check_out_time || '16:30' };
+        }
+      } catch {}
+
+      return NextResponse.json({
+        users: allUsers,
+        attendance: attendanceRecords,
+        warehouses: physicalWarehouses,
+        holidays: holidaysList,
+        shifts: {
+          default: defaultShiftObj,
+          overrides: shiftOverridesObj
+        }
+      }, { headers: noCacheHeaders });
+    }
+
+    // ----------------------------------------
+    // Admin Holidays CRUD
+    // ----------------------------------------
+    if (pathStr === 'admin/holidays' && method === 'POST') {
+      const { name, date } = await req.json();
+      if (!name || !date) return NextResponse.json({ error: 'Name and date required' }, { status: 400 });
+      const { error } = await supabase.from('holidays').insert({ name, date, type: 'official' });
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    if (path[0] === 'admin' && path[1] === 'holidays' && path[2] && method === 'DELETE') {
+      const hId = path[2];
+      const { error } = await supabase.from('holidays').delete().eq('id', hId);
       if (error) throw error;
       return NextResponse.json({ success: true });
     }

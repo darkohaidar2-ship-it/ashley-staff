@@ -42,7 +42,9 @@ import { Building2,
   PackagePlus,
   Settings,
   LayoutGrid,
+  Smartphone,
 } from 'lucide-react';
+import MobileFaceSecuritySuite from '@/components/attendance/MobileFaceSecuritySuite';
 import { ThemeSwitcher } from '@/components/layout/ThemeSwitcher';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -823,6 +825,7 @@ function SettingsPage() {
             <TabsTrigger value="media" className="px-0 py-4 whitespace-nowrap"><ImageIconLucide className="mr-2 h-4 w-4" /> ناوەندی میدیا</TabsTrigger>
             <TabsTrigger value="pdf" className="px-0 py-4 whitespace-nowrap"><FileText className="mr-2 h-4 w-4" /> {t('pdf_reports')}</TabsTrigger>
             <TabsTrigger value="themes" className="px-0 py-4 whitespace-nowrap"><Palette className="mr-2 h-4 w-4" /> Themes & Customization</TabsTrigger>
+            <TabsTrigger value="mobile-security" className="px-0 py-4 whitespace-nowrap"><Smartphone className="mr-2 h-4 w-4 text-emerald-500" /> ئاسایشی مۆبایل و دەموچاو</TabsTrigger>
             {isAdmin && <TabsTrigger value="admin" className="px-0 py-4 whitespace-nowrap"><ShieldCheck className="mr-2 h-4 w-4" /> ئەدمین</TabsTrigger>}
           </TabsList>
 
@@ -1053,6 +1056,9 @@ function SettingsPage() {
           </TabsContent>
           <TabsContent value="themes" className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-500">
               <DashboardSettingsSuite draft={draftSettings} onChange={updateSetting} />
+          </TabsContent>
+          <TabsContent value="mobile-security" className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-500">
+              <MobileFaceSecuritySuite />
           </TabsContent>
 
         </Tabs>

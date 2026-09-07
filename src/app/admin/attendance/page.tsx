@@ -8,7 +8,7 @@ import {
   XCircle, FileSpreadsheet, Lock, AlertTriangle,
   ChevronLeft, ChevronRight, BarChart3, Compass,
   Palmtree, Sun, UserCheck, AlertCircle, Check,
-  Move, Layers, Sparkles
+  Move, Layers, Sparkles, ScanFace, Smartphone
 } from 'lucide-react';
 import { 
   Card, CardContent, CardDescription, CardHeader, CardTitle 
@@ -24,6 +24,10 @@ interface User {
   role: string;
   hourlyRate: number;
   deviceToken?: string | null;
+  deviceBound?: boolean;
+  faceRegistered?: boolean;
+  deviceInfo?: any;
+  faceInfo?: any;
 }
 
 interface AttendanceRecord {
@@ -245,7 +249,24 @@ export default function AdminAttendancePage() {
         body: JSON.stringify({ userId })
       });
       if (res.ok) {
-        alert('پێناسەی مۆبایل سڕایەوە!');
+        alert('پێناسەی مۆبایل سڕایەوە و سفرکرایەوە!');
+        loadReport();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleResetFace = async (userId: string) => {
+    if (!confirm('ئایا دڵنیایت لە سڕینەوە و سفرکردنەوەی دەموچاوی ئەم کارمەندە؟ دەبێت دووبارە لە ٣ گۆشەوە ڕوخساری تۆمار بکاتەوە.')) return;
+    try {
+      const res = await fetch('/api/attendance/admin/users/reset-face', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      if (res.ok) {
+        alert('ناسنامەی دەموچاو سڕایەوە و سفرکرایەوە!');
         loadReport();
       }
     } catch (e) {
@@ -877,6 +898,7 @@ export default function AdminAttendancePage() {
                         <th className="p-2.5 text-[10px] font-black text-slate-600">ناو</th>
                         <th className="p-2.5 text-[10px] font-black text-slate-600">پین کۆد</th>
                         <th className="p-2.5 text-[10px] font-black text-slate-600">ئامێر (Device Status)</th>
+                        <th className="p-2.5 text-[10px] font-black text-slate-600">دەموچاو (Face ID)</th>
                         <th className="p-2.5 text-[10px] font-black text-slate-600 text-left">کردارەکان</th>
                       </tr>
                     </thead>
@@ -887,13 +909,24 @@ export default function AdminAttendancePage() {
                           <td className="p-2.5 font-bold text-slate-900">{u.name}</td>
                           <td className="p-2.5 num-font tracking-widest">{u.pin}</td>
                           <td className="p-2.5">
-                            {u.deviceToken ? (
+                            {u.deviceToken || u.deviceBound ? (
                               <span className="px-2 py-0.5 rounded-none font-bold text-[9px] bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 w-max">
                                 📲 بەستراوەتەوە
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 rounded-none font-bold text-[9px] bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1 w-max">
                                 💤 بەتاڵ
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-2.5">
+                            {u.faceRegistered ? (
+                              <span className="px-2 py-0.5 rounded-none font-bold text-[9px] bg-purple-100 text-purple-800 border border-purple-300 flex items-center gap-1 w-max">
+                                👤 ناسێنراوە (3D)
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-none font-bold text-[9px] bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1 w-max">
+                                ⚪ تۆمار نەکراوە
                               </span>
                             )}
                           </td>
@@ -904,19 +937,31 @@ export default function AdminAttendancePage() {
                                 size="icon" 
                                 onClick={() => handleDeleteUser(u.id)}
                                 className="h-7 w-7 rounded-none text-rose-600 hover:bg-rose-50 cursor-pointer"
+                                title="سڕینەوەی بەکارهێنەر"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             )}
-                            {u.deviceToken && (
+                            {(u.deviceToken || u.deviceBound) && (
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
                                 onClick={() => handleResetDevice(u.id)}
-                                title="سڕینەوەی ئامێر"
+                                title="سفرکردنەوەی مۆبایل"
                                 className="h-7 w-7 rounded-none text-amber-600 hover:bg-amber-50 cursor-pointer"
                               >
-                                <UserMinus className="w-3.5 h-3.5" />
+                                <Smartphone className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                            {u.faceRegistered && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => handleResetFace(u.id)}
+                                title="سفرکردنەوەی دەموچاو"
+                                className="h-7 w-7 rounded-none text-purple-600 hover:bg-purple-50 cursor-pointer"
+                              >
+                                <ScanFace className="w-3.5 h-3.5" />
                               </Button>
                             )}
                           </td>
