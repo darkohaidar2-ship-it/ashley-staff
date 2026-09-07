@@ -12,13 +12,15 @@ import {
   KeyRound, 
   DoorOpen, 
   LogOut, 
-  ChevronDown,
+  Search,
   Camera,
   ScanFace,
   UserCheck,
   UserX,
   ArrowRight,
-  AlertTriangle
+  Sparkles,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { getDistanceMeters, sendLocalNotification, type GeofenceRegion } from '@/lib/background-geofence';
@@ -73,7 +75,7 @@ const COMPANY_LOCATIONS: GeofenceRegion[] = [
   },
 ];
 
-// Quick Reason Chips for Late / Early / Overtime
+// Quick Reason Chips
 const LATE_IN_CHIPS = [
   '🚗 قەرەباڵغی جادە',
   '🔧 تێکچوونی ئۆتۆمبێل',
@@ -97,7 +99,7 @@ const OVERTIME_CHIPS = [
 ];
 
 // =========================================================================
-// 🎵 CUSTOM WEB AUDIO SYNTHESIZER (Guaranteed Offline & Zero Latency)
+// 🎵 CUSTOM WEB AUDIO SYNTHESIZER
 // =========================================================================
 
 // 1. Welcome Music: 2-second pleasant chime sequence
@@ -126,7 +128,25 @@ function playWelcomeMusic() {
   } catch {}
 }
 
-// 2. Check-In Chime: Energetic ascending 3-tone chime
+// Step confirmation tone (during multi-angle capture)
+function playAngleCaptureChime() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(1174.66, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.25);
+  } catch {}
+}
+
+// 2. Check-In Chime
 function playCheckInMusic() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -150,7 +170,7 @@ function playCheckInMusic() {
   } catch {}
 }
 
-// 3. Check-Out Chime: Warm harmonic departure chord
+// 3. Check-Out Chime
 function playCheckOutMusic() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -174,7 +194,7 @@ function playCheckOutMusic() {
   } catch {}
 }
 
-// 4. Reject Sound: Polite low buzz for mismatch or invalid entry
+// 4. Reject Sound
 function playRejectSound() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -202,25 +222,36 @@ export default function MobileAttendanceOneTap() {
   const [employeeProfile, setEmployeeProfile] = useState<{ id: string; name: string; role?: string } | null>(null);
   const [allEmployees, setAllEmployees] = useState(ASHLEY_DEFAULT_EMPLOYEES);
 
-  // 2-Factor Authentication States
-  const [authStep, setAuthStep] = useState<'PIN' | 'FACE_SCAN'>('PIN');
+  // In-App Employee Search & Select
+  const [searchEmployeeQuery, setSearchEmployeeQuery] = useState('');
   const [selectedEmpId, setSelectedEmpId] = useState('');
   const [pinInput, setPinInput] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
-  // Face Scan 2FA States
+  // 2-Factor Authentication States
+  const [authStep, setAuthStep] = useState<'PIN' | 'FACE_SCAN'>('PIN');
+
+  // Multi-Angle Face ID Enrollment States (Like Apple Face ID)
+  // Stages: 1 = Frontal (ڕووی پێشەوە), 2 = Right (لای ڕاست), 3 = Left (لای چەپ), 4 = Done
+  const [enrollmentStage, setEnrollmentStage] = useState<1 | 2 | 3 | 4>(1);
+  const [capturedDescriptors, setCapturedDescriptors] = useState<{
+    frontal?: number[];
+    right?: number[];
+    left?: number[];
+  }>({});
+  const [angleCountdown, setAngleCountdown] = useState<number>(3);
+
+  // Face Scan General States
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const scanLoopRef = useRef<NodeJS.Timeout | null>(null);
-  const [isFaceModelsLoaded, setIsFaceModelsLoaded] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [faceStatusText, setFaceStatusText] = useState('تکایە دەموچاوت ڕێک لە ناو بازنەکەدا ڕابگرە');
   const [faceScanSuccess, setFaceScanSuccess] = useState(false);
   const [faceMismatchError, setFaceMismatchError] = useState<string | null>(null);
   const [hasRegisteredFace, setHasRegisteredFace] = useState<boolean | null>(null);
-  const [registeredDescriptor, setRegisteredDescriptor] = useState<number[] | null>(null);
-  const [isCheckingServerFace, setIsCheckingServerFace] = useState(false);
+  const [registeredDescriptors, setRegisteredDescriptors] = useState<number[][]>([]);
 
   // GPS Geofence State
   const [currentLat, setCurrentLat] = useState<number | null>(null);
@@ -293,7 +324,6 @@ export default function MobileAttendanceOneTap() {
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
           const valid = data.filter((e: any) => e.name && e.name !== 'Admin');
-          // Merge with official PIN map to guarantee all employees have their official PIN
           const mapped = valid.map((e: any) => ({
             ...e,
             pin: e.pin || OFFICIAL_PIN_MAP[e.id] || (e.id === 'emp-02' ? '1002' : '1001'),
@@ -333,7 +363,7 @@ export default function MobileAttendanceOneTap() {
         }
 
         setDistanceMeters(Math.round(minDistance));
-        setIsInsideGeofence(insideAny || minDistance < 500); // 500m tolerance
+        setIsInsideGeofence(insideAny || minDistance < 500);
         setMatchedLocationName(matchedName);
       },
       () => {
@@ -407,7 +437,7 @@ export default function MobileAttendanceOneTap() {
     }
   }, [employeeProfile, fetchTodayShift, fetchMonthlyHistory]);
 
-  // 6. Calculate elapsed work minutes if checked in (deducting 12:00-13:00 lunch break)
+  // 6. Calculate worked minutes (deducting 12:00-13:00 lunch break)
   useEffect(() => {
     if (!liveTodayShift.checkInTime) {
       setWorkedMinutes(0);
@@ -431,7 +461,6 @@ export default function MobileAttendanceOneTap() {
       }
 
       const grossMinutes = outTotal - inTotal;
-      // 12:00 to 13:00 (720 to 780 minutes) is lunch break
       const breakStart = 12 * 60;
       const breakEnd = 13 * 60;
       const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
@@ -442,6 +471,17 @@ export default function MobileAttendanceOneTap() {
     return () => clearInterval(interval);
   }, [liveTodayShift]);
 
+  // Filter employees by search query
+  const filteredEmployees = useMemo(() => {
+    if (!searchEmployeeQuery.trim()) return allEmployees;
+    const q = searchEmployeeQuery.trim().toLowerCase();
+    return allEmployees.filter(e => 
+      e.name.toLowerCase().includes(q) || 
+      (e.role && e.role.toLowerCase().includes(q)) ||
+      e.id.toLowerCase().includes(q)
+    );
+  }, [allEmployees, searchEmployeeQuery]);
+
   // =========================================================================
   // 🔐 2FA STEP 1: PIN VERIFICATION
   // =========================================================================
@@ -450,7 +490,7 @@ export default function MobileAttendanceOneTap() {
     setAuthError(null);
 
     if (!selectedEmpId) {
-      setAuthError('تکایە سەرەتا ناوی خۆت هەڵبژێرە');
+      setAuthError('تکایە سەرەتا ناوی خۆت لە لیستەکە هەڵبژێرە');
       playRejectSound();
       return;
     }
@@ -483,30 +523,33 @@ export default function MobileAttendanceOneTap() {
 
     // Step 1 Passed! Advance to Step 2 (Face Scan)
     setAuthLoading(true);
-    setIsCheckingServerFace(true);
 
     try {
-      // Check server for existing registered face
       const res = await fetch(`/api/attendance/face/status?userId=${emp.id}`);
       const data = await res.json();
-      if (data?.hasFaceRegistered && Array.isArray(data?.descriptor)) {
+      if (data?.hasFaceRegistered && (data?.descriptor || data?.descriptors)) {
         setHasRegisteredFace(true);
-        setRegisteredDescriptor(data.descriptor);
+        const descs = Array.isArray(data.descriptors) && data.descriptors.length > 0
+          ? data.descriptors
+          : (data.descriptor ? [data.descriptor] : []);
+        setRegisteredDescriptors(descs);
       } else {
         setHasRegisteredFace(false);
-        setRegisteredDescriptor(null);
+        setRegisteredDescriptors([]);
+        setEnrollmentStage(1);
+        setCapturedDescriptors({});
       }
     } catch {
       setHasRegisteredFace(false);
+      setRegisteredDescriptors([]);
     } finally {
-      setIsCheckingServerFace(false);
       setAuthLoading(false);
       setAuthStep('FACE_SCAN');
     }
   };
 
   // =========================================================================
-  // 📸 2FA STEP 2: CAMERA & LIVE AI FACE RECOGNITION
+  // 📸 2FA STEP 2: CAMERA & MULTI-ANGLE FACE ENROLLMENT / VERIFICATION
   // =========================================================================
   const stopCamera = useCallback(() => {
     if (scanLoopRef.current) {
@@ -524,14 +567,14 @@ export default function MobileAttendanceOneTap() {
     if (authStep !== 'FACE_SCAN') return;
     setFaceMismatchError(null);
     setFaceScanSuccess(false);
-    setFaceStatusText('خەریکی ئامادەکردنی کامێرا و ژیری دەستکرد...');
+
+    const selectedEmp = allEmployees.find(e => e.id === selectedEmpId);
+    if (!selectedEmp) return;
 
     try {
-      // 1. Load AI Models
+      setFaceStatusText('خەریکی پەیوەندی بە کامێرا و سیستەمی زیرەک...');
       await loadFaceModels();
-      setIsFaceModelsLoaded(true);
 
-      // 2. Open User Webcam
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } }
       });
@@ -541,15 +584,126 @@ export default function MobileAttendanceOneTap() {
         await videoRef.current.play();
       }
       setCameraActive(true);
-      setFaceStatusText('تکایە دەموچاوت ڕێک لە ناو بازنەکەدا ڕابگرە');
 
-      // 3. Live AI Detection Loop
+      // =====================================================================
+      // CASE 1: FIRST-TIME ENROLLMENT -> 3-ANGLE SCANNING (Front, Right, Left)
+      // =====================================================================
+      if (!hasRegisteredFace || registeredDescriptors.length === 0) {
+        let currentStage: 1 | 2 | 3 | 4 = 1;
+        setEnrollmentStage(1);
+        setFaceStatusText('هەنگاوی ١: تکایە بە ڕاستەوخۆ سەیری کامێراکە بکە');
+
+        const captured: { frontal?: number[]; right?: number[]; left?: number[] } = {};
+        let stageHoldFrames = 0;
+        let isProcessing = false;
+
+        scanLoopRef.current = setInterval(async () => {
+          if (isProcessing || !videoRef.current || currentStage === 4) return;
+          isProcessing = true;
+
+          try {
+            const result = await extractFaceDescriptor(videoRef.current);
+            if (!result || !result.descriptor) {
+              setFaceStatusText('دەموچاو نابینرێت، ڕووت ڕێکبخە لەگەڵ کامێرا...');
+              isProcessing = false;
+              return;
+            }
+
+            stageHoldFrames++;
+            setAngleCountdown(Math.max(1, 4 - stageHoldFrames));
+
+            // STAGE 1: FRONT
+            if (currentStage === 1) {
+              setFaceStatusText('🟢 هەنگاوی ١: سەیرکردنی ڕاستەوخۆ... ڕامەوستە');
+              if (stageHoldFrames >= 3) {
+                captured.frontal = result.descriptor;
+                setCapturedDescriptors(prev => ({ ...prev, frontal: result.descriptor }));
+                playAngleCaptureChime();
+                currentStage = 2;
+                setEnrollmentStage(2);
+                stageHoldFrames = 0;
+                setFaceStatusText('👉 هەنگاوی ٢: سەرت کەمێک بسوڕێنە لای ڕاست');
+              }
+            }
+            // STAGE 2: RIGHT ANGLE
+            else if (currentStage === 2) {
+              setFaceStatusText('🟡 هەنگاوی ٢: سەرت کەمێک بە لای ڕاستدا ڕابگرە');
+              if (stageHoldFrames >= 3) {
+                captured.right = result.descriptor;
+                setCapturedDescriptors(prev => ({ ...prev, right: result.descriptor }));
+                playAngleCaptureChime();
+                currentStage = 3;
+                setEnrollmentStage(3);
+                stageHoldFrames = 0;
+                setFaceStatusText('👈 هەنگاوی ٣: سەرت کەمێک بسوڕێنە لای چەپ');
+              }
+            }
+            // STAGE 3: LEFT ANGLE
+            else if (currentStage === 3) {
+              setFaceStatusText('🔵 هەنگاوی ٣: سەرت کەمێک بە لای چەپدا ڕابگرە');
+              if (stageHoldFrames >= 3) {
+                captured.left = result.descriptor;
+                setCapturedDescriptors(prev => ({ ...prev, left: result.descriptor }));
+                currentStage = 4;
+                setEnrollmentStage(4);
+                stopCamera();
+
+                setFaceStatusText('🎉 سەرکەوتوو بوو! هەموو گۆشەکان پاشەکەوت دەکرێن...');
+                
+                // Combine all 3 descriptors
+                const multiDescriptors = [
+                  captured.frontal || result.descriptor,
+                  captured.right || result.descriptor,
+                  captured.left || result.descriptor
+                ];
+
+                let devToken = localStorage.getItem('ashley_device_token');
+                if (!devToken) {
+                  devToken = 'dev-' + Math.random().toString(36).substring(2, 10);
+                  localStorage.setItem('ashley_device_token', devToken);
+                }
+
+                // Register to server
+                await fetch('/api/attendance/face/register', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    userId: selectedEmp.id,
+                    userName: selectedEmp.name,
+                    descriptor: captured.frontal || result.descriptor,
+                    descriptors: multiDescriptors,
+                    pin: pinInput.trim(),
+                    deviceToken: devToken,
+                  })
+                });
+
+                // Complete login
+                const profileData = { id: selectedEmp.id, name: selectedEmp.name, role: selectedEmp.role || 'Employee' };
+                localStorage.setItem('ashley_bound_employee_profile', JSON.stringify(profileData));
+                setEmployeeProfile(profileData);
+                setFaceScanSuccess(true);
+                playWelcomeMusic();
+                sendLocalNotification('🎉 بەخێربێیت', `دەموچاو لە ٣ گۆشەوە بە ناوی (${selectedEmp.name}) بە سەرکەوتوویی بەسترایەوە.`);
+                return;
+              }
+            }
+          } catch (err: any) {
+            console.warn('Enrollment tick err:', err);
+          } finally {
+            isProcessing = false;
+          }
+        }, 500);
+
+        return;
+      }
+
+      // =====================================================================
+      // CASE 2: NORMAL DAILY VERIFICATION (Matches across all registered angles)
+      // =====================================================================
+      setFaceStatusText('تکایە سەیری کامێراکە بکە بۆ ناسینەوە');
       let consecutiveMatches = 0;
       let consecutiveMismatches = 0;
       let isProcessing = false;
-
-      const selectedEmp = allEmployees.find(e => e.id === selectedEmpId);
-      if (!selectedEmp) return;
 
       scanLoopRef.current = setInterval(async () => {
         if (isProcessing || !videoRef.current) return;
@@ -558,54 +712,34 @@ export default function MobileAttendanceOneTap() {
         try {
           const result = await extractFaceDescriptor(videoRef.current);
           if (!result || !result.descriptor) {
-            setFaceStatusText('دەموچاو نابینرێت، نزیکتر بەرەوە...');
+            setFaceStatusText('دەموچاو نابینرێت، سەیری کامێرا بکە...');
             isProcessing = false;
             return;
           }
 
           const liveDescriptor = result.descriptor;
 
-          // SCENARIO A: Employee NOT registered yet -> Auto-Enrollment (ڕوخسار + PIN + IP مۆبایل)
-          if (!hasRegisteredFace || !registeredDescriptor) {
-            setFaceStatusText('📌 دەموچاوت تۆمار دەکرێت بە ئەکاونتەکەت...');
-            stopCamera();
+          // Check live face against ALL registered angles (Euclidean distance < 0.52)
+          let bestMatch = false;
+          let minDistance = Infinity;
+          let maxSimilarity = 0;
 
-            // Save to server
-            let devToken = localStorage.getItem('ashley_device_token');
-            if (!devToken) {
-              devToken = 'dev-' + Math.random().toString(36).substring(2, 10);
-              localStorage.setItem('ashley_device_token', devToken);
+          for (const regDesc of registeredDescriptors) {
+            const match = matchFaceDescriptors(liveDescriptor, regDesc, 0.52);
+            if (match.distance < minDistance) {
+              minDistance = match.distance;
+              maxSimilarity = match.similarityPercent;
             }
-
-            await fetch('/api/attendance/face/register', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                userId: selectedEmp.id,
-                userName: selectedEmp.name,
-                descriptor: liveDescriptor,
-                pin: pinInput.trim(),
-                deviceToken: devToken,
-              })
-            });
-
-            // Bind profile locally
-            const profileData = { id: selectedEmp.id, name: selectedEmp.name, role: selectedEmp.role || 'Employee' };
-            localStorage.setItem('ashley_bound_employee_profile', JSON.stringify(profileData));
-            setEmployeeProfile(profileData);
-            setFaceScanSuccess(true);
-            playWelcomeMusic();
-            sendLocalNotification('🎉 بەخێربێیت', `مۆبایل و ڕوخسارت بە ناوی (${selectedEmp.name}) بەستراوەتەوە.`);
-            return;
+            if (match.isMatch) {
+              bestMatch = true;
+              break;
+            }
           }
 
-          // SCENARIO B: Face is ALREADY registered -> Verification & Match Check
-          const matchResult = matchFaceDescriptors(liveDescriptor, registeredDescriptor, 0.48);
-
-          if (matchResult.isMatch) {
+          if (bestMatch) {
             consecutiveMatches++;
             consecutiveMismatches = 0;
-            setFaceStatusText(`خۆت دەناسرێیتەوە... (%${matchResult.similarityPercent})`);
+            setFaceStatusText(`ناسرایتەوە! (%${maxSimilarity})`);
 
             if (consecutiveMatches >= 2) {
               stopCamera();
@@ -623,22 +757,22 @@ export default function MobileAttendanceOneTap() {
             if (consecutiveMismatches >= 3) {
               playRejectSound();
               setFaceMismatchError(`ببورە، تۆ ${selectedEmp.name} نیت، ببورە!`);
-              setFaceStatusText('شکستی هێنا لە ناسینەوەی ڕوخسار');
+              setFaceStatusText('دەموچاو لەگەڵ ئەم کارمەندە ناگونجێت');
               consecutiveMatches = 0;
             }
           }
         } catch (err: any) {
-          console.warn('Face loop tick error:', err);
+          console.warn('Verification tick error:', err);
         } finally {
           isProcessing = false;
         }
       }, 400);
 
     } catch (err: any) {
-      setFaceStatusText('هەڵە لە کردنەوەی کامێرا: ' + err.message);
+      setFaceStatusText('هەڵە لە کامێرا: ' + err.message);
       setCameraActive(false);
     }
-  }, [authStep, selectedEmpId, allEmployees, hasRegisteredFace, registeredDescriptor, pinInput, stopCamera]);
+  }, [authStep, selectedEmpId, allEmployees, hasRegisteredFace, registeredDescriptors, pinInput, stopCamera]);
 
   useEffect(() => {
     if (authStep === 'FACE_SCAN') {
@@ -649,7 +783,7 @@ export default function MobileAttendanceOneTap() {
     return () => stopCamera();
   }, [authStep, startFaceScan, stopCamera]);
 
-  // 7. Unbind / Logout Handler
+  // Logout / Unbind Handler
   const handleLogout = (e: React.FormEvent) => {
     e.preventDefault();
     const currentEmp = allEmployees.find(e => e.id === employeeProfile?.id);
@@ -672,7 +806,7 @@ export default function MobileAttendanceOneTap() {
   };
 
   // =========================================================================
-  // ⚡ THE HERO 1-TAP ATTENDANCE PUNCH (Check-In & Check-Out with Sound)
+  // ⚡ 1-TAP ATTENDANCE PUNCH
   // =========================================================================
   const handleOneTapAttendance = async (action: 'ENTER' | 'EXIT', reasonNote?: string) => {
     if (!employeeProfile?.id) return;
@@ -742,14 +876,12 @@ export default function MobileAttendanceOneTap() {
     }
   };
 
-  // Timing Rule Interceptors
   const handleCheckInClick = () => {
     if (!isInsideGeofence) {
       alert(`⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${distanceMeters} مەتر دووریت).\nتکایە بگە بە شوێنی کارگە بۆ تۆمارکردنی هاتن.`);
       return;
     }
     const currentHm = format(new Date(), 'HH:mm');
-    // Shift starts at 08:00. If > 08:15 -> Prompt for late reason
     if (currentHm > '08:15') {
       setPendingAction('ENTER');
       setReasonType('LATE_IN');
@@ -770,7 +902,6 @@ export default function MobileAttendanceOneTap() {
       return;
     }
     const currentHm = format(new Date(), 'HH:mm');
-    // Shift ends at 17:00.
     if (currentHm < '16:45') {
       setPendingAction('EXIT');
       setReasonType('EARLY_OUT');
@@ -798,7 +929,6 @@ export default function MobileAttendanceOneTap() {
     setShowReasonModal(false);
   };
 
-  // Format Worked Hours
   const formattedWorkedHours = useMemo(() => {
     if (!workedMinutes || workedMinutes <= 0) return '٠ خولەک';
     const h = Math.floor(workedMinutes / 60);
@@ -809,7 +939,7 @@ export default function MobileAttendanceOneTap() {
   }, [workedMinutes]);
 
   // =========================================================================
-  // VIEW 1: MODERN LIGHT 2-FACTOR AUTHENTICATION SCREEN (PIN + FACE SCAN)
+  // VIEW 1: MODERN LIGHT 2FA (CUSTOM SCROLLABLE LIST & MULTI-ANGLE FACE ID)
   // =========================================================================
   if (!employeeProfile) {
     const selectedEmp = allEmployees.find(e => e.id === selectedEmpId);
@@ -835,7 +965,7 @@ export default function MobileAttendanceOneTap() {
               authStep === 'PIN' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
             }`}>
               <KeyRound className="w-3.5 h-3.5" />
-              <span>١. پین کۆد</span>
+              <span>١. هەڵبژاردنی ناو و PIN</span>
             </div>
             <div className="w-4 h-0.5 bg-slate-200" />
             <div className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full ${
@@ -847,37 +977,87 @@ export default function MobileAttendanceOneTap() {
           </div>
 
           {/* ------------------------------------------------------------- */}
-          {/* STEP 1: EMPLOYEE SELECTION & PIN ENTRY                        */}
+          {/* STEP 1: CUSTOM SCROLLABLE EMPLOYEE LIST & PIN ENTRY           */}
           {/* ------------------------------------------------------------- */}
           {authStep === 'PIN' && (
             <form onSubmit={handleStep1PinSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1.5">
-                  ناوی کارمەند:
-                </label>
+              
+              {/* 📋 IN-APP SCROLLABLE EMPLOYEE SELECTOR (No native select!) */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-slate-800 block">
+                    ناوی خۆت هەڵبژێرە لە لیستەکەدا:
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-bold">
+                    {filteredEmployees.length} کارمەند
+                  </span>
+                </div>
+
+                {/* Search Box */}
                 <div className="relative">
-                  <select
-                    value={selectedEmpId}
-                    onChange={(e) => {
-                      setSelectedEmpId(e.target.value);
-                      setAuthError(null);
-                    }}
-                    required
-                    className="w-full bg-white border-2 border-slate-300 text-slate-900 text-xs font-bold p-3.5 rounded-xl focus:border-emerald-600 focus:outline-none appearance-none shadow-xs"
-                  >
-                    <option value="" className="text-slate-500 bg-white">-- ناوی خۆت هەڵبژێرە --</option>
-                    {allEmployees.map((emp) => (
-                      <option key={emp.id} value={emp.id} className="text-slate-900 bg-white font-bold py-1">
-                        👤 {emp.name} ({emp.role || 'کارمەند'})
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-4 h-4 text-slate-500 absolute left-3 top-4 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchEmployeeQuery}
+                    onChange={(e) => setSearchEmployeeQuery(e.target.value)}
+                    placeholder="گەڕانی خێرا لە ناوەکان..."
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold pr-8 pl-3 py-2 rounded-xl focus:border-emerald-600 focus:bg-white focus:outline-none"
+                  />
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5" />
+                </div>
+
+                {/* Scrollable Container (Always Pure White & High-Contrast) */}
+                <div className="border-2 border-slate-200 rounded-2xl bg-white p-1.5 max-h-52 overflow-y-auto space-y-1 shadow-inner scrollbar-thin">
+                  {filteredEmployees.map((emp) => {
+                    const isSelected = selectedEmpId === emp.id;
+                    const isManager = emp.id === 'emp-02' || (emp.role && emp.role.includes('Manager'));
+
+                    return (
+                      <div
+                        key={emp.id}
+                        onClick={() => {
+                          setSelectedEmpId(emp.id);
+                          setAuthError(null);
+                        }}
+                        className={`w-full text-right p-2.5 rounded-xl border transition-all flex items-center justify-between cursor-pointer select-none ${
+                          isSelected
+                            ? 'bg-emerald-50 border-emerald-500 shadow-xs ring-1 ring-emerald-500'
+                            : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs ${
+                            isSelected 
+                              ? 'bg-emerald-600 text-white' 
+                              : isManager 
+                              ? 'bg-amber-100 text-amber-900' 
+                              : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {emp.name.charAt(0)}
+                          </div>
+                          <div>
+                            <span className="text-xs font-black text-slate-900 block leading-tight">
+                              {emp.name}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-bold">
+                              {emp.role || 'کارمەند'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {isSelected && (
+                          <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                            <CheckCircle2 className="w-4 h-4" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1.5">
+              {/* PIN Code Field */}
+              <div className="pt-1">
+                <label className="block text-xs font-black text-slate-800 mb-1.5">
                   پین کۆدی ٤ ژمارەیی (PIN):
                 </label>
                 <div className="relative">
@@ -906,7 +1086,7 @@ export default function MobileAttendanceOneTap() {
 
               <button
                 type="submit"
-                disabled={authLoading}
+                disabled={authLoading || !selectedEmpId}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-xs py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {authLoading ? (
@@ -922,7 +1102,7 @@ export default function MobileAttendanceOneTap() {
           )}
 
           {/* ------------------------------------------------------------- */}
-          {/* STEP 2: CAMERA FACE SCAN (WITH RECOGNITION & REJECTION)        */}
+          {/* STEP 2: MULTI-ANGLE 3D FACE SCAN (FACE ID WORKFLOW)          */}
           {/* ------------------------------------------------------------- */}
           {authStep === 'FACE_SCAN' && (
             <div className="space-y-4 text-center">
@@ -932,6 +1112,31 @@ export default function MobileAttendanceOneTap() {
                   👤 {selectedEmp?.name}
                 </h3>
               </div>
+
+              {/* If First-time Enrollment -> 3-Angle Step Progress Indicators */}
+              {(!hasRegisteredFace || registeredDescriptors.length === 0) && (
+                <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-2xl space-y-1 text-right">
+                  <div className="flex items-center justify-between text-[11px] font-black text-slate-700">
+                    <span className="flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      <span>تۆمارکردنی یەکەمجار (٣ گۆشە):</span>
+                    </span>
+                    <span className="font-mono text-emerald-700">
+                      {enrollmentStage === 1 && 'هەنگاوی ١/٣ (پێشەوە)'}
+                      {enrollmentStage === 2 && 'هەنگاوی ٢/٣ (ڕاست)'}
+                      {enrollmentStage === 3 && 'هەنگاوی ٣/٣ (چەپ)'}
+                      {enrollmentStage === 4 && 'تەواو بوو! 🎉'}
+                    </span>
+                  </div>
+
+                  {/* 3 Step Pill Bars */}
+                  <div className="grid grid-cols-3 gap-1.5 pt-1">
+                    <div className={`h-1.5 rounded-full ${enrollmentStage >= 1 && capturedDescriptors.frontal ? 'bg-emerald-600' : enrollmentStage === 1 ? 'bg-amber-400 animate-pulse' : 'bg-slate-200'}`} />
+                    <div className={`h-1.5 rounded-full ${enrollmentStage >= 2 && capturedDescriptors.right ? 'bg-emerald-600' : enrollmentStage === 2 ? 'bg-amber-400 animate-pulse' : 'bg-slate-200'}`} />
+                    <div className={`h-1.5 rounded-full ${enrollmentStage >= 3 && capturedDescriptors.left ? 'bg-emerald-600' : enrollmentStage === 3 ? 'bg-amber-400 animate-pulse' : 'bg-slate-200'}`} />
+                  </div>
+                </div>
+              )}
 
               {/* Video Scanner Container */}
               <div className="relative w-52 h-52 mx-auto rounded-full overflow-hidden border-4 border-emerald-500 shadow-xl bg-slate-900 flex items-center justify-center">
@@ -946,6 +1151,15 @@ export default function MobileAttendanceOneTap() {
                 {/* Visual Face Alignment Ring */}
                 <div className="absolute inset-2 rounded-full border-2 border-dashed border-white/60 pointer-events-none animate-pulse" />
 
+                {/* Angle Direction Guide Overlay (If Enrolling) */}
+                {(!hasRegisteredFace || registeredDescriptors.length === 0) && cameraActive && (
+                  <div className="absolute top-2 px-3 py-0.5 rounded-full bg-black/60 text-white font-mono text-[10px] font-black backdrop-blur-xs flex items-center gap-1">
+                    {enrollmentStage === 1 && 'سەیرکردنی پێشەوە'}
+                    {enrollmentStage === 2 && 'کەمێک بسوڕێ لای ڕاست 👉'}
+                    {enrollmentStage === 3 && '👈 کەمێک بسوڕێ لای چەپ'}
+                  </div>
+                )}
+
                 {!cameraActive && (
                   <div className="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center text-white text-xs p-3">
                     <RefreshCw className="w-6 h-6 animate-spin mb-2 text-emerald-400" />
@@ -954,7 +1168,7 @@ export default function MobileAttendanceOneTap() {
                 )}
               </div>
 
-              {/* Face Status Description */}
+              {/* Status Banner */}
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold">
                 {faceMismatchError ? (
                   <div className="text-rose-700 flex items-center justify-center gap-1.5 font-black animate-shake">
@@ -984,7 +1198,7 @@ export default function MobileAttendanceOneTap() {
                   }}
                   className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2.5 rounded-xl border border-slate-200 cursor-pointer"
                 >
-                  گەڕانەوە بۆ PIN
+                  گەڕانەوە بۆ پێشوو
                 </button>
                 {faceMismatchError && (
                   <button
@@ -992,7 +1206,7 @@ export default function MobileAttendanceOneTap() {
                     onClick={startFaceScan}
                     className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-2.5 rounded-xl cursor-pointer"
                   >
-                    دووبارە سکان بکەرەوە
+                    دووبارە هەوڵبدەرەوە
                   </button>
                 )}
               </div>

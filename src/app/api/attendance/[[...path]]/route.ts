@@ -1958,9 +1958,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if (pathStr === 'face/register' && method === 'POST') {
       const body = await req.json();
-      const { userId, userName, descriptor, pin, deviceToken } = body;
+      const { userId, userName, descriptor, descriptors, pin, deviceToken } = body;
       const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || body.clientIp || '';
-      if (!userId || !descriptor) {
+      if (!userId || (!descriptor && (!descriptors || descriptors.length === 0))) {
         return NextResponse.json({ error: 'userId and face descriptor required' }, { status: 400 });
       }
 
@@ -1981,10 +1981,15 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }
         }
 
+        const finalDescriptors = Array.isArray(descriptors) && descriptors.length > 0 
+          ? descriptors 
+          : (descriptor ? [descriptor] : []);
+
         registry[userId] = {
           id: userId,
           name: userName || registry[userId]?.name || 'کارمەند',
-          descriptor: descriptor,
+          descriptor: finalDescriptors[0] || descriptor,
+          descriptors: finalDescriptors,
           pin: pin || registry[userId]?.pin || null,
           clientIp: clientIp || registry[userId]?.clientIp || null,
           deviceToken: deviceToken || registry[userId]?.deviceToken || null,
@@ -2095,11 +2100,16 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
         if (regRow?.qr_code) {
           const registry = JSON.parse(regRow.qr_code);
-          if (registry[userId]?.descriptor) {
+          const entry = registry[userId];
+          if (entry && (entry.descriptor || (entry.descriptors && entry.descriptors.length > 0))) {
+            const descs = Array.isArray(entry.descriptors) && entry.descriptors.length > 0
+              ? entry.descriptors
+              : (entry.descriptor ? [entry.descriptor] : []);
             return NextResponse.json({
               hasFaceRegistered: true,
-              descriptor: registry[userId].descriptor,
-              name: registry[userId].name,
+              descriptor: entry.descriptor || descs[0],
+              descriptors: descs,
+              name: entry.name,
             });
           }
         }
