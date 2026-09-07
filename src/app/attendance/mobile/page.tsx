@@ -20,7 +20,12 @@ import {
   ArrowRight,
   Sparkles,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Phone,
+  User,
+  X,
+  Upload,
+  AlertCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { getDistanceMeters, sendLocalNotification, type GeofenceRegion } from '@/lib/background-geofence';
@@ -241,6 +246,25 @@ export default function MobileAttendanceOneTap() {
     left?: number[];
   }>({});
   const [angleCountdown, setAngleCountdown] = useState<number>(3);
+
+  // Strict Angle Lock & Yaw Tracking
+  const [currentYaw, setCurrentYaw] = useState<number>(0);
+  const [isAngleAligned, setIsAngleAligned] = useState<boolean>(false);
+  const [headPoseDetected, setHeadPoseDetected] = useState<'CENTER' | 'RIGHT' | 'LEFT' | 'UNKNOWN'>('UNKNOWN');
+  const manualCaptureTriggerRef = useRef<(() => void) | null>(null);
+  const lastValidDescriptorRef = useRef<number[] | null>(null);
+  const lastValidAlignedRef = useRef<boolean>(false);
+
+  // Employee Profile Self-Service Modal States
+  const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
+  const [profilePhone, setProfilePhone] = useState<string>('');
+  const [profilePin, setProfilePin] = useState<string>('');
+  const [profileHireDate, setProfileHireDate] = useState<string>('');
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
+  const [profileSaveSuccess, setProfileSaveSuccess] = useState<boolean>(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const profileFileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Face Scan General States
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -563,10 +587,106 @@ export default function MobileAttendanceOneTap() {
     setCameraActive(false);
   }, []);
 
+  // Employee Profile Handlers
+  const handleOpenProfileModal = useCallback(async () => {
+    setShowProfileModal(true);
+    setProfileSaveSuccess(false);
+    setProfileError(null);
+    const empId = employeeProfile?.id || selectedEmpId;
+    if (!empId) return;
+
+    try {
+      const res = await fetch(`/api/attendance/profile?userId=${empId}`);
+      const data = await res.json();
+      if (data.success && data.profile) {
+        setProfilePhone(data.profile.phone || '');
+        setProfileHireDate(data.profile.hireDate || '');
+        setProfilePhoto(data.profile.photo || null);
+        setProfilePin('');
+      }
+    } catch (e) {
+      console.warn('Failed to load profile details:', e);
+    }
+  }, [employeeProfile, selectedEmpId]);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const empId = employeeProfile?.id || selectedEmpId;
+    if (!empId) return;
+
+    setIsSavingProfile(true);
+    setProfileError(null);
+    try {
+      const res = await fetch('/api/attendance/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: empId,
+          name: employeeProfile?.name,
+          phone: profilePhone.trim(),
+          hireDate: profileHireDate,
+          photo: profilePhoto,
+          ...(profilePin.trim().length >= 4 ? { pin: profilePin.trim() } : {}),
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProfileSaveSuccess(true);
+        if (profilePin.trim().length >= 4) {
+          OFFICIAL_PIN_MAP[empId] = profilePin.trim();
+        }
+        setTimeout(() => {
+          setProfileSaveSuccess(false);
+        }, 3000);
+      } else {
+        setProfileError(data.error || 'هەڵەیەک ڕوویدا لە پاشەکەوتکردن');
+      }
+    } catch (err: any) {
+      setProfileError('هەڵە لە پەیوەندی: ' + err.message);
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 400;
+        let w = img.width;
+        let h = img.height;
+        if (w > h && w > maxDim) {
+          h = Math.round((h * maxDim) / w);
+          w = maxDim;
+        } else if (h > maxDim) {
+          w = Math.round((w * maxDim) / h);
+          h = maxDim;
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          setProfilePhoto(dataUrl);
+        }
+      };
+      img.src = ev.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const startFaceScan = useCallback(async () => {
     if (authStep !== 'FACE_SCAN') return;
     setFaceMismatchError(null);
     setFaceScanSuccess(false);
+    setIsAngleAligned(false);
+    lastValidAlignedRef.current = false;
+    lastValidDescriptorRef.current = null;
 
     const selectedEmp = allEmployees.find(e => e.id === selectedEmpId);
     if (!selectedEmp) return;
@@ -576,7 +696,7 @@ export default function MobileAttendanceOneTap() {
       await loadFaceModels();
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } }
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 640 } }
       });
       mediaStreamRef.current = stream;
       if (videoRef.current) {
@@ -586,16 +706,92 @@ export default function MobileAttendanceOneTap() {
       setCameraActive(true);
 
       // =====================================================================
-      // CASE 1: FIRST-TIME ENROLLMENT -> 3-ANGLE SCANNING (Front, Right, Left)
+      // CASE 1: MULTI-ANGLE FACE ENROLLMENT (Strict Yaw Angle Lock & Visual Targets)
       // =====================================================================
       if (!hasRegisteredFace || registeredDescriptors.length === 0) {
         let currentStage: 1 | 2 | 3 | 4 = 1;
         setEnrollmentStage(1);
+        setIsAngleAligned(false);
         setFaceStatusText('هەنگاوی ١: تکایە بە ڕاستەوخۆ سەیری کامێراکە بکە');
 
         const captured: { frontal?: number[]; right?: number[]; left?: number[] } = {};
         let stageHoldFrames = 0;
         let isProcessing = false;
+        let stage2Sign: number | null = null;
+
+        // Shared advance function for auto and manual capture
+        const advanceEnrollmentStage = async (desc: number[]) => {
+          if (currentStage === 1) {
+            captured.frontal = desc;
+            setCapturedDescriptors(prev => ({ ...prev, frontal: desc }));
+            playAngleCaptureChime();
+            currentStage = 2;
+            setEnrollmentStage(2);
+            stageHoldFrames = 0;
+            setIsAngleAligned(false);
+            lastValidAlignedRef.current = false;
+            setFaceStatusText('👉 هەنگاوی ٢: سەرت بسوڕێنە لای ڕاست');
+          } else if (currentStage === 2) {
+            captured.right = desc;
+            setCapturedDescriptors(prev => ({ ...prev, right: desc }));
+            playAngleCaptureChime();
+            currentStage = 3;
+            setEnrollmentStage(3);
+            stageHoldFrames = 0;
+            setIsAngleAligned(false);
+            lastValidAlignedRef.current = false;
+            setFaceStatusText('👈 هەنگاوی ٣: سەرت بسوڕێنە لای چەپ');
+          } else if (currentStage === 3) {
+            captured.left = desc;
+            setCapturedDescriptors(prev => ({ ...prev, left: desc }));
+            currentStage = 4;
+            setEnrollmentStage(4);
+            stopCamera();
+
+            setFaceStatusText('🎉 سەرکەوتوو بوو! هەموو گۆشەکان پاشەکەوت دەکرێن...');
+            
+            const multiDescriptors = [
+              captured.frontal || desc,
+              captured.right || desc,
+              captured.left || desc
+            ];
+
+            let devToken = localStorage.getItem('ashley_device_token');
+            if (!devToken) {
+              devToken = 'dev-' + Math.random().toString(36).substring(2, 10);
+              localStorage.setItem('ashley_device_token', devToken);
+            }
+
+            // Register to server
+            await fetch('/api/attendance/face/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: selectedEmp.id,
+                userName: selectedEmp.name,
+                descriptor: captured.frontal || desc,
+                descriptors: multiDescriptors,
+                pin: pinInput.trim(),
+                deviceToken: devToken,
+              })
+            });
+
+            // Complete login
+            const profileData = { id: selectedEmp.id, name: selectedEmp.name, role: selectedEmp.role || 'Employee' };
+            localStorage.setItem('ashley_bound_employee_profile', JSON.stringify(profileData));
+            setEmployeeProfile(profileData);
+            setFaceScanSuccess(true);
+            playWelcomeMusic();
+            sendLocalNotification('🎉 بەخێربێیت', `دەموچاو لە ٣ گۆشەوە بە ناوی (${selectedEmp.name}) بە سەرکەوتوویی بەسترایەوە.`);
+          }
+        };
+
+        // Connect Manual Trigger
+        manualCaptureTriggerRef.current = () => {
+          if (lastValidDescriptorRef.current && lastValidAlignedRef.current) {
+            advanceEnrollmentStage(lastValidDescriptorRef.current);
+          }
+        };
 
         scanLoopRef.current = setInterval(async () => {
           if (isProcessing || !videoRef.current || currentStage === 4) return;
@@ -605,87 +801,65 @@ export default function MobileAttendanceOneTap() {
             const result = await extractFaceDescriptor(videoRef.current);
             if (!result || !result.descriptor) {
               setFaceStatusText('دەموچاو نابینرێت، ڕووت ڕێکبخە لەگەڵ کامێرا...');
+              setIsAngleAligned(false);
+              lastValidAlignedRef.current = false;
               isProcessing = false;
               return;
             }
 
-            stageHoldFrames++;
-            setAngleCountdown(Math.max(1, 4 - stageHoldFrames));
+            const yaw = (result as any).yaw || 0;
+            const headPose = (result as any).headPose || 'CENTER';
+            setCurrentYaw(yaw);
+            setHeadPoseDetected(headPose);
+            lastValidDescriptorRef.current = result.descriptor;
 
-            // STAGE 1: FRONT
+            // Strict Angle Alignment Verification
+            let isAligned = false;
+
             if (currentStage === 1) {
-              setFaceStatusText('🟢 هەنگاوی ١: سەیرکردنی ڕاستەوخۆ... ڕامەوستە');
-              if (stageHoldFrames >= 3) {
-                captured.frontal = result.descriptor;
-                setCapturedDescriptors(prev => ({ ...prev, frontal: result.descriptor }));
-                playAngleCaptureChime();
-                currentStage = 2;
-                setEnrollmentStage(2);
-                stageHoldFrames = 0;
-                setFaceStatusText('👉 هەنگاوی ٢: سەرت کەمێک بسوڕێنە لای ڕاست');
+              // STAGE 1: FRONT (Centered, |yaw| <= 0.13)
+              isAligned = Math.abs(yaw) <= 0.13;
+              if (isAligned) {
+                setFaceStatusText('🟢 سەیرکردنی پێشەوە... ڕامەوستە یان دوگمەکە دابگرە');
+              } else {
+                setFaceStatusText('👀 سەیری ناوەڕاستی کامێراکە بکە (پێشەوە)');
+              }
+            } else if (currentStage === 2) {
+              // STAGE 2: TURN RIGHT (Head must be turned: |yaw| >= 0.14)
+              isAligned = Math.abs(yaw) >= 0.14;
+              if (isAligned) {
+                stage2Sign = Math.sign(yaw);
+                setFaceStatusText('🟢 لای ڕاست پەسەندە! ڕایبگرە یان دوگمەکە دابگرە');
+              } else {
+                setFaceStatusText('👉 سەرت زیاتر بسوڕێنە بە لای ڕاستدا');
+              }
+            } else if (currentStage === 3) {
+              // STAGE 3: TURN LEFT (Must be turned opposite to Stage 2)
+              if (stage2Sign !== null) {
+                isAligned = (Math.sign(yaw) === -stage2Sign) && Math.abs(yaw) >= 0.14;
+              } else {
+                isAligned = Math.abs(yaw) >= 0.14;
+              }
+              if (isAligned) {
+                setFaceStatusText('🟢 لای چەپ پەسەندە! ڕایبگرە یان دوگمەکە دابگرە');
+              } else {
+                setFaceStatusText('👈 سەرت زیاتر بسوڕێنە بە لای چەپدا');
               }
             }
-            // STAGE 2: RIGHT ANGLE
-            else if (currentStage === 2) {
-              setFaceStatusText('🟡 هەنگاوی ٢: سەرت کەمێک بە لای ڕاستدا ڕابگرە');
+
+            setIsAngleAligned(isAligned);
+            lastValidAlignedRef.current = isAligned;
+
+            // AUTO-CAPTURE: Only advance if the user remains strictly in the target angle
+            if (isAligned) {
+              stageHoldFrames++;
+              setAngleCountdown(Math.max(1, 4 - stageHoldFrames));
+
               if (stageHoldFrames >= 3) {
-                captured.right = result.descriptor;
-                setCapturedDescriptors(prev => ({ ...prev, right: result.descriptor }));
-                playAngleCaptureChime();
-                currentStage = 3;
-                setEnrollmentStage(3);
-                stageHoldFrames = 0;
-                setFaceStatusText('👈 هەنگاوی ٣: سەرت کەمێک بسوڕێنە لای چەپ');
+                await advanceEnrollmentStage(result.descriptor);
               }
-            }
-            // STAGE 3: LEFT ANGLE
-            else if (currentStage === 3) {
-              setFaceStatusText('🔵 هەنگاوی ٣: سەرت کەمێک بە لای چەپدا ڕابگرە');
-              if (stageHoldFrames >= 3) {
-                captured.left = result.descriptor;
-                setCapturedDescriptors(prev => ({ ...prev, left: result.descriptor }));
-                currentStage = 4;
-                setEnrollmentStage(4);
-                stopCamera();
-
-                setFaceStatusText('🎉 سەرکەوتوو بوو! هەموو گۆشەکان پاشەکەوت دەکرێن...');
-                
-                // Combine all 3 descriptors
-                const multiDescriptors = [
-                  captured.frontal || result.descriptor,
-                  captured.right || result.descriptor,
-                  captured.left || result.descriptor
-                ];
-
-                let devToken = localStorage.getItem('ashley_device_token');
-                if (!devToken) {
-                  devToken = 'dev-' + Math.random().toString(36).substring(2, 10);
-                  localStorage.setItem('ashley_device_token', devToken);
-                }
-
-                // Register to server
-                await fetch('/api/attendance/face/register', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    userId: selectedEmp.id,
-                    userName: selectedEmp.name,
-                    descriptor: captured.frontal || result.descriptor,
-                    descriptors: multiDescriptors,
-                    pin: pinInput.trim(),
-                    deviceToken: devToken,
-                  })
-                });
-
-                // Complete login
-                const profileData = { id: selectedEmp.id, name: selectedEmp.name, role: selectedEmp.role || 'Employee' };
-                localStorage.setItem('ashley_bound_employee_profile', JSON.stringify(profileData));
-                setEmployeeProfile(profileData);
-                setFaceScanSuccess(true);
-                playWelcomeMusic();
-                sendLocalNotification('🎉 بەخێربێیت', `دەموچاو لە ٣ گۆشەوە بە ناوی (${selectedEmp.name}) بە سەرکەوتوویی بەسترایەوە.`);
-                return;
-              }
+            } else {
+              stageHoldFrames = 0;
             }
           } catch (err: any) {
             console.warn('Enrollment tick err:', err);
@@ -1102,6 +1276,7 @@ export default function MobileAttendanceOneTap() {
           )}
 
           {/* ------------------------------------------------------------- */}
+          {/* ------------------------------------------------------------- */}
           {/* STEP 2: MULTI-ANGLE 3D FACE SCAN (FACE ID WORKFLOW)          */}
           {/* ------------------------------------------------------------- */}
           {authStep === 'FACE_SCAN' && (
@@ -1115,13 +1290,13 @@ export default function MobileAttendanceOneTap() {
 
               {/* If First-time Enrollment -> 3-Angle Step Progress Indicators */}
               {(!hasRegisteredFace || registeredDescriptors.length === 0) && (
-                <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-2xl space-y-1 text-right">
+                <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-2xl space-y-1.5 text-right">
                   <div className="flex items-center justify-between text-[11px] font-black text-slate-700">
                     <span className="flex items-center gap-1">
                       <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                       <span>تۆمارکردنی یەکەمجار (٣ گۆشە):</span>
                     </span>
-                    <span className="font-mono text-emerald-700">
+                    <span className="font-mono text-emerald-700 font-black">
                       {enrollmentStage === 1 && 'هەنگاوی ١/٣ (پێشەوە)'}
                       {enrollmentStage === 2 && 'هەنگاوی ٢/٣ (ڕاست)'}
                       {enrollmentStage === 3 && 'هەنگاوی ٣/٣ (چەپ)'}
@@ -1130,16 +1305,16 @@ export default function MobileAttendanceOneTap() {
                   </div>
 
                   {/* 3 Step Pill Bars */}
-                  <div className="grid grid-cols-3 gap-1.5 pt-1">
-                    <div className={`h-1.5 rounded-full ${enrollmentStage >= 1 && capturedDescriptors.frontal ? 'bg-emerald-600' : enrollmentStage === 1 ? 'bg-amber-400 animate-pulse' : 'bg-slate-200'}`} />
-                    <div className={`h-1.5 rounded-full ${enrollmentStage >= 2 && capturedDescriptors.right ? 'bg-emerald-600' : enrollmentStage === 2 ? 'bg-amber-400 animate-pulse' : 'bg-slate-200'}`} />
-                    <div className={`h-1.5 rounded-full ${enrollmentStage >= 3 && capturedDescriptors.left ? 'bg-emerald-600' : enrollmentStage === 3 ? 'bg-amber-400 animate-pulse' : 'bg-slate-200'}`} />
+                  <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                    <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 1 && capturedDescriptors.frontal ? 'bg-emerald-600' : enrollmentStage === 1 ? 'bg-amber-400 animate-pulse' : 'bg-slate-200'}`} />
+                    <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 2 && capturedDescriptors.right ? 'bg-emerald-600' : enrollmentStage === 2 ? 'bg-amber-400 animate-pulse' : 'bg-slate-200'}`} />
+                    <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 3 && capturedDescriptors.left ? 'bg-emerald-600' : enrollmentStage === 3 ? 'bg-amber-400 animate-pulse' : 'bg-slate-200'}`} />
                   </div>
                 </div>
               )}
 
-              {/* Video Scanner Container */}
-              <div className="relative w-52 h-52 mx-auto rounded-full overflow-hidden border-4 border-emerald-500 shadow-xl bg-slate-900 flex items-center justify-center">
+              {/* 🌟 ENLARGED CAMERA VIEWPORT (w-72 h-72 sm:w-80 sm:h-80) WITH APPLE FACE ID GUIDES */}
+              <div className="relative w-72 h-72 sm:w-80 sm:h-80 mx-auto rounded-full overflow-hidden border-4 border-slate-300 shadow-2xl bg-slate-950 flex items-center justify-center transition-all duration-300">
                 <video
                   ref={videoRef}
                   autoPlay
@@ -1149,15 +1324,66 @@ export default function MobileAttendanceOneTap() {
                 />
                 
                 {/* Visual Face Alignment Ring */}
-                <div className="absolute inset-2 rounded-full border-2 border-dashed border-white/60 pointer-events-none animate-pulse" />
+                <div className={`absolute inset-4 rounded-full border-3 border-dashed transition-all duration-300 pointer-events-none ${
+                  isAngleAligned 
+                    ? 'border-emerald-400 ring-8 ring-emerald-500/20 scale-102' 
+                    : 'border-white/50 animate-pulse'
+                }`} />
 
-                {/* Angle Direction Guide Overlay (If Enrolling) */}
+                {/* Target Guides Overlays During Enrollment */}
                 {(!hasRegisteredFace || registeredDescriptors.length === 0) && cameraActive && (
-                  <div className="absolute top-2 px-3 py-0.5 rounded-full bg-black/60 text-white font-mono text-[10px] font-black backdrop-blur-xs flex items-center gap-1">
-                    {enrollmentStage === 1 && 'سەیرکردنی پێشەوە'}
-                    {enrollmentStage === 2 && 'کەمێک بسوڕێ لای ڕاست 👉'}
-                    {enrollmentStage === 3 && '👈 کەمێک بسوڕێ لای چەپ'}
-                  </div>
+                  <>
+                    {/* Stage 1: Front Center Target */}
+                    {enrollmentStage === 1 && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <div className={`w-28 h-36 rounded-full border-2 border-dashed flex items-center justify-center transition-colors ${
+                          isAngleAligned ? 'border-emerald-400 bg-emerald-500/10' : 'border-amber-300/60 bg-white/5'
+                        }`}>
+                          <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-black/60 text-white backdrop-blur-xs">
+                            {isAngleAligned ? '✅ ڕێکە' : '🎯 سەیرکردنی پێشەوە'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Stage 2: Turn Right Guide */}
+                    {enrollmentStage === 2 && (
+                      <div className="absolute inset-0 flex items-center justify-end pr-4 pointer-events-none">
+                        <div className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg transition-all ${
+                          isAngleAligned ? 'bg-emerald-600 text-white scale-110' : 'bg-amber-500 text-slate-900 animate-bounce'
+                        }`}>
+                          <span>👉 لای ڕاست</span>
+                          {isAngleAligned && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Stage 3: Turn Left Guide */}
+                    {enrollmentStage === 3 && (
+                      <div className="absolute inset-0 flex items-center justify-start pl-4 pointer-events-none">
+                        <div className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg transition-all ${
+                          isAngleAligned ? 'bg-emerald-600 text-white scale-110' : 'bg-amber-500 text-slate-900 animate-bounce'
+                        }`}>
+                          {isAngleAligned && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                          <span>لای چەپ 👈</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Top Status Pill */}
+                    <div className={`absolute top-3 px-3.5 py-1 rounded-full text-[11px] font-black shadow-md backdrop-blur-md flex items-center gap-1.5 transition-all ${
+                      isAngleAligned 
+                        ? 'bg-emerald-500/90 text-white' 
+                        : 'bg-black/70 text-slate-200'
+                    }`}>
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span>
+                        {enrollmentStage === 1 && (isAngleAligned ? 'سەیرکردنی پێشەوە (پەسەندە)' : 'سەیری پێشەوە بکە')}
+                        {enrollmentStage === 2 && (isAngleAligned ? 'لای ڕاست (پەسەندە)' : 'سەرت بسوڕێنە لای ڕاست 👉')}
+                        {enrollmentStage === 3 && (isAngleAligned ? 'لای چەپ (پەسەندە)' : '👈 سەرت بسوڕێنە لای چەپ')}
+                      </span>
+                    </div>
+                  </>
                 )}
 
                 {!cameraActive && (
@@ -1167,6 +1393,33 @@ export default function MobileAttendanceOneTap() {
                   </div>
                 )}
               </div>
+
+              {/* 📸 MANUAL ANGLE CAPTURE BUTTON */}
+              {(!hasRegisteredFace || registeredDescriptors.length === 0) && cameraActive && enrollmentStage <= 3 && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (manualCaptureTriggerRef.current) {
+                        manualCaptureTriggerRef.current();
+                      }
+                    }}
+                    disabled={!isAngleAligned}
+                    className={`w-full py-2.5 px-4 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all ${
+                      isAngleAligned
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-emerald-200 scale-101'
+                        : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                    }`}
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>
+                      {isAngleAligned
+                        ? `📸 تۆمارکردنی ئەم گۆشەیە (${enrollmentStage === 1 ? 'پێشەوە' : enrollmentStage === 2 ? 'لای ڕاست' : 'لای چەپ'})`
+                        : 'سەرت بگونجێنە لەگەڵ هێماکە بۆ تۆمارکردن...'}
+                    </span>
+                  </button>
+                </div>
+              )}
 
               {/* Status Banner */}
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold">
@@ -1231,24 +1484,46 @@ export default function MobileAttendanceOneTap() {
       
       {/* 🌟 TOP MODERN LIGHT HEADER */}
       <header className="p-3.5 bg-white border-b border-slate-200 flex items-center justify-between sticky top-0 z-50 shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center justify-center font-black text-emerald-800 text-xs shadow-xs">
-            {employeeProfile.name.charAt(0)}
+        <div 
+          onClick={handleOpenProfileModal}
+          className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity"
+          title="بینین و نوێکردنەوەی پڕۆفایل"
+        >
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center justify-center font-black text-emerald-800 text-xs shadow-xs overflow-hidden">
+            {profilePhoto ? (
+              <img src={profilePhoto} alt="Employee Avatar" className="w-full h-full object-cover" />
+            ) : (
+              <span>{employeeProfile.name.charAt(0)}</span>
+            )}
           </div>
           <div>
-            <h2 className="text-xs font-black text-slate-900 leading-tight">{employeeProfile.name}</h2>
+            <h2 className="text-xs font-black text-slate-900 leading-tight flex items-center gap-1">
+              <span>{employeeProfile.name}</span>
+              <Sparkles className="w-3 h-3 text-amber-500" />
+            </h2>
             <p className="text-[10px] text-emerald-700 font-bold">{employeeProfile.role || 'کارمەندی فەرمی'}</p>
           </div>
         </div>
 
-        <button 
-          onClick={() => setShowLogoutModal(true)}
-          className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[10px] flex items-center gap-1 font-bold cursor-pointer transition-colors"
-          title="ڕیستکردن یان دەرچوون"
-        >
-          <LogOut className="w-3.5 h-3.5 text-rose-600" />
-          <span>دەرچوون</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button 
+            onClick={handleOpenProfileModal}
+            className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] flex items-center gap-1 font-bold cursor-pointer transition-colors shadow-xs"
+            title="پڕۆفایلی کارمەند"
+          >
+            <User className="w-3.5 h-3.5 text-emerald-600" />
+            <span>پڕۆفایل</span>
+          </button>
+
+          <button 
+            onClick={() => setShowLogoutModal(true)}
+            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[10px] flex items-center gap-1 font-bold cursor-pointer transition-colors"
+            title="ڕیستکردن یان دەرچوون"
+          >
+            <LogOut className="w-3.5 h-3.5 text-rose-600" />
+            <span>دەرچوون</span>
+          </button>
+        </div>
       </header>
 
       <main className="p-4 space-y-4 flex-1">
@@ -1398,6 +1673,30 @@ export default function MobileAttendanceOneTap() {
         </div>
 
         {/* ============================================================ */}
+        {/* 👤 EMPLOYEE SELF-SERVICE PROFILE CARD */}
+        <div className="bg-white border border-slate-200 p-3.5 rounded-2xl shadow-xs flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 overflow-hidden">
+              {profilePhoto ? (
+                <img src={profilePhoto} alt="Employee Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-5 h-5" />
+              )}
+            </div>
+            <div>
+              <h4 className="text-xs font-black text-slate-900">پڕۆفایلی تایبەتی کارمەند</h4>
+              <p className="text-[10px] text-slate-500 font-bold">وێنە، مۆبایل، بەرواری دەستبەکاربوون، PIN</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleOpenProfileModal}
+            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-xs cursor-pointer transition-colors"
+          >
+            دەستکاریکردن
+          </button>
+        </div>
+
         {/* 📊 EMPLOYEE'S OWN MONTHLY ATTENDANCE LOG (Clean Light Table) */}
         {/* ============================================================ */}
         <div className="pt-3">
@@ -1576,6 +1875,165 @@ export default function MobileAttendanceOneTap() {
                   className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2.5 rounded-xl border border-slate-200 cursor-pointer"
                 >
                   پاشگەزبوونەوە
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+
+
+      {/* 👤 EMPLOYEE SELF-SERVICE PROFILE MODAL (Light Mode) */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 p-5 rounded-3xl max-w-sm w-full space-y-4 text-right shadow-2xl max-h-[90vh] overflow-y-auto">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <User className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-slate-900">پڕۆفایلی کارمەند</h4>
+                  <p className="text-[10px] text-slate-500 font-medium">زانیارییە کەسییەکان و PIN</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setShowProfileModal(false); setProfileError(null); setProfileSaveSuccess(false); }}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Photo Avatar Section */}
+            <div className="flex flex-col items-center justify-center py-2">
+              <div className="relative group">
+                <div className="w-20 h-20 rounded-full border-3 border-emerald-500 overflow-hidden shadow-md bg-slate-100 flex items-center justify-center">
+                  {profilePhoto ? (
+                    <img src={profilePhoto} alt="Employee Photo" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-2xl font-black text-slate-600">
+                      {(employeeProfile?.name || 'ک').charAt(0)}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => profileFileInputRef.current?.click()}
+                  className="absolute bottom-0 right-0 p-1.5 rounded-full bg-emerald-600 text-white shadow-md hover:bg-emerald-700 cursor-pointer transition-transform active:scale-95"
+                  title="گۆڕینی وێنە"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                </button>
+                <input
+                  ref={profileFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                />
+              </div>
+              <p className="text-xs font-black text-slate-900 mt-2">{employeeProfile?.name}</p>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold mt-0.5">
+                {employeeProfile?.role || 'کارمەندی فەرمی'}
+              </span>
+            </div>
+
+            {/* Form Fields */}
+            <form onSubmit={handleSaveProfile} className="space-y-3 pt-1">
+              {/* Phone Field */}
+              <div>
+                <label className="text-[11px] font-black text-slate-700 block mb-1 flex items-center gap-1">
+                  <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>ژمارەی مۆبایل:</span>
+                </label>
+                <input
+                  type="tel"
+                  value={profilePhone}
+                  onChange={(e) => setProfilePhone(e.target.value)}
+                  placeholder="0750 xxx xxxx"
+                  dir="ltr"
+                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-xs font-mono font-bold p-2.5 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-colors"
+                />
+              </div>
+
+              {/* Hire Date Field */}
+              <div>
+                <label className="text-[11px] font-black text-slate-700 block mb-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>بەرواری دەستبەکاربوون:</span>
+                </label>
+                <input
+                  type="date"
+                  value={profileHireDate}
+                  onChange={(e) => setProfileHireDate(e.target.value)}
+                  dir="ltr"
+                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-xs font-mono font-bold p-2.5 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-colors"
+                />
+              </div>
+
+              {/* Change PIN Field */}
+              <div>
+                <label className="text-[11px] font-black text-slate-700 block mb-1 flex items-center gap-1">
+                  <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>گۆڕینی کۆدی نهێنی (PIN):</span>
+                </label>
+                <input
+                  type="password"
+                  maxLength={6}
+                  value={profilePin}
+                  onChange={(e) => setProfilePin(e.target.value)}
+                  placeholder="PIN ی نوێ (٤ بۆ ٦ ژمارە)"
+                  dir="ltr"
+                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-xs font-mono font-bold p-2.5 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-colors"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">ئەگەر ناتەوێت PIN بگۆڕیت، بە بەتاڵی جێی بهێڵە.</p>
+              </div>
+
+              {/* Error & Success Alerts */}
+              {profileError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
+                  <span>{profileError}</span>
+                </div>
+              )}
+
+              {profileSaveSuccess && (
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-1.5 animate-bounce">
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
+                  <span>زانیارییەکانت بە سەرکەوتوویی پاشەکەوت کران!</span>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={isSavingProfile}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-xs py-2.5 rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                >
+                  {isSavingProfile ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>خەریکی پاشەکەوتکردن...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>پاشەکەوتکردنی گۆڕانکارییەکان</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowProfileModal(false); setProfileError(null); setProfileSaveSuccess(false); }}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2.5 px-4 rounded-xl border border-slate-200 cursor-pointer transition-colors"
+                >
+                  داخستن
                 </button>
               </div>
             </form>

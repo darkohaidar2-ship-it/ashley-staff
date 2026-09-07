@@ -59,7 +59,7 @@ export async function loadFaceModels(): Promise<boolean> {
 // 2. Extract 128-D Face Descriptor from Video / Image / Canvas
 export async function extractFaceDescriptor(
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
-): Promise<{ descriptor: number[]; detection: any } | null> {
+): Promise<{ descriptor: number[]; detection: any; landmarks?: any; yaw?: number; headPose?: 'CENTER' | 'RIGHT' | 'LEFT' | 'UNKNOWN' } | null> {
   if (typeof window === 'undefined') return null;
   const faceapi = await getFaceApi();
   if (!faceapi) return null;
@@ -78,9 +78,34 @@ export async function extractFaceDescriptor(
     return null;
   }
 
+  let yaw = 0;
+  let headPose: 'CENTER' | 'RIGHT' | 'LEFT' | 'UNKNOWN' = 'CENTER';
+
+  if (result.landmarks && result.landmarks.positions) {
+    const pts = result.landmarks.positions;
+    const nose = pts[30];
+    const eyeL = pts[36];
+    const eyeR = pts[45];
+    if (nose && eyeL && eyeR) {
+      const eyeMidX = (eyeL.x + eyeR.x) / 2;
+      const eyeDist = Math.abs(eyeR.x - eyeL.x) || 1;
+      yaw = (nose.x - eyeMidX) / eyeDist;
+      if (Math.abs(yaw) < 0.14) {
+        headPose = 'CENTER';
+      } else if (yaw > 0.14) {
+        headPose = 'RIGHT';
+      } else {
+        headPose = 'LEFT';
+      }
+    }
+  }
+
   return {
     descriptor: Array.from(result.descriptor),
     detection: result.detection,
+    landmarks: result.landmarks,
+    yaw,
+    headPose,
   };
 }
 

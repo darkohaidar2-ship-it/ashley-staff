@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { ReportWrapper } from '@/components/reports/ReportWrapper';
 import { DashboardCard } from '@/components/dashboard/dashboard-card';
+import { AdminExpensesModule } from '@/components/admin/AdminExpensesModule';
 import * as XLSX from 'xlsx';
 
 const formatCurrency = (amount: number) => {
@@ -29,7 +30,7 @@ const formatCurrency = (amount: number) => {
 
 function AshleyExpensesDashboard() {
   const { t, language } = useTranslation();
-  const { expenses, overtime, bonuses, withdrawals, settings } = useAppContext();
+  const { employees, expenses, overtime, bonuses, withdrawals, settings } = useAppContext();
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const isRTL = language === 'ku';
@@ -162,6 +163,11 @@ function AshleyExpensesDashboard() {
                 color={item.color}
               />
             ))}
+          </div>
+
+          {/* 💰 Full Comprehensive Employee Expenses Module */}
+          <div className="pt-4 border-t border-slate-200 dark:border-zinc-800">
+            <AdminExpensesModule employees={employees} />
           </div>
         </div>
       </div>

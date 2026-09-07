@@ -803,13 +803,72 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     }
 
     // ----------------------------------------
-    // POST /api/attendance/update-profile (Employee updates profile details except Name)
+    // GET & POST /api/attendance/profile & update-profile
     // ----------------------------------------
-    if (pathStr === 'update-profile' && method === 'POST') {
-      const { userId, phone, address, emergencyContact, pin } = await req.json();
+    if ((pathStr === 'profile' || pathStr === 'update-profile') && method === 'GET') {
+      const userId = req.nextUrl.searchParams.get('userId');
+      if (!userId) return NextResponse.json({ error: 'کارمەند دیاری نەکراوە' }, { status: 400 });
+
+      let profilesMap: Record<string, any> = {};
+      try {
+        const { data: pRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_employee_profiles').maybeSingle();
+        if (pRow?.qr_code) profilesMap = JSON.parse(pRow.qr_code);
+      } catch {}
+
+      const customProfile = profilesMap[userId] || {};
+      let dbUser: any = null;
+      try {
+        const { data: u } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+        if (u) dbUser = u;
+      } catch {}
+
+      return NextResponse.json({
+        success: true,
+        profile: {
+          userId,
+          name: dbUser?.name || customProfile.name,
+          role: dbUser?.role || customProfile.role,
+          pin: dbUser?.pin || customProfile.pin,
+          phone: customProfile.phone || dbUser?.phone || '',
+          hireDate: customProfile.hireDate || dbUser?.hire_date || '',
+          photo: customProfile.photo || dbUser?.avatar || null,
+        }
+      });
+    }
+
+    if ((pathStr === 'update-profile' || pathStr === 'profile') && method === 'POST') {
+      const { userId, phone, address, emergencyContact, pin, photo, hireDate, name } = await req.json();
       if (!userId) return NextResponse.json({ error: 'کارمەند دیاری نەکراوە' }, { status: 400 });
 
       try {
+        // 1. Resilient registry in warehouses
+        const { data: pRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_employee_profiles').maybeSingle();
+        let profilesMap: Record<string, any> = {};
+        if (pRow?.qr_code) {
+          try { profilesMap = JSON.parse(pRow.qr_code); } catch {}
+        }
+
+        profilesMap[userId] = {
+          ...(profilesMap[userId] || {}),
+          userId,
+          ...(name ? { name } : {}),
+          ...(pin ? { pin } : {}),
+          ...(phone !== undefined ? { phone } : {}),
+          ...(hireDate !== undefined ? { hireDate } : {}),
+          ...(photo !== undefined ? { photo } : {}),
+          updatedAt: new Date().toISOString(),
+        };
+
+        await supabase.from('warehouses').upsert({
+          id: 'ashley_employee_profiles',
+          name: 'Ashley Employee Profiles Data',
+          qr_code: JSON.stringify(profilesMap),
+          lat: 0,
+          lng: 0,
+          radius: 0,
+        });
+
+        // 2. Also update users table
         const updatePayload: any = {};
         if (phone !== undefined) updatePayload.phone = phone;
         if (address !== undefined) updatePayload.address = address;
