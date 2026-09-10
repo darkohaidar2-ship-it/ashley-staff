@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { ArrowRight, Smartphone, ShieldCheck, Home } from 'lucide-react';
 
 export default function StandaloneGpsAttendancePage() {
-  const { employees, allMergedAttendanceLogs } = useAppContext();
+  const { employees, attendanceLogs } = useAppContext();
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-6 lg:p-8 dir-rtl font-sans" dir="rtl">
@@ -47,7 +47,7 @@ export default function StandaloneGpsAttendancePage() {
         <section className="bg-slate-900/60 p-4 sm:p-6 rounded-3xl border border-slate-800 shadow-2xl">
           <NewGpsAttendanceMatrixTable 
             employees={(employees || []).filter(e => e?.status !== 'resigned' && e?.isActive !== false)} 
-            attendanceLogs={allMergedAttendanceLogs || []} 
+            attendanceLogs={attendanceLogs || []} 
           />
         </section>
 

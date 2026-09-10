@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, supabaseUrl, supabaseKey } from '@/lib/supabase';
 import crypto from 'crypto';
+import { getEmployeeProfile, updateEmployeeProfile } from '@/lib/attendance/profile-service';
+import { getSecurityStatus, resetUserDevice, resetUserFace } from '@/lib/attendance/security-service';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -720,43 +722,8 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if ((pathStr === 'unbind-device' || pathStr === 'admin/users/reset-device') && method === 'POST') {
       const { userId } = await req.json();
-      if (!userId) return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
-
-      try {
-        try {
-          await supabase
-            .from('users')
-            .update({ device_token: null })
-            .eq('id', userId);
-        } catch {}
-
-        const { data: regRow } = await supabase
-          .from('warehouses')
-          .select('qr_code')
-          .eq('id', 'ashley_device_bindings')
-          .maybeSingle();
-
-        let registry: Record<string, any> = {};
-        if (regRow?.qr_code) {
-          try { registry = JSON.parse(regRow.qr_code); } catch {}
-        }
-
-        if (registry[userId]) {
-          delete registry[userId];
-          await supabase.from('warehouses').upsert({
-            id: 'ashley_device_bindings',
-            name: 'Ashley Device & Hardware Registry',
-            qr_code: JSON.stringify(registry),
-            lat: 0,
-            lng: 0,
-            radius: 0
-          });
-        }
-      } catch (err) {
-        console.warn('Supabase unbind-device error:', err);
-      }
-
-      return NextResponse.json({ success: true, message: 'مۆبایلەکە بە سەرکەوتوویی لە ئەدمینەوە هەڵوەشێنرایەوە' });
+      const result = await resetUserDevice(supabase, userId);
+      return NextResponse.json(result, { status: result.success ? 200 : 400 });
     }
 
     // ----------------------------------------
@@ -807,80 +774,14 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if ((pathStr === 'profile' || pathStr === 'update-profile') && method === 'GET') {
       const userId = req.nextUrl.searchParams.get('userId');
-      if (!userId) return NextResponse.json({ error: 'کارمەند دیاری نەکراوە' }, { status: 400 });
-
-      let profilesMap: Record<string, any> = {};
-      try {
-        const { data: pRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_employee_profiles').maybeSingle();
-        if (pRow?.qr_code) profilesMap = JSON.parse(pRow.qr_code);
-      } catch {}
-
-      const customProfile = profilesMap[userId] || {};
-      let dbUser: any = null;
-      try {
-        const { data: u } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
-        if (u) dbUser = u;
-      } catch {}
-
-      return NextResponse.json({
-        success: true,
-        profile: {
-          userId,
-          name: dbUser?.name || customProfile.name,
-          role: dbUser?.role || customProfile.role,
-          pin: dbUser?.pin || customProfile.pin,
-          phone: customProfile.phone || dbUser?.phone || '',
-          hireDate: customProfile.hireDate || dbUser?.hire_date || '',
-          photo: customProfile.photo || dbUser?.avatar || null,
-        }
-      });
+      const result = await getEmployeeProfile(supabase, userId || '');
+      return NextResponse.json(result, { status: result.success ? 200 : 400 });
     }
 
     if ((pathStr === 'update-profile' || pathStr === 'profile') && method === 'POST') {
-      const { userId, phone, address, emergencyContact, pin, photo, hireDate, name } = await req.json();
-      if (!userId) return NextResponse.json({ error: 'کارمەند دیاری نەکراوە' }, { status: 400 });
-
-      try {
-        // 1. Resilient registry in warehouses
-        const { data: pRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_employee_profiles').maybeSingle();
-        let profilesMap: Record<string, any> = {};
-        if (pRow?.qr_code) {
-          try { profilesMap = JSON.parse(pRow.qr_code); } catch {}
-        }
-
-        profilesMap[userId] = {
-          ...(profilesMap[userId] || {}),
-          userId,
-          ...(name ? { name } : {}),
-          ...(pin ? { pin } : {}),
-          ...(phone !== undefined ? { phone } : {}),
-          ...(hireDate !== undefined ? { hireDate } : {}),
-          ...(photo !== undefined ? { photo } : {}),
-          updatedAt: new Date().toISOString(),
-        };
-
-        await supabase.from('warehouses').upsert({
-          id: 'ashley_employee_profiles',
-          name: 'Ashley Employee Profiles Data',
-          qr_code: JSON.stringify(profilesMap),
-          lat: 0,
-          lng: 0,
-          radius: 0,
-        });
-
-        // 2. Also update users table
-        const updatePayload: any = {};
-        if (phone !== undefined) updatePayload.phone = phone;
-        if (address !== undefined) updatePayload.address = address;
-        if (emergencyContact !== undefined) updatePayload.emergency_contact = emergencyContact;
-        if (pin !== undefined && pin.length >= 4) updatePayload.pin = pin;
-
-        await supabase.from('users').update(updatePayload).eq('id', userId);
-
-        return NextResponse.json({ success: true, message: 'زانیارییەکان بە سەرکەوتوویی نوێکرانەوە' });
-      } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 });
-      }
+      const payload = await req.json();
+      const result = await updateEmployeeProfile(supabase, payload);
+      return NextResponse.json(result, { status: result.success ? 200 : 400 });
     }
 
     // ----------------------------------------

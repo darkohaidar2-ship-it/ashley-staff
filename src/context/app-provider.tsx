@@ -222,18 +222,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         )
         .subscribe();
 
-      // Broadcast and storage listeners
+      // Broadcast, storage, and tab visibility listeners
+      const handleVisibilityChange = () => {
+        if (typeof document !== 'undefined' && !document.hidden) {
+          syncSupabaseAttendance();
+        }
+      };
+
       window.addEventListener('ashley_attendance_updated', syncSupabaseAttendance);
       window.addEventListener('storage', syncSupabaseAttendance);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
 
-      // Polling interval (every 8s)
-      const interval = setInterval(syncSupabaseAttendance, 8000);
+      // Smart Heartbeat interval (relaxed 60s fallback alongside instant Realtime WebSocket)
+      const interval = setInterval(syncSupabaseAttendance, 60000);
 
       return () => {
         supabase.removeChannel(channel);
         clearInterval(interval);
         window.removeEventListener('ashley_attendance_updated', syncSupabaseAttendance);
         window.removeEventListener('storage', syncSupabaseAttendance);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
     }, [setAttendanceLogs]);
 

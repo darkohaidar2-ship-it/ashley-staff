@@ -22,14 +22,26 @@ export const LanguageContext = createContext<LanguageContextType | undefined>(un
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const { settings, setSettings, isLoading } = useAppContext();
   
-  // Force Kurdish as the sole active language
-  const language: Language = 'ku';
+  const [language, setLanguageState] = useState<Language>('ku');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ashley_lang') as Language;
+      if (saved === 'en' || saved === 'ku') {
+        setLanguageState(saved);
+      }
+    }
+  }, []);
+
+  const setLanguage = useCallback((lang: Language) => {
+    setLanguageState(lang);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ashley_lang', lang);
+    }
+  }, []);
+
   const enTranslations = settings?.translations?.en || {};
   const kuTranslations = settings?.translations?.ku || {};
-
-  const setLanguage = (lang: Language) => {
-    // Locked to Kurdish, no-op for language changes
-  };
   
   const translations = {
     en: enTranslations,

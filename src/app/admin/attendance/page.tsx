@@ -16,56 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, getDaysInMonth, startOfMonth, addMonths, subMonths, getDay } from 'date-fns';
-
-interface User {
-  id: string;
-  name: string;
-  pin: string;
-  role: string;
-  hourlyRate: number;
-  deviceToken?: string | null;
-  deviceBound?: boolean;
-  faceRegistered?: boolean;
-  deviceInfo?: any;
-  faceInfo?: any;
-}
-
-interface AttendanceRecord {
-  id: string;
-  userId: string;
-  userName: string;
-  date: string;
-  checkIn?: string;
-  checkInTime?: string;
-  checkInSelfie?: string;
-  checkInAddress?: string;
-  checkOut?: string;
-  checkOutTime?: string;
-  checkOutSelfie?: string;
-  checkOutAddress?: string;
-  warehouseId?: string;
-  warehouseName: string;
-  lateMinutes: number;
-  earlyOutMinutes: number;
-  overtimeMinutes: number;
-  status: string;
-}
-
-interface Warehouse {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-  radius: number;
-  qr_code?: string;
-}
-
-interface Holiday {
-  id: string;
-  name: string;
-  date: string;
-  type: string;
-}
+import type { User, AttendanceRecord, AttendanceWarehouse as Warehouse, AttendanceHoliday as Holiday } from '@/lib/types';
 
 export default function AdminAttendancePage() {
   const [mounted, setMounted] = useState(false);

@@ -5,11 +5,22 @@ export type Language = 'en' | 'ku';
 
 export type User = {
     id: string;
-    username: string;
+    username?: string;
+    name: string;
     fullName?: string;
     password?: string;
-    roleId: string;
+    pin?: string;
+    role?: string;
+    roleId?: string;
+    hourlyRate?: number;
+    deviceToken?: string | null;
+    deviceBound?: boolean;
+    faceRegistered?: boolean;
+    deviceInfo?: any;
+    faceInfo?: any;
 };
+
+export type AttendanceUser = User;
 
 export type Role = {
     id: string;
@@ -415,28 +426,55 @@ export type OvertimeRecord = {
 export type AttendanceRecord = {
   id: string;
   employeeId?: string;
-  userId?: string;
-  userName?: string;
-  name: string;
-  type: string;
+  userId: string;
+  userName: string;
+  name?: string;
+  type?: string;
   action?: string;
-  time: string;
-  date?: string;
+  time?: string;
+  date: string;
   timestamp?: string;
+  checkIn?: string;
+  checkInTime?: string;
+  checkInSelfie?: string;
+  checkInAddress?: string;
+  checkOut?: string;
+  checkOutTime?: string;
+  checkOutSelfie?: string;
+  checkOutAddress?: string;
+  warehouseId?: string;
+  warehouseName: string;
+  lateMinutes: number;
+  earlyOutMinutes: number;
+  overtimeMinutes: number;
   notes?: string;
   employeeNote?: string;
   distance?: string;
   selfieUrl?: string;
-  checkInSelfie?: string;
-  checkOutSelfie?: string;
-  status?: string;
-  createdAt: string;
+  status: string;
+  createdAt?: string;
   originalTime?: string;
   editNote?: string;
   checkInOriginalTime?: string;
   checkInEditNote?: string;
   checkOutOriginalTime?: string;
   checkOutEditNote?: string;
+};
+
+export type AttendanceWarehouse = {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radius: number;
+  qr_code?: string;
+};
+
+export type AttendanceHoliday = {
+  id: string;
+  name: string;
+  date: string;
+  type: string;
 };
 
 export type AppConfig = {

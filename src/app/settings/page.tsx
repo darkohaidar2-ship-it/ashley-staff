@@ -79,8 +79,8 @@ import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { format, parseISO } from 'date-fns';
 import { allPermissions } from '@/lib/permissions';
-import enStatic from '@/app/locales/en.json';
-import kuStatic from '@/app/locales/ku.json';
+import enStatic from '@/locales/en.json';
+import kuStatic from '@/locales/ku.json';
 
 const themes = [
   { name: 'purple', color: 'bg-purple-600', label: 'Corporate Purple' },

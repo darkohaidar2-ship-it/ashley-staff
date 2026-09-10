@@ -1763,7 +1763,7 @@ export default function AdminPage() {
                 <Truck className="w-4 h-4 text-blue-600" />
                 <span>٣. لۆجستیك و گواستنەوە (Logistics Hub)</span>
               </div>
-              <AdminLogisticsModule />
+              <AdminLogisticsModule employees={employees || []} />
             </div>
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-slate-800 font-black text-xs border-b border-slate-200 pb-2">
@@ -1780,7 +1780,7 @@ export default function AdminPage() {
               <BarChart3 className="w-4 h-4 text-indigo-600" />
               <span>٥. ئامار و ڕاپۆرتە گشتییەکان (Weekly & Monthly Analytics)</span>
             </div>
-            <AdminWeeklyMonthlyStatsModule />
+            <AdminWeeklyMonthlyStatsModule employees={employees || []} attendanceLogs={attendanceLogs || []} />
           </div>
         </section>
       )}
