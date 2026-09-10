@@ -16,7 +16,8 @@ import {
   Archive,
   Calendar,
   ClipboardList,
-  Clock
+  Clock,
+  Smartphone
 } from 'lucide-react';
 
 import {
@@ -49,26 +50,29 @@ export function AppSidebar() {
 
   const navigation = [
     {
-      label: isRTL ? 'کۆگا و جەرد' : 'Warehouse & Inventory',
-      icon: Box,
+      label: isRTL ? 'ئامادەبوونی کارمەندان' : 'Staff Attendance',
+      icon: Users,
       items: [
-        { title: 'dashboard', icon: Home, href: '/', permission: 'admin:all' },
-        { title: 'placement_storage', icon: Box, href: '/items', permission: 'page:items:view' },
-        { title: 'locations', icon: MapPin, href: '/locations', permission: 'page:items:locations' },
-        { title: 'warehouse_map', icon: LayoutGrid, href: '/warehouse-map', permission: 'admin:all' },
-        { title: 'import', icon: Upload, href: '/import', permission: 'page:items:import' },
-        { title: 'excel_archive', icon: Archive, href: '/archive', permission: 'page:items:archive' },
+        { title: 'dashboard', icon: Home, href: '/admin', permission: 'admin:all' },
+        { title: 'attendance', icon: Calendar, href: '/attendance/checkin', permission: 'page:employees:view' },
+        { title: isRTL ? 'ئەپی مۆبایل و دەموچاو' : 'Mobile Face Attendance', icon: Smartphone, href: '/attendance/mobile', permission: 'page:employees:view' },
+        { title: 'admin_attendance', icon: ClipboardList, href: '/admin/attendance', permission: 'admin:all' },
+        { title: 'employees', icon: Users, href: '/employees', permission: 'page:employees:view' },
+        { title: isRTL ? 'نەخشەی شوێنەکان' : 'GPS Locations', icon: MapPin, href: '/gps', permission: 'admin:all' },
       ],
     },
     {
-      label: isRTL ? 'بەڕێوەبردنی ستاف' : 'Staff Management',
-      icon: Users,
+      label: isRTL ? 'کاتی زیادە' : 'Overtime Management',
+      icon: Clock,
       items: [
-        { title: 'employees', icon: Users, href: '/employees', permission: 'page:employees:view' },
-        { title: 'ashley_employees_management', icon: CreditCard, href: '/ashley-expenses', permission: 'page:ashley-expenses:view' },
         { title: 'overtime', icon: Clock, href: '/overtime', permission: 'page:employees:view' },
-        { title: 'attendance', icon: Calendar, href: '/attendance/checkin', permission: 'page:employees:view' },
-        { title: 'admin_attendance', icon: ClipboardList, href: '/admin/attendance', permission: 'admin:all' },
+      ],
+    },
+    {
+      label: isRTL ? 'مەسروفات و دارایی' : 'Expenses & Payroll',
+      icon: CreditCard,
+      items: [
+        { title: 'ashley_employees_management', icon: CreditCard, href: '/ashley-expenses', permission: 'page:ashley-expenses:view' },
       ],
     },
     {
@@ -83,10 +87,10 @@ export function AppSidebar() {
 
   // Compact mobile navigation bar items
   const mobileNavItems = [
-    { icon: Home, href: '/', label: isRTL ? 'داشبۆرد' : 'Dashboard', permission: 'admin:all' },
-    { icon: Box, href: '/items', label: isRTL ? 'کۆگا' : 'Inventory', permission: 'page:items:view' },
-    { icon: Calendar, href: '/attendance', label: isRTL ? 'دەوام' : 'Attendance', permission: 'page:employees:view' },
-    { icon: Users, href: '/employees', label: isRTL ? 'ستاف' : 'Staff', permission: 'page:employees:view' },
+    { icon: Home, href: '/admin', label: isRTL ? 'داشبۆرد' : 'Dashboard', permission: 'admin:all' },
+    { icon: Calendar, href: '/attendance/checkin', label: isRTL ? 'دەوام' : 'Attendance', permission: 'page:employees:view' },
+    { icon: Smartphone, href: '/attendance/mobile', label: isRTL ? 'مۆبایل' : 'Mobile', permission: 'page:employees:view' },
+    { icon: Clock, href: '/overtime', label: isRTL ? 'زیادە' : 'Overtime', permission: 'page:employees:view' },
     { icon: CreditCard, href: '/ashley-expenses', label: isRTL ? 'خەرجی' : 'Expenses', permission: 'page:ashley-expenses:view' },
   ];
 

@@ -1802,61 +1802,16 @@ export default function AdminPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
             
-            {/* 1. Master Warehouse & Inventory Suite */}
-            <div className="p-4 bg-white rounded-none border border-slate-200 space-y-3 shadow-xs hover:border-blue-300 transition-colors">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-none bg-blue-50 flex items-center justify-center text-blue-700">
-                    <Table className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-black text-slate-900 block">بەشی کۆگا و جەرد</span>
-                    <span className="text-[10px] text-slate-500 font-mono">Warehouse & Items</span>
-                  </div>
-                </div>
-                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-900">
-                  چالاکە
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-1.5 pt-1 text-xs font-bold">
-                <Link
-                  href="/public-inventory"
-                  className="p-2 rounded-none bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
-                >
-                  <span>📦</span> <span>جەردی کەرەستە</span>
-                </Link>
-                <Link
-                  href="/sold-items"
-                  className="p-2 rounded-none bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
-                >
-                  <span>📂</span> <span>کەرەستەی فرۆشراو</span>
-                </Link>
-                <Link
-                  href="/archive"
-                  className="p-2 rounded-none bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
-                >
-                  <span>🧾</span> <span>ئەرشیفی پسوولە</span>
-                </Link>
-                <Link
-                  href="/settings?tab=pdf"
-                  className="p-2 rounded-none bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
-                >
-                  <span>🎨</span> <span>دیزاینی ڕاپۆرت</span>
-                </Link>
-              </div>
-            </div>
-
-            {/* 2. Expenses Suite */}
+            {/* 1. Staff Attendance Suite */}
             <div className="p-4 bg-white rounded-none border border-slate-200 space-y-3 shadow-xs hover:border-emerald-300 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-10 h-10 rounded-none bg-emerald-50 flex items-center justify-center text-emerald-700">
-                    <DollarSign className="w-5 h-5" />
+                    <UserCheck className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-xs font-black text-slate-900 block">خەرجی و دارایی</span>
-                    <span className="text-[10px] text-slate-500 font-mono">Expenses & Fund</span>
+                    <span className="text-xs font-black text-slate-900 block">ئامادەبوونی کارمەندان</span>
+                    <span className="text-[10px] text-slate-500 font-mono">Staff Attendance Suite</span>
                   </div>
                 </div>
                 <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900">
@@ -1866,61 +1821,94 @@ export default function AdminPage() {
               
               <div className="grid grid-cols-2 gap-1.5 pt-1 text-xs font-bold">
                 <Link
-                  href="/ashley-expenses"
+                  href="/attendance/checkin"
                   className="p-2 rounded-none bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
-                  <span>💰</span> <span>سندوقی خەرجی</span>
+                  <span>📷</span> <span>سێڵفی دەوام</span>
                 </Link>
                 <Link
-                  href="/expenses"
+                  href="/attendance/mobile"
                   className="p-2 rounded-none bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
-                  <span>📊</span> <span>پۆلێنی خەرجی</span>
+                  <span>📱</span> <span>ئەپی مۆبایل</span>
+                </Link>
+                <Link
+                  href="/admin/attendance"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>⏰</span> <span>تۆمار و کاتەکان</span>
+                </Link>
+                <Link
+                  href="/gps"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>📍</span> <span>سنوری جوگرافی</span>
                 </Link>
               </div>
             </div>
 
-            {/* 3. Settings & Shift Administration */}
-            <div className="p-4 bg-white rounded-none border border-slate-200 space-y-3 shadow-xs hover:border-purple-300 transition-colors">
+            {/* 2. Overtime Suite */}
+            <div className="p-4 bg-white rounded-none border border-slate-200 space-y-3 shadow-xs hover:border-amber-300 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-none bg-purple-50 flex items-center justify-center text-purple-700">
-                    <Settings className="w-5 h-5" />
+                  <div className="w-10 h-10 rounded-none bg-amber-50 flex items-center justify-center text-amber-700">
+                    <Clock className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-xs font-black text-slate-900 block">بەشی ڕێکخستنەکان</span>
-                    <span className="text-[10px] text-slate-500 font-mono">Settings & Master ERP</span>
+                    <span className="text-xs font-black text-slate-900 block">سیستەمی کاتی زیادە</span>
+                    <span className="text-[10px] text-slate-500 font-mono">Overtime Management</span>
                   </div>
                 </div>
-                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-900">
-                  تەواو
+                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                  چالاکە
                 </span>
               </div>
               
               <div className="grid grid-cols-2 gap-1.5 pt-1 text-xs font-bold">
                 <Link
+                  href="/overtime"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>⏱️</span> <span>تۆماری کاتی زیادە</span>
+                </Link>
+                <Link
+                  href="/employees"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>👥</span> <span>ناوی کارمەندان</span>
+                </Link>
+              </div>
+            </div>
+
+            {/* 3. Expenses Suite */}
+            <div className="p-4 bg-white rounded-none border border-slate-200 space-y-3 shadow-xs hover:border-purple-300 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-none bg-purple-50 flex items-center justify-center text-purple-700">
+                    <DollarSign className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-black text-slate-900 block">خەرجی و دارایی</span>
+                    <span className="text-[10px] text-slate-500 font-mono">Expenses & Rates</span>
+                  </div>
+                </div>
+                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-900">
+                  چالاکە
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-1.5 pt-1 text-xs font-bold">
+                <Link
+                  href="/ashley-expenses"
+                  className="p-2 rounded-none bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
+                >
+                  <span>💰</span> <span>سندوقی خەرجی</span>
+                </Link>
+                <Link
                   href="/settings"
                   className="p-2 rounded-none bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
-                  <span>⚙️</span> <span>ڕێکخستنی گشتی</span>
-                </Link>
-                <Link
-                  href="/admin/attendance"
-                  className="p-2 rounded-none bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
-                >
-                  <span>⏰</span> <span>تۆمار و کاتەکان</span>
-                </Link>
-                <Link
-                  href="/map-management"
-                  className="p-2 rounded-none bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
-                >
-                  <span>🗺️</span> <span>نەخشەی کارگە</span>
-                </Link>
-                <Link
-                  href="/attendance/mobile"
-                  className="p-2 rounded-none bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 flex items-center gap-1.5 transition-all"
-                >
-                  <span>📱</span> <span>ئەپی مۆبایل</span>
+                  <span>⚙️</span> <span>ڕێکخستنی سیستەم</span>
                 </Link>
               </div>
             </div>

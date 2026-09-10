@@ -156,7 +156,82 @@ const nextConfig = {
       },
       {
         source: '/pdf-archive',
-        destination: '/archive',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/items',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/locations',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/warehouse-map',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/huana-map',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/ashley-map',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/map-management',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/import',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/import-pdf',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/new-file',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/sold-items',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/archive',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/archive/:id*',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/public-inventory',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/public-transmit',
+        destination: '/admin',
+        permanent: true,
+      },
+      {
+        source: '/pdf/:path*',
+        destination: '/admin',
         permanent: true,
       },
     ];

@@ -21,7 +21,7 @@ import {
 
 export function DashboardClient() {
   const router = useRouter();
-  const { items, locations, employees, expenses } = useAppContext();
+  const { employees, expenses, overtime, attendanceLogs } = useAppContext();
   const { language } = useTranslation();
   const isRTL = language === 'ku';
 
@@ -46,38 +46,33 @@ export function DashboardClient() {
     return () => clearInterval(interval);
   }, []);
 
+  // Quick Action Handler
+  const handleAction = (href: string) => {
+    router.push(href);
+  };
+
   // System Modules (ALL 26 System Pages Categorized)
   const systemModules = [
     {
-      categoryName: isRTL ? '📦 سیستەمی کۆگا & جەرد' : 'Warehouse & Inventory System',
-      description: isRTL ? 'گەڕان لە کاڵاکان، شوێنەکانی خەزنکردن، نەخشەی کۆگا و ئەرشیف' : 'Search inventory, storage zones, maps, and imports',
-      color: 'border-blue-200 bg-blue-50/40 text-blue-900',
-      badgeColor: 'bg-blue-600 text-white',
-      items: [
-        { title: isRTL ? 'جەرد و کاڵاکان' : 'Inventory Items Search', href: '/items', icon: Box, desc: isRTL ? 'گەڕانی خێرا بەپێی مۆدێل و کۆد' : 'Search items by model & location' },
-        { title: isRTL ? 'شوێنەکانی کۆگا' : 'Storage Locations', href: '/locations', icon: MapPin, desc: isRTL ? 'بەڕێوەبردنی شوێن و بەشەکان' : 'Manage storage zones & floors' },
-        { title: isRTL ? 'نەخشەی سەرەکی کۆگا' : 'Visual Layout Map', href: '/warehouse-map', icon: LayoutGrid, desc: isRTL ? 'سەیرکردنی نەخشەی گرافیکی 2D' : 'Interactive 2D warehouse map' },
-        { title: isRTL ? 'نەخشەی هوانە' : 'Huana Warehouse Map', href: '/huana-map', icon: Map, desc: isRTL ? 'نەخشەی کۆگای هوانە' : 'Huana storage map layout' },
-        { title: isRTL ? 'نەخشەی بینای ئاشڵی' : 'Ashley Building Map', href: '/ashley-map', icon: Layers, desc: isRTL ? 'نەخشەی قاتی ٣ و ٤ی ئاشڵی' : 'Ashley floor 3 & 4 layout' },
-        { title: isRTL ? 'بەڕێوەبردنی نەخشەكان' : 'Map Configuration', href: '/map-management', icon: Settings, desc: isRTL ? 'دروستکردنی کۆدی نەخشەکان' : 'Configure warehouse maps' },
-        { title: isRTL ? 'هاوردەکردنی ئێکسڵ' : 'Excel Import', href: '/import', icon: Upload, desc: isRTL ? 'داغڵکردنی فایلی Excel' : 'Import items from Excel' },
-        { title: isRTL ? 'هاوردەکردنی PDF' : 'PDF Import', href: '/import-pdf', icon: FileCheck, desc: isRTL ? 'خوێندنەوەی فایلی PDF' : 'Import data from PDF' },
-        { title: isRTL ? 'ئەرشیفی جەردەکان و بەڵگەنامەکان' : 'Unified Archive', href: '/archive', icon: Archive, desc: isRTL ? 'فایلی جەرد و بەڵگەنامە ئەرشیفکراوەکان' : 'Archived inventory and documents' },
-        { title: isRTL ? 'جەردی گشتی (Public)' : 'Public Inventory View', href: '/public-inventory', icon: ExternalLink, desc: isRTL ? 'لاپەڕەی گشتی سەیرکردنی جەرد' : 'Public read-only view' },
-        { title: isRTL ? 'گواستنەوەی بار (Public)' : 'Cargo Transport', href: '/public-transmit', icon: TrendingUp, desc: isRTL ? 'تۆماری گواستنەوەی بار' : 'Cargo transmit page' },
-      ]
-    },
-    {
-      categoryName: isRTL ? '👥 سیستەمی ستاف & ئامادەبوونی کارمەندان' : 'Staff & Attendance System',
-      description: isRTL ? 'تۆمارکردنی دەوام بە کامێرا و GPS، ڕۆژژمێری مانگانە و ڕاپۆرتەکان' : 'Geofenced check-in, attendance calendar, and staff logs',
+      categoryName: isRTL ? '👥 سیستەمی ئامادەبوونی کارمەندان' : 'Staff Attendance System',
+      description: isRTL ? 'تۆمارکردنی دەوام بە کامێرا و GPS، ڕۆژژمێری مانگانە و ناسینەوەی دەموچاو' : 'Geofenced check-in, attendance calendar, and face recognition',
       color: 'border-emerald-200 bg-emerald-50/40 text-emerald-900',
       badgeColor: 'bg-emerald-600 text-white',
       items: [
         { title: isRTL ? 'تۆمارکردنی دەوام (Check-In)' : 'Camera Check-In', href: '/attendance/checkin', icon: Camera, desc: isRTL ? 'سێڵفی + GPS لۆکەیشن' : 'Selfie check-in with GPS' },
         { title: isRTL ? 'ئامادەبوونی مۆبایل و دەموچاو' : 'Mobile Face Attendance', href: '/attendance/mobile', icon: Smartphone, desc: isRTL ? 'ناسینی ڕوخسار لە مۆبایلەوە' : 'Mobile face verification & check-in' },
-        { title: isRTL ? 'بارکۆدی تابلێتی کۆگا' : 'Tablet Live QR Code', href: '/attendance/qr?wh=warehouse_1', icon: MonitorPlay, desc: isRTL ? 'پیشاندانی بارکۆد لەسەر تابلێت' : 'Display dynamic QR code' },
         { title: isRTL ? 'بەڕێوەبردنی ئامادەبووان' : 'Attendance Admin Control', href: '/admin/attendance', icon: ClipboardList, desc: isRTL ? 'کاتەکان، پشووەکان و کۆگاکان' : 'Shifts, holidays & Geofence' },
         { title: isRTL ? 'ناوی کارمەندان' : 'Employees Directory', href: '/employees', icon: Users, desc: isRTL ? 'لیستی ستافی کۆمپانیا' : 'Company staff directory' },
+        { title: isRTL ? 'نەخشەی شوێنەکان (GPS)' : 'GPS Geofence', href: '/gps', icon: MapPin, desc: isRTL ? 'دیاریکردنی سنوری جوگرافی کۆگاکان' : 'Warehouse GPS Geofence setup' },
+      ]
+    },
+    {
+      categoryName: isRTL ? '⏱️ سیستەمی کاتی زیادە' : 'Overtime Management System',
+      description: isRTL ? 'تۆمارکردن، ئەژمارکردنی خۆکار و بەڕێوەبردنی سەعاتەکانی کاتی زیادە' : 'Daily and monthly overtime logs, calculation, and rates',
+      color: 'border-amber-200 bg-amber-50/40 text-amber-900',
+      badgeColor: 'bg-amber-600 text-white',
+      items: [
+        { title: isRTL ? 'بەڕێوەبردنی کاتی زیادە' : 'Overtime Management', href: '/overtime', icon: Clock, desc: isRTL ? 'تۆمار و ئاماری کاتی زیادەی کارمەندان' : 'Employee overtime logs & auto calculation' },
       ]
     },
     {
@@ -87,9 +82,6 @@ export function DashboardClient() {
       badgeColor: 'bg-rose-600 text-white',
       items: [
         { title: isRTL ? 'خەرجی و مووچەی ئاشڵی' : 'Expenses & Payroll', href: '/ashley-expenses', icon: CreditCard, desc: isRTL ? 'تۆماری خەرجی، پاداشت و نرخی کاتژمێری' : 'Ashley expenses, rates & payroll' },
-        { title: isRTL ? 'کاڵا فڕۆشراوەکان' : 'Sold Items History', href: '/sold-items', icon: DollarSign, desc: isRTL ? 'تۆماری فرۆشتنی کاڵاکان' : 'History of sold items' },
-        { title: isRTL ? 'دیزاینەری ڕاپۆرت' : 'Report Designer', href: '/settings?tab=pdf', icon: FileSpreadsheet, desc: isRTL ? 'دیزاینکردنی ڕاپۆرتی تایبەتی PDF' : 'Custom PDF report builder' },
-        { title: isRTL ? 'دروستکردنی فایلی نوێ' : 'Create New Document', href: '/new-file', icon: FilePlus, desc: isRTL ? 'تۆمارکردنی بەڵگەنامەی نوێ' : 'Create new ERP file' },
       ]
     },
     {
@@ -151,19 +143,19 @@ export function DashboardClient() {
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
-        {/* KPI 1: Warehouse Inventory */}
-        <Link href="/items" className="block group">
-          <Card className="border border-slate-200 bg-white shadow-sm rounded-xl hover:border-blue-400 hover:shadow-md transition-all">
+        {/* KPI 1: Staff Attendance Logs */}
+        <Link href="/admin" className="block group">
+          <Card className="border border-slate-200 bg-white shadow-sm rounded-xl hover:border-emerald-400 hover:shadow-md transition-all">
             <CardContent className="p-4 flex items-center justify-between">
               <div className="space-y-1">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">کۆی کاڵاکانی کۆگا</span>
-                <p className="text-2xl font-black text-slate-800 group-hover:text-blue-600 transition-colors">{items?.length || 0}</p>
-                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full inline-block">
-                  📦 جەردی کاڵاکان
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">ئامادەبووانی دەوام</span>
+                <p className="text-2xl font-black text-slate-800 group-hover:text-emerald-600 transition-colors">{attendanceLogs?.length || 0}</p>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full inline-block">
+                  📷 تۆماری ئامادەبوون
                 </span>
               </div>
-              <div className="p-3 bg-blue-50 text-blue-600 rounded-xl border border-blue-100 group-hover:scale-105 transition-transform">
-                <Box className="w-6 h-6" />
+              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100 group-hover:scale-105 transition-transform">
+                <Calendar className="w-6 h-6" />
               </div>
             </CardContent>
           </Card>
@@ -187,19 +179,19 @@ export function DashboardClient() {
           </Card>
         </Link>
 
-        {/* KPI 3: Storage Locations */}
-        <Link href="/locations" className="block group">
+        {/* KPI 3: Overtime Records */}
+        <Link href="/overtime" className="block group">
           <Card className="border border-slate-200 bg-white shadow-sm rounded-xl hover:border-amber-400 hover:shadow-md transition-all">
             <CardContent className="p-4 flex items-center justify-between">
               <div className="space-y-1">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">شوێنەکانی خەزنکردن</span>
-                <p className="text-2xl font-black text-slate-800 group-hover:text-amber-600 transition-colors">{locations?.length || 0}</p>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">تۆماری کاتی زیادە</span>
+                <p className="text-2xl font-black text-slate-800 group-hover:text-amber-600 transition-colors">{overtime?.length || 0}</p>
                 <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full inline-block">
-                  📍 بەشەکان & قاتەکان
+                  ⏱️ کاتژمێری زیادە
                 </span>
               </div>
               <div className="p-3 bg-amber-50 text-amber-600 rounded-xl border border-amber-100 group-hover:scale-105 transition-transform">
-                <MapPin className="w-6 h-6" />
+                <Clock className="w-6 h-6" />
               </div>
             </CardContent>
           </Card>
