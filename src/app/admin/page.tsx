@@ -1833,13 +1833,13 @@ export default function AdminPage() {
                   <span>📂</span> <span>کەرەستەی فرۆشراو</span>
                 </Link>
                 <Link
-                  href="/pdf-archive"
+                  href="/archive"
                   className="p-2 rounded-none bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
                   <span>🧾</span> <span>ئەرشیفی پسوولە</span>
                 </Link>
                 <Link
-                  href="/report-designer"
+                  href="/settings?tab=pdf"
                   className="p-2 rounded-none bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
                   <span>🎨</span> <span>دیزاینی ڕاپۆرت</span>
@@ -1872,10 +1872,10 @@ export default function AdminPage() {
                   <span>💰</span> <span>سندوقی خەرجی</span>
                 </Link>
                 <Link
-                  href="/ashley-expenses-settings"
+                  href="/expenses"
                   className="p-2 rounded-none bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-800 flex items-center gap-1.5 transition-all"
                 >
-                  <span>⚙️</span> <span>پۆلێنی خەرجی</span>
+                  <span>📊</span> <span>پۆلێنی خەرجی</span>
                 </Link>
               </div>
             </div>

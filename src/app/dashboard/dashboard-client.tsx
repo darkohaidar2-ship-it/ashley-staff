@@ -62,8 +62,7 @@ export function DashboardClient() {
         { title: isRTL ? 'بەڕێوەبردنی نەخشەكان' : 'Map Configuration', href: '/map-management', icon: Settings, desc: isRTL ? 'دروستکردنی کۆدی نەخشەکان' : 'Configure warehouse maps' },
         { title: isRTL ? 'هاوردەکردنی ئێکسڵ' : 'Excel Import', href: '/import', icon: Upload, desc: isRTL ? 'داغڵکردنی فایلی Excel' : 'Import items from Excel' },
         { title: isRTL ? 'هاوردەکردنی PDF' : 'PDF Import', href: '/import-pdf', icon: FileCheck, desc: isRTL ? 'خوێندنەوەی فایلی PDF' : 'Import data from PDF' },
-        { title: isRTL ? 'ئەرشیفی جەردەکان' : 'Inventory Archive', href: '/archive', icon: Archive, desc: isRTL ? 'بینینی فایلی جەردە کۆنەکان' : 'Archived inventory list' },
-        { title: isRTL ? 'ئەرشیفی PDF' : 'PDF Archive', href: '/pdf-archive', icon: FileText, desc: isRTL ? 'فایلە ئەرشیفکراوەکانی PDF' : 'Archived PDF documents' },
+        { title: isRTL ? 'ئەرشیفی جەردەکان و بەڵگەنامەکان' : 'Unified Archive', href: '/archive', icon: Archive, desc: isRTL ? 'فایلی جەرد و بەڵگەنامە ئەرشیفکراوەکان' : 'Archived inventory and documents' },
         { title: isRTL ? 'جەردی گشتی (Public)' : 'Public Inventory View', href: '/public-inventory', icon: ExternalLink, desc: isRTL ? 'لاپەڕەی گشتی سەیرکردنی جەرد' : 'Public read-only view' },
         { title: isRTL ? 'گواستنەوەی بار (Public)' : 'Cargo Transport', href: '/public-transmit', icon: TrendingUp, desc: isRTL ? 'تۆماری گواستنەوەی بار' : 'Cargo transmit page' },
       ]
@@ -75,7 +74,7 @@ export function DashboardClient() {
       badgeColor: 'bg-emerald-600 text-white',
       items: [
         { title: isRTL ? 'تۆمارکردنی دەوام (Check-In)' : 'Camera Check-In', href: '/attendance/checkin', icon: Camera, desc: isRTL ? 'سێڵفی + GPS لۆکەیشن' : 'Selfie check-in with GPS' },
-        { title: isRTL ? 'ئامادەبوونی من' : 'My Attendance Calendar', href: '/attendance', icon: Calendar, desc: isRTL ? 'خشتە و ڕۆژژمێری مانگانەم' : 'Personal attendance log' },
+        { title: isRTL ? 'ئامادەبوونی مۆبایل و دەموچاو' : 'Mobile Face Attendance', href: '/attendance/mobile', icon: Smartphone, desc: isRTL ? 'ناسینی ڕوخسار لە مۆبایلەوە' : 'Mobile face verification & check-in' },
         { title: isRTL ? 'بارکۆدی تابلێتی کۆگا' : 'Tablet Live QR Code', href: '/attendance/qr?wh=warehouse_1', icon: MonitorPlay, desc: isRTL ? 'پیشاندانی بارکۆد لەسەر تابلێت' : 'Display dynamic QR code' },
         { title: isRTL ? 'بەڕێوەبردنی ئامادەبووان' : 'Attendance Admin Control', href: '/admin/attendance', icon: ClipboardList, desc: isRTL ? 'کاتەکان، پشووەکان و کۆگاکان' : 'Shifts, holidays & Geofence' },
         { title: isRTL ? 'ناوی کارمەندان' : 'Employees Directory', href: '/employees', icon: Users, desc: isRTL ? 'لیستی ستافی کۆمپانیا' : 'Company staff directory' },
@@ -87,10 +86,9 @@ export function DashboardClient() {
       color: 'border-rose-200 bg-rose-50/40 text-rose-900',
       badgeColor: 'bg-rose-600 text-white',
       items: [
-        { title: isRTL ? 'خەرجی و مووچەی ئاشڵی' : 'Expenses & Payroll', href: '/ashley-expenses', icon: CreditCard, desc: isRTL ? 'تۆماری خەرجی و کێشاوەکان' : 'Ashley expenses & payroll' },
-        { title: isRTL ? 'ڕێکخستنی خەرجییەکان' : 'Expense Settings', href: '/ashley-expenses-settings', icon: Settings, desc: isRTL ? 'پۆلێنکردنی خەرجییەکان' : 'Expense category settings' },
+        { title: isRTL ? 'خەرجی و مووچەی ئاشڵی' : 'Expenses & Payroll', href: '/ashley-expenses', icon: CreditCard, desc: isRTL ? 'تۆماری خەرجی، پاداشت و نرخی کاتژمێری' : 'Ashley expenses, rates & payroll' },
         { title: isRTL ? 'کاڵا فڕۆشراوەکان' : 'Sold Items History', href: '/sold-items', icon: DollarSign, desc: isRTL ? 'تۆماری فرۆشتنی کاڵاکان' : 'History of sold items' },
-        { title: isRTL ? 'دیزاینەری ڕاپۆرت' : 'Report Designer', href: '/report-designer', icon: FileSpreadsheet, desc: isRTL ? 'دیزاینکردنی ڕاپۆرتی تایبەت' : 'Custom PDF report builder' },
+        { title: isRTL ? 'دیزاینەری ڕاپۆرت' : 'Report Designer', href: '/settings?tab=pdf', icon: FileSpreadsheet, desc: isRTL ? 'دیزاینکردنی ڕاپۆرتی تایبەتی PDF' : 'Custom PDF report builder' },
         { title: isRTL ? 'دروستکردنی فایلی نوێ' : 'Create New Document', href: '/new-file', icon: FilePlus, desc: isRTL ? 'تۆمارکردنی بەڵگەنامەی نوێ' : 'Create new ERP file' },
       ]
     },

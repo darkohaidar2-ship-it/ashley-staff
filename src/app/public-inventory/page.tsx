@@ -54,7 +54,7 @@ export default function PublicInventoryPage() {
             )}
             <h1 className="text-[12px] font-bold uppercase tracking-wider text-slate-900">{t('ashley_staff')} | {t('inventory_audit')}</h1>
           </div>
-          <Link href="/login">
+          <Link href="/adminpanel">
             <Button variant="ghost" size="sm" className="text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:text-slate-900">
               <ArrowLeft className={cn("mr-2 w-3.5 h-3.5", language === 'ku' ? "rotate-180" : "")} /> {t('back')}
             </Button>

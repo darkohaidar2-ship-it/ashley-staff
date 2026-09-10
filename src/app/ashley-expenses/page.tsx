@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Calendar as CalendarIcon, Printer, DollarSign, Clock, Gift, Banknote, FileText, Settings, FileDown } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Printer, DollarSign, Clock, Gift, Banknote, FileText, Settings, FileDown, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardTitle, CardHeader, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,10 @@ import { Progress } from '@/components/ui/progress';
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 import { ReportWrapper } from '@/components/reports/ReportWrapper';
 import { DashboardCard } from '@/components/dashboard/dashboard-card';
 import { AdminExpensesModule } from '@/components/admin/AdminExpensesModule';
@@ -30,10 +34,41 @@ const formatCurrency = (amount: number) => {
 
 function AshleyExpensesDashboard() {
   const { t, language } = useTranslation();
-  const { employees, expenses, overtime, bonuses, withdrawals, settings } = useAppContext();
+  const { employees, expenses, overtime, bonuses, withdrawals, settings, setSettings } = useAppContext();
+  const { toast } = useToast();
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const isRTL = language === 'ku';
+
+  const [isSalaryModalOpen, setIsSalaryModalOpen] = useState(false);
+  const [salaryRates, setSalaryRates] = useState({
+    overtimeRate: settings?.salarySettings?.overtimeRate ?? 5000,
+    bonusRate: settings?.salarySettings?.bonusRate ?? 5000,
+  });
+  const [isSavingRates, setIsSavingRates] = useState(false);
+
+  useEffect(() => {
+    if (settings?.salarySettings) {
+      setSalaryRates({
+        overtimeRate: settings.salarySettings.overtimeRate ?? 5000,
+        bonusRate: settings.salarySettings.bonusRate ?? 5000,
+      });
+    }
+  }, [settings?.salarySettings]);
+
+  const handleSaveSalaryRates = () => {
+    setIsSavingRates(true);
+    setSettings({
+      ...settings,
+      salarySettings: salaryRates,
+    });
+    toast({
+      title: isRTL ? 'ڕێکخستنەکان پاشەکەوت کران' : 'Settings Saved',
+      description: isRTL ? 'نرخی کاتژمێری زیادە و پاداشت نوێکرایەوە.' : 'Salary rates updated successfully.',
+    });
+    setIsSavingRates(false);
+    setIsSalaryModalOpen(false);
+  };
   
   const menuItems = [
     { title: t('expenses'), icon: DollarSign, href: '/expenses', color: 'bg-blue-500' },
@@ -41,7 +76,7 @@ function AshleyExpensesDashboard() {
     { title: t('bonuses'), icon: Gift, href: '/bonuses', color: 'bg-green-500' },
     { title: t('cash_withdrawals'), icon: Banknote, href: '/cash-withdrawal', color: 'bg-rose-500' },
     { title: t('monthly_reports'), icon: FileText, href: '/monthly-report', color: 'bg-indigo-500' },
-    { title: t('settings'), icon: Settings, href: '/ashley-expenses-settings', color: 'bg-gray-500' },
+    { title: t('settings'), icon: Settings, onClick: () => setIsSalaryModalOpen(true), color: 'bg-gray-500' },
   ];
 
   const monthlyTotals = useMemo(() => {
@@ -160,6 +195,7 @@ function AshleyExpensesDashboard() {
                 title={item.title}
                 icon={item.icon}
                 href={item.href}
+                onClick={item.onClick}
                 color={item.color}
               />
             ))}
@@ -169,6 +205,57 @@ function AshleyExpensesDashboard() {
           <div className="pt-4 border-t border-slate-200 dark:border-zinc-800">
             <AdminExpensesModule employees={employees} />
           </div>
+
+          {/* Salary Settings Dialog */}
+          <Dialog open={isSalaryModalOpen} onOpenChange={setIsSalaryModalOpen}>
+            <DialogContent className="max-w-md rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+              <DialogHeader>
+                <DialogTitle className="text-base font-bold">
+                  {isRTL ? 'ڕێکخستنی مووچە و زیادە' : 'Salary & Rate Settings'}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  {isRTL ? 'دیاریکردنی نرخی کاتژمێری زیادە و پاداشت بە دیناری عێراقی' : 'Configure hourly overtime rate and bonus per load in IQD.'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="overtime-rate" className="text-xs font-semibold">
+                    {t('overtime_rate_per_hour')} (IQD)
+                  </Label>
+                  <Input
+                    id="overtime-rate"
+                    type="number"
+                    value={salaryRates.overtimeRate}
+                    onChange={(e) => setSalaryRates(prev => ({ ...prev, overtimeRate: e.target.valueAsNumber || 0 }))}
+                    placeholder="5000"
+                    className="h-10 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bonus-rate" className="text-xs font-semibold">
+                    {t('bonus_rate_per_load')} (IQD)
+                  </Label>
+                  <Input
+                    id="bonus-rate"
+                    type="number"
+                    value={salaryRates.bonusRate}
+                    onChange={(e) => setSalaryRates(prev => ({ ...prev, bonusRate: e.target.valueAsNumber || 0 }))}
+                    placeholder="5000"
+                    className="h-10 text-sm"
+                  />
+                </div>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button variant="outline" onClick={() => setIsSalaryModalOpen(false)}>
+                  {isRTL ? 'پاشگەزبوونەوە' : 'Cancel'}
+                </Button>
+                <Button onClick={handleSaveSalaryRates} disabled={isSavingRates}>
+                  {isSavingRates ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                  {t('save_changes')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </>

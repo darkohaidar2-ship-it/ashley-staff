@@ -43,7 +43,7 @@ export default function PdfViewPage() {
       <div className="p-4 md:p-8 print:hidden">
         <header className="flex items-center justify-between gap-4 mb-8">
           <Button variant="outline" size="icon" asChild>
-            <Link href="/pdf-archive"><ArrowLeft /></Link>
+            <Link href="/archive"><ArrowLeft /></Link>
           </Button>
           <div className='flex items-center gap-2 flex-wrap justify-end'>
               <Button variant="outline" onClick={handlePrint}><Printer className="mr-2 h-4 w-4" /> {t('print')}</Button>

@@ -124,6 +124,41 @@ const nextConfig = {
         destination: '/settings',
         permanent: true,
       },
+      {
+        source: '/report-designer',
+        destination: '/settings?tab=pdf',
+        permanent: true,
+      },
+      {
+        source: '/admin/gps-matrix',
+        destination: '/gps',
+        permanent: true,
+      },
+      {
+        source: '/attendance',
+        destination: '/attendance/checkin',
+        permanent: true,
+      },
+      {
+        source: '/login',
+        destination: '/adminpanel',
+        permanent: true,
+      },
+      {
+        source: '/ashley-expenses-settings',
+        destination: '/ashley-expenses',
+        permanent: true,
+      },
+      {
+        source: '/inputs',
+        destination: '/ashley-expenses',
+        permanent: true,
+      },
+      {
+        source: '/pdf-archive',
+        destination: '/archive',
+        permanent: true,
+      },
     ];
   },
 };
