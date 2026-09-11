@@ -1,10 +1,21 @@
-
 'use client';
 
 import React, { createContext, useContext, ReactNode, useMemo, useEffect, useState, useCallback } from 'react';
-import { useCollection, useMemoFirebase, collection, doc } from '@/firebase';
-import { useFirestore, useUser, useDoc } from '@/firebase';
-import { supabase } from '@/lib/supabase';
+import { 
+    supabase, 
+    fetchEmployees, 
+    saveEmployees, 
+    fetchOvertime, 
+    saveOvertime, 
+    fetchExpenses, 
+    saveExpenses, 
+    fetchBonuses, 
+    saveBonuses, 
+    fetchWithdrawals, 
+    saveWithdrawals, 
+    fetchSalarySettings, 
+    saveSalarySettings 
+} from '@/lib/supabase';
 import { 
     Employee, 
     ExcelFile, 
@@ -29,9 +40,9 @@ import {
     WarehouseMap,
     AttendanceRecord,
 } from '@/lib/types';
-import { setDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { initialData, initialSettings } from './initial-data';
 import { format } from 'date-fns';
+
 export type ViewMode = 'list' | 'app-icon' | 'small' | 'large';
 
 interface AppState {
@@ -89,162 +100,309 @@ interface AppState {
 
 const AppContext = createContext<AppState | undefined>(undefined);
 
-function useFirestoreCollection<T extends {id: string}>(collectionName: string, initialFallback: T[]) {
-    const db = useFirestore();
-    
-    const collectionRef = useMemoFirebase(() => {
-        if (!db) return null;
-        return collection(db, collectionName);
-    }, [db, collectionName]);
-    
-    const { data, isLoading } = useCollection<T>(collectionRef);
-
+/**
+ * Hook for Supabase-backed persistent collections (Zero-latency localStorage cache + Cloud Sync)
+ */
+function useSupabaseCollection<T extends { id?: string }>(
+    key: string,
+    fetchFn: () => Promise<T[]>,
+    saveFn: (data: T[]) => Promise<boolean>,
+    initialFallback: T[]
+) {
     const [localData, setLocalData] = useState<T[]>(() => {
         if (typeof window !== 'undefined') {
-            const cached = localStorage.getItem(`ashley_local_${collectionName}`);
-            return cached ? JSON.parse(cached) : initialFallback;
+            const cached = localStorage.getItem(`ashley_sb_${key}`) || localStorage.getItem(`ashley_local_${key}`);
+            if (cached) {
+                try {
+                    const parsed = JSON.parse(cached);
+                    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                } catch {}
+            }
         }
         return initialFallback;
     });
 
-     useEffect(() => {
-        if (data && data.length > 0) {
-            setLocalData(data);
-            localStorage.setItem(`ashley_local_${collectionName}`, JSON.stringify(data));
-        }
-    }, [data, collectionName]);
-    
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Initial fetch from Supabase
+    useEffect(() => {
+        let mounted = true;
+        fetchFn()
+            .then((data) => {
+                if (!mounted) return;
+                if (Array.isArray(data) && data.length > 0) {
+                    setLocalData(data);
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem(`ashley_sb_${key}`, JSON.stringify(data));
+                        localStorage.setItem(`ashley_local_${key}`, JSON.stringify(data));
+                    }
+                }
+            })
+            .catch((err) => {
+                console.warn(`[Supabase] Error loading ${key}:`, err);
+            })
+            .finally(() => {
+                if (mounted) setIsLoading(false);
+            });
+
+        return () => {
+            mounted = false;
+        };
+    }, [key, fetchFn]);
+
+    // Remote sync event listener (dispatched by Supabase Realtime WebSocket)
+    useEffect(() => {
+        const handleRemoteSync = (e: Event) => {
+            const custom = e as CustomEvent<T[]>;
+            if (custom.detail && Array.isArray(custom.detail)) {
+                setLocalData(custom.detail);
+                if (typeof window !== 'undefined') {
+                    localStorage.setItem(`ashley_sb_${key}`, JSON.stringify(custom.detail));
+                    localStorage.setItem(`ashley_local_${key}`, JSON.stringify(custom.detail));
+                }
+            }
+        };
+        window.addEventListener(`ashley_sb_sync_${key}`, handleRemoteSync);
+        return () => {
+            window.removeEventListener(`ashley_sb_sync_${key}`, handleRemoteSync);
+        };
+    }, [key]);
+
+    // Optimistic local update + async Supabase save
     const setter = useCallback((newDataOrFn: React.SetStateAction<T[]>) => {
-        const currentData = localData || [];
-        const newData = typeof newDataOrFn === 'function' ? (newDataOrFn as (prevState: T[]) => T[])(currentData) : newDataOrFn;
+        setLocalData((prev) => {
+            const current = prev || [];
+            const next = typeof newDataOrFn === 'function' 
+                ? (newDataOrFn as (p: T[]) => T[])(current) 
+                : newDataOrFn;
 
-        setLocalData(newData);
-        localStorage.setItem(`ashley_local_${collectionName}`, JSON.stringify(newData));
+            if (typeof window !== 'undefined') {
+                localStorage.setItem(`ashley_sb_${key}`, JSON.stringify(next));
+                localStorage.setItem(`ashley_local_${key}`, JSON.stringify(next));
+            }
 
-        if (!collectionRef) return;
+            // Asynchronously save to Supabase
+            saveFn(next).catch((err) => {
+                console.error(`[Supabase] Error saving ${key}:`, err);
+            });
 
-        const currentDataMap = new Map(currentData.map(item => [item.id, item]));
-        const newDataMap = new Map(newData.map(item => [item.id, item]));
+            return next;
+        });
+    }, [key, saveFn]);
 
-        for (const id of currentDataMap.keys()) {
-            if (!newDataMap.has(id)) {
-                deleteDocumentNonBlocking(doc(collectionRef, id));
+    return [localData, setter, isLoading] as const;
+}
+
+/**
+ * Lightweight local storage hook for auxiliary legacy ERP tables
+ */
+function useSimpleLocalState<T>(key: string, initialFallback: T[]) {
+    const [data, setData] = useState<T[]>(() => {
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem(`ashley_local_${key}`);
+            if (cached) {
+                try {
+                    return JSON.parse(cached);
+                } catch {}
             }
         }
-        
-        for (const [id, item] of newDataMap.entries()) {
-            const existingItem = currentDataMap.get(id);
-            if (!existingItem) {
-                setDocumentNonBlocking(doc(collectionRef, id), item, { merge: false });
-            } else if (JSON.stringify(existingItem) !== JSON.stringify(item)) {
-                updateDocumentNonBlocking(doc(collectionRef, id), item);
+        return initialFallback;
+    });
+
+    const setter = useCallback((newDataOrFn: React.SetStateAction<T[]>) => {
+        setData((prev) => {
+            const next = typeof newDataOrFn === 'function' 
+                ? (newDataOrFn as (p: T[]) => T[])(prev) 
+                : newDataOrFn;
+            if (typeof window !== 'undefined') {
+                localStorage.setItem(`ashley_local_${key}`, JSON.stringify(next));
             }
-        }
-    }, [collectionRef, localData, collectionName]);
-    
-    return [localData || [], setter, isLoading] as const;
+            return next;
+        });
+    }, [key]);
+
+    return [data, setter, false] as const;
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-    const { isUserLoading } = useUser();
-    const db = useFirestore();
+    // 1. Core Target Domain 1: Employees Directory (Supabase Powered)
+    const [employees, setEmployees, isEmployeesLoading] = useSupabaseCollection<Employee>(
+        'employees', 
+        fetchEmployees, 
+        saveEmployees, 
+        initialData.employees
+    );
 
-    const [employees, setEmployees, isEmployeesLoading] = useFirestoreCollection<Employee>('employees', initialData.employees);
-    const [attendanceLogs, setAttendanceLogs, isAttLoading] = useFirestoreCollection<AttendanceRecord>('attendanceLogs', (initialData as any).attendanceLogs || []);
-    const [excelFiles, setExcelFiles, isExcelFilesLoading] = useFirestoreCollection<ExcelFile>('excelFiles', initialData.excelFiles);
-    const [rawItems, setRawItems, isItemsLoading] = useFirestoreCollection<Item>('items', initialData.items);
-    const [locations, setLocations, isLocationsLoading] = useFirestoreCollection<StorageLocation>('locations', initialData.locations);
+    // 2. Core Target Domain 2: Overtime Management (Supabase Powered)
+    const [overtime, setOvertime, isOvertimeLoading] = useSupabaseCollection<Overtime>(
+        'overtime', 
+        fetchOvertime, 
+        saveOvertime, 
+        initialData.overtime
+    );
 
-    // Global Real-Time Supabase Attendance Sync (Single source of truth from Supabase)
-    useEffect(() => {
-      // Complete purge of any legacy stale seed logs, overtime, or notes from localStorage
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.removeItem('ashley_local_attendanceLogs');
-          localStorage.removeItem('ashley_live_checkins');
-          localStorage.removeItem('ashley_local_overtime');
-          localStorage.removeItem('ashley_admin_notes_2026-08');
-          localStorage.removeItem('ashley_ot_notes_2026-08');
-          Object.keys(localStorage).forEach(k => {
-            if (
-              k.startsWith('ashley_admin_notes_') ||
-              k.startsWith('ashley_ot_notes_') ||
-              k.startsWith('ashley_deleted_attendance_') ||
-              k.startsWith('ashley_time_override_') ||
-              k.startsWith('ashley_seed_')
-            ) {
-              localStorage.removeItem(k);
+    // 3. Core Target Domain 3: Expenses, Bonuses & Cash Withdrawals (Supabase Powered)
+    const [expenses, setExpenses, isExpensesLoading] = useSupabaseCollection<Expense>(
+        'expenses', 
+        fetchExpenses, 
+        saveExpenses, 
+        initialData.expenses
+    );
+    const [bonuses, setBonuses, isBonusesLoading] = useSupabaseCollection<Bonus>(
+        'bonuses', 
+        fetchBonuses, 
+        saveBonuses, 
+        initialData.bonuses
+    );
+    const [withdrawals, setWithdrawals, isWithdrawalsLoading] = useSupabaseCollection<CashWithdrawal>(
+        'withdrawals', 
+        fetchWithdrawals, 
+        saveWithdrawals, 
+        initialData.withdrawals
+    );
+
+    // 4. Attendance Live Logs State
+    const [attendanceLogs, setAttendanceLogs] = useState<AttendanceRecord[]>(() => {
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem('ashley_sb_attendanceLogs') || localStorage.getItem('ashley_local_attendanceLogs');
+            if (cached) {
+                try {
+                    return JSON.parse(cached);
+                } catch {}
             }
-          });
-        } catch {}
-      }
-
-      let isFetching = false;
-      const syncSupabaseAttendance = () => {
-        if (isFetching) return;
-        if (typeof document !== 'undefined' && document.hidden) return;
-        isFetching = true;
-        fetch(`/api/attendance/logs?t=${Date.now()}`, { cache: 'no-store' })
-          .then((res) => res.json())
-          .then((supabaseLogs) => {
-            if (Array.isArray(supabaseLogs)) {
-              setAttendanceLogs(supabaseLogs);
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('ashley_local_attendanceLogs', JSON.stringify(supabaseLogs));
-              }
-            }
-          })
-          .catch((err) => console.warn('Supabase real-time sync notice:', err))
-          .finally(() => {
-            isFetching = false;
-          });
-      };
-
-      // Initial Fetch
-      syncSupabaseAttendance();
-
-      // Supabase Realtime WebSocket Subscription (Instant <0.5s push updates)
-      const channel = supabase
-        .channel('realtime_attendance_sync')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'attendance' },
-          () => {
-            syncSupabaseAttendance();
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'attendance_logs' },
-          () => {
-            syncSupabaseAttendance();
-          }
-        )
-        .subscribe();
-
-      // Broadcast, storage, and tab visibility listeners
-      const handleVisibilityChange = () => {
-        if (typeof document !== 'undefined' && !document.hidden) {
-          syncSupabaseAttendance();
         }
-      };
+        return (initialData as any).attendanceLogs || [];
+    });
 
-      window.addEventListener('ashley_attendance_updated', syncSupabaseAttendance);
-      window.addEventListener('storage', syncSupabaseAttendance);
-      document.addEventListener('visibilitychange', handleVisibilityChange);
+    // Auxiliary Collections (Lightweight client-side fallback)
+    const [excelFiles, setExcelFiles] = useSimpleLocalState<ExcelFile>('excelFiles', initialData.excelFiles);
+    const [rawItems, setRawItems] = useSimpleLocalState<Item>('items', initialData.items);
+    const [locations, setLocations] = useSimpleLocalState<StorageLocation>('locations', initialData.locations);
+    const [expenseReports, setExpenseReports] = useSimpleLocalState<ExpenseReport>('expenseReports', initialData.expenseReports);
+    const [itemCategories, setItemCategories] = useSimpleLocalState<ItemCategory>('itemCategories', initialData.itemCategories);
+    const [transfers, setTransfers] = useSimpleLocalState<Transfer>('transfers', initialData.transfers);
+    const [transferItems, setTransferItems] = useSimpleLocalState<ItemForTransfer>('transferItems', initialData.transferItems);
+    const [orderRequests, setOrderRequests] = useSimpleLocalState<OrderRequest>('orderRequests', initialData.orderRequests);
+    const [marketingFeedbacks, setMarketingFeedbacks] = useSimpleLocalState<MarketingFeedback>('marketingFeedbacks', initialData.marketingFeedbacks);
+    const [evaluationQuestions, setEvaluationQuestions] = useSimpleLocalState<EvaluationQuestion>('evaluationQuestions', initialData.evaluationQuestions);
+    const [users, setUsers] = useSimpleLocalState<User>('users', initialData.users);
+    const [roles, setRoles] = useSimpleLocalState<Role>('roles', initialData.roles);
+    const [soldItemsLists, setSoldItemsLists] = useSimpleLocalState<SoldItemsList>('soldItemsLists', initialData.soldItemsLists);
+    const [activityLogs, setActivityLogs] = useSimpleLocalState<ActivityLog>('activityLogs', initialData.activityLogs);
+    const [warehouseMaps, setWarehouseMaps] = useSimpleLocalState<WarehouseMap>('warehouseMaps', initialData.warehouseMaps);
 
-      // Smart Heartbeat interval (relaxed 60s fallback alongside instant Realtime WebSocket)
-      const interval = setInterval(syncSupabaseAttendance, 60000);
+    // Global Real-Time Supabase Sync Hub (Single Source of Truth)
+    useEffect(() => {
+        // Clean legacy local storage artifacts
+        if (typeof window !== 'undefined') {
+            try {
+                localStorage.removeItem('ashley_live_checkins');
+                Object.keys(localStorage).forEach((k) => {
+                    if (
+                        k.startsWith('ashley_admin_notes_') ||
+                        k.startsWith('ashley_ot_notes_') ||
+                        k.startsWith('ashley_deleted_attendance_') ||
+                        k.startsWith('ashley_time_override_') ||
+                        k.startsWith('ashley_seed_')
+                    ) {
+                        localStorage.removeItem(k);
+                    }
+                });
+            } catch {}
+        }
 
-      return () => {
-        supabase.removeChannel(channel);
-        clearInterval(interval);
-        window.removeEventListener('ashley_attendance_updated', syncSupabaseAttendance);
-        window.removeEventListener('storage', syncSupabaseAttendance);
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      };
-    }, [setAttendanceLogs]);
+        let isFetching = false;
+        const syncSupabaseAttendance = () => {
+            if (isFetching) return;
+            if (typeof document !== 'undefined' && document.hidden) return;
+            isFetching = true;
+            fetch(`/api/attendance/logs?t=${Date.now()}`, { cache: 'no-store' })
+                .then((res) => res.json())
+                .then((supabaseLogs) => {
+                    if (Array.isArray(supabaseLogs)) {
+                        setAttendanceLogs(supabaseLogs);
+                        if (typeof window !== 'undefined') {
+                            localStorage.setItem('ashley_sb_attendanceLogs', JSON.stringify(supabaseLogs));
+                            localStorage.setItem('ashley_local_attendanceLogs', JSON.stringify(supabaseLogs));
+                        }
+                    }
+                })
+                .catch((err) => console.warn('[Attendance] Realtime sync notice:', err))
+                .finally(() => {
+                    isFetching = false;
+                });
+        };
 
+        // Initial Attendance Fetch
+        syncSupabaseAttendance();
+
+        // Supabase Realtime WebSocket Subscription (<0.5s push updates)
+        const channel = supabase
+            .channel('ashley_nexus_realtime_hub')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'attendance' },
+                () => syncSupabaseAttendance()
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'attendance_logs' },
+                () => syncAttendanceImmediate()
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'warehouses' },
+                (payload: any) => {
+                    const row = payload?.new;
+                    if (!row?.id || !row?.qr_code) return;
+                    try {
+                        const parsed = JSON.parse(row.qr_code);
+                        const eventMap: Record<string, string> = {
+                            ashley_employees: 'employees',
+                            ashley_overtime: 'overtime',
+                            ashley_expenses: 'expenses',
+                            ashley_bonuses: 'bonuses',
+                            ashley_withdrawals: 'withdrawals',
+                        };
+                        const targetKey = eventMap[row.id];
+                        if (targetKey) {
+                            window.dispatchEvent(new CustomEvent(`ashley_sb_sync_${targetKey}`, { detail: parsed }));
+                        } else if (row.id === 'ashley_salary_settings') {
+                            setLocalSettings((prev) => ({ ...prev, salarySettings: parsed }));
+                        }
+                    } catch (e) {
+                        console.warn('[Realtime] Parse error for warehouse record:', row.id, e);
+                    }
+                }
+            )
+            .subscribe();
+
+        function syncAttendanceImmediate() {
+            syncSupabaseAttendance();
+        }
+
+        const handleVisibilityChange = () => {
+            if (typeof document !== 'undefined' && !document.hidden) {
+                syncSupabaseAttendance();
+            }
+        };
+
+        window.addEventListener('ashley_attendance_updated', syncSupabaseAttendance);
+        window.addEventListener('storage', syncSupabaseAttendance);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        const interval = setInterval(syncSupabaseAttendance, 45000);
+
+        return () => {
+            supabase.removeChannel(channel);
+            clearInterval(interval);
+            window.removeEventListener('ashley_attendance_updated', syncSupabaseAttendance);
+            window.removeEventListener('storage', syncSupabaseAttendance);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, []);
+
+    // Item Location tracking helper
     const items = rawItems;
     const setItems = useCallback((newDataOrFn: React.SetStateAction<Item[]>) => {
         setRawItems(prevItems => {
@@ -256,9 +414,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             
             return nextItems.map(item => {
                 const prevItem = prevItemsMap.get(item.id);
-                if (!prevItem) {
-                    return item;
-                }
+                if (!prevItem) return item;
                 
                 const prevLocIds = prevItem.locationIds || [];
                 const nextLocIds = item.locationIds || [];
@@ -306,69 +462,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             });
         });
     }, [setRawItems, locations]);
-    const [expenses, setExpenses, isExpensesLoading] = useFirestoreCollection<Expense>('expenses', initialData.expenses);
-    const [expenseReports, setExpenseReports, isExpenseReportsLoading] = useFirestoreCollection<ExpenseReport>('expenseReports', initialData.expenseReports);
-    const [overtime, setOvertime, isOvertimeLoading] = useFirestoreCollection<Overtime>('overtime', initialData.overtime);
-    const [bonuses, setBonuses, isBonusesLoading] = useFirestoreCollection<Bonus>('bonuses', initialData.bonuses);
-    const [withdrawals, setWithdrawals, isWithdrawalsLoading] = useFirestoreCollection<CashWithdrawal>('withdrawals', initialData.withdrawals);
-    const [itemCategories, setItemCategories, isItemCategoriesLoading] = useFirestoreCollection<ItemCategory>('itemCategories', initialData.itemCategories);
-    const [transfers, setTransfers, isTransfersLoading] = useFirestoreCollection<Transfer>('transfers', initialData.transfers);
-    const [transferItems, setTransferItems, isTransferItemsLoading] = useFirestoreCollection<ItemForTransfer>('transferItems', initialData.transferItems);
-    const [orderRequests, setOrderRequests, isOrderRequestsLoading] = useFirestoreCollection<OrderRequest>('orderRequests', initialData.orderRequests);
-    const [marketingFeedbacks, setMarketingFeedbacks, isMarketingFeedbacksLoading] = useFirestoreCollection<MarketingFeedback>('marketingFeedbacks', initialData.marketingFeedbacks);
-    const [evaluationQuestions, setEvaluationQuestions, isEvaluationQuestionsLoading] = useFirestoreCollection<EvaluationQuestion>('evaluationQuestions', initialData.evaluationQuestions);
-    const [users, setUsers, isUsersLoading] = useFirestoreCollection<User>('users', initialData.users);
-    const [roles, setRoles, isRolesLoading] = useFirestoreCollection<Role>('roles', initialData.roles);
-    const [soldItemsLists, setSoldItemsLists, isSoldItemsListsLoading] = useFirestoreCollection<SoldItemsList>('soldItemsLists', initialData.soldItemsLists);
-    const [activityLogs, setActivityLogs, isActivityLogsLoading] = useFirestoreCollection<ActivityLog>('activityLogs', initialData.activityLogs);
-    const [warehouseMaps, setWarehouseMaps, isWarehouseMapsLoading] = useFirestoreCollection<WarehouseMap>('warehouseMaps', initialData.warehouseMaps);
-    
-    const settingsDocRef = useMemoFirebase(() => db ? doc(db, 'settings', 'main') : null, [db]);
-    const { data: firestoreSettings, isLoading: isSettingsLoading } = useDoc<AppSettings>(settingsDocRef);
 
-    // One-time Win12 settings reset
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const resetKey = 'ashley_win12_reset_v4';
-        const hasReset = localStorage.getItem(resetKey);
-        if (!hasReset) {
-            localStorage.removeItem('ashley_terminal_settings');
-            localStorage.removeItem('ashley_view_mode');
-            localStorage.removeItem('ashley_dashboard_scale');
-            
-            if (settingsDocRef) {
-                const cleanedSettings = {
-                    ...initialSettings,
-                    language: 'ku', // Force Kurdish
-                    theme: 'light', // Light default
-                    customColors: {},
-                    sidebar: {
-                        fontSize: 12,
-                        textTransform: 'none',
-                        activeTabBackground: '',
-                        activeTabTextColor: '',
-                        activeTabBorder: '',
-                    },
-                    dashboard: {
-                        fontSize: 12,
-                        cardRadius: 12,
-                        titleColor: '220 82% 55%',
-                        textColor: '224 71.4% 4.1%',
-                        accentColor: '220 13% 91%',
-                        textTransform: 'none',
-                        activeCardBackground: '',
-                        activeCardBorder: '',
-                        buttonColor: '',
-                        buttonTextColor: '',
-                    }
-                };
-                setDocumentNonBlocking(settingsDocRef, cleanedSettings, { merge: false });
-            }
-            
-            localStorage.setItem(resetKey, 'true');
-        }
-    }, [settingsDocRef]);
-    
+    // ViewMode & Scale Settings
     const [viewMode, setViewMode] = useState<ViewMode>(() => {
         if (typeof window !== 'undefined') {
             const cached = localStorage.getItem('ashley_view_mode');
@@ -381,7 +476,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     useEffect(() => {
-        localStorage.setItem('ashley_view_mode', viewMode);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('ashley_view_mode', viewMode);
+        }
     }, [viewMode]);
 
     const [dashboardScale, setDashboardScale] = useState<number>(() => {
@@ -393,9 +490,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     useEffect(() => {
-        localStorage.setItem('ashley_dashboard_scale', dashboardScale.toString());
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('ashley_dashboard_scale', dashboardScale.toString());
+        }
     }, [dashboardScale]);
-    
+
+    // System Settings (Salary Settings backed by Supabase)
     const [settings, setLocalSettings] = useState<AppSettings>(() => {
         if (typeof window !== 'undefined') {
             const cached = localStorage.getItem('ashley_terminal_settings');
@@ -403,41 +503,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return initialSettings;
     });
-    
+
+    // Fetch latest salary settings from Supabase on mount
     useEffect(() => {
-        if (firestoreSettings) {
-            const mergedSettings: AppSettings = {
-                ...initialSettings,
-                ...firestoreSettings,
-                pdfSettings: {
-                    ...initialSettings.pdfSettings,
-                    ...(firestoreSettings.pdfSettings || {}),
-                },
-                lightThemeColors: { ...initialSettings.lightThemeColors, ...(firestoreSettings.lightThemeColors || {}) },
-                darkThemeColors: { ...initialSettings.darkThemeColors, ...(firestoreSettings.darkThemeColors || {}) },
-                salarySettings: { ...initialSettings.salarySettings, ...(firestoreSettings.salarySettings || {}) },
-                sidebar: { ...initialSettings.sidebar, ...(firestoreSettings.sidebar || {}) },
-                dashboard: { ...initialSettings.dashboard, ...(firestoreSettings.dashboard || {}) },
-                translations: {
-                    en: { ...initialSettings.translations.en, ...(firestoreSettings.translations?.en || {}) },
-                    ku: { ...initialSettings.translations.ku, ...(firestoreSettings.translations?.ku || {}) },
-                },
-            };
-            setLocalSettings(mergedSettings);
-            localStorage.setItem('ashley_terminal_settings', JSON.stringify(mergedSettings));
-        }
-    }, [firestoreSettings]);
-
-
+        fetchSalarySettings()
+            .then((sbSalarySettings) => {
+                if (sbSalarySettings) {
+                    setLocalSettings((prev) => ({
+                        ...prev,
+                        salarySettings: {
+                            ...prev.salarySettings,
+                            ...sbSalarySettings,
+                        },
+                    }));
+                }
+            })
+            .catch(() => {});
+    }, []);
 
     const setSettings = useCallback(async (value: React.SetStateAction<AppSettings>) => {
-        const newSettings = value instanceof Function ? value(settings) : value;
-        setLocalSettings(newSettings); 
-        localStorage.setItem('ashley_terminal_settings', JSON.stringify(newSettings));
-        if (settingsDocRef) {
-            setDocumentNonBlocking(settingsDocRef, JSON.parse(JSON.stringify(newSettings)), { merge: true });
-        }
-    }, [settingsDocRef, settings]);
+        setLocalSettings((prev) => {
+            const newSettings = typeof value === 'function' ? value(prev) : value;
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('ashley_terminal_settings', JSON.stringify(newSettings));
+            }
+            if (newSettings.salarySettings) {
+                saveSalarySettings(newSettings.salarySettings).catch(() => {});
+            }
+            return newSettings;
+        });
+    }, []);
 
     const exportStateAsJson = useCallback(() => {
         const data = {
@@ -456,8 +551,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }, [employees, excelFiles, items, locations, expenses, expenseReports, overtime, bonuses, withdrawals, itemCategories, transfers, transferItems, orderRequests, marketingFeedbacks, evaluationQuestions, users, roles, soldItemsLists, activityLogs, settings]);
-    
-    const isLoading = isUserLoading || isSettingsLoading;
+
+    const isLoading = isEmployeesLoading || isOvertimeLoading || isExpensesLoading || isBonusesLoading || isWithdrawalsLoading;
 
     const value = useMemo<AppState>(() => ({
         employees, setEmployees, attendanceLogs, setAttendanceLogs, excelFiles, setExcelFiles, items, setItems,
@@ -512,5 +607,3 @@ export function useAppContext() {
     }
     return context;
 }
-
-

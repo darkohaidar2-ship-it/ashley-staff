@@ -73,7 +73,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                 </main>
                 <footer className="w-full bg-slate-200 border-t border-slate-400 p-1 flex flex-wrap items-center justify-between text-[11px] font-mono text-slate-700 select-none">
                   <div className="flex items-center gap-2">
-                    <span className="statusbar-segment text-emerald-800 font-bold">● SYSTEM READY (FIRESTORE ONLINE)</span>
+                    <span className="statusbar-segment text-emerald-800 font-bold">● SYSTEM READY (SUPABASE ONLINE)</span>
                     <span className="statusbar-segment font-bold">RTL MODE: KURDISH (SORANI)</span>
                   </div>
                   <div className="flex items-center gap-2">
