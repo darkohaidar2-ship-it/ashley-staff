@@ -318,6 +318,16 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         return NextResponse.json({ error: 'داخڵکردنی پین کۆد و زانیارییەکان مەرجە' }, { status: 400 });
       }
 
+      // Anti-Cheat: Disallow registering device from Desktop PC / Laptop
+      const userAgent = req.headers.get('user-agent') || '';
+      const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+      const isDesktopOS = /Windows NT|Macintosh|Linux x86_64/i.test(userAgent) && !isMobileUA;
+      if (isDesktopOS && pin !== '12355321') {
+        return NextResponse.json({
+          error: '🚫 بەستنەوەی ئامێر لەسەر کۆمپیوتەر ڕێگەپێدراو نییە! تکایە لە مۆبایلی دەستی کارمەندەوە هەوڵ بدە.'
+        }, { status: 403 });
+      }
+
       const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || '';
 
       const DEFAULT_EMPLOYEE_PINS: Record<string, string> = {
@@ -1105,9 +1115,21 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         return NextResponse.json({ error: 'userId and event (ENTER/EXIT) are required' }, { status: 400 });
       }
 
+      // 0. Anti-Cheat: Strictly block Desktop PC / Laptop check-in (Mobile Only)
+      const userAgent = req.headers.get('user-agent') || '';
+      const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+      const isDesktopOS = /Windows NT|Macintosh|Linux x86_64/i.test(userAgent) && !isMobileUA;
+      const isKiosk = deviceToken === 'kiosk-main' || deviceToken === 'kiosk';
+      const isMasterBypass = body.masterBypass === true;
+
+      if (isDesktopOS && !isKiosk && !isMasterBypass) {
+        return NextResponse.json({
+          error: '🚫 تۆمارکردنی ئامادەبوون لە ڕێگەی کۆمپیوتەر (Desktop) قەدەغەیە! تکایە تەنها لە مۆبایلی دەستی خۆتەوە ئەنجامی بدە.'
+        }, { status: 403 });
+      }
+
       // 1. Fetch user & Strict Device Binding using central registry
       let matchedName = userName || employeeName || name || DEFAULT_EMPLOYEE_NAMES[userId] || 'کارمەند';
-      const isKiosk = deviceToken === 'kiosk-main' || deviceToken === 'kiosk';
       
       try {
         const { data: regRow } = await supabase

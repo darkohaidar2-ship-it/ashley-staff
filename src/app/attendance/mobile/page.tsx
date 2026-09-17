@@ -26,7 +26,10 @@ import {
   X,
   Upload,
   AlertCircle,
-  Compass
+  Compass,
+  Smartphone,
+  Laptop,
+  ShieldAlert
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { getDistanceMeters, sendLocalNotification, type GeofenceRegion } from '@/lib/background-geofence';
@@ -224,6 +227,13 @@ export default function MobileAttendanceOneTap() {
   const [currentTimeStr, setCurrentTimeStr] = useState('');
   const [currentDateStr, setCurrentDateStr] = useState('');
 
+  // 🛡️ Anti-Cheat: Desktop PC Detection States
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [masterBypass, setMasterBypass] = useState(false);
+  const [bypassPin, setBypassPin] = useState('');
+  const [showBypassModal, setShowBypassModal] = useState(false);
+  const [bypassError, setBypassError] = useState<string | null>(null);
+
   // Bound Employee Profile
   const [employeeProfile, setEmployeeProfile] = useState<{ id: string; name: string; role?: string } | null>(null);
   const [allEmployees, setAllEmployees] = useState(ASHLEY_DEFAULT_EMPLOYEES);
@@ -333,6 +343,46 @@ export default function MobileAttendanceOneTap() {
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // 1.2. 🛡️ Anti-Cheat: Detect Desktop PC / Laptop browsers
+  useEffect(() => {
+    const checkDevice = () => {
+      try {
+        if (typeof window === 'undefined') return;
+        if (sessionStorage.getItem('ashley_desktop_bypass') === 'true') {
+          setMasterBypass(true);
+          return;
+        }
+        const ua = navigator.userAgent || '';
+        const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+        const isDesktopOS = /Windows NT|Macintosh|Linux x86_64/i.test(ua) && !isMobileUA;
+        const isLargeScreen = window.innerWidth > 850;
+
+        if (isDesktopOS || (isLargeScreen && !isMobileUA)) {
+          setIsDesktop(true);
+        } else {
+          setIsDesktop(false);
+        }
+      } catch {}
+    };
+
+    checkDevice();
+    window.addEventListener('resize', checkDevice);
+    return () => window.removeEventListener('resize', checkDevice);
+  }, []);
+
+  const handleBypassSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (bypassPin.trim() === '12355321' || bypassPin.trim() === '1002') {
+      sessionStorage.setItem('ashley_desktop_bypass', 'true');
+      setMasterBypass(true);
+      setShowBypassModal(false);
+      setBypassError(null);
+    } else {
+      setBypassError('کۆدی ماستەری ئەدمین هەڵەیە!');
+      playRejectSound();
+    }
+  };
 
   // 1.5. Fetch dynamic company locations configured by Admin
   useEffect(() => {
@@ -1095,6 +1145,7 @@ export default function MobileAttendanceOneTap() {
           regionName: freshGeo?.matchedName || matchedLocationName,
           note: reasonNote || null,
           timestamp: new Date().toISOString(),
+          masterBypass: masterBypass,
         }),
       });
 
@@ -1237,6 +1288,117 @@ export default function MobileAttendanceOneTap() {
     if (h > 0) return `${h} کاتژمێر`;
     return `${m} خولەک`;
   }, [workedMinutes]);
+
+  // =========================================================================
+  // VIEW 0: DESKTOP PC BLOCKER SCREEN (ANTI-FRAUD & STRICT MOBILE ONLY)
+  // =========================================================================
+  if (isDesktop && !masterBypass) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4 dir-rtl select-none font-sans" dir="rtl">
+        <div className="w-full max-w-md bg-slate-900/95 border border-slate-800 p-8 rounded-3xl shadow-2xl space-y-6 text-center backdrop-blur-xl">
+          {/* Logo & Warning Visual */}
+          <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
+            <div className="w-20 h-20 rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-inner">
+              <Laptop className="w-10 h-10 text-slate-400" />
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-9 h-9 bg-rose-600 rounded-full border-2 border-slate-900 flex items-center justify-center text-white shadow-md">
+              <X className="w-5 h-5 stroke-[3]" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <span className="inline-block px-3 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full text-xs font-black">
+              🚫 بەکارهێنان لەسەر کۆمپیوتەر ڕێگەپێنەدراوە
+            </span>
+            <h1 className="text-xl font-black text-white">ئەم پەڕەیە تەنها بۆ مۆبایلە</h1>
+            <p className="text-xs text-slate-300 leading-relaxed font-medium">
+              بۆ پاراستنی دروستیی دەوام و ڕێگری لە ساختەکاری یان دەستکاریکردنی شوێنی جوگرافی (GPS)، تۆمارکردنی ئامادەبوون تەنها لە ڕێگەی <strong>مۆبایلی دەستی کارمەند</strong> ڕێگەپێدراوە.
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800/80 text-right space-y-3">
+            <div className="flex items-start gap-2.5 text-xs text-slate-300">
+              <Smartphone className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <span>تکایە ئەم لینکە لە وێبگەڕی مۆبایلەکەتەوە (Chrome یان Safari) بکەرەوە:</span>
+            </div>
+            <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-xs font-mono text-emerald-400 break-all select-all text-center">
+              https://ashley-staff.vercel.app/attendance/mobile
+            </div>
+            <div className="text-[11px] text-slate-400 text-center font-medium">
+              یاخود ئەپڵیکەیشنی فەرمی <strong>Ashley Staff</strong> دابەزێنە سەر مۆبایلی ئەندرۆید.
+            </div>
+          </div>
+
+          <div className="pt-2 flex flex-col gap-2.5">
+            <a 
+              href="/attendance" 
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-98 transition rounded-2xl text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30"
+            >
+              چوون بۆ داشبۆردی بەڕێوەبەر (Admin Dashboard)
+            </a>
+            
+            <button
+              type="button"
+              onClick={() => setShowBypassModal(true)}
+              className="text-[11px] text-slate-500 hover:text-slate-300 transition py-1 underline font-medium"
+            >
+              تایبەت بە بەڕێوەبەر (Master PIN Bypass)
+            </button>
+          </div>
+        </div>
+
+        {/* Modal for Admin Master Bypass */}
+        {showBypassModal && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="w-full max-w-xs bg-slate-900 border border-slate-700 p-5 rounded-2xl shadow-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-white">تێپەڕاندنی بەڕێوەبەر (Bypass)</h3>
+                <button 
+                  onClick={() => setShowBypassModal(false)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-400">
+                کۆدی ماستەری ئەدمین بنووسە بۆ پشکنین لەسەر کۆمپیوتەر:
+              </p>
+
+              <form onSubmit={handleBypassSubmit} className="space-y-3">
+                <input
+                  type="password"
+                  value={bypassPin}
+                  onChange={(e) => setBypassPin(e.target.value)}
+                  placeholder="Master PIN"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-center text-sm font-mono text-white focus:outline-none focus:border-emerald-500"
+                  autoFocus
+                />
+                {bypassError && (
+                  <p className="text-[11px] text-rose-400 text-center font-bold">{bypassError}</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition"
+                  >
+                    چوونەژوورەوە
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowBypassModal(false)}
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium"
+                  >
+                    داخستن
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // =========================================================================
   // VIEW 1: MODERN LIGHT 2FA (CUSTOM SCROLLABLE LIST & MULTI-ANGLE FACE ID)
