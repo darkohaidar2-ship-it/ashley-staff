@@ -1,7 +1,7 @@
 'use client';
 
-import AdminPanelPortalPage from './adminpanel/page';
+import MobileAttendanceOneTap from './attendance/mobile/page';
 
 export default function RootPage() {
-  return <AdminPanelPortalPage />;
+  return <MobileAttendanceOneTap />;
 }

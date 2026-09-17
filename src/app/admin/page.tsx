@@ -80,7 +80,7 @@ export default function AdminPage() {
 
       setAuthChecked(false);
       setSessionUser(null);
-      router.replace('/adminpanel');
+      router.replace('/');
     }
   }, [router]);
 
@@ -97,7 +97,7 @@ export default function AdminPage() {
           sessionStorage.removeItem('ashley_admin_session');
           localStorage.removeItem('ashley_admin_session');
         }
-        router.replace('/adminpanel');
+        router.replace('/adm1n_pan0l');
       }, 30 * 60 * 1000);
     };
 
@@ -328,7 +328,7 @@ export default function AdminPage() {
                   sessionStorage.removeItem('ashley_admin_session');
                   localStorage.removeItem('ashley_admin_session');
                 }
-                router.replace('/adminpanel');
+                router.replace('/adm1n_pan0l');
               }
             }}
             className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-300 transition-all cursor-pointer"

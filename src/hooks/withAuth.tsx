@@ -14,7 +14,7 @@ export default function withAuth<P extends object>(WrappedComponent: React.Compo
       const isAuth = !!stored || !!user;
       setHasSession(isAuth);
       if (!loading && !user && !stored) {
-        router.replace('/login');
+        router.replace('/');
       }
     }, [user, loading, router]);
 

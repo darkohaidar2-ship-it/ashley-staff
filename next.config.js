@@ -141,8 +141,13 @@ const nextConfig = {
       },
       {
         source: '/login',
-        destination: '/adminpanel',
-        permanent: true,
+        destination: '/',
+        permanent: false,
+      },
+      {
+        source: '/adminpanel',
+        destination: '/',
+        permanent: false,
       },
       {
         source: '/ashley-expenses-settings',

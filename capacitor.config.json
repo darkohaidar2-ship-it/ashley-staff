@@ -3,7 +3,7 @@
   "appName": "Ashley Staff",
   "webDir": "public",
   "server": {
-    "url": "https://ashley-staff.vercel.app/attendance/mobile",
+    "url": "https://ashley-staff.vercel.app",
     "cleartext": true
   },
   "android": {

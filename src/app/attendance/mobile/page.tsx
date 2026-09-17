@@ -1321,29 +1321,18 @@ export default function MobileAttendanceOneTap() {
               <Smartphone className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
               <span>تکایە ئەم لینکە لە وێبگەڕی مۆبایلەکەتەوە (Chrome یان Safari) بکەرەوە:</span>
             </div>
-            <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-xs font-mono text-emerald-400 break-all select-all text-center">
-              https://ashley-staff.vercel.app/attendance/mobile
+            <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-xs font-mono text-emerald-400 break-all select-all text-center font-bold">
+              https://ashley-staff.vercel.app
             </div>
             <div className="text-[11px] text-slate-400 text-center font-medium">
               یاخود ئەپڵیکەیشنی فەرمی <strong>Ashley Staff</strong> دابەزێنە سەر مۆبایلی ئەندرۆید.
             </div>
           </div>
 
-          <div className="pt-2 flex flex-col gap-2.5">
-            <a 
-              href="/attendance" 
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-98 transition rounded-2xl text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30"
-            >
-              چوون بۆ داشبۆردی بەڕێوەبەر (Admin Dashboard)
-            </a>
-            
-            <button
-              type="button"
-              onClick={() => setShowBypassModal(true)}
-              className="text-[11px] text-slate-500 hover:text-slate-300 transition py-1 underline font-medium"
-            >
-              تایبەت بە بەڕێوەبەر (Master PIN Bypass)
-            </button>
+          <div className="pt-1 text-center">
+            <span className="text-[11px] text-slate-500 font-medium">
+              سیستەمی بەڕێوەبردن و کۆنترۆڵی ئامادەبوونی ئاشڵی
+            </span>
           </div>
         </div>
 

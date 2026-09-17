@@ -48,6 +48,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     pathname === '/login' || 
     pathname?.startsWith('/attendance') || 
     pathname?.startsWith('/admin') ||
+    pathname?.startsWith('/adm1n_pan0l') ||
     pathname?.includes('mobile');
 
   useEffect(() => {
