@@ -935,10 +935,17 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
     const motherCompany = settings?.motherCompanyName || 'کۆمپانیای گروپی دیوان';
     const motherCompanySubtitle = settings?.motherCompanySubtitle || 'ناسنامەی مۆبیلیات';
+    const brandName = settings?.brandName || 'کۆمپانیای مۆبیلیاتی ئاشڵی';
+    const brandSubtitle = settings?.brandSubtitle || 'Official Document';
     const agencyTitle = settings?.agencyTitle || 'بریکاری سەرەکی مۆبیلیاتی ئاشڵین لە هەموو عێراق';
     const slogan = settings?.brandSlogan || 'Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)';
     const diwanLogo = settings?.diwanLogo || '/diwan-logo.svg';
     const reportLogo = settings?.reportLogo || settings?.ashleyLogo || settings?.appLogo || '/ashley-logo.png';
+    const docTitle = settings?.letterheadDocumentTitle || 'خشتەی تۆماری ئامادەبوونی فەرمی';
+    const docSubtitle = settings?.letterheadDocumentSubtitle || agencyTitle;
+    const primaryColor = settings?.letterheadPrimaryColor || '#0f172a';
+    const accentColor = settings?.letterheadAccentColor || '#d97706';
+    const titleColor = settings?.letterheadTitleColor || primaryColor;
 
     const isFullRange = printDays.length > 18;
 
@@ -1081,41 +1088,48 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       </head>
       <body>
         <div id="print-wrapper">
-          <!-- 1. هێدەری فەرمی گروپی دیوان و مۆبیلیاتی ئاشڵی، دروشم و بەروار -->
-          <div style="border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-            <!-- Right: Diwan Group -->
+          <!-- 1. هێدەری فەرمی: ڕاست (دیوان)، ناوەڕاست (تایتڵی بابەت)، چەپ (ئاشڵی و لۆگۆ) -->
+          <div style="border-bottom: 2.5px solid ${primaryColor}; padding-bottom: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+            <!-- Right: Diwan Logo, Name & Subtitle -->
             <div style="display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-start;">
-              <img src="${diwanLogo}" alt="Diwan Logo" style="height: 42px; max-width: 130px; object-fit: contain;" onerror="this.style.display='none'" />
+              <img src="${diwanLogo}" alt="Diwan Logo" style="height: 44px; max-width: 130px; object-fit: contain;" onerror="this.style.display='none'" />
               <div style="text-align: right;">
-                <div style="margin: 0; font-size: 13px; font-weight: 900; color: #0f172a; line-height: 1.2;">
+                <div style="margin: 0; font-size: 13px; font-weight: 900; color: ${primaryColor}; line-height: 1.2;">
                   ${motherCompany}
                 </div>
-                <div style="font-size: 8.5px; font-weight: 800; color: #d97706; margin-top: 1px;">
+                <div style="font-size: 8.5px; font-weight: 800; color: ${accentColor}; margin-top: 1px;">
                   ${motherCompanySubtitle}
                 </div>
               </div>
             </div>
 
-            <!-- Center: Agency Title & Slogan -->
+            <!-- Center: Subject Title & Subtitle -->
             <div style="text-align: center; flex: 1.6; padding: 0 6px;">
-              <h1 style="margin: 0; font-size: 13.5px; font-weight: 900; color: #0f172a; line-height: 1.2;">
-                ${agencyTitle}
+              <h1 style="margin: 0; font-size: 14px; font-weight: 900; color: ${titleColor}; line-height: 1.2;">
+                ${docTitle}
               </h1>
-              <div style="margin-top: 2px; font-size: 10px; font-weight: 800; color: #007AFF;">
-                ${slogan}
+              <div style="margin-top: 2px; font-size: 9.5px; font-weight: 800; color: ${accentColor};">
+                ${docSubtitle}
               </div>
               <div style="margin-top: 2px; font-size: 9px; font-weight: 600; color: #475569;">
                 ڕاپۆرتی خشتەی ئامادەبوونی کارمەندان — مانگی ${selectedMonth} (ڕۆژانی ${printStartDay} تا ${printEndDay})
               </div>
             </div>
 
-            <!-- Left: Ashley Logo & Metadata -->
+            <!-- Left: Ashley Name, Subtitle & Logo -->
             <div style="display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-end;">
-              <div style="text-align: left; font-size: 8px; font-family: monospace; color: #334155; background: #f8fafc; padding: 4px 6px; border-radius: 4px; border: 1px solid #cbd5e1; line-height: 1.4;">
-                <div><strong>بەروار:</strong> ${todayStr}</div>
-                <div><strong>شێفتی فەرمی:</strong> 08:30 - 16:30</div>
+              <div style="text-align: left;">
+                <div style="font-size: 12px; font-weight: 900; color: ${primaryColor}; line-height: 1.2;">
+                  ${brandName}
+                </div>
+                <div style="font-size: 8.5px; font-weight: 800; color: ${accentColor}; margin-top: 1px;">
+                  ${brandSubtitle || slogan}
+                </div>
+                <div style="font-size: 7.5px; font-family: monospace; color: #64748b; margin-top: 1px;">
+                  ${todayStr} • کۆدی فەرمی: ASH-DGP-2026
+                </div>
               </div>
-              <img src="${reportLogo}" alt="Ashley Logo" style="height: 38px; max-width: 120px; object-fit: contain;" onerror="this.style.display='none'" />
+              <img src="${reportLogo}" alt="Ashley Logo" style="height: 40px; max-width: 120px; object-fit: contain;" onerror="this.style.display='none'" />
             </div>
           </div>
 

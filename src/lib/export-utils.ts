@@ -1060,8 +1060,16 @@ export interface AshleyOfficialReportOptions {
     ashleyLogo?: string | null;
     appLogo?: string | null;
     motherCompanyName?: string;
+    motherCompanySubtitle?: string;
+    brandName?: string;
+    brandSubtitle?: string;
     agencyTitle?: string;
     brandSlogan?: string;
+    letterheadDocumentTitle?: string;
+    letterheadDocumentSubtitle?: string;
+    letterheadPrimaryColor?: string;
+    letterheadAccentColor?: string;
+    letterheadTitleColor?: string;
   };
   kpis?: {
     totalStaff: number;
@@ -1099,6 +1107,11 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
   const brandSlogan = settings?.brandSlogan || 'Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)';
   const diwanLogo = settings?.diwanLogo || '/diwan-logo.svg';
   const ashleyLogo = settings?.reportLogo || settings?.ashleyLogo || settings?.appLogo || '/ashley-logo.png';
+  const docTitle = settings?.letterheadDocumentTitle || 'خشتەی تۆماری ئامادەبوونی فەرمی';
+  const docSubtitle = settings?.letterheadDocumentSubtitle || agencyTitle;
+  const primaryColor = settings?.letterheadPrimaryColor || '#0f172a';
+  const accentColor = settings?.letterheadAccentColor || '#d97706';
+  const titleColor = settings?.letterheadTitleColor || primaryColor;
 
   const printWindow = window.open('', '_blank', 'width=1300,height=900');
   if (!printWindow) {
@@ -1401,38 +1414,37 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
   </div>
 
     <!-- Diwan Group & Ashley Official Dual Letterhead Header -->
-    <div class="letterhead" style="border-bottom: 2.5px solid #0f172a; padding-bottom: 12px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+    <div class="letterhead" style="border-bottom: 2.5px solid ${primaryColor}; padding-bottom: 12px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
       
-      <!-- Right: Diwan Group Logo & Mother Company -->
+      <!-- Right: Diwan Group Logo, Mother Company & Subtitle -->
       <div style="display: flex; align-items: center; gap: 12px; flex: 1; justify-content: flex-start;">
         <img src="${diwanLogo}" alt="Diwan Group Logo" style="height: 54px; max-width: 140px; object-fit: contain;" onerror="this.style.display='none'" />
         <div style="text-align: right;">
-          <div style="font-size: 13.5px; font-weight: 900; color: #0f172a; line-height: 1.2;">${motherCompany}</div>
-          <div style="font-size: 9.5px; font-weight: 800; color: #d97706; margin-top: 1px;">${motherCompanySubtitle}</div>
+          <div style="font-size: 13.5px; font-weight: 900; color: ${primaryColor}; line-height: 1.2;">${motherCompany}</div>
+          <div style="font-size: 9.5px; font-weight: 800; color: ${accentColor}; margin-top: 1px;">${motherCompanySubtitle}</div>
         </div>
       </div>
 
-      <!-- Center: Representation Agency & Brand Slogan -->
+      <!-- Center: Subject Document Title, Subtitle & Badge -->
       <div class="center-branding" style="flex: 1.6; text-align: center; padding: 0 8px;">
-        <h1 style="font-size: 14.5px; font-weight: 900; color: #0f172a; margin: 0; line-height: 1.3;">
-          ${agencyTitle}
+        <h1 style="font-size: 14.5px; font-weight: 900; color: ${titleColor}; margin: 0; line-height: 1.3;">
+          ${docTitle}
         </h1>
-        <h2 style="font-size: 11px; font-weight: 800; color: #007AFF; margin: 3px 0 0 0;">
-          ${brandSlogan}
+        <h2 style="font-size: 11px; font-weight: 800; color: ${accentColor}; margin: 3px 0 0 0;">
+          ${docSubtitle}
         </h2>
-        <div class="doc-badge" style="margin-top: 6px; display: inline-block;">
+        <div class="doc-badge" style="margin-top: 6px; display: inline-block; background: ${primaryColor}; color: #ffffff;">
           ڕاپۆرتی مانگانەی گشتی ئامادەبوون، دەوام و دارایی — مانگی ${month}
         </div>
       </div>
 
-      <!-- Left: Ashley Furniture Logo & Metadata -->
+      <!-- Left: Ashley Furniture Name, Subtitle, Code & Logo -->
       <div style="display: flex; align-items: center; gap: 12px; flex: 1; justify-content: flex-end;">
-        <div class="meta-box" style="text-align: left; padding: 6px 10px; font-size: 9px; line-height: 1.5; margin: 0;">
-          <div style="font-size: 10px; font-weight: 900; color: #0f172a;">${brandName}</div>
-          <div style="font-size: 8.5px; font-weight: 700; color: #64748b; margin-bottom: 2px;">${brandSubtitle}</div>
+        <div class="meta-box" style="text-align: left; padding: 6px 10px; font-size: 9px; line-height: 1.5; margin: 0; border: 1px solid #e2e8f0;">
+          <div style="font-size: 10px; font-weight: 900; color: ${primaryColor};">${brandName}</div>
+          <div style="font-size: 8.5px; font-weight: 700; color: ${accentColor}; margin-bottom: 2px;">${brandSubtitle || brandSlogan}</div>
           <div><strong>کۆدی دەرچوون:</strong> ASH-DGP-${month}</div>
           <div><strong>بەرواری دەرچوون:</strong> ${issueDate}</div>
-          <div><strong>شێفتی فەرمی:</strong> 08:30 - 16:30</div>
         </div>
         <img src="${ashleyLogo}" alt="Ashley Logo" style="height: 48px; max-width: 130px; object-fit: contain;" onerror="this.style.display='none'" />
       </div>

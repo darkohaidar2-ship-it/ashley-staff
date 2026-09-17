@@ -341,6 +341,11 @@ export type AppSettings = {
   brandSubtitle?: string;
   agencyTitle?: string;
   brandSlogan?: string;
+  letterheadDocumentTitle?: string;
+  letterheadDocumentSubtitle?: string;
+  letterheadPrimaryColor?: string;
+  letterheadAccentColor?: string;
+  letterheadTitleColor?: string;
   mainBackground: string | null;
   loginBackground: string | null;
   loginBackgroundVideo: string | null;

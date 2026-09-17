@@ -15,7 +15,8 @@ import {
   RotateCcw,
   ShieldCheck,
   CheckCircle2,
-  Clock
+  Clock,
+  Palette
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -178,6 +179,11 @@ function SettingsPage() {
       brandSubtitle: 'Official Document',
       agencyTitle: 'بریکاری سەرەکی مۆبیلیاتی ئاشڵین لە هەموو عێراق',
       brandSlogan: 'Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)',
+      letterheadDocumentTitle: 'خشتەی تۆماری ئامادەبوونی فەرمی',
+      letterheadDocumentSubtitle: 'کۆمپانیای گروپی دیوان • بریکاری سەرەکی مۆبیلیاتی ئاشڵی',
+      letterheadPrimaryColor: '#0f172a',
+      letterheadAccentColor: '#d97706',
+      letterheadTitleColor: '#0f172a',
       websiteLogo: '/ashley-logo.svg',
       reportLogo: '/ashley-logo.svg',
       diwanLogo: '/diwan-logo.svg',
@@ -313,6 +319,187 @@ function SettingsPage() {
                   className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
                 />
                 <p className="text-[10px] text-slate-400">دروشمی فەرمی براند لە سەر ڕاپۆرت و پەڕەکان.</p>
+              </div>
+
+              {/* Center Document Title */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                  تایتڵی فەرمی بابەت لە ناوەڕاست (Document Title)
+                </Label>
+                <Input 
+                  value={draftSettings.letterheadDocumentTitle ?? 'خشتەی تۆماری ئامادەبوونی فەرمی'}
+                  onChange={e => updateSetting('letterheadDocumentTitle', e.target.value)}
+                  placeholder="خشتەی تۆماری ئامادەبوونی فەرمی"
+                  className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
+                />
+                <p className="text-[10px] text-slate-400">تایتڵی گەورەی بابەت لە ناوەڕاستی وەرەقەی فەرمی.</p>
+              </div>
+
+              {/* Center Document Subtitle / Code */}
+              <div className="space-y-1.5 md:col-span-2">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                  ژێرنووسی بابەت یان کۆدی بەڵگەنامە (Subtitle / Code)
+                </Label>
+                <Input 
+                  value={draftSettings.letterheadDocumentSubtitle ?? 'کۆمپانیای گروپی دیوان • بریکاری سەرەکی مۆبیلیاتی ئاشڵی'}
+                  onChange={e => updateSetting('letterheadDocumentSubtitle', e.target.value)}
+                  placeholder="کۆمپانیای گروپی دیوان • بریکاری سەرەکی مۆبیلیاتی ئاشڵی"
+                  className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
+                />
+                <p className="text-[10px] text-slate-400">دەقی ژێر تایتڵی سەرەکی یان کورتەی بابەت.</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 🎨 Form 1.2: Official Letterhead Colors Customizer */}
+        <Card className="border border-slate-200/80 dark:border-white/10 shadow-xs bg-white dark:bg-[#1c1c1e] rounded-3xl overflow-hidden">
+          <CardHeader className="pb-3 border-b border-slate-100 dark:border-white/5">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+                <Palette className="w-4 h-4 text-purple-500" />
+                <span>دەستکاریکردنی ڕەنگەکانی وەرەقەی فەرمی (Letterhead Colors)</span>
+              </CardTitle>
+              <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-600 border-purple-500/30">
+                ڕەنگی دەستی
+              </Badge>
+            </div>
+            <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
+              دەتوانیت ڕەنگی دەقەکان، تایتڵی ناوەڕاست، دروشم، و هێڵە فەرمییەکان بە خواستی خۆت دیاری بکەیت.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4">
+            {/* Quick Color Presets */}
+            <div className="flex flex-wrap items-center gap-2 pb-1">
+              <span className="text-[11px] font-bold text-slate-500 ml-2">کۆنسێپتە خێراکان:</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  updateSetting('letterheadPrimaryColor', '#0f172a');
+                  updateSetting('letterheadTitleColor', '#0f172a');
+                  updateSetting('letterheadAccentColor', '#d97706');
+                }}
+                className="text-xs rounded-xl h-8 gap-1.5"
+              >
+                <span className="w-3 h-3 rounded-full bg-[#0f172a] border border-white/40 inline-block" />
+                <span className="w-3 h-3 rounded-full bg-[#d97706] inline-block -mr-1" />
+                <span>فەرمی ئاڵتونی و ڕەش</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  updateSetting('letterheadPrimaryColor', '#065f46');
+                  updateSetting('letterheadTitleColor', '#047857');
+                  updateSetting('letterheadAccentColor', '#0284c7');
+                }}
+                className="text-xs rounded-xl h-8 gap-1.5"
+              >
+                <span className="w-3 h-3 rounded-full bg-[#065f46] inline-block" />
+                <span className="w-3 h-3 rounded-full bg-[#0284c7] inline-block -mr-1" />
+                <span>سەوزی ئاشڵی و شین</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  updateSetting('letterheadPrimaryColor', '#1e3a8a');
+                  updateSetting('letterheadTitleColor', '#172554');
+                  updateSetting('letterheadAccentColor', '#b45309');
+                }}
+                className="text-xs rounded-xl h-8 gap-1.5"
+              >
+                <span className="w-3 h-3 rounded-full bg-[#1e3a8a] inline-block" />
+                <span className="w-3 h-3 rounded-full bg-[#b45309] inline-block -mr-1" />
+                <span>شینی دیوان و ئاڵتونی</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  updateSetting('letterheadPrimaryColor', '#18181b');
+                  updateSetting('letterheadTitleColor', '#09090b');
+                  updateSetting('letterheadAccentColor', '#71717a');
+                }}
+                className="text-xs rounded-xl h-8 gap-1.5"
+              >
+                <span className="w-3 h-3 rounded-full bg-[#18181b] inline-block" />
+                <span className="w-3 h-3 rounded-full bg-[#71717a] inline-block -mr-1" />
+                <span>مۆدێرن مۆنۆکرۆم</span>
+              </Button>
+            </div>
+
+            {/* Custom Color Pickers */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+              {/* Primary & Border Color */}
+              <div className="space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200/60 dark:border-white/5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
+                  <span>ڕەنگی سەرەکی و هێڵەکان</span>
+                  <div className="w-4 h-4 rounded-full border border-slate-300" style={{ backgroundColor: draftSettings.letterheadPrimaryColor || '#0f172a' }} />
+                </Label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="color" 
+                    value={draftSettings.letterheadPrimaryColor || '#0f172a'} 
+                    onChange={e => updateSetting('letterheadPrimaryColor', e.target.value)}
+                    className="w-9 h-9 rounded-xl border border-slate-300 dark:border-slate-600 cursor-pointer p-0.5 bg-white"
+                  />
+                  <Input 
+                    value={draftSettings.letterheadPrimaryColor || '#0f172a'}
+                    onChange={e => updateSetting('letterheadPrimaryColor', e.target.value)}
+                    className="h-9 text-xs font-mono font-bold uppercase"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400">ڕەنگی هێڵی جیاکەرەوە و ناوی سەرەکی کۆمپانیاکان.</p>
+              </div>
+
+              {/* Title Color */}
+              <div className="space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200/60 dark:border-white/5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
+                  <span>ڕەنگی تایتڵی ناوەڕاست</span>
+                  <div className="w-4 h-4 rounded-full border border-slate-300" style={{ backgroundColor: draftSettings.letterheadTitleColor || '#0f172a' }} />
+                </Label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="color" 
+                    value={draftSettings.letterheadTitleColor || '#0f172a'} 
+                    onChange={e => updateSetting('letterheadTitleColor', e.target.value)}
+                    className="w-9 h-9 rounded-xl border border-slate-300 dark:border-slate-600 cursor-pointer p-0.5 bg-white"
+                  />
+                  <Input 
+                    value={draftSettings.letterheadTitleColor || '#0f172a'}
+                    onChange={e => updateSetting('letterheadTitleColor', e.target.value)}
+                    className="h-9 text-xs font-mono font-bold uppercase"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400">ڕەنگی دەقی تایتڵی بابەت لە ناوەڕاستدا.</p>
+              </div>
+
+              {/* Accent & Subtitle Color */}
+              <div className="space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200/60 dark:border-white/5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
+                  <span>ڕەنگی دروشم و کورتەکان (Accent)</span>
+                  <div className="w-4 h-4 rounded-full border border-slate-300" style={{ backgroundColor: draftSettings.letterheadAccentColor || '#d97706' }} />
+                </Label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="color" 
+                    value={draftSettings.letterheadAccentColor || '#d97706'} 
+                    onChange={e => updateSetting('letterheadAccentColor', e.target.value)}
+                    className="w-9 h-9 rounded-xl border border-slate-300 dark:border-slate-600 cursor-pointer p-0.5 bg-white"
+                  />
+                  <Input 
+                    value={draftSettings.letterheadAccentColor || '#d97706'}
+                    onChange={e => updateSetting('letterheadAccentColor', e.target.value)}
+                    className="h-9 text-xs font-mono font-bold uppercase"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400">ڕەنگی دەقی ناسنامەی مۆبیلیات و کورتەی براند.</p>
               </div>
             </div>
           </CardContent>
@@ -528,11 +715,14 @@ function SettingsPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-4 bg-white text-slate-900">
-                <div className="rounded-xl border border-slate-200 p-3 bg-white space-y-2">
-                  <div className="flex items-center justify-between border-b border-slate-900 pb-2">
-                    {/* Diwan Group Logo & Name */}
-                    <div className="flex items-center gap-2">
-                      <div className="relative w-16 h-8 flex items-center justify-center">
+                <div className="rounded-xl border border-slate-200 p-3 bg-white space-y-2.5">
+                  <div 
+                    className="flex items-center justify-between pb-2.5"
+                    style={{ borderBottom: `2px solid ${draftSettings.letterheadPrimaryColor || '#0f172a'}` }}
+                  >
+                    {/* 1. لە ڕاستەوە: لۆگۆی دیوان پاشان ناوی دیوان و کورتەی بازرگانی */}
+                    <div className="flex items-center gap-2.5">
+                      <div className="relative w-14 h-9 flex items-center justify-center flex-shrink-0">
                         <Image 
                           src={draftSettings.diwanLogo || '/diwan-logo.svg'} 
                           alt="Diwan Logo" 
@@ -542,30 +732,54 @@ function SettingsPage() {
                         />
                       </div>
                       <div className="text-right">
-                        <div className="text-[10px] font-black text-slate-900 leading-tight">
+                        <div 
+                          className="text-[11px] font-black leading-tight"
+                          style={{ color: draftSettings.letterheadPrimaryColor || '#0f172a' }}
+                        >
                           {draftSettings.motherCompanyName || 'کۆمپانیای گروپی دیوان'}
                         </div>
-                        <div className="text-[8px] text-amber-600 font-bold">{draftSettings.motherCompanySubtitle || 'ناسنامەی مۆبیلیات'}</div>
+                        <div 
+                          className="text-[9px] font-bold mt-0.5"
+                          style={{ color: draftSettings.letterheadAccentColor || '#d97706' }}
+                        >
+                          {draftSettings.motherCompanySubtitle || 'ناسنامەی مۆبیلیات'}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Center Titles */}
-                    <div className="text-center px-2">
-                      <div className="text-[10px] font-black text-slate-900 leading-tight">
-                        {draftSettings.agencyTitle || 'بریکاری سەرەکی مۆبیلیاتی ئاشڵین لە هەموو عێراق'}
+                    {/* 2. ناوەڕاست: تایتڵی بابەتەکە و ژێرنووس/کۆدی بەڵگەنامە */}
+                    <div className="text-center px-3 flex-1 max-w-[42%]">
+                      <div 
+                        className="text-xs sm:text-sm font-black leading-tight"
+                        style={{ color: draftSettings.letterheadTitleColor || draftSettings.letterheadPrimaryColor || '#0f172a' }}
+                      >
+                        {draftSettings.letterheadDocumentTitle || 'خشتەی تۆماری ئامادەبوونی فەرمی'}
                       </div>
-                      <div className="text-[8px] font-bold text-[#007AFF] mt-0.5">
-                        {draftSettings.brandSlogan || 'Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)'}
+                      <div 
+                        className="text-[9px] font-bold mt-0.5 truncate"
+                        style={{ color: draftSettings.letterheadAccentColor || '#d97706' }}
+                      >
+                        {draftSettings.letterheadDocumentSubtitle || draftSettings.agencyTitle || 'کۆمپانیای گروپی دیوان • بریکاری سەرەکی مۆبیلیاتی ئاشڵی'}
                       </div>
                     </div>
 
-                    {/* Ashley Logo */}
-                    <div className="flex items-center gap-2">
+                    {/* 3. لە چەپەوە: ناوی ئاشڵی و کورتەی بازرگانی پاشان لۆگۆکەی */}
+                    <div className="flex items-center gap-2.5">
                       <div className="text-left">
-                        <div className="text-[10px] font-black text-slate-900">{draftSettings.brandName || 'Ashley Furniture'}</div>
-                        <div className="text-[8px] text-slate-500 font-bold">{draftSettings.brandSubtitle || 'Official Document'}</div>
+                        <div 
+                          className="text-[11px] font-black leading-tight"
+                          style={{ color: draftSettings.letterheadPrimaryColor || '#0f172a' }}
+                        >
+                          {draftSettings.brandName || 'کۆمپانیای مۆبیلیاتی ئاشڵی'}
+                        </div>
+                        <div 
+                          className="text-[9px] font-bold mt-0.5"
+                          style={{ color: draftSettings.letterheadAccentColor || '#d97706' }}
+                        >
+                          {draftSettings.brandSubtitle || draftSettings.brandSlogan || 'Official Document'}
+                        </div>
                       </div>
-                      <div className="relative w-16 h-8 flex items-center justify-center">
+                      <div className="relative w-14 h-9 flex items-center justify-center flex-shrink-0">
                         <Image 
                           src={draftSettings.reportLogo || draftSettings.ashleyLogo || draftSettings.appLogo || '/ashley-logo.png'} 
                           alt="Ashley Logo" 
@@ -577,9 +791,20 @@ function SettingsPage() {
                     </div>
                   </div>
 
-                  <div className="h-5 bg-slate-100 rounded flex items-center justify-between px-2 text-[8px] text-slate-600 font-bold">
-                    <span>خشتەی تۆماری ئامادەبوونی فەرمی</span>
-                    <span className="font-mono">کۆدی بەڵگەنامە: ASH-DGP-2026</span>
+                  {/* شریتی زانیاری خوارەوە بە ستایلی مۆدێرن */}
+                  <div 
+                    className="h-6 rounded-lg flex items-center justify-between px-3 text-[9px] font-bold"
+                    style={{ 
+                      backgroundColor: `${draftSettings.letterheadPrimaryColor || '#0f172a'}0A`,
+                      border: `1px solid ${draftSettings.letterheadPrimaryColor || '#0f172a'}18`,
+                      color: draftSettings.letterheadPrimaryColor || '#0f172a'
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: draftSettings.letterheadAccentColor || '#d97706' }} />
+                      <span>{draftSettings.agencyTitle || 'بریکاری سەرەکی مۆبیلیاتی ئاشڵین لە هەموو عێراق'}</span>
+                    </div>
+                    <span className="font-mono text-[8.5px] opacity-80">کۆدی فەرمی: ASH-DGP-2026</span>
                   </div>
                 </div>
               </CardContent>
