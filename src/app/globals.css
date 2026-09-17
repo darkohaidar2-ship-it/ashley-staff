@@ -1,5 +1,26 @@
 @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
+/* ==========================================================================
+   OFFICIAL KURDISH NRT LOCAL FONT BUNDLE (Regular & Bold)
+   ========================================================================== */
+@font-face {
+  font-family: 'NRT';
+  src: url('/fonts/NRT-Reg.woff') format('woff'),
+       url('/fonts/NRT-Reg.ttf') format('truetype');
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'NRT';
+  src: url('/fonts/NRT-Bd.woff') format('woff'),
+       url('/fonts/NRT-Bd.ttf') format('truetype');
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -31,8 +52,8 @@
     --ring: 211 100% 50%;
     --radius: 18px;
 
-    --font-heading: 'Vazirmatn', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
-    --font-body: 'Vazirmatn', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    --font-heading: 'NRT', 'Vazirmatn', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+    --font-body: 'NRT', 'Vazirmatn', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
     --font-mono: 'SF Mono', 'Consolas', 'Cascadia Code', monospace;
   }
 }
@@ -70,7 +91,7 @@
     background: #ffffff !important;
     color: #1c1c1e;
     font-size: 13px;
-    font-family: 'Vazirmatn', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+    font-family: 'NRT', 'Vazirmatn', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
     margin: 0;
     padding: 0;
     min-height: 100vh;

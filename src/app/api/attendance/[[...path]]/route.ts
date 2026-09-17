@@ -51,6 +51,21 @@ function getDailyToken() {
   return crypto.createHash('sha256').update(dateStr + 'AshleyAttendanceSecretSaltKey').digest('hex').substring(0, 12);
 }
 
+const DEFAULT_EMPLOYEE_NAMES: Record<string, string> = {
+  'emp-01': 'سه هەند مەریوان حەمەسەعید',
+  'emp-02': 'دارکۆ حەیدەر حسێن',
+  'emp-03': 'شادیار هوشیار',
+  'emp-04': 'هەڤاڵ حبیب حەمەڕەزا',
+  'emp-05': 'عیماد سەباح نوری',
+  'emp-06': 'کامەران عومەر ڕووئوف',
+  'emp-07': 'ڕابەر محەمەد مەحمود',
+  'emp-08': 'دانەر محەمەد باسام',
+  'emp-09': 'ڕێبین سەباح نوری',
+  'emp-10': 'بەهرەمەند ڕزگار عزیز',
+  'emp-11': 'شادومان یادگار رحیم',
+  'emp-12': 'سەروەت قادر',
+};
+
 // Haversine formula to check distance between two coordinates in meters
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371e3; // metres
@@ -122,20 +137,85 @@ async function getAddressFromCoords(lat: number, lng: number) {
   }
 }
 
+// Resilient shift overrides store helper
+async function getShiftOverridesFromStore(): Promise<Record<string, { checkInTime: string; checkOutTime: string }>> {
+  try {
+    const { data, error } = await supabase.from('shift_overrides').select('*');
+    if (!error && Array.isArray(data) && data.length > 0) {
+      const res: Record<string, any> = {};
+      data.forEach(o => { res[o.date] = { checkInTime: o.check_in_time, checkOutTime: o.check_out_time }; });
+      return res;
+    }
+  } catch {}
+  
+  try {
+    const { data: wRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_shift_overrides').maybeSingle();
+    if (wRow?.qr_code) {
+      return JSON.parse(wRow.qr_code);
+    }
+  } catch {}
+  return {};
+}
+
+async function saveShiftOverridesToStore(overrides: Record<string, { checkInTime: string; checkOutTime: string }>) {
+  try {
+    await supabase.from('warehouses').upsert({
+      id: 'ashley_shift_overrides',
+      name: 'Ashley Shift Overrides Store',
+      qr_code: JSON.stringify(overrides)
+    });
+  } catch (err) {
+    console.warn('Error saving shift overrides:', err);
+  }
+}
+
+// Resilient attendance settings store helper
+async function getAttendanceSettingsFromStore<T>(key: string, fallback: T): Promise<T> {
+  try {
+    const { data, error } = await supabase.from('attendance_settings').select('*').eq('id', key).maybeSingle();
+    if (!error && data?.settings) {
+      return data.settings as T;
+    }
+  } catch {}
+  
+  try {
+    const { data: wRow } = await supabase.from('warehouses').select('qr_code').eq('id', `ashley_setting_${key}`).maybeSingle();
+    if (wRow?.qr_code) {
+      return JSON.parse(wRow.qr_code) as T;
+    }
+  } catch {}
+  return fallback;
+}
+
+async function saveAttendanceSettingsToStore<T>(key: string, value: T) {
+  try {
+    await supabase.from('attendance_settings').upsert({
+      id: key,
+      settings: value,
+      updated_at: new Date().toISOString()
+    });
+  } catch {}
+
+  try {
+    await supabase.from('warehouses').upsert({
+      id: `ashley_setting_${key}`,
+      name: `Ashley Setting: ${key}`,
+      qr_code: JSON.stringify(value)
+    });
+  } catch (err) {
+    console.warn('Error saving setting to warehouses:', err);
+  }
+}
+
 // Get Shift details for a date
 async function getShiftForDate(dateStr: string): Promise<{ checkInTime: string; checkOutTime: string; graceMinutes: number }> {
   try {
-    const { data: override } = await supabase
-      .from('shift_overrides')
-      .select('*')
-      .eq('date', dateStr)
-      .maybeSingle();
-
-    if (override) {
+    const overrides = await getShiftOverridesFromStore();
+    if (overrides[dateStr]) {
       return { 
-        checkInTime: override.check_in_time || "08:00", 
-        checkOutTime: override.check_out_time || "17:00",
-        graceMinutes: override.grace_minutes !== undefined ? Number(override.grace_minutes) : 15
+        checkInTime: overrides[dateStr].checkInTime || "08:00", 
+        checkOutTime: overrides[dateStr].checkOutTime || "17:00",
+        graceMinutes: 15
       };
     }
 
@@ -234,21 +314,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         'CDN-Cache-Control': 'no-store',
       };
 
-      const DEFAULT_EMPLOYEE_NAMES: Record<string, string> = {
-        'emp-01': 'سه هەند مەریوان حەمەسەعید',
-        'emp-02': 'دارکۆ حەیدەر حسێن',
-        'emp-03': 'شادیار هوشیار',
-        'emp-04': 'هەڤاڵ حبیب حەمەڕەزا',
-        'emp-05': 'عیماد سەباح نوری',
-        'emp-06': 'کامەران عومەر ڕووئوف',
-        'emp-07': 'ڕابەر محەمەد مەحمود',
-        'emp-08': 'دانەر محەمەد باسام',
-        'emp-09': 'ڕێبین سەباح نوری',
-        'emp-10': 'بەهرەمەند ڕزگار عزیز',
-        'emp-11': 'شادومان یادگار رحیم',
-        'emp-12': 'سەروەت قادر',
-      };
-
       try {
         // 1. Check resilient central registry in warehouses table
         const { data: regRow } = await supabase
@@ -343,21 +408,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         'emp-10': '1010',
         'emp-11': '1011',
         'emp-12': '1012',
-      };
-
-      const DEFAULT_EMPLOYEE_NAMES: Record<string, string> = {
-        'emp-01': 'سه هەند مەریوان حەمەسەعید',
-        'emp-02': 'دارکۆ حەیدەر حسێن',
-        'emp-03': 'شادیار هوشیار',
-        'emp-04': 'هەڤاڵ حبیب حەمەڕەزا',
-        'emp-05': 'عیماد سەباح نوری',
-        'emp-06': 'کامەران عومەر ڕووئوف',
-        'emp-07': 'ڕابەر محەمەد مەحمود',
-        'emp-08': 'دانەر محەمەد باسام',
-        'emp-09': 'ڕێبین سەباح نوری',
-        'emp-10': 'بەهرەمەند ڕزگار عزیز',
-        'emp-11': 'شادومان یادگار رحیم',
-        'emp-12': 'سەروەت قادر',
       };
 
       let user: any = null;
@@ -849,16 +899,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         .from('shifts')
         .select('*')
         .eq('id', 'default')
-        .single();
+        .maybeSingle();
 
-      const { data: overrides } = await supabase
-        .from('shift_overrides')
-        .select('*');
-
-      const formattedOverrides: Record<string, any> = {};
-      (overrides || []).forEach(o => {
-        formattedOverrides[o.date] = { checkInTime: o.check_in_time, checkOutTime: o.check_out_time };
-      });
+      const overrides = await getShiftOverridesFromStore();
 
       return NextResponse.json({
         default: { 
@@ -866,7 +909,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           checkOutTime: defaultShift?.check_out_time || '17:00',
           graceMinutes: defaultShift?.grace_minutes !== undefined ? Number(defaultShift.grace_minutes) : 15
         },
-        overrides: formattedOverrides
+        overrides
       });
     }
 
@@ -911,11 +954,16 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
       }
 
-      const { error } = await supabase
-        .from('shift_overrides')
-        .upsert({ date, check_in_time: checkInTime, check_out_time: checkOutTime });
+      try {
+        await supabase
+          .from('shift_overrides')
+          .upsert({ date, check_in_time: checkInTime, check_out_time: checkOutTime });
+      } catch {}
 
-      if (error) throw error;
+      const currentOverrides = await getShiftOverridesFromStore();
+      currentOverrides[date] = { checkInTime, checkOutTime };
+      await saveShiftOverridesToStore(currentOverrides);
+
       return NextResponse.json({ success: true });
     }
 
@@ -926,12 +974,17 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const { date } = await req.json();
       if (!date) return NextResponse.json({ error: 'Missing date' }, { status: 400 });
 
-      const { error } = await supabase
-        .from('shift_overrides')
-        .delete()
-        .eq('date', date);
+      try {
+        await supabase
+          .from('shift_overrides')
+          .delete()
+          .eq('date', date);
+      } catch {}
 
-      if (error) throw error;
+      const currentOverrides = await getShiftOverridesFromStore();
+      delete currentOverrides[date];
+      await saveShiftOverridesToStore(currentOverrides);
+
       return NextResponse.json({ success: true });
     }
 
@@ -1450,13 +1503,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const settingsKey = `excursions_${dateStr}`;
 
       try {
-        const { data: existing } = await supabase
-          .from('attendance_settings')
-          .select('*')
-          .eq('id', settingsKey)
-          .maybeSingle();
-
-        let currentList: any[] = Array.isArray(existing?.settings) ? existing.settings : [];
+        let currentList = await getAttendanceSettingsFromStore<any[]>(settingsKey, []);
         const empId = userId || 'emp-02';
         
         // Find existing index
@@ -1488,11 +1535,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           currentList.push(newItem);
         }
 
-        await supabase.from('attendance_settings').upsert({
-          id: settingsKey,
-          settings: currentList,
-          updated_at: new Date().toISOString()
-        });
+        await saveAttendanceSettingsToStore(settingsKey, currentList);
 
         // Dual-persistence: Also record into attendance_logs table
         try {
@@ -1606,13 +1649,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const settingsKey = `excursions_${dateStr}`;
 
       try {
-        const { data: existing } = await supabase
-          .from('attendance_settings')
-          .select('*')
-          .eq('id', settingsKey)
-          .maybeSingle();
-
-        let excursions = Array.isArray(existing?.settings) ? existing.settings : [];
+        let excursions = await getAttendanceSettingsFromStore<any[]>(settingsKey, []);
 
         // Fallback: Also check attendance_logs for excursions on this date
         if (excursions.length === 0) {
@@ -1660,13 +1697,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const targetEmpId = userId || excursionId.replace('exc-', '').split('-')[0] || 'emp-02';
 
       try {
-        const { data: existing } = await supabase
-          .from('attendance_settings')
-          .select('*')
-          .eq('id', settingsKey)
-          .maybeSingle();
-
-        let currentList: any[] = Array.isArray(existing?.settings) ? existing.settings : [];
+        let currentList = await getAttendanceSettingsFromStore<any[]>(settingsKey, []);
         let existingIdx = currentList.findIndex((item: any) => item.id === excursionId);
         if (existingIdx < 0) {
           existingIdx = currentList.findIndex((item: any) => item.userId === targetEmpId);
@@ -1684,11 +1715,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           });
         }
 
-        await supabase.from('attendance_settings').upsert({
-          id: settingsKey,
-          settings: currentList,
-          updated_at: new Date().toISOString()
-        });
+        await saveAttendanceSettingsToStore(settingsKey, currentList);
 
         // Dual log into attendance_logs
         try {
@@ -1898,154 +1925,127 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     if (pathStr === 'admin/manual-record' && method === 'POST') {
       try {
         const body = await req.json();
-        const { 
-          userId, 
-          userName, 
-          date, 
-          status, 
-          checkInTime, 
-          checkOutTime, 
-          action, 
-          adminNote, 
-          adminCheckInNote, 
-          adminCheckOutNote,
-          note, 
-          checkOutNote,
-          historyLogs,
-          adminDecision,
-          isWaived
-        } = body;
-        
-        if (!userId || !date) {
-          return NextResponse.json({ error: 'userId and date required' }, { status: 400 });
+        const recordsList: any[] = Array.isArray(body.records) ? body.records : [body];
+
+        if (recordsList.length === 0) {
+          return NextResponse.json({ error: 'No records provided' }, { status: 400 });
         }
 
-        const cleanEmpId = (userId || '').toString().trim();
-        const rawNum = cleanEmpId.replace('emp-', '');
-        const idVariations = [cleanEmpId, rawNum, `emp-${rawNum}`];
-        const recordKey = `${cleanEmpId}_${date}`;
+        // Fetch warehouse backup overrides once
+        let currentSettings: Record<string, any> = {};
+        try {
+          const { data: setRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_manual_attendance_records').maybeSingle();
+          if (setRow?.qr_code) {
+            currentSettings = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+          }
+        } catch {}
 
-        // 🗑️ If action is delete OR status is empty/delete -> Remove completely from Supabase
-        if (action === 'delete' || status === 'empty' || status === 'delete' || status === 'None' || status === 'Empty') {
-          for (const idVar of idVariations) {
+        let deleteCount = 0;
+        let upsertCount = 0;
+        let lastUpsertData: any = null;
+
+        // Separate deletions from upserts for lightning-fast execution
+        const deletions = recordsList.filter(item => 
+          item.action === 'delete' || item.status === 'empty' || item.status === 'delete' || item.status === 'None' || item.status === 'Empty'
+        );
+        const upserts = recordsList.filter(item => !deletions.includes(item));
+
+        // 🗑️ Lightning-fast parallel deletion in Supabase
+        if (deletions.length > 0) {
+          await Promise.all(deletions.map(async (item) => {
+            if (!item.userId || !item.date) return;
+            const cleanEmpId = (item.userId || '').toString().trim();
+            const rawNum = cleanEmpId.replace('emp-', '');
+            const idVariations = [cleanEmpId, rawNum, `emp-${rawNum}`];
+            const recordKey = `${cleanEmpId}_${item.date}`;
+
+            delete currentSettings[recordKey];
+            delete currentSettings[`${rawNum}_${item.date}`];
+            delete currentSettings[`emp-${rawNum}_${item.date}`];
+            deleteCount++;
+
             try {
-              await supabase.from('attendance').delete().eq('user_id', idVar).eq('date', date);
-              await supabase.from('attendance_logs').delete().eq('employee_id', idVar).eq('log_date', date);
+              await Promise.all([
+                supabase.from('attendance').delete().in('user_id', idVariations).eq('date', item.date),
+                supabase.from('attendance_logs').delete().in('employee_id', idVariations).eq('log_date', item.date)
+              ]);
             } catch {}
+          }));
+        }
+
+        for (const item of upserts) {
+          const { 
+            userId, date, status, checkInTime, checkOutTime, note, 
+            adminNote, adminCheckInNote, adminCheckOutNote, checkOutNote, 
+            userName, isWaived, adminDecision, historyLogs 
+          } = item;
+          const cleanEmpId = (userId || '').toString().trim();
+          const rawNum = cleanEmpId.replace('emp-', '');
+          const recordKey = `${cleanEmpId}_${date}`;
+
+          // 💾 Normal Upsert
+          const rawIn = checkInTime || '08:00';
+          const rawOut = checkOutTime || '17:00';
+          const empNote = note || null;
+          const combinedAdminNote = adminNote || [adminCheckInNote, adminCheckOutNote].filter(Boolean).join(' | ') || null;
+          const rowId = `att-${cleanEmpId}-${date}`;
+
+          let totalHours = 8;
+          if (status === 'Present' && checkInTime && checkOutTime) {
+            const [inH, inM] = checkInTime.split(':').map(Number);
+            const [outH, outM] = checkOutTime.split(':').map(Number);
+            const inTotal = inH * 60 + (inM || 0);
+            const outTotal = outH * 60 + (outM || 0);
+            if (outTotal > inTotal) {
+              const gross = outTotal - inTotal;
+              const breakStart = 12 * 60;
+              const breakEnd = 13 * 60;
+              const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
+              totalHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
+            }
           }
 
-          // Remove from warehouses resilient backup
+          const upsertData: any = {
+            id: rowId,
+            user_id: cleanEmpId,
+            user_name: userName || 'کارمەند',
+            date: date,
+            status: status || 'Present',
+            warehouse_name: 'کۆمپانیای سەرەکی ئاشڵی',
+            check_in_time: status === 'Present' ? (checkInTime || '08:00') : status === 'Leave' ? 'مۆڵەت' : null,
+            check_out_time: status === 'Present' ? (checkOutTime || '17:00') : status === 'Leave' ? 'مۆڵەت' : null,
+            raw_check_in_time: rawIn,
+            raw_check_out_time: rawOut,
+            adjusted_check_in_time: checkInTime,
+            adjusted_check_out_time: checkOutTime,
+            note: empNote,
+            check_in_note: empNote,
+            check_out_note: checkOutNote || null,
+            admin_note: combinedAdminNote,
+            admin_check_in_note: adminCheckInNote || null,
+            admin_check_out_note: adminCheckOutNote || null,
+            total_hours: totalHours,
+            late_minutes: 0,
+            early_out_minutes: 0,
+            overtime_minutes: 0,
+          };
+
           try {
-            const { data: setRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_manual_attendance_records').maybeSingle();
-            if (setRow?.qr_code) {
-              const currentSettings = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : { ...setRow.qr_code };
-              delete currentSettings[recordKey];
-              delete currentSettings[`${rawNum}_${date}`];
-              delete currentSettings[`emp-${rawNum}_${date}`];
-              await supabase.from('warehouses').upsert({
-                id: 'ashley_manual_attendance_records',
-                name: 'Ashley Manual Attendance Overrides Store',
-                qr_code: JSON.stringify(currentSettings),
-                lat: 0,
-                lng: 0,
-                radius: 0
+            const { error: upsertErr } = await supabase.from('attendance').upsert(upsertData);
+            if (upsertErr) {
+              await supabase.from('attendance').upsert({
+                id: rowId,
+                user_id: cleanEmpId,
+                user_name: upsertData.user_name,
+                date: date,
+                status: upsertData.status,
+                check_in_time: upsertData.check_in_time,
+                check_out_time: upsertData.check_out_time,
+                note: combinedAdminNote || empNote || ''
               });
             }
           } catch {}
 
-          return NextResponse.json({ success: true, message: 'تۆماری ئەم ڕۆژە بە سەرکەوتوویی لە سوپابەیس سڕایەوە و بەتاڵ کرا' });
-        }
-
-        // 💾 Fetch existing record to preserve original raw times and notes
-        let existingRec: any = null;
-        try {
-          const { data: rec } = await supabase
-            .from('attendance')
-            .select('*')
-            .eq('user_id', cleanEmpId)
-            .eq('date', date)
-            .maybeSingle();
-          existingRec = rec;
-        } catch {}
-
-        const rawIn = existingRec?.raw_check_in_time || existingRec?.check_in_time || checkInTime || '08:00';
-        const rawOut = existingRec?.raw_check_out_time || existingRec?.check_out_time || checkOutTime || '17:00';
-        const empNote = existingRec?.note || existingRec?.check_in_note || note || checkInNote || null;
-        const combinedAdminNote = adminNote || [adminCheckInNote, adminCheckOutNote].filter(Boolean).join(' | ') || null;
-
-        const rowId = `att-${cleanEmpId}-${date}`;
-        const upsertData: any = {
-          id: rowId,
-          user_id: cleanEmpId,
-          user_name: userName || existingRec?.user_name || 'کارمەند',
-          date: date,
-          status: status || 'Present',
-          warehouse_name: existingRec?.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
-          check_in_time: status === 'Present' ? (checkInTime || '08:00') : status === 'Leave' ? 'مۆڵەت' : null,
-          check_out_time: status === 'Present' ? (checkOutTime || '17:00') : status === 'Leave' ? 'مۆڵەت' : null,
-          raw_check_in_time: rawIn,
-          raw_check_out_time: rawOut,
-          adjusted_check_in_time: checkInTime,
-          adjusted_check_out_time: checkOutTime,
-          note: empNote,
-          check_in_note: empNote,
-          check_out_note: existingRec?.check_out_note || checkOutNote || null,
-          admin_note: combinedAdminNote,
-          admin_check_in_note: adminCheckInNote || null,
-          admin_check_out_note: adminCheckOutNote || null,
-          late_minutes: 0,
-          early_out_minutes: 0,
-          overtime_minutes: 0,
-        };
-
-        // Calculate Net Worked Hours deducting 12:00-13:00 break
-        if (status === 'Present' && checkInTime && checkOutTime) {
-          const [inH, inM] = checkInTime.split(':').map(Number);
-          const [outH, outM] = checkOutTime.split(':').map(Number);
-          const inTotal = inH * 60 + (inM || 0);
-          const outTotal = outH * 60 + (outM || 0);
-          if (outTotal > inTotal) {
-            const gross = outTotal - inTotal;
-            const breakStart = 12 * 60; // 720
-            const breakEnd = 13 * 60;   // 780
-            const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
-            upsertData.total_hours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
-          }
-        }
-
-        // Try primary upsert to attendance table
-        let upsertSuccess = false;
-        try {
-          const { error: upsertErr } = await supabase.from('attendance').upsert(upsertData);
-          if (!upsertErr) {
-            upsertSuccess = true;
-          } else {
-            console.warn('Primary attendance upsert error, trying fallback columns:', upsertErr.message);
-            // Fallback with minimal standard schema
-            const fallbackData = {
-              id: rowId,
-              user_id: cleanEmpId,
-              user_name: upsertData.user_name,
-              date: date,
-              status: upsertData.status,
-              check_in_time: upsertData.check_in_time,
-              check_out_time: upsertData.check_out_time,
-              note: combinedAdminNote || empNote || ''
-            };
-            const { error: fbErr } = await supabase.from('attendance').upsert(fallbackData);
-            if (!fbErr) upsertSuccess = true;
-          }
-        } catch (dbErr) {
-          console.warn('Supabase attendance catch error:', dbErr);
-        }
-
-        // 🛡️ Always Persist to warehouses resilient backup store
-        try {
-          const { data: setRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_manual_attendance_records').maybeSingle();
-          let currentSettings: Record<string, any> = {};
-          if (setRow?.qr_code) {
-            currentSettings = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
-          }
           currentSettings[recordKey] = {
             userId: cleanEmpId,
             userName: upsertData.user_name,
@@ -2057,7 +2057,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             rawCheckOut: rawOut,
             note: empNote,
             checkInNote: empNote,
-            checkOutNote: existingRec?.check_out_note || checkOutNote || null,
+            checkOutNote: checkOutNote || null,
             adminNote: combinedAdminNote,
             adminCheckInNote: adminCheckInNote || null,
             adminCheckOutNote: adminCheckOutNote || null,
@@ -2067,6 +2067,34 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             updatedAt: new Date().toISOString()
           };
 
+          try {
+            await supabase.from('attendance_logs').upsert({
+              id: `manual-${cleanEmpId}-${date}`,
+              employee_id: cleanEmpId,
+              employee_name: upsertData.user_name,
+              log_type: 'Admin Edit',
+              log_date: date,
+              log_time_str: upsertData.check_in_time || '08:00',
+              location_address: '🛡️ دەستکاری ئەدمین',
+              notes: JSON.stringify({ 
+                adminNote: combinedAdminNote,
+                adminCheckInNote,
+                adminCheckOutNote,
+                rawCheckIn: rawIn,
+                rawCheckOut: rawOut,
+                checkInTime: upsertData.check_in_time,
+                checkOutTime: upsertData.check_out_time
+              }),
+              created_at: new Date().toISOString()
+            });
+          } catch {}
+
+          lastUpsertData = upsertData;
+          upsertCount++;
+        }
+
+        // Save aggregated settings to warehouses once
+        try {
           await supabase.from('warehouses').upsert({
             id: 'ashley_manual_attendance_records',
             name: 'Ashley Manual Attendance Overrides Store',
@@ -2079,33 +2107,13 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           console.warn('warehouses backup error:', settErr);
         }
 
-        // Dual log into attendance_logs table
-        try {
-          await supabase.from('attendance_logs').upsert({
-            id: `manual-${cleanEmpId}-${date}`,
-            employee_id: cleanEmpId,
-            employee_name: upsertData.user_name,
-            log_type: 'Admin Edit',
-            log_date: date,
-            log_time_str: upsertData.check_in_time || '08:00',
-            location_address: '🛡️ دەستکاری ئەدمین',
-            notes: JSON.stringify({ 
-              adminNote: combinedAdminNote,
-              adminCheckInNote,
-              adminCheckOutNote,
-              rawCheckIn: rawIn,
-              rawCheckOut: rawOut,
-              checkInTime: upsertData.check_in_time,
-              checkOutTime: upsertData.check_out_time
-            }),
-            created_at: new Date().toISOString()
-          });
-        } catch {}
-
         return NextResponse.json({ 
           success: true, 
-          message: 'تۆمارەکە بە سەرکەوتوویی لە سوپابەیس و سێرڤەر پاشەکەوت کرا', 
-          record: upsertData 
+          message: recordsList.length > 1 
+            ? `${upsertCount} تۆمار نوێکرانەوە، ${deleteCount} بەتاڵ کران` 
+            : 'تۆمارەکە بە سەرکەوتوویی لە سوپابەیس و سێرڤەر پاشەکەوت کرا',
+          count: upsertCount + deleteCount,
+          record: lastUpsertData
         });
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
@@ -2337,19 +2345,19 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         { id: 'emp-12', name: 'سەروەت قادر', pin: '1012', role: 'Employee', hourlyRate: 0 },
       ];
 
-      let deviceRegistry = {};
+      let deviceRegistry: Record<string, any> = {};
       try {
         const { data: dRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_device_bindings').maybeSingle();
         if (dRow?.qr_code) deviceRegistry = JSON.parse(dRow.qr_code);
       } catch {}
 
-      let faceRegistry = {};
+      let faceRegistry: Record<string, any> = {};
       try {
         const { data: fRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_face_registry').maybeSingle();
         if (fRow?.qr_code) faceRegistry = JSON.parse(fRow.qr_code);
       } catch {}
 
-      let dbUsers = [];
+      let dbUsers: any[] = [];
       try {
         const { data: uRows } = await supabase.from('users').select('*').neq('role', 'admin');
         if (uRows && uRows.length > 0) dbUsers = uRows;
@@ -2412,78 +2420,66 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         { id: 'emp-12', name: 'سەروەت قادر', pin: '1012', role: 'Employee', hourlyRate: 0 },
       ];
 
-      let deviceRegistry = {};
-      try {
-        const { data: dRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_device_bindings').maybeSingle();
-        if (dRow?.qr_code) deviceRegistry = JSON.parse(dRow.qr_code);
-      } catch {}
-
-      let faceRegistry = {};
-      try {
-        const { data: fRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_face_registry').maybeSingle();
-        if (fRow?.qr_code) faceRegistry = JSON.parse(fRow.qr_code);
-      } catch {}
-
-      let dbUsers = [];
-      try {
-        const { data: uRows } = await supabase.from('users').select('*').neq('role', 'admin');
-        if (uRows && uRows.length > 0) dbUsers = uRows;
-      } catch {}
-
-      const allUsers = baseEmployees.map(baseEmp => {
-        const dbU = dbUsers.find(u => u.id === baseEmp.id);
-        const devEntry = deviceRegistry[baseEmp.id];
-        const isDeviceBound = !!(devEntry && !devEntry.unbound && devEntry.deviceToken) || !!(dbU?.device_token);
-        const faceEntry = faceRegistry[baseEmp.id];
-        const isFaceRegistered = !!(faceEntry && (faceEntry.descriptor || (faceEntry.descriptors && faceEntry.descriptors.length > 0))) || !!(dbU?.face_descriptor);
-
-        return {
-          id: baseEmp.id,
-          name: dbU?.name || baseEmp.name,
-          pin: dbU?.pin || baseEmp.pin,
-          role: dbU?.role || baseEmp.role,
-          hourlyRate: dbU?.hourly_rate ?? baseEmp.hourlyRate,
-          deviceToken: isDeviceBound ? (devEntry?.deviceToken || dbU?.device_token || 'bound') : null,
-          deviceBound: isDeviceBound,
-          faceRegistered: isFaceRegistered,
-          deviceInfo: isDeviceBound ? {
-            ip: devEntry?.ip || faceEntry?.clientIp || null,
-            boundAt: devEntry?.boundAt || null
-          } : null,
-          faceInfo: isFaceRegistered ? {
-            count: faceEntry?.descriptors?.length || (faceEntry?.descriptor ? 1 : 1),
-            registeredAt: faceEntry?.registeredAt || null
-          } : null
-        };
-      });
-
-      // Attendance records
+      let deviceRegistry: Record<string, any> = {};
+      let faceRegistry: Record<string, any> = {};
+      let dbUsers: any[] = [];
       let attendanceRecords: any[] = [];
+      let allUsers: any[] = [];
       const manualOverridesMap: Record<string, any> = {};
 
-      // 1. Fetch manual overrides from warehouses resilient backup
       try {
-        const { data: setRow } = await supabase
-          .from('warehouses')
-          .select('qr_code')
-          .eq('id', 'ashley_manual_attendance_records')
-          .maybeSingle();
+        const [dRowRes, fRowRes, uRowsRes, setRowRes, attRes] = await Promise.all([
+          supabase.from('warehouses').select('qr_code').eq('id', 'ashley_device_bindings').maybeSingle(),
+          supabase.from('warehouses').select('qr_code').eq('id', 'ashley_face_registry').maybeSingle(),
+          supabase.from('users').select('*').neq('role', 'admin'),
+          supabase.from('warehouses').select('qr_code').eq('id', 'ashley_manual_attendance_records').maybeSingle(),
+          supabase.from('attendance').select('*').order('date', { ascending: false }).limit(1000)
+        ]);
 
-        if (setRow?.qr_code) {
-          const parsed = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
-          Object.assign(manualOverridesMap, parsed);
+        if (dRowRes?.data?.qr_code) {
+          try { deviceRegistry = typeof dRowRes.data.qr_code === 'string' ? JSON.parse(dRowRes.data.qr_code) : dRowRes.data.qr_code; } catch {}
         }
-      } catch (setErr) {
-        console.warn('Manual records backup fetch error:', setErr);
-      }
+        if (fRowRes?.data?.qr_code) {
+          try { faceRegistry = typeof fRowRes.data.qr_code === 'string' ? JSON.parse(fRowRes.data.qr_code) : fRowRes.data.qr_code; } catch {}
+        }
+        if (uRowsRes?.data && uRowsRes.data.length > 0) {
+          dbUsers = uRowsRes.data;
+        }
+        if (setRowRes?.data?.qr_code) {
+          try {
+            const parsed = typeof setRowRes.data.qr_code === 'string' ? JSON.parse(setRowRes.data.qr_code) : setRowRes.data.qr_code;
+            Object.assign(manualOverridesMap, parsed);
+          } catch {}
+        }
 
-      try {
-        const { data: attData } = await supabase
-          .from('attendance')
-          .select('*')
-          .order('date', { ascending: false })
-          .limit(1000);
+        allUsers = baseEmployees.map(baseEmp => {
+          const dbU = dbUsers.find(u => u.id === baseEmp.id);
+          const devEntry = deviceRegistry[baseEmp.id];
+          const isDeviceBound = !!(devEntry && !devEntry.unbound && devEntry.deviceToken) || !!(dbU?.device_token);
+          const faceEntry = faceRegistry[baseEmp.id];
+          const isFaceRegistered = !!(faceEntry && (faceEntry.descriptor || (faceEntry.descriptors && faceEntry.descriptors.length > 0))) || !!(dbU?.face_descriptor);
 
+          return {
+            id: baseEmp.id,
+            name: dbU?.name || baseEmp.name,
+            pin: dbU?.pin || baseEmp.pin,
+            role: dbU?.role || baseEmp.role,
+            hourlyRate: dbU?.hourly_rate ?? baseEmp.hourlyRate,
+            deviceToken: isDeviceBound ? (devEntry?.deviceToken || dbU?.device_token || 'bound') : null,
+            deviceBound: isDeviceBound,
+            faceRegistered: isFaceRegistered,
+            deviceInfo: isDeviceBound ? {
+              ip: devEntry?.ip || faceEntry?.clientIp || null,
+              boundAt: devEntry?.boundAt || null
+            } : null,
+            faceInfo: isFaceRegistered ? {
+              count: faceEntry?.descriptors?.length || (faceEntry?.descriptor ? 1 : 1),
+              registeredAt: faceEntry?.registeredAt || null
+            } : null
+          };
+        });
+
+        const attData = attRes?.data;
         if (attData) {
           attendanceRecords = attData.map(a => {
             const rowKey = `${a.user_id}_${a.date}`;
@@ -3031,11 +3027,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       // Check Rate Limiting / Lockout
       const lockKey = `lockout_${inputUser}`;
       const now = Date.now();
-      let attemptsData: any = {};
-      try {
-        const { data: meta } = await supabase.from('attendance_settings').select('*').eq('id', lockKey).maybeSingle();
-        if (meta?.settings) attemptsData = meta.settings;
-      } catch {}
+      let attemptsData: any = await getAttendanceSettingsFromStore<any>(lockKey, {});
 
       if (attemptsData.lockedUntil && attemptsData.lockedUntil > now) {
         const remainingMinutes = Math.ceil((attemptsData.lockedUntil - now) / 60000);
@@ -3062,12 +3054,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           newLockedUntil = now + 15 * 60 * 1000;
         }
 
-        try {
-          await supabase.from('attendance_settings').upsert({
-            id: lockKey,
-            settings: { failedAttempts: currentFailed, lockedUntil: newLockedUntil },
-          });
-        } catch {}
+        await saveAttendanceSettingsToStore(lockKey, { failedAttempts: currentFailed, lockedUntil: newLockedUntil });
 
         if (newLockedUntil > 0) {
           return NextResponse.json(
@@ -3091,12 +3078,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       }
 
       // Password matches!
-      try {
-        await supabase.from('attendance_settings').upsert({
-          id: lockKey,
-          settings: { failedAttempts: 0, lockedUntil: 0 },
-        });
-      } catch {}
+      await saveAttendanceSettingsToStore(lockKey, { failedAttempts: 0, lockedUntil: 0 });
 
       const sessionToken = 'adm_' + Math.random().toString(36).substring(2, 12) + '_' + Date.now().toString(36);
 
@@ -3163,13 +3145,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const { month, noteKey, note } = await req.json();
       const settingsKey = `ot_notes_${month || 'global'}`;
       try {
-        const { data: existing } = await supabase.from('attendance_settings').select('*').eq('id', settingsKey).maybeSingle();
-        const currentNotes = existing?.settings || {};
+        const currentNotes = await getAttendanceSettingsFromStore<any>(settingsKey, {});
         currentNotes[noteKey] = note;
-        await supabase.from('attendance_settings').upsert({
-          id: settingsKey,
-          settings: currentNotes,
-        });
+        await saveAttendanceSettingsToStore(settingsKey, currentNotes);
         return NextResponse.json({ success: true });
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
@@ -3198,33 +3176,47 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           if (uploaded) finalPhotoUrl = uploaded;
         }
 
-        const userUpdatePayload: any = {
-          full_name: name,
-          phone: phone,
-          address: address,
-          emergency_contact: emergencyContact,
-          national_id: nationalId,
-          blood_type: bloodType,
-          birth_date: birthDate,
-          photo_url: finalPhotoUrl,
-        };
-        if (pin) userUpdatePayload.pin = pin;
+        // 1. Resilient Profile Registry in warehouses
+        await updateEmployeeProfile(supabase, {
+          userId: cleanEmpId,
+          name,
+          phone,
+          address,
+          emergencyContact,
+          pin,
+          photo: finalPhotoUrl,
+          hireDate: birthDate,
+        });
 
-        // 1. Update in users table
-        await supabase.from('users').update(userUpdatePayload).or(`id.eq.${cleanEmpId},id.eq.${rawNum},id.eq.emp-${rawNum}`);
+        // 2. Keep ashley_employees in sync
+        try {
+          const { data: wRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_employees').maybeSingle();
+          if (wRow?.qr_code) {
+            let empList = JSON.parse(wRow.qr_code);
+            if (Array.isArray(empList)) {
+              const idx = empList.findIndex((e: any) => e.id === cleanEmpId || e.id === `emp-${rawNum}`);
+              if (idx >= 0) {
+                empList[idx] = {
+                  ...empList[idx],
+                  ...(name ? { name, fullName3Part: name } : {}),
+                  ...(phone ? { phone } : {}),
+                  ...(finalPhotoUrl ? { photoUrl: finalPhotoUrl } : {}),
+                  ...(pin ? { pin, password: pin } : {}),
+                };
+                await supabase.from('warehouses').upsert({
+                  id: 'ashley_employees',
+                  name: 'Ashley Official Employees Directory',
+                  qr_code: JSON.stringify(empList)
+                });
+              }
+            }
+          }
+        } catch {}
 
-        // 2. Update in employees table
-        await supabase.from('employees').update({
-          name: name,
-          fullName3Part: name,
-          phone: phone,
-          photoUrl: finalPhotoUrl,
-          nationalId: nationalId,
-          bloodType: bloodType,
-          emergencyContact: emergencyContact,
-          address: address,
-          dateOfBirth: birthDate
-        }).or(`id.eq.${cleanEmpId},id.eq.${rawNum},id.eq.emp-${rawNum}`);
+        // 3. Update in users table safely
+        try {
+          await supabase.from('users').update({ role: 'Employee', updated_at: new Date().toISOString() }).or(`id.eq.${cleanEmpId},id.eq.${rawNum},id.eq.emp-${rawNum}`);
+        } catch {}
 
         return NextResponse.json({ success: true, photoUrl: finalPhotoUrl, message: 'پڕۆفایل بە سەرکەوتوویی لە سوپابەیس نوێکرایەوە' });
       } catch (err: any) {

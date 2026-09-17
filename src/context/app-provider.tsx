@@ -14,7 +14,39 @@ import {
     fetchWithdrawals, 
     saveWithdrawals, 
     fetchSalarySettings, 
-    saveSalarySettings 
+    saveSalarySettings,
+    fetchAppSettings,
+    saveAppSettings,
+    fetchItems,
+    saveItems,
+    fetchExcelFiles,
+    saveExcelFiles,
+    fetchStorageLocations,
+    saveStorageLocations,
+    fetchItemCategories,
+    saveItemCategories,
+    fetchWarehouseMaps,
+    saveWarehouseMaps,
+    fetchSoldItemsLists,
+    saveSoldItemsLists,
+    fetchTransfers,
+    saveTransfers,
+    fetchTransferItems,
+    saveTransferItems,
+    fetchOrderRequests,
+    saveOrderRequests,
+    fetchMarketingFeedbacks,
+    saveMarketingFeedbacks,
+    fetchEvaluationQuestions,
+    saveEvaluationQuestions,
+    fetchRoles,
+    saveRoles,
+    fetchActivityLogs,
+    saveActivityLogs,
+    fetchExpenseReports,
+    saveExpenseReports,
+    fetchUsersList,
+    saveUsersList
 } from '@/lib/supabase';
 import { 
     Employee, 
@@ -274,22 +306,103 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return (initialData as any).attendanceLogs || [];
     });
 
-    // Auxiliary Collections (Lightweight client-side fallback)
-    const [excelFiles, setExcelFiles] = useSimpleLocalState<ExcelFile>('excelFiles', initialData.excelFiles);
-    const [rawItems, setRawItems] = useSimpleLocalState<Item>('items', initialData.items);
-    const [locations, setLocations] = useSimpleLocalState<StorageLocation>('locations', initialData.locations);
-    const [expenseReports, setExpenseReports] = useSimpleLocalState<ExpenseReport>('expenseReports', initialData.expenseReports);
-    const [itemCategories, setItemCategories] = useSimpleLocalState<ItemCategory>('itemCategories', initialData.itemCategories);
-    const [transfers, setTransfers] = useSimpleLocalState<Transfer>('transfers', initialData.transfers);
-    const [transferItems, setTransferItems] = useSimpleLocalState<ItemForTransfer>('transferItems', initialData.transferItems);
-    const [orderRequests, setOrderRequests] = useSimpleLocalState<OrderRequest>('orderRequests', initialData.orderRequests);
-    const [marketingFeedbacks, setMarketingFeedbacks] = useSimpleLocalState<MarketingFeedback>('marketingFeedbacks', initialData.marketingFeedbacks);
-    const [evaluationQuestions, setEvaluationQuestions] = useSimpleLocalState<EvaluationQuestion>('evaluationQuestions', initialData.evaluationQuestions);
-    const [users, setUsers] = useSimpleLocalState<User>('users', initialData.users);
-    const [roles, setRoles] = useSimpleLocalState<Role>('roles', initialData.roles);
-    const [soldItemsLists, setSoldItemsLists] = useSimpleLocalState<SoldItemsList>('soldItemsLists', initialData.soldItemsLists);
-    const [activityLogs, setActivityLogs] = useSimpleLocalState<ActivityLog>('activityLogs', initialData.activityLogs);
-    const [warehouseMaps, setWarehouseMaps] = useSimpleLocalState<WarehouseMap>('warehouseMaps', initialData.warehouseMaps);
+    // 5. Inventory & Warehouse Collections (Supabase Cloud Powered)
+    const [excelFiles, setExcelFiles] = useSupabaseCollection<ExcelFile>(
+        'excelFiles',
+        fetchExcelFiles,
+        saveExcelFiles,
+        initialData.excelFiles
+    );
+    const [rawItems, setRawItems] = useSupabaseCollection<Item>(
+        'items',
+        fetchItems,
+        saveItems,
+        initialData.items
+    );
+    const [locations, setLocations] = useSupabaseCollection<StorageLocation>(
+        'locations',
+        fetchStorageLocations,
+        saveStorageLocations,
+        initialData.locations
+    );
+    const [itemCategories, setItemCategories] = useSupabaseCollection<ItemCategory>(
+        'itemCategories',
+        fetchItemCategories,
+        saveItemCategories,
+        initialData.itemCategories
+    );
+    const [warehouseMaps, setWarehouseMaps] = useSupabaseCollection<WarehouseMap>(
+        'warehouseMaps',
+        fetchWarehouseMaps,
+        saveWarehouseMaps,
+        initialData.warehouseMaps
+    );
+    const [soldItemsLists, setSoldItemsLists] = useSupabaseCollection<SoldItemsList>(
+        'soldItemsLists',
+        fetchSoldItemsLists,
+        saveSoldItemsLists,
+        initialData.soldItemsLists
+    );
+
+    // 6. Logistics & Transfer Operations (Supabase Cloud Powered)
+    const [transfers, setTransfers] = useSupabaseCollection<Transfer>(
+        'transfers',
+        fetchTransfers,
+        saveTransfers,
+        initialData.transfers
+    );
+    const [transferItems, setTransferItems] = useSupabaseCollection<ItemForTransfer>(
+        'transferItems',
+        fetchTransferItems,
+        saveTransferItems,
+        initialData.transferItems
+    );
+    const [orderRequests, setOrderRequests] = useSupabaseCollection<OrderRequest>(
+        'orderRequests',
+        fetchOrderRequests,
+        saveOrderRequests,
+        initialData.orderRequests
+    );
+
+    // 7. Finance Reports & Staff Evaluation (Supabase Cloud Powered)
+    const [expenseReports, setExpenseReports] = useSupabaseCollection<ExpenseReport>(
+        'expenseReports',
+        fetchExpenseReports,
+        saveExpenseReports,
+        initialData.expenseReports
+    );
+    const [marketingFeedbacks, setMarketingFeedbacks] = useSupabaseCollection<MarketingFeedback>(
+        'marketingFeedbacks',
+        fetchMarketingFeedbacks,
+        saveMarketingFeedbacks,
+        initialData.marketingFeedbacks
+    );
+    const [evaluationQuestions, setEvaluationQuestions] = useSupabaseCollection<EvaluationQuestion>(
+        'evaluationQuestions',
+        fetchEvaluationQuestions,
+        saveEvaluationQuestions,
+        initialData.evaluationQuestions
+    );
+
+    // 8. System Security, Roles & Audit (Supabase Cloud Powered)
+    const [users, setUsers] = useSupabaseCollection<User>(
+        'users',
+        fetchUsersList,
+        saveUsersList,
+        initialData.users
+    );
+    const [roles, setRoles] = useSupabaseCollection<Role>(
+        'roles',
+        fetchRoles,
+        saveRoles,
+        initialData.roles
+    );
+    const [activityLogs, setActivityLogs] = useSupabaseCollection<ActivityLog>(
+        'activityLogs',
+        fetchActivityLogs,
+        saveActivityLogs,
+        initialData.activityLogs
+    );
 
     // Global Real-Time Supabase Sync Hub (Single Source of Truth)
     useEffect(() => {
@@ -363,12 +476,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
                             ashley_expenses: 'expenses',
                             ashley_bonuses: 'bonuses',
                             ashley_withdrawals: 'withdrawals',
+                            ashley_items: 'items',
+                            ashley_excel_files: 'excelFiles',
+                            ashley_locations: 'locations',
+                            ashley_categories: 'itemCategories',
+                            ashley_warehouse_maps: 'warehouseMaps',
+                            ashley_sold_items: 'soldItemsLists',
+                            ashley_transfers: 'transfers',
+                            ashley_transfer_items: 'transferItems',
+                            ashley_order_requests: 'orderRequests',
+                            ashley_expense_reports: 'expenseReports',
+                            ashley_marketing_feedbacks: 'marketingFeedbacks',
+                            ashley_evaluation_questions: 'evaluationQuestions',
+                            ashley_system_users: 'users',
+                            ashley_system_roles: 'roles',
+                            ashley_activity_logs: 'activityLogs',
                         };
                         const targetKey = eventMap[row.id];
                         if (targetKey) {
                             window.dispatchEvent(new CustomEvent(`ashley_sb_sync_${targetKey}`, { detail: parsed }));
                         } else if (row.id === 'ashley_salary_settings') {
                             setLocalSettings((prev) => ({ ...prev, salarySettings: parsed }));
+                        } else if (row.id === 'ashley_global_settings') {
+                            setLocalSettings((prev) => {
+                                const merged = { ...prev, ...parsed };
+                                if (typeof window !== 'undefined') {
+                                    localStorage.setItem('ashley_terminal_settings', JSON.stringify(merged));
+                                }
+                                return merged;
+                            });
                         }
                     } catch (e) {
                         console.warn('[Realtime] Parse error for warehouse record:', row.id, e);
@@ -509,8 +645,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return initialSettings;
     });
 
-    // Fetch latest salary settings from Supabase on mount
+    // Fetch latest global settings and salary settings from Supabase on mount
     useEffect(() => {
+        fetchAppSettings()
+            .then((sbSettings) => {
+                if (sbSettings) {
+                    setLocalSettings((prev) => {
+                        const merged = { ...prev, ...sbSettings };
+                        if (typeof window !== 'undefined') {
+                            localStorage.setItem('ashley_terminal_settings', JSON.stringify(merged));
+                        }
+                        return merged;
+                    });
+                }
+            })
+            .catch(() => {});
+
         fetchSalarySettings()
             .then((sbSalarySettings) => {
                 if (sbSalarySettings) {
@@ -532,6 +682,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (typeof window !== 'undefined') {
                 localStorage.setItem('ashley_terminal_settings', JSON.stringify(newSettings));
             }
+            // Realtime sync to Supabase Cloud
+            saveAppSettings(newSettings).catch((err) => {
+                console.error('[Supabase] Failed to sync settings to cloud:', err);
+            });
             if (newSettings.salarySettings) {
                 saveSalarySettings(newSettings.salarySettings).catch(() => {});
             }

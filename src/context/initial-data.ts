@@ -23,12 +23,14 @@ const initialUsers: User[] = [
     {
         id: 'user-admin-default',
         username: 'admin',
+        name: 'Admin',
         password: 'password',
         roleId: 'role-admin'
     },
     {
         id: 'user-darko-admin',
         username: 'Darko_admin07',
+        name: 'Darko Admin',
         password: '123',
         roleId: 'role-admin'
     }
@@ -136,7 +138,7 @@ export const initialSettings: AppSettings = {
     dashboardBanner: null,
     dashboardBannerHeight: 0,
     newsTickerText: 'Welcome to ASHLEY Do27!',
-    fontFamily: 'Inter, system-ui, sans-serif',
+    fontFamily: 'NRT, system-ui, sans-serif',
     customFont: null,
     printHeaderImage: null,
     printFooterImage: null,

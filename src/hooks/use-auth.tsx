@@ -14,6 +14,7 @@ interface AuthState {
 const defaultAdminUser: User = {
   id: 'admin-1',
   username: 'admin',
+  name: 'بەڕێوەبەری سەرەکی (Super Admin)',
   password: '000',
   fullName: 'بەڕێوەبەری سەرەکی (Super Admin)',
   roleId: 'role-admin'
@@ -64,9 +65,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const sessionToken = 'adm_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
-    const loggedUser = {
+    const loggedUser: User & { token: string; loginTime: number } = {
       id: 'admin-super',
       username: username.trim(),
+      name: username ? `بەڕێوەبەر (${username})` : 'بەڕێوەبەری سەرەکی',
       password: password.trim(),
       fullName: username ? `بەڕێوەبەر (${username})` : 'بەڕێوەبەری سەرەکی (Super Admin)',
       roleId: 'role-admin',

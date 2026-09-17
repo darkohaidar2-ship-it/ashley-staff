@@ -11,7 +11,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['var(--font-body)', 'Arial', 'sans-serif'],
+        sans: ['var(--font-body)', 'NRT', 'Vazirmatn', 'Arial', 'sans-serif'],
       },
       colors: {
         background: 'hsl(var(--background))',

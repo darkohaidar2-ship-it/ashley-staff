@@ -1,4 +1,4 @@
-﻿import { supabase } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 import type { AttendanceRecord } from '@/lib/types';
 
 export async function fetchAttendanceLogs(): Promise<AttendanceRecord[]> {
@@ -32,7 +32,7 @@ export async function fetchAttendanceLogs(): Promise<AttendanceRecord[]> {
       originalTime: row.original_time,
       editNote: row.edit_note,
       status: 'present',
-    })) as AttendanceRecord[];
+    })) as unknown as AttendanceRecord[];
   } catch (err) {
     console.error('[AttendanceService] Exception fetching attendance logs:', err);
     return [];

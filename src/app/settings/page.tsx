@@ -130,43 +130,107 @@ function SettingsPage() {
     }));
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, fieldKey: string) => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Compress image before storing to ensure fast Supabase sync and low bandwidth
+  const compressImageFile = (file: File, maxWidth = 900, maxHeight = 900, quality = 0.85): Promise<string> => {
+    if (file.type === 'image/svg+xml') {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new window.Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(e.target?.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+          resolve(canvas.toDataURL(mime, quality));
+        };
+        img.onerror = () => resolve(e.target?.result as string);
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldKey: string) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        updateSetting(fieldKey, base64);
+      try {
+        const optimizedBase64 = await compressImageFile(file);
+        updateSetting(fieldKey, optimizedBase64);
         toast({
-          title: "وێنەکە بارکرا",
-          description: "تکایە کلیك لە پاشەکەوتکردن بکە بۆ جێگیرکردنی لۆگۆکە."
+          title: "وێنەکە ئامادە کرا",
+          description: "تکایە کلیك لە پاشەکەوتکردن بکە بۆ جێگیرکردنی لۆگۆکە لە کلاود (سووپابەیس)."
         });
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        toast({
+          title: "هەڵە لە ئامادەکردنی وێنە",
+          description: "نەتوانرا وێنەکە ئامادە بکرێت.",
+          variant: "destructive"
+        });
+      }
     }
   };
 
   const handleSaveChanges = async () => {
-    setSettings(draftSettings);
-
-    // Sync default shift to attendance backend
+    setIsSaving(true);
     try {
-      const shiftData = draftSettings.shiftSettings || { checkInTime: '08:00', checkOutTime: '17:00', graceMinutes: 15 };
-      await fetch('/api/attendance/admin/shifts/default', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(shiftData)
-      });
-    } catch (err) {
-      console.warn('Shift sync warning:', err);
-    }
+      await setSettings(draftSettings);
 
-    setIsSaved(true);
-    toast({
-      title: "ڕێکخستنەکان پاشەکەوت کران",
-      description: "ناسنامەی فەرمی کۆمپانیا و کاتەکانی دەوام بە سەرکەوتوویی نوێکرانەوە."
-    });
-    setTimeout(() => setIsSaved(false), 3000);
+      // Sync default shift to attendance backend
+      try {
+        const shiftData = draftSettings.shiftSettings || { checkInTime: '08:00', checkOutTime: '17:00', graceMinutes: 15 };
+        await fetch('/api/attendance/admin/shifts/default', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(shiftData)
+        });
+      } catch (err) {
+        console.warn('Shift sync warning:', err);
+      }
+
+      setIsSaved(true);
+      toast({
+        title: "ڕێکخستنەکان پاشەکەوت کران",
+        description: "ناسنامەی فەرمی کۆمپانیا لە کلاود (سووپابەیس) و لۆکاڵ بە سەرکەوتوویی نوێکرانەوە و ڕاستەوخۆ دەبینرێن.",
+      });
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (err) {
+      toast({
+        title: "هەڵە لە پاشەکەوتکردن",
+        description: "تکایە دڵنیابەرەوە لە پەیوەندی ئینتەرنێت.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleResetDefaults = () => {
@@ -636,7 +700,7 @@ function SettingsPage() {
             <ImageControl 
               label="🏛️ لۆگۆی گروپی دیوان (کۆمپانیای دایک)" 
               description="لۆگۆی فەرمی کۆمپانیای دایک بۆ دانان لە هێدەری ڕاپۆرتەکان شانبەشانی ئاشڵی." 
-              value={draftSettings.diwanLogo} 
+              value={draftSettings.diwanLogo || null} 
               onValueChange={v => updateSetting('diwanLogo', v)}
               onFileUpload={e => handleFileUpload(e, 'diwanLogo')}
             />
@@ -838,13 +902,32 @@ function SettingsPage() {
 
           <button
             type="button"
+            disabled={isSaving}
             onClick={handleSaveChanges}
             className={`px-6 py-2.5 rounded-xl text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer ${
-              isSaved ? 'bg-emerald-600' : 'bg-[#007AFF] hover:bg-[#0062cc]'
+              isSaved 
+                ? 'bg-emerald-600' 
+                : isSaving 
+                  ? 'bg-blue-400 cursor-wait' 
+                  : 'bg-[#007AFF] hover:bg-[#0062cc]'
             }`}
           >
-            {isSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-            <span>{isSaved ? 'پاشەکەوتکرا!' : 'پاشەکەوتکردنی هەموو ڕێکخستنەکان'}</span>
+            {isSaved ? (
+              <>
+                <Check className="w-4 h-4" />
+                <span>پاشەکەوتکرا لە کلاود و لۆکاڵ!</span>
+              </>
+            ) : isSaving ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>خەزنکردن لە کلاود (سووپابەیس)...</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>پاشەکەوتکردنی هەموو ڕێکخستنەکان (Realtime Sync)</span>
+              </>
+            )}
           </button>
         </div>
 

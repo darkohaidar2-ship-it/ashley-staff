@@ -220,8 +220,22 @@ export function exportToPDF(options: ExportReportOptions) {
       print-color-adjust: exact !important;
       color-adjust: exact !important;
     }
+    @font-face {
+      font-family: 'NRT';
+      src: url('/fonts/NRT-Reg.woff') format('woff'),
+           url('/fonts/NRT-Reg.ttf') format('truetype');
+      font-weight: 400 500;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'NRT';
+      src: url('/fonts/NRT-Bd.woff') format('woff'),
+           url('/fonts/NRT-Bd.ttf') format('truetype');
+      font-weight: 600 900;
+      font-style: normal;
+    }
     body {
-      font-family: 'Segoe UI', Tahoma, 'Noto Kufi Arabic', Arial, sans-serif;
+      font-family: 'NRT', 'Vazirmatn', 'Segoe UI', Tahoma, Arial, sans-serif;
       margin: 0;
       padding: 10px;
       color: #0f172a;
@@ -792,8 +806,22 @@ export function exportMonthlyMultiPageDailyPDF(options: MonthDailyReportOptions)
       print-color-adjust: exact !important;
       color-adjust: exact !important;
     }
+    @font-face {
+      font-family: 'NRT';
+      src: url('/fonts/NRT-Reg.woff') format('woff'),
+           url('/fonts/NRT-Reg.ttf') format('truetype');
+      font-weight: 400 500;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'NRT';
+      src: url('/fonts/NRT-Bd.woff') format('woff'),
+           url('/fonts/NRT-Bd.ttf') format('truetype');
+      font-weight: 600 900;
+      font-style: normal;
+    }
     body {
-      font-family: 'Segoe UI', Tahoma, 'Noto Kufi Arabic', Arial, sans-serif;
+      font-family: 'NRT', 'Vazirmatn', 'Segoe UI', Tahoma, Arial, sans-serif;
       margin: 0;
       padding: 0;
       color: #0f172a;
@@ -1169,11 +1197,25 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
   <meta charset="UTF-8">
   <title>ڕاپۆرتی فەرمی مانگانەی کۆمپانیای ئاشڵی - ${month}</title>
   <style>
+    @font-face {
+      font-family: 'NRT';
+      src: url('/fonts/NRT-Reg.woff') format('woff'),
+           url('/fonts/NRT-Reg.ttf') format('truetype');
+      font-weight: 400 500;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'NRT';
+      src: url('/fonts/NRT-Bd.woff') format('woff'),
+           url('/fonts/NRT-Bd.ttf') format('truetype');
+      font-weight: 600 900;
+      font-style: normal;
+    }
     @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap');
     
     * { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Vazirmatn", system-ui, sans-serif;
+      font-family: 'NRT', 'Vazirmatn', -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
       margin: 0;
       padding: 12px;
       color: #1c1c1e;

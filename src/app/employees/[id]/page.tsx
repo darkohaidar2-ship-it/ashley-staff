@@ -73,7 +73,8 @@ function EmployeeDetailPage() {
     expenses = [],
     overtime = [],
     bonuses = [],
-    withdrawals = []
+    withdrawals = [],
+    isLoading = false
   } = useAppContext();
 
   // Find Employee from Context or fallback list
@@ -740,17 +741,23 @@ function EmployeeDetailPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3 bg-emerald-50 border border-emerald-200 text-center">
               <span className="text-[10px] text-emerald-800 font-black block">ڕۆژانی ئامادەبوو:</span>
-              <span className="text-xl font-black font-mono text-emerald-700">{attendanceData.presentCount} ڕۆژ</span>
+              <span className="text-xl font-black font-mono text-emerald-700">
+                {isLoading ? <span className="inline-block w-12 h-5 bg-emerald-200/80 rounded animate-pulse" /> : `${attendanceData.presentCount} ڕۆژ`}
+              </span>
             </div>
 
             <div className="p-3 bg-blue-50 border border-blue-200 text-center">
               <span className="text-[10px] text-blue-800 font-black block">کۆی کاتژمێری ئیشکردن:</span>
-              <span className="text-xl font-black font-mono text-blue-700">{attendanceData.totalWorkedHours} کاتژمێر</span>
+              <span className="text-xl font-black font-mono text-blue-700">
+                {isLoading ? <span className="inline-block w-12 h-5 bg-blue-200/80 rounded animate-pulse" /> : `${attendanceData.totalWorkedHours} کاتژمێر`}
+              </span>
             </div>
 
             <div className="p-3 bg-rose-50 border border-rose-200 text-center">
               <span className="text-[10px] text-rose-800 font-black block">غیاب / نەهاتوو:</span>
-              <span className="text-xl font-black font-mono text-rose-700">{attendanceData.absentCount} ڕۆژ</span>
+              <span className="text-xl font-black font-mono text-rose-700">
+                {isLoading ? <span className="inline-block w-12 h-5 bg-rose-200/80 rounded animate-pulse" /> : `${attendanceData.absentCount} ڕۆژ`}
+              </span>
             </div>
 
             <div className="p-3 bg-purple-50 border border-purple-200 text-center">
@@ -806,7 +813,9 @@ function EmployeeDetailPage() {
                         {d.isPresent ? '٨ کاتژمێر' : d.isFriday ? 'پشوو' : '-'}
                       </td>
                       <td className="p-2 text-center">
-                        {d.isFriday ? (
+                        {isLoading ? (
+                          <span className="inline-block w-10 h-4 bg-slate-200 rounded animate-pulse" />
+                        ) : d.isFriday ? (
                           <span className="px-2 py-0.5 bg-teal-100 text-teal-900 border border-teal-300 text-[10px]">🌴 پشوو</span>
                         ) : d.isPresent ? (
                           <span className="px-2 py-0.5 bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px]">🟢 ئامادە</span>

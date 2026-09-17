@@ -28,10 +28,14 @@ function DynamicFontInjector({ children }: { children: React.ReactNode }) {
             font-family: 'CustomUploadedFont', system-ui, sans-serif !important;
           }
         `;
-      } else if (settings?.fontFamily) {
+      } else if (settings?.fontFamily && !settings.fontFamily.includes('Inter')) {
         const existingStyle = document.getElementById('custom-ui-font-style');
         if (existingStyle) existingStyle.remove();
         document.body.style.fontFamily = settings.fontFamily;
+      } else {
+        const existingStyle = document.getElementById('custom-ui-font-style');
+        if (existingStyle) existingStyle.remove();
+        document.body.style.fontFamily = "'NRT', 'Vazirmatn', system-ui, sans-serif";
       }
     }
   }, [settings?.fontFamily, settings?.customFont]);

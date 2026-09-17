@@ -26,7 +26,13 @@ import {
   MessageSquareText,
   User,
   ShieldCheck,
-  Sparkles
+  Sparkles,
+  CheckSquare,
+  Square,
+  Layers,
+  SlidersHorizontal,
+  CalendarRange,
+  MousePointerClick
 } from 'lucide-react';
 import { getDaysInMonth, format, getDay } from 'date-fns';
 import Link from 'next/link';
@@ -92,7 +98,7 @@ const DAY_THEMES: Record<number, {
 };
 
 export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [] }: NewGpsAttendanceMatrixTableProps) {
-  const { settings } = useAppContext();
+  const { settings, isLoading: isGlobalLoading } = useAppContext();
   const [selectedMonth, setSelectedMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'));
   const [searchQuery, setSearchQuery] = useState<string>('');
   
@@ -120,7 +126,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   const [selectedPaletteStatus, setSelectedPaletteStatus] = useState<string>('Present');
   const [draggedStatus, setDraggedStatus] = useState<string | null>(null);
 
-  // Dynamic Manual Overrides Map for cell statuses
+  // Dynamic Manual Overrides Map for cell statuses (Initialized with instant cache if available)
   const [manualStatusMap, setManualStatusMap] = useState<Record<string, { 
     status: string; 
     checkInTime?: string; 
@@ -128,7 +134,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     rawCheckIn?: string; 
     rawCheckOut?: string; 
     checkInNote?: string;
-    checkOutNote?: string;
+    checkOutNote?: string; 
     note?: string; 
     adminNote?: string;
     adminCheckInNote?: string;
@@ -136,7 +142,20 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     historyLogs?: any[];
     adminDecision?: 'waived' | 'penalized' | null;
     isWaived?: boolean;
-  }>>({});
+  }>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const curMonth = format(new Date(), 'yyyy-MM');
+        const cached = localStorage.getItem(`ashley_matrix_overrides_${curMonth}`);
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return {};
+  });
+
+  // Track whether saved records have loaded from server
+  const [isRecordsLoaded, setIsRecordsLoaded] = useState<boolean>(false);
+  const isWaitingData = !isRecordsLoaded || isGlobalLoading;
 
   // 🖥️ Fit to Screen / Density View Mode ('fit' = 100% on screen, 'normal' = wide expanded)
   const [tableFitMode, setTableFitMode] = useState<'fit' | 'normal'>('fit');
@@ -147,6 +166,39 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   const [printEndDay, setPrintEndDay] = useState<number>(31);
   const [printEmployeeFilter, setPrintEmployeeFilter] = useState<'all' | 'managers' | 'custom'>('all');
   const [selectedPrintEmpIds, setSelectedPrintEmpIds] = useState<string[]>([]);
+
+  // 🎯 Multi-Select & Batch Edit States
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState<boolean>(false);
+  const [selectedCells, setSelectedCells] = useState<Record<string, { empId: string; empName: string; dateStr: string; dayNum: number }>>({});
+  const [showBatchModal, setShowBatchModal] = useState<boolean>(false);
+
+  // Batch Form State
+  const [batchStatus, setBatchStatus] = useState<string>('Present');
+  const [batchCheckIn, setBatchCheckIn] = useState<string>('08:00');
+  const [batchCheckOut, setBatchCheckOut] = useState<string>('17:00');
+  const [batchNote, setBatchNote] = useState<string>('');
+  const [isApplyingBatch, setIsApplyingBatch] = useState<boolean>(false);
+
+  // Range Selector Modal State
+  const [rangeTargetEmp, setRangeTargetEmp] = useState<string>('all'); // 'all', 'managers', or specific emp.id
+  const [rangeStartDay, setRangeStartDay] = useState<number>(1);
+  const [rangeEndDay, setRangeEndDay] = useState<number>(31);
+  const [rangeDayType, setRangeDayType] = useState<'all' | 'workdays' | 'fridays'>('all');
+
+  // 🖱️ Spreadsheet-Style Drag-To-Select (Google Sheets / Excel)
+  const [isDraggingCells, setIsDraggingCells] = useState<boolean>(false);
+  const [lastFocusedCell, setLastFocusedCell] = useState<{ r: number; c: number } | null>(null);
+  const dragSelectionRef = React.useRef<{
+    isDragging: boolean;
+    start: { r: number; c: number } | null;
+    hasMoved: boolean;
+    baseSelected: Record<string, { empId: string; empName: string; dateStr: string; dayNum: number }>;
+  }>({
+    isDragging: false,
+    start: null,
+    hasMoved: false,
+    baseSelected: {},
+  });
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
 
@@ -169,10 +221,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     });
   }, [totalDays, year, month, selectedMonth, todayStr]);
 
-  // Adjust printEndDay if month days change
+  // Adjust printEndDay & rangeEndDay if month days change
   useEffect(() => {
     setPrintEndDay(totalDays);
-  }, [totalDays]);
+    setRangeEndDay(totalDays);
+    setSelectedCells({});
+  }, [totalDays, selectedMonth]);
 
   // Fetch saved manual records from server & Supabase
   const loadSavedRecords = useCallback(async () => {
@@ -245,7 +299,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           if (cached) setManualStatusMap(prev => ({ ...prev, ...JSON.parse(cached) }));
         } catch {}
       }
+    } finally {
+      setIsRecordsLoaded(true);
     }
+  }, [selectedMonth]);
+
+  // Reset loading state whenever month switches
+  useEffect(() => {
+    setIsRecordsLoaded(false);
   }, [selectedMonth]);
 
   useEffect(() => {
@@ -296,6 +357,247 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       return (a.fullName3Part || a.name || '').localeCompare(b.fullName3Part || b.name || '', 'ckb');
     });
   }, [employees, searchQuery]);
+
+  // ==========================================
+  // 🎯 MULTI-SELECT & BATCH EDITING SYSTEM
+  // ==========================================
+  const selectedCount = useMemo(() => Object.keys(selectedCells).length, [selectedCells]);
+
+  // 🖱️ Calculate rectangular box selection between start cell (startR, startC) and current cell (currentR, currentC)
+  const updateDragSelection = useCallback((
+    startR: number, 
+    startC: number, 
+    currentR: number, 
+    currentC: number, 
+    base: Record<string, { empId: string; empName: string; dateStr: string; dayNum: number }>
+  ) => {
+    const minR = Math.min(startR, currentR);
+    const maxR = Math.max(startR, currentR);
+    const minC = Math.min(startC, currentC);
+    const maxC = Math.max(startC, currentC);
+
+    const next = { ...base };
+    for (let r = minR; r <= maxR; r++) {
+      const targetEmp = activeEmployees[r];
+      if (!targetEmp) continue;
+      const empName = targetEmp.fullName3Part || targetEmp.name;
+      for (let c = minC; c <= maxC; c++) {
+        const targetDay = daysArray[c];
+        if (!targetDay) continue;
+        const key = `${targetEmp.id}_${targetDay.dateStr}`;
+        next[key] = {
+          empId: targetEmp.id,
+          empName,
+          dateStr: targetDay.dateStr,
+          dayNum: targetDay.dayNum,
+        };
+      }
+    }
+    setSelectedCells(next);
+  }, [activeEmployees, daysArray]);
+
+  // Global mouseup listener so dragging ends cleanly even if released outside the table
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (dragSelectionRef.current.isDragging) {
+        dragSelectionRef.current.isDragging = false;
+        setIsDraggingCells(false);
+      }
+    };
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, []);
+
+  // 1. Toggle single cell selection
+  const toggleCellSelection = useCallback((empId: string, empName: string, dateStr: string, dayNum: number) => {
+    const key = `${empId}_${dateStr}`;
+    setSelectedCells(prev => {
+      const next = { ...prev };
+      if (next[key]) {
+        delete next[key];
+      } else {
+        next[key] = { empId, empName, dateStr, dayNum };
+      }
+      return next;
+    });
+  }, []);
+
+  // 2. Select / Deselect entire Day Column (for all active employees)
+  const toggleDayColumn = useCallback((dayNum: number, dateStr: string) => {
+    setSelectedCells(prev => {
+      const next = { ...prev };
+      const allSelected = activeEmployees.length > 0 && activeEmployees.every(emp => Boolean(next[`${emp.id}_${dateStr}`]));
+      activeEmployees.forEach(emp => {
+        const k = `${emp.id}_${dateStr}`;
+        if (allSelected) {
+          delete next[k];
+        } else {
+          next[k] = { empId: emp.id, empName: emp.fullName3Part || emp.name, dateStr, dayNum };
+        }
+      });
+      return next;
+    });
+  }, [activeEmployees]);
+
+  // 3. Select / Deselect entire Employee Row (all days of month)
+  const toggleEmployeeRow = useCallback((empId: string, empName: string) => {
+    setSelectedCells(prev => {
+      const next = { ...prev };
+      const allSelected = daysArray.length > 0 && daysArray.every(d => Boolean(next[`${empId}_${d.dateStr}`]));
+      daysArray.forEach(d => {
+        const k = `${empId}_${d.dateStr}`;
+        if (allSelected) {
+          delete next[k];
+        } else {
+          next[k] = { empId, empName, dateStr: d.dateStr, dayNum: d.dayNum };
+        }
+      });
+      return next;
+    });
+  }, [daysArray]);
+
+  // 4. Select Entire Matrix (All employees, all days)
+  const selectAllMatrix = useCallback(() => {
+    const next: Record<string, { empId: string; empName: string; dateStr: string; dayNum: number }> = {};
+    activeEmployees.forEach(emp => {
+      daysArray.forEach(d => {
+        next[`${emp.id}_${d.dateStr}`] = {
+          empId: emp.id,
+          empName: emp.fullName3Part || emp.name,
+          dateStr: d.dateStr,
+          dayNum: d.dayNum
+        };
+      });
+    });
+    setSelectedCells(next);
+  }, [activeEmployees, daysArray]);
+
+  // 5. Clear All Selection
+  const clearAllSelection = useCallback(() => {
+    setSelectedCells({});
+  }, []);
+
+  // 6. Compute cells matching range criteria
+  const computeRangeCells = useCallback(() => {
+    const empsToSelect = rangeTargetEmp === 'all'
+      ? activeEmployees
+      : rangeTargetEmp === 'managers'
+      ? activeEmployees.filter(e => e.role === 'Manager' || e.id === 'emp-02' || (e.fullName3Part || '').includes('دارکۆ'))
+      : activeEmployees.filter(e => e.id === rangeTargetEmp);
+
+    const cells: Array<{ empId: string; empName: string; dateStr: string; dayNum: number }> = [];
+    empsToSelect.forEach(emp => {
+      daysArray.forEach(d => {
+        if (d.dayNum >= rangeStartDay && d.dayNum <= rangeEndDay) {
+          if (rangeDayType === 'workdays' && d.isFriday) return;
+          if (rangeDayType === 'fridays' && !d.isFriday) return;
+          cells.push({
+            empId: emp.id,
+            empName: emp.fullName3Part || emp.name,
+            dateStr: d.dateStr,
+            dayNum: d.dayNum
+          });
+        }
+      });
+    });
+    return cells;
+  }, [rangeTargetEmp, rangeStartDay, rangeEndDay, rangeDayType, activeEmployees, daysArray]);
+
+  // Select by Range criteria
+  const selectByRange = useCallback(() => {
+    const cells = computeRangeCells();
+    setSelectedCells(prev => {
+      const next = { ...prev };
+      cells.forEach(c => {
+        next[`${c.empId}_${c.dateStr}`] = c;
+      });
+      return next;
+    });
+    setIsMultiSelectMode(true);
+    setShowBatchModal(false);
+  }, [computeRangeCells]);
+
+  // 7. Apply Batch Data and Persist to Supabase
+  const handleApplyBatchData = useCallback(async (
+    overrideStatus?: string, 
+    overrideIn?: string, 
+    overrideOut?: string,
+    overrideNote?: string,
+    customCells?: Array<{ empId: string; empName: string; dateStr: string; dayNum: number }>
+  ) => {
+    const targetStatus = overrideStatus || batchStatus;
+    const targetIn = overrideIn || batchCheckIn;
+    const targetOut = overrideOut || batchCheckOut;
+    const targetNote = overrideNote !== undefined ? overrideNote : batchNote;
+
+    const selectedList = customCells && customCells.length > 0 ? customCells : Object.values(selectedCells);
+    if (selectedList.length === 0) return;
+
+    setIsApplyingBatch(true);
+
+    // Optimistic instant UI update
+    setManualStatusMap(prev => {
+      const next = { ...prev };
+      selectedList.forEach(item => {
+        const key = `${item.empId}_${item.dateStr}`;
+        if (targetStatus === 'Empty') {
+          delete next[key];
+        } else {
+          next[key] = {
+            status: targetStatus,
+            checkInTime: targetStatus === 'Present' ? targetIn : targetStatus === 'Leave' ? 'مۆڵەت' : undefined,
+            checkOutTime: targetStatus === 'Present' ? targetOut : targetStatus === 'Leave' ? 'مۆڵەت' : undefined,
+            rawCheckIn: targetIn,
+            rawCheckOut: targetOut,
+            adminNote: targetNote || undefined,
+            adminCheckInNote: targetNote || undefined,
+            isWaived: false,
+            adminDecision: null,
+          };
+        }
+      });
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(next));
+        } catch {}
+      }
+      return next;
+    });
+
+    // Close modal and clear selection immediately (0ms UI feedback)
+    setSelectedCells({});
+    setShowBatchModal(false);
+
+    // Persistent server & Supabase batch sync
+    try {
+      const recordsPayload = selectedList.map(item => ({
+        userId: item.empId,
+        userName: item.empName,
+        date: item.dateStr,
+        status: targetStatus,
+        action: targetStatus === 'Empty' ? 'delete' : undefined,
+        checkInTime: targetStatus === 'Present' ? targetIn : undefined,
+        checkOutTime: targetStatus === 'Present' ? targetOut : undefined,
+        adminNote: targetNote || undefined,
+        adminCheckInNote: targetNote || undefined,
+      }));
+
+      await fetch('/api/attendance/admin/manual-record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ records: recordsPayload })
+      });
+
+      loadSavedRecords();
+    } catch (err) {
+      console.error('Batch save error:', err);
+    } finally {
+      setIsApplyingBatch(false);
+    }
+  }, [batchStatus, batchCheckIn, batchCheckOut, batchNote, selectedCells, selectedMonth, loadSavedRecords]);
+
 
   // Lookup record function for any employee & day
   const getGpsLogsForEmpAndDay = useCallback((emp: Employee, dayItem: { dayNum: number; dateStr: string; isFriday: boolean; isFuture: boolean; isToday: boolean }) => {
@@ -503,6 +805,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
     if (hasRecord) {
       status = 'Present';
+    } else if (isWaitingData && !isFriday && !isFuture && !isToday) {
+      // 🌟 Suppress false 'Absent' while server data is still loading
+      status = 'Loading';
     } else if (!isFriday && !isFuture && !isToday) {
       status = 'Absent';
     }
@@ -547,10 +852,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       warehouseName,
       workedHours,
     };
-  }, [manualStatusMap, attendanceLogs, selectedMonth]);
+  }, [manualStatusMap, attendanceLogs, selectedMonth, isWaitingData]);
 
   // Open Cell Click Modal (Does NOT overwrite arbitrarily)
-  const handleCellClick = (emp: Employee, dayItem: { dayNum: number; dateStr: string; isFriday: boolean; isFuture: boolean; isToday: boolean }) => {
+  const handleCellClick = (emp: Employee, dayItem: { dayNum: number; dateStr: string; isFriday: boolean; isFuture: boolean; isToday: boolean; dayOfWeek: number }) => {
     const info = getGpsLogsForEmpAndDay(emp, dayItem);
     setSelectedDayModal({ emp, dayItem, info });
     setModalStatus(info.status === 'Empty' ? 'Present' : info.status);
@@ -559,7 +864,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     setModalAdminNote(info.adminNote || '');
     setModalAdminCheckInNote(info.adminCheckInNote || info.adminNote || '');
     setModalAdminCheckOutNote(info.adminCheckOutNote || '');
-    setModalAdminDecision(info.adminDecision || (info.isWaived ? 'waived' : null));
+    setModalAdminDecision((info.adminDecision as 'waived' | 'penalized') || (info.isWaived ? 'waived' : null));
   };
 
   // Save Modal Changes to Supabase
@@ -636,7 +941,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         return next;
       });
 
-      // 2. Persistent server sync
+      // Close modal IMMEDIATELY (0ms instant user feedback)
+      setSelectedDayModal(null);
+      setIsSavingModal(false);
+
+      // 2. Persistent server sync in background
       await fetch('/api/attendance/admin/manual-record', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -659,8 +968,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         })
       });
 
-      await loadSavedRecords();
-      setSelectedDayModal(null);
+      loadSavedRecords();
     } catch (e) {
       console.error('Error saving modal attendance edit:', e);
     } finally {
@@ -675,16 +983,23 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     const { emp, dayItem } = selectedDayModal;
     const key = `${emp.id}_${dayItem.dateStr}`;
 
-    // Optimistic Clean Blank Update
+    // 1. Close modal IMMEDIATELY (0ms reaction)
+    setSelectedDayModal(null);
+
+    // 2. Optimistic Clean Blank Update
     setManualStatusMap(prev => {
       const next = {
         ...prev,
         [key]: {
           status: 'Empty',
-          checkInTime: undefined,
-          checkOutTime: undefined,
+          checkInTime: '',
+          checkOutTime: '',
+          rawCheckIn: '',
+          rawCheckOut: '',
           adminNote: '',
-          note: ''
+          note: '',
+          hasRecord: false,
+          workedHours: 0,
         }
       };
       if (typeof window !== 'undefined') {
@@ -695,6 +1010,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       return next;
     });
 
+    // 3. Persistent server sync in background
     try {
       await fetch('/api/attendance/admin/manual-record', {
         method: 'POST',
@@ -707,9 +1023,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           status: 'empty'
         })
       });
-      await loadSavedRecords();
-      setSelectedDayModal(null);
-    } catch (e) {}
+      loadSavedRecords();
+    } catch (e) {
+      console.error('Failed to delete record:', e);
+    }
   };
 
   // Drag & Drop Instant Drop
@@ -998,6 +1315,20 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         <meta charset="UTF-8">
         <title>Ashley Attendance Sheet - ${selectedMonth} (Days ${printStartDay}-${printEndDay})</title>
         <style>
+          @font-face {
+            font-family: 'NRT';
+            src: url('/fonts/NRT-Reg.woff') format('woff'),
+                 url('/fonts/NRT-Reg.ttf') format('truetype');
+            font-weight: 400 500;
+            font-style: normal;
+          }
+          @font-face {
+            font-family: 'NRT';
+            src: url('/fonts/NRT-Bd.woff') format('woff'),
+                 url('/fonts/NRT-Bd.ttf') format('truetype');
+            font-weight: 600 900;
+            font-style: normal;
+          }
           @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap');
           
           @page {
@@ -1006,7 +1337,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           }
           * { box-sizing: border-box; }
           html, body {
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Vazirmatn", system-ui, sans-serif;
+            font-family: 'NRT', 'Vazirmatn', -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
             margin: 0;
             padding: 6px;
             color: #1c1c1e;
@@ -1220,6 +1551,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-[#007AFF] dark:text-blue-400 border border-blue-200/50 dark:border-blue-800/40 font-mono">
                   08:30 - 16:30
                 </span>
+                {isWaitingData && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 animate-pulse">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                    <span>بارکردنی داتاکان...</span>
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
                 کلیک لەسەر ناوی کارمەند بکە بۆ دۆسیەی HR — کلیک لەسەر خانەکان بکە بۆ دەستکاری.
@@ -1241,6 +1578,40 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               />
             </div>
             
+            {/* 🎯 Multi-Select Toggle Button */}
+            <button 
+              type="button"
+              onClick={() => {
+                setIsMultiSelectMode(prev => !prev);
+                if (isMultiSelectMode) setSelectedCells({});
+              }} 
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer border ${
+                isMultiSelectMode 
+                  ? 'bg-[#007AFF] text-white border-[#007AFF] shadow-sm ring-2 ring-blue-400/40' 
+                  : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-[#007AFF] dark:text-blue-400 border-blue-200/60 dark:border-blue-800/40'
+              }`}
+              title="دیاریکردنی چەندین ڕۆژ یان خانە لە خشتەکە — دەتوانیت وەک شیت بە ماوس ڕایبکێشیت (Drag-to-Select)"
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+              <span>{isMultiSelectMode ? 'مودێ فرە-خانە (چالاکە)' : 'دەستکاری فرە-ڕۆژ'}</span>
+              {selectedCount > 0 && (
+                <span className="bg-white text-[#007AFF] text-[10px] font-mono px-1.5 py-0.5 rounded-full font-black">
+                  {selectedCount}
+                </span>
+              )}
+            </button>
+
+            {/* 📅 Batch Days Range Tool Button */}
+            <button 
+              type="button"
+              onClick={() => setShowBatchModal(true)} 
+              className="px-3.5 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer border border-indigo-200/60 dark:border-indigo-800/40"
+              title="دیاریکردنی مەودای چەندین ڕۆژ (بۆ نموونە لە ڕۆژی ١ تا ١٥ بۆ هەمووان)"
+            >
+              <CalendarRange className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>داخڵکردنی چەند ڕۆژێک</span>
+            </button>
+
             {/* 🖨️ Prominent Print & Custom Range Button */}
             <button 
               onClick={() => setShowPrintModal(true)} 
@@ -1374,16 +1745,37 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               <th className={`sticky right-0 bg-slate-100/98 dark:bg-[#3a3a3c]/98 text-slate-900 dark:text-white font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l-2 border-l-slate-300 dark:border-l-slate-600 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] ${
                 tableFitMode === 'fit' ? 'w-[145px] min-w-[145px] px-2 py-2 text-[11px]' : 'min-w-[200px] px-3 py-3 text-xs'
               }`}>
-                کارمەند (دۆسیەی HR)
+                <div className="flex items-center justify-between">
+                  <span>کارمەند (دۆسیەی HR)</span>
+                  {isMultiSelectMode && (
+                    <button
+                      type="button"
+                      onClick={selectAllMatrix}
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#007AFF] text-white hover:bg-blue-600 transition-colors cursor-pointer"
+                      title="دیاریکردنی هەموو خشتەکە"
+                    >
+                      هەمووی
+                    </button>
+                  )}
+                </div>
               </th>
               {daysArray.map((d) => {
                 const isFriday = d.isFriday;
                 const theme = DAY_THEMES[d.dayOfWeek] || DAY_THEMES[6];
+                const isColFullySelected = activeEmployees.length > 0 && activeEmployees.every(emp => Boolean(selectedCells[`${emp.id}_${d.dateStr}`]));
+                const isColPartiallySelected = !isColFullySelected && activeEmployees.some(emp => Boolean(selectedCells[`${emp.id}_${d.dateStr}`]));
+
                 return (
                   <th 
-                    key={d.dateStr} 
-                    className={`text-center font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 ${
-                      theme.headerCls
+                    key={d.dateStr}
+                    onClick={() => toggleDayColumn(d.dayNum, d.dateStr)}
+                    title={`کرتە بکە بۆ دیاریکردنی هەموو کارمەندان لە ڕۆژی ${d.dayNum}`}
+                    className={`relative text-center font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 cursor-pointer transition-all hover:brightness-95 ${
+                      isColFullySelected 
+                        ? 'bg-blue-200 dark:bg-blue-900 text-blue-950 dark:text-blue-100 ring-2 ring-[#007AFF] ring-inset shadow-xs' 
+                        : isColPartiallySelected 
+                        ? 'bg-blue-100/70 dark:bg-blue-950/70 ring-1 ring-blue-400 ring-inset' 
+                        : theme.headerCls
                     } ${
                       isFriday 
                         ? 'border-l-2 border-l-slate-400 dark:border-l-slate-500' 
@@ -1396,7 +1788,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       tableFitMode === 'fit' ? 'p-0.5 min-w-[26px] sm:min-w-[32px]' : 'p-1 min-w-[54px] sm:min-w-[60px]'
                     }`}
                   >
-                    <div className={`${tableFitMode === 'fit' ? 'text-[10px]' : 'text-[11px]'} font-mono leading-tight`}>{d.dayNum}</div>
+                    <div className="flex items-center justify-center gap-0.5 leading-tight">
+                      <span className={`${tableFitMode === 'fit' ? 'text-[10px]' : 'text-[11px]'} font-mono`}>{d.dayNum}</span>
+                      {isColFullySelected && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#007AFF]" />
+                      )}
+                    </div>
                     <div className={`${tableFitMode === 'fit' ? 'text-[7.5px]' : 'text-[8px]'} font-bold leading-none mt-0.5`}>
                       {d.isToday ? '⚡' : isFriday ? '🌴' : theme.shortName}
                     </div>
@@ -1437,7 +1834,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-300/80 dark:divide-slate-700">
-            {activeEmployees.map((emp, index) => {
+            {activeEmployees.map((emp, empIndex) => {
               const isDarko = emp.id === 'emp-02' || (emp.fullName3Part || emp.name || '').includes('دارکۆ');
               const isManager = emp.role === 'Manager' || isDarko;
 
@@ -1469,40 +1866,69 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               const attendanceRate = Math.min(100, Math.round((empPresentDays / workableDays) * 100));
 
               return (
-                <tr key={emp.id} className={`hover:bg-blue-50/60 dark:hover:bg-white/10 transition-colors border-b border-slate-300/80 dark:border-slate-700/80 ${isDarko ? 'bg-amber-50/20 dark:bg-amber-950/10' : index % 2 === 1 ? 'bg-slate-50/50 dark:bg-white/[0.02]' : 'bg-white dark:bg-transparent'}`}>
+                <tr key={emp.id} className={`hover:bg-blue-50/60 dark:hover:bg-white/10 transition-colors border-b border-slate-300/80 dark:border-slate-700/80 ${isDarko ? 'bg-amber-50/20 dark:bg-amber-950/10' : empIndex % 2 === 1 ? 'bg-slate-50/50 dark:bg-white/[0.02]' : 'bg-white dark:bg-transparent'}`}>
                   <td className={`sticky right-0 bg-white/98 dark:bg-[#2c2c2e]/98 backdrop-blur-md z-10 border-b border-slate-300/80 dark:border-slate-700/80 border-l-2 border-l-slate-400 dark:border-l-slate-500 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] ${
                     tableFitMode === 'fit' ? 'w-[145px] min-w-[145px] px-1.5 py-1.5' : 'px-3 py-2.5'
                   }`}>
-                    <Link
-                      href={`/employees/${emp.id}`}
-                      className="flex items-center gap-1.5 sm:gap-2 text-right hover:text-[#007AFF] cursor-pointer group transition-colors w-full"
-                      title="کلیک بکە بۆ کردنەوەی پەیجی فەرمی ئەم کارمەندە و ئامێر و مۆبایلەکەی"
-                    >
-                      <div className={`${tableFitMode === 'fit' ? 'w-6 h-6 rounded-lg text-[10px]' : 'w-8 h-8 rounded-xl text-xs'} bg-gradient-to-tr from-slate-800 to-slate-900 border border-slate-200/60 dark:border-white/10 overflow-hidden flex items-center justify-center text-white font-bold shrink-0 group-hover:border-[#007AFF] shadow-xs`}>
-                        {emp.photoUrl ? (
-                          <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <span>{emp.name.slice(0, 1)}</span>
-                        )}
-                      </div>
-                      <div className="overflow-hidden">
-                        <div className={`${tableFitMode === 'fit' ? 'text-[11px]' : 'text-xs'} font-bold text-slate-900 dark:text-white group-hover:text-[#007AFF] flex items-center gap-1 truncate`}>
-                          <span className="truncate">{emp.fullName3Part || emp.name}</span>
-                          <ExternalLink className="w-2.5 h-2.5 text-slate-400 group-hover:text-[#007AFF] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    <div className="flex items-center gap-1 sm:gap-1.5">
+                      {/* 🔘 Employee Row Multi-Select Checkbox */}
+                      {isMultiSelectMode && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            toggleEmployeeRow(emp.id, emp.fullName3Part || emp.name);
+                          }}
+                          className={`p-1 rounded-md transition-colors shrink-0 ${
+                            daysArray.length > 0 && daysArray.every(d => Boolean(selectedCells[`${emp.id}_${d.dateStr}`]))
+                              ? 'bg-[#007AFF] text-white shadow-xs'
+                              : 'text-slate-300 hover:text-[#007AFF] dark:text-slate-600 dark:hover:text-blue-400'
+                          }`}
+                          title="دیاریکردنی هەموو ڕۆژەکانی ئەم کارمەندە لەم مانگەدا"
+                        >
+                          {daysArray.length > 0 && daysArray.every(d => Boolean(selectedCells[`${emp.id}_${d.dateStr}`])) ? (
+                            <CheckSquare className="w-3.5 h-3.5" />
+                          ) : (
+                            <Square className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
+
+                      <Link
+                        href={`/employees/${emp.id}`}
+                        className="flex items-center gap-1.5 sm:gap-2 text-right hover:text-[#007AFF] cursor-pointer group transition-colors w-full overflow-hidden"
+                        title="کلیک بکە بۆ کردنەوەی پەیجی فەرمی ئەم کارمەندە و ئامێر و مۆبایلەکەی"
+                      >
+                        <div className={`${tableFitMode === 'fit' ? 'w-6 h-6 rounded-lg text-[10px]' : 'w-8 h-8 rounded-xl text-xs'} bg-gradient-to-tr from-slate-800 to-slate-900 border border-slate-200/60 dark:border-white/10 overflow-hidden flex items-center justify-center text-white font-bold shrink-0 group-hover:border-[#007AFF] shadow-xs`}>
+                          {emp.photoUrl ? (
+                            <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span>{emp.name.slice(0, 1)}</span>
+                          )}
                         </div>
-                        <div className={`${tableFitMode === 'fit' ? 'text-[8.5px]' : 'text-[10px]'} font-mono text-slate-400 dark:text-slate-500 truncate`}>
-                          {isDarko ? 'بەڕێوەبەر' : emp.role || 'Staff'} ({emp.id})
+                        <div className="overflow-hidden">
+                          <div className={`${tableFitMode === 'fit' ? 'text-[11px]' : 'text-xs'} font-bold text-slate-900 dark:text-white group-hover:text-[#007AFF] flex items-center gap-1 truncate`}>
+                            <span className="truncate">{emp.fullName3Part || emp.name}</span>
+                            <ExternalLink className="w-2.5 h-2.5 text-slate-400 group-hover:text-[#007AFF] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                          </div>
+                          <div className={`${tableFitMode === 'fit' ? 'text-[8.5px]' : 'text-[10px]'} font-mono text-slate-400 dark:text-slate-500 truncate`}>
+                            {isDarko ? 'بەڕێوەبەر' : emp.role || 'Staff'} ({emp.id})
+                          </div>
                         </div>
-                      </div>
-                    </Link>
+                      </Link>
+                    </div>
                   </td>
-                  {daysArray.map((d) => {
+                  {daysArray.map((d, dayIndex) => {
                     const info = getGpsLogsForEmpAndDay(emp, d);
                     const isFriday = d.isFriday;
                     const theme = DAY_THEMES[d.dayOfWeek] || DAY_THEMES[6];
                     const isPresent = info.status === 'Present' || Boolean(info.checkInTime);
                     const inTime = (info.checkInTime || '08:00').slice(0, 5);
                     const outTime = info.checkOutTime ? info.checkOutTime.slice(0, 5) : (d.isToday ? 'بەردەوام' : '17:00');
+
+                    const cellKey = `${emp.id}_${d.dateStr}`;
+                    const isCellSelected = Boolean(selectedCells[cellKey]);
 
                     let badgeColor = 'text-slate-300 dark:text-slate-600 font-normal';
                     let badgeText = '-';
@@ -1527,7 +1953,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       badgeColor = 'text-rose-700 dark:text-rose-400 font-bold';
                       badgeText = tableFitMode === 'fit' ? 'غ' : 'غیاب';
                     }
-                    // 5. Empty / Clean Blank / Future
+                    // 5. Loading / چاوەڕوانی (Quiet clean state while loading server data)
+                    else if (info.status === 'Loading' || isWaitingData) {
+                      badgeColor = 'text-slate-400 dark:text-slate-500 font-normal';
+                      badgeText = '-';
+                    }
+                    // 6. Empty / Clean Blank / Future
                     else {
                       badgeColor = 'text-slate-300 dark:text-slate-600 font-normal';
                       badgeText = '-';
@@ -1551,11 +1982,65 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                             handleDirectDrop(emp.id, emp.name, d.dateStr, dropped);
                           }
                         }}
-                        onClick={() => handleCellClick(emp, d)}
-                        title={`کلیک بکە بۆ بینینی وردەکاری و دەستکاری\nهاتن: ${info.checkInTime || '08:00'}${isWaived ? ' (چاوپۆشی لێکراوە)' : isLate ? ' (درەنگکەوتوو)' : ''}\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00')}`}
-                        className={`relative text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 cursor-pointer hover:bg-[#007AFF]/15 transition-all ${
-                          theme.cellCls
+                        onDragStart={(e) => {
+                          e.preventDefault();
+                        }}
+                        onMouseDown={(e) => {
+                          if (e.button !== 0) return; // Left mouse button only
+
+                          // If Shift is held and there is a previous anchor cell, instant range-select
+                          if (e.shiftKey && lastFocusedCell) {
+                            setIsMultiSelectMode(true);
+                            updateDragSelection(lastFocusedCell.r, lastFocusedCell.c, empIndex, dayIndex, selectedCells);
+                            return;
+                          }
+
+                          const isShiftOrCtrl = e.shiftKey || e.ctrlKey || e.metaKey;
+                          const base = isShiftOrCtrl ? { ...selectedCells } : {};
+
+                          dragSelectionRef.current = {
+                            isDragging: true,
+                            start: { r: empIndex, c: dayIndex },
+                            hasMoved: false,
+                            baseSelected: base,
+                          };
+                          setLastFocusedCell({ r: empIndex, c: dayIndex });
+                          setIsDraggingCells(true);
+                        }}
+                        onMouseEnter={() => {
+                          if (!dragSelectionRef.current.isDragging || !dragSelectionRef.current.start) return;
+                          dragSelectionRef.current.hasMoved = true;
+                          if (!isMultiSelectMode) {
+                            setIsMultiSelectMode(true);
+                          }
+                          updateDragSelection(
+                            dragSelectionRef.current.start.r,
+                            dragSelectionRef.current.start.c,
+                            empIndex,
+                            dayIndex,
+                            dragSelectionRef.current.baseSelected
+                          );
+                        }}
+                        onClick={(e) => {
+                          // If mouse was dragged across multiple cells, don't trigger normal click
+                          if (dragSelectionRef.current.hasMoved) {
+                            return;
+                          }
+                          setLastFocusedCell({ r: empIndex, c: dayIndex });
+                          if (isMultiSelectMode || e.ctrlKey || e.metaKey || e.shiftKey) {
+                            toggleCellSelection(emp.id, emp.fullName3Part || emp.name, d.dateStr, d.dayNum);
+                          } else {
+                            handleCellClick(emp, d);
+                          }
+                        }}
+                        title={`ڕابکێشە (Drag) بۆ دیاریکردنی زۆر وەک شیت\nهاتن: ${info.checkInTime || '08:00'}${isWaived ? ' (چاوپۆشی لێکراوە)' : isLate ? ' (درەنگکەوتوو)' : ''}\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00')}`}
+                        className={`relative text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 select-none transition-all ${
+                          isCellSelected 
+                            ? 'ring-2 ring-[#007AFF] bg-blue-100 dark:bg-blue-900/90 font-black shadow-md z-20 scale-[1.03]' 
+                            : theme.cellCls
                         } ${
+                          isMultiSelectMode || isDraggingCells ? 'cursor-cell' : 'cursor-pointer'
+                        } hover:bg-[#007AFF]/20 ${
                           isFriday ? 'border-l-2 border-l-slate-400 dark:border-l-slate-500' : ''
                         } ${
                           d.isToday ? 'ring-1 ring-amber-400 ring-inset bg-amber-100/50 dark:bg-amber-950/40' : ''
@@ -1563,6 +2048,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           tableFitMode === 'fit' ? 'p-0.5 min-w-[26px] sm:min-w-[32px]' : 'p-1 min-w-[54px]'
                         }`}
                       >
+                        {/* 🔵 Selected Cell Dot Indicator */}
+                        {isCellSelected && (
+                          <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-[#007AFF] ring-1 ring-white shadow-xs z-30" />
+                        )}
+
                         {/* 🔴 Red Dot Indicator for Late Check-in (Suppressed if admin waived) */}
                         {isLate && (
                           <span 
@@ -1580,6 +2070,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                               {outTime === 'بەردەوام' ? (tableFitMode === 'fit' ? '••' : 'بەردەوام') : outTime}
                             </span>
                           </div>
+                        ) : info.status === 'Loading' ? (
+                          <div className={`w-full ${tableFitMode === 'fit' ? 'py-1' : 'py-2'} flex items-center justify-center`}>
+                            <span className="inline-block w-3.5 h-1.5 bg-slate-200/90 dark:bg-slate-700/90 rounded-full animate-pulse" />
+                          </div>
                         ) : (
                           <div className={`w-full ${tableFitMode === 'fit' ? 'py-1 text-[8.5px]' : 'py-2 text-[10px]'} font-bold flex items-center justify-center ${badgeColor}`}>
                             {badgeText}
@@ -1591,46 +2085,66 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
                   {/* 📊 Apple Summary Pills for this employee with Authoritative Divider */}
                   <td className={`text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 border-r-2 border-r-slate-400 dark:border-r-slate-500 bg-slate-50/40 dark:bg-white/[0.01] ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
-                    <span className={`inline-block font-mono font-bold ${
-                      tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2.5 py-1 rounded-xl text-xs'
-                    } bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20`}>
-                      {empPresentDays}{tableFitMode === 'fit' ? 'd' : ' ڕۆژ'}
-                    </span>
+                    {isWaitingData ? (
+                      <span className="inline-block w-8 h-4 bg-slate-200/80 dark:bg-slate-700/80 rounded-md animate-pulse" />
+                    ) : (
+                      <span className={`inline-block font-mono font-bold ${
+                        tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2.5 py-1 rounded-xl text-xs'
+                      } bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20`}>
+                        {empPresentDays}{tableFitMode === 'fit' ? 'd' : ' ڕۆژ'}
+                      </span>
+                    )}
                   </td>
                   <td className={`text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 bg-slate-50/40 dark:bg-white/[0.01] ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
-                    <span className={`inline-block font-mono font-bold ${
-                      tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2.5 py-1 rounded-xl text-xs'
-                    } bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/20`}>
-                      {empTotalHours}h
-                    </span>
+                    {isWaitingData ? (
+                      <span className="inline-block w-8 h-4 bg-slate-200/80 dark:bg-slate-700/80 rounded-md animate-pulse" />
+                    ) : (
+                      <span className={`inline-block font-mono font-bold ${
+                        tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2.5 py-1 rounded-xl text-xs'
+                      } bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/20`}>
+                        {empTotalHours}h
+                      </span>
+                    )}
                   </td>
                   <td className={`text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 bg-slate-50/40 dark:bg-white/[0.01] ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
-                    <span className={`inline-block font-mono font-bold ${
-                      tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2 py-0.5 rounded-lg text-xs'
-                    } ${
-                      empLateDays > 0 ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30' : 'text-slate-400 dark:text-slate-600'
-                    }`}>
-                      {empLateDays > 0 ? (tableFitMode === 'fit' ? empLateDays : `${empLateDays} جار`) : '٠'}
-                    </span>
+                    {isWaitingData ? (
+                      <span className="inline-block w-6 h-4 bg-slate-200/80 dark:bg-slate-700/80 rounded-md animate-pulse" />
+                    ) : (
+                      <span className={`inline-block font-mono font-bold ${
+                        tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2 py-0.5 rounded-lg text-xs'
+                      } ${
+                        empLateDays > 0 ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30' : 'text-slate-400 dark:text-slate-600'
+                      }`}>
+                        {empLateDays > 0 ? (tableFitMode === 'fit' ? empLateDays : `${empLateDays} جار`) : '٠'}
+                      </span>
+                    )}
                   </td>
                   <td className={`text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 bg-slate-50/40 dark:bg-white/[0.01] ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
-                    <span className={`inline-block font-mono font-bold ${
-                      tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2 py-0.5 rounded-lg text-xs'
-                    } ${
-                      empAbsentDays > 0 ? 'bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-500/20' : 'text-slate-400 dark:text-slate-600'
-                    }`}>
-                      {empAbsentDays > 0 ? (tableFitMode === 'fit' ? empAbsentDays : `${empAbsentDays} ڕۆژ`) : '٠'}
-                    </span>
+                    {isWaitingData ? (
+                      <span className="inline-block w-6 h-4 bg-slate-200/80 dark:bg-slate-700/80 rounded-md animate-pulse" />
+                    ) : (
+                      <span className={`inline-block font-mono font-bold ${
+                        tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2 py-0.5 rounded-lg text-xs'
+                      } ${
+                        empAbsentDays > 0 ? 'bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-500/20' : 'text-slate-400 dark:text-slate-600'
+                      }`}>
+                        {empAbsentDays > 0 ? (tableFitMode === 'fit' ? empAbsentDays : `${empAbsentDays} ڕۆژ`) : '٠'}
+                      </span>
+                    )}
                   </td>
                   <td className={`text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 bg-slate-50/40 dark:bg-white/[0.01] ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
-                    <span className={`inline-block font-mono font-bold ${
-                      tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2 py-0.5 rounded-lg text-xs'
-                    } ${
-                      attendanceRate >= 90 ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300' : 
-                      attendanceRate >= 75 ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300' : 'bg-rose-500/15 text-rose-800 dark:text-rose-300'
-                    }`}>
-                      %{attendanceRate}
-                    </span>
+                    {isWaitingData ? (
+                      <span className="inline-block w-7 h-4 bg-slate-200/80 dark:bg-slate-700/80 rounded-md animate-pulse" />
+                    ) : (
+                      <span className={`inline-block font-mono font-bold ${
+                        tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2 py-0.5 rounded-lg text-xs'
+                      } ${
+                        attendanceRate >= 90 ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300' : 
+                        attendanceRate >= 75 ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300' : 'bg-rose-500/15 text-rose-800 dark:text-rose-300'
+                      }`}>
+                        %{attendanceRate}
+                      </span>
+                    )}
                   </td>
                 </tr>
               );
@@ -2216,6 +2730,407 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               </div>
 
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🎯 FLOATING BATCH ACTION BAR (Apple iOS Liquid Glass Dock) */}
+      {/* ========================================================================= */}
+      {selectedCount > 0 && (
+        <aside 
+          aria-label="کردارە خێراکانی دەستکاری فرە-ڕۆژ"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-4xl w-[95%] sm:w-auto animate-in slide-in-from-bottom-5 duration-300 pointer-events-auto select-none font-sans"
+          dir="rtl"
+        >
+          <div className="bg-slate-900/95 dark:bg-[#1c1c1e]/95 backdrop-blur-2xl text-white px-3 py-2.5 sm:px-5 sm:py-3 rounded-[26px] border border-white/20 shadow-2xl shadow-black/50 flex flex-wrap items-center justify-between sm:justify-start gap-2 sm:gap-3 text-xs">
+            
+            {/* 1. Counter Badge & Status */}
+            <div className="flex items-center gap-2 pr-1 sm:pr-2 border-l border-white/15 pl-2 sm:pl-3">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#007AFF] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#007AFF]"></span>
+              </span>
+              <span className="font-black text-xs sm:text-sm text-blue-300 font-mono">
+                {selectedCount}
+              </span>
+              <span className="text-slate-300 font-bold hidden sm:inline">
+                {isDraggingCells ? 'خانە لە کاتی ڕاکێشاندان (ڕاکێشە)...' : 'خانە دیاریکراوە'}
+              </span>
+            </div>
+
+            {/* 2. Quick 1-Click Status Chips */}
+            <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+              {/* Present (Default 08:00 - 17:00) */}
+              <button
+                type="button"
+                disabled={isApplyingBatch}
+                onClick={() => handleApplyBatchData('Present', '08:00', '17:00')}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                title="دانانی هەموو خانە دیاریکراوەکان وەک ئامادەبوو (08:00 تا 17:00)"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
+                <span>ئامادەبوو</span>
+              </button>
+
+              {/* Leave (مۆڵەت) */}
+              <button
+                type="button"
+                disabled={isApplyingBatch}
+                onClick={() => handleApplyBatchData('Leave')}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                title="دانانی هەموو خانە دیاریکراوەکان وەک مۆڵەت"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-300" />
+                <span>مۆڵەت</span>
+              </button>
+
+              {/* Holiday (پشوو) */}
+              <button
+                type="button"
+                disabled={isApplyingBatch}
+                onClick={() => handleApplyBatchData('Holiday')}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                title="دانانی هەموو خانە دیاریکراوەکان وەک پشوو"
+              >
+                <span>🌴 پشوو</span>
+              </button>
+
+              {/* Absent (غیاب) */}
+              <button
+                type="button"
+                disabled={isApplyingBatch}
+                onClick={() => handleApplyBatchData('Absent')}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                title="دانانی هەموو خانە دیاریکراوەکان وەک غیاب"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-300" />
+                <span>غیاب</span>
+              </button>
+
+              {/* Clear/Delete */}
+              <button
+                type="button"
+                disabled={isApplyingBatch}
+                onClick={() => handleApplyBatchData('Empty')}
+                className="px-2 sm:px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-slate-300 hover:text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                title="سڕینەوەی داتای ئەم خانانە و بەتاڵکردنەوەیان"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span className="hidden sm:inline">سڕینەوە</span>
+              </button>
+            </div>
+
+            {/* 3. Custom Time & Details Modal Opener */}
+            <div className="flex items-center gap-1 sm:gap-1.5 border-r border-white/15 pr-2 sm:pr-3">
+              <button
+                type="button"
+                onClick={() => setShowBatchModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                title="کردنەوەی فۆڕمی دەستکاری بۆ دیاریکردنی کات و تێبینی تایبەت"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>کات و تێبینی...</span>
+              </button>
+
+              {/* Select All Matrix Button */}
+              <button
+                type="button"
+                onClick={selectAllMatrix}
+                className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-slate-200 text-[11px] sm:text-xs font-bold transition-all cursor-pointer"
+                title="دیاریکردنی سەرجەم خانەکانی ئەم مانگە بۆ هەموو کارمەندان"
+              >
+                <span>هەموو خشتە</span>
+              </button>
+
+              {/* Cancel Selection */}
+              <button
+                type="button"
+                onClick={clearAllSelection}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-rose-600 active:scale-95 text-slate-300 hover:text-white transition-all cursor-pointer"
+                title="لابردنی دیاریکردن (Cancel)"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {isApplyingBatch && (
+              <span className="text-xs font-bold text-amber-300 animate-pulse mr-1 font-mono">
+                پاشەکەوت دەکرێت...
+              </span>
+            )}
+
+          </div>
+        </aside>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🎯 BATCH & RANGE ATTENDANCE ENTRY MODAL (Apple iOS Liquid Retina) */}
+      {/* ========================================================================= */}
+      {showBatchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-200 font-sans" dir="rtl">
+          <div className="bg-[#f2f2f7] dark:bg-[#1c1c1e] text-slate-900 dark:text-white rounded-[28px] border border-white/60 dark:border-white/10 shadow-2xl max-w-xl w-full p-0 overflow-hidden transition-all flex flex-col max-h-[92vh]">
+            
+            {/* Header */}
+            <div className="px-6 py-4 bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white font-bold flex items-center justify-center shadow-md shadow-indigo-500/20">
+                  <CalendarRange className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
+                    داخڵکردن و دەستکاری فرە-ڕۆژ (Bulk Entry)
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    دیاریکردنی چەند ڕۆژێک یان مەودا و تۆمارکردنی یەک داتا بە یەک کلیک
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBatchModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-500 dark:text-slate-300 flex items-center justify-center cursor-pointer transition-all active:scale-90"
+                title="داخستن"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 sm:p-6 space-y-4 overflow-y-auto">
+              
+              {/* Selected Cells Indicator Banner */}
+              {selectedCount > 0 && (
+                <div className="p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-between text-xs">
+                  <span className="text-blue-900 dark:text-blue-200 font-bold flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-[#007AFF]" />
+                    <span>ئێستا {selectedCount} خانە لە خشتەکەدا دیاریکراوە و ئامادەیە</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clearAllSelection}
+                    className="text-[11px] text-rose-600 dark:text-rose-400 hover:underline font-bold cursor-pointer"
+                  >
+                    پاککردنەوە
+                  </button>
+                </div>
+              )}
+
+              {/* 1. مەودای ڕۆژەکان و کارمەندان (Range & Target) */}
+              <div className="bg-white dark:bg-[#2c2c2e] p-4 rounded-2xl border border-slate-200/70 dark:border-white/5 shadow-xs space-y-3">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-white/5">
+                  <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                    <span>١. دیاریکردنی کارمەندان و مەودای ڕۆژەکان:</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">Target & Range</span>
+                </div>
+
+                {/* Employee Target */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">کێ دەگرێتەوە؟</label>
+                  <select
+                    value={rangeTargetEmp}
+                    onChange={(e) => setRangeTargetEmp(e.target.value)}
+                    className="w-full text-xs font-bold bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2.5 rounded-xl outline-none border border-slate-200/60 dark:border-white/5 focus:border-[#007AFF]"
+                  >
+                    <option value="all">👥 هەموو ستاف و کارمەندان ({activeEmployees.length} کارمەند)</option>
+                    <option value="managers">👑 تەنها بەڕێوەبەر و سەرپەرشتیاران</option>
+                    <optgroup label="دیاریکردنی تاکە کارمەند:">
+                      {activeEmployees.map(emp => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.fullName3Part || emp.name} ({emp.id})
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+
+                {/* Days Range (From Day -> To Day) */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">لە ڕۆژی مانگ:</label>
+                    <select
+                      value={rangeStartDay}
+                      onChange={(e) => setRangeStartDay(Number(e.target.value))}
+                      className="w-full text-xs font-bold font-mono bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2 rounded-xl outline-none border border-slate-200/60 dark:border-white/5"
+                    >
+                      {daysArray.map(d => (
+                        <option key={d.dayNum} value={d.dayNum}>ڕۆژی {d.dayNum}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">تا ڕۆژی مانگ:</label>
+                    <select
+                      value={rangeEndDay}
+                      onChange={(e) => setRangeEndDay(Number(e.target.value))}
+                      className="w-full text-xs font-bold font-mono bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2 rounded-xl outline-none border border-slate-200/60 dark:border-white/5"
+                    >
+                      {daysArray.map(d => (
+                        <option key={d.dayNum} value={d.dayNum}>ڕۆژی {d.dayNum}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Day Type Filter Presets */}
+                <div className="space-y-1 pt-1">
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">فلتەری جۆری ڕۆژەکان لەم مەودایە:</label>
+                  <div className="p-1 bg-slate-100 dark:bg-[#1c1c1e] rounded-xl grid grid-cols-3 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setRangeDayType('all')}
+                      className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        rangeDayType === 'all'
+                          ? 'bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white shadow-xs font-black'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      هەموو ڕۆژەکان
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRangeDayType('workdays')}
+                      className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        rangeDayType === 'workdays'
+                          ? 'bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white shadow-xs font-black'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      دەوام (بێ هەینی)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRangeDayType('fridays')}
+                      className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        rangeDayType === 'fridays'
+                          ? 'bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white shadow-xs font-black'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      تەنها هەینییەکان
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. داتای نوێ بۆ جێبەجێکردن (New Attendance Data) */}
+              <div className="bg-white dark:bg-[#2c2c2e] p-4 rounded-2xl border border-slate-200/70 dark:border-white/5 shadow-xs space-y-3">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-white/5">
+                  <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>٢. داتای نوێ بۆ داخڵکردن بە یەکجار:</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">Values to Apply</span>
+                </div>
+
+                {/* Status Choice */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">حاڵەت:</label>
+                  <div className="p-1 bg-slate-100 dark:bg-[#1c1c1e] rounded-2xl grid grid-cols-5 gap-1">
+                    {[
+                      { key: 'Present', label: 'ئامادەبوو', dot: 'bg-emerald-500' },
+                      { key: 'Leave', label: 'مۆڵەت', dot: 'bg-amber-500' },
+                      { key: 'Holiday', label: 'پشوو', dot: 'bg-blue-500' },
+                      { key: 'Absent', label: 'غیاب', dot: 'bg-rose-500' },
+                      { key: 'Empty', label: 'سڕینەوە', dot: 'bg-slate-400' },
+                    ].map(s => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => setBatchStatus(s.key)}
+                        className={`py-2 px-1 rounded-xl text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                          batchStatus === s.key
+                            ? 'bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white shadow-xs font-black'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${s.dot}`} />
+                        <span className="text-[11px]">{s.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Check-In / Check-Out Times if Present */}
+                {batchStatus === 'Present' && (
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">کاتی هاتن:</label>
+                      <input
+                        type="time"
+                        value={batchCheckIn}
+                        onChange={(e) => setBatchCheckIn(e.target.value)}
+                        className="w-full text-xs font-mono font-bold bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2.5 rounded-xl border border-slate-200/60 dark:border-white/5 outline-none focus:border-[#007AFF]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">کاتی چوون:</label>
+                      <input
+                        type="time"
+                        value={batchCheckOut}
+                        onChange={(e) => setBatchCheckOut(e.target.value)}
+                        className="w-full text-xs font-mono font-bold bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2.5 rounded-xl border border-slate-200/60 dark:border-white/5 outline-none focus:border-[#007AFF]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Admin Note */}
+                <div className="space-y-1 pt-1">
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                    تێبینی ئەدمین (ئارەزوومەندانە):
+                  </label>
+                  <input
+                    type="text"
+                    value={batchNote}
+                    onChange={(e) => setBatchNote(e.target.value)}
+                    placeholder="هۆکاری گۆڕانکاری، بۆ نموونە: پشووی فەرمی، ئامادەبوونی دەوامی تەواو..."
+                    className="w-full text-xs bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2.5 rounded-xl border border-slate-200/60 dark:border-white/5 outline-none focus:border-[#007AFF] font-medium"
+                  />
+                </div>
+              </div>
+
+            </div>
+
+            {/* Footer / Actions */}
+            <div className="px-6 py-4 bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border-t border-slate-200/60 dark:border-slate-800/60 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowBatchModal(false)}
+                className="px-4 py-2 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer active:scale-95"
+              >
+                داخستن
+              </button>
+
+              <div className="flex items-center gap-2">
+                {/* Button 1: Just Select Range in Matrix */}
+                <button
+                  type="button"
+                  onClick={selectByRange}
+                  className="px-4 py-2 rounded-full bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer border border-indigo-200/50"
+                  title="تەنها ئەم ڕۆژانە لە خشتەکەدا دەستنیشان بکە بێ ئەوەی یەکسەر دەستکاری بکرێت"
+                >
+                  <MousePointerClick className="w-3.5 h-3.5" />
+                  <span>دیاریکردن لە خشتەدا</span>
+                </button>
+
+                {/* Button 2: Apply & Save Directly */}
+                <button
+                  type="button"
+                  disabled={isApplyingBatch}
+                  onClick={async () => {
+                    const cells = selectedCount > 0 ? Object.values(selectedCells) : computeRangeCells();
+                    await handleApplyBatchData(batchStatus, batchCheckIn, batchCheckOut, batchNote, cells);
+                  }}
+                  className="px-6 py-2 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>{isApplyingBatch ? 'پاشەکەوت دەکرێت...' : 'جێبەجێکردنی ڕاستەوخۆ'}</span>
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}

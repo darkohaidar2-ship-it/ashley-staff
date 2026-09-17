@@ -618,7 +618,7 @@ export default function AdminPage() {
           adminNotes={adminNotes}
           onClose={() => setSelectedEmp360(null)}
           onEnrollFace={(emp) => setFaceEnrollEmp(emp)}
-          onDeleteFace={handleDeleteFace}
+          onDeleteFace={(emp) => handleDeleteFace(emp.id)}
           hasFaceRegistered={registeredFaceIds.includes(selectedEmp360.id)}
         />
       )}

@@ -637,7 +637,7 @@ function AccountPage() {
       return;
     }
 
-    const isCurrentPasswordCorrect = await login(user.username, currentPassword);
+    const isCurrentPasswordCorrect = await login(user.username || '', currentPassword);
 
     if (!isCurrentPasswordCorrect) {
       toast({
@@ -658,7 +658,7 @@ function AccountPage() {
       )
     );
 
-    await login(user.username, newPassword);
+    await login(user.username || '', newPassword);
 
     toast({
       title: 'وشەی تێپەڕ گۆڕدرا',
