@@ -177,7 +177,7 @@ export function exportToCSV(
 export function exportToPDF(options: ExportReportOptions) {
   const {
     title,
-    subtitle = 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی (Ashley Enterprise ERP)',
+    subtitle = 'کۆمپانیای ئاشڵی — Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)',
     period = '',
     columns,
     data,
@@ -637,7 +637,7 @@ export function exportMonthlyMultiPageDailyPDF(options: MonthDailyReportOptions)
     month,
     daysData,
     title = 'ڕاپۆرتی ئامادەبوونی ڕۆژانەی مانگانەی ئاشڵی (Monthly 31-Day Attendance Log)',
-    subtitle = 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی (Ashley Enterprise ERP)',
+    subtitle = 'کۆمپانیای ئاشڵی — Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)',
   } = options;
 
   const printWindow = window.open('', '_blank', 'width=1200,height=900');
@@ -1054,6 +1054,15 @@ export interface AshleyOfficialReportOptions {
   month: string;
   issueDate?: string;
   rows: AshleyOfficialReportRow[];
+  settings?: {
+    reportLogo?: string | null;
+    diwanLogo?: string | null;
+    ashleyLogo?: string | null;
+    appLogo?: string | null;
+    motherCompanyName?: string;
+    agencyTitle?: string;
+    brandSlogan?: string;
+  };
   kpis?: {
     totalStaff: number;
     totalWorkHours: number;
@@ -1070,6 +1079,7 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
     month,
     issueDate = new Date().toISOString().split('T')[0],
     rows = [],
+    settings,
     kpis = {
       totalStaff: rows.length,
       totalWorkHours: rows.reduce((s, r) => s + (r.totalHours || 0), 0),
@@ -1081,6 +1091,15 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
     }
   } = options;
 
+  const motherCompany = settings?.motherCompanyName || 'کۆمپانیای گروپی دیوان';
+  const motherCompanySubtitle = settings?.motherCompanySubtitle || 'ناسنامەی مۆبیلیات';
+  const brandName = settings?.brandName || 'کۆمپانیای مۆبیلیاتی ئاشڵی';
+  const brandSubtitle = settings?.brandSubtitle || 'Official Document';
+  const agencyTitle = settings?.agencyTitle || 'بریکاری سەرەکی مۆبیلیاتی ئاشڵین لە هەموو عێراق';
+  const brandSlogan = settings?.brandSlogan || 'Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)';
+  const diwanLogo = settings?.diwanLogo || '/diwan-logo.svg';
+  const ashleyLogo = settings?.reportLogo || settings?.ashleyLogo || settings?.appLogo || '/ashley-logo.png';
+
   const printWindow = window.open('', '_blank', 'width=1300,height=900');
   if (!printWindow) {
     alert('تکایە ڕێگە بدە بە کردنەوەی پەنجەرەی نوێ (Pop-up) بۆ کردنەوەی ڕاپۆرتی فەرمی');
@@ -1088,32 +1107,44 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
   }
 
   const rowsHtml = rows.map((r, idx) => `
-    <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'}; page-break-inside: avoid;">
-      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-family: monospace; font-weight: bold; color: #64748b;">${idx + 1}</td>
-      <td style="border: 1px solid #94a3b8; padding: 6px 8px; font-weight: 900; text-align: right; color: #0f172a; white-space: nowrap;">
+    <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#fcfcfd'}; page-break-inside: avoid;">
+      <td style="border: 1px solid #e2e8f0; padding: 6px 8px; text-align: center; font-family: monospace; font-weight: 700; color: #64748b;">${idx + 1}</td>
+      <td style="border: 1px solid #e2e8f0; padding: 6px 8px; font-weight: 800; text-align: right; color: #0f172a; white-space: nowrap;">
         ${r.name}
-        <span style="display: block; font-size: 8.5px; font-family: monospace; color: #64748b; font-weight: normal;">ID: ${r.empId}</span>
+        <span style="display: block; font-size: 8.5px; font-family: monospace; color: #64748b; font-weight: 500;">ID: ${r.empId}</span>
       </td>
-      <td style="border: 1px solid #94a3b8; padding: 6px 8px; font-weight: bold; color: #334155; text-align: right;">${r.role || 'کارمەند'}</td>
-      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: #047857; background-color: #f0fdf4;">${r.presentDays} ڕۆژ</td>
-      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: #1e3a8a; background-color: #eff6ff;">${r.totalHours}h</td>
-      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: ${r.lateCount > 0 ? '#d97706' : '#64748b'}; background-color: ${r.lateCount > 0 ? '#fffbeb' : 'transparent'};">
-        ${r.lateCount > 0 ? `⚠️ ${r.lateCount} جار` : '٠'}
+      <td style="border: 1px solid #e2e8f0; padding: 6px 8px; font-weight: 700; color: #334155; text-align: right;">${r.role || 'کارمەند'}</td>
+      <td style="border: 1px solid #e2e8f0; padding: 6px 8px; text-align: center;">
+        <span style="display: inline-block; background: rgba(16, 185, 129, 0.12); color: #047857; border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 2px 6px; font-weight: 800; font-family: monospace; font-size: 9px;">${r.presentDays} ڕۆژ</span>
       </td>
-      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: ${r.absentCount > 0 ? '#dc2626' : '#64748b'}; background-color: ${r.absentCount > 0 ? '#fef2f2' : 'transparent'};">
-        ${r.absentCount > 0 ? `${r.absentCount}` : '-'}
+      <td style="border: 1px solid #e2e8f0; padding: 6px 8px; text-align: center;">
+        <span style="display: inline-block; background: rgba(0, 122, 255, 0.10); color: #007AFF; border: 1px solid rgba(0, 122, 255, 0.2); border-radius: 6px; padding: 2px 6px; font-weight: 800; font-family: monospace; font-size: 9px;">${r.totalHours}h</span>
       </td>
-      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: #d97706; background-color: #fffbeb;">
-        ${r.overtimeHours ? `+${r.overtimeHours}h` : '-'}
+      <td style="border: 1px solid #e2e8f0; padding: 6px 8px; text-align: center;">
+        <span style="display: inline-block; ${r.lateCount > 0 ? 'background: rgba(245, 158, 11, 0.15); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.3);' : 'color: #94a3b8;'} border-radius: 6px; padding: 2px 6px; font-weight: 800; font-family: monospace; font-size: 9px;">
+          ${r.lateCount > 0 ? `⚠️ ${r.lateCount} جار` : '٠'}
+        </span>
       </td>
-      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: #047857;">
+      <td style="border: 1px solid #e2e8f0; padding: 6px 8px; text-align: center;">
+        <span style="display: inline-block; ${r.absentCount > 0 ? 'background: rgba(239, 68, 68, 0.12); color: #b91c1c; border: 1px solid rgba(239, 68, 68, 0.25);' : 'color: #94a3b8;'} border-radius: 6px; padding: 2px 6px; font-weight: 800; font-family: monospace; font-size: 9px;">
+          ${r.absentCount > 0 ? `${r.absentCount}` : '-'}
+        </span>
+      </td>
+      <td style="border: 1px solid #e2e8f0; padding: 6px 8px; text-align: center;">
+        <span style="display: inline-block; ${r.overtimeHours ? 'background: rgba(124, 58, 237, 0.12); color: #6d28d9; border: 1px solid rgba(124, 58, 237, 0.25);' : 'color: #94a3b8;'} border-radius: 6px; padding: 2px 6px; font-weight: 800; font-family: monospace; font-size: 9px;">
+          ${r.overtimeHours ? `+${r.overtimeHours}h` : '-'}
+        </span>
+      </td>
+      <td style="border: 1px solid #e2e8f0; padding: 6px 8px; text-align: center; font-weight: 800; font-family: monospace; color: #047857;">
         ${r.overtimeAmount ? `${Number(r.overtimeAmount).toLocaleString()} IQD` : '-'}
       </td>
-      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: #b91c1c;">
+      <td style="border: 1px solid #e2e8f0; padding: 6px 8px; text-align: center; font-weight: 800; font-family: monospace; color: #b91c1c;">
         ${r.expensesAmount ? `${Number(r.expensesAmount).toLocaleString()} IQD` : '-'}
       </td>
-      <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: 900; font-family: monospace; color: #0f172a; background-color: #f1f5f9;">
-        %${r.rate !== undefined ? r.rate : 100}
+      <td style="border: 1px solid #e2e8f0; padding: 6px 8px; text-align: center;">
+        <span style="display: inline-block; background: #f1f5f9; color: #0f172a; border-radius: 6px; padding: 2px 6px; font-weight: 800; font-family: monospace; font-size: 9px;">
+          %${r.rate !== undefined ? r.rate : 100}
+        </span>
       </td>
     </tr>
   `).join('');
@@ -1125,31 +1156,33 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
   <meta charset="UTF-8">
   <title>ڕاپۆرتی فەرمی مانگانەی کۆمپانیای ئاشڵی - ${month}</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap');
     
     * { box-sizing: border-box; }
     body {
-      font-family: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Vazirmatn", system-ui, sans-serif;
       margin: 0;
       padding: 12px;
-      color: #0f172a;
+      color: #1c1c1e;
       background: #ffffff;
       direction: rtl;
+      -webkit-font-smoothing: antialiased;
     }
 
     .report-container {
       width: 100%;
       max-width: 1150px;
       margin: 0 auto;
-      border: 2px solid #0f172a;
-      padding: 16px 20px;
+      border: 1px solid #e2e8f0;
+      border-radius: 18px;
+      padding: 18px 22px;
       background: #ffffff;
     }
 
     .letterhead {
-      border-bottom: 3px double #0f172a;
-      padding-bottom: 12px;
-      margin-bottom: 12px;
+      border-bottom: 1.5px solid #e2e8f0;
+      padding-bottom: 14px;
+      margin-bottom: 14px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -1158,8 +1191,12 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
     .meta-box {
       font-size: 10px;
       font-family: Consolas, monospace;
-      color: #334155;
+      color: #475569;
       line-height: 1.6;
+      background: #f8fafc;
+      padding: 8px 12px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
     }
 
     .center-branding {
@@ -1167,58 +1204,59 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
     }
 
     .center-branding img {
-      height: 58px;
-      margin-bottom: 3px;
+      height: 52px;
+      margin-bottom: 4px;
     }
 
     .center-branding h1 {
       margin: 0;
-      font-size: 19px;
+      font-size: 18px;
       font-weight: 900;
       color: #0f172a;
-      letter-spacing: 0.5px;
+      letter-spacing: -0.2px;
     }
 
     .center-branding h2 {
       margin: 2px 0 0 0;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 700;
-      color: #475569;
-      font-family: sans-serif;
+      color: #64748b;
     }
 
     .doc-badge {
       display: inline-block;
-      margin-top: 5px;
-      background: #0f172a;
+      margin-top: 6px;
+      background: #007AFF;
       color: #ffffff;
-      padding: 3px 14px;
-      font-size: 11px;
-      font-weight: 900;
-      letter-spacing: 0.5px;
+      padding: 3px 16px;
+      font-size: 10.5px;
+      font-weight: 800;
+      border-radius: 9999px;
+      letter-spacing: 0.3px;
     }
 
     /* KPI STRIP */
     .kpi-strip {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
-      gap: 8px;
-      margin-bottom: 12px;
+      gap: 10px;
+      margin-bottom: 14px;
     }
 
     .kpi-card {
-      border: 1px solid #cbd5e1;
-      padding: 6px 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 8px 10px;
       text-align: center;
       background: #f8fafc;
     }
 
     .kpi-card .label {
-      font-size: 9px;
-      font-weight: bold;
+      font-size: 9.5px;
+      font-weight: 700;
       color: #64748b;
       display: block;
-      margin-bottom: 2px;
+      margin-bottom: 3px;
     }
 
     .kpi-card .val {
@@ -1230,9 +1268,13 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
 
     table {
       width: 100%;
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 0;
       font-size: 9.5px;
-      margin-top: 6px;
+      margin-top: 8px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
     }
 
     thead {
@@ -1240,12 +1282,12 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
     }
 
     th {
-      background: #1e293b;
-      color: #ffffff;
-      padding: 6px 8px;
-      border: 1px solid #475569;
+      background: #f1f5f9;
+      color: #1e293b;
+      padding: 7px 8px;
+      border: 1px solid #e2e8f0;
       text-align: center;
-      font-weight: 900;
+      font-weight: 800;
       font-size: 9.5px;
     }
 
@@ -1255,9 +1297,9 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
 
     /* SIGNATURE BLOCK */
     .signatures-block {
-      margin-top: 25px;
-      padding-top: 15px;
-      border-top: 2px dashed #cbd5e1;
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid #e2e8f0;
       display: flex;
       justify-content: space-around;
       text-align: center;
@@ -1267,19 +1309,23 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
 
     .sig-col {
       width: 220px;
+      background: #f8fafc;
+      padding: 12px 16px;
+      border-radius: 14px;
+      border: 1px solid #e2e8f0;
     }
 
     .sig-col .title {
-      font-size: 11px;
-      font-weight: 900;
-      color: #0f172a;
+      font-size: 10.5px;
+      font-weight: 800;
+      color: #1e293b;
       margin-bottom: 6px;
     }
 
     .sig-col .line {
       margin-top: 30px;
-      border-bottom: 1.5px dotted #94a3b8;
-      width: 140px;
+      border-bottom: 1.5px dashed #cbd5e1;
+      width: 130px;
       margin-left: auto;
       margin-right: auto;
     }
@@ -1287,52 +1333,57 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
     /* OFFICIAL ROUND SEAL */
     .seal-circle {
       margin: 8px auto 0 auto;
-      width: 100px;
-      height: 100px;
-      border: 3.5px double #1e3a8a;
+      width: 90px;
+      height: 90px;
+      border: 2.5px dashed #007AFF;
       border-radius: 50%;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: #1e3a8a;
-      font-weight: 900;
-      line-height: 1.15;
-      background: rgba(224, 242, 254, 0.35);
-      transform: rotate(-6deg);
-      box-shadow: inset 0 0 10px rgba(30, 58, 138, 0.12);
+      color: #007AFF;
+      font-weight: 800;
+      font-size: 8.5px;
+      line-height: 1.2;
+      background: rgba(0, 122, 255, 0.05);
+      transform: rotate(-4deg);
     }
 
     .print-bar {
       position: fixed;
-      bottom: 15px;
+      top: 15px;
       left: 50%;
       transform: translateX(-50%);
-      background: #0f172a;
-      color: white;
+      background: rgba(242, 242, 247, 0.90);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      color: #1c1c1e;
       padding: 8px 20px;
-      border-radius: 30px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+      border-radius: 9999px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      border: 1px solid rgba(0, 0, 0, 0.08);
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
       z-index: 99999;
       font-size: 12px;
-      font-weight: bold;
+      font-weight: 700;
     }
 
     .print-btn {
-      background: #2563eb;
+      background: #007AFF;
       color: white;
       border: none;
-      padding: 6px 18px;
-      border-radius: 20px;
-      font-weight: 900;
+      padding: 6px 20px;
+      border-radius: 9999px;
+      font-weight: 800;
+      font-size: 11.5px;
       cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
     }
 
     @media print {
-      body { padding: 0; }
+      body { padding: 0; background: #ffffff !important; }
       .no-print { display: none !important; }
       .report-container { border: none; padding: 0; }
       @page {
@@ -1345,53 +1396,68 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
 <body>
 
   <div class="print-bar no-print">
-    <span>🖨️ ڕاپۆرتی فەرمی ئامادەیە (Official Letterhead)</span>
-    <button class="print-btn" onclick="window.print()">دەستبەجێ پرێنت بکە / Save as PDF</button>
+    <span>🖨️ ڕاپۆرتی فەرمی مانگانە ئامادەیە</span>
+    <button class="print-btn" onclick="window.print()">دەستبەجێ پرێنت بکە (Print / PDF)</button>
   </div>
 
-  <div class="report-container">
-    
-    <!-- Ashley Official Letterhead Header -->
-    <div class="letterhead">
-      <div class="meta-box">
-        <div><strong>کۆدی دەرچوون:</strong> ASH-DIR-${month}-902</div>
-        <div><strong>بەرواری دەرچوون:</strong> ${issueDate}</div>
-        <div><strong>شێفتی فەرمی:</strong> 08:00 - 17:00 (پشووی نیوەڕۆ: 12:00 - 13:00)</div>
+    <!-- Diwan Group & Ashley Official Dual Letterhead Header -->
+    <div class="letterhead" style="border-bottom: 2.5px solid #0f172a; padding-bottom: 12px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+      
+      <!-- Right: Diwan Group Logo & Mother Company -->
+      <div style="display: flex; align-items: center; gap: 12px; flex: 1; justify-content: flex-start;">
+        <img src="${diwanLogo}" alt="Diwan Group Logo" style="height: 54px; max-width: 140px; object-fit: contain;" onerror="this.style.display='none'" />
+        <div style="text-align: right;">
+          <div style="font-size: 13.5px; font-weight: 900; color: #0f172a; line-height: 1.2;">${motherCompany}</div>
+          <div style="font-size: 9.5px; font-weight: 800; color: #d97706; margin-top: 1px;">${motherCompanySubtitle}</div>
+        </div>
       </div>
 
-      <div class="center-branding">
-        <img src="/ashley-logo.png" alt="Ashley Logo" onerror="this.style.display='none'" />
-        <h1>کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی</h1>
-        <h2>Ashley Industrial & Commercial Co.</h2>
-        <div class="doc-badge">ڕاپۆرتی مانگانەی گشتی ئامادەبوون، دەوام و دارایی — مانگی ${month}</div>
+      <!-- Center: Representation Agency & Brand Slogan -->
+      <div class="center-branding" style="flex: 1.6; text-align: center; padding: 0 8px;">
+        <h1 style="font-size: 14.5px; font-weight: 900; color: #0f172a; margin: 0; line-height: 1.3;">
+          ${agencyTitle}
+        </h1>
+        <h2 style="font-size: 11px; font-weight: 800; color: #007AFF; margin: 3px 0 0 0;">
+          ${brandSlogan}
+        </h2>
+        <div class="doc-badge" style="margin-top: 6px; display: inline-block;">
+          ڕاپۆرتی مانگانەی گشتی ئامادەبوون، دەوام و دارایی — مانگی ${month}
+        </div>
       </div>
 
-      <div class="meta-box" style="text-align: left;">
-        <div><strong>ژمارەی کارمەندان:</strong> ${kpis.totalStaff} کارمەند</div>
-        <div><strong>پابەندبوون:</strong> %${kpis.avgRate}</div>
-        <div><strong>دۆخی بەڵگەنامە:</strong> فەرمی و پەسەندکراو</div>
+      <!-- Left: Ashley Furniture Logo & Metadata -->
+      <div style="display: flex; align-items: center; gap: 12px; flex: 1; justify-content: flex-end;">
+        <div class="meta-box" style="text-align: left; padding: 6px 10px; font-size: 9px; line-height: 1.5; margin: 0;">
+          <div style="font-size: 10px; font-weight: 900; color: #0f172a;">${brandName}</div>
+          <div style="font-size: 8.5px; font-weight: 700; color: #64748b; margin-bottom: 2px;">${brandSubtitle}</div>
+          <div><strong>کۆدی دەرچوون:</strong> ASH-DGP-${month}</div>
+          <div><strong>بەرواری دەرچوون:</strong> ${issueDate}</div>
+          <div><strong>شێفتی فەرمی:</strong> 08:30 - 16:30</div>
+        </div>
+        <img src="${ashleyLogo}" alt="Ashley Logo" style="height: 48px; max-width: 130px; object-fit: contain;" onerror="this.style.display='none'" />
       </div>
+
     </div>
 
     <!-- Executive KPI Summary Cards -->
     <div class="kpi-strip">
-      <div class="kpi-card" style="border-top: 3px solid #2563eb;">
+      <div class="kpi-card" style="border-top: 3px solid #007AFF;">
         <span class="label">کۆی کارمەندانی چالاک</span>
-        <span class="val" style="color: #1e3a8a;">${kpis.totalStaff} کەس</span>
+        <span class="val" style="color: #007AFF;">${kpis.totalStaff} کەس</span>
       </div>
-      <div class="kpi-card" style="border-top: 3px solid #059669;">
+      <div class="kpi-card" style="border-top: 3px solid #10b981;">
         <span class="label">کۆی کاتژمێرەکانی ئیشکردن</span>
         <span class="val" style="color: #047857;">${kpis.totalWorkHours.toLocaleString()}h</span>
       </div>
-      <div class="kpi-card" style="border-top: 3px solid #d97706;">
+      <div class="kpi-card" style="border-top: 3px solid #f59e0b;">
         <span class="label">حاڵەتی درەنگکەوتن</span>
         <span class="val" style="color: #b45309;">${kpis.totalLateCount} جار</span>
       </div>
-      <div class="kpi-card" style="border-top: 3px solid #7c3aed;">
+      <div class="kpi-card" style="border-top: 3px solid #8b5cf6;">
         <span class="label">کۆی کاتی زیادە (ئیزافە)</span>
         <span class="val" style="color: #6d28d9;">+${kpis.totalOvertimeHours || 0}h</span>
       </div>
-      <div class="kpi-card" style="border-top: 3px solid #047857;">
+      <div class="kpi-card" style="border-top: 3px solid #10b981;">
         <span class="label">شایستەی پارەی ئیزافە</span>
         <span class="val" style="color: #047857;">${(kpis.totalOvertimeCost || 0).toLocaleString()} IQD</span>
       </div>
@@ -1434,17 +1500,17 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
       </div>
 
       <div class="sig-col">
-        <div class="title" style="color: #1e3a8a;">پەسەندکردنی بەڕێوەبەری سەرەکی:</div>
+        <div class="title" style="color: #007AFF;">پەسەندکردنی بەڕێوەبەری گشتی:</div>
         <div style="font-size: 12px; font-weight: 900; color: #0f172a; margin-top: 2px;">دارکۆ حەیدەر عەزیز</div>
-        <div style="font-size: 9px; color: #475569; font-weight: bold;">General Manager • Ashley Industrial Co.</div>
+        <div style="font-size: 9px; color: #64748b; font-weight: bold;">General Manager • Ashley Industrial Co.</div>
         
-        <!-- Official Ashley Company Stamp -->
+        <!-- Official Diwan Group & Ashley Company Stamp -->
         <div class="seal-circle">
-          <div style="font-size: 6px; color: #b45309;">★ ★ ★</div>
-          <div style="font-size: 8px; font-weight: 900; color: #1e3a8a;">کۆمپانیای ئاشڵی</div>
-          <div style="font-size: 7px; font-weight: 900; color: #047857; background: #ecfdf5; padding: 1px 4px; border: 0.5px solid #10b981; margin: 1px 0;">پەسەندکراوە</div>
-          <div style="font-size: 6px; font-family: monospace; color: #1e3a8a;">ASHLEY APPROVED</div>
-          <div style="font-size: 6px; color: #b45309;">★ ★ ★</div>
+          <div style="font-size: 6px; color: #007AFF;">★ ★ ★</div>
+          <div style="font-size: 7.5px; font-weight: 900; color: #0f172a;">گروپی دیوان • ئاشڵی</div>
+          <div style="font-size: 6.5px; font-weight: 800; color: #047857; background: #ecfdf5; padding: 1px 4px; border: 0.5px solid #10b981; margin: 1px 0; border-radius: 3px;">پەسەندکراوە</div>
+          <div style="font-size: 5.5px; font-family: monospace; color: #007AFF;">DIWAN • ASHLEY APPROVED</div>
+          <div style="font-size: 6px; color: #007AFF;">★ ★ ★</div>
         </div>
       </div>
     </div>
@@ -1466,3 +1532,4 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
   printWindow.document.write(html);
   printWindow.document.close();
 }
+

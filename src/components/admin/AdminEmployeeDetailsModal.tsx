@@ -322,13 +322,13 @@ export function AdminEmployeeDetailsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-md p-2 sm:p-4 dir-rtl" dir="rtl">
-      <div className="bg-white rounded-2xl border-2 border-slate-400 shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden text-right">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-2 sm:p-4 dir-rtl font-sans animate-in fade-in duration-200" dir="rtl">
+      <div className="bg-[#f2f2f7] dark:bg-[#1c1c1e] text-slate-900 dark:text-white rounded-[28px] border border-white/60 dark:border-white/10 shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden text-right">
         
-        {/* 🌟 HEADER: EMPLOYEE PROFILE 360 BANNER */}
-        <div className="p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white flex items-center justify-between border-b border-indigo-800">
-          <div className="flex items-center gap-3">
-            <div className="w-14 h-14 rounded-none bg-slate-800 border-2 border-blue-400 overflow-hidden flex items-center justify-center text-white text-lg font-black shadow-md flex-shrink-0">
+        {/* 🌟 iOS HEADER: EMPLOYEE PROFILE BANNER */}
+        <div className="px-6 py-4 bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/60 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3.5">
+            <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-indigo-600 to-blue-500 overflow-hidden flex items-center justify-center text-white text-lg font-black shadow-sm flex-shrink-0">
               {employee.photoUrl ? (
                 <img src={employee.photoUrl} alt={employee.name} className="w-full h-full object-cover" />
               ) : (
@@ -337,32 +337,32 @@ export function AdminEmployeeDetailsModal({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-black text-white">
+                <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight">
                   {employee.fullName3Part || employee.name}
                 </h2>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/30 border border-emerald-400 text-emerald-200 text-xs font-mono font-bold">
+                <span className="px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-[#007AFF] dark:text-blue-400 border border-blue-200/50 dark:border-blue-800/40 text-[10px] font-mono font-bold">
                   EMP-{employee.employeeId || employee.id.replace('emp-', '')}
                 </span>
-                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                   employee.status === 'resigned' || employee.isActive === false
-                    ? 'bg-rose-500/30 text-rose-200 border border-rose-400'
-                    : 'bg-blue-500/30 text-blue-200 border border-blue-400'
+                    ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200/50'
+                    : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/50'
                 }`}>
                   {employee.status === 'resigned' ? 'وازهێناو' : 'چالاک'}
                 </span>
               </div>
-              <p className="text-xs text-indigo-200 font-medium mt-0.5 flex items-center gap-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5 flex items-center gap-3">
                 <span className="flex items-center gap-1">
-                  <Briefcase className="w-3.5 h-3.5 text-blue-400" />
+                  <Briefcase className="w-3.5 h-3.5 text-blue-500" />
                   {employee.role || 'کارمەند'}
                 </span>
                 {employee.phone && (
                   <span className="flex items-center gap-1 font-mono">
-                    <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                    <Phone className="w-3.5 h-3.5 text-emerald-500" />
                     {employee.phone}
                   </span>
                 )}
-                <span className="font-mono text-[11px] text-slate-300">
+                <span className="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold">
                   مانگی: {selectedMonth}
                 </span>
               </p>
@@ -373,32 +373,32 @@ export function AdminEmployeeDetailsModal({
             <button
               type="button"
               onClick={handleExportPDF}
-              className="btn-classic text-xs font-bold px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white border border-blue-400 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md transition-all active:scale-95"
+              className="px-3.5 py-1.5 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
               title="پرێنتکردنی تەواوی چالاکی ئەم کارمەندە وەک PDF"
             >
-              <Printer className="w-4 h-4 text-white" />
-              <span>🖨️ پرێنت (PDF)</span>
+              <Printer className="w-3.5 h-3.5 text-white" />
+              <span>PDF</span>
             </button>
 
             <button
               type="button"
               onClick={handleExportCSV}
-              className="btn-classic text-xs font-bold px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-400 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md transition-all active:scale-95"
-              title="داگرتنی داتای مانگانەی ئەم کارمەندە وەک Excel / CSV"
+              className="px-3.5 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-200/50 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+              title="داگرتنی داتای مانگانەی ئەم کارمەندە وەک CSV"
             >
-              <FileSpreadsheet className="w-4 h-4 text-white" />
-              <span>📊 CSV</span>
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span>CSV</span>
             </button>
 
             {onEnrollFace && (
               <button
                 type="button"
                 onClick={() => onEnrollFace(employee)}
-                className="btn-classic text-xs font-bold px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 border border-amber-400 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md transition-all active:scale-95"
+                className="px-3.5 py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 text-xs font-bold border border-amber-200/50 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
                 title="تۆمارکردن یان دووبارە ناساندنەوەی ڕوخسار"
               >
-                <Camera className="w-4 h-4 text-slate-950" />
-                <span>📸 {hasFaceRegistered ? 'نوێکردنەوەی ڕوخسار' : 'ناساندنی ڕوخسار'}</span>
+                <Camera className="w-3.5 h-3.5 text-amber-600" />
+                <span>{hasFaceRegistered ? 'نوێکردنەوەی ڕوخسار' : 'ناساندنی ڕوخسار'}</span>
               </button>
             )}
 
@@ -406,157 +406,153 @@ export function AdminEmployeeDetailsModal({
               <button
                 type="button"
                 onClick={() => onDeleteFace(employee)}
-                className="btn-classic text-xs font-bold px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white border border-rose-500 rounded-xl flex items-center gap-1 cursor-pointer shadow-md transition-all active:scale-95"
-                title="سڕینەوە و پاککردنەوەی ناسنامەی دەموچاوی ئەم کارمەندە"
+                className="px-3 py-1.5 rounded-full bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 text-xs font-bold border border-rose-200/50 flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                title="سڕینەوەی ناسنامەی دەموچاو"
               >
-                <Trash2 className="w-3.5 h-3.5 text-white" />
-                <span>🗑️ سڕینەوەی ڕوخسار</span>
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             )}
 
-            <button
+            <button 
               onClick={onClose}
-              className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
+              className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-500 dark:text-slate-300 flex items-center justify-center cursor-pointer transition-all active:scale-90"
+              title="داخستن"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* 📊 SUMMARY KPI METRICS BAR */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-3 bg-slate-100 border-b border-slate-300 text-center">
-          <div className="bg-white p-2 rounded-xl border border-blue-200 shadow-sm">
-            <span className="text-[10px] text-slate-600 block font-bold">ڕۆژانی ئامادەبوون</span>
-            <p className="text-sm font-black text-blue-950 font-mono mt-0.5">
-              {totals.daysPresent} ڕۆژ
+        {/* 📊 SUMMARY KPI METRICS BAR (Apple Cards) */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 p-4 sm:p-5">
+          <div className="bg-white dark:bg-[#2c2c2e] p-3 rounded-2xl border border-slate-200/60 dark:border-white/5 shadow-xs">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-bold">ڕۆژانی ئامادەبوون</span>
+            <p className="text-base font-black text-blue-600 dark:text-blue-400 font-mono mt-0.5">
+              {totals.daysPresent} <span className="text-xs font-medium text-slate-400">ڕۆژ</span>
             </p>
           </div>
 
-          <div className="bg-white p-2 rounded-xl border border-amber-200 shadow-sm">
-            <span className="text-[10px] text-amber-900 block font-bold">کۆی کاتی کارکردن</span>
-            <p className="text-sm font-black text-amber-950 font-mono mt-0.5">
-              {totals.totalWorkedHours} کاتژمێر
+          <div className="bg-white dark:bg-[#2c2c2e] p-3 rounded-2xl border border-slate-200/60 dark:border-white/5 shadow-xs">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-bold">کۆی کاتی کارکردن</span>
+            <p className="text-base font-black text-amber-600 dark:text-amber-400 font-mono mt-0.5">
+              {totals.totalWorkedHours} <span className="text-xs font-medium text-slate-400">h</span>
             </p>
           </div>
 
-          <div className="bg-white p-2 rounded-xl border border-rose-200 shadow-sm">
-            <span className="text-[10px] text-rose-900 block font-bold">کۆی دواکەوتن (+)</span>
-            <p className="text-sm font-black text-rose-950 font-mono mt-0.5">
+          <div className="bg-white dark:bg-[#2c2c2e] p-3 rounded-2xl border border-slate-200/60 dark:border-white/5 shadow-xs">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-bold">کۆی دواکەوتن</span>
+            <p className="text-base font-black text-rose-600 dark:text-rose-400 font-mono mt-0.5">
               {totals.totalLateMins > 0 ? `+${formatMinutesHuman(totals.totalLateMins)}` : '0'}
             </p>
           </div>
 
-          <div className="bg-white p-2 rounded-xl border border-emerald-200 shadow-sm">
-            <span className="text-[10px] text-emerald-900 block font-bold">کاتی زیادە (Overtime)</span>
-            <p className="text-sm font-black text-emerald-950 font-mono mt-0.5">
-              +{totals.totalOtHours} کاتژمێر
+          <div className="bg-white dark:bg-[#2c2c2e] p-3 rounded-2xl border border-slate-200/60 dark:border-white/5 shadow-xs">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-bold">کاتی زیادە</span>
+            <p className="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
+              +{totals.totalOtHours} <span className="text-xs font-medium text-slate-400">h</span>
             </p>
           </div>
 
-          <div className="bg-white p-2 rounded-xl border border-purple-200 shadow-sm col-span-2 sm:col-span-1">
-            <span className="text-[10px] text-purple-900 block font-bold">کۆی شایستەی پارە (IQD)</span>
-            <p className="text-sm font-black text-purple-950 font-mono mt-0.5">
-              +{totals.totalOtPay.toLocaleString()} IQD
+          <div className="bg-white dark:bg-[#2c2c2e] p-3 rounded-2xl border border-slate-200/60 dark:border-white/5 shadow-xs col-span-2 sm:col-span-1">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-bold">شایستەی پارە</span>
+            <p className="text-sm font-black text-purple-600 dark:text-purple-400 font-mono mt-0.5">
+              +{totals.totalOtPay.toLocaleString()} <span className="text-[10px] font-medium text-slate-400">IQD</span>
             </p>
           </div>
         </div>
 
         {/* 📋 DAY-BY-DAY ATTENDANCE & OVERTIME TABLE */}
-        <div className="p-3 overflow-y-auto flex-1 space-y-2">
+        <div className="px-5 pb-5 overflow-y-auto flex-1 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-indigo-700" />
-              <span>خشتەی دەوامی ڕۆژانە و کاتی زیادەی کارمەند لە مانگی ({selectedMonth}):</span>
+            <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <Calendar className="w-4 h-4 text-blue-500" />
+              <span>خشتەی دەوامی ڕۆژانە و کاتی زیادەی کارمەند:</span>
             </h3>
-            <span className="text-[11px] font-mono text-slate-500 font-bold">
+            <span className="text-[11px] font-mono text-slate-500 font-bold bg-white dark:bg-[#2c2c2e] px-2.5 py-1 rounded-full border border-slate-200/60 dark:border-white/5">
               {totals.overtimeDaysCount} ڕۆژ ئیزافە
             </span>
           </div>
 
-          <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+          <div className="border border-slate-200/80 dark:border-white/5 rounded-2xl overflow-hidden shadow-xs bg-white dark:bg-[#2c2c2e]">
             <table className="w-full text-right text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-200 border-b border-slate-300 text-slate-900 font-black">
-                  <th className="p-2 border-l border-slate-300 w-10 text-center">#</th>
-                  <th className="p-2 border-l border-slate-300 text-center">بەروار</th>
-                  <th className="p-2 border-l border-slate-300 text-center">ڕۆژ</th>
-                  <th className="p-2 border-l border-slate-300 text-center">کاتی هاتن (In)</th>
-                  <th className="p-2 border-l border-slate-300 text-center">کاتی دەرچوون (Out)</th>
-                  <th className="p-2 border-l border-slate-300 text-center bg-blue-50 text-blue-950">کاتی کارکردن</th>
-                  <th className="p-2 border-l border-slate-300 text-center bg-amber-50 text-amber-950">ئیزافە</th>
-                  <th className="p-2 border-l border-slate-300 text-center bg-emerald-50 text-emerald-950">بڕی پارە</th>
-                  <th className="p-2 border-l border-slate-300">جۆری ئیش و تێبینی</th>
-                  <th className="p-2 text-center">دۆخ</th>
+                <tr className="bg-slate-50 dark:bg-[#3a3a3c] border-b border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300 font-bold">
+                  <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 w-10 text-center">#</th>
+                  <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">بەروار</th>
+                  <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">ڕۆژ</th>
+                  <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">هاتن (In)</th>
+                  <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">دەرچوون (Out)</th>
+                  <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">کاتی کارکردن</th>
+                  <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">ئیزافە</th>
+                  <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">بڕی پارە</th>
+                  <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5">تێبینی</th>
+                  <th className="p-2.5 text-center">دۆخ</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 font-bold">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/5 font-medium">
                 {dailyRecords.map((rec) => {
                   const hasOt = rec.overtimeHours > 0;
                   return (
                     <tr 
                       key={rec.dayNum} 
-                      className={`hover:bg-slate-50 transition-colors ${
-                        hasOt ? 'bg-amber-50/50' : rec.isFriday ? 'bg-slate-50/60' : ''
+                      className={`hover:bg-slate-50 dark:hover:bg-white/5 transition-colors ${
+                        hasOt ? 'bg-amber-50/30 dark:bg-amber-950/20' : rec.isFriday ? 'bg-slate-50/50 dark:bg-white/5' : ''
                       }`}
                     >
-                      <td className="p-2 border-l border-slate-200 text-center font-mono text-slate-500">{rec.dayNum}</td>
-                      <td className="p-2 border-l border-slate-200 text-center font-mono">{rec.dateStr}</td>
-                      <td className="p-2 border-l border-slate-200 text-center text-slate-600 text-[11px]">{rec.dayName}</td>
-                      <td className="p-2 border-l border-slate-200 text-center font-mono">
+                      <td className="p-2.5 border-l border-slate-100 dark:border-white/5 text-center font-mono text-slate-400">{rec.dayNum}</td>
+                      <td className="p-2.5 border-l border-slate-100 dark:border-white/5 text-center font-mono">{rec.dateStr}</td>
+                      <td className="p-2.5 border-l border-slate-100 dark:border-white/5 text-center text-slate-500 text-[11px]">{rec.dayName}</td>
+                      <td className="p-2.5 border-l border-slate-100 dark:border-white/5 text-center font-mono">
                         {rec.checkInTime ? (
-                          <span className={`px-2 py-0.5 rounded-md border font-mono font-black ${
-                            getAttendanceTimeBadge(rec.checkInTime, 'in').colorClass
-                          }`}>
-                            📥 {formatTime12H(rec.checkInTime)}
+                          <span className="px-2 py-0.5 rounded-md font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30">
+                            {formatTime12H(rec.checkInTime)}
                           </span>
                         ) : (
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
-                      <td className="p-2 border-l border-slate-200 text-center font-mono">
+                      <td className="p-2.5 border-l border-slate-100 dark:border-white/5 text-center font-mono">
                         {rec.checkOutTime ? (
-                          <span className={`px-2 py-0.5 rounded-md border font-mono font-black ${
-                            getAttendanceTimeBadge(rec.checkOutTime, 'out').colorClass
-                          }`}>
-                            📤 {formatTime12H(rec.checkOutTime)}
+                          <span className="px-2 py-0.5 rounded-md font-mono font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30">
+                            {formatTime12H(rec.checkOutTime)}
                           </span>
                         ) : (
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
-                      <td className="p-2 border-l border-slate-200 text-center font-mono text-blue-950 bg-blue-50/30">
-                        {rec.workedHours > 0 ? `${rec.workedHours} ک` : '-'}
+                      <td className="p-2.5 border-l border-slate-100 dark:border-white/5 text-center font-mono font-bold text-blue-600 dark:text-blue-400">
+                        {rec.workedHours > 0 ? `${rec.workedHours}h` : '-'}
                       </td>
-                      <td className="p-2 border-l border-slate-200 text-center font-mono text-amber-950 font-black bg-amber-50/30">
-                        {hasOt ? `+${rec.overtimeHours} ک` : '-'}
+                      <td className="p-2.5 border-l border-slate-100 dark:border-white/5 text-center font-mono font-bold text-amber-600 dark:text-amber-400">
+                        {hasOt ? `+${rec.overtimeHours}h` : '-'}
                       </td>
-                      <td className="p-2 border-l border-slate-200 text-center font-mono text-emerald-950 font-black bg-emerald-50/30">
+                      <td className="p-2.5 border-l border-slate-100 dark:border-white/5 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
                         {rec.overtimeAmount > 0 ? `+${rec.overtimeAmount.toLocaleString()}` : '-'}
                       </td>
-                      <td className="p-2 border-l border-slate-200 text-slate-800 text-[11px]">
+                      <td className="p-2.5 border-l border-slate-100 dark:border-white/5 text-slate-700 dark:text-slate-300 text-xs">
                         {rec.note ? (
-                          <span className="text-slate-950 font-bold bg-white px-1.5 py-0.5 rounded border border-slate-300 block">
-                            📝 {rec.note}
+                          <span className="text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-[#1c1c1e] px-2 py-0.5 rounded-md border border-slate-200/60 dark:border-white/5 block">
+                            {rec.note}
                           </span>
                         ) : (
                           <span className="text-slate-400 italic">-</span>
                         )}
                       </td>
-                      <td className="p-2 text-center">
+                      <td className="p-2.5 text-center">
                         {rec.status === 'present' ? (
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px]">
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px] font-bold">
                             ئامادە
                           </span>
                         ) : rec.status === 'off' ? (
-                          <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 text-[10px]">
+                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-400 text-[10px] font-bold">
                             پشوو
                           </span>
                         ) : rec.status === 'future' ? (
-                          <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200 text-[10px]">
+                          <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 text-[10px] font-bold">
                             داهاتوو
                           </span>
                         ) : (
-                          <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-950 border border-rose-300 text-[10px]">
+                          <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 text-[10px] font-bold">
                             غایب
                           </span>
                         )}
@@ -570,13 +566,13 @@ export function AdminEmployeeDetailsModal({
         </div>
 
         {/* FOOTER */}
-        <div className="p-3 bg-slate-100 border-t border-slate-300 flex items-center justify-between">
-          <span className="text-xs text-slate-600 font-bold">
-            کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی — پرۆفایلی وردی کارمەند
+        <div className="px-6 py-4 bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between">
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+            کۆمپانیای ئاشڵی — پرۆفایلی وردی کارمەند
           </span>
           <button
             onClick={onClose}
-            className="btn-classic text-xs px-4 py-1.5 font-bold"
+            className="px-5 py-2 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer active:scale-95"
           >
             داخستن
           </button>

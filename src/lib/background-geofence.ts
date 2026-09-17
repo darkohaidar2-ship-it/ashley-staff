@@ -70,6 +70,29 @@ export async function sendLocalNotification(title: string, body: string) {
   }
 }
 
+/**
+ * Single-shot On-Demand GPS measurement
+ * Uses navigator.geolocation.getCurrentPosition() ONLY when explicitly requested.
+ * Automatically shuts down immediately after obtaining coordinates.
+ */
+export function getCurrentGpsPosition(options?: PositionOptions): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      return reject(new Error('ئامێرەکەت پشتگیری لە دیاریکردنی شوێنی جوگرافی (GPS) ناکات.'));
+    }
+    navigator.geolocation.getCurrentPosition(
+      resolve,
+      reject,
+      {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0, // No cached stale position, fresh 1-shot fix
+        ...options,
+      }
+    );
+  });
+}
+
 class AutonomousGeofenceManager {
   private watchId: number | null = null;
   private isInsideState: boolean | null = null;
@@ -80,28 +103,9 @@ class AutonomousGeofenceManager {
   public start(config: GeofenceConfig) {
     if (typeof window === 'undefined') return;
     this.config = config;
-    this.isRunning = true;
-
-    // Load last known state from localStorage
-    const savedState = localStorage.getItem(`ashley_geostate_${config.userId}`);
-    if (savedState) {
-      this.isInsideState = savedState === 'inside';
-    }
-
-    // Flush any pending offline queue
-    this.flushOfflineQueue();
-
-    if ('geolocation' in navigator) {
-      this.watchId = navigator.geolocation.watchPosition(
-        (pos) => this.handlePositionUpdate(pos),
-        (err) => console.warn('Geofence GPS Watcher warning:', err.message),
-        {
-          enableHighAccuracy: true,
-          maximumAge: 3000,
-          timeout: 15000,
-        }
-      );
-    }
+    // Continuous 24/7 watching disabled per system architecture requirements.
+    // Use on-demand getCurrentPosition upon punch instead.
+    this.isRunning = false;
   }
 
   public stop() {

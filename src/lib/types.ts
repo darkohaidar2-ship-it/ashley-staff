@@ -331,6 +331,16 @@ export type SidebarSettings = {
 
 export type AppSettings = {
   appLogo: string | null;
+  websiteLogo?: string | null;
+  reportLogo?: string | null;
+  diwanLogo?: string | null;
+  ashleyLogo?: string | null;
+  motherCompanyName?: string;
+  motherCompanySubtitle?: string;
+  brandName?: string;
+  brandSubtitle?: string;
+  agencyTitle?: string;
+  brandSlogan?: string;
   mainBackground: string | null;
   loginBackground: string | null;
   loginBackgroundVideo: string | null;
@@ -369,6 +379,11 @@ export type AppSettings = {
     lat: number;
     lng: number;
     radiusMeters: number;
+  };
+  shiftSettings?: {
+    checkInTime: string;
+    checkOutTime: string;
+    graceMinutes: number;
   };
 };
 

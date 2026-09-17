@@ -1,241 +1,256 @@
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ==========================================================================
-   WINDOWS 11 FLUENT ENTERPRISE 2.0 (WinUI 3 / Acrylic Glass ERP)
+   APPLE iOS / macOS DESIGN SYSTEM (Liquid Retina & Glassmorphism)
    ========================================================================== */
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222 47% 11%;
+    --background: 240 10% 96%; /* #f2f2f7 Apple System Gray 6 */
+    --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 221 83% 53%; /* Royal Blue */
-    --primary-foreground: 210 40% 98%;
-    --secondary: 214 32% 91%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 8px;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 211 100% 50%; /* #007AFF Apple Blue */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 92%;
+    --secondary-foreground: 240 10% 3.9%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+    --accent: 211 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%; /* #FF3B30 Apple Red */
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 211 100% 50%;
+    --radius: 18px;
 
-    --font-heading: 'Noto Kufi Arabic', 'Vazirmatn', 'Segoe UI Variable', system-ui, sans-serif;
-    --font-body: 'Noto Kufi Arabic', 'Vazirmatn', 'Segoe UI Variable', system-ui, sans-serif;
-    --font-mono: 'Consolas', 'Cascadia Code', monospace;
+    --font-heading: 'Vazirmatn', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+    --font-body: 'Vazirmatn', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    --font-mono: 'SF Mono', 'Consolas', 'Cascadia Code', monospace;
   }
 }
 
 @layer base {
   * {
-    border-color: #e2e8f0;
+    border-color: rgba(0, 0, 0, 0.08);
+    scrollbar-width: thin;
+    scrollbar-color: #93c5fd rgba(224, 242, 254, 0.4);
   }
+
+  /* 🌟 SLEEK LIGHT-BLUE SCROLLBAR (Apple & Fluid UI) */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: rgba(224, 242, 254, 0.35);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #93c5fd;
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #60a5fa;
+  }
+  ::-webkit-scrollbar-thumb:active {
+    background: #3b82f6;
+  }
+
   body {
-    background: linear-gradient(135deg, #eef2f6 0%, #e0e7ff 40%, #f1f5f9 100%) !important;
-    background-attachment: fixed !important;
-    color: #0f172a;
-    font-size: 12.5px;
-    font-family: 'Noto Kufi Arabic', 'Vazirmatn', 'Segoe UI Variable', system-ui, sans-serif;
+    background: #ffffff !important;
+    color: #1c1c1e;
+    font-size: 13px;
+    font-family: 'Vazirmatn', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
     margin: 0;
     padding: 0;
     min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 @layer utilities {
   /* ==========================================================================
-     WINUI 3 ACRYLIC GLASS PANELS & CARDS
+     APPLE iOS GLASS PANELS & LIQUID RETINA CARDS
      ========================================================================== */
-  .panel-fluent, .panel-classic {
-    background: rgba(255, 255, 255, 0.88) !important;
-    backdrop-filter: blur(16px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
-    border: 1.5px solid rgba(255, 255, 255, 0.8) !important;
-    border-radius: 12px !important;
-    box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 4px 12px -2px rgba(0, 0, 0, 0.03) !important;
+  .panel-fluent, .panel-classic, .ios-card {
+    background: rgba(255, 255, 255, 0.92) !important;
+    backdrop-filter: blur(20px) saturate(190%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(190%) !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.02) !important;
     overflow: hidden !important;
   }
 
-  .panel-header-fluent, .panel-header-classic {
-    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #2563eb 100%) !important;
-    color: #ffffff !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+  .panel-header-fluent, .panel-header-classic, .ios-header {
+    background: rgba(255, 255, 255, 0.85) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    color: #1c1c1e !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
     font-weight: 800 !important;
-    font-size: 12px !important;
-    padding: 8px 14px !important;
-    border-radius: 10px 10px 0 0 !important;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+    font-size: 13px !important;
+    padding: 12px 18px !important;
+    border-radius: 24px 24px 0 0 !important;
   }
 
   /* ==========================================================================
-     WINUI 3 FLUENT BUTTONS
+     APPLE iOS TACTILE BUTTONS & SEGMENTED CONTROLS
      ========================================================================== */
-  .btn-fluent, .btn-classic {
-    background: rgba(255, 255, 255, 0.95) !important;
-    color: #0f172a !important;
-    border: 1px solid #cbd5e1 !important;
-    border-radius: 8px !important;
+  .btn-fluent, .btn-classic, .ios-btn {
+    background: rgba(0, 0, 0, 0.05) !important;
+    color: #1c1c1e !important;
+    border: 1px solid rgba(0, 0, 0, 0.04) !important;
+    border-radius: 9999px !important;
     font-weight: 700 !important;
-    font-size: 11.5px !important;
-    padding: 5px 12px !important;
+    font-size: 12px !important;
+    padding: 7px 16px !important;
     cursor: pointer !important;
     user-select: none !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     gap: 6px !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04) !important;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
   }
 
-  .btn-fluent:hover, .btn-classic:hover {
-    background: #ffffff !important;
-    border-color: #3b82f6 !important;
-    color: #1d4ed8 !important;
+  .btn-fluent:hover, .btn-classic:hover, .ios-btn:hover {
+    background: rgba(0, 0, 0, 0.08) !important;
+    color: #000000 !important;
     transform: translateY(-1px) !important;
-    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.12) !important;
   }
 
-  .btn-fluent:active, .btn-classic:active {
-    transform: translateY(0px) scale(0.98) !important;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  .btn-fluent:active, .btn-classic:active, .ios-btn:active {
+    transform: scale(0.96) !important;
+    background: rgba(0, 0, 0, 0.12) !important;
   }
 
-  .btn-fluent-primary, .btn-classic-primary {
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  .btn-fluent-primary, .btn-classic-primary, .ios-btn-primary {
+    background: #007AFF !important;
     color: #ffffff !important;
-    border: 1px solid #1e40af !important;
-    border-radius: 8px !important;
+    border: none !important;
+    border-radius: 9999px !important;
     font-weight: 800 !important;
-    font-size: 11.5px !important;
-    padding: 6px 14px !important;
+    font-size: 12px !important;
+    padding: 8px 18px !important;
     cursor: pointer !important;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+    box-shadow: 0 4px 14px rgba(0, 122, 255, 0.3) !important;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
   }
 
-  .btn-fluent-primary:hover, .btn-classic-primary:hover {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+  .btn-fluent-primary:hover, .btn-classic-primary:hover, .ios-btn-primary:hover {
+    background: #0062cc !important;
     transform: translateY(-1px) !important;
-    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35) !important;
+    box-shadow: 0 6px 18px rgba(0, 122, 255, 0.4) !important;
   }
 
-  .btn-fluent-danger, .btn-classic-danger {
-    background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
+  .btn-fluent-danger, .btn-classic-danger, .ios-btn-danger {
+    background: rgba(255, 59, 48, 0.1) !important;
+    color: #FF3B30 !important;
+    border: 1px solid rgba(255, 59, 48, 0.2) !important;
+    border-radius: 9999px !important;
+    font-weight: 800 !important;
+    font-size: 12px !important;
+    padding: 8px 18px !important;
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  .btn-fluent-danger:hover, .btn-classic-danger:hover, .ios-btn-danger:hover {
+    background: #FF3B30 !important;
     color: #ffffff !important;
-    border: 1px solid #9f1239 !important;
-    border-radius: 8px !important;
-    font-weight: 800 !important;
-    font-size: 11.5px !important;
-    padding: 6px 14px !important;
-    cursor: pointer !important;
-    box-shadow: 0 4px 12px rgba(225, 29, 72, 0.25) !important;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-  }
-
-  .btn-fluent-danger:hover, .btn-classic-danger:hover {
-    background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
     transform: translateY(-1px) !important;
-    box-shadow: 0 6px 16px rgba(225, 29, 72, 0.35) !important;
+    box-shadow: 0 6px 16px rgba(255, 59, 48, 0.3) !important;
   }
 
   /* ==========================================================================
-     WINUI 3 FLUENT DATA GRID (TABLE)
+     APPLE iOS CLEAN DATA TABLE
      ========================================================================== */
   .table-fluent, .table-classic {
     width: 100% !important;
     border-collapse: separate !important;
     border-spacing: 0 !important;
-    border: 1px solid #cbd5e1 !important;
-    border-radius: 10px !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    border-radius: 20px !important;
     font-size: 12px !important;
     text-align: right !important;
     overflow: hidden !important;
+    background: #ffffff !important;
   }
 
   .table-fluent th, .table-classic th {
-    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
-    color: #1e293b !important;
+    background: #f8fafc !important;
+    color: #475569 !important;
     font-weight: 800 !important;
-    border-bottom: 2px solid #cbd5e1 !important;
-    border-left: 1px solid #e2e8f0 !important;
-    padding: 8px 10px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    border-left: 1px solid #f1f5f9 !important;
+    padding: 10px 12px !important;
     white-space: nowrap !important;
   }
 
   .table-fluent td, .table-classic td {
     border-bottom: 1px solid #f1f5f9 !important;
-    border-left: 1px solid #f1f5f9 !important;
-    padding: 6px 10px !important;
-    color: #0f172a !important;
+    border-left: 1px solid #f8fafc !important;
+    padding: 8px 12px !important;
+    color: #1e293b !important;
     transition: background-color 0.15s ease !important;
   }
 
   .table-fluent tr:nth-child(even), .table-classic tr:nth-child(even) {
-    background-color: rgba(255, 255, 255, 0.95) !important;
-  }
-
-  .table-fluent tr:nth-child(odd), .table-classic tr:nth-child(odd) {
-    background-color: rgba(248, 250, 252, 0.95) !important;
-  }
-
-  .table-fluent tr:hover, .table-classic tr:hover {
-    background-color: rgba(224, 231, 255, 0.6) !important; /* Soft WinUI 3 indigo highlight */
-  }
-
-  .table-fluent tr.grand-total-row, .table-classic tr.grand-total-row {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
-    color: #ffffff !important;
-    font-weight: 800 !important;
-  }
-
-  .table-fluent tr.grand-total-row td, .table-classic tr.grand-total-row td {
-    border-color: #334155 !important;
-    color: #ffffff !important;
-  }
-
-  /* ==========================================================================
-     WINUI 3 FLUENT INPUT FIELDS
-     ========================================================================== */
-  .input-fluent, .input-classic {
-    background-color: rgba(255, 255, 255, 0.9) !important;
-    border: 1.5px solid #cbd5e1 !important;
-    border-radius: 8px !important;
-    padding: 5px 10px !important;
-    font-size: 12px !important;
-    color: #0f172a !important;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03) !important;
-    transition: all 0.2s ease !important;
-  }
-
-  .input-fluent:focus, .input-classic:focus {
-    outline: none !important;
-    border-color: #2563eb !important;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
     background-color: #ffffff !important;
   }
 
+  .table-fluent tr:nth-child(odd), .table-classic tr:nth-child(odd) {
+    background-color: #fbfcfe !important;
+  }
+
+  .table-fluent tr:hover, .table-classic tr:hover {
+    background-color: #f1f5f9 !important;
+  }
+
   /* ==========================================================================
-     WINUI 3 STATUSBAR SEGMENT
+     APPLE iOS INPUT FIELDS
+     ========================================================================== */
+  .input-fluent, .input-classic, .ios-input {
+    background-color: #f2f2f7 !important;
+    border: 1px solid transparent !important;
+    border-radius: 14px !important;
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+    color: #1c1c1e !important;
+    transition: all 0.2s ease !important;
+  }
+
+  .input-fluent:focus, .input-classic:focus, .ios-input:focus {
+    outline: none !important;
+    border-color: #007AFF !important;
+    background-color: #ffffff !important;
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15) !important;
+  }
+
+  /* ==========================================================================
+     APPLE STATUSBAR PILL
      ========================================================================== */
   .statusbar-segment {
     background: rgba(255, 255, 255, 0.8) !important;
-    border: 1px solid #cbd5e1 !important;
-    border-radius: 6px !important;
-    padding: 3px 8px !important;
+    border: 1px solid rgba(0, 0, 0, 0.05) !important;
+    border-radius: 9999px !important;
+    padding: 3px 10px !important;
     font-size: 11px !important;
     font-family: monospace !important;
     color: #334155 !important;
-    backdrop-filter: blur(8px) !important;
+    backdrop-filter: blur(10px) !important;
   }
 }
 

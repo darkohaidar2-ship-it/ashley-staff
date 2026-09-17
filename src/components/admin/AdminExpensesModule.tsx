@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import type { Employee } from '@/lib/types';
 import { useAppContext } from '@/context/app-provider';
 import { 
@@ -11,10 +11,11 @@ import {
   FileSpreadsheet, 
   Printer, 
   TrendingDown, 
-  TrendingUp, 
   Gift, 
   Banknote,
-  Search
+  Search,
+  CheckCircle2,
+  ChevronDown
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
@@ -33,10 +34,8 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   const [filterEmpId, setFilterEmpId] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
 
-  // Form States
-  const [title, setTitle] = useState('');
+  // Form States (matching screenshot)
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('مەسروفاتی گشتی');
   const [expenseType, setExpenseType] = useState<'taxi' | 'fuel' | 'food' | 'office' | 'other'>('taxi');
   const [fromLoc, setFromLoc] = useState('');
   const [toLoc, setToLoc] = useState('');
@@ -45,12 +44,35 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   const [date, setDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [note, setNote] = useState('');
 
+  // UX Feedback states
+  const [lastAddedFeedback, setLastAddedFeedback] = useState<string | null>(null);
+  const [recentlyAddedId, setRecentlyAddedId] = useState<string | null>(null);
+
+  // Input ref to automatically focus back on Amount for rapid consecutive entries
+  const amountInputRef = useRef<HTMLInputElement>(null);
+
+  const categoryPills = [
+    { key: 'taxi' as const, label: 'کرێی تەکسی' },
+    { key: 'fuel' as const, label: 'بەنزین' },
+    { key: 'food' as const, label: 'خواردن' },
+    { key: 'office' as const, label: 'مەکتەب' },
+    { key: 'other' as const, label: 'تر' },
+  ];
+
   const typeLabels: Record<string, string> = {
-    taxi: '🚖 کرێی تەکسی',
-    fuel: '⛽ بەنزین',
-    food: '🍔 خواردن',
-    office: '🏢 مەکتەب',
-    other: '📦 تر'
+    taxi: 'کرێی تەکسی',
+    fuel: 'بەنزین',
+    food: 'خواردن',
+    office: 'مەکتەب',
+    other: 'تر'
+  };
+
+  const typeColors: Record<string, { bg: string; text: string; border: string }> = {
+    taxi: { bg: 'bg-blue-50 dark:bg-blue-950/40', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
+    fuel: { bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800' },
+    food: { bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' },
+    office: { bg: 'bg-purple-50 dark:bg-purple-950/40', text: 'text-purple-700 dark:text-purple-300', border: 'border-purple-200 dark:border-purple-800' },
+    other: { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-700' },
   };
 
   const activeEmployees = useMemo(() => {
@@ -85,7 +107,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     });
   }, [expenses, selectedMonth, filterEmpId, filterType, searchQuery]);
 
-  // 👥 Grouping Expenses by Employee with Subtotals
+  // Grouping Expenses by Employee with Subtotals
   const groupedExpenses = useMemo(() => {
     const map: Record<string, { empKey: string; empName: string; empId?: string; role?: string; items: any[]; total: number }> = {};
     monthlyExpenses.forEach((exp: any) => {
@@ -142,20 +164,25 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   const totalWth = monthlyWithdrawals.reduce((sum: number, w: any) => sum + Number(w.amount || 0), 0);
   const grandTotal = totalExp + totalBon + totalWth;
 
-  const handleAddRecord = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!amount || parseFloat(amount) <= 0) return alert('تکایە بڕی پارەی دروست بنووسە');
+  // Ultra-Fast Data Entry Handler
+  const handleAddRecord = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!amount || parseFloat(amount) <= 0) {
+      amountInputRef.current?.focus();
+      return;
+    }
 
     const numAmount = parseFloat(amount);
     const emp = employees.find(e => e.id === selectedEmpId);
-    const empName = emp?.fullName3Part || emp?.name || 'کارمەند';
+    const empName = emp ? (emp.fullName3Part || emp.name) : 'مەسروفاتی گشتی کارگە';
+    const newId = (activeTab === 'expenses' ? 'exp_' : activeTab === 'bonuses' ? 'bon_' : 'wth_') + Date.now();
 
     if (activeTab === 'expenses') {
       const newExp = {
-        id: 'exp_' + Date.now(),
-        title: title.trim() || typeLabels[expenseType] || category,
+        id: newId,
+        title: typeLabels[expenseType] || 'مەسروفات',
         amount: numAmount,
-        category,
+        category: typeLabels[expenseType] || 'مەسروفات',
         type: expenseType,
         from: fromLoc.trim(),
         to: toLoc.trim(),
@@ -167,11 +194,11 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         createdAt: new Date().toISOString(),
       };
       setExpenses((prev: any) => [newExp, ...(prev || [])]);
-      alert(`🎉 مەسروفاتی (${newExp.title}) ${selectedEmpId ? `بۆ کارمەند (${empName})` : ''} بە بڕی ${numAmount.toLocaleString()} IQD تۆمارکرا!`);
+      setLastAddedFeedback(`✓ خەرجی (${typeLabels[expenseType]}) بە بڕی ${numAmount.toLocaleString()} IQD بۆ (${empName}) تۆمارکرا!`);
     } else if (activeTab === 'bonuses') {
       if (!selectedEmpId) return alert('تکایە کارمەند دیاری بکە بۆ پاداشت');
       const newBonus = {
-        id: 'bon_' + Date.now(),
+        id: newId,
         employeeId: selectedEmpId,
         employeeName: empName,
         amount: numAmount,
@@ -181,11 +208,11 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         createdAt: new Date().toISOString(),
       };
       setBonuses((prev: any) => [newBonus, ...(prev || [])]);
-      alert(`🎉 پاداشت بۆ (${empName}) بە بڕی ${numAmount.toLocaleString()} IQD تۆمارکرا!`);
+      setLastAddedFeedback(`✓ پاداشت بە بڕی ${numAmount.toLocaleString()} IQD بۆ (${empName}) تۆمارکرا!`);
     } else if (activeTab === 'withdrawals') {
-      if (!selectedEmpId) return alert('تکایە کارمەند دیاری بکە بۆ ڕاکێشانی پارە');
+      if (!selectedEmpId) return alert('تکایە کارمەند دیاری بکە بۆ ڕاکێشانی پێشینە');
       const newWth = {
-        id: 'wth_' + Date.now(),
+        id: newId,
         employeeId: selectedEmpId,
         employeeName: empName,
         amount: numAmount,
@@ -194,20 +221,37 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         createdAt: new Date().toISOString(),
       };
       setWithdrawals((prev: any) => [newWth, ...(prev || [])]);
-      alert(`🎉 ڕاکێشانی پارە بۆ (${empName}) تۆمارکرا!`);
+      setLastAddedFeedback(`✓ ڕاکێشانی پێشینە بە بڕی ${numAmount.toLocaleString()} IQD بۆ (${empName}) تۆمارکرا!`);
     }
 
-    setTitle('');
+    // Visual feedback on the new row
+    setRecentlyAddedId(newId);
+    setTimeout(() => setRecentlyAddedId(null), 3000);
+    setTimeout(() => setLastAddedFeedback(null), 4000);
+
+    // Fast Data Entry Ergonomics:
+    // Reset specific fields but RETAIN selected employee and date!
     setAmount('');
-    setSelectedEmpId('');
     setFromLoc('');
     setToLoc('');
     setTripNo('');
     setNote('');
+
+    // Immediately refocus on amount input so user can type next expense with zero clicks!
+    setTimeout(() => {
+      amountInputRef.current?.focus();
+    }, 50);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddRecord();
+    }
   };
 
   const handleDeleteRecord = (id: string, type: 'expenses' | 'bonuses' | 'withdrawals') => {
-    if (!confirm('ئایا دڵنیایت لە سڕینەوە؟')) return;
+    if (!confirm('ئایا دڵنیایت لە سڕینەوەی ئەم تۆمارە؟')) return;
     if (type === 'expenses') setExpenses((prev: any) => (prev || []).filter((e: any) => e.id !== id));
     if (type === 'bonuses') setBonuses((prev: any) => (prev || []).filter((b: any) => b.id !== id));
     if (type === 'withdrawals') setWithdrawals((prev: any) => (prev || []).filter((w: any) => w.id !== id));
@@ -239,7 +283,6 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
             note: e.note || e.title || '-',
           });
         });
-        // Subtotal row per employee
         data.push({
           empName: `📊 کۆی (${grp.empName})`,
           date: '—',
@@ -259,7 +302,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         data,
         fileName: `Ashley_Expenses_${selectedMonth}`,
         summaryCards: [
-          { label: 'کۆی خەرجی مەسروفات', value: `${totalExp.toLocaleString()} IQD`, color: '#be123c' },
+          { label: 'کۆی خەرجی مەسروفات', value: `${totalExp.toLocaleString()} IQD`, color: '#007AFF' },
           { label: 'ژمارەی پسوولەکان', value: `${monthlyExpenses.length} دانە` },
           { label: 'ژمارەی کارمەندان', value: `${Object.keys(groupedExpenses).length} کەس` },
         ],
@@ -387,357 +430,380 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   };
 
   return (
-    <div className="space-y-4 text-xs font-bold text-slate-900 dir-rtl" dir="rtl">
+    <div className="space-y-6 dir-rtl" dir="rtl">
       
-      {/* 🏷️ LARGE PROMINENT SECTION TITLE */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-gradient-to-r from-emerald-950 via-emerald-900 to-teal-900 text-white rounded-xl shadow-md border border-emerald-700">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 bg-emerald-800/80 rounded-lg border border-emerald-600 shadow-inner">
-            <DollarSign className="w-5 h-5 text-emerald-200" />
-          </div>
-          <div>
-            <h2 className="text-base sm:text-lg font-black tracking-wide text-emerald-50">
-              لیستی مەسروفات، پاداشت و پێشینەی دارایی (Expenses & Finance Ledger)
-            </h2>
-            <p className="text-[11px] text-emerald-200/90 font-medium">
-              تۆمارکردنی پسوولەکانی کارگە، بەخششی کارمەندان و ڕاکێشانی پێشینە لەگەڵ ئاماری گشتی
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-mono font-black bg-rose-600 text-white border-2 border-white px-3 py-1 rounded-full shadow-md animate-pulse">
-            🔴 بەم زووانە (Coming Soon)
-          </span>
-        </div>
-      </div>
-
-      {/* 🛠️ TOP CONTROLS & TABS */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-100 border-2 border-slate-300 rounded-xl shadow-sm">
-        <div className="flex flex-wrap items-center gap-1.5">
+      {/* 🧭 NAVIGATION TABS */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-2 bg-slate-100/80 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-2xl shadow-2xs">
+        <div className="flex flex-wrap items-center gap-2">
           <button
+            type="button"
             onClick={() => setActiveTab('expenses')}
-            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer font-black ${
+            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 font-bold text-xs cursor-pointer ${
               activeTab === 'expenses' 
-                ? 'bg-rose-800 text-white shadow-md border border-rose-950 scale-102' 
-                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+                ? 'bg-[#007AFF] text-white shadow-sm scale-102' 
+                : 'bg-white dark:bg-[#2c2c2e] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200/70 dark:border-white/5'
             }`}
           >
-            <TrendingDown className="w-3.5 h-3.5" />
-            <span>💸 مەسروفاتی کارگە ({monthlyExpenses.length})</span>
+            <TrendingDown className="w-4 h-4" />
+            <span>💸 مەسروفات و خەرجی ({monthlyExpenses.length})</span>
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('bonuses')}
-            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer font-black ${
+            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 font-bold text-xs cursor-pointer ${
               activeTab === 'bonuses' 
-                ? 'bg-emerald-800 text-white shadow-md border border-emerald-950 scale-102' 
-                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+                ? 'bg-emerald-600 text-white shadow-sm scale-102' 
+                : 'bg-white dark:bg-[#2c2c2e] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200/70 dark:border-white/5'
             }`}
           >
-            <Gift className="w-3.5 h-3.5" />
+            <Gift className="w-4 h-4" />
             <span>🎁 پاداشت و بەخشش ({monthlyBonuses.length})</span>
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('withdrawals')}
-            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer font-black ${
+            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 font-bold text-xs cursor-pointer ${
               activeTab === 'withdrawals' 
-                ? 'bg-amber-800 text-white shadow-md border border-amber-950 scale-102' 
-                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+                ? 'bg-amber-600 text-white shadow-sm scale-102' 
+                : 'bg-white dark:bg-[#2c2c2e] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200/70 dark:border-white/5'
             }`}
           >
-            <Banknote className="w-3.5 h-3.5" />
+            <Banknote className="w-4 h-4" />
             <span>🏧 ڕاکێشانی پێشینە ({monthlyWithdrawals.length})</span>
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 font-mono">
-          <span className="text-slate-600 font-bold text-xs">مانگ:</span>
+        {/* Quick Month Filter & Exports */}
+        <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+          <span className="text-slate-500 dark:text-slate-400 font-bold">مانگ:</span>
           <input
             type="month"
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
-            className="input-classic font-bold bg-white"
+            className="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-white font-bold text-xs focus:outline-none focus:ring-1 focus:ring-[#007AFF]"
           />
 
           <button
             onClick={handleExportPDF}
-            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-900 border-red-300 shadow-sm cursor-pointer"
+            className="h-8 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 shadow-2xs transition-all cursor-pointer"
           >
-            <Printer className="w-3.5 h-3.5 text-red-700" />
-            <span>📄 PDF</span>
+            <Printer className="w-3.5 h-3.5 text-rose-600" />
+            <span>PDF</span>
           </button>
 
           <button
             onClick={handleExportCSV}
-            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300 shadow-sm cursor-pointer"
+            className="h-8 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 shadow-2xs transition-all cursor-pointer"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-            <span>📊 CSV</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Excel / CSV</span>
           </button>
         </div>
       </div>
 
-      {/* 📊 SUMMARY KPI CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="panel-classic p-2.5 text-center bg-rose-50/80 border-2 border-rose-200 shadow-sm rounded-xl">
-          <span className="text-[10px] text-rose-900 block font-bold">کۆی مەسروفات</span>
-          <p className="text-base font-black text-rose-950 font-mono mt-0.5">{totalExp.toLocaleString()} IQD</p>
+      {/* 📊 KPI SUMMARY ROW */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="p-3.5 bg-white dark:bg-[#1c1c1e] border border-slate-200/80 dark:border-white/5 rounded-2xl shadow-2xs">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold block">کۆی مەسروفات</span>
+          <p className="text-base sm:text-lg font-black text-blue-600 dark:text-blue-400 font-mono mt-0.5">
+            {totalExp.toLocaleString()} <span className="text-[10px] font-sans font-normal text-slate-400">IQD</span>
+          </p>
         </div>
-        <div className="panel-classic p-2.5 text-center bg-emerald-50/80 border-2 border-emerald-200 shadow-sm rounded-xl">
-          <span className="text-[10px] text-emerald-900 block font-bold">کۆی پاداشتەکان</span>
-          <p className="text-base font-black text-emerald-950 font-mono mt-0.5">{totalBon.toLocaleString()} IQD</p>
+        <div className="p-3.5 bg-white dark:bg-[#1c1c1e] border border-slate-200/80 dark:border-white/5 rounded-2xl shadow-2xs">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold block">کۆی پاداشتەکان</span>
+          <p className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
+            {totalBon.toLocaleString()} <span className="text-[10px] font-sans font-normal text-slate-400">IQD</span>
+          </p>
         </div>
-        <div className="panel-classic p-2.5 text-center bg-amber-50/80 border-2 border-amber-200 shadow-sm rounded-xl">
-          <span className="text-[10px] text-amber-900 block font-bold">کۆی پێشینە و سەحب</span>
-          <p className="text-base font-black text-amber-950 font-mono mt-0.5">{totalWth.toLocaleString()} IQD</p>
+        <div className="p-3.5 bg-white dark:bg-[#1c1c1e] border border-slate-200/80 dark:border-white/5 rounded-2xl shadow-2xs">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold block">کۆی پێشینە و سەحب</span>
+          <p className="text-base sm:text-lg font-black text-amber-600 dark:text-amber-400 font-mono mt-0.5">
+            {totalWth.toLocaleString()} <span className="text-[10px] font-sans font-normal text-slate-400">IQD</span>
+          </p>
         </div>
-        <div className="panel-classic p-2.5 text-center bg-purple-50/80 border-2 border-purple-200 shadow-sm rounded-xl">
-          <span className="text-[10px] text-purple-900 block font-bold">کۆی گشتی خەرجی مانگ</span>
-          <p className="text-base font-black text-purple-950 font-mono mt-0.5">{grandTotal.toLocaleString()} IQD</p>
+        <div className="p-3.5 bg-white dark:bg-[#1c1c1e] border border-slate-200/80 dark:border-white/5 rounded-2xl shadow-2xs">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold block">کۆی گشتی مانگ</span>
+          <p className="text-base sm:text-lg font-black text-purple-600 dark:text-purple-400 font-mono mt-0.5">
+            {grandTotal.toLocaleString()} <span className="text-[10px] font-sans font-normal text-slate-400">IQD</span>
+          </p>
         </div>
       </div>
 
-      {/* 📝 DISTINCT FORM / DATA ENTRY PANEL (COLOR THEMED PER TAB) */}
-      <form 
-        onSubmit={handleAddRecord} 
-        className={`p-3.5 border-2 rounded-xl shadow-md space-y-3 ${
-          activeTab === 'expenses'
-            ? 'bg-gradient-to-r from-rose-50/90 via-red-50/70 to-rose-50/90 border-rose-300'
-            : activeTab === 'bonuses'
-            ? 'bg-gradient-to-r from-emerald-50/90 via-teal-50/70 to-emerald-50/90 border-emerald-300'
-            : 'bg-gradient-to-r from-amber-50/90 via-orange-50/70 to-amber-50/90 border-amber-300'
-        }`}
-      >
-        <div className="flex items-center justify-between border-b pb-2 border-slate-300/80">
-          <div className="flex items-center gap-2">
-            <span className={`p-1 text-white rounded-md ${
-              activeTab === 'expenses' ? 'bg-rose-600' : activeTab === 'bonuses' ? 'bg-emerald-600' : 'bg-amber-600'
-            }`}>
-              <Plus className="w-3.5 h-3.5" />
-            </span>
-            <h3 className="text-xs font-black text-slate-900">
-              {activeTab === 'expenses' && 'فۆرمی تۆمارکردنی مەسروفاتی نوێ (New Expense Form)'}
-              {activeTab === 'bonuses' && 'فۆرمی تۆمارکردنی پاداشتی کارمەند (New Bonus Form)'}
-              {activeTab === 'withdrawals' && 'فۆرمی تۆمارکردنی ڕاکێشانی پێشینە (New Cash Withdrawal Form)'}
+      {/* 📝 NEW EXPENSE FORM (MATCHING USER SCREENSHOT media_1789546965924.png) */}
+      <div className="bg-white dark:bg-[#1c1c1e] rounded-3xl border border-slate-200/80 dark:border-white/10 shadow-sm p-6 sm:p-7 space-y-4">
+        
+        {/* Header & Category Pills (RTL layout) */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+              {activeTab === 'expenses' && 'زیادکردنی خەرجی نوێ'}
+              {activeTab === 'bonuses' && 'زیادکردنی پاداشتی نوێ'}
+              {activeTab === 'withdrawals' && 'زیادکردنی ڕاکێشانی پێشینەی نوێ'}
             </h3>
+
+            {/* Micro Success Toast */}
+            {lastAddedFeedback && (
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-bold rounded-full border border-emerald-200 dark:border-emerald-800 animate-in fade-in duration-200">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{lastAddedFeedback}</span>
+              </div>
+            )}
           </div>
-          <span className="text-[10px] bg-white/90 border border-slate-300 px-2 py-0.5 rounded font-mono font-bold text-slate-800">
-            تۆمار لە: {date}
-          </span>
-        </div>
 
-        {/* 🚖 Quick Chips for Expense Types */}
-        {activeTab === 'expenses' && (
-          <div className="flex items-center gap-1.5 flex-wrap pb-2 border-b border-rose-200/70">
-            <span className="text-[11px] font-bold text-rose-950 ml-1">جۆری خەرجی خێرا:</span>
-            {(['taxi', 'fuel', 'food', 'office', 'other'] as const).map(t => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => {
-                  setExpenseType(t);
-                  if (!title || Object.values(typeLabels).some(lbl => lbl.includes(title))) {
-                    setTitle(typeLabels[t].replace(/^[^\s]+\s/, ''));
-                  }
-                }}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer border ${
-                  expenseType === t
-                    ? 'bg-rose-800 text-white border-rose-950 shadow scale-105'
-                    : 'bg-white text-slate-700 border-slate-300 hover:bg-rose-100/60'
-                }`}
-              >
-                {typeLabels[t]}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-4 md:grid-cols-7 gap-2">
-          {activeTab === 'expenses' ? (
-            <>
-              <div className="sm:col-span-2">
-                <label className="block text-slate-800 mb-1 text-[11px] font-bold">کارمەند (سوودمەند یان گشتی):</label>
-                <select
-                  value={selectedEmpId}
-                  onChange={(e) => setSelectedEmpId(e.target.value)}
-                  className="input-classic w-full font-bold bg-white"
-                >
-                  <option value="">🏢 مەسروفاتی گشتی کارگە</option>
-                  {activeEmployees.map(emp => (
-                    <option key={emp.id} value={emp.id}>
-                      👤 {emp.fullName3Part || emp.name} ({emp.role || 'کارمەند'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-slate-800 mb-1 text-[11px] font-bold">بەروار:</label>
-                <input
-                  type="date"
-                  required
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="input-classic w-full font-mono font-bold bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-800 mb-1 text-[11px] font-bold">بڕی پارە (IQD):</label>
-                <input
-                  type="number"
-                  required
-                  step="1000"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0"
-                  className="input-classic w-full font-mono font-bold bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-800 mb-1 text-[11px] font-bold">لە (شوێن):</label>
-                <input
-                  type="text"
-                  value={fromLoc}
-                  onChange={(e) => setFromLoc(e.target.value)}
-                  placeholder="لە..."
-                  className="input-classic w-full font-bold bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-800 mb-1 text-[11px] font-bold">بۆ (شوێن):</label>
-                <input
-                  type="text"
-                  value={toLoc}
-                  onChange={(e) => setToLoc(e.target.value)}
-                  placeholder="بۆ..."
-                  className="input-classic w-full font-bold bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-800 mb-1 text-[11px] font-bold">ژ.سەفەر:</label>
-                <input
-                  type="text"
-                  value={tripNo}
-                  onChange={(e) => setTripNo(e.target.value)}
-                  placeholder="ژ.سەفەر"
-                  className="input-classic w-full font-bold bg-white"
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="sm:col-span-3">
-                <label className="block text-slate-800 mb-1 text-[11px] font-bold">کارمەند:</label>
-                <select
-                  value={selectedEmpId}
-                  onChange={(e) => setSelectedEmpId(e.target.value)}
-                  className="input-classic w-full font-bold bg-white"
-                  required
-                >
-                  <option value="">-- هەڵبژاردنی کارمەند --</option>
-                  {activeEmployees.map(emp => (
-                    <option key={emp.id} value={emp.id}>
-                      👤 {emp.fullName3Part || emp.name} ({emp.role || 'کارمەند'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-slate-800 mb-1 text-[11px] font-bold">بڕی پارە (IQD):</label>
-                <input
-                  type="number"
-                  required
-                  step="1000"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="50,000"
-                  className="input-classic w-full font-mono font-bold bg-white"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-slate-800 mb-1 text-[11px] font-bold">بەروار:</label>
-                <input
-                  type="date"
-                  required
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="input-classic w-full font-mono font-bold bg-white"
-                />
-              </div>
-            </>
+          {/* Category Pills (Active = Apple Blue #007AFF) */}
+          {activeTab === 'expenses' && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {categoryPills.map(cat => {
+                const isActive = expenseType === cat.key;
+                return (
+                  <button
+                    key={cat.key}
+                    type="button"
+                    onClick={() => {
+                      setExpenseType(cat.key);
+                      amountInputRef.current?.focus();
+                    }}
+                    className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-[#007AFF] text-white font-bold shadow-xs'
+                        : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-          <div className="flex-1 min-w-[200px] flex gap-2">
-            {activeTab === 'expenses' && (
+        {/* 🔲 Main Input Row 1: 6 inputs side by side in RTL order */}
+        {activeTab === 'expenses' ? (
+          <form onSubmit={handleAddRecord} className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+              
+              {/* 1. کارمەند (Employee select dropdown) */}
+              <div className="relative">
+                <select
+                  value={selectedEmpId}
+                  onChange={(e) => setSelectedEmpId(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="w-full h-10 px-3 pl-8 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 focus:border-[#007AFF] appearance-none cursor-pointer"
+                >
+                  <option value="">کارمەند</option>
+                  <option value="company">🏢 مەسروفاتی گشتی کارگە</option>
+                  {activeEmployees.map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.fullName3Part || emp.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute left-2.5 top-3 pointer-events-none text-slate-400">
+                  <ChevronDown className="w-4 h-4" />
+                </div>
+              </div>
+
+              {/* 2. بەروار (Date picker input) */}
+              <div className="relative">
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 focus:border-[#007AFF] cursor-pointer"
+                />
+              </div>
+
+              {/* 3. بڕی پارە (Amount in IQD) */}
+              <div>
+                <input
+                  type="number"
+                  ref={amountInputRef}
+                  placeholder="0"
+                  step="500"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="w-full h-10 px-3 text-right rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white text-xs font-mono font-black placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 focus:border-[#007AFF]"
+                />
+              </div>
+
+              {/* 4. لە (From location) */}
+              <div>
+                <input
+                  type="text"
+                  placeholder="لە"
+                  value={fromLoc}
+                  onChange={(e) => setFromLoc(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-white text-xs font-bold placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 focus:border-[#007AFF]"
+                />
+              </div>
+
+              {/* 5. بۆ (To location) */}
+              <div>
+                <input
+                  type="text"
+                  placeholder="بۆ"
+                  value={toLoc}
+                  onChange={(e) => setToLoc(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-white text-xs font-bold placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 focus:border-[#007AFF]"
+                />
+              </div>
+
+              {/* 6. ژ.سەفەر (Trip number / Reference) */}
+              <div>
+                <input
+                  type="text"
+                  placeholder="ژ.سەفەر"
+                  value={tripNo}
+                  onChange={(e) => setTripNo(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-white text-xs font-bold placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 focus:border-[#007AFF]"
+                />
+              </div>
+            </div>
+
+            {/* 🔲 Row 2: تێبینی (Spanning right-side under employee and date) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+              <div className="col-span-2">
+                <input
+                  type="text"
+                  placeholder="تێبینی"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-white text-xs font-bold placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 focus:border-[#007AFF]"
+                />
+              </div>
+            </div>
+
+            {/* 🔲 Row 3: Blue Add Button [+ زیادکردن] */}
+            <div className="pt-1 flex items-center justify-start">
+              <button
+                type="submit"
+                className="h-10 px-6 rounded-xl bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>زیادکردن</span>
+              </button>
+            </div>
+          </form>
+        ) : (
+          /* Bonus & Withdrawal Form in the same clean Apple style */
+          <form onSubmit={handleAddRecord} className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {/* Employee */}
+              <div className="relative">
+                <select
+                  value={selectedEmpId}
+                  onChange={(e) => setSelectedEmpId(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  required
+                  className="w-full h-10 px-3 pl-8 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 focus:border-[#007AFF] appearance-none cursor-pointer"
+                >
+                  <option value="">کارمەند هەڵبژێرە</option>
+                  {activeEmployees.map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.fullName3Part || emp.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute left-2.5 top-3 pointer-events-none text-slate-400">
+                  <ChevronDown className="w-4 h-4" />
+                </div>
+              </div>
+
+              {/* Date */}
+              <div>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 focus:border-[#007AFF]"
+                />
+              </div>
+
+              {/* Amount */}
+              <div>
+                <input
+                  type="number"
+                  ref={amountInputRef}
+                  placeholder="0"
+                  step="500"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="w-full h-10 px-3 text-right rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white text-xs font-mono font-black placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 focus:border-[#007AFF]"
+                />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <input
                 type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="ناونیشانی پسوولە (وەک: پێداویستی نووسینگە / بەنزین)..."
-                className="input-classic w-1/3 font-bold bg-white"
+                placeholder={activeTab === 'bonuses' ? 'هۆکاری پاداشت...' : 'تێبینی ڕاکێشانی پێشینە...'}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-white text-xs font-bold placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 focus:border-[#007AFF]"
               />
-            )}
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="تێبینی، وردەکاری پسوولە یان هۆکار..."
-              className="input-classic flex-1 font-bold bg-white"
-            />
-          </div>
-          <button 
-            type="submit" 
-            className={`btn-classic text-xs font-black flex items-center gap-1.5 text-white shadow-sm cursor-pointer px-4 py-1.5 rounded flex-shrink-0 ${
-              activeTab === 'expenses' ? 'bg-rose-700 hover:bg-rose-800 border-rose-900' :
-              activeTab === 'bonuses' ? 'bg-emerald-700 hover:bg-emerald-800 border-emerald-900' :
-              'bg-amber-700 hover:bg-amber-800 border-amber-900'
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-            <span>پاشەکەوتکردنی ئەم تۆمارە</span>
-          </button>
-        </div>
-      </form>
+            </div>
 
-      {/* 📊 ANALYTICS & DATA TABLE CONTAINER */}
-      <div className="border-2 border-slate-300 bg-white rounded-none shadow-md overflow-hidden">
-        <div className="bg-slate-800 text-white p-2.5 px-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-3">
-            <h3 className="text-xs font-black flex items-center gap-2">
-              <span>
-                📋 {activeTab === 'expenses' && `لیستی مەسروفاتی کارمەندان و کارگەی ئاشڵی (${selectedMonth})`}
-                {activeTab === 'bonuses' && `لیستی پاداشتەکانی مانگی (${selectedMonth})`}
-                {activeTab === 'withdrawals' && `لیستی پێشینەی ڕاکێشراوی مانگی (${selectedMonth})`}
-              </span>
-            </h3>
-            <span className="text-[10px] font-mono text-amber-300 font-bold bg-slate-900 px-2 py-0.5 border border-slate-700">
-              {activeTab === 'expenses' ? `${monthlyExpenses.length} پسوولە` :
-               activeTab === 'bonuses' ? `${monthlyBonuses.length} کارمەند` :
-               `${monthlyWithdrawals.length} تۆمار`}
-            </span>
+            <div className="pt-1 flex items-center justify-start">
+              <button
+                type="submit"
+                className={`h-10 px-6 rounded-xl text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer ${
+                  activeTab === 'bonuses' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'
+                }`}
+              >
+                <Plus className="w-4 h-4" />
+                <span>زیادکردن</span>
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      {/* 📊 LIVE PREVIEW TABLE (خشتەی پێشبینی ڕاستەوخۆ) */}
+      <div className="bg-white dark:bg-[#1c1c1e] rounded-3xl border border-slate-200/80 dark:border-white/10 shadow-sm overflow-hidden space-y-0">
+        
+        {/* Table Toolbar / Filters */}
+        <div className="p-4 sm:p-5 border-b border-slate-200/80 dark:border-white/10 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span>خشتەی پێشبینی ڕاستەوخۆ (Live Ledger Preview)</span>
+              </h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {activeTab === 'expenses' && `مەسروفاتی مانگی (${selectedMonth}) - دەستبەجێ بە زیادکردنی نوێ نوێ دەبێتەوە`}
+                {activeTab === 'bonuses' && `پاداشتەکانی مانگی (${selectedMonth})`}
+                {activeTab === 'withdrawals' && `ڕاکێشانی پێشینەی مانگی (${selectedMonth})`}
+              </p>
+            </div>
           </div>
 
-          {/* Quick Filter by Employee & Search */}
+          {/* Quick Filter Inputs */}
           <div className="flex items-center gap-2 flex-wrap">
             <select
               value={filterEmpId}
               onChange={(e) => setFilterEmpId(e.target.value)}
-              className="bg-slate-900 border border-slate-600 text-white text-xs font-bold px-2 py-1 focus:outline-none"
+              className="h-8 px-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#2c2c2e] text-slate-800 dark:text-white text-xs font-bold focus:outline-none"
             >
-              <option value="all">👥 هەموو کارمەندان و مەسروفاتەکان</option>
+              <option value="all">👥 هەموو کارمەندان</option>
               {activeTab === 'expenses' && (
-                <option value="company">🏢 تەنها مەسروفاتی گشتی کۆمپانیا</option>
+                <option value="company">🏢 مەسروفاتی گشتی کۆمپانیا</option>
               )}
               {activeEmployees.map(emp => (
                 <option key={emp.id} value={emp.id}>
-                  👤 {emp.fullName3Part || emp.name}
+                  {emp.fullName3Part || emp.name}
                 </option>
               ))}
             </select>
@@ -746,169 +812,174 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="bg-slate-900 border border-slate-600 text-white text-xs font-bold px-2 py-1 focus:outline-none"
+                className="h-8 px-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#2c2c2e] text-slate-800 dark:text-white text-xs font-bold focus:outline-none"
               >
                 <option value="all">🏷️ هەموو جۆرەکان</option>
-                <option value="taxi">🚖 کرێی تەکسی</option>
-                <option value="fuel">⛽ بەنزین</option>
-                <option value="food">🍔 خواردن</option>
-                <option value="office">🏢 مەکتەب</option>
-                <option value="other">📦 تر</option>
+                <option value="taxi">کرێی تەکسی</option>
+                <option value="fuel">بەنزین</option>
+                <option value="food">خواردن</option>
+                <option value="office">مەکتەب</option>
+                <option value="other">تر</option>
               </select>
             )}
 
-            <div className="relative min-w-[170px]">
-              <Search className="w-3.5 h-3.5 absolute right-2.5 top-2 text-slate-400" />
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute right-2.5 top-2.5 text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="گەڕان بەدوای مەسروفات..."
-                className="w-full bg-slate-900 border border-slate-600 text-white text-xs pl-2 pr-7 py-1 focus:outline-none placeholder-slate-400"
+                placeholder="گەڕان..."
+                className="h-8 pr-8 pl-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#2c2c2e] text-slate-800 dark:text-white text-xs font-bold placeholder:text-slate-400 focus:outline-none"
               />
             </div>
           </div>
         </div>
 
+        {/* Crisp Table Layout with Gridlines */}
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs border-collapse">
             <thead>
               {activeTab === 'expenses' ? (
-                <tr className="bg-slate-200 border-b-2 border-slate-300 text-slate-900 font-black">
-                  <th className="p-2 border-l border-slate-300 w-10 text-center">#</th>
-                  <th className="p-2 border-l border-slate-300 text-center">بەروار</th>
-                  <th className="p-2 border-l border-slate-300 text-center">جۆر</th>
-                  <th className="p-2 border-l border-slate-300">لە (From)</th>
-                  <th className="p-2 border-l border-slate-300">بۆ (To)</th>
-                  <th className="p-2 border-l border-slate-300 text-center">ژ.سەفەر</th>
-                  <th className="p-2 border-l border-slate-300">ناونیشان / تێبینی</th>
-                  <th className="p-2 border-l border-slate-300 text-center">بڕی پارە (IQD)</th>
-                  <th className="p-2 text-center w-14">کردار</th>
+                <tr className="bg-slate-50/90 dark:bg-[#2c2c2e] border-b border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 font-black">
+                  <th className="py-2.5 px-3 border-l border-slate-200 dark:border-slate-700/80 w-10 text-center">#</th>
+                  <th className="py-2.5 px-3 border-l border-slate-200 dark:border-slate-700/80 text-center">بەروار</th>
+                  <th className="py-2.5 px-3 border-l border-slate-200 dark:border-slate-700/80 text-center">جۆری خەرجی</th>
+                  <th className="py-2.5 px-3 border-l border-slate-200 dark:border-slate-700/80">لە (From)</th>
+                  <th className="py-2.5 px-3 border-l border-slate-200 dark:border-slate-700/80">بۆ (To)</th>
+                  <th className="py-2.5 px-3 border-l border-slate-200 dark:border-slate-700/80 text-center">ژ.سەفەر</th>
+                  <th className="py-2.5 px-3 border-l border-slate-200 dark:border-slate-700/80">تێبینی</th>
+                  <th className="py-2.5 px-3 border-l border-slate-200 dark:border-slate-700/80 text-center">بڕی پارە (IQD)</th>
+                  <th className="py-2.5 px-3 text-center w-14">کردار</th>
                 </tr>
               ) : (
-                <tr className="bg-slate-200 border-b-2 border-slate-300 text-slate-900 font-black">
-                  <th className="p-2.5 border-l border-slate-300 w-10 text-center">#</th>
-                  <th className="p-2.5 border-l border-slate-300">ناوی کارمەند</th>
-                  <th className="p-2.5 border-l border-slate-300 text-center">بەروار</th>
-                  <th className="p-2.5 border-l border-slate-300 text-center">
+                <tr className="bg-slate-50/90 dark:bg-[#2c2c2e] border-b border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 font-black">
+                  <th className="py-2.5 px-3 border-l border-slate-200 dark:border-slate-700/80 w-10 text-center">#</th>
+                  <th className="py-2.5 px-3 border-l border-slate-200 dark:border-slate-700/80">ناوی کارمەند</th>
+                  <th className="py-2.5 px-3 border-l border-slate-200 dark:border-slate-700/80 text-center">بەروار</th>
+                  <th className="py-2.5 px-3 border-l border-slate-200 dark:border-slate-700/80 text-center">
                     {activeTab === 'bonuses' ? 'بڕی پاداشت (IQD)' : 'بڕی پارەی ڕاکێشراو (IQD)'}
                   </th>
-                  <th className="p-2.5 border-l border-slate-300">
+                  <th className="py-2.5 px-3 border-l border-slate-200 dark:border-slate-700/80">
                     {activeTab === 'bonuses' ? 'هۆکار و تێبینی' : 'تێبینی'}
                   </th>
-                  <th className="p-2.5 text-center w-16">کردار</th>
+                  <th className="py-2.5 px-3 text-center w-14">کردار</th>
                 </tr>
               )}
             </thead>
-            <tbody className="divide-y divide-slate-200 font-bold">
+            <tbody className="divide-y divide-slate-200/80 dark:divide-slate-700/80 font-bold">
               {activeTab === 'expenses' && (
                 Object.keys(groupedExpenses).length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="p-8 text-center text-slate-500 font-bold">
-                      هیچ مەسروفاتێک بۆ ئەم کارمەندە یان لە مانگی ({selectedMonth}) تۆمار نەکراوە.
+                    <td colSpan={9} className="py-12 text-center text-slate-400 dark:text-slate-500 font-medium">
+                      هیچ خەرجییەک لە مانگی ({selectedMonth}) تۆمار نەکراوە.
                     </td>
                   </tr>
                 ) : (
                   <>
                     {Object.values(groupedExpenses).map((grp) => (
                       <React.Fragment key={grp.empKey}>
-                        {/* 👤 Employee Header Row */}
-                        <tr className="bg-slate-800 text-white border-y border-slate-900">
-                          <td colSpan={9} className="p-2 px-3">
+                        {/* 👤 Employee Header Divider */}
+                        <tr className="bg-slate-100/70 dark:bg-white/5 border-t border-b border-slate-200 dark:border-slate-700">
+                          <td colSpan={9} className="py-2 px-3">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <div className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center text-[10px] font-black shadow-sm">
+                                <div className="w-5 h-5 rounded-full bg-[#007AFF] text-white flex items-center justify-center text-[10px] font-black shadow-xs">
                                   {grp.empName.charAt(0)}
                                 </div>
-                                <span className="text-xs sm:text-sm font-black text-amber-200">
+                                <span className="text-xs font-black text-slate-900 dark:text-white">
                                   {grp.empName}
                                 </span>
                                 {grp.role && (
-                                  <span className="text-[10px] bg-slate-700 text-slate-200 px-2 py-0.5 rounded font-bold">
+                                  <span className="text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-full font-medium">
                                     {grp.role}
                                   </span>
                                 )}
-                                <span className="text-[10px] bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full font-bold">
+                                <span className="text-[10px] bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 px-2 py-0.5 rounded-full font-bold">
                                   {grp.items.length} پسوولە
                                 </span>
                               </div>
-                              <div className="text-xs font-mono font-black text-amber-300">
-                                کۆی ئەم کارمەندە: {grp.total.toLocaleString()} IQD
+                              <div className="text-xs font-mono font-black text-[#007AFF]">
+                                کۆی کارمەند: {grp.total.toLocaleString()} IQD
                               </div>
                             </div>
                           </td>
                         </tr>
 
                         {/* 📋 Employee's Individual Expense Rows */}
-                        {grp.items.map((exp: any, idx: number) => (
-                          <tr key={exp.id} className="hover:bg-amber-50/50 transition-all border-b border-slate-200">
-                            <td className="p-2 border-l border-slate-200 text-center font-mono text-slate-500 text-xs">
-                              {idx + 1}
-                            </td>
-                            <td className="p-2 border-l border-slate-200 text-center font-mono font-bold text-slate-800">
-                              {exp.date}
-                            </td>
-                            <td className="p-2 border-l border-slate-200 text-center">
-                              <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-300 inline-flex items-center gap-1">
-                                {typeLabels[exp.type] || exp.category || '📦 تر'}
-                              </span>
-                            </td>
-                            <td className="p-2 border-l border-slate-200 text-slate-800 font-medium">
-                              {exp.from || '—'}
-                            </td>
-                            <td className="p-2 border-l border-slate-200 text-slate-800 font-medium">
-                              {exp.to || '—'}
-                            </td>
-                            <td className="p-2 border-l border-slate-200 text-center font-mono font-bold text-slate-700">
-                              {exp.trip || '—'}
-                            </td>
-                            <td className="p-2 border-l border-slate-200 text-slate-700 font-medium">
-                              {exp.note ? (
-                                <span>
-                                  <strong className="text-slate-900">{exp.title}</strong>
-                                  <span className="text-slate-500 mr-1">({exp.note})</span>
+                        {grp.items.map((exp: any, idx: number) => {
+                          const isJustAdded = exp.id === recentlyAddedId;
+                          const color = typeColors[exp.type] || typeColors.other;
+                          return (
+                            <tr 
+                              key={exp.id} 
+                              className={`transition-colors border-b border-slate-200/60 dark:border-slate-800 ${
+                                isJustAdded 
+                                  ? 'bg-blue-50/90 dark:bg-blue-950/50 ring-2 ring-[#007AFF] ring-inset animate-pulse' 
+                                  : 'hover:bg-slate-50/60 dark:hover:bg-white/5'
+                              }`}
+                            >
+                              <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-center font-mono text-slate-400 text-xs">
+                                {idx + 1}
+                              </td>
+                              <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
+                                {exp.date}
+                              </td>
+                              <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-center">
+                                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border inline-flex items-center gap-1 ${color.bg} ${color.text} ${color.border}`}>
+                                  {typeLabels[exp.type] || exp.category || 'تر'}
                                 </span>
-                              ) : (
-                                exp.title || '—'
-                              )}
-                            </td>
-                            <td className="p-2 border-l border-slate-200 text-center font-mono text-rose-900 font-black text-xs">
-                              {Number(exp.amount || 0).toLocaleString()} IQD
-                            </td>
-                            <td className="p-2 text-center">
-                              <button 
-                                onClick={() => handleDeleteRecord(exp.id, 'expenses')} 
-                                className="text-rose-700 hover:text-rose-950 p-1 hover:bg-rose-100 rounded transition-all cursor-pointer"
-                                title="سڕینەوە"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                              </td>
+                              <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium">
+                                {exp.from || '—'}
+                              </td>
+                              <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium">
+                                {exp.to || '—'}
+                              </td>
+                              <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-center font-mono font-bold text-slate-600 dark:text-slate-400">
+                                {exp.trip || '—'}
+                              </td>
+                              <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium">
+                                {exp.note || exp.title || '—'}
+                              </td>
+                              <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-center font-mono text-[#007AFF] font-black text-xs">
+                                {Number(exp.amount || 0).toLocaleString()} IQD
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <button 
+                                  onClick={() => handleDeleteRecord(exp.id, 'expenses')} 
+                                  className="text-slate-400 hover:text-rose-600 p-1 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-all cursor-pointer"
+                                  title="سڕینەوە"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
 
-                        {/* 📊 SUB-TOTAL ROW PER EMPLOYEE (CRITICAL REQUIREMENT) */}
-                        <tr className="bg-amber-100/90 border-b-2 border-amber-300 font-black text-amber-950 shadow-inner">
-                          <td colSpan={7} className="p-2.5 px-4 text-right font-black text-xs">
+                        {/* Subtotal Row */}
+                        <tr className="bg-slate-50 dark:bg-white/5 font-black text-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700">
+                          <td colSpan={7} className="py-2 px-4 text-right text-xs">
                             📊 کۆی مەسروفاتی ({grp.empName}):
                           </td>
-                          <td className="p-2.5 text-center font-mono font-black text-xs text-amber-950 bg-amber-200/90 border-x border-amber-300">
+                          <td className="py-2 px-3 text-center font-mono font-black text-xs text-[#007AFF] border-x border-slate-200/60 dark:border-slate-700">
                             {grp.total.toLocaleString()} IQD
                           </td>
-                          <td className="p-2.5"></td>
+                          <td></td>
                         </tr>
                       </React.Fragment>
                     ))}
 
-                    {/* 💎 GRAND TOTAL ROW AT THE VERY BOTTOM */}
-                    <tr className="bg-slate-900 text-white font-black text-sm border-t-2 border-slate-950 shadow-md">
-                      <td colSpan={7} className="p-3 px-4 text-right font-black text-amber-300">
+                    {/* Grand Total Row */}
+                    <tr className="bg-slate-900 text-white font-black text-xs border-t-2 border-slate-950">
+                      <td colSpan={7} className="py-3 px-4 text-right text-slate-300">
                         💎 کۆی گشتی هەموو مەسروفاتەکان ({monthlyExpenses.length} پسوولە):
                       </td>
-                      <td className="p-3 text-center font-mono font-black text-emerald-400 text-sm bg-slate-950 border-x border-slate-800">
+                      <td className="py-3 px-3 text-center font-mono font-black text-emerald-400 text-sm bg-slate-950 border-x border-slate-800">
                         {totalExp.toLocaleString()} IQD
                       </td>
-                      <td className="p-3"></td>
+                      <td></td>
                     </tr>
                   </>
                 )
@@ -917,35 +988,35 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
               {activeTab === 'bonuses' && (
                 monthlyBonuses.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-500 font-bold">
+                    <td colSpan={6} className="py-12 text-center text-slate-400 font-medium">
                       هیچ پاداشتێک بۆ مانگی ({selectedMonth}) تۆمار نەکراوە.
                     </td>
                   </tr>
                 ) : (
                   <>
                     {monthlyBonuses.map((b: any, idx: number) => (
-                      <tr key={b.id} className="hover:bg-emerald-50/40 transition-all">
-                        <td className="p-2.5 border-l border-slate-200 text-center font-mono text-slate-500">{idx + 1}</td>
-                        <td className="p-2.5 border-l border-slate-200 text-slate-950 font-black">{b.employeeName}</td>
-                        <td className="p-2.5 border-l border-slate-200 text-center font-mono font-bold text-slate-800">{b.date}</td>
-                        <td className="p-2.5 border-l border-slate-200 text-center font-mono text-emerald-900 font-black">
+                      <tr key={b.id} className="hover:bg-slate-50/60 dark:hover:bg-white/5 transition-colors border-b border-slate-200/60 dark:border-slate-800">
+                        <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-center font-mono text-slate-400">{idx + 1}</td>
+                        <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-slate-900 dark:text-white font-bold">{b.employeeName}</td>
+                        <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-center font-mono font-bold text-slate-700 dark:text-slate-300">{b.date}</td>
+                        <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-center font-mono text-emerald-600 dark:text-emerald-400 font-black">
                           {Number(b.totalAmount || b.amount || 0).toLocaleString()} IQD
                         </td>
-                        <td className="p-2.5 border-l border-slate-200 text-slate-700 font-medium">{b.reason || b.note || '-'}</td>
-                        <td className="p-2.5 text-center">
+                        <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium">{b.reason || b.note || '-'}</td>
+                        <td className="py-2.5 px-3 text-center">
                           <button 
                             onClick={() => handleDeleteRecord(b.id, 'bonuses')} 
-                            className="text-rose-700 hover:text-rose-950 p-1 hover:bg-rose-100 rounded transition-all"
+                            className="text-slate-400 hover:text-rose-600 p-1 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-all"
                             title="سڕینەوە"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </td>
                       </tr>
                     ))}
-                    <tr className="bg-emerald-950 text-white font-black text-xs border-t-2 border-emerald-900">
-                      <td colSpan={3} className="p-2.5 text-right text-emerald-200">کۆی گشتی پاداشتەکان:</td>
-                      <td className="p-2.5 text-center font-mono text-emerald-300 font-black">{totalBon.toLocaleString()} IQD</td>
+                    <tr className="bg-slate-900 text-white font-black text-xs border-t-2 border-slate-950">
+                      <td colSpan={3} className="py-3 px-4 text-right text-slate-300">کۆی گشتی پاداشتەکان:</td>
+                      <td className="py-3 px-3 text-center font-mono text-emerald-400 font-black text-sm">{totalBon.toLocaleString()} IQD</td>
                       <td colSpan={2}></td>
                     </tr>
                   </>
@@ -955,35 +1026,35 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
               {activeTab === 'withdrawals' && (
                 monthlyWithdrawals.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-500 font-bold">
+                    <td colSpan={6} className="py-12 text-center text-slate-400 font-medium">
                       هیچ ڕاکێشانێکی پێشینە بۆ مانگی ({selectedMonth}) تۆمار نەکراوە.
                     </td>
                   </tr>
                 ) : (
                   <>
                     {monthlyWithdrawals.map((w: any, idx: number) => (
-                      <tr key={w.id} className="hover:bg-amber-50/40 transition-all">
-                        <td className="p-2.5 border-l border-slate-200 text-center font-mono text-slate-500">{idx + 1}</td>
-                        <td className="p-2.5 border-l border-slate-200 text-slate-950 font-black">{w.employeeName}</td>
-                        <td className="p-2.5 border-l border-slate-200 text-center font-mono font-bold text-slate-800">{w.date}</td>
-                        <td className="p-2.5 border-l border-slate-200 text-center font-mono text-amber-900 font-black">
+                      <tr key={w.id} className="hover:bg-slate-50/60 dark:hover:bg-white/5 transition-colors border-b border-slate-200/60 dark:border-slate-800">
+                        <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-center font-mono text-slate-400">{idx + 1}</td>
+                        <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-slate-900 dark:text-white font-bold">{w.employeeName}</td>
+                        <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-center font-mono font-bold text-slate-700 dark:text-slate-300">{w.date}</td>
+                        <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-center font-mono text-amber-600 dark:text-amber-400 font-black">
                           {Number(w.amount || 0).toLocaleString()} IQD
                         </td>
-                        <td className="p-2.5 border-l border-slate-200 text-slate-700 font-medium">{w.note || '-'}</td>
-                        <td className="p-2.5 text-center">
+                        <td className="py-2.5 px-3 border-l border-slate-200/60 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium">{w.note || '-'}</td>
+                        <td className="py-2.5 px-3 text-center">
                           <button 
                             onClick={() => handleDeleteRecord(w.id, 'withdrawals')} 
-                            className="text-rose-700 hover:text-rose-950 p-1 hover:bg-rose-100 rounded transition-all"
+                            className="text-slate-400 hover:text-rose-600 p-1 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-all"
                             title="سڕینەوە"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </td>
                       </tr>
                     ))}
-                    <tr className="bg-amber-950 text-white font-black text-xs border-t-2 border-amber-900">
-                      <td colSpan={3} className="p-2.5 text-right text-amber-200">کۆی گشتی پێشینەی ڕاکێشراو:</td>
-                      <td className="p-2.5 text-center font-mono text-amber-300 font-black">{totalWth.toLocaleString()} IQD</td>
+                    <tr className="bg-slate-900 text-white font-black text-xs border-t-2 border-slate-950">
+                      <td colSpan={3} className="py-3 px-4 text-right text-slate-300">کۆی گشتی پێشینەی ڕاکێشراو:</td>
+                      <td className="py-3 px-3 text-center font-mono text-amber-400 font-black text-sm">{totalWth.toLocaleString()} IQD</td>
                       <td colSpan={2}></td>
                     </tr>
                   </>

@@ -1,0 +1,68 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" width="100%" height="100%">
+  <defs>
+    <linearGradient id="diwanGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F59E0B" />
+      <stop offset="50%" stop-color="#D97706" />
+      <stop offset="100%" stop-color="#B45309" />
+    </linearGradient>
+    <linearGradient id="diwanBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E293B" />
+      <stop offset="100%" stop-color="#0F172A" />
+    </linearGradient>
+    <linearGradient id="crestGold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FDE68A" />
+      <stop offset="40%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#92400E" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.15" />
+    </filter>
+  </defs>
+
+  <g transform="translate(15, 12)" filter="url(#shadow)">
+    <path d="M 48 4 L 88 26 L 88 70 L 48 92 L 8 70 L 8 26 Z" 
+          fill="url(#diwanBlue)" stroke="url(#crestGold)" stroke-width="2.5" stroke-linejoin="round" />
+    
+    <path d="M 48 12 L 80 30 L 80 66 L 48 84 L 16 66 L 16 30 Z" 
+          fill="none" stroke="url(#crestGold)" stroke-width="1" opacity="0.4" />
+
+    <path d="M 48 20 L 64 36 L 64 68 L 56 74 L 56 42 L 48 34 L 40 42 L 40 74 L 32 68 L 32 36 Z" 
+          fill="url(#crestGold)" />
+    
+    <polygon points="48,15 54,23 48,29 42,23" fill="#FDE68A" />
+
+    <rect x="28" y="76" width="40" height="3" rx="1.5" fill="url(#crestGold)" />
+    <rect x="22" y="81" width="52" height="3" rx="1.5" fill="url(#crestGold)" />
+  </g>
+
+  <g transform="translate(125, 20)">
+    <text x="0" y="32" 
+          font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" 
+          font-size="28" 
+          font-weight="900" 
+          letter-spacing="3" 
+          fill="#0F172A">
+      DIWAN <tspan fill="url(#diwanGold)">GROUP</tspan>
+    </text>
+
+    <text x="0" y="58" 
+          font-family="system-ui, -apple-system, 'Vazirmatn', 'Segoe UI', sans-serif" 
+          font-size="16" 
+          font-weight="800" 
+          fill="#334155" 
+          letter-spacing="0.5">
+      کۆمپانیای گروپی دیوان
+    </text>
+
+    <text x="0" y="76" 
+          font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" 
+          font-size="9.5" 
+          font-weight="700" 
+          letter-spacing="4" 
+          fill="#94A3B8">
+      COMMERCIAL &amp; INVESTMENT HOLDING
+    </text>
+  </g>
+
+  <line x1="125" y1="83" x2="395" y2="83" stroke="url(#crestGold)" stroke-width="1.5" opacity="0.6" />
+</svg>

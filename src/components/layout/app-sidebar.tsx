@@ -56,7 +56,6 @@ export function AppSidebar() {
         { title: 'dashboard', icon: Home, href: '/admin', permission: 'admin:all' },
         { title: 'attendance', icon: Calendar, href: '/attendance/checkin', permission: 'page:employees:view' },
         { title: isRTL ? 'ئەپی مۆبایل و دەموچاو' : 'Mobile Face Attendance', icon: Smartphone, href: '/attendance/mobile', permission: 'page:employees:view' },
-        { title: 'admin_attendance', icon: ClipboardList, href: '/admin/attendance', permission: 'admin:all' },
         { title: 'employees', icon: Users, href: '/employees', permission: 'page:employees:view' },
         { title: isRTL ? 'نەخشەی شوێنەکان' : 'GPS Locations', icon: MapPin, href: '/gps', permission: 'admin:all' },
       ],
@@ -108,9 +107,9 @@ export function AppSidebar() {
         <SidebarHeader className="p-2 flex flex-col items-center gap-4">
           <SidebarTrigger className="text-muted-foreground hover:text-foreground hover:bg-muted transition-all h-8 w-8 rounded-md" />
           
-          {state !== "collapsed" && settings.appLogo && (
+          {state !== "collapsed" && (settings.websiteLogo || settings.appLogo) && (
               <div className="relative w-8 h-8 opacity-80 mt-2">
-                  <Image src={settings.appLogo} alt="Logo" fill className="object-contain" unoptimized />
+                  <Image src={settings.websiteLogo || settings.appLogo || '/ashley-logo.png'} alt="Logo" fill className="object-contain" unoptimized />
               </div>
           )}
         </SidebarHeader>

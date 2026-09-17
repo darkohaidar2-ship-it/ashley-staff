@@ -159,7 +159,7 @@ export default function AdminPanelPortalPage() {
               پەنەری بەڕێوەبەری سەرەکی ئاشڵی
             </h1>
             <p className="text-xs text-slate-500 font-bold mt-0.5">
-              Ashley Enterprise ERP Admin Portal
+              Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)
             </p>
           </div>
         </div>

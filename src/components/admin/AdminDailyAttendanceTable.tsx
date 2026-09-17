@@ -727,31 +727,31 @@ export function AdminDailyAttendanceTable({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 font-sans select-none" dir="rtl">
       
-      {/* 📅 TOP CONTROLS BAR: DATE PICKER & REPORT BUTTONS */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl shadow-md border border-slate-700">
+      {/* 🍏 Apple iOS Glassmorphic Top Controls Bar */}
+      <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[24px] p-4 sm:p-5 shadow-xs flex flex-wrap items-center justify-between gap-3">
         
-        {/* Date Navigator */}
-        <div className="flex items-center gap-2">
+        {/* Date Navigator - Apple Segmented Pill */}
+        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-[#3a3a3c] p-1 rounded-full border border-slate-200/60 dark:border-white/5">
           <button
             type="button"
             onClick={handlePrevDay}
-            className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
+            className="w-8 h-8 rounded-full hover:bg-white dark:hover:bg-white/10 text-slate-700 dark:text-white flex items-center justify-center transition-all cursor-pointer active:scale-95"
             title="ڕۆژی پێشوو"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
 
-          <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-xl border border-white/20">
-            <Calendar className="w-4 h-4 text-sky-400" />
+          <div className="flex items-center gap-2 px-3 py-1">
+            <Calendar className="w-3.5 h-3.5 text-[#007AFF]" />
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-transparent text-white font-mono font-bold text-xs focus:outline-none cursor-pointer"
+              className="bg-transparent text-slate-900 dark:text-white font-mono font-bold text-xs focus:outline-none cursor-pointer"
             />
-            <span className="text-xs font-black text-amber-300 px-2 py-0.5 rounded-md bg-amber-950/60 border border-amber-500/30">
+            <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/25">
               {dayName}
             </span>
           </div>
@@ -759,7 +759,7 @@ export function AdminDailyAttendanceTable({
           <button
             type="button"
             onClick={handleNextDay}
-            className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
+            className="w-8 h-8 rounded-full hover:bg-white dark:hover:bg-white/10 text-slate-700 dark:text-white flex items-center justify-center transition-all cursor-pointer active:scale-95"
             title="ڕۆژی دواتر"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -768,7 +768,7 @@ export function AdminDailyAttendanceTable({
           <button
             type="button"
             onClick={handleToday}
-            className="btn-classic text-xs font-bold px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white border-blue-400 rounded-xl"
+            className="text-xs font-bold px-3 py-1.5 bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white rounded-full shadow-xs hover:bg-slate-50 transition-all cursor-pointer active:scale-95 border border-slate-200/60 dark:border-white/10"
           >
             ئەمڕۆ
           </button>
@@ -784,13 +784,13 @@ export function AdminDailyAttendanceTable({
               fetchDailyExcursions(selectedDate);
               setShowExcursionReportModal(true);
             }}
-            className="btn-classic text-xs font-black px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 border border-amber-300 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
-            title="بینینی لیستی دەرچوونی کاتی کارمەندان و لێبڕین یان حیسابکردنی دەوام"
+            className="px-3.5 py-2 rounded-full bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 text-xs font-bold border border-amber-300/60 dark:border-amber-700/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+            title="بینینی لیستی دەرچوونی کاتی کارمەندان"
           >
-            <Clock className="w-3.5 h-3.5 text-slate-950" />
-            <span>📋 دەرچوونە کاتییەکان</span>
+            <Clock className="w-3.5 h-3.5 text-amber-600" />
+            <span>دەرچوونە کاتییەکان</span>
             {dailyExcursions.length > 0 && (
-              <span className="bg-slate-950 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-black">
+              <span className="bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
                 {dailyExcursions.length}
               </span>
             )}
@@ -800,169 +800,189 @@ export function AdminDailyAttendanceTable({
           <button
             type="button"
             onClick={handleWipeAllAttendanceData}
-            className="btn-classic text-xs font-black px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white border border-rose-400 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
-            title="سڕینەوەی سەرجەم داتاکانی ئامادەبوون لە سێرڤەر و پاککردنەوەی تەواوی خشتەکە"
+            className="px-3.5 py-2 rounded-full bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 text-xs font-bold border border-rose-300/60 dark:border-rose-800/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+            title="سڕینەوەی سەرجەم داتاکان"
           >
-            <Trash2 className="w-3.5 h-3.5 text-white" />
-            <span>🗑️ سڕینەوەی سەرجەم داتاکان (Wipe All)</span>
+            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+            <span>سڕینەوەی گشتی</span>
           </button>
 
           {/* 🖨️ Print Single Day */}
           <button
             type="button"
             onClick={handlePrintSingleDayPDF}
-            className="btn-classic text-xs font-bold px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white border border-blue-400 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md transition-all active:scale-95"
-            title="پرێنتکردنی تەواوی زانیاری ئەم ڕۆژە وەک PDF"
+            className="px-4 py-2 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
+            title="پرێنتکردنی ئەم ڕۆژە"
           >
-            <Printer className="w-4 h-4 text-white" />
-            <span>🖨️ پرێنتی ئەم ڕۆژە (PDF)</span>
+            <Printer className="w-3.5 h-3.5 text-white" />
+            <span>پرێنتی ڕۆژ (PDF)</span>
           </button>
 
           {/* 🖨️ 31-PAGE FULL MONTH MULTI-PAGE PDF */}
           <button
             type="button"
             onClick={handlePrint31DayMonthPDF}
-            className="btn-classic text-xs font-black px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-700 hover:to-indigo-800 text-white border border-purple-400 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg transition-all active:scale-95"
-            title="پرێنتکردنی تەواوی ۳۱ ڕۆژی مانگ لە فایلی یەک PDF دا (هەر ڕۆژەی لاپەڕەیەک)"
+            className="px-4 py-2 rounded-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
+            title="پرێنتی گشتی ۳۱ ڕۆژ"
           >
-            <Sparkles className="w-4 h-4 text-amber-300" />
-            <span>🖨️ پرێنتی گشتی مانگانە (۳۱ لاپەڕە)</span>
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>پرێنتی مانگانە (۳۱ لاپەڕە)</span>
           </button>
 
           {/* 📊 Day CSV */}
           <button
             type="button"
             onClick={handleExportDayCSV}
-            className="btn-classic text-xs font-bold px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-400 rounded-xl flex items-center gap-1 cursor-pointer shadow-md"
-            title="داگرتنی داتای ئەم ڕۆژە بۆ Excel"
+            className="px-3.5 py-2 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 text-xs font-bold border border-emerald-300/60 dark:border-emerald-700/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+            title="داگرتنی CSV"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>📊 CSV ی ڕۆژ</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+            <span>CSV ڕۆژ</span>
           </button>
 
           {/* 📊 Month CSV */}
           <button
             type="button"
             onClick={handleExportMonthCSV}
-            className="btn-classic text-xs font-bold px-2.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white border border-teal-500 rounded-xl flex items-center gap-1 cursor-pointer shadow-md"
-            title="داگرتنی سەرجەم ڕۆژەکانی مانگ بۆ Excel"
+            className="px-3.5 py-2 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+            title="داگرتنی CSV مانگ"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>📊 CSV ی مانگ</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
+            <span>CSV مانگ</span>
           </button>
 
         </div>
 
       </div>
 
-      {/* 📊 SUMMARY KPI BAR FOR SELECTED DAY */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl text-center shadow-xs">
-          <span className="text-[11px] font-bold text-blue-900 block">کۆی کارمەندانی چالاک</span>
-          <p className="text-lg font-black text-blue-950 font-mono mt-0.5">
-            {currentDayData.summary.totalEmployees} کەس
-          </p>
+      {/* 📊 Apple Style Daily Summary KPI Cards Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
+          <div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">کۆی کارمەندانی چالاک</div>
+            <div className="text-lg font-black text-slate-900 dark:text-white font-mono mt-0.5">
+              {currentDayData.summary.totalEmployees} <span className="text-xs text-slate-400 font-medium">کەس</span>
+            </div>
+          </div>
+          <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-[#007AFF] dark:text-blue-400 flex items-center justify-center">
+            <Users className="w-5 h-5" />
+          </div>
         </div>
 
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-center shadow-xs">
-          <span className="text-[11px] font-bold text-emerald-900 block">ئامادەبووانی ئەم ڕۆژە</span>
-          <p className="text-lg font-black text-emerald-950 font-mono mt-0.5">
-            {currentDayData.summary.presentCount} کەس
-          </p>
+        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
+          <div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">ئامادەبووانی ئەم ڕۆژە</div>
+            <div className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
+              {currentDayData.summary.presentCount} <span className="text-xs text-slate-400 font-medium">کەس</span>
+            </div>
+          </div>
+          <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
         </div>
 
-        <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-center shadow-xs">
-          <span className="text-[11px] font-bold text-rose-900 block">دواکەوتوو (دوای 08:15)</span>
-          <p className="text-lg font-black text-rose-950 font-mono mt-0.5">
-            {currentDayData.summary.lateCount} کەس
-          </p>
+        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
+          <div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">دواکەوتوو (دوای 08:15)</div>
+            <div className="text-lg font-black text-amber-600 dark:text-amber-400 font-mono mt-0.5">
+              {currentDayData.summary.lateCount} <span className="text-xs text-slate-400 font-medium">کەس</span>
+            </div>
+          </div>
+          <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
         </div>
 
-        <div className="p-3 bg-purple-50 border border-purple-200 rounded-2xl text-center shadow-xs">
-          <span className="text-[11px] font-bold text-purple-900 block">خاوەن ئیزافە (Overtime)</span>
-          <p className="text-lg font-black text-purple-950 font-mono mt-0.5">
-            {currentDayData.summary.overtimeCount} کەس <span className="text-xs text-purple-700">({currentDayData.summary.totalOvertimeHours} کاتژمێر)</span>
-          </p>
+        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
+          <div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">خاوەن ئیزافە (Overtime)</div>
+            <div className="text-lg font-black text-purple-600 dark:text-purple-400 font-mono mt-0.5">
+              {currentDayData.summary.overtimeCount} <span className="text-xs text-purple-500 font-medium">({currentDayData.summary.totalOvertimeHours}h)</span>
+            </div>
+          </div>
+          <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+            <Sparkles className="w-5 h-5" />
+          </div>
         </div>
       </div>
 
-      {/* 🔍 SEARCH FILTER */}
-      <div className="flex items-center gap-2 p-2 bg-white rounded-xl border border-slate-200 shadow-xs">
-        <Search className="w-4 h-4 text-slate-400" />
+      {/* 🔍 Apple Style Search Bar */}
+      <div className="relative">
+        <Search className="w-4 h-4 absolute right-3.5 top-3 text-slate-400" />
         <input
           type="text"
           placeholder="گەڕان بەدوای ناوی کارمەند، پۆست، تێبینی کارمەند، یان تێبینی ئەدمین..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="input-classic w-full text-xs font-bold"
+          className="w-full pl-3 pr-10 py-2.5 rounded-2xl bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-[#007AFF] placeholder-slate-400 shadow-xs"
         />
         {searchTerm && (
-          <button onClick={() => setSearchTerm('')} className="text-xs text-slate-400 hover:text-slate-700 p-1">
+          <button onClick={() => setSearchTerm('')} className="absolute left-3 top-2.5 text-xs text-slate-400 hover:text-slate-700 p-1">
             <X className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
 
-      {/* 📋 MASTER DAILY ATTENDANCE TABLE */}
-      <div className="table-classic-wrapper rounded-2xl border border-slate-300 shadow-sm overflow-hidden bg-white">
-        <table className="table-classic w-full text-xs">
-          <thead>
-            <tr className="bg-slate-900 text-white font-black text-right">
-              <th className="p-2.5 text-center w-10">#</th>
-              <th className="p-2.5 w-44">ناوی کارمەند</th>
-              <th className="p-2.5 w-32">پۆست / ئەرک</th>
-              <th className="p-2.5 text-center w-28">📥 هاتن</th>
-              <th className="p-2.5 w-44">💬 تێبینی کارمەند (هاتن)</th>
-              <th className="p-2.5 text-center w-28">📤 ڕۆیشتن</th>
-              <th className="p-2.5 w-44">💬 تێبینی کارمەند (ڕۆیشتن / ئیزافە)</th>
-              <th className="p-2.5 text-center w-24">⏱️ دەوام</th>
-              <th className="p-2.5 text-center w-24">⚡ ئیزافە</th>
-              <th className="p-2.5">🛡️ تێبینی ئەدمین (دەستکاریکردن و هۆکارەکان)</th>
+      {/* 📋 🍏 Apple iOS Master Daily Attendance Table */}
+      <div className="w-full overflow-x-auto border border-slate-200/80 dark:border-white/5 rounded-[24px] shadow-xs bg-white dark:bg-[#2c2c2e] overflow-hidden">
+        <table className="w-full text-xs text-right border-collapse">
+          <thead className="bg-slate-50/90 dark:bg-[#2c2c2e]/90 backdrop-blur-md border-b border-slate-200 dark:border-white/10">
+            <tr className="text-slate-800 dark:text-slate-200 font-bold border-b-2 border-slate-300 dark:border-slate-700">
+              <th className="p-3 text-center w-10 border-l border-slate-300 dark:border-slate-700">#</th>
+              <th className="p-3 w-44 border-l border-slate-300 dark:border-slate-700">ناوی کارمەند</th>
+              <th className="p-3 w-32 border-l border-slate-300 dark:border-slate-700">پۆست / ئەرک</th>
+              <th className="p-3 text-center w-28 border-l border-slate-300 dark:border-slate-700">📥 کاتی هاتن</th>
+              <th className="p-3 w-44 border-l border-slate-300 dark:border-slate-700">💬 تێبینی کارمەند (هاتن)</th>
+              <th className="p-3 text-center w-28 border-l border-slate-300 dark:border-slate-700">📤 کاتی چوون</th>
+              <th className="p-3 w-44 border-l border-slate-300 dark:border-slate-700">💬 تێبینی کارمەند (چوون)</th>
+              <th className="p-3 text-center w-24 border-l border-slate-300 dark:border-slate-700">⏱️ دەوام</th>
+              <th className="p-3 text-center w-24 border-l border-slate-300 dark:border-slate-700">⚡ ئیزافە</th>
+              <th className="p-3">🛡️ تێبینی ئەدمین (دەستکاری)</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
+          <tbody className="divide-y divide-slate-300/80 dark:divide-slate-700">
             {filteredRows.length > 0 ? (
-              filteredRows.map((row) => {
+              filteredRows.map((row, rIdx) => {
                 const inBadge = getAttendanceTimeBadge(row.checkInTime, 'in');
                 const outBadge = getAttendanceTimeBadge(row.checkOutTime, 'out');
                 const isEditingThisAdminNote = editingAdminNoteKey === row.empId;
 
                 return (
-                  <tr key={row.empId} className="hover:bg-blue-50/40 transition-colors">
-                    <td className="p-2.5 border-l border-slate-200 text-center font-mono text-slate-500 font-bold">
+                  <tr key={row.empId} className={`hover:bg-blue-50/40 dark:hover:bg-white/5 transition-colors border-b border-slate-300/80 dark:border-slate-700/80 ${rIdx % 2 === 1 ? 'bg-slate-50/50 dark:bg-white/[0.02]' : ''}`}>
+                    <td className="p-3 text-center font-mono text-slate-400 font-bold border-l-2 border-slate-300 dark:border-slate-700">
                       {row.index}
                     </td>
 
-                    <td className="p-2.5 border-l border-slate-200 font-black text-slate-900">
+                    <td className="p-3 font-bold text-slate-900 dark:text-white border-l border-slate-300/80 dark:border-slate-700/80">
                       {row.name}
                     </td>
 
-                    <td className="p-2.5 border-l border-slate-200 text-slate-600 font-bold">
+                    <td className="p-3 text-slate-500 dark:text-slate-400 font-medium border-l border-slate-300/80 dark:border-slate-700/80">
                       {row.role}
                     </td>
 
                     {/* Check-In */}
-                    <td className="p-2.5 border-l border-slate-200 text-center">
+                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80 text-center">
                       <div className="flex flex-col items-center justify-center gap-1">
                         {row.checkInTime !== '-' ? (
                           <div className="flex flex-col items-center">
                             {row.checkInOriginalTime ? (
                               <>
-                                <span className="line-through text-rose-500 font-bold font-mono text-[10px] block">
+                                <span className="line-through text-rose-400 font-bold font-mono text-[9px] block">
                                   {row.checkInOriginalTime}
                                 </span>
-                                <span className="px-2.5 py-0.5 rounded-lg bg-emerald-600 text-white font-mono font-black text-xs inline-flex items-center gap-1 shadow-xs">
+                                <span className="px-2.5 py-1 rounded-xl bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25 font-mono font-bold text-xs inline-flex items-center gap-1 shadow-xs">
                                   📥 {inBadge.formattedTime}
                                 </span>
                               </>
                             ) : (
-                              <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-950 border border-emerald-300 font-mono font-black text-xs inline-block">
+                              <span className="px-2.5 py-1 rounded-xl bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25 font-mono font-bold text-xs inline-block">
                                 📥 {inBadge.formattedTime}
                               </span>
                             )}
                           </div>
                         ) : (
-                          <span className="text-slate-400 font-mono font-bold">-</span>
+                          <span className="text-slate-300 dark:text-slate-600 font-mono font-bold">-</span>
                         )}
 
                         <button
@@ -979,8 +999,8 @@ export function AdminDailyAttendanceTable({
                             setNewTimeInput(row.checkInTime !== '-' ? row.checkInTime : '08:00');
                             setAdminReasonInput('');
                           }}
-                          className="px-1.5 py-0.5 text-[10px] text-slate-400 hover:text-emerald-800 hover:bg-emerald-50 rounded transition-all flex items-center gap-0.5 font-bold cursor-pointer"
-                          title="گۆڕینی کاتی هاتن و نووسینی هۆکارەکەی لە تێبینی ئەدمین"
+                          className="px-2 py-0.5 text-[10px] text-slate-400 hover:text-[#007AFF] hover:bg-blue-50 dark:hover:bg-white/10 rounded-full transition-all flex items-center gap-0.5 font-bold cursor-pointer"
+                          title="گۆڕینی کاتی هاتن"
                         >
                           <Edit3 className="w-2.5 h-2.5" />
                           <span>گۆڕین</span>
@@ -989,39 +1009,39 @@ export function AdminDailyAttendanceTable({
                     </td>
 
                     {/* Check-In Employee Note */}
-                    <td className="p-2.5 border-l border-slate-200">
+                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80">
                       {row.checkInNote ? (
-                        <div className="flex items-start gap-1 text-[11px] text-blue-900 font-bold bg-blue-50/80 p-1.5 rounded-lg border border-blue-200">
-                          <MessageSquare className="w-3 h-3 text-blue-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex items-start gap-1.5 text-[11px] text-blue-900 dark:text-blue-200 font-medium bg-blue-50/80 dark:bg-blue-950/30 p-2 rounded-xl border border-blue-200/60 dark:border-blue-800/30">
+                          <MessageSquare className="w-3 h-3 text-[#007AFF] shrink-0 mt-0.5" />
                           <span>{row.checkInNote}</span>
                         </div>
                       ) : (
-                        <span className="text-slate-300 text-[11px]">-</span>
+                        <span className="text-slate-300 dark:text-slate-600 text-[11px]">-</span>
                       )}
                     </td>
 
                     {/* Check-Out */}
-                    <td className="p-2.5 border-l border-slate-200 text-center">
+                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80 text-center">
                       <div className="flex flex-col items-center justify-center gap-1">
                         {row.checkOutTime !== '-' ? (
                           <div className="flex flex-col items-center">
                             {row.checkOutOriginalTime ? (
                               <>
-                                <span className="line-through text-rose-500 font-bold font-mono text-[10px] block">
+                                <span className="line-through text-rose-400 font-bold font-mono text-[9px] block">
                                   {row.checkOutOriginalTime}
                                 </span>
-                                <span className="px-2.5 py-0.5 rounded-lg bg-emerald-600 text-white font-mono font-black text-xs inline-flex items-center gap-1 shadow-xs">
+                                <span className="px-2.5 py-1 rounded-xl bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/25 font-mono font-bold text-xs inline-flex items-center gap-1 shadow-xs">
                                   📤 {outBadge.formattedTime}
                                 </span>
                               </>
                             ) : (
-                              <span className="px-2.5 py-1 rounded-lg bg-sky-100 text-sky-950 border border-sky-300 font-mono font-black text-xs inline-block">
+                              <span className="px-2.5 py-1 rounded-xl bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/25 font-mono font-bold text-xs inline-block">
                                 📤 {outBadge.formattedTime}
                               </span>
                             )}
                           </div>
                         ) : (
-                          <span className="text-slate-400 font-mono font-bold">-</span>
+                          <span className="text-slate-300 dark:text-slate-600 font-mono font-bold">-</span>
                         )}
 
                         <button
@@ -1038,8 +1058,8 @@ export function AdminDailyAttendanceTable({
                             setNewTimeInput(row.checkOutTime !== '-' ? row.checkOutTime : '17:00');
                             setAdminReasonInput('');
                           }}
-                          className="px-1.5 py-0.5 text-[10px] text-slate-400 hover:text-sky-800 hover:bg-sky-50 rounded transition-all flex items-center gap-0.5 font-bold cursor-pointer"
-                          title="گۆڕینی کاتی دەرچوون و نووسینی هۆکارەکەی لە تێبینی ئەدمین"
+                          className="px-2 py-0.5 text-[10px] text-slate-400 hover:text-[#007AFF] hover:bg-blue-50 dark:hover:bg-white/10 rounded-full transition-all flex items-center gap-0.5 font-bold cursor-pointer"
+                          title="گۆڕینی کاتی چوون"
                         >
                           <Edit3 className="w-2.5 h-2.5" />
                           <span>گۆڕین</span>
@@ -1048,35 +1068,35 @@ export function AdminDailyAttendanceTable({
                     </td>
 
                     {/* Check-Out Employee Note / Overtime Reason */}
-                    <td className="p-2.5 border-l border-slate-200">
+                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80">
                       {row.checkOutNote ? (
-                        <div className="flex items-start gap-1 text-[11px] text-purple-900 font-bold bg-purple-50/80 p-1.5 rounded-lg border border-purple-200">
-                          <MessageSquare className="w-3 h-3 text-purple-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex items-start gap-1.5 text-[11px] text-purple-900 dark:text-purple-200 font-medium bg-purple-50/80 dark:bg-purple-950/30 p-2 rounded-xl border border-purple-200/60 dark:border-purple-800/30">
+                          <MessageSquare className="w-3 h-3 text-purple-600 shrink-0 mt-0.5" />
                           <span>{row.checkOutNote}</span>
                         </div>
                       ) : (
-                        <span className="text-slate-300 text-[11px]">-</span>
+                        <span className="text-slate-300 dark:text-slate-600 text-[11px]">-</span>
                       )}
                     </td>
 
                     {/* Duration */}
-                    <td className="p-2.5 border-l border-slate-200 text-center font-mono font-bold text-slate-800">
+                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
                       {row.durationStr}
                     </td>
 
                     {/* Overtime */}
-                    <td className="p-2.5 border-l border-slate-200 text-center">
+                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80 text-center">
                       {row.overtimeStr !== '-' ? (
-                        <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-950 border border-purple-300 font-mono font-black text-xs">
+                        <span className="px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/25 font-mono font-bold text-xs">
                           {row.overtimeStr}
                         </span>
                       ) : (
-                        <span className="text-slate-300 font-mono">-</span>
+                        <span className="text-slate-300 dark:text-slate-600 font-mono">-</span>
                       )}
                     </td>
 
-                    {/* Admin Note Column (Supports Multiple Notes & Direct Delete) */}
-                    <td className="p-2.5 border-l border-slate-200">
+                    {/* Admin Note Column */}
+                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80">
                       {isEditingThisAdminNote ? (
                         <div className="flex items-center gap-1.5">
                           <textarea
@@ -1085,13 +1105,13 @@ export function AdminDailyAttendanceTable({
                             value={tempAdminNoteText}
                             onChange={(e) => setTempAdminNoteText(e.target.value)}
                             placeholder="تێبینی ئەدمین بنووسە..."
-                            className="input-classic w-full text-xs font-bold py-1 px-2"
+                            className="w-full text-xs font-medium py-1.5 px-2.5 rounded-xl bg-slate-100 dark:bg-[#3a3a3c] border border-slate-200/80 dark:border-white/10 text-slate-900 dark:text-white focus:outline-none focus:border-[#007AFF]"
                           />
                           <div className="flex flex-col gap-1">
                             <button
                               type="button"
                               onClick={() => handleSaveAdminNote(row.empId)}
-                              className="p-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
+                              className="p-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer transition-all active:scale-90"
                               title="پاشەکەوت"
                             >
                               <Check className="w-3.5 h-3.5" />
@@ -1099,7 +1119,7 @@ export function AdminDailyAttendanceTable({
                             <button
                               type="button"
                               onClick={() => setEditingAdminNoteKey(null)}
-                              className="p-1 rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 cursor-pointer"
+                              className="p-1.5 rounded-xl bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-300 cursor-pointer transition-all active:scale-90"
                               title="پاشگەزبوونەوە"
                             >
                               <X className="w-3.5 h-3.5" />
@@ -1109,25 +1129,25 @@ export function AdminDailyAttendanceTable({
                       ) : (
                         <div className="flex items-start justify-between gap-1.5 group">
                           {row.adminNote ? (
-                            <div className="flex flex-col gap-1 text-xs font-bold text-amber-950 flex-1">
+                            <div className="flex flex-col gap-1 text-xs font-medium text-amber-950 dark:text-amber-200 flex-1">
                               {row.adminNote.split('\n').filter(Boolean).map((noteLine, nIdx) => (
-                                <div key={nIdx} className="flex items-start gap-1.5 bg-amber-50/95 px-2.5 py-1 rounded-xl border border-amber-300 shadow-xs">
-                                  <Shield className="w-3.5 h-3.5 text-amber-700 flex-shrink-0 mt-0.5" />
+                                <div key={nIdx} className="flex items-start gap-1.5 bg-amber-50/90 dark:bg-amber-950/30 px-2.5 py-1 rounded-xl border border-amber-300/60 dark:border-amber-700/30 shadow-xs">
+                                  <Shield className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
                                   <span className="leading-relaxed">{noteLine}</span>
                                 </div>
                               ))}
                             </div>
                           ) : (
-                            <span className="text-slate-300 text-xs italic">تێبینی نییە</span>
+                            <span className="text-slate-300 dark:text-slate-600 text-xs italic">تێبینی نییە</span>
                           )}
-                          <div className="flex items-center gap-1 flex-shrink-0">
+                          <div className="flex items-center gap-1 shrink-0">
                             <button
                               type="button"
                               onClick={() => {
                                 setEditingAdminNoteKey(row.empId);
                                 setTempAdminNoteText(row.adminNote || '');
                               }}
-                              className="opacity-60 group-hover:opacity-100 p-1 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all cursor-pointer"
+                              className="opacity-60 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-[#007AFF] hover:bg-blue-50 dark:hover:bg-white/10 rounded-xl transition-all cursor-pointer"
                               title="دەستکاریکردنی تێبینی ئەدمین"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
@@ -1135,8 +1155,8 @@ export function AdminDailyAttendanceTable({
                             <button
                               type="button"
                               onClick={() => handleDeleteRowAttendance(row.empId, row.name)}
-                              className="opacity-60 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
-                              title="سڕینەوەی ئەم دەوامە (هەموو کات و داتای شیت دەسڕێتەوە)"
+                              className="opacity-60 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-white/10 rounded-xl transition-all cursor-pointer"
+                              title="سڕینەوەی دەوامی کارمەند"
                             >
                               <Trash2 className="w-3.5 h-3.5 text-rose-500" />
                             </button>

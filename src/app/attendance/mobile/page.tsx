@@ -25,7 +25,8 @@ import {
   User,
   X,
   Upload,
-  AlertCircle
+  AlertCircle,
+  Compass
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { getDistanceMeters, sendLocalNotification, type GeofenceRegion } from '@/lib/background-geofence';
@@ -277,11 +278,14 @@ export default function MobileAttendanceOneTap() {
   const [hasRegisteredFace, setHasRegisteredFace] = useState<boolean | null>(null);
   const [registeredDescriptors, setRegisteredDescriptors] = useState<number[][]>([]);
 
-  // GPS Geofence State
+  // Dynamic Factory & Warehouse Locations State (synced with /gps and settings)
+  const [companyLocations, setCompanyLocations] = useState<GeofenceRegion[]>(COMPANY_LOCATIONS);
+
+  // GPS Geofence State (default false until verified)
   const [currentLat, setCurrentLat] = useState<number | null>(null);
   const [currentLng, setCurrentLng] = useState<number | null>(null);
   const [distanceMeters, setDistanceMeters] = useState<number>(0);
-  const [isInsideGeofence, setIsInsideGeofence] = useState<boolean>(true);
+  const [isInsideGeofence, setIsInsideGeofence] = useState<boolean>(false);
   const [matchedLocationName, setMatchedLocationName] = useState<string>('کۆمپانیای سەرەکی ئاشڵی');
 
   // Today's Live Shift State
@@ -330,6 +334,25 @@ export default function MobileAttendanceOneTap() {
     return () => clearInterval(interval);
   }, []);
 
+  // 1.5. Fetch dynamic company locations configured by Admin
+  useEffect(() => {
+    fetch('/api/attendance/location')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped: GeofenceRegion[] = data.map((loc: any) => ({
+            id: loc.id || loc.name,
+            name: loc.name || 'لۆکەیشنی فەرمی ئاشڵی',
+            lat: parseFloat(loc.lat),
+            lng: parseFloat(loc.lng),
+            radiusMeters: loc.radius || loc.radiusMeters || 350,
+          }));
+          setCompanyLocations(mapped);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // 2. Load bound employee profile from localStorage
   useEffect(() => {
     try {
@@ -358,46 +381,97 @@ export default function MobileAttendanceOneTap() {
       .catch(() => {});
   }, []);
 
-  // 3. GPS Geolocation Tracking
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+  // 3. 🎯 Pure On-Demand GPS Geolocation Tracking
+  const [gpsState, setGpsState] = useState<'idle' | 'acquiring' | 'ready' | 'error'>('idle');
+  const [gpsErrorMessage, setGpsErrorMessage] = useState<string | null>(null);
 
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setCurrentLat(lat);
-        setCurrentLng(lng);
+  const requestSingleGpsPosition = useCallback(async (): Promise<{ 
+    lat: number; 
+    lng: number; 
+    minDistance: number; 
+    insideAny: boolean; 
+    matchedName: string 
+  }> => {
+    setGpsState('acquiring');
+    setGpsErrorMessage(null);
 
-        let minDistance = Infinity;
-        let insideAny = false;
-        let matchedName = COMPANY_LOCATIONS[0].name;
+    const activeLocations = (companyLocations && companyLocations.length > 0) ? companyLocations : COMPANY_LOCATIONS;
 
-        for (const loc of COMPANY_LOCATIONS) {
-          const dist = getDistanceMeters(lat, lng, loc.lat, loc.lng);
-          if (dist < minDistance) {
-            minDistance = dist;
-            matchedName = loc.name;
+    return new Promise((resolve, reject) => {
+      if (typeof navigator === 'undefined' || !navigator.geolocation) {
+        const err = new Error('ئامێرەکەت پشتگیری لە دیاریکردنی شوێنی جوگرافی (GPS) ناکات.');
+        setGpsState('error');
+        setGpsErrorMessage(err.message);
+        setIsInsideGeofence(false);
+        return reject(err);
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setCurrentLat(lat);
+          setCurrentLng(lng);
+
+          let minDistance = Infinity;
+          let insideAny = false;
+          let matchedName = activeLocations[0]?.name || 'کۆمپانیای سەرەکی ئاشڵی';
+
+          for (const loc of activeLocations) {
+            if (!loc.lat || !loc.lng) continue;
+            const dist = getDistanceMeters(lat, lng, loc.lat, loc.lng);
+            if (dist < minDistance) {
+              minDistance = dist;
+              matchedName = loc.name;
+            }
+            if (dist <= (loc.radiusMeters || 350)) {
+              insideAny = true;
+              matchedName = loc.name;
+              break;
+            }
           }
-          if (dist <= loc.radiusMeters) {
-            insideAny = true;
-            matchedName = loc.name;
-            break;
+
+          const roundedDist = Math.round(minDistance);
+          setDistanceMeters(roundedDist);
+          setIsInsideGeofence(insideAny);
+          setMatchedLocationName(matchedName);
+          setGpsState('ready');
+
+          resolve({
+            lat,
+            lng,
+            minDistance: roundedDist,
+            insideAny,
+            matchedName,
+          });
+        },
+        (err) => {
+          setGpsState('error');
+          setIsInsideGeofence(false);
+          let msg = 'نەتوانرا شوێنی جوگرافی GPS وەربگیرێت.';
+          if (err.code === 1) {
+            msg = '⚠️ تکایە دەسەڵاتی (Permission)ی شوێن (Location) پێ بدە تا بتوانیت ئامادەبوون تۆمار بکەیت.';
+          } else if (err.code === 2) {
+            msg = '⚠️ شوێنی GPS بەردەست نییە. تکایە دڵنیابە لە کارکردنی Location لە مۆبایلەکەتدا.';
+          } else if (err.code === 3) {
+            msg = '⚠️ کاتی وەرگرتنی شوێنی GPS بەسەرچوو (Timeout). تکایە دووبارە تاقی بکەرەوە.';
           }
+          setGpsErrorMessage(msg);
+          reject(new Error(msg));
+        },
+        { 
+          enableHighAccuracy: true, 
+          timeout: 12000, 
+          maximumAge: 0 // Fresh single-shot fix, never cached, immediate shut off
         }
+      );
+    });
+  }, [companyLocations]);
 
-        setDistanceMeters(Math.round(minDistance));
-        setIsInsideGeofence(insideAny || minDistance < 500);
-        setMatchedLocationName(matchedName);
-      },
-      () => {
-        setIsInsideGeofence(true);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
-    );
-
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
+  // 🛰️ Automatic GPS Geofence Check on App Launch & Location updates
+  useEffect(() => {
+    requestSingleGpsPosition().catch(() => {});
+  }, [requestSingleGpsPosition]);
 
   // 4. Fetch Live Today Shift Status from Server
   const fetchTodayShift = useCallback(async () => {
@@ -456,8 +530,13 @@ export default function MobileAttendanceOneTap() {
     if (employeeProfile?.id) {
       fetchTodayShift();
       fetchMonthlyHistory();
-      const interval = setInterval(fetchTodayShift, 10000);
-      return () => clearInterval(interval);
+      
+      // Gentle refresh ONLY when returning/focusing tab, no 24/7 background interval
+      const onFocus = () => {
+        fetchTodayShift();
+      };
+      window.addEventListener('focus', onFocus);
+      return () => window.removeEventListener('focus', onFocus);
     }
   }, [employeeProfile, fetchTodayShift, fetchMonthlyHistory]);
 
@@ -980,9 +1059,13 @@ export default function MobileAttendanceOneTap() {
   };
 
   // =========================================================================
-  // ⚡ 1-TAP ATTENDANCE PUNCH
+  // ⚡ 1-TAP ATTENDANCE PUNCH (Single-Shot GPS Driven)
   // =========================================================================
-  const handleOneTapAttendance = async (action: 'ENTER' | 'EXIT', reasonNote?: string) => {
+  const handleOneTapAttendance = async (
+    action: 'ENTER' | 'EXIT', 
+    reasonNote?: string,
+    freshGeo?: { lat: number; lng: number; minDistance: number; matchedName: string }
+  ) => {
     if (!employeeProfile?.id) return;
 
     setTriggerLoading(true);
@@ -990,12 +1073,14 @@ export default function MobileAttendanceOneTap() {
     const nowTime = format(new Date(), 'HH:mm');
 
     try {
-      let devToken = localStorage.getItem('ashley_device_token');
+      let devToken = localStorage.getItem(`ashley_device_token_${employeeProfile.id}`) || localStorage.getItem('ashley_device_token');
       if (!devToken) {
-        devToken = 'dev-' + Math.random().toString(36).substring(2, 10);
+        devToken = `dev-phone-${employeeProfile.id}-${Math.random().toString(36).substring(2, 8)}`;
         localStorage.setItem('ashley_device_token', devToken);
+        localStorage.setItem(`ashley_device_token_${employeeProfile.id}`, devToken);
       }
 
+      const defaultLoc = companyLocations[0] || COMPANY_LOCATIONS[0];
       const res = await fetch('/api/attendance/autonomous-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1004,16 +1089,21 @@ export default function MobileAttendanceOneTap() {
           userName: employeeProfile.name,
           deviceToken: devToken,
           event: action,
-          lat: currentLat || 35.508918,
-          lng: currentLng || 45.452935,
-          distance: distanceMeters,
-          regionName: matchedLocationName,
+          lat: freshGeo?.lat || currentLat || defaultLoc.lat,
+          lng: freshGeo?.lng || currentLng || defaultLoc.lng,
+          distance: freshGeo?.minDistance ?? distanceMeters,
+          regionName: freshGeo?.matchedName || matchedLocationName,
           note: reasonNote || null,
           timestamp: new Date().toISOString(),
         }),
       });
 
       const data = await res.json();
+      if (!res.ok) {
+        alert(`⚠️ ${data.error || 'نەتوانرا ئامادەبوون تۆمار بکرێت'}`);
+        return;
+      }
+
       const assignedTime = data.time || nowTime;
 
       if (action === 'ENTER') {
@@ -1021,7 +1111,7 @@ export default function MobileAttendanceOneTap() {
           checkInTime: assignedTime,
           checkOutTime: null,
           status: 'Present',
-          warehouseName: data.location || matchedLocationName,
+          warehouseName: data.location || freshGeo?.matchedName || matchedLocationName,
         };
         setLiveTodayShift(updatedShift);
         localStorage.setItem(`ashley_shift_state_${todayIso}_${employeeProfile.id}`, JSON.stringify(updatedShift));
@@ -1032,7 +1122,7 @@ export default function MobileAttendanceOneTap() {
           checkInTime: liveTodayShift.checkInTime || '08:00',
           checkOutTime: assignedTime,
           status: 'Present',
-          warehouseName: data.location || matchedLocationName,
+          warehouseName: data.location || freshGeo?.matchedName || matchedLocationName,
         };
         setLiveTodayShift(updatedShift);
         localStorage.setItem(`ashley_shift_state_${todayIso}_${employeeProfile.id}`, JSON.stringify(updatedShift));
@@ -1050,55 +1140,91 @@ export default function MobileAttendanceOneTap() {
     }
   };
 
-  const handleCheckInClick = () => {
-    if (!isInsideGeofence) {
-      alert(`⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${distanceMeters} مەتر دووریت).\nتکایە بگە بە شوێنی کارگە بۆ تۆمارکردنی هاتن.`);
-      return;
-    }
-    const currentHm = format(new Date(), 'HH:mm');
-    if (currentHm > '08:15') {
-      setPendingAction('ENTER');
-      setReasonType('LATE_IN');
-      setSelectedChip(LATE_IN_CHIPS[0]);
-      setCustomReason('');
-      setShowReasonModal(true);
-      return;
-    }
+  const handleCheckInClick = async () => {
+    try {
+      setTriggerLoading(true);
+      // 🛰️ Single-shot GPS activation ONLY for 1 second on demand
+      const geo = await requestSingleGpsPosition();
+      
+      if (!geo.insideAny) {
+        alert(`⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${geo.minDistance} مەتر دووریت).\nتکایە بگە بە شوێنی کارگە یان کۆگای ئاشڵی بۆ تۆمارکردنی هاتن.`);
+        setTriggerLoading(false);
+        return;
+      }
 
-    if (confirm('ئایا دڵنیایت لە دەستپێکردنی دەوام و تۆمارکردنی هاتن؟')) {
-      handleOneTapAttendance('ENTER');
+      const currentHm = format(new Date(), 'HH:mm');
+      if (currentHm > '08:15') {
+        setPendingAction('ENTER');
+        setReasonType('LATE_IN');
+        setSelectedChip(LATE_IN_CHIPS[0]);
+        setCustomReason('');
+        setShowReasonModal(true);
+        setTriggerLoading(false);
+        return;
+      }
+
+      if (confirm('ئایا دڵنیایت لە دەستپێکردنی دەوام و تۆمارکردنی هاتن؟')) {
+        await handleOneTapAttendance('ENTER', undefined, geo);
+      } else {
+        setTriggerLoading(false);
+      }
+    } catch (err: any) {
+      alert(err.message || 'هەڵە لە وەرگرتنی شوێنی GPS.');
+      setTriggerLoading(false);
     }
   };
 
-  const handleCheckOutClick = () => {
-    if (!isInsideGeofence) {
-      alert(`⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${distanceMeters} مەتر دووریت).\nدەبێت لە ناو کارگە بیت بۆ تۆمارکردنی ڕۆیشتن.`);
-      return;
-    }
-    const currentHm = format(new Date(), 'HH:mm');
-    if (currentHm < '16:45') {
-      setPendingAction('EXIT');
-      setReasonType('EARLY_OUT');
-      setSelectedChip(EARLY_OUT_CHIPS[0]);
-      setCustomReason('');
-      setShowReasonModal(true);
-      return;
-    } else if (currentHm > '17:15') {
-      setPendingAction('EXIT');
-      setReasonType('OVERTIME_OUT');
-      setSelectedChip(OVERTIME_CHIPS[0]);
-      setCustomReason('');
-      setShowReasonModal(true);
-      return;
-    }
+  const handleCheckOutClick = async () => {
+    try {
+      setTriggerLoading(true);
+      // 🛰️ Single-shot GPS activation ONLY for 1 second on demand
+      const geo = await requestSingleGpsPosition();
 
-    if (confirm('ئایا دڵنیایت لە تەواوبوونی دەوام و تۆمارکردنی ڕۆیشتن؟')) {
-      handleOneTapAttendance('EXIT');
+      if (!geo.insideAny) {
+        alert(`⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${geo.minDistance} مەتر دووریت).\nدەبێت لە ناو کارگە یان کۆگای ئاشڵی بیت بۆ تۆمارکردنی ڕۆیشتن.`);
+        setTriggerLoading(false);
+        return;
+      }
+
+      const currentHm = format(new Date(), 'HH:mm');
+      if (currentHm < '16:45') {
+        setPendingAction('EXIT');
+        setReasonType('EARLY_OUT');
+        setSelectedChip(EARLY_OUT_CHIPS[0]);
+        setCustomReason('');
+        setShowReasonModal(true);
+        setTriggerLoading(false);
+        return;
+      } else if (currentHm > '17:15') {
+        setPendingAction('EXIT');
+        setReasonType('OVERTIME_OUT');
+        setSelectedChip(OVERTIME_CHIPS[0]);
+        setCustomReason('');
+        setShowReasonModal(true);
+        setTriggerLoading(false);
+        return;
+      }
+
+      if (confirm('ئایا دڵنیایت لە تەواوبوونی دەوام و تۆمارکردنی ڕۆیشتن؟')) {
+        await handleOneTapAttendance('EXIT', undefined, geo);
+      } else {
+        setTriggerLoading(false);
+      }
+    } catch (err: any) {
+      alert(err.message || 'هەڵە لە وەرگرتنی شوێنی GPS.');
+      setTriggerLoading(false);
     }
   };
 
   const submitReasonAttendance = () => {
-    const finalNote = customReason.trim() ? `${selectedChip} (${customReason.trim()})` : selectedChip;
+    const chipText = selectedChip ? selectedChip.trim() : '';
+    const customText = customReason ? customReason.trim() : '';
+    const finalNote = customText ? (chipText ? `${chipText} - ${customText}` : customText) : chipText;
+    
+    if (!finalNote || !finalNote.trim()) {
+      alert('⚠️ داخڵکردنی هۆکار و تێبینی ئیجبارییە بۆ تۆمارکردن! تکایە هۆکارێک هەڵبژێرە یان بنووسە.');
+      return;
+    }
     handleOneTapAttendance(pendingAction, finalNote);
     setShowReasonModal(false);
   };
@@ -1539,23 +1665,56 @@ export default function MobileAttendanceOneTap() {
           </div>
         </div>
 
-        {/* 📍 GPS GEOFENCE STATUS (Clean Light Badge) */}
-        <div className={`p-3 rounded-2xl border flex items-center gap-2.5 shadow-xs ${
-          isInsideGeofence 
-            ? 'bg-emerald-50 border-emerald-300 text-emerald-900' 
-            : 'bg-amber-50 border-amber-300 text-amber-900'
-        }`}>
-          <MapPin className={`w-5 h-5 flex-shrink-0 ${isInsideGeofence ? 'text-emerald-700' : 'text-amber-700'}`} />
-          <div className="text-xs leading-tight">
-            <p className="font-black">
-              {isInsideGeofence 
-                ? `🟢 تۆ لە ناو کارگەیت (${matchedLocationName})` 
-                : `⚠️ لە دەرەوەی کارگەیت (${distanceMeters} مەتر دووریت)`}
-            </p>
-            <p className="text-[10px] opacity-80 mt-0.5">
-              سیستەمی شوێنکەوتنی GPS کارگەی ئاشڵی
-            </p>
+        {/* 📍 GPS GEOFENCE STATUS (Pure On-Demand Indicator) */}
+        <div className="p-3.5 rounded-2xl border border-slate-200/80 bg-white shadow-xs flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+              gpsState === 'acquiring' 
+                ? 'bg-amber-100 text-amber-700 animate-spin' 
+                : gpsState === 'ready' 
+                ? isInsideGeofence ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                : 'bg-blue-50 text-blue-600'
+            }`}>
+              {gpsState === 'acquiring' ? (
+                <RefreshCw className="w-4 h-4" />
+              ) : (
+                <MapPin className="w-4 h-4" />
+              )}
+            </div>
+            <div className="text-xs leading-tight">
+              <p className="font-black text-slate-800">
+                {gpsState === 'acquiring' 
+                  ? '📡 لە وەرگرتنی کاتیی شوێنی GPS لە مانگی دەستکرد...' 
+                  : gpsState === 'ready'
+                  ? (isInsideGeofence 
+                      ? `🟢 لە ناو سنووری کارگەیت (${matchedLocationName})` 
+                      : `⚠️ لە دەرەوەی سنووریت (${distanceMeters} مەتر دووریت)`)
+                  : '📍 دیاریکردنی شوێن بە GPS: تەنها لە کاتی کلیک (On-Demand)'}
+              </p>
+              <p className="text-[10px] text-slate-500 mt-0.5">
+                {gpsState === 'ready' 
+                  ? `دووری لە کارگە: ${distanceMeters} مەتر (ڕێگەپێدراو: تا ٣٥٠م)`
+                  : 'بەردەوام کار ناکات؛ تەنها لە کاتی تۆمارکردن بۆ ١ چرکە دەکوژێتەوە'}
+              </p>
+            </div>
           </div>
+
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await requestSingleGpsPosition();
+              } catch (e: any) {
+                alert(e.message || 'هەڵە لە وەرگرتنی GPS');
+              }
+            }}
+            disabled={gpsState === 'acquiring' || triggerLoading}
+            className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-[11px] font-bold border border-slate-200 flex items-center gap-1 cursor-pointer transition-all shrink-0"
+            title="پشکنینی کاتیی شوێنی ئێستا"
+          >
+            <Compass className="w-3.5 h-3.5 text-blue-600" />
+            <span>پشکنین</span>
+          </button>
         </div>
 
         {/* 🔔 FEEDBACK TOAST */}
@@ -1568,34 +1727,79 @@ export default function MobileAttendanceOneTap() {
         {/* ============================================================ */}
         {/* 🚀 THE HERO 1-TAP ATTENDANCE ACTION BUTTON                   */}
         {/* ============================================================ */}
-        <div className="pt-2">
+        <div className="pt-2 space-y-3">
+
+          {/* 🔒 OUTSIDE GEOFENCE WARNING BANNER */}
+          {!isInsideGeofence && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-300 dark:border-amber-800 rounded-2xl flex items-start gap-3 text-xs shadow-xs">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center shrink-0 text-amber-700 dark:text-amber-300">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div className="space-y-1 flex-1">
+                <p className="font-black text-amber-900 dark:text-amber-200 text-xs">
+                  ⚠️ تۆ لە دەرەوەی بازنەی دیاریکراوی کۆمپانیایت!
+                </p>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                  دوگمەکانی هاتن و ڕۆیشتن قوفڵکراون ({distanceMeters} مەتر دووریت لە {matchedLocationName}). بە گەیشتنت بە ناو سنووری دیاریکراو دوگمەکان ئۆتۆماتیکی دەکرێنەوە.
+                </p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await requestSingleGpsPosition();
+                    } catch (e: any) {
+                      alert(e.message || 'هەڵە لە وەرگرتنی GPS');
+                    }
+                  }}
+                  disabled={gpsState === 'acquiring' || triggerLoading}
+                  className="mt-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
+                >
+                  <RefreshCw className={`w-3 h-3 ${gpsState === 'acquiring' ? 'animate-spin' : ''}`} />
+                  <span>دووبارە پشکنینەوەی شوێن (Refresh GPS)</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {!liveTodayShift.checkInTime ? (
-            /* STATE 1: NOT CHECKED IN YET -> BIG CRISP GREEN CHECK-IN BUTTON */
+            /* STATE 1: NOT CHECKED IN YET -> CHECK-IN BUTTON (LOCKED IF OUTSIDE GEOFENCE) */
             <button
               onClick={handleCheckInClick}
-              disabled={triggerLoading || !isInsideGeofence}
-              className={`w-full p-6 rounded-3xl shadow-lg transition-all flex flex-col items-center justify-center gap-2 cursor-pointer ${
-                !isInsideGeofence 
-                  ? 'bg-slate-200 border-2 border-slate-300 text-slate-500 opacity-70 cursor-not-allowed shadow-none' 
-                  : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-98 text-white shadow-emerald-700/20 border-2 border-emerald-500'
+              disabled={!isInsideGeofence || triggerLoading}
+              className={`w-full p-6 rounded-3xl shadow-lg transition-all flex flex-col items-center justify-center gap-2 border-2 ${
+                !isInsideGeofence
+                  ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-500 border-slate-300 dark:border-slate-700 cursor-not-allowed opacity-90'
+                  : 'cursor-pointer bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-98 text-white shadow-emerald-700/20 border-emerald-500'
               }`}
             >
-              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                !isInsideGeofence ? 'bg-slate-200 dark:bg-slate-700 text-amber-500' : 'bg-white/20 text-white'
+              }`}>
                 {triggerLoading ? (
                   <RefreshCw className="w-8 h-8 animate-spin" />
+                ) : !isInsideGeofence ? (
+                  <Lock className="w-8 h-8 text-amber-600 dark:text-amber-400" />
                 ) : (
                   <CheckCircle2 className="w-9 h-9 text-white" />
                 )}
               </div>
               <span className="text-lg font-black tracking-wide">
-                {!isInsideGeofence ? '⚠️ تۆ لە دەرەوەی کارگەیت' : '🟢 تۆمارکردنی هاتن (Check In)'}
+                {triggerLoading 
+                  ? '📡 وەرگرتنی شوێن و تۆمارکردن...' 
+                  : !isInsideGeofence 
+                  ? '🔒 دوگمەی هاتن قوفڵکراوە (لە دەرەوەی کارگەیت)' 
+                  : '🟢 تۆمارکردنی هاتن (Check In)'}
               </span>
-              <span className="text-xs text-emerald-100 font-medium">
-                {!isInsideGeofence ? `دەبێت بچیتە ناو بازنەی کارگە (${distanceMeters} مەتر دووریت)` : 'دەوامی فەرمی: 08:00 - کلیک بکە بۆ دەستپێکردن'}
+              <span className={`text-xs font-medium ${
+                !isInsideGeofence ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-100'
+              }`}>
+                {!isInsideGeofence 
+                  ? `تۆ ${distanceMeters} مەتر دووریت لە کارگە - تکایە بگە بە سنووری دیاریکراو` 
+                  : 'دەوامی فەرمی: 08:00 - تۆ لە ناو سنووری ڕێگەپێدراوی کارگەیت'}
               </span>
             </button>
           ) : isCheckedIn ? (
-            /* STATE 2: CURRENTLY AT WORK -> BIG CRISP RED CHECK-OUT BUTTON */
+            /* STATE 2: CURRENTLY AT WORK -> CHECK-OUT BUTTON (LOCKED IF OUTSIDE GEOFENCE) */
             <div className="space-y-3">
               <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-2xl flex items-center justify-between text-xs shadow-xs">
                 <div>
@@ -1614,25 +1818,37 @@ export default function MobileAttendanceOneTap() {
 
               <button
                 onClick={handleCheckOutClick}
-                disabled={triggerLoading || !isInsideGeofence}
-                className={`w-full p-6 rounded-3xl shadow-lg transition-all flex flex-col items-center justify-center gap-2 cursor-pointer ${
-                  !isInsideGeofence 
-                    ? 'bg-slate-200 border-2 border-slate-300 text-slate-500 opacity-70 cursor-not-allowed shadow-none' 
-                    : 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 active:scale-98 text-white shadow-rose-700/20 border-2 border-rose-500'
+                disabled={!isInsideGeofence || triggerLoading}
+                className={`w-full p-6 rounded-3xl shadow-lg transition-all flex flex-col items-center justify-center gap-2 border-2 ${
+                  !isInsideGeofence
+                    ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-500 border-slate-300 dark:border-slate-700 cursor-not-allowed opacity-90'
+                    : 'cursor-pointer bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 active:scale-98 text-white shadow-rose-700/20 border-rose-500'
                 }`}
               >
-                <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                  !isInsideGeofence ? 'bg-slate-200 dark:bg-slate-700 text-amber-500' : 'bg-white/20 text-white'
+                }`}>
                   {triggerLoading ? (
                     <RefreshCw className="w-8 h-8 animate-spin" />
+                  ) : !isInsideGeofence ? (
+                    <Lock className="w-8 h-8 text-amber-600 dark:text-amber-400" />
                   ) : (
                     <DoorOpen className="w-9 h-9 text-white" />
                   )}
                 </div>
                 <span className="text-lg font-black tracking-wide">
-                  {!isInsideGeofence ? '⚠️ تۆ لە دەرەوەی کارگەیت' : '🔴 تۆمارکردنی ڕۆیشتن (Check Out)'}
+                  {triggerLoading 
+                    ? '📡 وەرگرتنی شوێن و تۆمارکردن...' 
+                    : !isInsideGeofence 
+                    ? '🔒 دوگمەی ڕۆیشتن قوفڵکراوە (لە دەرەوەی کارگەیت)' 
+                    : '🔴 تۆمارکردنی ڕۆیشتن (Check Out)'}
                 </span>
-                <span className="text-xs text-rose-100 font-medium">
-                  {!isInsideGeofence ? `دەبێت لە ناو کارگە بیت بۆ دەرچوون (${distanceMeters} مەتر دووریت)` : 'کاتی کۆتایی دەوام: 17:00 - کلیک بکە لە کاتی دەرچوون'}
+                <span className={`text-xs font-medium ${
+                  !isInsideGeofence ? 'text-amber-700 dark:text-amber-400' : 'text-rose-100'
+                }`}>
+                  {!isInsideGeofence 
+                    ? `تۆ ${distanceMeters} مەتر دووریت لە کارگە - بۆ تۆمارکردن دەبێت لە ناو سنوور بیت` 
+                    : 'کاتی کۆتایی دەوام: 17:00 - تۆ لە ناو سنووری ڕێگەپێدراوی کارگەیت'}
                 </span>
               </button>
             </div>
@@ -1662,12 +1878,10 @@ export default function MobileAttendanceOneTap() {
                 </div>
               </div>
 
-              <button
-                onClick={handleCheckOutClick}
-                className="text-xs text-emerald-700 font-bold hover:underline cursor-pointer pt-1 block mx-auto"
-              >
-                نوێکردنەوەی کاتی ڕۆیشتن
-              </button>
+              <div className="text-[11px] text-slate-500 font-medium pt-1 flex items-center justify-center gap-1.5 bg-slate-50 py-2 rounded-xl border border-slate-200">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>ڕۆژانە تەنها یەکجار هاتن و یەکجار ڕۆیشتن ڕێگەپێدراوە.</span>
+              </div>
             </div>
           )}
         </div>
@@ -1805,12 +2019,15 @@ export default function MobileAttendanceOneTap() {
 
             {/* Custom Reason Note Input */}
             <div className="space-y-1">
-              <label className="text-[11px] font-black text-slate-700 block">تێبینی زیاتر (ئارەزوومەندانە):</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-black text-slate-700 block">تێبینی و وردەکاری زیاتر:</label>
+                <span className="text-[10px] text-rose-600 font-bold">* نووسین یان هەڵبژاردن ئیجبارییە</span>
+              </div>
               <input
                 type="text"
                 value={customReason}
                 onChange={(e) => setCustomReason(e.target.value)}
-                placeholder="وردەکاری یان هۆکاری تر..."
+                placeholder="هۆکاری درەنگکەوتن یان ڕۆیشتن بنووسە..."
                 className="w-full bg-white border border-slate-300 text-slate-900 text-xs p-2.5 rounded-xl focus:border-amber-600 focus:outline-none"
               />
             </div>
@@ -1820,7 +2037,7 @@ export default function MobileAttendanceOneTap() {
               <button
                 type="button"
                 onClick={submitReasonAttendance}
-                disabled={triggerLoading || !selectedChip}
+                disabled={triggerLoading || (!selectedChip && !customReason.trim())}
                 className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs py-3 rounded-xl shadow-md cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 <CheckCircle2 className="w-4 h-4" />

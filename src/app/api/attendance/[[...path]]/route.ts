@@ -123,7 +123,7 @@ async function getAddressFromCoords(lat: number, lng: number) {
 }
 
 // Get Shift details for a date
-async function getShiftForDate(dateStr: string) {
+async function getShiftForDate(dateStr: string): Promise<{ checkInTime: string; checkOutTime: string; graceMinutes: number }> {
   try {
     const { data: override } = await supabase
       .from('shift_overrides')
@@ -132,19 +132,31 @@ async function getShiftForDate(dateStr: string) {
       .maybeSingle();
 
     if (override) {
-      return { checkInTime: override.check_in_time, checkOutTime: override.check_out_time };
+      return { 
+        checkInTime: override.check_in_time || "08:00", 
+        checkOutTime: override.check_out_time || "17:00",
+        graceMinutes: override.grace_minutes !== undefined ? Number(override.grace_minutes) : 15
+      };
     }
 
     const { data: defaultShift } = await supabase
       .from('shifts')
       .select('*')
       .eq('id', 'default')
-      .single();
+      .maybeSingle();
 
-    return { checkInTime: defaultShift.check_in_time, checkOutTime: defaultShift.check_out_time };
+    if (defaultShift) {
+      return { 
+        checkInTime: defaultShift.check_in_time || "08:00", 
+        checkOutTime: defaultShift.check_out_time || "17:00",
+        graceMinutes: defaultShift.grace_minutes !== undefined ? Number(defaultShift.grace_minutes) : 15
+      };
+    }
+
+    return { checkInTime: "08:00", checkOutTime: "17:00", graceMinutes: 15 };
   } catch (err) {
     console.error('Error getting shift:', err);
-    return { checkInTime: "08:30", checkOutTime: "16:30" };
+    return { checkInTime: "08:00", checkOutTime: "17:00", graceMinutes: 15 };
   }
 }
 
@@ -839,7 +851,11 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       });
 
       return NextResponse.json({
-        default: { checkInTime: defaultShift?.check_in_time || '08:30', checkOutTime: defaultShift?.check_out_time || '16:30' },
+        default: { 
+          checkInTime: defaultShift?.check_in_time || '08:00', 
+          checkOutTime: defaultShift?.check_out_time || '17:00',
+          graceMinutes: defaultShift?.grace_minutes !== undefined ? Number(defaultShift.grace_minutes) : 15
+        },
         overrides: formattedOverrides
       });
     }
@@ -848,12 +864,29 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // POST /api/attendance/admin/shifts/default
     // ----------------------------------------
     if (pathStr === 'admin/shifts/default' && method === 'POST') {
-      const { checkInTime, checkOutTime } = await req.json();
+      const { checkInTime, checkOutTime, graceMinutes } = await req.json();
       if (!checkInTime || !checkOutTime) return NextResponse.json({ error: 'Invalid shift times' }, { status: 400 });
 
-      const { error } = await supabase
+      const upsertPayload: any = { 
+        id: 'default', 
+        check_in_time: checkInTime, 
+        check_out_time: checkOutTime 
+      };
+      if (graceMinutes !== undefined) {
+        upsertPayload.grace_minutes = Number(graceMinutes);
+      }
+
+      let { error } = await supabase
         .from('shifts')
-        .upsert({ id: 'default', check_in_time: checkInTime, check_out_time: checkOutTime });
+        .upsert(upsertPayload);
+
+      if (error && graceMinutes !== undefined) {
+        // Fallback without grace_minutes if column not in shifts table
+        const resFallback = await supabase
+          .from('shifts')
+          .upsert({ id: 'default', check_in_time: checkInTime, check_out_time: checkOutTime });
+        error = resFallback.error;
+      }
 
       if (error) throw error;
       return NextResponse.json({ success: true });
@@ -898,8 +931,8 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     if (pathStr === 'check-in-out-unified' && method === 'POST') {
       const { userId, deviceToken, warehouseId, selfie, lat, lng, token } = await req.json();
       
-      if (!userId || !deviceToken || !lat || !lng || !selfie || !token) {
-        return NextResponse.json({ error: 'هەموو زانیارییەکان پێویستن (وێنە، لۆکەیشن GPS، کۆدی نوێی ڕۆژ)' }, { status: 400 });
+      if (!userId || !deviceToken || lat === undefined || lng === undefined || !token) {
+        return NextResponse.json({ error: 'هەموو زانیارییەکان پێویستن (لۆکەیشن GPS، کۆدی نوێی ڕۆژ)' }, { status: 400 });
       }
 
       if (token !== getDailyToken()) {
@@ -910,11 +943,15 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         .from('users')
         .select('*')
         .eq('id', userId)
-        .eq('device_token', deviceToken)
         .maybeSingle();
 
       if (userErr || !user) {
-        return NextResponse.json({ error: 'ڕێگەپێنەدراو: ئەم مۆبایلە بە ناوی ئەم کارمەندەوە نەبەستراوەتەوە' }, { status: 401 });
+        return NextResponse.json({ error: 'کارمەند نەدۆزرایەوە' }, { status: 404 });
+      }
+
+      // Check device token if already bound
+      if (user.device_token && user.device_token !== deviceToken && deviceToken !== 'kiosk-main') {
+        return NextResponse.json({ error: '⚠️ ئەم ئەکاونتە بەستراوەتەوە بە مۆبایلێکی ترەوە. ناتوانیت لە ڕێگەی ئامێری جیاوازەوە ئامادەبوون تۆمار بکەیت.' }, { status: 403 });
       }
 
       let finalWarehouseId = warehouseId || null;
@@ -951,8 +988,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
       if (!existingRecord) {
         // Perform Check-In
-        const selfieUrl = await uploadSelfieToStorage(userId, dateStr, 'in', selfie);
-        if (!selfieUrl) return NextResponse.json({ error: 'شکست لە بارکردنی وێنەی دەوام' }, { status: 500 });
+        let selfieUrl = null;
+        if (selfie) {
+          try {
+            selfieUrl = await uploadSelfieToStorage(userId, dateStr, 'in', selfie);
+          } catch {}
+        }
 
         const activeShift = await getShiftForDate(dateStr);
         const [shiftHour, shiftMin] = activeShift.checkInTime.split(':').map(Number);
@@ -961,7 +1002,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         const expectedMinutes = shiftHour * 60 + shiftMin;
         const actualMinutes = inHour * 60 + inMin;
         const lateMinutes = Math.max(0, actualMinutes - expectedMinutes);
-        const isLate = lateMinutes > 5;
+        const isLate = lateMinutes > (activeShift.graceMinutes ?? 15);
 
         const record = {
           id: `${userId}-${dateStr}`,
@@ -1000,8 +1041,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           return NextResponse.json({ error: 'تۆ پێشتر هاتن و ڕۆشتنت بۆ ئەمڕۆ تۆمار کردووە!' }, { status: 400 });
         }
 
-        const selfieUrl = await uploadSelfieToStorage(userId, dateStr, 'out', selfie);
-        if (!selfieUrl) return NextResponse.json({ error: 'شکست لە بارکردنی وێنەی ڕۆشتن' }, { status: 500 });
+        let selfieUrl = null;
+        if (selfie) {
+          try {
+            selfieUrl = await uploadSelfieToStorage(userId, dateStr, 'out', selfie);
+          } catch {}
+        }
 
         const activeShift = await getShiftForDate(dateStr);
         const [shiftHour, shiftMin] = activeShift.checkOutTime.split(':').map(Number);
@@ -1010,7 +1055,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         const expectedMinutes = shiftHour * 60 + shiftMin;
         const actualMinutes = outHour * 60 + outMin;
         const earlyMinutes = Math.max(0, expectedMinutes - actualMinutes);
-        const isEarly = earlyMinutes > 5;
+        const isEarly = earlyMinutes > (activeShift.graceMinutes ?? 15);
         const overtimeMinutes = Math.max(0, actualMinutes - expectedMinutes);
 
         let newStatus = existingRecord.status;
@@ -1060,25 +1105,60 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         return NextResponse.json({ error: 'userId and event (ENTER/EXIT) are required' }, { status: 400 });
       }
 
-      // 1. Fetch user
-      let matchedName = userName || employeeName || name || 'کارمەند';
+      // 1. Fetch user & Strict Device Binding using central registry
+      let matchedName = userName || employeeName || name || DEFAULT_EMPLOYEE_NAMES[userId] || 'کارمەند';
+      const isKiosk = deviceToken === 'kiosk-main' || deviceToken === 'kiosk';
+      
       try {
-        const { data: userRow } = await supabase.from('users').select('id, name, device_token').eq('id', userId).maybeSingle();
-        if (userRow) {
-          matchedName = userRow.name || matchedName;
-          if (deviceToken && !userRow.device_token) {
-            await supabase.from('users').update({ device_token: deviceToken }).eq('id', userId);
+        const { data: regRow } = await supabase
+          .from('warehouses')
+          .select('qr_code')
+          .eq('id', 'ashley_device_bindings')
+          .maybeSingle();
+
+        let registry: Record<string, any> = {};
+        if (regRow?.qr_code) {
+          try { registry = JSON.parse(regRow.qr_code); } catch {}
+        }
+
+        const userBinding = registry[userId];
+
+        if (userBinding && !userBinding.unbound && userBinding.deviceToken && !isKiosk) {
+          // Employee account already has a bound phone: verify incoming device matches
+          if (deviceToken && userBinding.deviceToken !== deviceToken) {
+            return NextResponse.json({
+              error: '⚠️ ئەم ئەکاونتە بەستراوەتەوە بە مۆبایلێکی ترەوە. ناتوانیت لە ڕێگەی ئامێری جیاوازەوە ئامادەبوون تۆمار بکەیت.'
+            }, { status: 403 });
           }
-        } else if (userId && matchedName) {
-          await supabase.from('users').upsert({
-            id: userId,
-            name: matchedName,
-            device_token: deviceToken || null,
-            role: 'Employee'
+        } else if (deviceToken && !isKiosk) {
+          // Check if this phone is already bound to a DIFFERENT employee account
+          for (const [otherId, otherInfo] of Object.entries<any>(registry)) {
+            if (otherId !== userId && otherInfo && !otherInfo.unbound && otherInfo.deviceToken === deviceToken) {
+              return NextResponse.json({
+                error: `❌ ئەم مۆبایلە پێشتر بە هەژماری (${otherInfo.userName || otherId}) بەستراوەتەوە! هەر مۆبایلێک تەنها بۆ یەک ئەکاونتە.`
+              }, { status: 403 });
+            }
+          }
+
+          // First time this employee uses their phone: bind it securely
+          registry[userId] = {
+            userId,
+            userName: matchedName,
+            deviceToken,
+            boundAt: new Date().toISOString(),
+            unbound: false
+          };
+          await supabase.from('warehouses').upsert({
+            id: 'ashley_device_bindings',
+            name: 'Ashley Device & Hardware Registry',
+            qr_code: JSON.stringify(registry),
+            lat: 0,
+            lng: 0,
+            radius: 0
           });
         }
-      } catch (uErr) {
-        console.warn('User fetch in auto-geofence:', uErr);
+      } catch (devErr) {
+        console.warn('Device registry check warning:', devErr);
       }
 
       // 2. Geofence Distance Validation across ALL branches
@@ -1105,7 +1185,29 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         }
       }
 
+      // 🛑 1. Strict Geofence Check: Must be within designated location boundary
+      if (lat !== undefined && lng !== undefined && minDistance !== Infinity) {
+        const allowedRadius = targetWh.radius || targetWh.radiusMeters || 350;
+        if (minDistance > allowedRadius) {
+          return NextResponse.json({ 
+            error: `⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${Math.round(minDistance)} مەتر دووریت). تۆمارکردن بە مەرجی بوون لە ناو لۆکەیشنی دیاریکراوە.` 
+          }, { status: 403 });
+        }
+      }
+
       const { dateStr, timeStr } = getBaghdadDateTime();
+      const activeShift = await getShiftForDate(dateStr);
+      const [shiftStartH, shiftStartM] = activeShift.checkInTime.split(':').map(Number);
+      const [shiftEndH, shiftEndM] = activeShift.checkOutTime.split(':').map(Number);
+      const shiftGraceMinutes = activeShift.graceMinutes ?? 15;
+
+      const standardStartMinutes = shiftStartH * 60 + shiftStartM;
+      const allowedLateThreshold = standardStartMinutes + shiftGraceMinutes;
+
+      const standardEndMinutes = shiftEndH * 60 + shiftEndM;
+      const earlyGraceThreshold = standardEndMinutes - shiftGraceMinutes;
+      const overtimeGraceThreshold = standardEndMinutes + shiftGraceMinutes;
+
       const address = (lat !== undefined && lng !== undefined) ? await getAddressFromCoords(parseFloat(lat), parseFloat(lng)) : targetWh.name;
       const isCheckIn = event === 'ENTER';
 
@@ -1116,6 +1218,51 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         .eq('user_id', userId)
         .eq('date', dateStr)
         .maybeSingle();
+
+      // 🛑 2. Strict 1-Punch Daily Guard: Only 1 check-in and 1 check-out per day
+      if (isCheckIn && existingRecord?.check_in_time) {
+        return NextResponse.json({ 
+          error: `⚠️ هاتنی ئەمڕۆت پێشتر لە کاتژمێر (${existingRecord.check_in_time}) تۆمارکراوە. ڕۆژانە تەنها یەکجار ڕێگەپێدراوە.` 
+        }, { status: 400 });
+      }
+
+      if (!isCheckIn && !existingRecord?.check_in_time) {
+        return NextResponse.json({ 
+          error: `⚠️ پێویستە سەرەتا هاتنی دەوام تۆمار بکەیت پێش ئەوەی ڕۆیشتن تۆمار بکەیت.` 
+        }, { status: 400 });
+      }
+
+      if (!isCheckIn && existingRecord?.check_out_time) {
+        return NextResponse.json({ 
+          error: `⚠️ ڕۆیشتنی ئەمڕۆت پێشتر لە کاتژمێر (${existingRecord.check_out_time}) تۆمارکراوە. ڕۆژانە تەنها یەکجار ڕێگەپێدراوە.` 
+        }, { status: 400 });
+      }
+
+      // 🛑 3. Mandatory Note Enforcement for Late Arrival, Early Exit, and Overtime
+      if (isCheckIn) {
+        const [inH, inM] = timeStr.split(':').map(Number);
+        const actualMinutes = inH * 60 + inM;
+        if (!isKiosk && actualMinutes > allowedLateThreshold && (!attachedNote || !attachedNote.trim())) {
+          const lateTimeFormatted = `${String(Math.floor(allowedLateThreshold / 60)).padStart(2, '0')}:${String(allowedLateThreshold % 60).padStart(2, '0')}`;
+          return NextResponse.json({
+            error: `⚠️ لەبەر ئەوەی دوای ${lateTimeFormatted} گەیشتوویت و درەنگکەوتووە، نووسین و دیاریکردنی هۆکار و تێبینی ئیجبارییە بۆ تۆمارکردنی هاتن.`
+          }, { status: 400 });
+        }
+      } else {
+        const [outH, outM] = timeStr.split(':').map(Number);
+        const actualOutMinutes = outH * 60 + outM;
+        if (!isKiosk && actualOutMinutes < earlyGraceThreshold && (!attachedNote || !attachedNote.trim())) {
+          const earlyTimeFormatted = `${String(Math.floor(earlyGraceThreshold / 60)).padStart(2, '0')}:${String(earlyGraceThreshold % 60).padStart(2, '0')}`;
+          return NextResponse.json({
+            error: `⚠️ لەبەر ئەوەی پێش کاتی فەرمی (${earlyTimeFormatted}) دەڕۆیت، نووسینی هۆکار و تێبینی ئیجبارییە بۆ تۆمارکردنی ڕۆیشتن.`
+          }, { status: 400 });
+        }
+        if (!isKiosk && actualOutMinutes > overtimeGraceThreshold && (!attachedNote || !attachedNote.trim())) {
+          return NextResponse.json({
+            error: `⚠️ لەبەر ئەوەی دەوامی زیادە (ئۆڤەرتایم) دەکەیت، نووسینی هۆکار و تێبینی ئیجبارییە بۆ تۆمارکردنی ڕۆیشتن.`
+          }, { status: 400 });
+        }
+      }
 
       const rowId = existingRecord?.id || `${userId}-${dateStr}`;
       const nowIso = new Date().toISOString();
@@ -1158,13 +1305,11 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         upsertPayload.check_out_time = null;
         upsertPayload.check_out_address = null;
 
-        // Calculate Late Minutes (Shift 08:00, Grace up to 08:15)
+        // Calculate Late Minutes (Dynamic Shift Start and Grace Threshold)
         const [inH, inM] = checkInTimeFinal.split(':').map(Number);
         const actualMinutes = inH * 60 + inM;
-        const graceMinutes = 8 * 60 + 15; // 08:15
-        const standardMinutes = 8 * 60;   // 08:00
-        const isLate = actualMinutes > graceMinutes;
-        const lateMinutes = isLate ? (actualMinutes - standardMinutes) : 0;
+        const isLate = actualMinutes > allowedLateThreshold;
+        const lateMinutes = isLate ? (actualMinutes - standardStartMinutes) : 0;
 
         upsertPayload.late_minutes = lateMinutes;
         upsertPayload.status = isLate ? 'Late' : 'Present';
@@ -1189,20 +1334,17 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         if (existingRecord?.check_in_note) upsertPayload.check_in_note = existingRecord.check_in_note;
         if (existingRecord?.status) upsertPayload.status = existingRecord.status;
 
-        // Calculate Early Exit (< 16:45) and Overtime (> 17:15) against 17:00 shift end
+        // Calculate Early Exit and Overtime against dynamic shift end
         const [outH, outM] = timeStr.split(':').map(Number);
         const actualOutMinutes = outH * 60 + outM;
-        const standardEndMinutes = 17 * 60;     // 17:00
-        const earlyGraceMinutes = 16 * 60 + 45; // 16:45
-        const overtimeGraceMinutes = 17 * 60 + 15; // 17:15
 
-        if (actualOutMinutes < earlyGraceMinutes) {
+        if (actualOutMinutes < earlyGraceThreshold) {
           upsertPayload.early_out_minutes = standardEndMinutes - actualOutMinutes;
         } else {
           upsertPayload.early_out_minutes = 0;
         }
 
-        if (actualOutMinutes > overtimeGraceMinutes) {
+        if (actualOutMinutes > overtimeGraceThreshold) {
           upsertPayload.overtime_minutes = actualOutMinutes - standardEndMinutes;
         } else {
           upsertPayload.overtime_minutes = 0;
@@ -1733,7 +1875,25 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if (pathStr === 'admin/manual-record' && method === 'POST') {
       try {
-        const { userId, userName, date, status, checkInTime, checkOutTime, action, adminNote, note } = await req.json();
+        const body = await req.json();
+        const { 
+          userId, 
+          userName, 
+          date, 
+          status, 
+          checkInTime, 
+          checkOutTime, 
+          action, 
+          adminNote, 
+          adminCheckInNote, 
+          adminCheckOutNote,
+          note, 
+          checkOutNote,
+          historyLogs,
+          adminDecision,
+          isWaived
+        } = body;
+        
         if (!userId || !date) {
           return NextResponse.json({ error: 'userId and date required' }, { status: 400 });
         }
@@ -1741,27 +1901,55 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         const cleanEmpId = (userId || '').toString().trim();
         const rawNum = cleanEmpId.replace('emp-', '');
         const idVariations = [cleanEmpId, rawNum, `emp-${rawNum}`];
+        const recordKey = `${cleanEmpId}_${date}`;
 
         // 🗑️ If action is delete OR status is empty/delete -> Remove completely from Supabase
         if (action === 'delete' || status === 'empty' || status === 'delete' || status === 'None' || status === 'Empty') {
           for (const idVar of idVariations) {
-            await supabase.from('attendance').delete().eq('user_id', idVar).eq('date', date);
-            await supabase.from('attendance_logs').delete().eq('employee_id', idVar).eq('log_date', date);
+            try {
+              await supabase.from('attendance').delete().eq('user_id', idVar).eq('date', date);
+              await supabase.from('attendance_logs').delete().eq('employee_id', idVar).eq('log_date', date);
+            } catch {}
           }
+
+          // Remove from warehouses resilient backup
+          try {
+            const { data: setRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_manual_attendance_records').maybeSingle();
+            if (setRow?.qr_code) {
+              const currentSettings = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : { ...setRow.qr_code };
+              delete currentSettings[recordKey];
+              delete currentSettings[`${rawNum}_${date}`];
+              delete currentSettings[`emp-${rawNum}_${date}`];
+              await supabase.from('warehouses').upsert({
+                id: 'ashley_manual_attendance_records',
+                name: 'Ashley Manual Attendance Overrides Store',
+                qr_code: JSON.stringify(currentSettings),
+                lat: 0,
+                lng: 0,
+                radius: 0
+              });
+            }
+          } catch {}
+
           return NextResponse.json({ success: true, message: 'تۆماری ئەم ڕۆژە بە سەرکەوتوویی لە سوپابەیس سڕایەوە و بەتاڵ کرا' });
         }
 
         // 💾 Fetch existing record to preserve original raw times and notes
-        const { data: existingRec } = await supabase
-          .from('attendance')
-          .select('*')
-          .eq('user_id', cleanEmpId)
-          .eq('date', date)
-          .maybeSingle();
+        let existingRec: any = null;
+        try {
+          const { data: rec } = await supabase
+            .from('attendance')
+            .select('*')
+            .eq('user_id', cleanEmpId)
+            .eq('date', date)
+            .maybeSingle();
+          existingRec = rec;
+        } catch {}
 
         const rawIn = existingRec?.raw_check_in_time || existingRec?.check_in_time || checkInTime || '08:00';
         const rawOut = existingRec?.raw_check_out_time || existingRec?.check_out_time || checkOutTime || '17:00';
-        const empNote = existingRec?.note || existingRec?.check_in_note || note || null;
+        const empNote = existingRec?.note || existingRec?.check_in_note || note || checkInNote || null;
+        const combinedAdminNote = adminNote || [adminCheckInNote, adminCheckOutNote].filter(Boolean).join(' | ') || null;
 
         const rowId = `att-${cleanEmpId}-${date}`;
         const upsertData: any = {
@@ -1778,7 +1966,11 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           adjusted_check_in_time: checkInTime,
           adjusted_check_out_time: checkOutTime,
           note: empNote,
-          admin_note: adminNote || null,
+          check_in_note: empNote,
+          check_out_note: existingRec?.check_out_note || checkOutNote || null,
+          admin_note: combinedAdminNote,
+          admin_check_in_note: adminCheckInNote || null,
+          admin_check_out_note: adminCheckOutNote || null,
           late_minutes: 0,
           early_out_minutes: 0,
           overtime_minutes: 0,
@@ -1799,13 +1991,100 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }
         }
 
-        const { error: upsertErr } = await supabase.from('attendance').upsert(upsertData);
-        if (upsertErr) {
-          console.error('Error upserting manual record to Supabase:', upsertErr);
-          return NextResponse.json({ error: upsertErr.message }, { status: 500 });
+        // Try primary upsert to attendance table
+        let upsertSuccess = false;
+        try {
+          const { error: upsertErr } = await supabase.from('attendance').upsert(upsertData);
+          if (!upsertErr) {
+            upsertSuccess = true;
+          } else {
+            console.warn('Primary attendance upsert error, trying fallback columns:', upsertErr.message);
+            // Fallback with minimal standard schema
+            const fallbackData = {
+              id: rowId,
+              user_id: cleanEmpId,
+              user_name: upsertData.user_name,
+              date: date,
+              status: upsertData.status,
+              check_in_time: upsertData.check_in_time,
+              check_out_time: upsertData.check_out_time,
+              note: combinedAdminNote || empNote || ''
+            };
+            const { error: fbErr } = await supabase.from('attendance').upsert(fallbackData);
+            if (!fbErr) upsertSuccess = true;
+          }
+        } catch (dbErr) {
+          console.warn('Supabase attendance catch error:', dbErr);
         }
 
-        return NextResponse.json({ success: true, message: 'تۆمارەکە لە داتابەیسی سوپابەیس پاشەکەوت کرا', record: upsertData });
+        // 🛡️ Always Persist to warehouses resilient backup store
+        try {
+          const { data: setRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_manual_attendance_records').maybeSingle();
+          let currentSettings: Record<string, any> = {};
+          if (setRow?.qr_code) {
+            currentSettings = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+          }
+          currentSettings[recordKey] = {
+            userId: cleanEmpId,
+            userName: upsertData.user_name,
+            date: date,
+            status: status || 'Present',
+            checkInTime: upsertData.check_in_time,
+            checkOutTime: upsertData.check_out_time,
+            rawCheckIn: rawIn,
+            rawCheckOut: rawOut,
+            note: empNote,
+            checkInNote: empNote,
+            checkOutNote: existingRec?.check_out_note || checkOutNote || null,
+            adminNote: combinedAdminNote,
+            adminCheckInNote: adminCheckInNote || null,
+            adminCheckOutNote: adminCheckOutNote || null,
+            historyLogs: historyLogs || currentSettings[recordKey]?.historyLogs || [],
+            adminDecision: adminDecision || (isWaived ? 'waived' : null) || currentSettings[recordKey]?.adminDecision || null,
+            isWaived: adminDecision === 'waived' || isWaived === true || (adminDecision !== 'penalized' && Boolean(currentSettings[recordKey]?.isWaived)),
+            updatedAt: new Date().toISOString()
+          };
+
+          await supabase.from('warehouses').upsert({
+            id: 'ashley_manual_attendance_records',
+            name: 'Ashley Manual Attendance Overrides Store',
+            qr_code: JSON.stringify(currentSettings),
+            lat: 0,
+            lng: 0,
+            radius: 0
+          });
+        } catch (settErr) {
+          console.warn('warehouses backup error:', settErr);
+        }
+
+        // Dual log into attendance_logs table
+        try {
+          await supabase.from('attendance_logs').upsert({
+            id: `manual-${cleanEmpId}-${date}`,
+            employee_id: cleanEmpId,
+            employee_name: upsertData.user_name,
+            log_type: 'Admin Edit',
+            log_date: date,
+            log_time_str: upsertData.check_in_time || '08:00',
+            location_address: '🛡️ دەستکاری ئەدمین',
+            notes: JSON.stringify({ 
+              adminNote: combinedAdminNote,
+              adminCheckInNote,
+              adminCheckOutNote,
+              rawCheckIn: rawIn,
+              rawCheckOut: rawOut,
+              checkInTime: upsertData.check_in_time,
+              checkOutTime: upsertData.check_out_time
+            }),
+            created_at: new Date().toISOString()
+          });
+        } catch {}
+
+        return NextResponse.json({ 
+          success: true, 
+          message: 'تۆمارەکە بە سەرکەوتوویی لە سوپابەیس و سێرڤەر پاشەکەوت کرا', 
+          record: upsertData 
+        });
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
       }
@@ -2157,38 +2436,111 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       });
 
       // Attendance records
-      let attendanceRecords = [];
+      let attendanceRecords: any[] = [];
+      const manualOverridesMap: Record<string, any> = {};
+
+      // 1. Fetch manual overrides from warehouses resilient backup
+      try {
+        const { data: setRow } = await supabase
+          .from('warehouses')
+          .select('qr_code')
+          .eq('id', 'ashley_manual_attendance_records')
+          .maybeSingle();
+
+        if (setRow?.qr_code) {
+          const parsed = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+          Object.assign(manualOverridesMap, parsed);
+        }
+      } catch (setErr) {
+        console.warn('Manual records backup fetch error:', setErr);
+      }
+
       try {
         const { data: attData } = await supabase
           .from('attendance')
           .select('*')
           .order('date', { ascending: false })
-          .limit(500);
+          .limit(1000);
 
         if (attData) {
-          attendanceRecords = attData.map(a => ({
-            id: a.id,
-            userId: a.user_id,
-            userName: a.user_name || allUsers.find(u => u.id === a.user_id)?.name || 'Unknown',
-            date: a.date,
-            checkIn: a.check_in,
-            checkInTime: a.check_in_time,
-            checkInSelfie: a.check_in_selfie,
-            checkInAddress: a.check_in_address,
-            checkOut: a.check_out,
-            checkOutTime: a.check_out_time,
-            checkOutSelfie: a.check_out_selfie,
-            checkOutAddress: a.check_out_address,
-            warehouseId: a.warehouse_id,
-            warehouseName: a.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
-            lateMinutes: a.late_minutes || 0,
-            earlyOutMinutes: a.early_out_minutes || 0,
-            overtimeMinutes: a.overtime_minutes || 0,
-            status: a.status || 'Present'
-          }));
+          attendanceRecords = attData.map(a => {
+            const rowKey = `${a.user_id}_${a.date}`;
+            const manualOverride = manualOverridesMap[rowKey];
+
+            return {
+              id: a.id,
+              userId: a.user_id,
+              userName: a.user_name || allUsers.find(u => u.id === a.user_id)?.name || 'Unknown',
+              date: a.date,
+              checkIn: a.check_in,
+              checkInTime: manualOverride?.checkInTime || a.check_in_time,
+              checkInSelfie: a.check_in_selfie,
+              checkInAddress: a.check_in_address,
+              checkOut: a.check_out,
+              checkOutTime: manualOverride?.checkOutTime || a.check_out_time,
+              checkOutSelfie: a.check_out_selfie,
+              checkOutAddress: a.check_out_address,
+              rawCheckInTime: a.raw_check_in_time || manualOverride?.rawCheckIn || a.check_in_time,
+              rawCheckOutTime: a.raw_check_out_time || manualOverride?.rawCheckOut || a.check_out_time,
+              rawCheckIn: a.raw_check_in_time || manualOverride?.rawCheckIn || a.check_in_time,
+              rawCheckOut: a.raw_check_out_time || manualOverride?.rawCheckOut || a.check_out_time,
+              note: a.note || manualOverride?.note || a.notes,
+              notes: a.notes || a.note || manualOverride?.note,
+              checkInNote: a.check_in_note || manualOverride?.checkInNote || a.note,
+              checkOutNote: a.check_out_note || manualOverride?.checkOutNote,
+              adminNote: manualOverride?.adminNote || a.admin_note || a.adminNote,
+              adminCheckInNote: manualOverride?.adminCheckInNote || a.admin_check_in_note || a.adminCheckInNote,
+              historyLogs: manualOverride?.historyLogs || [],
+              adminDecision: manualOverride?.adminDecision || (manualOverride?.isWaived ? 'waived' : null) || null,
+              isWaived: Boolean(manualOverride?.isWaived ?? (manualOverride?.adminDecision === 'waived')),
+              warehouseId: a.warehouse_id,
+              warehouseName: a.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
+              lateMinutes: a.late_minutes || 0,
+              earlyOutMinutes: a.early_out_minutes || 0,
+              overtimeMinutes: a.overtime_minutes || 0,
+              status: manualOverride?.status || a.status || 'Present'
+            };
+          });
         }
       } catch (err) {
         console.warn('Error fetching attendance in admin/report:', err);
+      }
+
+      // Add any standalone manual overrides that might not exist in the attendance table
+      for (const [mKey, mVal] of Object.entries<any>(manualOverridesMap)) {
+        if (!mVal || !mVal.userId || !mVal.date) continue;
+        const exists = attendanceRecords.some(r => r.userId === mVal.userId && r.date === mVal.date);
+        if (!exists && mVal.status && mVal.status !== 'empty' && mVal.status !== 'delete' && mVal.status !== 'Empty') {
+          attendanceRecords.push({
+            id: `manual-${mVal.userId}-${mVal.date}`,
+            userId: mVal.userId,
+            userName: mVal.userName || allUsers.find(u => u.id === mVal.userId)?.name || 'Unknown',
+            date: mVal.date,
+            checkIn: mVal.checkInTime ? `${mVal.date} ${mVal.checkInTime}` : '',
+            checkInTime: mVal.checkInTime,
+            checkOut: mVal.checkOutTime ? `${mVal.date} ${mVal.checkOutTime}` : '',
+            checkOutTime: mVal.checkOutTime,
+            rawCheckInTime: mVal.rawCheckIn || mVal.checkInTime,
+            rawCheckOutTime: mVal.rawCheckOut || mVal.checkOutTime,
+            rawCheckIn: mVal.rawCheckIn || mVal.checkInTime,
+            rawCheckOut: mVal.rawCheckOut || mVal.checkOutTime,
+            note: mVal.note,
+            notes: mVal.note,
+            checkInNote: mVal.checkInNote || mVal.note,
+            checkOutNote: mVal.checkOutNote,
+            adminNote: mVal.adminNote,
+            adminCheckInNote: mVal.adminCheckInNote,
+            adminCheckOutNote: mVal.adminCheckOutNote,
+            historyLogs: mVal.historyLogs || [],
+            adminDecision: mVal.adminDecision || (mVal.isWaived ? 'waived' : null) || null,
+            isWaived: Boolean(mVal.isWaived ?? (mVal.adminDecision === 'waived')),
+            warehouseName: 'کۆمپانیای سەرەکی ئاشڵی',
+            lateMinutes: 0,
+            earlyOutMinutes: 0,
+            overtimeMinutes: 0,
+            status: mVal.status || 'Present'
+          });
+        }
       }
 
       // Warehouses
@@ -2210,12 +2562,16 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       } catch {}
 
       // Shifts
-      let defaultShiftObj = { checkInTime: '08:30', checkOutTime: '16:30' };
+      let defaultShiftObj = { checkInTime: '08:00', checkOutTime: '17:00', graceMinutes: 15 };
       let shiftOverridesObj = {};
       try {
         const { data: sRow } = await supabase.from('shifts').select('*').eq('id', 'default').maybeSingle();
         if (sRow) {
-          defaultShiftObj = { checkInTime: sRow.check_in_time || '08:30', checkOutTime: sRow.check_out_time || '16:30' };
+          defaultShiftObj = { 
+            checkInTime: sRow.check_in_time || '08:00', 
+            checkOutTime: sRow.check_out_time || '17:00',
+            graceMinutes: sRow.grace_minutes !== undefined ? Number(sRow.grace_minutes) : 15
+          };
         }
       } catch {}
 

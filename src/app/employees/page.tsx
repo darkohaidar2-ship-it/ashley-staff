@@ -186,75 +186,107 @@ function EmployeesPage() {
           <AddEmployeeDialog open={isAddDialogOpen} onOpenChange={setAddDialogOpen} addEmployee={addEmployee} />
           
           <div className="space-y-6 w-full">
-              <Card className="border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm rounded-xl">
-                <CardHeader className="py-3 px-4 border-b border-slate-100 dark:border-zinc-800/80">
+              <div className="border border-slate-200/80 dark:border-white/5 bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl shadow-sm rounded-[28px] overflow-hidden">
+                <div className="py-4 px-6 border-b border-slate-100 dark:border-white/5">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <div className="flex-1">
-                            <CardTitle className="text-xs font-black uppercase text-slate-400 tracking-wider">{t('employees_list')}</CardTitle>
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-blue-500 text-white flex items-center justify-center shadow-sm">
+                                <User className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">{t('employees_list')}</h2>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">کۆی کارمەندان: {filteredEmployees.length}</p>
+                            </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                                <Input placeholder={t('search_name_or_id')} className="pl-9 h-8 text-xs max-w-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                            <div className="relative min-w-[200px]">
+                                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                <input 
+                                    placeholder={t('search_name_or_id')} 
+                                    className="w-full pr-8 pl-3 py-1.5 text-xs font-medium rounded-full bg-slate-100 dark:bg-[#3a3a3c] border border-slate-200/60 dark:border-white/5 text-slate-900 dark:text-white outline-none focus:border-blue-500" 
+                                    value={searchQuery} 
+                                    onChange={(e) => setSearchQuery(e.target.value)} 
+                                />
                             </div>
-                            <Button onClick={() => setAddDialogOpen(true)} size="sm" className="h-8 text-xs font-bold px-3">
-                                <Plus className="mr-1.5 h-3.5 w-3.5" /> {t('add_employee')}
-                            </Button>
-                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={handlePrint}><Printer className="h-3.5 w-3.5" /></Button>
-                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleExportExcel}><FileDown className="h-3.5 w-3.5" /></Button>
+                            <button 
+                                onClick={() => setAddDialogOpen(true)} 
+                                className="px-4 py-2 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
+                            >
+                                <Plus className="h-3.5 w-3.5" /> 
+                                <span>{t('add_employee')}</span>
+                            </button>
+                            <button 
+                                onClick={handlePrint} 
+                                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all cursor-pointer"
+                            >
+                                <Printer className="h-3.5 w-3.5" />
+                            </button>
+                            <button 
+                                onClick={handleExportExcel} 
+                                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all cursor-pointer"
+                            >
+                                <FileDown className="h-3.5 w-3.5" />
+                            </button>
                         </div>
                     </div>
-                </CardHeader>
-                <CardContent>
-                    <div className="border rounded-lg overflow-hidden">
+                </div>
+                <div className="p-4 sm:p-6">
+                    <div className="border border-slate-200/80 dark:border-white/5 rounded-2xl overflow-hidden bg-white dark:bg-[#1c1c1e] shadow-2xs">
                         <Table>
                             <TableHeader>
-                                <TableRow>
-                                    <TableHead>{t('photo')}</TableHead>
-                                    <TableHead>{t('name')}</TableHead>
-                                    <TableHead>{t('id')}</TableHead>
-                                    <TableHead>{t('role')}</TableHead>
-                                    <TableHead>{t('phone')}</TableHead>
-                                    <TableHead>{t('status')}</TableHead>
+                                <TableRow className="bg-slate-50 dark:bg-[#2c2c2e] hover:bg-slate-50 border-b border-slate-200/80 dark:border-white/5">
+                                    <TableHead className="font-bold text-slate-600 dark:text-slate-300">{t('photo')}</TableHead>
+                                    <TableHead className="font-bold text-slate-600 dark:text-slate-300">{t('name')}</TableHead>
+                                    <TableHead className="font-bold text-slate-600 dark:text-slate-300">{t('id')}</TableHead>
+                                    <TableHead className="font-bold text-slate-600 dark:text-slate-300">{t('role')}</TableHead>
+                                    <TableHead className="font-bold text-slate-600 dark:text-slate-300">{t('phone')}</TableHead>
+                                    <TableHead className="font-bold text-slate-600 dark:text-slate-300">{t('status')}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {isLoading ? (
                                     [...Array(5)].map((_, i) => (
                                         <TableRow key={i}>
-                                            <TableCell><Skeleton className="h-10 w-10 rounded-full" /></TableCell>
-                                            <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                                            <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                                            <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                                            <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                                            <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                                            <TableCell><Skeleton className="h-9 w-9 rounded-2xl" /></TableCell>
+                                            <TableCell><Skeleton className="h-5 w-32 rounded-lg" /></TableCell>
+                                            <TableCell><Skeleton className="h-5 w-16 rounded-lg" /></TableCell>
+                                            <TableCell><Skeleton className="h-5 w-24 rounded-lg" /></TableCell>
+                                            <TableCell><Skeleton className="h-5 w-28 rounded-lg" /></TableCell>
+                                            <TableCell><Skeleton className="h-5 w-20 rounded-lg" /></TableCell>
                                         </TableRow>
                                     ))
                                 ) : filteredEmployees.length > 0 ? (
                                     filteredEmployees.map(emp => {
                                       const displayName = language === 'ku' && emp.kurdishName ? emp.kurdishName : emp.name;
-                                      const cellPadding = "py-2 px-4";
-                                      const avatarSize = "h-8 w-8";
+                                      const cellPadding = "py-3 px-4";
                                       
                                       return (
-                                        <TableRow key={emp.id} onClick={() => router.push(`/employees/${emp.id}`)} className="cursor-pointer hover:bg-accent/50 group transition-all">
+                                        <TableRow key={emp.id} onClick={() => router.push(`/employees/${emp.id}`)} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 transition-colors border-b border-slate-100 dark:border-white/5">
                                             <TableCell className={cellPadding}>
-                                                <Avatar className={cn(avatarSize, "transition-all")}>
-                                                    <AvatarImage src={emp.photoUrl || ''} alt={emp.name} />
-                                                    <AvatarFallback>{emp.name.charAt(0)}</AvatarFallback>
+                                                <Avatar className="h-9 w-9 rounded-2xl border border-slate-200/60 dark:border-white/10 shadow-2xs">
+                                                    <AvatarImage src={emp.photoUrl || ''} alt={emp.name} className="object-cover" />
+                                                    <AvatarFallback className="rounded-2xl bg-indigo-50 text-indigo-700 font-bold">{emp.name.charAt(0)}</AvatarFallback>
                                                 </Avatar>
                                             </TableCell>
-                                            <TableCell className={cn(cellPadding, "font-bold", viewMode === 'large' ? "text-lg" : "text-sm")}>{displayName}</TableCell>
-                                            <TableCell className={cn(cellPadding, viewMode === 'large' ? "text-lg" : "text-sm")}>{emp.employeeId || t('n_a')}</TableCell>
-                                            <TableCell className={cn(cellPadding, viewMode === 'large' ? "text-lg" : "text-sm")}>{t(emp.role || 'n_a')}</TableCell>
-                                            <TableCell className={cn(cellPadding, viewMode === 'large' ? "text-lg" : "text-sm")}>{emp.phone || t('n_a')}</TableCell>
-                                            <TableCell className={cn(cellPadding, viewMode === 'large' ? "text-lg" : "text-sm")}>{emp.isActive ? t('active') : t('inactive')}</TableCell>
+                                            <TableCell className={cn(cellPadding, "font-bold text-slate-900 dark:text-white text-sm")}>{displayName}</TableCell>
+                                            <TableCell className={cn(cellPadding, "font-mono font-bold text-xs text-indigo-600 dark:text-indigo-400")}>{emp.employeeId || t('n_a')}</TableCell>
+                                            <TableCell className={cn(cellPadding, "text-xs font-medium text-slate-600 dark:text-slate-300")}>{t(emp.role || 'n_a')}</TableCell>
+                                            <TableCell className={cn(cellPadding, "font-mono text-xs text-slate-500")}>{emp.phone || t('n_a')}</TableCell>
+                                            <TableCell className={cellPadding}>
+                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                                    emp.isActive 
+                                                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/50' 
+                                                        : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200/50'
+                                                }`}>
+                                                    {emp.isActive ? t('active') : t('inactive')}
+                                                </span>
+                                            </TableCell>
                                         </TableRow>
                                       )
                                     })
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="h-24 text-center">
+                                        <TableCell colSpan={6} className="h-24 text-center text-slate-400">
                                             {t('no_employees_found')}
                                         </TableCell>
                                     </TableRow>
@@ -262,8 +294,8 @@ function EmployeesPage() {
                             </TableBody>
                         </Table>
                     </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
           </div>
       </div>
     </>

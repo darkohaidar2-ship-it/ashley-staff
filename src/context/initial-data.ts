@@ -108,7 +108,17 @@ const defaultDarkColors: ThemeColors = { background: '222.2 84% 4.9%', foregroun
 
 
 export const initialSettings: AppSettings = {
-    appLogo: 'https://logos-world.net/wp-content/uploads/2022/04/Ashley-Emblem.png',
+    appLogo: '/ashley-logo.png',
+    websiteLogo: '/ashley-logo.png',
+    reportLogo: '/ashley-logo.png',
+    diwanLogo: '/diwan-logo.svg',
+    ashleyLogo: '/ashley-logo.png',
+    motherCompanyName: 'کۆمپانیای گروپی دیوان',
+    motherCompanySubtitle: 'ناسنامەی مۆبیلیات',
+    brandName: 'کۆمپانیای مۆبیلیاتی ئاشڵی',
+    brandSubtitle: 'Official Document',
+    agencyTitle: 'بریکاری سەرەکی مۆبیلیاتی ئاشڵین لە هەموو عێراق',
+    brandSlogan: 'Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)',
     mainBackground: null,
     loginBackground: 'https://store.ashley.sa/cdn/shop/files/15602_63ed4394-41df-47b4-b450-eff960c05668.jpg?v=1709104619&width=1445',
     loginBackgroundVideo: null,
@@ -135,6 +145,11 @@ export const initialSettings: AppSettings = {
     salarySettings: {
         overtimeRate: 5000,
         bonusRate: 5000,
+    },
+    shiftSettings: {
+        checkInTime: '08:00',
+        checkOutTime: '17:00',
+        graceMinutes: 15,
     },
     reportHeaderColors: {
         ashleyExpenses: '#3b82f6',

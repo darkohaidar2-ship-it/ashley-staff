@@ -499,7 +499,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [settings, setLocalSettings] = useState<AppSettings>(() => {
         if (typeof window !== 'undefined') {
             const cached = localStorage.getItem('ashley_terminal_settings');
-            return cached ? JSON.parse(cached) : initialSettings;
+            if (cached) {
+                try {
+                    return { ...initialSettings, ...JSON.parse(cached) };
+                } catch {}
+            }
+            return initialSettings;
         }
         return initialSettings;
     });
