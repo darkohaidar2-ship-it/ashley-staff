@@ -871,58 +871,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     }
   };
 
-  // 📄 EXPORT OFFICIAL ASHLEY LETTERHEAD PDF
+  // 📄 EXPORT OFFICIAL ASHLEY LETTERHEAD PDF (31-DAY MATRIX + KPI SUMMARY)
   const handleExportOfficialLetterheadPDF = () => {
-    try {
-      const rows: AshleyOfficialReportRow[] = activeEmployees.map((emp, idx) => {
-        let presentDays = 0;
-        let totalHours = 0;
-        let absentDays = 0;
-        let lateDays = 0;
-
-        daysArray.forEach(d => {
-          const info = getGpsLogsForEmpAndDay(emp, d);
-          const isPresent = info.status === 'Present' || Boolean(info.checkInTime);
-          if (isPresent) {
-            presentDays++;
-            totalHours += (info.workedHours !== undefined ? info.workedHours : 8);
-            const inT = (info.checkInTime || '08:00').slice(0, 5);
-            if (inT > '08:15') lateDays++;
-          } else if (!d.isFuture && !d.isFriday) {
-            absentDays++;
-          }
-        });
-
-        const workableDays = Math.max(1, daysArray.filter(d => !d.isFuture && !d.isFriday).length);
-        const rate = Math.min(100, Math.round((presentDays / workableDays) * 100));
-        const otHours = (emp as any).overtimeHours || (emp.id === 'emp-02' ? 12 : 0);
-        const otAmount = otHours * 5000;
-
-        return {
-          index: idx + 1,
-          empId: emp.id,
-          name: emp.fullName3Part || emp.name,
-          role: emp.role || 'کارمەند',
-          presentDays,
-          totalHours,
-          lateCount: lateDays,
-          absentCount: absentDays,
-          leaveCount: 0,
-          overtimeHours: otHours > 0 ? otHours : undefined,
-          overtimeAmount: otAmount > 0 ? otAmount : undefined,
-          rate
-        };
-      });
-
-      exportAshleyOfficialLetterheadPDF({
-        month: selectedMonth,
-        issueDate: todayStr,
-        rows,
-        settings,
-      });
-    } catch (err: any) {
-      alert('هەڵەیەک ڕوویدا لە دروستکردنی وەرەقەی سەری فەرمی: ' + err.message);
-    }
+    handleOpenCleanPrintNewTab();
   };
 
   // 🖨️ OPEN PURE CLEAN PRINT IN SEPARATED NEW TAB (AUTO-FIT LANDSCAPE A4/A3)
@@ -949,6 +900,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
     const isFullRange = printDays.length > 18;
 
+    let globalPresentDays = 0;
+    let globalWorkedHours = 0;
+    let globalLateCount = 0;
+    let globalAbsentCount = 0;
+    let globalLeaveCount = 0;
+
     const rowsHtml = printEmployees.map((emp, idx) => {
       let presentCount = 0;
       let leaveCount = 0;
@@ -962,10 +919,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
         if (info.hasRecord || info.status === 'Present') {
           presentCount++;
-          totalWorkedHours += (info.workedHours !== undefined ? info.workedHours : 8);
+          globalPresentDays++;
+          const hrs = (info.workedHours !== undefined ? info.workedHours : 8);
+          totalWorkedHours += hrs;
+          globalWorkedHours += hrs;
           const inT = (info.checkInTime || '08:00').slice(0, 5);
           const outT = (info.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00')).slice(0, 5);
           const isLate = inT > '08:15' && !info.isWaived && info.adminDecision !== 'waived';
+          if (isLate) globalLateCount++;
           
           cellContent = `
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;">
@@ -981,10 +942,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           cellBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
         } else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
           leaveCount++;
+          globalLeaveCount++;
           cellContent = `<span style="color: #b45309; font-weight: 800; font-size: ${isFullRange ? '6.5px' : '7.5px'};">مۆڵەت</span>`;
           cellBg = '#fffdf7';
         } else if (info.status === 'Absent' || (!d.isFuture && !d.isFriday && !info.hasRecord && !info.status)) {
           absentCount++;
+          globalAbsentCount++;
           cellContent = `<span style="color: #b91c1c; font-weight: 800; font-size: ${isFullRange ? '6.5px' : '7.5px'};">غیاب</span>`;
           cellBg = '#fefafa';
         } else if (info.isFriday || info.status === 'Holiday') {
@@ -1017,6 +980,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         </tr>
       `;
     }).join('');
+
+    const totalWorkingSlots = Math.max(1, printEmployees.length * printDays.filter(d => !d.isFuture && !d.isFriday).length);
+    const overallRate = Math.min(100, Math.round((globalPresentDays / totalWorkingSlots) * 100));
 
     const headersHtml = printDays.map(d => `
       <th style="border: 0.5px solid #cbd5e1; padding: 2px 1px; text-align: center; background-color: ${d.isFriday ? 'rgba(16, 185, 129, 0.12)' : '#f8fafc'}; color: ${d.isFriday ? '#047857' : '#334155'};">
@@ -1052,7 +1018,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           #print-wrapper {
             width: 100%;
             margin: 0 auto;
-            transform-origin: top center;
           }
           table {
             width: 100%;
@@ -1077,7 +1042,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             }
             #print-wrapper {
               width: 100% !important;
-              transform: none !important;
             }
             table {
               width: 100% !important;
@@ -1088,8 +1052,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       </head>
       <body>
         <div id="print-wrapper">
-          <!-- 1. هێدەری فەرمی: ڕاست (دیوان)، ناوەڕاست (تایتڵی بابەت)، چەپ (ئاشڵی و لۆگۆ) -->
-          <div style="border-bottom: 2.5px solid ${primaryColor}; padding-bottom: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+          <!-- 1. هێدەری فەرمی: ڕاست (دیوان)، ناوەڕاست (تەنها تایتڵی فەرمی)، چەپ (ئاشڵی و لۆگۆ) -->
+          <div style="border-bottom: 2.5px solid ${primaryColor}; padding-bottom: 8px; margin-bottom: 7px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
             <!-- Right: Diwan Logo, Name & Subtitle -->
             <div style="display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-start;">
               <img src="${diwanLogo}" alt="Diwan Logo" style="height: 44px; max-width: 130px; object-fit: contain;" onerror="this.style.display='none'" />
@@ -1103,17 +1067,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               </div>
             </div>
 
-            <!-- Center: Subject Title & Subtitle -->
+            <!-- Center: Clean Subject Title (هیچ دەقێک لەژێر ئەم تایتڵە نانووسرێت) -->
             <div style="text-align: center; flex: 1.6; padding: 0 6px;">
-              <h1 style="margin: 0; font-size: 14px; font-weight: 900; color: ${titleColor}; line-height: 1.2;">
+              <h1 style="margin: 0; font-size: 15.5px; font-weight: 900; color: ${titleColor}; line-height: 1.2; letter-spacing: -0.2px;">
                 ${docTitle}
               </h1>
-              <div style="margin-top: 2px; font-size: 9.5px; font-weight: 800; color: ${accentColor};">
-                ${docSubtitle}
-              </div>
-              <div style="margin-top: 2px; font-size: 9px; font-weight: 600; color: #475569;">
-                ڕاپۆرتی خشتەی ئامادەبوونی کارمەندان — مانگی ${selectedMonth} (ڕۆژانی ${printStartDay} تا ${printEndDay})
-              </div>
             </div>
 
             <!-- Left: Ashley Name, Subtitle & Logo -->
@@ -1133,7 +1091,41 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             </div>
           </div>
 
-          <!-- 2. خشتەی ئامادەبوون (Attendance Table) -->
+          <!-- 2. کورتەی گشتی دەوام (Executive KPI Cards Strip) -->
+          <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 6px; page-break-inside: avoid;">
+            <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 6px; text-align: center; background: #ffffff; border-top: 2.5px solid #007AFF;">
+              <div style="font-size: 7.5px; font-weight: 700; color: #64748b;">کۆی گشتی کارمەندان</div>
+              <div style="font-size: 11px; font-weight: 900; color: #007AFF; font-family: monospace;">${printEmployees.length} کەس</div>
+            </div>
+            <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 6px; text-align: center; background: #ffffff; border-top: 2.5px solid #059669;">
+              <div style="font-size: 7.5px; font-weight: 700; color: #64748b;">کۆی کاژێرەکانی دەوام</div>
+              <div style="font-size: 11px; font-weight: 900; color: #059669; font-family: monospace;">${globalWorkedHours}h</div>
+            </div>
+            <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 6px; text-align: center; background: #ffffff; border-top: 2.5px solid #d97706;">
+              <div style="font-size: 7.5px; font-weight: 700; color: #64748b;">حاڵەتەکانی دواکەوتن</div>
+              <div style="font-size: 11px; font-weight: 900; color: #d97706; font-family: monospace;">${globalLateCount} جار</div>
+            </div>
+            <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 6px; text-align: center; background: #ffffff; border-top: 2.5px solid #b91c1c;">
+              <div style="font-size: 7.5px; font-weight: 700; color: #64748b;">کۆی ڕۆژانی غیاب</div>
+              <div style="font-size: 11px; font-weight: 900; color: #b91c1c; font-family: monospace;">${globalAbsentCount} ڕۆژ</div>
+            </div>
+            <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 6px; text-align: center; background: #ffffff; border-top: 2.5px solid #0f172a;">
+              <div style="font-size: 7.5px; font-weight: 700; color: #64748b;">تێکڕای پابەندبوون</div>
+              <div style="font-size: 11px; font-weight: 900; color: #0f172a; font-family: monospace;">%${overallRate}</div>
+            </div>
+          </div>
+
+          <!-- 3. ڕوونکردنەوەی خشتەکە لەسەر خشتەکە (Table Explanation Strip) -->
+          <div style="margin-bottom: 5px; padding: 4px 8px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; font-size: 8px; font-weight: 700; color: #334155; page-break-inside: avoid;">
+            <div>
+              <span>📋 <strong>ڕوونکردنەوەی خشتە:</strong> تۆماری دەوامی فەرمی ۳۱ ڕۆژەیی کارمەندان بۆ مانگی <strong>${selectedMonth}</strong> (ڕۆژانی ${printStartDay} تا ${printEndDay}) • دەوامی فەرمی: 08:00 هاتن - 17:00 دەرچوون • مەرجی درەنگکەوتن: پاش 08:15</span>
+            </div>
+            <div style="font-family: monospace; color: #64748b; font-size: 7.5px;">
+              <span>بەرواری دەرچوون: ${todayStr} • کۆدی بەڵگەنامە: ASH-DGP-${selectedMonth}</span>
+            </div>
+          </div>
+
+          <!-- 4. خشتەی ۳۱ ڕۆژەیی ئامادەبوون (Attendance 31-Day Table) -->
           <table>
             <thead>
               <tr style="background-color: #f1f5f9;">
@@ -1150,19 +1142,45 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             </tbody>
           </table>
 
-          <!-- 3. واژووەکان لە خواری خوارەوە (Signatures at bottom) -->
-          <div style="margin-top: 24px; display: flex; justify-content: space-around; text-align: center; font-size: 9.5px; font-weight: 700; border-top: 1px solid #cbd5e1; padding-top: 12px; page-break-inside: avoid; break-inside: avoid;">
-            <div style="background: #f8fafc; padding: 6px 16px; border-radius: 6px; border: 1px solid #cbd5e1; min-width: 150px;">
-              <div style="color: #475569; font-size: 8.5px; font-weight: 800;">ئامادەکاری ئامادەبوون (HR)</div>
-              <div style="margin-top: 24px; border-bottom: 1px dashed #94a3b8; width: 110px; margin-left: auto; margin-right: auto;"></div>
+          <!-- 5. واژووەکان لە خوارەوە بەپێی ئەرکەکان (Signatures without pre-printed names or seals) -->
+          <div style="margin-top: 18px; display: flex; justify-content: space-between; gap: 14px; text-align: right; page-break-inside: avoid; break-inside: avoid; direction: rtl;">
+            <!-- Right: سەرپەرشتیاری ئایتی -->
+            <div style="flex: 1; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
+              <div style="font-size: 9.5px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px;">
+                سەرپەرشتیاری ئایتی
+              </div>
+              <div style="font-size: 8px; font-weight: 700; color: #475569; margin-bottom: 8px;">
+                ناو: ................................................................
+              </div>
+              <div style="font-size: 8px; font-weight: 700; color: #475569;">
+                واژوو: ..............................................................
+              </div>
             </div>
-            <div style="background: #f8fafc; padding: 6px 16px; border-radius: 6px; border: 1px solid #cbd5e1; min-width: 150px;">
-              <div style="color: #475569; font-size: 8.5px; font-weight: 800;">بەڕێوەبەری ژمێریاری و وردبینی</div>
-              <div style="margin-top: 24px; border-bottom: 1px dashed #94a3b8; width: 110px; margin-left: auto; margin-right: auto;"></div>
+
+            <!-- Center: بەڕێوەبەری کۆگا -->
+            <div style="flex: 1; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
+              <div style="font-size: 9.5px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px;">
+                بەڕێوەبەری کۆگا
+              </div>
+              <div style="font-size: 8px; font-weight: 700; color: #475569; margin-bottom: 8px;">
+                ناو: ................................................................
+              </div>
+              <div style="font-size: 8px; font-weight: 700; color: #475569;">
+                واژوو: ..............................................................
+              </div>
             </div>
-            <div style="background: #f8fafc; padding: 6px 16px; border-radius: 6px; border: 1px solid #cbd5e1; min-width: 150px;">
-              <div style="color: #475569; font-size: 8.5px; font-weight: 800;">پەسەندکردنی بەڕێوەبەری گشتی (دارکۆ حەیدەر)</div>
-              <div style="margin-top: 24px; border-bottom: 1px dashed #94a3b8; width: 120px; margin-left: auto; margin-right: auto;"></div>
+
+            <!-- Left: بەڕێوەبەر -->
+            <div style="flex: 1; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
+              <div style="font-size: 9.5px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px;">
+                بەڕێوەبەر
+              </div>
+              <div style="font-size: 8px; font-weight: 700; color: #475569; margin-bottom: 8px;">
+                ناو: ................................................................
+              </div>
+              <div style="font-size: 8px; font-weight: 700; color: #475569;">
+                واژوو: ..............................................................
+              </div>
             </div>
           </div>
         </div>

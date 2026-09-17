@@ -1425,17 +1425,11 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
         </div>
       </div>
 
-      <!-- Center: Subject Document Title, Subtitle & Badge -->
+      <!-- Center: Clean Subject Document Title (هیچ دەقێک لەژێر ئەم تایتڵە نانووسرێت) -->
       <div class="center-branding" style="flex: 1.6; text-align: center; padding: 0 8px;">
-        <h1 style="font-size: 14.5px; font-weight: 900; color: ${titleColor}; margin: 0; line-height: 1.3;">
+        <h1 style="font-size: 16px; font-weight: 900; color: ${titleColor}; margin: 0; line-height: 1.2; letter-spacing: -0.2px;">
           ${docTitle}
         </h1>
-        <h2 style="font-size: 11px; font-weight: 800; color: ${accentColor}; margin: 3px 0 0 0;">
-          ${docSubtitle}
-        </h2>
-        <div class="doc-badge" style="margin-top: 6px; display: inline-block; background: ${primaryColor}; color: #ffffff;">
-          ڕاپۆرتی مانگانەی گشتی ئامادەبوون، دەوام و دارایی — مانگی ${month}
-        </div>
       </div>
 
       <!-- Left: Ashley Furniture Name, Subtitle, Code & Logo -->
@@ -1475,6 +1469,16 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
       </div>
     </div>
 
+    <!-- ڕوونکردنەوەی خشتەکە لەسەر خشتەکە (Table Explanation Strip) -->
+    <div style="margin-bottom: 8px; padding: 6px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 9px; font-weight: 700; color: #334155;">
+      <div>
+        <span>📋 <strong>ڕوونکردنەوەی خشتە:</strong> تۆماری فەرمی ئامادەبوونی کارمەندان بۆ مانگی <strong>${month}</strong> • دەوامی فەرمی: 08:00 هاتن - 17:00 دەرچوون • مەرجی درەنگکەوتن: پاش 08:15</span>
+      </div>
+      <div style="font-family: monospace; color: #64748b; font-size: 8.5px;">
+        <span>بەرواری دەرچوون: ${issueDate} • کۆدی بەڵگەنامە: ASH-DGP-${month}</span>
+      </div>
+    </div>
+
     <!-- Official Records Table -->
     <table>
       <thead>
@@ -1497,32 +1501,44 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
       </tbody>
     </table>
 
-    <!-- Official Executive Signatures Block -->
-    <div class="signatures-block">
-      <div class="sig-col">
-        <div class="title">ئامادەکاری سەرچاوە مرۆییەکان (HR):</div>
-        <div style="font-size: 9.5px; color: #64748b;">تۆماری ئەلیکترۆنی و وردبینی دەوام</div>
-        <div class="line"></div>
+    <!-- واژووەکانی خوارەوە بەپێی ئەرکەکان (Signatures without pre-printed names or seals) -->
+    <div style="margin-top: 22px; display: flex; justify-content: space-between; gap: 14px; text-align: right; page-break-inside: avoid; break-inside: avoid; direction: rtl;">
+      <!-- Right: سەرپەرشتیاری ئایتی -->
+      <div style="flex: 1; background: #f8fafc; padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1;">
+        <div style="font-size: 11px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+          سەرپەرشتیاری ئایتی
+        </div>
+        <div style="font-size: 9px; font-weight: 700; color: #475569; margin-bottom: 10px;">
+          ناو: ................................................................
+        </div>
+        <div style="font-size: 9px; font-weight: 700; color: #475569;">
+          واژوو: ..............................................................
+        </div>
       </div>
 
-      <div class="sig-col">
-        <div class="title">بەڕێوەبەری ژمێریاری و وردبینی دارایی:</div>
-        <div style="font-size: 9.5px; color: #64748b;">پەسەندکردنی شایستە و خەرجییەکان</div>
-        <div class="line"></div>
+      <!-- Center: بەڕێوەبەری کۆگا -->
+      <div style="flex: 1; background: #f8fafc; padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1;">
+        <div style="font-size: 11px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+          بەڕێوەبەری کۆگا
+        </div>
+        <div style="font-size: 9px; font-weight: 700; color: #475569; margin-bottom: 10px;">
+          ناو: ................................................................
+        </div>
+        <div style="font-size: 9px; font-weight: 700; color: #475569;">
+          واژوو: ..............................................................
+        </div>
       </div>
 
-      <div class="sig-col">
-        <div class="title" style="color: #007AFF;">پەسەندکردنی بەڕێوەبەری گشتی:</div>
-        <div style="font-size: 12px; font-weight: 900; color: #0f172a; margin-top: 2px;">دارکۆ حەیدەر عەزیز</div>
-        <div style="font-size: 9px; color: #64748b; font-weight: bold;">General Manager • Ashley Industrial Co.</div>
-        
-        <!-- Official Diwan Group & Ashley Company Stamp -->
-        <div class="seal-circle">
-          <div style="font-size: 6px; color: #007AFF;">★ ★ ★</div>
-          <div style="font-size: 7.5px; font-weight: 900; color: #0f172a;">گروپی دیوان • ئاشڵی</div>
-          <div style="font-size: 6.5px; font-weight: 800; color: #047857; background: #ecfdf5; padding: 1px 4px; border: 0.5px solid #10b981; margin: 1px 0; border-radius: 3px;">پەسەندکراوە</div>
-          <div style="font-size: 5.5px; font-family: monospace; color: #007AFF;">DIWAN • ASHLEY APPROVED</div>
-          <div style="font-size: 6px; color: #007AFF;">★ ★ ★</div>
+      <!-- Left: بەڕێوەبەر -->
+      <div style="flex: 1; background: #f8fafc; padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1;">
+        <div style="font-size: 11px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+          بەڕێوەبەر
+        </div>
+        <div style="font-size: 9px; font-weight: 700; color: #475569; margin-bottom: 10px;">
+          ناو: ................................................................
+        </div>
+        <div style="font-size: 9px; font-weight: 700; color: #475569;">
+          واژوو: ..............................................................
         </div>
       </div>
     </div>

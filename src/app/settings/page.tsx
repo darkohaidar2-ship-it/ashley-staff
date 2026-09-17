@@ -747,19 +747,13 @@ function SettingsPage() {
                       </div>
                     </div>
 
-                    {/* 2. ناوەڕاست: تایتڵی بابەتەکە و ژێرنووس/کۆدی بەڵگەنامە */}
+                    {/* 2. ناوەڕاست: تەنها تایتڵی بابەتەکە (هیچ لەژێریا نانووسرێت) */}
                     <div className="text-center px-3 flex-1 max-w-[42%]">
                       <div 
                         className="text-xs sm:text-sm font-black leading-tight"
                         style={{ color: draftSettings.letterheadTitleColor || draftSettings.letterheadPrimaryColor || '#0f172a' }}
                       >
                         {draftSettings.letterheadDocumentTitle || 'خشتەی تۆماری ئامادەبوونی فەرمی'}
-                      </div>
-                      <div 
-                        className="text-[9px] font-bold mt-0.5 truncate"
-                        style={{ color: draftSettings.letterheadAccentColor || '#d97706' }}
-                      >
-                        {draftSettings.letterheadDocumentSubtitle || draftSettings.agencyTitle || 'کۆمپانیای گروپی دیوان • بریکاری سەرەکی مۆبیلیاتی ئاشڵی'}
                       </div>
                     </div>
 
@@ -791,7 +785,7 @@ function SettingsPage() {
                     </div>
                   </div>
 
-                  {/* شریتی زانیاری خوارەوە بە ستایلی مۆدێرن */}
+                  {/* شریتی ڕوونکردنەوەی خشتەکە لەسەر خشتەکە */}
                   <div 
                     className="h-6 rounded-lg flex items-center justify-between px-3 text-[9px] font-bold"
                     style={{ 
@@ -802,9 +796,28 @@ function SettingsPage() {
                   >
                     <div className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: draftSettings.letterheadAccentColor || '#d97706' }} />
-                      <span>{draftSettings.agencyTitle || 'بریکاری سەرەکی مۆبیلیاتی ئاشڵین لە هەموو عێراق'}</span>
+                      <span>📋 ڕوونکردنەوەی خشتە: تۆماری فەرمی ئامادەبوونی ۳۱ ڕۆژەیی • دەوامی 08:00 هاتن - 17:00 دەرچوون</span>
                     </div>
                     <span className="font-mono text-[8.5px] opacity-80">کۆدی فەرمی: ASH-DGP-2026</span>
+                  </div>
+
+                  {/* واژووەکانی خوارەوە بەپێی ئەرکەکان بەبێ مۆر و ناوی پێشوەختە */}
+                  <div className="pt-2 border-t border-slate-200 grid grid-cols-3 gap-2 text-right">
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/70 text-[9px]">
+                      <div className="font-bold text-slate-800 text-center pb-1 border-b border-slate-200">سەرپەرشتیاری ئایتی</div>
+                      <div className="text-slate-500 font-medium pt-1">ناو: ....................</div>
+                      <div className="text-slate-500 font-medium pt-0.5">واژوو: ....................</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/70 text-[9px]">
+                      <div className="font-bold text-slate-800 text-center pb-1 border-b border-slate-200">بەڕێوەبەری کۆگا</div>
+                      <div className="text-slate-500 font-medium pt-1">ناو: ....................</div>
+                      <div className="text-slate-500 font-medium pt-0.5">واژوو: ....................</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/70 text-[9px]">
+                      <div className="font-bold text-slate-800 text-center pb-1 border-b border-slate-200">بەڕێوەبەر</div>
+                      <div className="text-slate-500 font-medium pt-1">ناو: ....................</div>
+                      <div className="text-slate-500 font-medium pt-0.5">واژوو: ....................</div>
+                    </div>
                   </div>
                 </div>
               </CardContent>
