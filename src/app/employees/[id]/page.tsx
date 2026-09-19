@@ -43,6 +43,8 @@ import { useAppContext } from '@/context/app-provider';
 import type { Employee, AttendanceRecord } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { AdminFaceEnrollModal } from '@/components/attendance/AdminFaceEnrollModal';
+import { ReportWrapper } from '@/components/reports/ReportWrapper';
+import { formatTime24H } from '@/lib/export-utils';
 import * as XLSX from 'xlsx';
 
 const ASHLEY_DEFAULT_EMPLOYEES = [
@@ -342,7 +344,114 @@ function EmployeeDetailPage() {
   const isDarko = selectedEmployee.id === 'emp-02' || (selectedEmployee.name || '').includes('دارکۆ');
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans p-3 sm:p-6 select-none space-y-4" dir="rtl">
+    <>
+      {/* 🌟 OFFICIAL 3-PART ASHLEY LETTERHEAD PRINT VIEW */}
+      <div className="hidden print:block bg-white min-h-screen">
+        <ReportWrapper
+          title={`دۆسیەی فەرمی کارمەند — ${(selectedEmployee as any).fullName3Part || selectedEmployee.name}`}
+          subtitle="ناسنامە و ڕاپۆرتی ئامادەبوونی فەرمی کارمەند لە سیستەمی کۆمپانیای ئاشڵی"
+          period={`مانگی ${selectedMonth}`}
+        >
+          {/* Employee Profile Summary */}
+          <div className="border border-slate-300 rounded-lg p-3.5 mb-4 bg-slate-50/50 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-lg border border-slate-300 bg-slate-200 overflow-hidden flex items-center justify-center font-bold text-slate-700 text-lg shrink-0">
+                {selectedEmployee.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={selectedEmployee.photoUrl} alt={selectedEmployee.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span>{(selectedEmployee.name || '').slice(0, 2)}</span>
+                )}
+              </div>
+              <div className="text-right space-y-1">
+                <div className="text-base font-black text-slate-900">
+                  {(selectedEmployee as any).fullName3Part || selectedEmployee.name}
+                </div>
+                <div className="flex items-center gap-3 text-xs font-bold text-slate-600">
+                  <span>کۆدی کارمەند: <strong className="font-mono text-slate-900">{selectedEmployee.id}</strong></span>
+                  <span>•</span>
+                  <span>پۆست / ئەرک: <strong className="text-slate-900">{isDarko ? 'بەڕێوەبەری سەرەکی' : selectedEmployee.role || 'کارمەند'}</strong></span>
+                  <span>•</span>
+                  <span>ژمارەی مۆبایل: <strong className="font-mono text-slate-900">{selectedEmployee.phone || '0770 000 0000'}</strong></span>
+                </div>
+                <div className="flex items-center gap-3 text-xs font-bold text-slate-500">
+                  <span>دەستپێکی کارکردن: <strong className="font-mono text-slate-700">{(selectedEmployee as any).startDate || selectedEmployee.employmentStartDate?.slice(0, 10) || '2025-01-01'}</strong></span>
+                  <span>•</span>
+                  <span>دۆخی دەوام: <strong className={selectedEmployee.status === 'resigned' ? 'text-rose-600' : 'text-emerald-700'}>{selectedEmployee.status === 'resigned' ? 'وازهێناو' : 'چالاک'}</strong></span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="border border-slate-200 bg-white rounded p-2 min-w-[75px]">
+                <div className="text-[9px] font-bold text-slate-500">ئامادەبوون</div>
+                <div className="text-sm font-black text-emerald-700 font-mono">{attendanceData.presentCount} ڕۆژ</div>
+              </div>
+              <div className="border border-slate-200 bg-white rounded p-2 min-w-[75px]">
+                <div className="text-[9px] font-bold text-slate-500">غیاب</div>
+                <div className="text-sm font-black text-rose-700 font-mono">{attendanceData.absentCount} ڕۆژ</div>
+              </div>
+              <div className="border border-slate-200 bg-white rounded p-2 min-w-[75px]">
+                <div className="text-[9px] font-bold text-slate-500">کۆی کاژێر</div>
+                <div className="text-sm font-black text-blue-700 font-mono">{attendanceData.totalWorkedHours}h</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Table Explanation Strip */}
+          <div className="mb-2 p-2 bg-slate-100 border border-slate-300 rounded text-[9.5px] font-bold text-slate-700 flex justify-between items-center">
+            <span>📋 ڕوونکردنەوەی تۆمارەکانی دەوام بۆ مانگی <strong>{selectedMonth}</strong> • دەوامی فەرمی ڕۆژانە: 08:00 هاتن - 17:00 دەرچوون</span>
+            <span className="font-mono text-[9px] text-slate-500">کۆدی دۆسیە: ASH-EMP-${selectedEmployee.id}</span>
+          </div>
+
+          {/* Monthly Attendance Table */}
+          <table className="w-full border-collapse border border-slate-400 text-right text-[10px]">
+            <thead>
+              <tr className="bg-slate-200 text-slate-900 font-black">
+                <th className="border border-slate-400 p-1.5 text-center w-8">#</th>
+                <th className="border border-slate-400 p-1.5">بەروار</th>
+                <th className="border border-slate-400 p-1.5">ڕۆژ</th>
+                <th className="border border-slate-400 p-1.5 text-center">📥 هاتن</th>
+                <th className="border border-slate-400 p-1.5 text-center">📤 دەرچوون</th>
+                <th className="border border-slate-400 p-1.5 text-center">⏱️ ماوە</th>
+                <th className="border border-slate-400 p-1.5 text-center">دۆخ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {attendanceData.days.map((d) => (
+                <tr key={d.dateStr} className={`border-b border-slate-300 ${d.isFriday ? 'bg-slate-100' : ''}`}>
+                  <td className="border border-slate-300 p-1 text-center font-mono text-slate-500">{d.dayNum}</td>
+                  <td className="border border-slate-300 p-1 font-mono font-bold">{d.dateStr}</td>
+                  <td className="border border-slate-300 p-1 font-bold">{d.isFriday ? '🌴 هەینی' : 'ڕۆژی ئاسایی'}</td>
+                  <td className="border border-slate-300 p-1 text-center font-mono font-bold">
+                    {d.checkInTime ? formatTime24H(d.checkInTime) : '-'}
+                  </td>
+                  <td className="border border-slate-300 p-1 text-center font-mono font-bold">
+                    {d.checkOutTime ? formatTime24H(d.checkOutTime) : '-'}
+                  </td>
+                  <td className="border border-slate-300 p-1 text-center font-mono">
+                    {d.isPresent ? '8h' : d.isFriday ? 'پشوو' : '-'}
+                  </td>
+                  <td className="border border-slate-300 p-1 text-center font-bold">
+                    {d.isFriday ? (
+                      <span className="text-teal-700">🌴 پشوو</span>
+                    ) : d.isPresent ? (
+                      <span className="text-emerald-700">🟢 ئامادە</span>
+                    ) : d.isFuture ? (
+                      <span className="text-slate-400">-</span>
+                    ) : (
+                      <span className="text-rose-700">🔴 غیاب</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </ReportWrapper>
+      </div>
+
+      {/* 🧭 INTERACTIVE APP CONTAINER (HIDDEN IN PRINT) */}
+      <div className="min-h-screen bg-slate-100 text-slate-900 font-sans p-3 sm:p-6 select-none space-y-4 print:hidden" dir="rtl">
       
       {/* 🧭 WINDOWS 11 TOP COMMAND BAR & NAVIGATION BREADCRUMB */}
       <div className="bg-white border-2 border-slate-300 p-3.5 shadow-sm flex flex-wrap items-center justify-between gap-3">
@@ -881,6 +990,7 @@ function EmployeeDetailPage() {
       )}
 
     </div>
+    </>
   );
 }
 

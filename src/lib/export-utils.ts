@@ -20,6 +20,8 @@ export interface ExportReportOptions {
   kpiNotes?: string[];
   orientation?: 'landscape' | 'portrait';
   fileName?: string;
+  settings?: any;
+  documentCode?: string;
 }
 
 export interface DailyReportRow {
@@ -57,6 +59,8 @@ export interface MonthDailyReportOptions {
   }>;
   title?: string;
   subtitle?: string;
+  settings?: any;
+  documentCode?: string;
 }
 
 /**
@@ -203,6 +207,29 @@ export function exportToPDF(options: ExportReportOptions) {
     hour12: false,
   });
 
+  let activeSettings = options.settings;
+  if (!activeSettings && typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('ashley_global_settings');
+      if (stored) {
+        activeSettings = JSON.parse(stored);
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  const motherCompany = activeSettings?.motherCompanyName || 'کۆمپانیای گروپی دیوان';
+  const motherCompanySubtitle = activeSettings?.motherCompanySubtitle || 'ناسنامەی مۆبیلیات';
+  const brandName = activeSettings?.brandName || 'کۆمپانیای مۆبیلیاتی ئاشڵی';
+  const brandSubtitle = activeSettings?.brandSubtitle || activeSettings?.brandSlogan || 'Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)';
+  const diwanLogo = activeSettings?.diwanLogo || '/diwan-logo.svg';
+  const reportLogo = activeSettings?.reportLogo || activeSettings?.ashleyLogo || activeSettings?.appLogo || '/ashley-logo.png';
+  const primaryColor = activeSettings?.letterheadPrimaryColor || '#0f172a';
+  const accentColor = activeSettings?.letterheadAccentColor || '#d97706';
+  const titleColor = activeSettings?.letterheadTitleColor || primaryColor;
+  const docCode = options.documentCode || 'ASH-DGP-2026';
+
   const html = `
 <!DOCTYPE html>
 <html lang="ku" dir="rtl">
@@ -250,48 +277,108 @@ export function exportToPDF(options: ExportReportOptions) {
       margin: 0 auto;
     }
     
-    /* 🌟 COLORFUL EXECUTIVE HEADER */
-    .report-header {
+    /* 🌟 OFFICIAL 3-PART ASHLEY LETTERHEAD */
+    .official-letterhead {
+      border-bottom: 2.5px solid ${primaryColor};
+      padding-bottom: 10px;
+      margin-bottom: 12px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #1e3a8a 100%) !important;
-      color: #ffffff !important;
-      padding: 12px 16px;
-      border-radius: 10px;
-      margin-bottom: 12px;
-      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
-      border: 1px solid #1e3a8a;
+      gap: 12px;
+      width: 100%;
     }
-    .header-titles h1 {
+    .letterhead-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      justify-content: flex-start;
+      text-align: right;
+    }
+    .letterhead-center {
+      flex: 1.6;
+      text-align: center;
+      padding: 0 8px;
+    }
+    .letterhead-center h1 {
       margin: 0;
-      font-size: 17px;
+      font-size: 16px;
       font-weight: 900;
-      color: #ffffff;
-      letter-spacing: -0.3px;
+      color: ${titleColor};
+      letter-spacing: -0.2px;
+      line-height: 1.3;
     }
-    .header-titles h2 {
-      margin: 3px 0 0 0;
-      font-size: 11px;
-      font-weight: 700;
-      color: #cbd5e1;
-    }
-    .header-meta {
-      text-align: left;
+    .letterhead-center .period-badge {
       font-size: 10px;
       font-weight: bold;
-      color: #f1f5f9;
+      color: #64748b;
+      margin-top: 3px;
     }
-    .header-meta .badge {
-      display: inline-block;
-      background: #3b82f6 !important;
-      color: #ffffff !important;
-      padding: 3px 10px;
-      border-radius: 6px;
-      font-size: 10px;
+    .letterhead-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      justify-content: flex-end;
+      text-align: left;
+    }
+    .company-title {
+      font-size: 12px;
       font-weight: 900;
-      margin-bottom: 3px;
-      border: 1px solid rgba(255,255,255,0.4);
+      color: ${primaryColor};
+      line-height: 1.2;
+    }
+    .company-subtitle {
+      font-size: 9px;
+      font-weight: 800;
+      color: ${accentColor};
+      margin-top: 1px;
+    }
+    .meta-code {
+      font-size: 8px;
+      font-family: Consolas, monospace;
+      color: #64748b;
+      margin-top: 2px;
+    }
+    .letterhead-logo {
+      max-height: 44px;
+      max-width: 120px;
+      object-fit: contain;
+    }
+
+    /* ✍️ Official 3-Role Signatures Strip */
+    .report-signatures {
+      margin-top: 22px;
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      text-align: right;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      direction: rtl;
+    }
+    .signature-card {
+      flex: 1;
+      background: #f8fafc;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+    }
+    .signature-role {
+      font-size: 10.5px;
+      font-weight: 800;
+      color: #0f172a;
+      text-align: center;
+      margin-bottom: 6px;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 3px;
+    }
+    .signature-line {
+      font-size: 9px;
+      font-weight: 700;
+      color: #475569;
+      margin-bottom: 6px;
     }
 
     /* 📊 VIBRANT SUMMARY KPI CARDS */
@@ -522,15 +609,31 @@ export function exportToPDF(options: ExportReportOptions) {
   </div>
 
   <div class="report-container">
-    <!-- Header -->
-    <div class="report-header">
-      <div class="header-titles">
-        <h1>${title}</h1>
-        <h2>${subtitle}</h2>
+    <!-- 🌟 OFFICIAL 3-PART ASHLEY LETTERHEAD -->
+    <div class="official-letterhead">
+      <!-- 1. لای ڕاست: لۆگۆ و ناوی گروپی دیوان -->
+      <div class="letterhead-right">
+        <img src="${diwanLogo}" alt="Diwan Logo" class="letterhead-logo" onerror="this.style.display='none'">
+        <div>
+          <div class="company-title">${motherCompany}</div>
+          <div class="company-subtitle">${motherCompanySubtitle}</div>
+        </div>
       </div>
-      <div class="header-meta">
-        ${period ? `<div class="badge">ماوە: ${period}</div><br>` : ''}
-        <span>بەرواری دەرچوون: ${currentDateStr} (${currentTimeStr})</span>
+
+      <!-- 2. ناوەڕاست: تەنها تایتڵی فەرمی بابەتەکە -->
+      <div class="letterhead-center">
+        <h1>${title}</h1>
+        ${period ? `<div class="period-badge">ماوە: ${period}</div>` : (subtitle ? `<div class="period-badge">${subtitle}</div>` : '')}
+      </div>
+
+      <!-- 3. لای چەپ: ناوی ئاشڵی، بەروار و کۆد و لۆگۆی ئاشڵی -->
+      <div class="letterhead-left">
+        <div>
+          <div class="company-title">${brandName}</div>
+          <div class="company-subtitle">${brandSubtitle}</div>
+          <div class="meta-code">${currentDateStr} (${currentTimeStr}) • کۆدی فەرمی: ${docCode}</div>
+        </div>
+        <img src="${reportLogo}" alt="Ashley Logo" class="letterhead-logo" onerror="this.style.display='none'">
       </div>
     </div>
 
@@ -614,21 +717,29 @@ export function exportToPDF(options: ExportReportOptions) {
       </tbody>
     </table>
 
-    <!-- Footer & Signatures -->
-    <div class="report-footer">
-      <div>
-        <p style="margin: 0; font-weight: bold;">سیستەمی بەڕێوەبردنی سەرچاوەکانی مرۆیی ئاشڵی (Ashley ERP 2026)</p>
-        <p style="margin: 2px 0 0 0; color: #64748b;">تێبینی: ئەم ڕاپۆرتە فەرمییە و لەسەر بنەمای ئامادەبوونی ئەلیکترۆنی دەرکراوە.</p>
+    <!-- ✍️ Official 3-Role Signatures Strip -->
+    <div class="report-signatures">
+      <div class="signature-card">
+        <div class="signature-role">سەرپەرشتیاری ئایتی</div>
+        <div class="signature-line">ناو: ................................................................</div>
+        <div class="signature-line" style="margin-bottom: 0;">واژوو: ..............................................................</div>
       </div>
+      <div class="signature-card">
+        <div class="signature-role">بەڕێوەبەری ژمێریاری و کۆگا</div>
+        <div class="signature-line">ناو: ................................................................</div>
+        <div class="signature-line" style="margin-bottom: 0;">واژوو: ..............................................................</div>
+      </div>
+      <div class="signature-card">
+        <div class="signature-role">بەڕێوەبەری گشتی</div>
+        <div class="signature-line">ناو: ................................................................</div>
+        <div class="signature-line" style="margin-bottom: 0;">واژوو: ..............................................................</div>
+      </div>
+    </div>
 
-      <div style="display: flex; gap: 30px;">
-        <div class="signature-box">
-          واژووی سەرپەرشتیار
-        </div>
-        <div class="signature-box">
-          واژووی بەڕێوەبەری کارگێڕی
-        </div>
-      </div>
+    <!-- Official System Footer Strip -->
+    <div style="margin-top: 12px; padding-top: 6px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; font-size: 8.5px; color: #64748b; direction: rtl;">
+      <span>سیستەمی بەڕێوەبردنی سەرچاوەکانی مرۆیی ئاشڵی (Ashley ERP 2026)</span>
+      <span>بەڵگەنامەی فەرمی وەرگیراو لە سیستەم • دەرچوون: ${currentDateStr} (${currentTimeStr})</span>
     </div>
 
   </div>
@@ -671,21 +782,59 @@ export function exportMonthlyMultiPageDailyPDF(options: MonthDailyReportOptions)
     hour12: false,
   });
 
+  let activeSettings = options.settings;
+  if (!activeSettings && typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('ashley_global_settings');
+      if (stored) {
+        activeSettings = JSON.parse(stored);
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  const motherCompany = activeSettings?.motherCompanyName || 'کۆمپانیای گروپی دیوان';
+  const motherCompanySubtitle = activeSettings?.motherCompanySubtitle || 'ناسنامەی مۆبیلیات';
+  const brandName = activeSettings?.brandName || 'کۆمپانیای مۆبیلیاتی ئاشڵی';
+  const brandSubtitle = activeSettings?.brandSubtitle || activeSettings?.brandSlogan || 'Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)';
+  const diwanLogo = activeSettings?.diwanLogo || '/diwan-logo.svg';
+  const reportLogo = activeSettings?.reportLogo || activeSettings?.ashleyLogo || activeSettings?.appLogo || '/ashley-logo.png';
+  const primaryColor = activeSettings?.letterheadPrimaryColor || '#0f172a';
+  const accentColor = activeSettings?.letterheadAccentColor || '#d97706';
+  const titleColor = activeSettings?.letterheadTitleColor || primaryColor;
+  const docCode = options.documentCode || `ASH-DGP-${month}`;
+
   const pagesHtml = daysData.map((day, dayIndex) => {
     const isLast = dayIndex === daysData.length - 1;
 
     return `
     <div class="daily-page-container ${isLast ? 'last-page' : ''}">
-      <!-- Page Header -->
-      <div class="report-header">
-        <div class="header-titles">
-          <h1>${title}</h1>
-          <h2>${subtitle}</h2>
+      <!-- 🌟 OFFICIAL 3-PART ASHLEY LETTERHEAD -->
+      <div class="official-letterhead">
+        <!-- 1. لای ڕاست: لۆگۆ و ناوی گروپی دیوان -->
+        <div class="letterhead-right">
+          <img src="${diwanLogo}" alt="Diwan Logo" class="letterhead-logo" onerror="this.style.display='none'">
+          <div>
+            <div class="company-title">${motherCompany}</div>
+            <div class="company-subtitle">${motherCompanySubtitle}</div>
+          </div>
         </div>
-        <div class="header-meta">
-          <div class="badge">📅 ${day.dayName} (${day.dateStr}) — لاپەڕەی ${day.dayNum} لە ${daysData.length}</div>
-          <br>
-          <span>دەرچوونی ڕاپۆرت: ${currentDateStr} (${currentTimeStr})</span>
+
+        <!-- 2. ناوەڕاست: تەنها تایتڵی فەرمی بابەتەکە -->
+        <div class="letterhead-center">
+          <h1>${title}</h1>
+          <div class="period-badge">📅 ${day.dayName} (${day.dateStr}) — لاپەڕەی ${day.dayNum} لە ${daysData.length}</div>
+        </div>
+
+        <!-- 3. لای چەپ: ناوی ئاشڵی، بەروار و کۆد و لۆگۆی ئاشڵی -->
+        <div class="letterhead-left">
+          <div>
+            <div class="company-title">${brandName}</div>
+            <div class="company-subtitle">${brandSubtitle}</div>
+            <div class="meta-code">${currentDateStr} • کۆدی دەرچوون: ${docCode}</div>
+          </div>
+          <img src="${reportLogo}" alt="Ashley Logo" class="letterhead-logo" onerror="this.style.display='none'">
         </div>
       </div>
 
@@ -769,21 +918,29 @@ export function exportMonthlyMultiPageDailyPDF(options: MonthDailyReportOptions)
         </tbody>
       </table>
 
-      <!-- Page Footer & Signatures -->
-      <div class="report-footer">
-        <div>
-          <p style="margin: 0; font-weight: bold;">کۆمپانیای ئاشڵی (Ashley ERP 2026) — مانگی ${month} (ڕۆژی ${day.dayNum})</p>
-          <p style="margin: 2px 0 0 0; color: #64748b;">بەڵگەنامەی فەرمیی دەوامی کارمەندان — کۆپی ئەلیکترۆنی.</p>
+      <!-- ✍️ Official 3-Role Signatures Strip -->
+      <div class="report-signatures">
+        <div class="signature-card">
+          <div class="signature-role">سەرپەرشتیاری ئایتی</div>
+          <div class="signature-line">ناو: ................................................................</div>
+          <div class="signature-line" style="margin-bottom: 0;">واژوو: ..............................................................</div>
         </div>
+        <div class="signature-card">
+          <div class="signature-role">بەڕێوەبەری ژمێریاری و کۆگا</div>
+          <div class="signature-line">ناو: ................................................................</div>
+          <div class="signature-line" style="margin-bottom: 0;">واژوو: ..............................................................</div>
+        </div>
+        <div class="signature-card">
+          <div class="signature-role">بەڕێوەبەری گشتی</div>
+          <div class="signature-line">ناو: ................................................................</div>
+          <div class="signature-line" style="margin-bottom: 0;">واژوو: ..............................................................</div>
+        </div>
+      </div>
 
-        <div style="display: flex; gap: 30px;">
-          <div class="signature-box">
-            واژووی سەرپەرشتیار
-          </div>
-          <div class="signature-box">
-            واژووی بەڕێوەبەری کارگێڕی
-          </div>
-        </div>
+      <!-- Page Footer Strip -->
+      <div style="margin-top: 6px; padding-top: 4px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; font-size: 8px; color: #64748b; direction: rtl;">
+        <span>کۆمپانیای ئاشڵی (Ashley ERP 2026) — مانگی ${month} (ڕۆژی ${day.dayNum})</span>
+        <span>بەڵگەنامەی فەرمیی دەوامی کارمەندان — کۆپی ئەلیکترۆنی • ${currentDateStr} (${currentTimeStr})</span>
       </div>
     </div>
     `;
@@ -846,47 +1003,74 @@ export function exportMonthlyMultiPageDailyPDF(options: MonthDailyReportOptions)
       page-break-after: auto !important;
     }
 
-    /* 🌟 COLORFUL EXECUTIVE HEADER */
-    .report-header {
+    /* 🌟 OFFICIAL 3-PART ASHLEY LETTERHEAD */
+    .official-letterhead {
+      border-bottom: 2.5px solid ${primaryColor};
+      padding-bottom: 6px;
+      margin-bottom: 8px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #1e3a8a 100%) !important;
-      color: #ffffff !important;
-      padding: 8px 14px;
-      border-radius: 8px;
-      margin-bottom: 8px;
-      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
-      border: 1px solid #1e3a8a;
+      gap: 10px;
+      width: 100%;
     }
-    .header-titles h1 {
+    .letterhead-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      justify-content: flex-start;
+      text-align: right;
+    }
+    .letterhead-center {
+      flex: 1.6;
+      text-align: center;
+      padding: 0 6px;
+    }
+    .letterhead-center h1 {
       margin: 0;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 900;
-      color: #ffffff;
+      color: ${titleColor};
+      letter-spacing: -0.2px;
+      line-height: 1.2;
     }
-    .header-titles h2 {
-      margin: 2px 0 0 0;
-      font-size: 10px;
-      font-weight: 700;
-      color: #cbd5e1;
-    }
-    .header-meta {
-      text-align: left;
+    .letterhead-center .period-badge {
       font-size: 9.5px;
       font-weight: bold;
-      color: #f1f5f9;
+      color: #64748b;
+      margin-top: 2px;
     }
-    .header-meta .badge {
-      display: inline-block;
-      background: #2563eb !important;
-      color: #ffffff !important;
-      padding: 3px 8px;
-      border-radius: 5px;
-      font-size: 9.5px;
+    .letterhead-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      justify-content: flex-end;
+      text-align: left;
+    }
+    .company-title {
+      font-size: 11px;
       font-weight: 900;
-      margin-bottom: 2px;
-      border: 1px solid rgba(255,255,255,0.4);
+      color: ${primaryColor};
+      line-height: 1.2;
+    }
+    .company-subtitle {
+      font-size: 8.5px;
+      font-weight: 800;
+      color: ${accentColor};
+      margin-top: 1px;
+    }
+    .meta-code {
+      font-size: 7.5px;
+      font-family: Consolas, monospace;
+      color: #64748b;
+      margin-top: 1px;
+    }
+    .letterhead-logo {
+      max-height: 38px;
+      max-width: 100px;
+      object-fit: contain;
     }
 
     /* 📊 VIBRANT SUMMARY KPI CARDS */
@@ -979,24 +1163,38 @@ export function exportMonthlyMultiPageDailyPDF(options: MonthDailyReportOptions)
       font-family: Consolas, monospace;
     }
 
-    /* Footer & Signatures */
-    .report-footer {
-      margin-top: 8px;
+    /* ✍️ Official 3-Role Signatures Strip */
+    .report-signatures {
+      margin-top: 10px;
       display: flex;
       justify-content: space-between;
-      align-items: flex-end;
-      padding-top: 8px;
-      border-top: 1.5px dashed #94a3b8;
-      font-size: 9px;
-      color: #475569;
+      gap: 10px;
+      text-align: right;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      direction: rtl;
     }
-    .signature-box {
-      text-align: center;
-      width: 170px;
-      border-top: 1.5px solid #334155;
-      padding-top: 4px;
-      font-weight: bold;
+    .signature-card {
+      flex: 1;
+      background: #f8fafc;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+    }
+    .signature-role {
+      font-size: 9.5px;
+      font-weight: 800;
       color: #0f172a;
+      text-align: center;
+      margin-bottom: 4px;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 2px;
+    }
+    .signature-line {
+      font-size: 8px;
+      font-weight: 700;
+      color: #475569;
+      margin-bottom: 4px;
     }
 
     /* Print Controls */
@@ -1558,10 +1756,10 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
         </div>
       </div>
 
-      <!-- Center: بەڕێوەبەری کۆگا -->
+      <!-- Center: بەڕێوەبەری ژمێریاری و کۆگا -->
       <div style="flex: 1; background: #f8fafc; padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1;">
         <div style="font-size: 11px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
-          بەڕێوەبەری کۆگا
+          بەڕێوەبەری ژمێریاری و کۆگا
         </div>
         <div style="font-size: 9px; font-weight: 700; color: #475569; margin-bottom: 10px;">
           ناو: ................................................................
@@ -1571,10 +1769,10 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
         </div>
       </div>
 
-      <!-- Left: بەڕێوەبەر -->
+      <!-- Left: بەڕێوەبەری گشتی -->
       <div style="flex: 1; background: #f8fafc; padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1;">
         <div style="font-size: 11px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
-          بەڕێوەبەر
+          بەڕێوەبەری گشتی
         </div>
         <div style="font-size: 9px; font-weight: 700; color: #475569; margin-bottom: 10px;">
           ناو: ................................................................

@@ -1488,10 +1488,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               </div>
             </div>
 
-            <!-- Center: بەڕێوەبەری کۆگا -->
+            <!-- Center: بەڕێوەبەری ژمێریاری و کۆگا -->
             <div style="flex: 1; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
               <div style="font-size: 9.5px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px;">
-                بەڕێوەبەری کۆگا
+                بەڕێوەبەری ژمێریاری و کۆگا
               </div>
               <div style="font-size: 8px; font-weight: 700; color: #475569; margin-bottom: 8px;">
                 ناو: ................................................................
@@ -1501,10 +1501,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               </div>
             </div>
 
-            <!-- Left: بەڕێوەبەر -->
+            <!-- Left: بەڕێوەبەری گشتی -->
             <div style="flex: 1; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
               <div style="font-size: 9.5px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px;">
-                بەڕێوەبەر
+                بەڕێوەبەری گشتی
               </div>
               <div style="font-size: 8px; font-weight: 700; color: #475569; margin-bottom: 8px;">
                 ناو: ................................................................

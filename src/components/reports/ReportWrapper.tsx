@@ -1,17 +1,25 @@
 
 'use client';
 
+import React from 'react';
 import { useAppContext } from '@/context/app-provider';
 import { format, isValid, parseISO } from 'date-fns';
+import { OfficialPrintHeader, OfficialPrintSignatures } from './OfficialPrintHeader';
 
 export const ReportWrapper = ({
   children,
   title,
+  subtitle,
   date,
+  period,
+  showSignatures = true,
 }: {
   children: React.ReactNode;
   title?: string;
+  subtitle?: string;
   date?: string | Date | null;
+  period?: string;
+  showSignatures?: boolean;
 }) => {
   const { settings } = useAppContext();
   
@@ -19,17 +27,17 @@ export const ReportWrapper = ({
   if (date) {
     if (date instanceof Date) {
       if (isValid(date)) {
-        formattedDate = format(date, 'dd/MM/yyyy');
+        formattedDate = format(date, 'yyyy-MM-dd');
       }
     } else {
       try {
         const parsed = parseISO(date);
         if (isValid(parsed)) {
-          formattedDate = format(parsed, 'dd/MM/yyyy');
+          formattedDate = format(parsed, 'yyyy-MM-dd');
         } else {
           const fallbackParsed = new Date(date);
           if (isValid(fallbackParsed)) {
-            formattedDate = format(fallbackParsed, 'dd/MM/yyyy');
+            formattedDate = format(fallbackParsed, 'yyyy-MM-dd');
           } else {
             formattedDate = date;
           }
@@ -40,41 +48,26 @@ export const ReportWrapper = ({
     }
   }
 
-  return (
-    <div className="p-8 bg-white text-black font-sans min-h-screen flex flex-col w-full max-w-[210mm] mx-auto">
-      {/* 1. Upper Image */}
-      {settings?.printHeaderImage && (
-        <header className="mb-8 text-center break-inside-avoid">
-          <img
-            src={settings.printHeaderImage}
-            alt="Report Header"
-            className="w-full h-auto max-h-32 object-contain mx-auto"
-            crossOrigin="anonymous"
-          />
-        </header>
-      )}
+  const effectivePeriod = period || (formattedDate ? `بەروار: ${formattedDate}` : undefined);
 
-      {/* 2. Title and 3. Date */}
-      <div className="text-center mb-10 break-after-avoid">
-        {title && <h1 className="text-3xl font-black uppercase tracking-tight mb-2">{title}</h1>}
-        {formattedDate && <p className="text-lg font-bold text-gray-600">{formattedDate}</p>}
-      </div>
+  return (
+    <div className="p-4 sm:p-6 bg-white text-slate-900 font-sans min-h-screen flex flex-col w-full max-w-[297mm] mx-auto print:p-2 print:m-0 print:max-w-full" dir="rtl">
+      {/* 🌟 Official 3-Part Ashley Letterhead Header */}
+      <OfficialPrintHeader
+        title={title}
+        subtitle={subtitle}
+        period={effectivePeriod}
+        settings={settings}
+      />
       
-      {/* 4. List (Children) */}
-      <main className="flex-1 w-full mb-12">
+      {/* 📋 Main Content / Table */}
+      <main className="flex-1 w-full my-3">
         {children}
       </main>
 
-      {/* 5. Lower Image */}
-      {settings?.printFooterImage && (
-        <footer className="mt-auto pt-8 border-t-2 border-gray-100 break-before-avoid">
-          <img
-            src={settings.printFooterImage}
-            alt="Report Footer"
-            className="w-full h-auto max-h-32 object-contain mx-auto"
-            crossOrigin="anonymous"
-          />
-        </footer>
+      {/* ✍️ Official 3-Role Signatures Strip */}
+      {showSignatures && (
+        <OfficialPrintSignatures />
       )}
     </div>
   );
