@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
+import Link from 'next/link';
 import type { Employee, AttendanceRecord } from '@/lib/types';
 import { formatTime12H, formatTime24H, getAttendanceTimeBadge, exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
 import { 
@@ -13,13 +14,14 @@ import {
   Phone, 
   Briefcase, 
   CheckCircle2, 
-  AlertTriangle,
-  FileText,
-  Camera,
-  RefreshCw,
-  Printer,
-  FileSpreadsheet,
-  Trash2
+  AlertTriangle, 
+  FileText, 
+  Camera, 
+  RefreshCw, 
+  Printer, 
+  FileSpreadsheet, 
+  Trash2,
+  ExternalLink
 } from 'lucide-react';
 import { getDaysInMonth, getDay, format } from 'date-fns';
 
@@ -412,6 +414,16 @@ export function AdminEmployeeDetailsModal({
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             )}
+
+            <Link
+              href={`/employees/${employee.id}`}
+              className="px-3.5 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+              title="کردنەوەی دۆسیە و پرۆفایلی تەواوی ئەم کارمەندە"
+            >
+              <User className="w-3.5 h-3.5 text-blue-500" />
+              <span>دۆسیەی تەواو</span>
+              <ExternalLink className="w-3 h-3 opacity-40" />
+            </Link>
 
             <button 
               onClick={onClose}

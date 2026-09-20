@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { 
   Calendar, 
   Clock, 
@@ -20,7 +21,8 @@ import {
   MessageSquare,
   RefreshCw,
   Shield,
-  Trash2
+  Trash2,
+  ExternalLink
 } from 'lucide-react';
 import { format, addDays, subDays, parseISO, getDaysInMonth, getDay } from 'date-fns';
 import type { Employee, AttendanceRecord } from '@/lib/types';
@@ -954,7 +956,14 @@ export function AdminDailyAttendanceTable({
                     </td>
 
                     <td className="p-3 font-bold text-slate-900 dark:text-white border-l border-slate-300/80 dark:border-slate-700/80">
-                      {row.name}
+                      <Link 
+                        href={`/employees/${row.empId}`}
+                        className="hover:text-[#007AFF] hover:underline flex items-center gap-1.5 transition-colors group"
+                        title="بینینی پرۆفایل و دۆسیەی کارمەند"
+                      >
+                        <span>{row.name}</span>
+                        <ExternalLink className="w-3 h-3 opacity-30 group-hover:opacity-100 text-blue-500 transition-opacity" />
+                      </Link>
                     </td>
 
                     <td className="p-3 text-slate-500 dark:text-slate-400 font-medium border-l border-slate-300/80 dark:border-slate-700/80">
