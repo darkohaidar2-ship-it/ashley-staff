@@ -32,6 +32,7 @@ import {
   ShieldAlert,
   KeyRound,
   TrendingUp,
+  RefreshCw,
   X
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -289,12 +290,25 @@ function EmployeesPage() {
     return map;
   }, [unifiedEmployees, attendanceLogs, matrixOverrides, currentMonthStr]);
 
-  // Filter employees based on search query
-  const filteredEmployees = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return unifiedEmployees;
+  // Quick Filter Pills State
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'waived' | 'resigned'>('all');
 
-    return unifiedEmployees.filter(emp => {
+  // Filter employees based on search query and status filter
+  const filteredEmployees = useMemo(() => {
+    let list = unifiedEmployees;
+
+    if (statusFilter === 'active') {
+      list = list.filter(e => e.isActive !== false && e.status !== 'resigned');
+    } else if (statusFilter === 'waived') {
+      list = list.filter(e => (employeeComplianceMap[e.id]?.waivedCount || 0) > 0);
+    } else if (statusFilter === 'resigned') {
+      list = list.filter(e => e.status === 'resigned');
+    }
+
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return list;
+
+    return list.filter(emp => {
       const name = (emp.name || '').toLowerCase();
       const kurdish = (emp.kurdishName || (emp as any).fullName3Part || '').toLowerCase();
       const empId = (emp.employeeId || emp.id || '').toLowerCase();
@@ -303,13 +317,17 @@ function EmployeesPage() {
 
       return name.includes(query) || kurdish.includes(query) || empId.includes(query) || phone.includes(query) || role.includes(query);
     });
-  }, [unifiedEmployees, searchQuery]);
+  }, [unifiedEmployees, searchQuery, statusFilter, employeeComplianceMap]);
 
   // High-Level KPIs
   const totalEmployeesCount = unifiedEmployees.length;
   const activeStaffCount = unifiedEmployees.filter(e => e.isActive !== false && e.status !== 'resigned').length;
   const boundDevicesCount = unifiedEmployees.filter(e => (e as any).deviceBound || e.id === 'emp-02').length;
   const faceRegisteredCount = unifiedEmployees.filter(e => registeredFaces.has(e.id.toLowerCase())).length;
+  const waivedEmployeesCount = useMemo(() => {
+    return unifiedEmployees.filter(e => (employeeComplianceMap[e.id]?.waivedCount || 0) > 0).length;
+  }, [unifiedEmployees, employeeComplianceMap]);
+  const resignedCount = unifiedEmployees.filter(e => e.status === 'resigned').length;
   const totalWaivedCount = useMemo(() => {
     return Object.values(employeeComplianceMap).reduce((acc, curr) => acc + (curr.waivedCount || 0), 0);
   }, [employeeComplianceMap]);
@@ -468,7 +486,7 @@ function EmployeesPage() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  <div className="relative min-w-[220px]">
+                  <div className="relative min-w-[200px] sm:min-w-[240px]">
                     <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                     <input 
                       placeholder="گەڕان بەپێی ناو، ئایدی، پۆست، یان مۆبایل..." 
@@ -485,30 +503,70 @@ function EmployeesPage() {
 
                   <button 
                     onClick={() => setAddDialogOpen(true)} 
-                    className="px-3.5 py-1.5 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+                    className="h-8 px-3.5 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
                   >
                     <Plus className="h-3.5 w-3.5" /> 
-                    <span>زیادکردنی کارمەند</span>
+                    <span>کارمەندی نوێ</span>
                   </button>
 
+                  {/* 🖨️ Icon-only Print Button */}
                   <button 
                     onClick={handlePrint} 
-                    className="px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95"
-                    title="پرێنتکردنی لیستی کارمەندان"
+                    className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all active:scale-90 border border-slate-200/80 dark:border-white/10 cursor-pointer shadow-2xs"
+                    title="چاپکردن (Print)"
+                    aria-label="Print"
                   >
-                    <Printer className="h-3.5 w-3.5" />
-                    <span>پرێنت</span>
+                    <Printer className="h-4 w-4" />
                   </button>
 
+                  {/* 📊 Icon-only Excel Button */}
                   <button 
                     onClick={handleExportExcel} 
-                    className="px-3 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-200/60 flex items-center gap-1 cursor-pointer transition-all active:scale-95"
-                    title="داگرتنی خشتە وەک ئێکسڵ"
+                    className="h-8 w-8 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 flex items-center justify-center transition-all active:scale-90 border border-emerald-200/80 dark:border-emerald-800/40 cursor-pointer shadow-2xs"
+                    title="داگرتن وەک ئێکسڵ (Excel)"
+                    aria-label="Export Excel"
                   >
-                    <FileDown className="h-3.5 w-3.5 text-emerald-600" />
-                    <span>Excel</span>
+                    <FileDown className="h-4 w-4 text-emerald-600" />
+                  </button>
+
+                  {/* 🔄 Icon-only Refresh Button */}
+                  <button 
+                    onClick={() => { loadRegisteredFaces(); loadMatrixOverrides(); toast({ title: 'نوێکرایەوە', description: 'داتاکان نوێکرانەوە.' }); }} 
+                    className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all active:scale-90 border border-slate-200/80 dark:border-white/10 cursor-pointer shadow-2xs"
+                    title="نوێکردنەوەی داتا (Refresh)"
+                    aria-label="Refresh"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
                   </button>
                 </div>
+              </div>
+
+              {/* 🔘 Segmented Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pt-2.5 mt-2.5 border-t border-slate-100 dark:border-white/5 text-xs">
+                {[
+                  { id: 'all', label: 'هەموو', count: totalEmployeesCount },
+                  { id: 'active', label: 'دەوامی چالاک', count: activeStaffCount },
+                  { id: 'waived', label: '🟢 خاوەن لێخۆشبوون', count: waivedEmployeesCount },
+                  { id: 'resigned', label: 'وازهێناو', count: resignedCount }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setStatusFilter(tab.id as any)}
+                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none whitespace-nowrap ${
+                      statusFilter === tab.id
+                        ? 'bg-slate-900 text-white shadow-xs dark:bg-white dark:text-slate-900'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-black ${
+                      statusFilter === tab.id ? 'bg-white/20 text-white dark:bg-black/20 dark:text-slate-900' : 'bg-slate-200 text-slate-700 dark:bg-white/10 dark:text-slate-300'
+                    }`}>
+                      {tab.count}
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -517,19 +575,14 @@ function EmployeesPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-100/90 dark:bg-[#1e1e20] border-b border-slate-200/80 dark:border-white/10 text-[11px] font-black">
-                    <TableHead className="w-12 text-center text-slate-700 dark:text-slate-300">#</TableHead>
-                    <TableHead className="w-12 text-center text-slate-700 dark:text-slate-300">وێنە</TableHead>
-                    <TableHead className="min-w-[170px] text-right text-slate-700 dark:text-slate-300">ناوی کارمەند</TableHead>
-                    <TableHead className="min-w-[110px] text-right text-slate-700 dark:text-slate-300">پۆست / ئەرک</TableHead>
-                    <TableHead className="min-w-[120px] text-center text-slate-700 dark:text-slate-300">📱 مۆبایلی ئەپ</TableHead>
-                    <TableHead className="min-w-[125px] text-center text-slate-700 dark:text-slate-300">📸 ناسنامەی ڕوخسار</TableHead>
-                    <TableHead className="min-w-[75px] text-center text-slate-700 dark:text-slate-300">کۆدی PIN</TableHead>
-                    <TableHead className="min-w-[95px] text-center text-slate-700 dark:text-slate-300">📅 دەستبەکاربوون</TableHead>
-                    <TableHead className="min-w-[100px] text-center text-slate-700 dark:text-slate-300">⚡ پابەندبوون ٪</TableHead>
+                    <TableHead className="w-10 text-center text-slate-700 dark:text-slate-300">#</TableHead>
+                    <TableHead className="min-w-[220px] text-right text-slate-700 dark:text-slate-300">کارمەند و دەسەڵات</TableHead>
+                    <TableHead className="min-w-[95px] text-center text-slate-700 dark:text-slate-300">⚡ پابەندبوون</TableHead>
                     <TableHead className="min-w-[95px] text-center text-slate-700 dark:text-slate-300">🟢 لێخۆشبوون</TableHead>
                     <TableHead className="min-w-[110px] text-center text-slate-700 dark:text-slate-300">📞 تەلەفۆن</TableHead>
-                    <TableHead className="min-w-[75px] text-center text-slate-700 dark:text-slate-300">دۆخ</TableHead>
-                    <TableHead className="min-w-[100px] text-center text-slate-700 dark:text-slate-300">کردارەکان</TableHead>
+                    <TableHead className="min-w-[95px] text-center text-slate-700 dark:text-slate-300">📅 دەستبەکاربوون</TableHead>
+                    <TableHead className="min-w-[70px] text-center text-slate-700 dark:text-slate-300">دۆخ</TableHead>
+                    <TableHead className="w-14 text-center text-slate-700 dark:text-slate-300">دۆسیە</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -537,18 +590,13 @@ function EmployeesPage() {
                     [...Array(6)].map((_, i) => (
                       <TableRow key={i}>
                         <TableCell><Skeleton className="h-6 w-6 rounded-md mx-auto" /></TableCell>
-                        <TableCell><Skeleton className="h-9 w-9 rounded-2xl mx-auto" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-36 rounded-lg" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-24 rounded-lg" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-20 rounded-full mx-auto" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-20 rounded-full mx-auto" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-12 rounded-lg mx-auto" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-20 rounded-lg mx-auto" /></TableCell>
+                        <TableCell><Skeleton className="h-9 w-48 rounded-xl" /></TableCell>
                         <TableCell><Skeleton className="h-6 w-16 rounded-full mx-auto" /></TableCell>
                         <TableCell><Skeleton className="h-6 w-16 rounded-full mx-auto" /></TableCell>
                         <TableCell><Skeleton className="h-5 w-24 rounded-lg mx-auto" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-20 rounded-lg mx-auto" /></TableCell>
                         <TableCell><Skeleton className="h-5 w-16 rounded-full mx-auto" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-16 rounded-full mx-auto" /></TableCell>
+                        <TableCell><Skeleton className="h-7 w-7 rounded-full mx-auto" /></TableCell>
                       </TableRow>
                     ))
                   ) : filteredEmployees.length > 0 ? (
@@ -557,9 +605,8 @@ function EmployeesPage() {
                       const displayName = (emp as any).fullName3Part || emp.name;
                       const isBound = Boolean((emp as any).deviceBound || isDarko);
                       const hasFace = registeredFaces.has(emp.id.toLowerCase());
-                      const pin = (emp as any).password || (emp as any).pin || '1001';
                       const startDate = (emp as any).startDate || emp.employmentStartDate?.slice(0, 10) || '2024-01-01';
-                      const stats = employeeComplianceMap[emp.id] || { presentDays: 20, rate: 95 };
+                      const stats = employeeComplianceMap[emp.id] || { presentDays: 20, rate: 95, waivedCount: 0 };
                       const isResigned = emp.status === 'resigned' || emp.isActive === false;
 
                       return (
@@ -569,96 +616,77 @@ function EmployeesPage() {
                           className="cursor-pointer hover:bg-blue-50/50 dark:hover:bg-white/5 transition-colors border-b border-slate-100 dark:border-white/5 group"
                         >
                           {/* 1. Index */}
-                          <TableCell className="py-2.5 px-3 text-center font-mono text-slate-400 font-bold text-xs">
+                          <TableCell className="py-2.5 px-2 text-center font-mono text-slate-400 font-bold text-xs">
                             {idx + 1}
                           </TableCell>
 
-                          {/* 2. Photo / Avatar */}
-                          <TableCell className="py-2 px-2 text-center">
-                            <div className="relative inline-block">
-                              <Avatar className="h-9 w-9 rounded-xl border border-slate-200/80 dark:border-white/10 shadow-2xs mx-auto">
-                                <AvatarImage src={emp.photoUrl || ''} alt={emp.name} className="object-cover" />
-                                <AvatarFallback className="rounded-xl bg-gradient-to-tr from-indigo-50 to-blue-50 text-indigo-700 font-black text-xs">
-                                  {emp.name.slice(0, 2)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-[#2c2c2e] ${
-                                isResigned ? 'bg-rose-500' : 'bg-emerald-500'
-                              }`} />
+                          {/* 2. Employee (Avatar + Name + Role + Micro-Indicators) */}
+                          <TableCell className="py-2.5 px-3">
+                            <div className="flex items-center gap-3">
+                              <div className="relative shrink-0">
+                                <Avatar className="h-9 w-9 rounded-xl border border-slate-200/80 dark:border-white/10 shadow-2xs">
+                                  <AvatarImage src={emp.photoUrl || ''} alt={emp.name} className="object-cover" />
+                                  <AvatarFallback className="rounded-xl bg-gradient-to-tr from-indigo-50 to-blue-50 text-indigo-700 font-black text-xs">
+                                    {emp.name.slice(0, 2)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-[#2c2c2e] ${
+                                  isResigned ? 'bg-rose-500' : 'bg-emerald-500'
+                                }`} />
+                              </div>
+
+                              <div className="flex flex-col min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-slate-900 dark:text-white text-xs group-hover:text-blue-600 transition-colors flex items-center gap-1 truncate">
+                                    <span>{displayName}</span>
+                                    {isDarko && <span className="text-[10px]">👑</span>}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-400 font-semibold shrink-0">
+                                    #{emp.employeeId || emp.id.replace('emp-', '')}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10.5px] text-slate-500 dark:text-slate-400 font-medium">
+                                    {isDarko ? 'بەڕێوەبەری سەرەکی' : emp.role || 'کارمەند'}
+                                  </span>
+
+                                  {/* Micro-Indicators for Device & Face */}
+                                  <div className="flex items-center gap-1.5 mr-1.5">
+                                    {isBound ? (
+                                      <span className="inline-flex items-center text-emerald-600 dark:text-emerald-400" title="📱 مۆبایل بەستراوەتەوە">
+                                        <Smartphone className="w-3.5 h-3.5" />
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center text-slate-300 dark:text-slate-600" title="📱 مۆبایل نەبەستراوە">
+                                        <Smartphone className="w-3.5 h-3.5" />
+                                      </span>
+                                    )}
+
+                                    {hasFace ? (
+                                      <span className="inline-flex items-center text-purple-600 dark:text-purple-400" title="📸 دەموچاو ناسراوە">
+                                        <Camera className="w-3.5 h-3.5" />
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setFaceModalEmp(emp);
+                                        }}
+                                        className="inline-flex items-center text-amber-500 hover:text-amber-600 cursor-pointer"
+                                        title="📸 دەموچاو تۆمارنەکراوە (کلیک بکە بۆ ناساندن)"
+                                      >
+                                        <Camera className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           </TableCell>
 
-                          {/* 3. Name & ID */}
-                          <TableCell className="py-2.5 px-3">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-slate-900 dark:text-white text-xs group-hover:text-blue-600 transition-colors flex items-center gap-1.5">
-                                <span>{displayName}</span>
-                                {isDarko && <span className="text-[10px]">👑</span>}
-                              </span>
-                              <span className="text-[10px] font-mono text-slate-400 font-bold mt-0.5">
-                                ID: {emp.employeeId || emp.id}
-                              </span>
-                            </div>
-                          </TableCell>
-
-                          {/* 4. Role */}
-                          <TableCell className="py-2.5 px-3">
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/5 whitespace-nowrap">
-                              {isDarko ? 'بەڕێوەبەری سەرەکی' : emp.role || 'کارمەند'}
-                            </span>
-                          </TableCell>
-
-                          {/* 5. Mobile Device Binding */}
-                          <TableCell className="py-2.5 px-2 text-center">
-                            {isBound ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 shadow-2xs whitespace-nowrap">
-                                <Smartphone className="w-3 h-3 text-emerald-600" />
-                                <span>بەستراوەتەوە</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-400 border border-slate-200 dark:border-white/5 whitespace-nowrap">
-                                <Smartphone className="w-3 h-3 text-slate-400" />
-                                <span>نەبەستراوە</span>
-                              </span>
-                            )}
-                          </TableCell>
-
-                          {/* 6. AI Face ID */}
-                          <TableCell className="py-2.5 px-2 text-center">
-                            {hasFace ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 shadow-2xs whitespace-nowrap">
-                                <Camera className="w-3 h-3 text-emerald-600" />
-                                <span>ناسراوە</span>
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setFaceModalEmp(emp);
-                                }}
-                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300/60 transition-colors whitespace-nowrap cursor-pointer"
-                                title="کلیک بکە بۆ ناساندنی دەموچاو"
-                              >
-                                <Camera className="w-3 h-3 text-amber-600" />
-                                <span>تۆمارنەکراوە</span>
-                              </button>
-                            )}
-                          </TableCell>
-
-                          {/* 7. PIN Code */}
-                          <TableCell className="py-2.5 px-2 text-center font-mono">
-                            <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-white/10 text-slate-800 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-white/5">
-                              {pin}
-                            </span>
-                          </TableCell>
-
-                          {/* 8. Start Date */}
-                          <TableCell className="py-2.5 px-2 text-center font-mono text-[11px] text-slate-600 dark:text-slate-300 font-bold whitespace-nowrap">
-                            {startDate}
-                          </TableCell>
-
-                          {/* 9. Attendance Compliance % */}
+                          {/* 3. Attendance Compliance % */}
                           <TableCell className="py-2.5 px-2 text-center">
                             <div className="flex flex-col items-center">
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black border ${
@@ -676,7 +704,7 @@ function EmployeesPage() {
                             </div>
                           </TableCell>
 
-                          {/* 10. Waived Count (لێخۆشبوون لە دەوام) */}
+                          {/* 4. Waived Count (لێخۆشبوون لە دەوام) */}
                           <TableCell className="py-2.5 px-2 text-center">
                             {stats.waivedCount > 0 ? (
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300/80 shadow-2xs whitespace-nowrap">
@@ -688,7 +716,7 @@ function EmployeesPage() {
                             )}
                           </TableCell>
 
-                          {/* 11. Phone */}
+                          {/* 5. Phone */}
                           <TableCell className="py-2.5 px-2 text-center font-mono text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
                             <a 
                               href={`tel:${emp.phone}`} 
@@ -699,7 +727,12 @@ function EmployeesPage() {
                             </a>
                           </TableCell>
 
-                          {/* 11. Status */}
+                          {/* 6. Start Date */}
+                          <TableCell className="py-2.5 px-2 text-center font-mono text-[11px] text-slate-600 dark:text-slate-300 font-bold whitespace-nowrap">
+                            {startDate}
+                          </TableCell>
+
+                          {/* 7. Status */}
                           <TableCell className="py-2.5 px-2 text-center">
                             <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${
                               isResigned
@@ -710,27 +743,23 @@ function EmployeesPage() {
                             </span>
                           </TableCell>
 
-                          {/* 12. Actions */}
+                          {/* 8. Actions (Compact Icon Button) */}
                           <TableCell className="py-2.5 px-2 text-center" onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-center gap-1.5">
-                              <Link
-                                href={`/employees/${emp.id}`}
-                                className="px-2.5 py-1 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 text-[10px] font-bold border border-blue-200/50 flex items-center gap-1 transition-all active:scale-95"
-                                title="کردنەوەی تەواوی پرۆفایل و دۆسیە"
-                              >
-                                <User className="w-3 h-3" />
-                                <span>دۆسیە</span>
-                                <ExternalLink className="w-2.5 h-2.5 opacity-50" />
-                              </Link>
-                            </div>
+                            <Link
+                              href={`/employees/${emp.id}`}
+                              className="w-7 h-7 rounded-full bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-700 dark:bg-white/10 dark:hover:bg-blue-950/50 dark:text-slate-300 dark:hover:text-blue-300 inline-flex items-center justify-center transition-all active:scale-90 border border-slate-200/60 dark:border-white/10"
+                              title="کردنەوەی تەواوی پڕۆفایل و دۆسیە"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </Link>
                           </TableCell>
                         </TableRow>
                       );
                     })
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={13} className="h-28 text-center text-slate-400 font-bold text-xs">
-                        هیچ کارمەندێک بەم ناوە یان زانیارییە نەدۆزرایەوە
+                      <TableCell colSpan={8} className="h-28 text-center text-slate-400 font-bold text-xs">
+                        هیچ کارمەندێک لەم دۆخە یان بەم ناوە نەدۆزرایەوە
                       </TableCell>
                     </TableRow>
                   )}

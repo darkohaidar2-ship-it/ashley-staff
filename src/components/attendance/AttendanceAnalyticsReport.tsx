@@ -787,18 +787,20 @@ export function AttendanceAnalyticsReport({
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportPDF}
-            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-900 border-red-300 shadow-sm cursor-pointer"
+            className="h-8 w-8 rounded-full bg-red-50 hover:bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-300 flex items-center justify-center border border-red-200/60 dark:border-red-900/40 shadow-2xs transition-all active:scale-90 cursor-pointer"
+            title="هەناردەکردنی ڕاپۆرت وەک PDF (Print / PDF)"
+            aria-label="Export PDF"
           >
-            <Printer className="w-3.5 h-3.5 text-red-700" />
-            <span>📄 هەناردەکردنی PDF (Full Width)</span>
+            <Printer className="w-4 h-4 text-red-600" />
           </button>
 
           <button
             onClick={handleExportCSV}
-            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300 shadow-sm cursor-pointer"
+            className="h-8 w-8 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 flex items-center justify-center border border-emerald-200/60 dark:border-emerald-900/40 shadow-2xs transition-all active:scale-90 cursor-pointer"
+            title="هەناردەکردنی ڕاپۆرت وەک CSV / Excel"
+            aria-label="Export CSV"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-            <span>📊 هەناردەکردنی CSV (Excel)</span>
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
           </button>
         </div>
 

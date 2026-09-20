@@ -727,7 +727,7 @@ function AccountPage() {
       <div className="min-h-screen bg-background text-foreground print:hidden">
         <main className="w-full p-4 md:p-8">
           <div className="flex justify-end gap-2 mb-4">
-            <Button variant="outline" size="icon" onClick={handlePrint}>
+            <Button variant="outline" size="icon" onClick={handlePrint} title="چاپکردن (Print)" aria-label="Print">
               <Printer className="h-4 w-4" />
             </Button>
           </div>

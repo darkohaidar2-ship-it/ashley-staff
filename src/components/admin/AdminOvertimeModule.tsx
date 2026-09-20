@@ -618,18 +618,20 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
 
           <button
             onClick={handleExportPDF}
-            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-900 border-red-300 shadow-sm cursor-pointer"
+            className="h-8 w-8 rounded-full flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-900 border border-red-300 shadow-2xs transition-all active:scale-90 cursor-pointer"
+            title="هەناردەی PDF / چاپکردن"
+            aria-label="Export PDF"
           >
-            <Printer className="w-3.5 h-3.5 text-red-700" />
-            <span>📄 هەناردەی PDF</span>
+            <Printer className="w-4 h-4 text-red-700" />
           </button>
 
           <button
             onClick={handleExportCSV}
-            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300 shadow-sm cursor-pointer"
+            className="h-8 w-8 rounded-full flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs transition-all active:scale-90 cursor-pointer"
+            title="هەناردەی CSV / ئێکسڵ"
+            aria-label="Export CSV"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-            <span>📊 هەناردەی CSV</span>
+            <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
           </button>
         </div>
       </div>

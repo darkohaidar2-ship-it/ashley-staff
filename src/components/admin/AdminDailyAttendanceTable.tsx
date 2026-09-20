@@ -813,44 +813,45 @@ export function AdminDailyAttendanceTable({
           <button
             type="button"
             onClick={handlePrintSingleDayPDF}
-            className="px-4 py-2 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
-            title="پرێنتکردنی ئەم ڕۆژە"
+            className="h-8 w-8 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white flex items-center justify-center shadow-2xs transition-all active:scale-90 cursor-pointer"
+            title="پرێنتکردنی داتای ئەمڕۆ (Print Day PDF)"
+            aria-label="Print Day PDF"
           >
-            <Printer className="w-3.5 h-3.5 text-white" />
-            <span>پرێنتی ڕۆژ (PDF)</span>
+            <Printer className="w-4 h-4 text-white" />
           </button>
 
           {/* 🖨️ 31-PAGE FULL MONTH MULTI-PAGE PDF */}
           <button
             type="button"
             onClick={handlePrint31DayMonthPDF}
-            className="px-4 py-2 rounded-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
-            title="پرێنتی گشتی ۳۱ ڕۆژ"
+            className="h-8 px-3 rounded-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all active:scale-90 cursor-pointer"
+            title="پرێنتی گشتی ۳۱ ڕۆژ (۳۱ لاپەڕە)"
+            aria-label="Print 31-Day Month PDF"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>پرێنتی مانگانە (۳۱ لاپەڕە)</span>
+            <span>۳۱ لاپەڕە</span>
           </button>
 
           {/* 📊 Day CSV */}
           <button
             type="button"
             onClick={handleExportDayCSV}
-            className="px-3.5 py-2 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 text-xs font-bold border border-emerald-300/60 dark:border-emerald-700/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
-            title="داگرتنی CSV"
+            className="h-8 w-8 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-700/40 flex items-center justify-center cursor-pointer transition-all active:scale-90 shadow-2xs"
+            title="داگرتنی CSV بۆ ئەمڕۆ"
+            aria-label="CSV Day"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-            <span>CSV ڕۆژ</span>
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
           </button>
 
           {/* 📊 Month CSV */}
           <button
             type="button"
             onClick={handleExportMonthCSV}
-            className="px-3.5 py-2 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
-            title="داگرتنی CSV مانگ"
+            className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white flex items-center justify-center cursor-pointer transition-all active:scale-90 border border-slate-200/80 dark:border-white/10 shadow-2xs"
+            title="داگرتنی CSV بۆ تەواوی مانگ"
+            aria-label="CSV Month"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
-            <span>CSV مانگ</span>
+            <FileSpreadsheet className="w-4 h-4 text-slate-600 dark:text-slate-400" />
           </button>
 
         </div>

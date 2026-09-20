@@ -1364,33 +1364,34 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               <span>داخڵکردنی چەند ڕۆژێک</span>
             </button>
 
-            {/* 🖨️ Prominent Print & Custom Range Button */}
+            {/* 🖨️ Icon-only Print Button */}
             <button 
               onClick={() => setShowPrintModal(true)} 
-              className="px-4 py-2 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+              className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white flex items-center justify-center transition-all active:scale-90 border border-slate-200/80 dark:border-white/10 cursor-pointer shadow-2xs"
+              title="چاپکردنی تایبەت (Print)"
+              aria-label="چاپکردن"
             >
-              <Printer className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              <span>چاپکردنی تایبەت</span>
+              <Printer className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             </button>
 
-            {/* 📊 Excel (.xlsx) Instant Export Button */}
+            {/* 📊 Icon-only Excel (.xlsx) Instant Export Button */}
             <button
               onClick={handleExportExcelMatrix}
-              className="px-4 py-2 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer border border-emerald-200/50 dark:border-emerald-800/30"
-              title="داگرتنی خشتەی تەواو بە شێوازی فایلی ئێکسڵ (.xlsx)"
+              className="h-8 w-8 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 flex items-center justify-center transition-all active:scale-90 cursor-pointer border border-emerald-200/80 dark:border-emerald-800/40 shadow-2xs"
+              title="داگرتنی خشتە بە شێوازی ئێکسڵ (.xlsx)"
+              aria-label="ئێکسڵ"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span>ئێکسڵ (Excel)</span>
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             </button>
 
             {/* 📄 Official Ashley Letterhead PDF Button */}
             <button
               onClick={handleExportOfficialLetterheadPDF}
-              className="px-4 py-2 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
-              title="ڕاپۆرتی فەرمی بە وەرەقەی سەری ئاشڵی"
+              className="h-8 px-3 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+              title="ڕاپۆرتی فەرمی بە وەرەقەی سەری ئاشڵی (PDF)"
             >
               <FileText className="w-3.5 h-3.5 text-white" />
-              <span>ڕاپۆرتی فەرمی (PDF)</span>
+              <span>ڕاپۆرتی فەرمی</span>
             </button>
           </div>
         </div>

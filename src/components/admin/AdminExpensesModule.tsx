@@ -485,18 +485,20 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
 
           <button
             onClick={handleExportPDF}
-            className="h-8 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 shadow-2xs transition-all cursor-pointer"
+            className="h-8 w-8 rounded-full flex items-center justify-center bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 shadow-2xs transition-all active:scale-90 cursor-pointer"
+            title="هەناردەکردن بۆ PDF / چاپکردن"
+            aria-label="Export PDF"
           >
-            <Printer className="w-3.5 h-3.5 text-rose-600" />
-            <span>PDF</span>
+            <Printer className="w-4 h-4 text-rose-600" />
           </button>
 
           <button
             onClick={handleExportCSV}
-            className="h-8 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 shadow-2xs transition-all cursor-pointer"
+            className="h-8 w-8 rounded-full flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 shadow-2xs transition-all active:scale-90 cursor-pointer"
+            title="داگرتن وەک ئێکسڵ / CSV"
+            aria-label="Export Excel"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Excel / CSV</span>
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
           </button>
         </div>
       </div>

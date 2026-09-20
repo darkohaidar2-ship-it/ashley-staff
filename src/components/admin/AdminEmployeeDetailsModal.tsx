@@ -375,21 +375,21 @@ export function AdminEmployeeDetailsModal({
             <button
               type="button"
               onClick={handleExportPDF}
-              className="px-3.5 py-1.5 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
+              className="h-8 w-8 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white flex items-center justify-center shadow-2xs transition-all active:scale-90 cursor-pointer"
               title="پرێنتکردنی تەواوی چالاکی ئەم کارمەندە وەک PDF"
+              aria-label="Export PDF"
             >
-              <Printer className="w-3.5 h-3.5 text-white" />
-              <span>PDF</span>
+              <Printer className="w-4 h-4 text-white" />
             </button>
 
             <button
               type="button"
               onClick={handleExportCSV}
-              className="px-3.5 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-200/50 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+              className="h-8 w-8 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200/50 flex items-center justify-center cursor-pointer transition-all active:scale-90 shadow-2xs"
               title="داگرتنی داتای مانگانەی ئەم کارمەندە وەک CSV"
+              aria-label="Export CSV"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span>CSV</span>
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             </button>
 
             {onEnrollFace && (

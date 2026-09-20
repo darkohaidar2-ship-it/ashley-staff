@@ -535,37 +535,41 @@ function EmployeeDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* 🖨️ Icon-only Print Button */}
           <button
             type="button"
             onClick={() => window.print()}
-            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs font-bold flex items-center gap-1 cursor-pointer"
+            className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 flex items-center justify-center cursor-pointer shadow-2xs transition-all active:scale-90"
+            title="چاپکردنی دۆسیە (Print)"
+            aria-label="Print"
           >
-            <Printer className="w-3.5 h-3.5" />
-            <span>پرێنت</span>
+            <Printer className="w-4 h-4" />
           </button>
 
           <button
             type="button"
             onClick={() => setIsEditing(!isEditing)}
-            className={`px-3 py-1.5 border text-xs font-black flex items-center gap-1 cursor-pointer transition-colors ${
+            className={`h-8 px-3 rounded-full border text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 ${
               isEditing ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
             }`}
+            title="دەستکاری زانیاری کارمەند"
           >
             <Edit className="w-3.5 h-3.5 text-blue-600" />
-            <span>{isEditing ? 'داخستنی دەستکاری' : 'دەستکاری زانیاری'}</span>
+            <span>{isEditing ? 'داخستن' : 'دەستکاری'}</span>
           </button>
 
           <button
             type="button"
             onClick={handleToggleResigned}
-            className={`px-3 py-1.5 text-xs font-black flex items-center gap-1 border cursor-pointer ${
+            className={`h-8 px-3 rounded-full text-xs font-bold flex items-center gap-1.5 border cursor-pointer transition-all active:scale-95 ${
               selectedEmployee.status === 'resigned' 
                 ? 'bg-emerald-50 text-emerald-800 border-emerald-300' 
                 : 'bg-rose-50 text-rose-800 border-rose-300'
             }`}
+            title={selectedEmployee.status === 'resigned' ? 'گەڕاندنەوە بۆ دەوام' : 'تۆمارکردنی وازهێنان'}
           >
             {selectedEmployee.status === 'resigned' ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
-            <span>{selectedEmployee.status === 'resigned' ? 'گەڕاندنەوە بۆ دەوام' : 'تۆمارکردنی وازهێنان'}</span>
+            <span>{selectedEmployee.status === 'resigned' ? 'گەڕاندنەوە' : 'وازهێنان'}</span>
           </button>
         </div>
       </div>
@@ -944,9 +948,17 @@ function EmployeeDetailPage() {
             </div>
           </div>
 
-          <div className="p-2.5 bg-slate-100 border border-slate-300 rounded text-xs font-bold text-slate-700 flex flex-wrap justify-between items-center gap-2">
-            <span>📋 دەوامی فەرمی: 08:00 هاتن - 17:00 ڕۆیشتن • <strong>ڕێبەری ڕەنگەکان:</strong> <span className="text-emerald-600 font-black">سەوز: لێخۆشبوو</span> • <span className="text-rose-600 font-black">سوور: سەرپێچی بێ لێخۆشبوون</span> • <span className="text-slate-900 font-black">ڕەش: لە کاتی خۆی</span></span>
-            <span className="text-xs text-blue-700 font-bold">🛡️ دەستکاری ئەدمین لە سەرووی هەموو داتایەکی ترە</span>
+          {/* 🎨 Minimalist Status Micro-Legend Strip */}
+          <div className="flex flex-wrap items-center justify-between text-xs font-bold text-slate-600 px-1 py-1 border-b border-slate-200">
+            <div className="flex items-center gap-4">
+              <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-slate-900 inline-block" /> لە کاتی خۆی</span>
+              <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> لێخۆشبوو</span>
+              <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" /> سەرپێچی</span>
+            </div>
+            <span className="text-[11px] text-blue-700 inline-flex items-center gap-1 font-bold">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>دەستکاری ئەدمین باڵادەستە</span>
+            </span>
           </div>
 
           <div className="border border-slate-300 overflow-x-auto rounded-lg">
