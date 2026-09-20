@@ -3,6 +3,7 @@ import { supabase, supabaseUrl, supabaseKey } from '@/lib/supabase';
 import crypto from 'crypto';
 import { getEmployeeProfile, updateEmployeeProfile } from '@/lib/attendance/profile-service';
 import { getSecurityStatus, resetUserDevice, resetUserFace } from '@/lib/attendance/security-service';
+import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -51,20 +52,17 @@ function getDailyToken() {
   return crypto.createHash('sha256').update(dateStr + 'AshleyAttendanceSecretSaltKey').digest('hex').substring(0, 12);
 }
 
-const DEFAULT_EMPLOYEE_NAMES: Record<string, string> = {
-  'emp-01': 'سه هەند مەریوان حەمەسەعید',
-  'emp-02': 'دارکۆ حەیدەر حسێن',
-  'emp-03': 'شادیار هوشیار',
-  'emp-04': 'هەڤاڵ حبیب حەمەڕەزا',
-  'emp-05': 'عیماد سەباح نوری',
-  'emp-06': 'کامەران عومەر ڕووئوف',
-  'emp-07': 'ڕابەر محەمەد مەحمود',
-  'emp-08': 'دانەر محەمەد باسام',
-  'emp-09': 'ڕێبین سەباح نوری',
-  'emp-10': 'بەهرەمەند ڕزگار عزیز',
-  'emp-11': 'شادومان یادگار رحیم',
-  'emp-12': 'سەروەت قادر',
-};
+const DEFAULT_EMPLOYEE_NAMES: Record<string, string> = Object.fromEntries(
+  ASHLEY_OFFICIAL_EMPLOYEES.flatMap(e => {
+    const displayName = (e as any).fullName3Part || e.name;
+    return [
+      [e.id, displayName],
+      [e.employeeId, displayName],
+      [`emp-${e.employeeId}`, displayName],
+      [e.name, displayName]
+    ];
+  })
+);
 
 // Haversine formula to check distance between two coordinates in meters
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -2391,20 +2389,13 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // GET /api/attendance/admin/security-status
     // ----------------------------------------
     if (pathStr === 'admin/security-status' && method === 'GET') {
-      const baseEmployees = [
-        { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', pin: '1001', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', pin: '1002', role: 'Manager', hourlyRate: 0 },
-        { id: 'emp-03', name: 'شادیار هوشیار', pin: '1003', role: 'Employee Supervisor', hourlyRate: 0 },
-        { id: 'emp-04', name: 'هەڤاڵ حبیب حەمەڕەزا', pin: '1004', role: 'Transport Supervisor', hourlyRate: 0 },
-        { id: 'emp-05', name: 'عیماد سەباح نوری', pin: '1005', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-06', name: 'کامەران عومەر ڕووئوف', pin: '1006', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-07', name: 'ڕابەر محەمەد مەحمود', pin: '1007', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-08', name: 'دانەر محەمەد باسام', pin: '1008', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-09', name: 'ڕێبین سەباح نوری', pin: '1009', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', pin: '1010', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-11', name: 'شادومان یادگار رحیم', pin: '1011', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-12', name: 'سەروەت قادر', pin: '1012', role: 'Employee', hourlyRate: 0 },
-      ];
+      const baseEmployees = ASHLEY_OFFICIAL_EMPLOYEES.map(e => ({
+        id: e.id,
+        name: (e as any).fullName3Part || e.name,
+        pin: (e as any).pin || (e as any).password || '1001',
+        role: e.role || 'Employee',
+        hourlyRate: 0
+      }));
 
       let deviceRegistry: Record<string, any> = {};
       try {
@@ -2466,20 +2457,13 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // GET /api/attendance/admin/report
     // ----------------------------------------
     if (pathStr === 'admin/report' && method === 'GET') {
-      const baseEmployees = [
-        { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', pin: '1001', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', pin: '1002', role: 'Manager', hourlyRate: 0 },
-        { id: 'emp-03', name: 'شادیار هوشیار', pin: '1003', role: 'Employee Supervisor', hourlyRate: 0 },
-        { id: 'emp-04', name: 'هەڤاڵ حبیب حەمەڕەزا', pin: '1004', role: 'Transport Supervisor', hourlyRate: 0 },
-        { id: 'emp-05', name: 'عیماد سەباح نوری', pin: '1005', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-06', name: 'کامەران عومەر ڕووئوف', pin: '1006', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-07', name: 'ڕابەر محەمەد مەحمود', pin: '1007', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-08', name: 'دانەر محەمەد باسام', pin: '1008', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-09', name: 'ڕێبین سەباح نوری', pin: '1009', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', pin: '1010', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-11', name: 'شادومان یادگار رحیم', pin: '1011', role: 'Employee', hourlyRate: 0 },
-        { id: 'emp-12', name: 'سەروەت قادر', pin: '1012', role: 'Employee', hourlyRate: 0 },
-      ];
+      const baseEmployees = ASHLEY_OFFICIAL_EMPLOYEES.map(e => ({
+        id: e.id,
+        name: (e as any).fullName3Part || e.name,
+        pin: (e as any).pin || (e as any).password || '1001',
+        role: e.role || 'Employee',
+        hourlyRate: 0
+      }));
 
       let deviceRegistry: Record<string, any> = {};
       let faceRegistry: Record<string, any> = {};
@@ -2657,6 +2641,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       return NextResponse.json({
         users: allUsers,
         attendance: attendanceRecords,
+        manualOverridesMap,
         warehouses: physicalWarehouses,
         holidays: holidaysList,
         shifts: {

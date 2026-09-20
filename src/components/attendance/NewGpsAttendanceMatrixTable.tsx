@@ -40,6 +40,7 @@ import * as XLSX from 'xlsx';
 import { AdminEmployeeDetailsModal } from '@/components/admin/AdminEmployeeDetailsModal';
 import { exportAshleyOfficialLetterheadPDF, type AshleyOfficialReportRow } from '@/lib/export-utils';
 import { useAppContext } from '@/context/app-provider';
+import { resolveEmployeeDayAttendance, getCheckInStatus, getCheckOutStatus } from '@/lib/attendance-helpers';
 
 interface NewGpsAttendanceMatrixTableProps {
   employees: Employee[];
@@ -599,260 +600,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   }, [batchStatus, batchCheckIn, batchCheckOut, batchNote, selectedCells, selectedMonth, loadSavedRecords]);
 
 
-  // Lookup record function for any employee & day
+  // Lookup record function for any employee & day with absolute Admin Override priority
   const getGpsLogsForEmpAndDay = useCallback((emp: Employee, dayItem: { dayNum: number; dateStr: string; isFriday: boolean; isFuture: boolean; isToday: boolean }) => {
-    const { dateStr, isFriday, isFuture, isToday } = dayItem;
-    const empId = (emp.id || '').toString().trim().toLowerCase();
-    const empNum = empId.replace('emp-', '');
-    const empName = (emp.name || emp.fullName3Part || '').trim().toLowerCase();
-
-    // 1. Check manual override first
-    const override = manualStatusMap[`${emp.id}_${dateStr}`] || manualStatusMap[`${empNum}_${dateStr}`] || manualStatusMap[`emp-${empNum}_${dateStr}`];
-    if (override) {
-      if (override.status === 'empty' || override.status === 'Empty' || override.status === 'delete') {
-        return {
-          hasRecord: false,
-          isFriday,
-          isFuture,
-          isToday,
-          checkInTime: '',
-          checkOutTime: '',
-          rawCheckIn: '',
-          rawCheckOut: '',
-          checkInNote: '',
-          checkOutNote: '',
-          note: '',
-          adminNote: '',
-          adminCheckInNote: '',
-          adminCheckOutNote: '',
-          status: 'Empty',
-          warehouseName: '',
-          workedHours: 0,
-        };
-      }
-
-      let workedHours = 8;
-      const cIn = override.checkInTime || '';
-      const cOut = override.checkOutTime || '';
-      if (cIn && cOut && cIn.includes(':') && cOut.includes(':')) {
-        const [inH, inM] = cIn.split(':').map(Number);
-        const [outH, outM] = cOut.split(':').map(Number);
-        const inTotal = inH * 60 + (inM || 0);
-        const outTotal = outH * 60 + (outM || 0);
-        if (outTotal > inTotal) {
-          const gross = outTotal - inTotal;
-          const breakStart = 12 * 60; // 720
-          const breakEnd = 13 * 60;   // 780
-          const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
-          workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
-        }
-      }
-
-      return {
-        hasRecord: true,
-        isFriday,
-        isFuture,
-        isToday,
-        checkInTime: override.checkInTime || '',
-        checkOutTime: override.checkOutTime || '',
-        rawCheckIn: override.rawCheckIn || override.checkInTime || '',
-        rawCheckOut: override.rawCheckOut || override.checkOutTime || '',
-        checkInNote: override.checkInNote || override.note || '',
-        checkOutNote: override.checkOutNote || '',
-        note: override.note || override.checkInNote || '',
-        adminNote: override.adminNote || '',
-        adminCheckInNote: override.adminCheckInNote || override.adminNote || '',
-        adminCheckOutNote: override.adminCheckOutNote || '',
-        historyLogs: override.historyLogs || [],
-        adminDecision: override.adminDecision || null,
-        isWaived: Boolean(override.isWaived ?? (override.adminDecision === 'waived')),
-        status: override.status,
-        warehouseName: 'کۆمپانیای سەرەکی ئاشڵی',
-        workedHours: override.status === 'Present' ? workedHours : 0,
-      };
-    }
-
-    // 2. Friday Holiday
-    if (isFriday) {
-      return {
-        hasRecord: false,
-        isFriday: true,
-        isFuture,
-        isToday,
-        checkInTime: '',
-        checkOutTime: '',
-        rawCheckIn: '',
-        rawCheckOut: '',
-        checkInNote: '',
-        checkOutNote: '',
-        note: '',
-        adminNote: '',
-        adminCheckInNote: '',
-        adminCheckOutNote: '',
-        status: 'Holiday',
-        warehouseName: 'کۆمپانیای سەرەکی ئاشڵی',
-        workedHours: 0,
-      };
-    }
-
-    // 3. Future Days -> Clean neutral empty slot
-    if (isFuture) {
-      return {
-        hasRecord: false,
-        isFriday: false,
-        isFuture: true,
-        isToday: false,
-        checkInTime: '',
-        checkOutTime: '',
-        rawCheckIn: '',
-        rawCheckOut: '',
-        checkInNote: '',
-        checkOutNote: '',
-        note: '',
-        adminNote: '',
-        adminCheckInNote: '',
-        adminCheckOutNote: '',
-        status: 'Empty',
-        warehouseName: '',
-        workedHours: 0,
-      };
-    }
-
-    // 4. Past or Today: Search actual GPS logs from server
-    const dayRecords = attendanceLogs.filter(log => {
-      const logDate = log.date || (log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || '');
-      if (logDate !== dateStr) return false;
-
-      const logEmpId = (log.employeeId || log.userId || '').toString().trim().toLowerCase();
-      const logName = (log.name || log.userName || (log as any).employeeName || '').trim().toLowerCase();
-
-      return (
-        logEmpId === empId || 
-        logEmpId === empNum || 
-        logEmpId === `emp-${empNum}` ||
-        (logName && (logName === empName || logName.includes(empName) || empName.includes(logName)))
-      );
-    });
-
-    let checkInTime = '';
-    let checkOutTime = '';
-    let rawCheckIn = '';
-    let rawCheckOut = '';
-    let checkInNote = '';
-    let checkOutNote = '';
-    let note = '';
-    let adminNote = '';
-    let adminCheckInNote = '';
-    let adminCheckOutNote = '';
-    let adminDecision: 'waived' | 'penalized' | null = null;
-    let isWaived = false;
-    let warehouseName = 'کۆمپانیای سەرەکی ئاشڵی';
-    let historyLogs: any[] = [];
-
-    dayRecords.forEach((r: any) => {
-      const inCandidate = r.checkInTime || r.check_in_time || (r.checkIn ? (r.checkIn.includes(' ') ? r.checkIn.split(' ')[1]?.slice(0, 5) : r.checkIn.includes('T') ? r.checkIn.split('T')[1]?.slice(0, 5) : r.checkIn.slice(0, 5)) : '');
-      const outCandidate = r.checkOutTime || r.check_out_time || (r.checkOut ? (r.checkOut.includes(' ') ? r.checkOut.split(' ')[1]?.slice(0, 5) : r.checkOut.includes('T') ? r.checkOut.split('T')[1]?.slice(0, 5) : r.checkOut.slice(0, 5)) : '');
-
-      if (inCandidate && !checkInTime) checkInTime = inCandidate.slice(0, 5);
-      if (outCandidate) checkOutTime = outCandidate.slice(0, 5);
-      if (r.rawCheckInTime || r.raw_check_in_time) rawCheckIn = (r.rawCheckInTime || r.raw_check_in_time).slice(0, 5);
-      if (r.rawCheckOutTime || r.raw_check_out_time) rawCheckOut = (r.rawCheckOutTime || r.raw_check_out_time).slice(0, 5);
-      
-      const inN = r.check_in_note || r.checkInNote || r.checkin_note;
-      const outN = r.check_out_note || r.checkOutNote || r.checkout_note;
-      const genN = r.note || r.notes || r.reason || r.employeeNote || r.employee_note;
-      
-      if (inN && !checkInNote) checkInNote = inN;
-      if (outN && !checkOutNote) checkOutNote = outN;
-      if (genN && !note) note = genN;
-
-      const admInN = r.adminCheckInNote || r.admin_check_in_note;
-      const admOutN = r.adminCheckOutNote || r.admin_check_out_note;
-      const admN = r.adminNote || r.admin_note || r.editNote || r.edit_note;
-
-      if (admInN && !adminCheckInNote) adminCheckInNote = admInN;
-      if (admOutN && !adminCheckOutNote) adminCheckOutNote = admOutN;
-      if (admN && !adminNote) adminNote = admN;
-
-      if (r.adminDecision) adminDecision = r.adminDecision;
-      if (r.isWaived !== undefined) isWaived = Boolean(r.isWaived);
-
-      if (r.historyLogs && Array.isArray(r.historyLogs) && r.historyLogs.length > 0) {
-        historyLogs = r.historyLogs;
-      }
-      
-      if (r.warehouseName || r.warehouse_name) warehouseName = r.warehouseName || r.warehouse_name;
-    });
-
-    if (!checkInNote && note) checkInNote = note;
-
-    // Check local storage for overtime or admin notes fallback
-    if (typeof window !== 'undefined' && !note) {
-      try {
-        const otNotes = JSON.parse(localStorage.getItem(`ashley_ot_notes_${selectedMonth}`) || '{}');
-        const adminNotes = JSON.parse(localStorage.getItem(`ashley_admin_notes_${selectedMonth}`) || '{}');
-        const empKey = `${emp.id}_${dateStr}`;
-        if (otNotes[empKey]) note = otNotes[empKey];
-        else if (adminNotes[empKey]) adminNote = adminNotes[empKey];
-      } catch {}
-    }
-
-    if (!rawCheckIn && checkInTime) rawCheckIn = checkInTime;
-    if (!rawCheckOut && checkOutTime) rawCheckOut = checkOutTime;
-
-    const hasRecord = Boolean(checkInTime || checkOutTime);
-    let status = 'Empty';
-
-    if (hasRecord) {
-      status = 'Present';
-    } else if (isWaitingData && !isFriday && !isFuture && !isToday) {
-      // 🌟 Suppress false 'Absent' while server data is still loading
-      status = 'Loading';
-    } else if (!isFriday && !isFuture && !isToday) {
-      status = 'Absent';
-    }
-
-    // Calculate worked hours deducting 12:00 to 13:00 lunch break
-    let workedHours = 0;
-    if (checkInTime && checkOutTime) {
-      const [inH, inM] = checkInTime.split(':').map(Number);
-      const [outH, outM] = checkOutTime.split(':').map(Number);
-      const inTotal = inH * 60 + (inM || 0);
-      const outTotal = outH * 60 + (outM || 0);
-      if (outTotal > inTotal) {
-        const gross = outTotal - inTotal;
-        const breakStart = 12 * 60; // 720
-        const breakEnd = 13 * 60;   // 780
-        const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
-        workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
-      }
-    } else if (hasRecord) {
-      workedHours = 8;
-    }
-
-    return {
-      hasRecord,
-      isFriday: false,
-      isFuture: false,
-      isToday,
-      checkInTime,
-      checkOutTime,
-      rawCheckIn,
-      rawCheckOut,
-      checkInNote,
-      checkOutNote,
-      note,
-      adminNote,
-      adminCheckInNote,
-      adminCheckOutNote,
-      historyLogs,
-      adminDecision: adminDecision || (isWaived ? 'waived' : null),
-      isWaived: isWaived || adminDecision === 'waived',
-      status,
-      warehouseName,
-      workedHours,
-    };
-  }, [manualStatusMap, attendanceLogs, selectedMonth, isWaitingData]);
+    return resolveEmployeeDayAttendance(emp, dayItem, manualStatusMap, attendanceLogs, isWaitingData);
+  }, [manualStatusMap, attendanceLogs, isWaitingData]);
 
   // Open Cell Click Modal (Does NOT overwrite arbitrarily)
   const handleCellClick = (emp: Employee, dayItem: { dayNum: number; dateStr: string; isFriday: boolean; isFuture: boolean; isToday: boolean; dayOfWeek: number }) => {
@@ -1242,16 +993,17 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           globalWorkedHours += hrs;
           const inT = (info.checkInTime || '08:00').slice(0, 5);
           const outT = (info.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00')).slice(0, 5);
+          const inPrintColor = info.checkInStatus?.printColor || (info.isWaived ? '#059669' : inT > '08:15' ? '#dc2626' : '#0f172a');
+          const outPrintColor = info.checkOutStatus?.printColor || '#64748b';
           const isLate = inT > '08:15' && !info.isWaived && info.adminDecision !== 'waived';
           if (isLate) globalLateCount++;
           
           cellContent = `
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;">
-              <span style="font-weight: 800; font-size: ${isFullRange ? '7px' : '8px'}; color: #0f172a; font-family: monospace; white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 1px;">
-                ${isLate ? '<span style="display: inline-block; width: 3px; height: 3px; border-radius: 50%; background: #ef4444; margin-left: 1px;"></span>' : ''}
+              <span style="font-weight: 800; font-size: ${isFullRange ? '7px' : '8px'}; color: ${inPrintColor}; font-family: monospace; white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 1px;">
                 <span>${inT}</span>
               </span>
-              <span style="font-weight: 600; font-size: ${isFullRange ? '6px' : '7px'}; color: #64748b; font-family: monospace; white-space: nowrap;">
+              <span style="font-weight: 700; font-size: ${isFullRange ? '6px' : '7px'}; color: ${outPrintColor}; font-family: monospace; white-space: nowrap;">
                 ${outT}
               </span>
             </div>
@@ -1449,7 +1201,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           <!-- 3. ڕوونکردنەوەی خشتەکە لەسەر خشتەکە (Table Explanation Strip) -->
           <div style="margin-bottom: 5px; padding: 4px 8px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; font-size: 8px; font-weight: 700; color: #334155; page-break-inside: avoid;">
             <div>
-              <span>📋 <strong>ڕوونکردنەوەی خشتە:</strong> تۆماری دەوامی فەرمی ۳۱ ڕۆژەیی کارمەندان بۆ مانگی <strong>${selectedMonth}</strong> (ڕۆژانی ${printStartDay} تا ${printEndDay}) • دەوامی فەرمی: 08:00 هاتن - 17:00 دەرچوون • مەرجی درەنگکەوتن: پاش 08:15</span>
+              <span>📋 <strong>ڕوونکردنەوەی خشتە:</strong> تۆماری دەوامی فەرمی ۳۱ ڕۆژەیی کارمەندان بۆ مانگی <strong>${selectedMonth}</strong> • دەوامی فەرمی: 08:00 هاتن - 17:00 دەرچوون • <strong>ڕێبەری ڕەنگەکان:</strong> <span style="color:#059669; font-weight:800;">سەوز: لێخۆشبوو</span> • <span style="color:#dc2626; font-weight:800;">سوور: سەرپێچی بێ لێخۆشبوون</span> • <span style="color:#0f172a; font-weight:800;">ڕەش: لە کاتی خۆی</span></span>
             </div>
             <div style="font-family: monospace; color: #64748b; font-size: 7.5px;">
               <span>بەرواری دەرچوون: ${todayStr} • کۆدی بەڵگەنامە: ASH-DGP-${selectedMonth}</span>
@@ -2033,7 +1785,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                             handleCellClick(emp, d);
                           }
                         }}
-                        title={`ڕابکێشە (Drag) بۆ دیاریکردنی زۆر وەک شیت\nهاتن: ${info.checkInTime || '08:00'}${isWaived ? ' (چاوپۆشی لێکراوە)' : isLate ? ' (درەنگکەوتوو)' : ''}\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00')}`}
+                        title={`هاتن: ${info.checkInTime || '08:00'} (${info.checkInStatus?.label || ''})\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00')} (${info.checkOutStatus?.label || ''})${info.adminNote ? `\nتێبینی ئەدمین: ${info.adminNote}` : ''}`}
                         className={`relative text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 select-none transition-all ${
                           isCellSelected 
                             ? 'ring-2 ring-[#007AFF] bg-blue-100 dark:bg-blue-900/90 font-black shadow-md z-20 scale-[1.03]' 
@@ -2053,20 +1805,28 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-[#007AFF] ring-1 ring-white shadow-xs z-30" />
                         )}
 
-                        {/* 🔴 Red Dot Indicator for Late Check-in (Suppressed if admin waived) */}
+                        {/* 🔴 Red Dot Indicator for Late Check-in or Early Departure (Unexcused) */}
                         {isLate && (
                           <span 
                             className="absolute top-0.5 left-0.5 w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-rose-500 shadow-xs z-10 animate-pulse" 
-                            title="درەنگکەوتوو (دوای 08:15)"
+                            title="سەرپێچی دەوام (بێ لێخۆشبوون)"
+                          />
+                        )}
+
+                        {/* 🟢 Green Dot Indicator for Excused / Waived by Admin */}
+                        {(info.checkInStatus?.isWaived || info.checkOutStatus?.isWaived) && (
+                          <span 
+                            className="absolute top-0.5 left-0.5 w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 ring-1 ring-white shadow-xs z-10" 
+                            title="لێخۆشبوو (چاوپۆشیکراو لەلایەن ئەدمین)"
                           />
                         )}
 
                         {isPresent ? (
                           <div className={`w-full flex flex-col items-center justify-center ${tableFitMode === 'fit' ? 'py-0.5' : 'py-1'} leading-none select-none`}>
-                            <span className={`font-mono font-extrabold ${tableFitMode === 'fit' ? 'text-[9.5px]' : 'text-xs'} text-slate-900 dark:text-slate-100 leading-tight tracking-tight`}>
+                            <span className={`font-mono font-extrabold ${tableFitMode === 'fit' ? 'text-[9.5px]' : 'text-xs'} ${info.checkInStatus?.colorCls || 'text-slate-900 dark:text-slate-100'} leading-tight tracking-tight`}>
                               {inTime}
                             </span>
-                            <span className={`font-mono font-semibold ${tableFitMode === 'fit' ? 'text-[8px] mt-0.5' : 'text-[10px] mt-1'} text-slate-500 dark:text-slate-400 leading-tight tracking-tight`}>
+                            <span className={`font-mono font-semibold ${tableFitMode === 'fit' ? 'text-[8px] mt-0.5' : 'text-[10px] mt-1'} ${info.checkOutStatus?.colorCls || 'text-slate-500 dark:text-slate-400'} leading-tight tracking-tight`}>
                               {outTime === 'بەردەوام' ? (tableFitMode === 'fit' ? '••' : 'بەردەوام') : outTime}
                             </span>
                           </div>
@@ -2362,12 +2122,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 <div className="space-y-2 bg-slate-50 dark:bg-[#1c1c1e] p-3.5 rounded-xl border border-slate-200/60 dark:border-white/5">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <span>⚖️ بڕیاری سەرپشکی ئەدمین (Waiver / Discretion):</span>
+                      <span>⚖️ بڕیاری سەرپشکی ئەدمین (Waiver / Leniency):</span>
                     </label>
-                    <span className="text-[10px] font-mono text-slate-400">Admin Action</span>
+                    <span className="text-[10px] font-mono text-slate-400">Admin Authority</span>
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    ئایا لە کاتی درەنگکەوتن چاوپۆشی لێدەکەیت یان لەسەر کارمەند حساب دەکرێت؟
+                    ئایا لە کاتی درەنگ هاتن یان زوو ڕۆیشتن چاوپۆشی لێدەکەیت یان وەک سەرپێچی حساب دەکرێت؟
                   </p>
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <button
@@ -2375,7 +2135,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       onClick={() => setModalAdminDecision(prev => prev === 'waived' ? null : 'waived')}
                       className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
                         modalAdminDecision === 'waived'
-                          ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm font-black'
+                          ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm font-black ring-2 ring-emerald-400'
                           : 'bg-white dark:bg-[#2c2c2e] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800/40 hover:bg-emerald-50'
                       }`}
                     >
@@ -2384,7 +2144,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         <span>چاوپۆشیکردن (لێخۆشبوون)</span>
                       </span>
                       <span className={`text-[9.5px] font-medium ${modalAdminDecision === 'waived' ? 'text-emerald-100' : 'text-slate-400'}`}>
-                        خاڵی سوور و ئاگاداری لادەبرێت
+                        کات بە سەوز دەنووسرێت (لێخۆشبوو)
                       </span>
                     </button>
 
@@ -2393,7 +2153,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       onClick={() => setModalAdminDecision(prev => prev === 'penalized' ? null : 'penalized')}
                       className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
                         modalAdminDecision === 'penalized'
-                          ? 'bg-rose-600 text-white border-rose-700 shadow-sm font-black'
+                          ? 'bg-rose-600 text-white border-rose-700 shadow-sm font-black ring-2 ring-rose-400'
                           : 'bg-white dark:bg-[#2c2c2e] text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-800/40 hover:bg-rose-50'
                       }`}
                     >
@@ -2402,7 +2162,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         <span>حسابکردن لەسەر کارمەند</span>
                       </span>
                       <span className={`text-[9.5px] font-medium ${modalAdminDecision === 'penalized' ? 'text-rose-100' : 'text-slate-400'}`}>
-                        هێمای درەنگکەوتن دەمێنێتەوە
+                        کات بە سوور دەنووسرێت (سەرپێچی)
                       </span>
                     </button>
                   </div>

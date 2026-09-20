@@ -46,6 +46,7 @@ import { AdminFaceEnrollModal } from '@/components/attendance/AdminFaceEnrollMod
 import { ReportWrapper } from '@/components/reports/ReportWrapper';
 import { formatTime24H } from '@/lib/export-utils';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
+import { resolveEmployeeDayAttendance, getCheckInStatus, getCheckOutStatus } from '@/lib/attendance-helpers';
 import * as XLSX from 'xlsx';
 
 const ASHLEY_DEFAULT_EMPLOYEES = ASHLEY_OFFICIAL_EMPLOYEES;
@@ -256,7 +257,53 @@ function EmployeeDetailPage() {
     });
   };
 
-  // Attendance breakdown for the selected month
+  // 31-Day Matrix Overrides & Admin Decisions
+  const [matrixOverrides, setMatrixOverrides] = useState<Record<string, any>>({});
+
+  const loadMatrixOverrides = useCallback(async () => {
+    let localMap: Record<string, any> = {};
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(`ashley_matrix_overrides_${selectedMonth}`);
+        if (cached) localMap = JSON.parse(cached);
+      } catch {}
+    }
+
+    try {
+      const res = await fetch(`/api/attendance/admin/report?t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        const map: Record<string, any> = { ...localMap };
+        (data.attendance || []).forEach((r: any) => {
+          if (r.status && r.status !== 'empty' && r.status !== 'delete' && r.status !== 'Empty') {
+            const k = `${r.userId}_${r.date}`;
+            map[k] = { ...map[k], ...r };
+          }
+        });
+        if (data.manualOverridesMap) {
+          Object.assign(map, data.manualOverridesMap);
+        }
+        setMatrixOverrides(map);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(map));
+          } catch {}
+        }
+      } else if (Object.keys(localMap).length > 0) {
+        setMatrixOverrides(localMap);
+      }
+    } catch {
+      if (Object.keys(localMap).length > 0) {
+        setMatrixOverrides(localMap);
+      }
+    }
+  }, [selectedMonth]);
+
+  useEffect(() => {
+    loadMatrixOverrides();
+  }, [loadMatrixOverrides]);
+
+  // Attendance breakdown for the selected month using Authoritative 31-Day Matrix
   const [yearStr, monthStr] = selectedMonth.split('-');
   const year = parseInt(yearStr || '2026', 10);
   const month = parseInt(monthStr || '09', 10);
@@ -266,6 +313,8 @@ function EmployeeDetailPage() {
   const attendanceData = useMemo(() => {
     let presentCount = 0;
     let totalWorkedHours = 0;
+    let waivedCount = 0;
+    let unexcusedViolationsCount = 0;
 
     const days = Array.from({ length: totalDays }, (_, i) => {
       const dayNum = i + 1;
@@ -276,46 +325,49 @@ function EmployeeDetailPage() {
       const isFuture = dateStr > todayStr;
       const isToday = dateStr === todayStr;
 
-      const dayRecords = attendanceLogs.filter(log => {
-        const logDate = log.date || (log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || '');
-        if (logDate !== dateStr) return false;
-        const logEmpId = (log.employeeId || log.userId || '').toString().trim().toLowerCase();
-        return logEmpId === employeeId.toLowerCase();
-      });
+      const dayItem = { dayNum, dateStr, isFriday, isFuture, isToday };
+      const resolved = resolveEmployeeDayAttendance(
+        selectedEmployee || { id: employeeId },
+        dayItem,
+        matrixOverrides,
+        attendanceLogs
+      );
 
-      let checkInTime = '';
-      let checkOutTime = '';
-      dayRecords.forEach((r: any) => {
-        if (r.checkInTime && !checkInTime) checkInTime = r.checkInTime.slice(0, 5);
-        if (r.checkOutTime) checkOutTime = r.checkOutTime.slice(0, 5);
-      });
-
-      const isPresent = Boolean(checkInTime || checkOutTime);
-      if (isPresent) {
+      if (resolved.status === 'Present' || resolved.hasRecord) {
         presentCount++;
-        totalWorkedHours += 8;
+        totalWorkedHours += resolved.workedHours || 8;
+      }
+
+      if (resolved.isWaived || resolved.checkInStatus.isWaived || resolved.checkOutStatus.isWaived) {
+        waivedCount++;
+      }
+
+      if (resolved.checkInStatus.status === 'late_unexcused' || resolved.checkOutStatus.status === 'early_unexcused') {
+        unexcusedViolationsCount++;
       }
 
       return {
+        ...resolved,
         dayNum,
         dateStr,
         isFriday,
         isFuture,
         isToday,
-        checkInTime,
-        checkOutTime,
-        isPresent,
-        status: isFriday ? 'Holiday' : isPresent ? 'Present' : isFuture ? 'Empty' : 'Absent'
+        isPresent: resolved.status === 'Present' || resolved.hasRecord,
       };
     });
+
+    const absentCount = Math.max(0, days.filter(d => !d.isFuture && !d.isFriday && !d.isPresent).length);
 
     return {
       days,
       presentCount,
       totalWorkedHours,
-      absentCount: Math.max(0, days.filter(d => !d.isFuture && !d.isFriday && !d.isPresent).length)
+      absentCount,
+      waivedCount,
+      unexcusedViolationsCount,
     };
-  }, [totalDays, selectedMonth, year, month, todayStr, attendanceLogs, employeeId]);
+  }, [totalDays, selectedMonth, year, month, todayStr, attendanceLogs, employeeId, selectedEmployee, matrixOverrides]);
 
   if (!selectedEmployee) {
     return (
@@ -373,25 +425,33 @@ function EmployeeDetailPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="border border-slate-200 bg-white rounded p-2 min-w-[75px]">
+            <div className="grid grid-cols-5 gap-2 text-center">
+              <div className="border border-slate-200 bg-white rounded p-2 min-w-[65px]">
                 <div className="text-[9px] font-bold text-slate-500">ئامادەبوون</div>
                 <div className="text-sm font-black text-emerald-700 font-mono">{attendanceData.presentCount} ڕۆژ</div>
               </div>
-              <div className="border border-slate-200 bg-white rounded p-2 min-w-[75px]">
-                <div className="text-[9px] font-bold text-slate-500">غیاب</div>
-                <div className="text-sm font-black text-rose-700 font-mono">{attendanceData.absentCount} ڕۆژ</div>
-              </div>
-              <div className="border border-slate-200 bg-white rounded p-2 min-w-[75px]">
+              <div className="border border-slate-200 bg-white rounded p-2 min-w-[65px]">
                 <div className="text-[9px] font-bold text-slate-500">کۆی کاژێر</div>
                 <div className="text-sm font-black text-blue-700 font-mono">{attendanceData.totalWorkedHours}h</div>
+              </div>
+              <div className="border border-emerald-200 bg-emerald-50 rounded p-2 min-w-[65px]">
+                <div className="text-[9px] font-bold text-emerald-800">🟢 لێخۆشبوون</div>
+                <div className="text-sm font-black text-emerald-700 font-mono">{attendanceData.waivedCount} جار</div>
+              </div>
+              <div className="border border-rose-200 bg-rose-50 rounded p-2 min-w-[65px]">
+                <div className="text-[9px] font-bold text-rose-800">🔴 سەرپێچی</div>
+                <div className="text-sm font-black text-rose-700 font-mono">{attendanceData.unexcusedViolationsCount} جار</div>
+              </div>
+              <div className="border border-slate-200 bg-white rounded p-2 min-w-[65px]">
+                <div className="text-[9px] font-bold text-slate-500">غیاب</div>
+                <div className="text-sm font-black text-rose-700 font-mono">{attendanceData.absentCount} ڕۆژ</div>
               </div>
             </div>
           </div>
 
           {/* Table Explanation Strip */}
           <div className="mb-2 p-2 bg-slate-100 border border-slate-300 rounded text-[9.5px] font-bold text-slate-700 flex justify-between items-center">
-            <span>📋 ڕوونکردنەوەی تۆمارەکانی دەوام بۆ مانگی <strong>{selectedMonth}</strong> • دەوامی فەرمی ڕۆژانە: 08:00 هاتن - 17:00 دەرچوون</span>
+            <span>📋 ڕوونکردنەوەی تۆمارەکانی دەوام بۆ مانگی <strong>{selectedMonth}</strong> • دەوامی فەرمی: 08:00 هاتن - 17:00 دەرچوون • <strong>ڕێبەری ڕەنگەکان:</strong> <span style={{ color: '#059669', fontWeight: 800 }}>سەوز: لێخۆشبوو</span> • <span style={{ color: '#dc2626', fontWeight: 800 }}>سوور: سەرپێچی بێ لێخۆشبوون</span> • <span style={{ color: '#0f172a', fontWeight: 800 }}>ڕەش: لە کاتی خۆی</span></span>
             <span className="font-mono text-[9px] text-slate-500">کۆدی دۆسیە: ASH-EMP-${selectedEmployee.id}</span>
           </div>
 
@@ -402,10 +462,10 @@ function EmployeeDetailPage() {
                 <th className="border border-slate-400 p-1.5 text-center w-8">#</th>
                 <th className="border border-slate-400 p-1.5">بەروار</th>
                 <th className="border border-slate-400 p-1.5">ڕۆژ</th>
-                <th className="border border-slate-400 p-1.5 text-center">📥 هاتن</th>
-                <th className="border border-slate-400 p-1.5 text-center">📤 دەرچوون</th>
+                <th className="border border-slate-400 p-1.5 text-center">📥 کاتی هاتن</th>
+                <th className="border border-slate-400 p-1.5 text-center">📤 کاتی دەرچوون</th>
                 <th className="border border-slate-400 p-1.5 text-center">⏱️ ماوە</th>
-                <th className="border border-slate-400 p-1.5 text-center">دۆخ</th>
+                <th className="border border-slate-400 p-1.5 text-center">دۆخ / بڕیاری ئەدمین</th>
               </tr>
             </thead>
             <tbody>
@@ -414,24 +474,33 @@ function EmployeeDetailPage() {
                   <td className="border border-slate-300 p-1 text-center font-mono text-slate-500">{d.dayNum}</td>
                   <td className="border border-slate-300 p-1 font-mono font-bold">{d.dateStr}</td>
                   <td className="border border-slate-300 p-1 font-bold">{d.isFriday ? '🌴 هەینی' : 'ڕۆژی ئاسایی'}</td>
-                  <td className="border border-slate-300 p-1 text-center font-mono font-bold">
+                  <td className="border border-slate-300 p-1 text-center font-mono font-black" style={{ color: d.checkInStatus?.printColor || '#0f172a' }}>
                     {d.checkInTime ? formatTime24H(d.checkInTime) : '-'}
+                    {d.checkInStatus?.isWaived && <span className="block text-[8px] font-bold text-emerald-700">🟢 لێخۆشبوو</span>}
+                    {d.checkInStatus?.status === 'late_unexcused' && <span className="block text-[8px] font-bold text-rose-700">🔴 درەنگکەوتوو</span>}
                   </td>
-                  <td className="border border-slate-300 p-1 text-center font-mono font-bold">
-                    {d.checkOutTime ? formatTime24H(d.checkOutTime) : '-'}
+                  <td className="border border-slate-300 p-1 text-center font-mono font-black" style={{ color: d.checkOutStatus?.printColor || '#0f172a' }}>
+                    {d.checkOutTime ? formatTime24H(d.checkOutTime) : (d.isToday ? 'بەردەوام' : '-')}
+                    {d.checkOutStatus?.isWaived && <span className="block text-[8px] font-bold text-emerald-700">🟢 لێخۆشبوو</span>}
+                    {d.checkOutStatus?.status === 'early_unexcused' && <span className="block text-[8px] font-bold text-rose-700">🔴 زوو ڕۆیشتوو</span>}
                   </td>
                   <td className="border border-slate-300 p-1 text-center font-mono">
-                    {d.isPresent ? '8h' : d.isFriday ? 'پشوو' : '-'}
+                    {d.isPresent ? `${d.workedHours || 8}h` : d.isFriday ? 'پشوو' : '-'}
                   </td>
                   <td className="border border-slate-300 p-1 text-center font-bold">
                     {d.isFriday ? (
                       <span className="text-teal-700">🌴 پشوو</span>
+                    ) : d.status === 'Leave' ? (
+                      <span className="text-amber-700">مۆڵەت</span>
                     ) : d.isPresent ? (
                       <span className="text-emerald-700">🟢 ئامادە</span>
                     ) : d.isFuture ? (
                       <span className="text-slate-400">-</span>
                     ) : (
                       <span className="text-rose-700">🔴 غیاب</span>
+                    )}
+                    {d.adminNote && (
+                      <div className="text-[7.5px] text-blue-700 mt-0.5">🛡️ {d.adminNote}</div>
                     )}
                   </td>
                 </tr>
@@ -838,44 +907,58 @@ function EmployeeDetailPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3 bg-emerald-50 border border-emerald-200 text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-center rounded-lg">
               <span className="text-[10px] text-emerald-800 font-black block">ڕۆژانی ئامادەبوو:</span>
               <span className="text-xl font-black font-mono text-emerald-700">
                 {isLoading ? <span className="inline-block w-12 h-5 bg-emerald-200/80 rounded animate-pulse" /> : `${attendanceData.presentCount} ڕۆژ`}
               </span>
             </div>
 
-            <div className="p-3 bg-blue-50 border border-blue-200 text-center">
+            <div className="p-3 bg-blue-50 border border-blue-200 text-center rounded-lg">
               <span className="text-[10px] text-blue-800 font-black block">کۆی کاتژمێری ئیشکردن:</span>
               <span className="text-xl font-black font-mono text-blue-700">
-                {isLoading ? <span className="inline-block w-12 h-5 bg-blue-200/80 rounded animate-pulse" /> : `${attendanceData.totalWorkedHours} کاتژمێر`}
+                {isLoading ? <span className="inline-block w-12 h-5 bg-blue-200/80 rounded animate-pulse" /> : `${attendanceData.totalWorkedHours}h`}
               </span>
             </div>
 
-            <div className="p-3 bg-rose-50 border border-rose-200 text-center">
-              <span className="text-[10px] text-rose-800 font-black block">غیاب / نەهاتوو:</span>
+            <div className="p-3 bg-emerald-50/80 border border-emerald-300 text-center rounded-lg">
+              <span className="text-[10px] text-emerald-800 font-black block">🟢 ڕۆژانی لێخۆشبوون:</span>
+              <span className="text-xl font-black font-mono text-emerald-600">
+                {isLoading ? <span className="inline-block w-12 h-5 bg-emerald-200/80 rounded animate-pulse" /> : `${attendanceData.waivedCount} جار`}
+              </span>
+            </div>
+
+            <div className="p-3 bg-rose-50 border border-rose-200 text-center rounded-lg">
+              <span className="text-[10px] text-rose-800 font-black block">🔴 سەرپێچی دەوام:</span>
+              <span className="text-xl font-black font-mono text-rose-600">
+                {isLoading ? <span className="inline-block w-12 h-5 bg-rose-200/80 rounded animate-pulse" /> : `${attendanceData.unexcusedViolationsCount} جار`}
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-300 text-center rounded-lg">
+              <span className="text-[10px] text-slate-700 font-black block">غیاب / نەهاتوو:</span>
               <span className="text-xl font-black font-mono text-rose-700">
-                {isLoading ? <span className="inline-block w-12 h-5 bg-rose-200/80 rounded animate-pulse" /> : `${attendanceData.absentCount} ڕۆژ`}
+                {isLoading ? <span className="inline-block w-12 h-5 bg-slate-200/80 rounded animate-pulse" /> : `${attendanceData.absentCount} ڕۆژ`}
               </span>
-            </div>
-
-            <div className="p-3 bg-purple-50 border border-purple-200 text-center">
-              <span className="text-[10px] text-purple-800 font-black block">شێفتی فەرمی:</span>
-              <span className="text-xl font-black font-mono text-purple-700">8:30 - 16:30</span>
             </div>
           </div>
 
-          <div className="border border-slate-300 overflow-x-auto">
+          <div className="p-2.5 bg-slate-100 border border-slate-300 rounded text-xs font-bold text-slate-700 flex flex-wrap justify-between items-center gap-2">
+            <span>📋 دەوامی فەرمی: 08:00 هاتن - 17:00 ڕۆیشتن • <strong>ڕێبەری ڕەنگەکان:</strong> <span className="text-emerald-600 font-black">سەوز: لێخۆشبوو</span> • <span className="text-rose-600 font-black">سوور: سەرپێچی بێ لێخۆشبوون</span> • <span className="text-slate-900 font-black">ڕەش: لە کاتی خۆی</span></span>
+            <span className="text-xs text-blue-700 font-bold">🛡️ دەستکاری ئەدمین لە سەرووی هەموو داتایەکی ترە</span>
+          </div>
+
+          <div className="border border-slate-300 overflow-x-auto rounded-lg">
             <table className="w-full text-right text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-200 text-slate-900 font-black border-b border-slate-300">
-                  <th className="p-2 border-l border-slate-300 text-center w-12">ڕۆژ</th>
-                  <th className="p-2 border-l border-slate-300 text-center w-28">بەروار</th>
-                  <th className="p-2 border-l border-slate-300 text-center">هاتن (Check-In)</th>
-                  <th className="p-2 border-l border-slate-300 text-center">ڕۆیشتن (Check-Out)</th>
-                  <th className="p-2 border-l border-slate-300 text-center">ماوەی ئیشکردن</th>
-                  <th className="p-2 text-center w-24">حاڵەت</th>
+                  <th className="p-2.5 border-l border-slate-300 text-center w-12">ڕۆژ</th>
+                  <th className="p-2.5 border-l border-slate-300 text-center w-28">بەروار</th>
+                  <th className="p-2.5 border-l border-slate-300 text-center">📥 کاتی هاتن</th>
+                  <th className="p-2.5 border-l border-slate-300 text-center">📤 کاتی دەرچوون</th>
+                  <th className="p-2.5 border-l border-slate-300 text-center">ماوەی ئیشکردن</th>
+                  <th className="p-2.5 text-center w-36">دۆخ / بڕیاری ئەدمین</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 font-bold">
@@ -887,42 +970,79 @@ function EmployeeDetailPage() {
                         d.isToday ? 'bg-amber-50/70 font-black' : d.isFriday ? 'bg-emerald-50/40 text-teal-800' : ''
                       }`}
                     >
-                      <td className="p-2 border-l border-slate-200 text-center font-mono">{d.dayNum}</td>
-                      <td className="p-2 border-l border-slate-200 text-center font-mono text-slate-600">
+                      <td className="p-2.5 border-l border-slate-200 text-center font-mono">{d.dayNum}</td>
+                      <td className="p-2.5 border-l border-slate-200 text-center font-mono text-slate-600">
                         {d.dateStr} {d.isFriday ? '(هەینی)' : ''}
                       </td>
-                      <td className="p-2 border-l border-slate-200 text-center">
+                      <td className="p-2.5 border-l border-slate-200 text-center">
                         {d.isPresent ? (
-                          <span className="px-2.5 py-1 bg-emerald-600 text-white font-mono font-black text-xs shadow-2xs">
-                            🟢 هاتن: {d.checkInTime || '08:30'}
-                          </span>
+                          <div className="inline-flex flex-col items-center">
+                            <span className={`px-2.5 py-1 rounded font-mono font-black text-xs shadow-2xs ${
+                              d.checkInStatus?.status === 'late_waived'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : d.checkInStatus?.status === 'late_unexcused'
+                                ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                : 'bg-slate-100 text-slate-900 border border-slate-300'
+                            }`}>
+                              {d.checkInStatus?.status === 'late_waived' ? '🟢 ' : d.checkInStatus?.status === 'late_unexcused' ? '🔴 ' : '⏱️ '}
+                              {d.checkInTime || '08:00'}
+                            </span>
+                            <span className="text-[10px] font-bold mt-0.5" style={{ color: d.checkInStatus?.printColor }}>
+                              {d.checkInStatus?.label}
+                            </span>
+                          </div>
                         ) : (
                           <span className="text-slate-400 font-mono">-</span>
                         )}
                       </td>
-                      <td className="p-2 border-l border-slate-200 text-center">
+                      <td className="p-2.5 border-l border-slate-200 text-center">
                         {d.isPresent ? (
-                          <span className="px-2.5 py-1 bg-emerald-700 text-emerald-50 font-mono font-black text-xs shadow-2xs">
-                            🏁 ڕۆیشتن: {d.checkOutTime || (d.isToday ? 'بەردەوام' : '16:30')}
-                          </span>
+                          <div className="inline-flex flex-col items-center">
+                            <span className={`px-2.5 py-1 rounded font-mono font-black text-xs shadow-2xs ${
+                              d.checkOutStatus?.status === 'early_waived' || d.checkOutStatus?.status === 'overtime_approved'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : d.checkOutStatus?.status === 'early_unexcused' || d.checkOutStatus?.status === 'overtime_unexcused'
+                                ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                : 'bg-slate-100 text-slate-900 border border-slate-300'
+                            }`}>
+                              {d.checkOutStatus?.isWaived ? '🟢 ' : (d.checkOutStatus?.status === 'early_unexcused' || d.checkOutStatus?.status === 'overtime_unexcused') ? '🔴 ' : '🏁 '}
+                              {d.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00')}
+                            </span>
+                            <span className="text-[10px] font-bold mt-0.5" style={{ color: d.checkOutStatus?.printColor }}>
+                              {d.checkOutStatus?.label}
+                            </span>
+                          </div>
                         ) : (
                           <span className="text-slate-400 font-mono">-</span>
                         )}
                       </td>
-                      <td className="p-2 border-l border-slate-200 text-center font-mono">
-                        {d.isPresent ? '٨ کاتژمێر' : d.isFriday ? 'پشوو' : '-'}
+                      <td className="p-2.5 border-l border-slate-200 text-center font-mono">
+                        {d.isPresent ? `${d.workedHours || 8}h` : d.isFriday ? 'پشوو' : '-'}
                       </td>
-                      <td className="p-2 text-center">
+                      <td className="p-2.5 text-center">
                         {isLoading ? (
                           <span className="inline-block w-10 h-4 bg-slate-200 rounded animate-pulse" />
                         ) : d.isFriday ? (
-                          <span className="px-2 py-0.5 bg-teal-100 text-teal-900 border border-teal-300 text-[10px]">🌴 پشوو</span>
+                          <span className="px-2 py-0.5 bg-teal-100 text-teal-900 border border-teal-300 text-[10px] rounded">🌴 پشوو</span>
+                        ) : d.status === 'Leave' ? (
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 text-[10px] rounded">🟡 مۆڵەت</span>
                         ) : d.isPresent ? (
-                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px]">🟢 ئامادە</span>
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px] rounded">🟢 ئامادە</span>
                         ) : d.isFuture ? (
                           <span className="text-slate-300 text-[10px]">-</span>
                         ) : (
-                          <span className="px-2 py-0.5 bg-rose-100 text-rose-900 border border-rose-300 text-[10px]">🔴 غیاب</span>
+                          <span className="px-2 py-0.5 bg-rose-100 text-rose-900 border border-rose-300 text-[10px] rounded">🔴 غیاب</span>
+                        )}
+
+                        {d.hasAdminOverride && (
+                          <div className="text-[9.5px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 mt-1">
+                            🛡️ دەستکاری ئەدمین
+                          </div>
+                        )}
+                        {d.adminNote && (
+                          <div className="text-[9px] text-slate-600 font-normal mt-0.5 bg-slate-50 p-0.5 rounded border border-slate-200">
+                            {d.adminNote}
+                          </div>
                         )}
                       </td>
                     </tr>

@@ -46,6 +46,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import { EmployeeDashboardPrintView } from '@/components/employees/EmployeeDashboardPrintView';
 import { AdminFaceEnrollModal } from '@/components/attendance/AdminFaceEnrollModal';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
+import { resolveEmployeeDayAttendance } from '@/lib/attendance-helpers';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
 
@@ -184,6 +185,48 @@ function EmployeesPage() {
     loadRegisteredFaces();
   }, [loadRegisteredFaces]);
 
+  // Load 31-Day Matrix Overrides & Admin Decisions for current month
+  const currentMonthStr = format(new Date(), 'yyyy-MM');
+  const [matrixOverrides, setMatrixOverrides] = useState<Record<string, any>>({});
+
+  const loadMatrixOverrides = useCallback(async () => {
+    let localMap: Record<string, any> = {};
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(`ashley_matrix_overrides_${currentMonthStr}`);
+        if (cached) localMap = JSON.parse(cached);
+      } catch {}
+    }
+
+    try {
+      const res = await fetch(`/api/attendance/admin/report?t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        const map: Record<string, any> = { ...localMap };
+        (data.attendance || []).forEach((r: any) => {
+          if (r.status && r.status !== 'empty' && r.status !== 'delete' && r.status !== 'Empty') {
+            const k = `${r.userId}_${r.date}`;
+            map[k] = { ...map[k], ...r };
+          }
+        });
+        if (data.manualOverridesMap) {
+          Object.assign(map, data.manualOverridesMap);
+        }
+        setMatrixOverrides(map);
+      } else if (Object.keys(localMap).length > 0) {
+        setMatrixOverrides(localMap);
+      }
+    } catch {
+      if (Object.keys(localMap).length > 0) {
+        setMatrixOverrides(localMap);
+      }
+    }
+  }, [currentMonthStr]);
+
+  useEffect(() => {
+    loadMatrixOverrides();
+  }, [loadMatrixOverrides]);
+
   // Merge canonical authoritative defaults with live state
   const unifiedEmployees = useMemo(() => {
     const list = employees && employees.length > 0 ? employees : ASHLEY_OFFICIAL_EMPLOYEES;
@@ -200,37 +243,51 @@ function EmployeesPage() {
     return [...list].sort(sortEmployees);
   }, [employees]);
 
-  // Calculate Real-Time Monthly Attendance & Compliance Rate for Each Employee
+  // Calculate Real-Time Monthly Attendance & Compliance Rate for Each Employee using 31-Day Matrix
   const employeeComplianceMap = useMemo(() => {
-    const currentMonthStr = format(new Date(), 'yyyy-MM');
     const todayNum = new Date().getDate();
     const workingDaysSoFar = Math.max(1, Math.min(26, todayNum));
 
-    const map: Record<string, { presentDays: number; rate: number }> = {};
+    const map: Record<string, { presentDays: number; rate: number; waivedCount: number; lateCount: number }> = {};
 
     unifiedEmployees.forEach(emp => {
-      const empId = emp.id.toLowerCase();
-      const empLogs = attendanceLogs.filter(l => (l.employeeId || l.userId || '').toString().toLowerCase() === empId);
-      
-      const presentDates = new Set(
-        empLogs
-          .filter(l => (l.date && l.date.startsWith(currentMonthStr)) || (l.time && l.time.startsWith(currentMonthStr)))
-          .filter(l => (l.checkInTime && l.checkInTime !== '-') || (l.checkOutTime && l.checkOutTime !== '-') || (l as any).checkIn || (l as any).checkOut)
-          .map(l => l.date || (l.time ? l.time.split(' ')[0] : ''))
-      );
+      let presentCount = 0;
+      let waivedCount = 0;
+      let lateCount = 0;
 
-      // Baseline fallback for realistic display if offline
-      const presentCount = presentDates.size > 0 
-        ? presentDates.size 
-        : (emp.status === 'resigned' ? 0 : Math.min(workingDaysSoFar, 22));
-      
+      for (let d = 1; d <= todayNum; d++) {
+        const dayStr = d < 10 ? `0${d}` : `${d}`;
+        const dateStr = `${currentMonthStr}-${dayStr}`;
+        const dateObj = new Date(new Date().getFullYear(), new Date().getMonth(), d);
+        const isFriday = dateObj.getDay() === 5;
+        const isFuture = false;
+        const isToday = d === todayNum;
+
+        const resolved = resolveEmployeeDayAttendance(
+          emp,
+          { dayNum: d, dateStr, isFriday, isFuture, isToday },
+          matrixOverrides,
+          attendanceLogs
+        );
+
+        if (resolved.status === 'Present') {
+          presentCount++;
+        }
+        if (resolved.isWaived || resolved.checkInStatus.isWaived || resolved.checkOutStatus.isWaived) {
+          waivedCount++;
+        }
+        if (resolved.checkInStatus.status === 'late_unexcused' || resolved.checkOutStatus.status === 'early_unexcused') {
+          lateCount++;
+        }
+      }
+
       const rate = emp.status === 'resigned' ? 0 : Math.min(100, Math.round((presentCount / workingDaysSoFar) * 100));
 
-      map[emp.id] = { presentDays: presentCount, rate };
+      map[emp.id] = { presentDays: presentCount, rate, waivedCount, lateCount };
     });
 
     return map;
-  }, [unifiedEmployees, attendanceLogs]);
+  }, [unifiedEmployees, attendanceLogs, matrixOverrides, currentMonthStr]);
 
   // Filter employees based on search query
   const filteredEmployees = useMemo(() => {
@@ -253,6 +310,10 @@ function EmployeesPage() {
   const activeStaffCount = unifiedEmployees.filter(e => e.isActive !== false && e.status !== 'resigned').length;
   const boundDevicesCount = unifiedEmployees.filter(e => (e as any).deviceBound || e.id === 'emp-02').length;
   const faceRegisteredCount = unifiedEmployees.filter(e => registeredFaces.has(e.id.toLowerCase())).length;
+  const totalWaivedCount = useMemo(() => {
+    return Object.values(employeeComplianceMap).reduce((acc, curr) => acc + (curr.waivedCount || 0), 0);
+  }, [employeeComplianceMap]);
+
   const overallAvgRate = useMemo(() => {
     if (unifiedEmployees.length === 0) return 96;
     const active = unifiedEmployees.filter(e => e.status !== 'resigned');
@@ -279,7 +340,7 @@ function EmployeesPage() {
     const dataToExport = filteredEmployees.map(emp => {
       const isBound = Boolean((emp as any).deviceBound || emp.id === 'emp-02');
       const hasFace = registeredFaces.has(emp.id.toLowerCase());
-      const stats = employeeComplianceMap[emp.id] || { presentDays: 20, rate: 95 };
+      const stats = employeeComplianceMap[emp.id] || { presentDays: 20, rate: 95, waivedCount: 0 };
 
       return {
         'ناوی تەواو': (emp as any).fullName3Part || emp.name,
@@ -291,6 +352,7 @@ function EmployeesPage() {
         'دەستبەکاربوون': (emp as any).startDate || emp.employmentStartDate?.slice(0, 10) || '2024-01-01',
         'ڕێژەی پابەندبوون': `%${stats.rate}`,
         'ڕۆژانی ئامادەبوون': `${stats.presentDays} ڕۆژ`,
+        'لێخۆشبوون لە دەوام': `${stats.waivedCount || 0} جار`,
         'ژمارەی مۆبایل': emp.phone || '',
         'ئیمەیڵ': emp.email || '',
         'دۆخی دەوام': emp.status === 'resigned' ? 'وازهێناو' : 'چالاک',
@@ -310,19 +372,20 @@ function EmployeesPage() {
         <EmployeeDashboardPrintView 
           employees={filteredEmployees} 
           settings={settings} 
-          registeredFaces={registeredFaces}
-          complianceMap={employeeComplianceMap}
+          registeredFaces={registeredFaces} 
+          complianceMap={employeeComplianceMap} 
         />
       </div>
-      
-      {/* 🧭 INTERACTIVE ERP EMPLOYEES DASHBOARD */}
-      <div className="print:hidden w-full font-sans select-none" dir="rtl">
-        <AddEmployeeDialog open={isAddDialogOpen} onOpenChange={setAddDialogOpen} addEmployee={addEmployee} />
-        
-        <div className="space-y-4 w-full">
+
+      {/* 🧭 INTERACTIVE APP CONTAINER (HIDDEN IN PRINT) */}
+      <div className="min-h-screen bg-slate-50/50 dark:bg-[#1c1c1e] text-slate-900 dark:text-white font-sans p-3 sm:p-6 select-none space-y-4 print:hidden" dir="rtl">
+        <div className="max-w-[1600px] mx-auto space-y-4">
+          <AddEmployeeDialog open={isAddDialogOpen} onOpenChange={setAddDialogOpen} addEmployee={addEmployee} />
+          
+          <div className="space-y-4 w-full">
 
           {/* 📊 EXECUTIVE METRICS STRIP (HIGH LEVEL STATS) */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <div className="bg-white dark:bg-[#2c2c2e] border border-slate-200/80 dark:border-white/5 rounded-2xl p-3.5 shadow-2xs">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-500 dark:text-slate-400">کۆی کارمەندان</span>
@@ -363,7 +426,17 @@ function EmployeesPage() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-[#2c2c2e] border border-slate-200/80 dark:border-white/5 rounded-2xl p-3.5 shadow-2xs col-span-2 sm:col-span-1">
+            <div className="bg-white dark:bg-[#2c2c2e] border border-slate-200/80 dark:border-white/5 rounded-2xl p-3.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">🟢 لێخۆشبوونەکان</span>
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div className="text-xl font-black font-mono text-emerald-600 mt-1">
+                {totalWaivedCount} <span className="text-xs font-normal text-slate-400">جار</span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-[#2c2c2e] border border-slate-200/80 dark:border-white/5 rounded-2xl p-3.5 shadow-2xs">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-500 dark:text-slate-400">تێکڕای پابەندبوون</span>
                 <Sparkles className="w-4 h-4 text-purple-600" />
@@ -453,6 +526,7 @@ function EmployeesPage() {
                     <TableHead className="min-w-[75px] text-center text-slate-700 dark:text-slate-300">کۆدی PIN</TableHead>
                     <TableHead className="min-w-[95px] text-center text-slate-700 dark:text-slate-300">📅 دەستبەکاربوون</TableHead>
                     <TableHead className="min-w-[100px] text-center text-slate-700 dark:text-slate-300">⚡ پابەندبوون ٪</TableHead>
+                    <TableHead className="min-w-[95px] text-center text-slate-700 dark:text-slate-300">🟢 لێخۆشبوون</TableHead>
                     <TableHead className="min-w-[110px] text-center text-slate-700 dark:text-slate-300">📞 تەلەفۆن</TableHead>
                     <TableHead className="min-w-[75px] text-center text-slate-700 dark:text-slate-300">دۆخ</TableHead>
                     <TableHead className="min-w-[100px] text-center text-slate-700 dark:text-slate-300">کردارەکان</TableHead>
@@ -470,6 +544,7 @@ function EmployeesPage() {
                         <TableCell><Skeleton className="h-6 w-20 rounded-full mx-auto" /></TableCell>
                         <TableCell><Skeleton className="h-5 w-12 rounded-lg mx-auto" /></TableCell>
                         <TableCell><Skeleton className="h-5 w-20 rounded-lg mx-auto" /></TableCell>
+                        <TableCell><Skeleton className="h-6 w-16 rounded-full mx-auto" /></TableCell>
                         <TableCell><Skeleton className="h-6 w-16 rounded-full mx-auto" /></TableCell>
                         <TableCell><Skeleton className="h-5 w-24 rounded-lg mx-auto" /></TableCell>
                         <TableCell><Skeleton className="h-5 w-16 rounded-full mx-auto" /></TableCell>
@@ -601,7 +676,19 @@ function EmployeesPage() {
                             </div>
                           </TableCell>
 
-                          {/* 10. Phone */}
+                          {/* 10. Waived Count (لێخۆشبوون لە دەوام) */}
+                          <TableCell className="py-2.5 px-2 text-center">
+                            {stats.waivedCount > 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300/80 shadow-2xs whitespace-nowrap">
+                                <span>🟢</span>
+                                <span>{stats.waivedCount} جار</span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-mono text-xs">-</span>
+                            )}
+                          </TableCell>
+
+                          {/* 11. Phone */}
                           <TableCell className="py-2.5 px-2 text-center font-mono text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
                             <a 
                               href={`tel:${emp.phone}`} 
@@ -642,7 +729,7 @@ function EmployeesPage() {
                     })
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={12} className="h-28 text-center text-slate-400 font-bold text-xs">
+                      <TableCell colSpan={13} className="h-28 text-center text-slate-400 font-bold text-xs">
                         هیچ کارمەندێک بەم ناوە یان زانیارییە نەدۆزرایەوە
                       </TableCell>
                     </TableRow>
@@ -670,6 +757,7 @@ function EmployeesPage() {
           />
         )}
 
+        </div>
       </div>
     </>
   );

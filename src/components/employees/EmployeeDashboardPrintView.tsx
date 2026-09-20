@@ -11,7 +11,7 @@ export interface EmployeeDashboardPrintViewProps {
   employees: Employee[];
   settings?: AppSettings;
   registeredFaces?: Set<string>;
-  complianceMap?: Record<string, { presentDays: number; rate: number }>;
+  complianceMap?: Record<string, { presentDays: number; rate: number; waivedCount?: number; lateCount?: number }>;
 }
 
 export const EmployeeDashboardPrintView = ({ 
@@ -32,6 +32,7 @@ export const EmployeeDashboardPrintView = ({
         const numId = (e.employeeId || '').toLowerCase();
         return (registeredFaces && (registeredFaces.has(empId) || registeredFaces.has(numId))) || (e as any).faceRegistered;
     }).length;
+    const totalWaivedCount = Object.values(complianceMap).reduce((acc, curr) => acc + (curr.waivedCount || 0), 0);
 
     return (
         <ReportWrapper 
@@ -40,7 +41,7 @@ export const EmployeeDashboardPrintView = ({
             showSignatures={true}
         >
             {/* 📊 Summary Metrics Strip */}
-            <div className="mb-3 grid grid-cols-5 gap-2 text-center text-xs">
+            <div className="mb-3 grid grid-cols-6 gap-2 text-center text-xs">
                 <div className="p-1.5 bg-slate-50 border border-slate-300 rounded">
                     <span className="text-[10px] text-slate-500 block font-bold">کۆی گشتی ستاف</span>
                     <span className="font-mono font-black text-slate-900 text-sm">{totalStaff} کەس</span>
@@ -56,6 +57,10 @@ export const EmployeeDashboardPrintView = ({
                 <div className="p-1.5 bg-purple-50 border border-purple-200 rounded">
                     <span className="text-[10px] text-purple-700 block font-bold">ناسینی ڕوخسار (AI)</span>
                     <span className="font-mono font-black text-purple-800 text-sm">{registeredFaceCount} ناسراو</span>
+                </div>
+                <div className="p-1.5 bg-emerald-50 border border-emerald-300 rounded">
+                    <span className="text-[10px] text-emerald-700 block font-bold">🟢 لێخۆشبوون لە دەوام</span>
+                    <span className="font-mono font-black text-emerald-800 text-sm">{totalWaivedCount} جار</span>
                 </div>
                 <div className="p-1.5 bg-slate-50 border border-slate-300 rounded font-mono text-[10px] flex flex-col justify-center text-slate-500">
                     <span>کۆدی بەڵگەنامە</span>
@@ -77,6 +82,7 @@ export const EmployeeDashboardPrintView = ({
                         <th className="p-1.5 border-l border-slate-300 text-center w-20">ئامێری مۆبایل</th>
                         <th className="p-1.5 border-l border-slate-300 text-center w-20">ناسینی ڕوخسار</th>
                         <th className="p-1.5 border-l border-slate-300 text-center w-16">پابەندبوون</th>
+                        <th className="p-1.5 border-l border-slate-300 text-center w-16">لێخۆشبوون</th>
                         <th className="p-1.5 border-l border-slate-300 text-center w-20">دەستپێکی دەوام</th>
                         <th className="p-1.5 text-center w-14">دۆخ</th>
                     </tr>
@@ -140,6 +146,17 @@ export const EmployeeDashboardPrintView = ({
                                         <span className={`text-[10px] ${compliance >= 85 ? 'text-emerald-700' : 'text-amber-700'}`}>
                                             {compliance}%
                                         </span>
+                                    )}
+                                </td>
+
+                                {/* Waived Count (لێخۆشبوون لە دەوام) */}
+                                <td className="p-1 border-l border-slate-300 text-center font-mono font-bold">
+                                    {(complianceMap[employee.id]?.waivedCount || 0) > 0 ? (
+                                        <span className="text-[10px] text-emerald-700 font-black">
+                                            🟢 {complianceMap[employee.id]?.waivedCount}
+                                        </span>
+                                    ) : (
+                                        <span className="text-slate-400 text-[10px]">٠</span>
                                     )}
                                 </td>
 
