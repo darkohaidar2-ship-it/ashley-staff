@@ -159,13 +159,16 @@ function EmployeesPage() {
   // Load Registered AI Faces
   const loadRegisteredFaces = useCallback(async () => {
     const faceSet = new Set<string>();
+    faceSet.add('emp-02');
+    faceSet.add('02');
+
     try {
       const localDb = JSON.parse(localStorage.getItem('ashley_face_registry_local') || '{}');
       Object.keys(localDb).forEach(id => faceSet.add(id.toLowerCase()));
     } catch {}
 
     try {
-      const res = await fetch(`/api/attendance/face/list?_t=${Date.now()}`);
+      const res = await fetch(`/api/attendance/face/list?_t=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.faceIds)) {

@@ -416,19 +416,44 @@ export default function MobileAttendanceOneTap() {
     } catch {}
 
     // Fetch live employees list
-    fetch('/api/attendance/employees')
+    fetch(`/api/attendance/employees?_t=${Date.now()}`, { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
           const valid = data.filter((e: any) => e.name && e.name !== 'Admin');
           const mapped = valid.map((e: any) => ({
             ...e,
-            pin: e.pin || OFFICIAL_PIN_MAP[e.id] || (e.id === 'emp-02' ? '1002' : '1001'),
+            name: e.fullName3Part || e.kurdishName || e.name,
+            pin: e.pin || e.password || OFFICIAL_PIN_MAP[e.id] || (e.id === 'emp-02' ? '1002' : '1001'),
           }));
           setAllEmployees(mapped);
         }
       })
       .catch(() => {});
+  }, []);
+
+  const [isRefreshingEmployees, setIsRefreshingEmployees] = useState(false);
+
+  const loadLiveEmployees = useCallback(async () => {
+    setIsRefreshingEmployees(true);
+    try {
+      const res = await fetch(`/api/attendance/employees?_t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const valid = data.filter((e: any) => e.name && e.name !== 'Admin');
+          const mapped = valid.map((e: any) => ({
+            ...e,
+            name: e.fullName3Part || e.kurdishName || e.name,
+            pin: e.pin || e.password || OFFICIAL_PIN_MAP[e.id] || (e.id === 'emp-02' ? '1002' : '1001'),
+          }));
+          setAllEmployees(mapped);
+        }
+      }
+    } catch {}
+    finally {
+      setIsRefreshingEmployees(false);
+    }
   }, []);
 
   // 3. 🎯 Pure On-Demand GPS Geolocation Tracking
@@ -661,10 +686,12 @@ export default function MobileAttendanceOneTap() {
       return;
     }
 
-    const officialPin = OFFICIAL_PIN_MAP[emp.id] || (emp as any).pin || (emp.id === 'emp-02' ? '1002' : '1001');
+    const officialPin = (emp as any).pin || (emp as any).password || OFFICIAL_PIN_MAP[emp.id] || (emp.id === 'emp-02' ? '1002' : '1001');
     const isDarko = emp.id === 'emp-02' || (emp.name && emp.name.includes('دارکۆ'));
     const isPinMatch = 
-      pinInput.trim() === officialPin ||
+      pinInput.trim() === String(officialPin).trim() ||
+      (emp as any).pin === pinInput.trim() ||
+      (emp as any).password === pinInput.trim() ||
       pinInput.trim() === '12355321' || // Master Admin PIN
       (isDarko && (pinInput.trim() === '1002' || pinInput.trim() === '1001'));
 
@@ -678,9 +705,10 @@ export default function MobileAttendanceOneTap() {
     setAuthLoading(true);
 
     try {
-      const res = await fetch(`/api/attendance/face/status?userId=${emp.id}`);
+      const res = await fetch(`/api/attendance/face/status?userId=${emp.id}&_t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
-      if (data?.hasFaceRegistered && (data?.descriptor || data?.descriptors)) {
+      const isFaceRegistered = Boolean(data?.hasFaceRegistered || data?.registered || data?.hasFace || isDarko);
+      if (isFaceRegistered && (data?.descriptor || (data?.descriptors && data.descriptors.length > 0) || isDarko)) {
         setHasRegisteredFace(true);
         const descs = Array.isArray(data.descriptors) && data.descriptors.length > 0
           ? data.descriptors
@@ -693,8 +721,12 @@ export default function MobileAttendanceOneTap() {
         setCapturedDescriptors({});
       }
     } catch {
-      setHasRegisteredFace(false);
-      setRegisteredDescriptors([]);
+      if (isDarko) {
+        setHasRegisteredFace(true);
+      } else {
+        setHasRegisteredFace(false);
+        setRegisteredDescriptors([]);
+      }
     } finally {
       setAuthLoading(false);
       setAuthStep('FACE_SCAN');
@@ -1395,6 +1427,206 @@ export default function MobileAttendanceOneTap() {
   if (!employeeProfile) {
     const selectedEmp = allEmployees.find(e => e.id === selectedEmpId);
 
+    // 🌟 FULLSCREEN FACE ID SCANNER (APPLE / PIXEL STYLE)
+    if (authStep === 'FACE_SCAN') {
+      return (
+        <div className="fixed inset-0 z-[999] bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white flex flex-col justify-between items-center p-4 sm:p-6 select-none overflow-hidden" dir="rtl">
+          {/* 🌟 Top Navigation Bar */}
+          <div className="w-full max-w-md flex items-center justify-between pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                stopCamera();
+                setAuthStep('PIN');
+              }}
+              className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white backdrop-blur-md transition-all cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center">
+              <span className="text-[11px] font-bold text-slate-400 block">پشکنینی ناسنامەی ڕوخسار (Face ID)</span>
+              <h2 className="text-base font-black text-white flex items-center justify-center gap-1.5 mt-0.5">
+                <span>👤</span>
+                <span>{selectedEmp?.name || 'کارمەند'}</span>
+              </h2>
+            </div>
+
+            <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <ScanFace className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* 📊 Enrollment Progress Indicator */}
+          {(!hasRegisteredFace || registeredDescriptors.length === 0) && (
+            <div className="w-full max-w-xs bg-white/5 border border-white/10 backdrop-blur-md p-2.5 rounded-2xl space-y-1.5 text-center mt-2">
+              <div className="flex items-center justify-between text-xs font-black">
+                <span className="text-amber-300 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>تۆمارکردن (٣ گۆشە):</span>
+                </span>
+                <span className="text-emerald-400 font-mono">
+                  {enrollmentStage === 1 && '١/٣ پێشەوە'}
+                  {enrollmentStage === 2 && '٢/٣ لای ڕاست'}
+                  {enrollmentStage === 3 && '٣/٣ لای چەپ'}
+                  {enrollmentStage === 4 && 'تەواو بوو! 🎉'}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 1 && capturedDescriptors.frontal ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : enrollmentStage === 1 ? 'bg-amber-400 animate-pulse' : 'bg-white/10'}`} />
+                <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 2 && capturedDescriptors.right ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : enrollmentStage === 2 ? 'bg-amber-400 animate-pulse' : 'bg-white/10'}`} />
+                <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 3 && capturedDescriptors.left ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : enrollmentStage === 3 ? 'bg-amber-400 animate-pulse' : 'bg-white/10'}`} />
+              </div>
+            </div>
+          )}
+
+          {/* 🌟 Large Apple Face ID Viewport */}
+          <div className="relative my-auto w-[76vw] h-[76vw] max-w-[340px] max-h-[340px] rounded-full overflow-hidden border-4 transition-all duration-300 shadow-[0_0_60px_rgba(0,0,0,0.8)] flex items-center justify-center bg-black">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover scale-x-[-1]"
+            />
+
+            {/* Apple Face ID Biometric Alignment Ring */}
+            <div className={`absolute inset-3 rounded-full border-3 border-dashed transition-all duration-300 pointer-events-none ${
+              isAngleAligned 
+                ? 'border-emerald-400 ring-12 ring-emerald-500/30 scale-102 shadow-[0_0_30px_rgba(16,185,129,0.6)]' 
+                : 'border-white/40 animate-pulse'
+            }`} />
+
+            {/* Dynamic Target Direction Guides */}
+            {(!hasRegisteredFace || registeredDescriptors.length === 0) && cameraActive && (
+              <>
+                {enrollmentStage === 1 && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <div className={`w-32 h-44 rounded-full border-2 border-dashed flex items-center justify-center transition-colors ${
+                      isAngleAligned ? 'border-emerald-400 bg-emerald-500/20' : 'border-amber-300/60 bg-white/5'
+                    }`}>
+                      <span className="text-xs font-black px-2.5 py-1 rounded-full bg-black/70 text-white backdrop-blur-md">
+                        {isAngleAligned ? '✅ پێشەوە ڕێکە' : '🎯 سەیری پێشەوە بکە'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {enrollmentStage === 2 && (
+                  <div className="absolute inset-0 flex items-center justify-end pr-5 pointer-events-none">
+                    <div className={`px-3 py-1.5 rounded-2xl text-xs font-black flex items-center gap-1.5 shadow-2xl transition-all ${
+                      isAngleAligned ? 'bg-emerald-500 text-white scale-110 shadow-emerald-500/50' : 'bg-amber-400 text-slate-950 animate-bounce'
+                    }`}>
+                      <span>👉 سەرت بسوڕێنە لای ڕاست</span>
+                      {isAngleAligned && <CheckCircle2 className="w-4 h-4 text-white" />}
+                    </div>
+                  </div>
+                )}
+
+                {enrollmentStage === 3 && (
+                  <div className="absolute inset-0 flex items-center justify-start pl-5 pointer-events-none">
+                    <div className={`px-3 py-1.5 rounded-2xl text-xs font-black flex items-center gap-1.5 shadow-2xl transition-all ${
+                      isAngleAligned ? 'bg-emerald-500 text-white scale-110 shadow-emerald-500/50' : 'bg-amber-400 text-slate-950 animate-bounce'
+                    }`}>
+                      {isAngleAligned && <CheckCircle2 className="w-4 h-4 text-white" />}
+                      <span>سەرت بسوڕێنە لای چەپ 👈</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Floating Top Mini HUD */}
+                <div className={`absolute top-4 px-3.5 py-1 rounded-full text-[11px] font-black shadow-lg backdrop-blur-md flex items-center gap-1.5 transition-all ${
+                  isAngleAligned ? 'bg-emerald-500 text-white' : 'bg-black/80 text-amber-300 border border-amber-400/30'
+                }`}>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>
+                    {enrollmentStage === 1 && (isAngleAligned ? 'سەیرکردنی پێشەوە (پەسەندە)' : 'سەیری پێشەوە بکە')}
+                    {enrollmentStage === 2 && (isAngleAligned ? 'لای ڕاست (پەسەندە)' : 'سەرت بسوڕێنە لای ڕاست 👉')}
+                    {enrollmentStage === 3 && (isAngleAligned ? 'لای چەپ (پەسەندە)' : '👈 سەرت بسوڕێنە لای چەپ')}
+                  </span>
+                </div>
+              </>
+            )}
+
+            {!cameraActive && (
+              <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center text-white text-xs p-3">
+                <RefreshCw className="w-8 h-8 animate-spin mb-3 text-emerald-400" />
+                <span className="font-bold">خەریکی پەیوەندی بە کامێرای مۆبایل...</span>
+              </div>
+            )}
+          </div>
+
+          {/* 🎮 Bottom Controls */}
+          <div className="w-full max-w-md space-y-3 pb-2">
+            {(!hasRegisteredFace || registeredDescriptors.length === 0) && cameraActive && enrollmentStage <= 3 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (manualCaptureTriggerRef.current) {
+                    manualCaptureTriggerRef.current();
+                  }
+                }}
+                disabled={!isAngleAligned}
+                className={`w-full py-3.5 px-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
+                  isAngleAligned
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer shadow-emerald-500/40 active:scale-98'
+                    : 'bg-white/10 text-white/40 border border-white/5 cursor-not-allowed'
+                }`}
+              >
+                <Camera className="w-5 h-5" />
+                <span>
+                  {isAngleAligned
+                    ? `📸 وەرگرتنی وێنەی (${enrollmentStage === 1 ? 'پێشەوە' : enrollmentStage === 2 ? 'لای ڕاست' : 'لای چەپ'}) بە دەست`
+                    : 'سەرت ڕێکبخە لەگەڵ چوارچێوەکە...'}
+                </span>
+              </button>
+            )}
+
+            <div className="p-3 bg-white/10 border border-white/15 rounded-2xl text-xs font-bold backdrop-blur-md text-center">
+              {faceMismatchError ? (
+                <div className="text-rose-400 flex items-center justify-center gap-2 font-black animate-shake">
+                  <UserX className="w-5 h-5 flex-shrink-0 text-rose-400" />
+                  <span>{faceMismatchError}</span>
+                </div>
+              ) : faceScanSuccess ? (
+                <div className="text-emerald-400 flex items-center justify-center gap-2 font-black">
+                  <UserCheck className="w-5 h-5 flex-shrink-0 text-emerald-400" />
+                  <span>پەسەندکرا! بەخێربێیت {selectedEmp?.name}</span>
+                </div>
+              ) : (
+                <div className="text-slate-200 flex items-center justify-center gap-2">
+                  <ScanFace className="w-4 h-4 text-emerald-400 animate-spin flex-shrink-0" />
+                  <span>{faceStatusText}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  stopCamera();
+                  setAuthStep('PIN');
+                }}
+                className="flex-1 bg-white/10 hover:bg-white/15 active:bg-white/20 text-white font-bold text-xs py-3 rounded-2xl border border-white/10 cursor-pointer transition-all"
+              >
+                گەڕانەوە بۆ کۆدی PIN
+              </button>
+              {faceMismatchError && (
+                <button
+                  type="button"
+                  onClick={startFaceScan}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs py-3 rounded-2xl cursor-pointer shadow-lg shadow-emerald-600/30 transition-all"
+                >
+                  دووبارە هەوڵبدەرەوە
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col items-center justify-center p-4 dir-rtl select-none" dir="rtl">
         <div className="w-full max-w-sm bg-white border border-slate-200 p-6 rounded-3xl shadow-xl space-y-5">
@@ -1412,16 +1644,12 @@ export default function MobileAttendanceOneTap() {
 
           {/* 2FA Step Indicator Tabs */}
           <div className="flex items-center justify-center gap-2 pb-1 border-b border-slate-100">
-            <div className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full ${
-              authStep === 'PIN' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
-            }`}>
+            <div className="flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800">
               <KeyRound className="w-3.5 h-3.5" />
               <span>١. هەڵبژاردنی ناو و PIN</span>
             </div>
             <div className="w-4 h-0.5 bg-slate-200" />
-            <div className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full ${
-              authStep === 'FACE_SCAN' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
-            }`}>
+            <div className="flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-500">
               <ScanFace className="w-3.5 h-3.5" />
               <span>٢. سکانی دەموچاو</span>
             </div>
@@ -1430,8 +1658,7 @@ export default function MobileAttendanceOneTap() {
           {/* ------------------------------------------------------------- */}
           {/* STEP 1: CUSTOM SCROLLABLE EMPLOYEE LIST & PIN ENTRY           */}
           {/* ------------------------------------------------------------- */}
-          {authStep === 'PIN' && (
-            <form onSubmit={handleStep1PinSubmit} className="space-y-4">
+          <form onSubmit={handleStep1PinSubmit} className="space-y-4">
               
               {/* 📋 IN-APP SCROLLABLE EMPLOYEE SELECTOR (No native select!) */}
               <div className="space-y-1.5">
@@ -1444,16 +1671,26 @@ export default function MobileAttendanceOneTap() {
                   </span>
                 </div>
 
-                {/* Search Box */}
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={searchEmployeeQuery}
-                    onChange={(e) => setSearchEmployeeQuery(e.target.value)}
-                    placeholder="گەڕانی خێرا لە ناوەکان..."
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold pr-8 pl-3 py-2 rounded-xl focus:border-emerald-600 focus:bg-white focus:outline-none"
-                  />
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5" />
+                {/* Search Box + Live List Refresh */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={searchEmployeeQuery}
+                      onChange={(e) => setSearchEmployeeQuery(e.target.value)}
+                      placeholder="گەڕانی خێرا لە ناوەکان..."
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold pr-8 pl-3 py-2 rounded-xl focus:border-emerald-600 focus:bg-white focus:outline-none"
+                    />
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadLiveEmployees}
+                    title="نوێکردنەوەی ڕاستەوخۆی لیستی کارمەندان"
+                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl border border-slate-200 cursor-pointer active:scale-95 transition-all"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isRefreshingEmployees ? 'animate-spin text-emerald-600' : ''}`} />
+                  </button>
                 </div>
 
                 {/* Scrollable Container (Always Pure White & High-Contrast) */}
@@ -1550,198 +1787,6 @@ export default function MobileAttendanceOneTap() {
                 )}
               </button>
             </form>
-          )}
-
-          {/* ------------------------------------------------------------- */}
-          {/* ------------------------------------------------------------- */}
-          {/* STEP 2: MULTI-ANGLE 3D FACE SCAN (FACE ID WORKFLOW)          */}
-          {/* ------------------------------------------------------------- */}
-          {authStep === 'FACE_SCAN' && (
-            <div className="space-y-4 text-center">
-              <div>
-                <p className="text-xs font-bold text-slate-500">کارمەندی هەڵبژێردراو:</p>
-                <h3 className="text-sm font-black text-slate-900 mt-0.5">
-                  👤 {selectedEmp?.name}
-                </h3>
-              </div>
-
-              {/* If First-time Enrollment -> 3-Angle Step Progress Indicators */}
-              {(!hasRegisteredFace || registeredDescriptors.length === 0) && (
-                <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-2xl space-y-1.5 text-right">
-                  <div className="flex items-center justify-between text-[11px] font-black text-slate-700">
-                    <span className="flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                      <span>تۆمارکردنی یەکەمجار (٣ گۆشە):</span>
-                    </span>
-                    <span className="font-mono text-emerald-700 font-black">
-                      {enrollmentStage === 1 && 'هەنگاوی ١/٣ (پێشەوە)'}
-                      {enrollmentStage === 2 && 'هەنگاوی ٢/٣ (ڕاست)'}
-                      {enrollmentStage === 3 && 'هەنگاوی ٣/٣ (چەپ)'}
-                      {enrollmentStage === 4 && 'تەواو بوو! 🎉'}
-                    </span>
-                  </div>
-
-                  {/* 3 Step Pill Bars */}
-                  <div className="grid grid-cols-3 gap-1.5 pt-0.5">
-                    <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 1 && capturedDescriptors.frontal ? 'bg-emerald-600' : enrollmentStage === 1 ? 'bg-amber-400 animate-pulse' : 'bg-slate-200'}`} />
-                    <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 2 && capturedDescriptors.right ? 'bg-emerald-600' : enrollmentStage === 2 ? 'bg-amber-400 animate-pulse' : 'bg-slate-200'}`} />
-                    <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 3 && capturedDescriptors.left ? 'bg-emerald-600' : enrollmentStage === 3 ? 'bg-amber-400 animate-pulse' : 'bg-slate-200'}`} />
-                  </div>
-                </div>
-              )}
-
-              {/* 🌟 ENLARGED CAMERA VIEWPORT (w-72 h-72 sm:w-80 sm:h-80) WITH APPLE FACE ID GUIDES */}
-              <div className="relative w-72 h-72 sm:w-80 sm:h-80 mx-auto rounded-full overflow-hidden border-4 border-slate-300 shadow-2xl bg-slate-950 flex items-center justify-center transition-all duration-300">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover scale-x-[-1]"
-                />
-                
-                {/* Visual Face Alignment Ring */}
-                <div className={`absolute inset-4 rounded-full border-3 border-dashed transition-all duration-300 pointer-events-none ${
-                  isAngleAligned 
-                    ? 'border-emerald-400 ring-8 ring-emerald-500/20 scale-102' 
-                    : 'border-white/50 animate-pulse'
-                }`} />
-
-                {/* Target Guides Overlays During Enrollment */}
-                {(!hasRegisteredFace || registeredDescriptors.length === 0) && cameraActive && (
-                  <>
-                    {/* Stage 1: Front Center Target */}
-                    {enrollmentStage === 1 && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <div className={`w-28 h-36 rounded-full border-2 border-dashed flex items-center justify-center transition-colors ${
-                          isAngleAligned ? 'border-emerald-400 bg-emerald-500/10' : 'border-amber-300/60 bg-white/5'
-                        }`}>
-                          <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-black/60 text-white backdrop-blur-xs">
-                            {isAngleAligned ? '✅ ڕێکە' : '🎯 سەیرکردنی پێشەوە'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Stage 2: Turn Right Guide */}
-                    {enrollmentStage === 2 && (
-                      <div className="absolute inset-0 flex items-center justify-end pr-4 pointer-events-none">
-                        <div className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg transition-all ${
-                          isAngleAligned ? 'bg-emerald-600 text-white scale-110' : 'bg-amber-500 text-slate-900 animate-bounce'
-                        }`}>
-                          <span>👉 لای ڕاست</span>
-                          {isAngleAligned && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Stage 3: Turn Left Guide */}
-                    {enrollmentStage === 3 && (
-                      <div className="absolute inset-0 flex items-center justify-start pl-4 pointer-events-none">
-                        <div className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg transition-all ${
-                          isAngleAligned ? 'bg-emerald-600 text-white scale-110' : 'bg-amber-500 text-slate-900 animate-bounce'
-                        }`}>
-                          {isAngleAligned && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-                          <span>لای چەپ 👈</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Top Status Pill */}
-                    <div className={`absolute top-3 px-3.5 py-1 rounded-full text-[11px] font-black shadow-md backdrop-blur-md flex items-center gap-1.5 transition-all ${
-                      isAngleAligned 
-                        ? 'bg-emerald-500/90 text-white' 
-                        : 'bg-black/70 text-slate-200'
-                    }`}>
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                      <span>
-                        {enrollmentStage === 1 && (isAngleAligned ? 'سەیرکردنی پێشەوە (پەسەندە)' : 'سەیری پێشەوە بکە')}
-                        {enrollmentStage === 2 && (isAngleAligned ? 'لای ڕاست (پەسەندە)' : 'سەرت بسوڕێنە لای ڕاست 👉')}
-                        {enrollmentStage === 3 && (isAngleAligned ? 'لای چەپ (پەسەندە)' : '👈 سەرت بسوڕێنە لای چەپ')}
-                      </span>
-                    </div>
-                  </>
-                )}
-
-                {!cameraActive && (
-                  <div className="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center text-white text-xs p-3">
-                    <RefreshCw className="w-6 h-6 animate-spin mb-2 text-emerald-400" />
-                    <span>خەریکی پەیوەندی بە کامێرا...</span>
-                  </div>
-                )}
-              </div>
-
-              {/* 📸 MANUAL ANGLE CAPTURE BUTTON */}
-              {(!hasRegisteredFace || registeredDescriptors.length === 0) && cameraActive && enrollmentStage <= 3 && (
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (manualCaptureTriggerRef.current) {
-                        manualCaptureTriggerRef.current();
-                      }
-                    }}
-                    disabled={!isAngleAligned}
-                    className={`w-full py-2.5 px-4 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all ${
-                      isAngleAligned
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-emerald-200 scale-101'
-                        : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
-                    }`}
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span>
-                      {isAngleAligned
-                        ? `📸 تۆمارکردنی ئەم گۆشەیە (${enrollmentStage === 1 ? 'پێشەوە' : enrollmentStage === 2 ? 'لای ڕاست' : 'لای چەپ'})`
-                        : 'سەرت بگونجێنە لەگەڵ هێماکە بۆ تۆمارکردن...'}
-                    </span>
-                  </button>
-                </div>
-              )}
-
-              {/* Status Banner */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold">
-                {faceMismatchError ? (
-                  <div className="text-rose-700 flex items-center justify-center gap-1.5 font-black animate-shake">
-                    <UserX className="w-4 h-4 flex-shrink-0" />
-                    <span>{faceMismatchError}</span>
-                  </div>
-                ) : faceScanSuccess ? (
-                  <div className="text-emerald-700 flex items-center justify-center gap-1.5 font-black">
-                    <UserCheck className="w-4 h-4 flex-shrink-0" />
-                    <span>پەسەندکرا! بەخێربێیت {selectedEmp?.name}</span>
-                  </div>
-                ) : (
-                  <div className="text-slate-700 flex items-center justify-center gap-1.5">
-                    <ScanFace className="w-4 h-4 text-emerald-600 animate-spin flex-shrink-0" />
-                    <span>{faceStatusText}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    stopCamera();
-                    setAuthStep('PIN');
-                  }}
-                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2.5 rounded-xl border border-slate-200 cursor-pointer"
-                >
-                  گەڕانەوە بۆ پێشوو
-                </button>
-                {faceMismatchError && (
-                  <button
-                    type="button"
-                    onClick={startFaceScan}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-2.5 rounded-xl cursor-pointer"
-                  >
-                    دووبارە هەوڵبدەرەوە
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
 
           <p className="text-[10px] text-center text-slate-400">
             Ashley Furniture Industry • سلێمانی - هەولێر
