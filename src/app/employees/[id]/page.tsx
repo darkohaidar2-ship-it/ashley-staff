@@ -45,22 +45,10 @@ import { useToast } from '@/hooks/use-toast';
 import { AdminFaceEnrollModal } from '@/components/attendance/AdminFaceEnrollModal';
 import { ReportWrapper } from '@/components/reports/ReportWrapper';
 import { formatTime24H } from '@/lib/export-utils';
+import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import * as XLSX from 'xlsx';
 
-const ASHLEY_DEFAULT_EMPLOYEES = [
-  { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', fullName3Part: 'سه هەند مەریوان حەمەسەعید', role: 'Employee', phone: '0770 123 4567', startDate: '2025-01-01', pin: '1001', password: '1001', deviceBound: false },
-  { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', fullName3Part: 'دارکۆ حەیدەر حسێن', role: 'Manager', phone: '0770 765 4321', startDate: '2024-01-01', pin: '1002', password: '1002', deviceBound: true },
-  { id: 'emp-03', name: 'شادیار هوشیار', fullName3Part: 'شادیار هوشیار', role: 'Employee Supervisor', phone: '0750 111 2233', startDate: '2025-02-01', pin: '1003', password: '1003', deviceBound: false },
-  { id: 'emp-04', name: 'هەڤاڵ حبیب حەمەڕەزا', fullName3Part: 'هەڤاڵ حبیب حەمەڕەزا', role: 'Transport Supervisor', phone: '0750 222 3344', startDate: '2025-02-15', pin: '1004', password: '1004', deviceBound: false },
-  { id: 'emp-05', name: 'عیماد سەباح نوری', fullName3Part: 'عیماد سەباح نوری', role: 'Employee', phone: '0770 333 4455', startDate: '2025-03-01', pin: '1005', password: '1005', deviceBound: false },
-  { id: 'emp-06', name: 'کامەران عومەر ڕووئوف', fullName3Part: 'کامەران عومەر ڕووئوف', role: 'Employee', phone: '0770 444 5566', startDate: '2025-03-10', pin: '1006', password: '1006', deviceBound: false },
-  { id: 'emp-07', name: 'ڕابەر محەمەد مەحمود', fullName3Part: 'ڕابەر محەمەد مەحمود', role: 'Employee', phone: '0770 555 6677', startDate: '2025-04-01', pin: '1007', password: '1007', deviceBound: false },
-  { id: 'emp-08', name: 'دانەر محەمەد باسام', fullName3Part: 'دانەر محەمەد باسام', role: 'Employee', phone: '0770 666 7788', startDate: '2025-04-15', pin: '1008', password: '1008', deviceBound: false },
-  { id: 'emp-09', name: 'ڕێبین سەباح نوری', fullName3Part: 'ڕێبین سەباح نوری', role: 'Employee', phone: '0770 777 8899', startDate: '2025-05-01', pin: '1009', password: '1009', deviceBound: false },
-  { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', fullName3Part: 'بەهرەمەند ڕزگار عزیز', role: 'Employee', phone: '0770 888 9900', startDate: '2025-05-15', pin: '1010', password: '1010', deviceBound: false },
-  { id: 'emp-11', name: 'شادومان یادگار رحیم', fullName3Part: 'شادومان یادگار رحیم', role: 'Employee', phone: '0750 999 0011', startDate: '2025-06-01', pin: '1011', password: '1011', deviceBound: false },
-  { id: 'emp-12', name: 'سەروەت قادر', fullName3Part: 'سەروەت قادر', role: 'Employee', phone: '0750 000 1122', startDate: '2025-06-15', pin: '1012', password: '1012', deviceBound: false },
-];
+const ASHLEY_DEFAULT_EMPLOYEES = ASHLEY_OFFICIAL_EMPLOYEES;
 
 function EmployeeDetailPage() {
   const params = useParams();

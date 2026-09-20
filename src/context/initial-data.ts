@@ -1,5 +1,6 @@
 import { Employee, User, Role, AppSettings, AllPdfSettings, PdfSettings, ThemeColors, BranchColors, AnswerOption } from '@/lib/types';
 import { adminPermissions, adminAssistantPermissions, viewerPermissions, employeePermissions, financeManagerPermissions, inventoryManagerPermissions, hrManagerPermissions } from '@/lib/permissions';
+import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import en from '@/locales/en.json';
 import ku from '@/locales/ku.json';
 
@@ -270,20 +271,7 @@ export const initialData: any = {
             ]
         }
     ],
-    employees: [
-      { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', fullName3Part: 'سه هەند مەریوان حەمەسەعید', employeeId: '01', role: 'Employee', startDate: '2024-01-01', employmentStartDate: '2024-01-01', password: '1001', isActive: true, status: 'active' },
-      { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', fullName3Part: 'دارکۆ حەیدەر حسێن', employeeId: '02', role: 'Manager', startDate: '2025-02-01', employmentStartDate: '2025-02-01', password: '1002', isActive: true, status: 'active' },
-      { id: 'emp-03', name: 'شادیار هوشیار', fullName3Part: 'شادیار هوشیار', employeeId: '03', role: 'Employee Supervisor', startDate: '2026-06-01', employmentStartDate: '2026-06-01', password: '1003', isActive: true, status: 'active' },
-      { id: 'emp-04', name: 'هەڤاڵ حبیب حەمەڕەزا', fullName3Part: 'هەڤاڵ حبیب حەمەڕەزا', employeeId: '04', role: 'Transport Supervisor', startDate: '2025-05-13', employmentStartDate: '2025-05-13', password: '1004', isActive: true, status: 'active' },
-      { id: 'emp-05', name: 'عیماد سەباح نوری', fullName3Part: 'عیماد سەباح نوری', employeeId: '05', role: 'Employee', startDate: '2023-11-15', employmentStartDate: '2023-11-15', password: '1005', isActive: true, status: 'active' },
-      { id: 'emp-06', name: 'کامەران عومەر ڕووئوف', fullName3Part: 'کامەران عومەر ڕووئوف', employeeId: '06', role: 'Employee', startDate: '2025-09-15', employmentStartDate: '2025-09-15', password: '1006', isActive: true, status: 'active' },
-      { id: 'emp-07', name: 'ڕابەر محەمەد مەحمود', fullName3Part: 'ڕابەر محەمەد مەحمود', employeeId: '07', role: 'Employee', startDate: '2024-04-20', employmentStartDate: '2024-04-20', password: '1007', isActive: true, status: 'active' },
-      { id: 'emp-08', name: 'دانەر محەمەد باسام', fullName3Part: 'دانەر محەمەد باسام', employeeId: '08', role: 'Employee', startDate: '2024-05-20', employmentStartDate: '2024-05-20', password: '1008', isActive: true, status: 'active' },
-      { id: 'emp-09', name: 'ڕێبین سەباح نوری', fullName3Part: 'ڕێبین سەباح نوری', employeeId: '09', role: 'Employee', startDate: '2024-06-22', employmentStartDate: '2024-06-22', password: '1009', isActive: true, status: 'active' },
-      { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', fullName3Part: 'بەهرەمەند ڕزگار عزیز', employeeId: '10', role: 'Employee', startDate: '2026-12-27', employmentStartDate: '2026-12-27', password: '1010', isActive: true, status: 'active' },
-      { id: 'emp-11', name: 'شادومان یادگار رحیم', fullName3Part: 'شادومان یادگار رحیم', employeeId: '11', role: 'Employee', startDate: '2024-09-30', employmentStartDate: '2024-09-30', password: '1011', isActive: true, status: 'active' },
-      { id: 'emp-12', name: 'سەروەت قادر', fullName3Part: 'سەروەت قادر', employeeId: '12', role: 'Employee', startDate: '2025-01-01', employmentStartDate: '2025-01-01', password: '1012', isActive: true, status: 'active' },
-    ],
+    employees: ASHLEY_OFFICIAL_EMPLOYEES,
     attendanceLogs: [],
     excelFiles: [],
     items: [],
