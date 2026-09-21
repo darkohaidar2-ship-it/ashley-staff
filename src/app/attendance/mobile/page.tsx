@@ -1246,11 +1246,8 @@ export default function MobileAttendanceOneTap() {
         return;
       }
 
-      if (confirm('ئایا دڵنیایت لە دەستپێکردنی دەوام و تۆمارکردنی هاتن؟')) {
-        await handleOneTapAttendance('ENTER', undefined, geo);
-      } else {
-        setTriggerLoading(false);
-      }
+      // 🚀 Direct 1-tap check-in with GPS verification
+      await handleOneTapAttendance('ENTER', undefined, geo);
     } catch (err: any) {
       alert(err.message || 'هەڵە لە وەرگرتنی شوێنی GPS.');
       setTriggerLoading(false);
@@ -1288,11 +1285,8 @@ export default function MobileAttendanceOneTap() {
         return;
       }
 
-      if (confirm('ئایا دڵنیایت لە تەواوبوونی دەوام و تۆمارکردنی ڕۆیشتن؟')) {
-        await handleOneTapAttendance('EXIT', undefined, geo);
-      } else {
-        setTriggerLoading(false);
-      }
+      // 🚀 Direct 1-tap check-out with GPS verification
+      await handleOneTapAttendance('EXIT', undefined, geo);
     } catch (err: any) {
       alert(err.message || 'هەڵە لە وەرگرتنی شوێنی GPS.');
       setTriggerLoading(false);
@@ -1829,15 +1823,6 @@ export default function MobileAttendanceOneTap() {
 
         <div className="flex items-center gap-1.5">
           <button 
-            onClick={handleOpenProfileModal}
-            className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] flex items-center gap-1 font-bold cursor-pointer transition-colors shadow-xs"
-            title="پڕۆفایلی کارمەند"
-          >
-            <User className="w-3.5 h-3.5 text-emerald-600" />
-            <span>پڕۆفایل</span>
-          </button>
-
-          <button 
             onClick={() => setShowLogoutModal(true)}
             className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[10px] flex items-center gap-1 font-bold cursor-pointer transition-colors"
             title="ڕیستکردن یان دەرچوون"
@@ -1938,21 +1923,9 @@ export default function MobileAttendanceOneTap() {
                 <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
                   دوگمەکانی هاتن و ڕۆیشتن قوفڵکراون ({distanceMeters} مەتر دووریت لە {matchedLocationName}). بە گەیشتنت بە ناو سنووری دیاریکراو دوگمەکان ئۆتۆماتیکی دەکرێنەوە.
                 </p>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await requestSingleGpsPosition();
-                    } catch (e: any) {
-                      alert(e.message || 'هەڵە لە وەرگرتنی GPS');
-                    }
-                  }}
-                  disabled={gpsState === 'acquiring' || triggerLoading}
-                  className="mt-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
-                >
-                  <RefreshCw className={`w-3 h-3 ${gpsState === 'acquiring' ? 'animate-spin' : ''}`} />
-                  <span>دووبارە پشکنینەوەی شوێن (Refresh GPS)</span>
-                </button>
+                <p className="text-[10px] text-amber-700 dark:text-amber-400 font-bold pt-0.5">
+                  💡 کاتێک دەگەیتە شوێنی کار، دوگمەی «پشکنین» لەسەر کارتی شوێن لە سەرەوە دابگرە.
+                </p>
               </div>
             </div>
           )}

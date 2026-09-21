@@ -798,16 +798,6 @@ export function AdminDailyAttendanceTable({
             )}
           </button>
 
-          {/* 🗑️ Wipe All Attendance Data Button */}
-          <button
-            type="button"
-            onClick={handleWipeAllAttendanceData}
-            className="px-3.5 py-2 rounded-full bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 text-xs font-bold border border-rose-300/60 dark:border-rose-800/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
-            title="سڕینەوەی سەرجەم داتاکان"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-            <span>سڕینەوەی گشتی</span>
-          </button>
 
           {/* 🖨️ Print Single Day */}
           <button
