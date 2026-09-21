@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAppContext } from '@/context/app-provider';
 import { 
-  Smartphone, 
   Camera, 
   ShieldCheck, 
   Users, 
@@ -25,12 +24,6 @@ interface NavSection {
 }
 
 const NAV_SECTIONS: NavSection[] = [
-  {
-    title: 'دەوامی مۆبایل',
-    href: '/',
-    icon: Smartphone,
-    matches: ['/', '/attendance/mobile'],
-  },
   {
     title: 'کیۆسکی دەموچاو',
     href: '/attendance/checkin',

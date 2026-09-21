@@ -80,8 +80,8 @@ export function getCheckInStatus(
       isLate: true,
       isWaived: true,
       status: 'late_waived',
-      colorCls: 'text-emerald-600 dark:text-emerald-400 font-extrabold',
-      printColor: '#059669',
+      colorCls: 'text-purple-600 dark:text-purple-400 font-black',
+      printColor: '#9333ea',
       label: 'لێخۆشبوو'
     };
   }
@@ -127,8 +127,8 @@ export function getCheckOutStatus(
         isOvertime: false,
         isWaived: true,
         status: 'early_waived',
-        colorCls: 'text-emerald-600 dark:text-emerald-400 font-extrabold',
-        printColor: '#059669',
+        colorCls: 'text-purple-600 dark:text-purple-400 font-black',
+        printColor: '#9333ea',
         label: 'لێخۆشبوو (زوو چوونەوە)'
       };
     }
@@ -161,8 +161,8 @@ export function getCheckOutStatus(
       isOvertime: true,
       isWaived: Boolean(isWaived),
       status: 'overtime_approved',
-      colorCls: isWaived ? 'text-emerald-600 dark:text-emerald-400 font-extrabold' : 'text-slate-700 dark:text-slate-300 font-semibold',
-      printColor: isWaived ? '#059669' : '#334155',
+      colorCls: isWaived ? 'text-purple-600 dark:text-purple-400 font-black' : 'text-slate-700 dark:text-slate-300 font-semibold',
+      printColor: isWaived ? '#9333ea' : '#334155',
       label: isWaived ? 'ئیزافەی پەسەندکراو' : 'درەنگ چوونەوە'
     };
   }
@@ -196,7 +196,11 @@ export interface UnifiedAttendanceDayInfo {
   adminCheckInNote: string;
   adminCheckOutNote: string;
   adminDecision: 'waived' | 'penalized' | null;
+  adminCheckInDecision?: 'waived' | 'penalized' | null;
+  adminCheckOutDecision?: 'waived' | 'penalized' | null;
   isWaived: boolean;
+  isCheckInWaived?: boolean;
+  isCheckOutWaived?: boolean;
   workedHours: number;
   warehouseName: string;
   historyLogs: any[];
@@ -207,6 +211,7 @@ export interface UnifiedAttendanceDayInfo {
 
 /**
  * Resolves attendance record with absolute priority for Admin Overrides
+ * and guarantees LATEST live data (کۆتا داتا) is displayed.
  */
 export function resolveEmployeeDayAttendance(
   emp: { id: string; name?: string | null; fullName3Part?: string | null; employeeId?: string | null; [key: string]: any },
@@ -221,7 +226,31 @@ export function resolveEmployeeDayAttendance(
   const empAlt = (emp.employeeId || '').toString().trim().toLowerCase();
   const empName = (emp.name || emp.fullName3Part || '').trim().toLowerCase();
 
-  // 1. 🛡️ CHECK ADMIN MANUAL OVERRIDE FIRST (ABSOLUTE PRECEDENCE)
+  // Find all actual logs from attendanceLogs for this employee on this date
+  const dayRecords = (attendanceLogs || []).filter(log => {
+    const logDate = log.date || (log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || log.created_at?.split('T')[0] || '');
+    if (logDate !== dateStr) return false;
+
+    const logEmpId = (log.employeeId || log.userId || '').toString().trim().toLowerCase();
+    const logName = (log.name || log.userName || log.employeeName || '').trim().toLowerCase();
+
+    return (
+      logEmpId === empId || 
+      logEmpId === empNum || 
+      logEmpId === `emp-${empNum}` ||
+      (empAlt && logEmpId === empAlt) ||
+      (logName && (logName === empName || logName.includes(empName) || empName.includes(logName)))
+    );
+  });
+
+  // Sort dayRecords chronologically so latest log wins (کۆتا داتا)
+  const sortedDayRecords = [...dayRecords].sort((a, b) => {
+    const timeA = a.created_at || a.createdAt || a.timestamp || a.time || '';
+    const timeB = b.created_at || b.createdAt || b.timestamp || b.time || '';
+    return timeA.localeCompare(timeB);
+  });
+
+  // 1. 🛡️ CHECK ADMIN MANUAL OVERRIDE
   const override = 
     overridesMap[`${emp.id}_${dateStr}`] || 
     overridesMap[`${empNum}_${dateStr}`] || 
@@ -230,7 +259,20 @@ export function resolveEmployeeDayAttendance(
 
   if (override) {
     const isOverrideEmpty = override.status === 'empty' || override.status === 'Empty' || override.status === 'delete';
-    if (isOverrideEmpty) {
+    
+    // If override is marked empty/deleted, but employee checked in again on mobile/live logs, do NOT block the new live checkin!
+    const hasSubsequentLiveCheckIn = sortedDayRecords.some(r => {
+      const inTime = r.checkInTime || r.check_in_time || r.checkIn;
+      if (!inTime) return false;
+      if (override.deletedAt || override.timestamp) {
+        const rTime = new Date(r.created_at || r.createdAt || r.time || 0).getTime();
+        const oTime = new Date(override.deletedAt || override.timestamp || 0).getTime();
+        return rTime > oTime;
+      }
+      return true;
+    });
+
+    if (isOverrideEmpty && !hasSubsequentLiveCheckIn) {
       return {
         hasRecord: false,
         isFriday,
@@ -248,7 +290,11 @@ export function resolveEmployeeDayAttendance(
         adminCheckInNote: '',
         adminCheckOutNote: '',
         adminDecision: null,
+        adminCheckInDecision: null,
+        adminCheckOutDecision: null,
         isWaived: false,
+        isCheckInWaived: false,
+        isCheckOutWaived: false,
         workedHours: 0,
         warehouseName: '',
         historyLogs: [],
@@ -258,55 +304,77 @@ export function resolveEmployeeDayAttendance(
       };
     }
 
-    const cIn = (override.checkInTime || '').slice(0, 5);
-    const cOut = (override.checkOutTime || '').slice(0, 5);
-    const adminDecision = (override.adminDecision as 'waived' | 'penalized') || (override.isWaived ? 'waived' : null);
-    const isWaived = Boolean(override.isWaived ?? (adminDecision === 'waived'));
-    const isPenalized = adminDecision === 'penalized';
+    if (!isOverrideEmpty) {
+      const cIn = (override.checkInTime || '').slice(0, 5);
+      const cOut = (override.checkOutTime || '').slice(0, 5);
+      const adminDecision = (override.adminDecision as 'waived' | 'penalized') || (override.isWaived ? 'waived' : null);
+      const isPenalized = adminDecision === 'penalized' || override.adminCheckInDecision === 'penalized' || override.adminCheckOutDecision === 'penalized';
 
-    let workedHours = 8;
-    if (cIn && cOut && cIn.includes(':') && cOut.includes(':')) {
-      const [inH, inM] = cIn.split(':').map(Number);
-      const [outH, outM] = cOut.split(':').map(Number);
-      const inTotal = inH * 60 + (inM || 0);
-      const outTotal = outH * 60 + (outM || 0);
-      if (outTotal > inTotal) {
-        const gross = outTotal - inTotal;
-        const breakStart = 12 * 60;
-        const breakEnd = 13 * 60;
-        const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
-        workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
+      // Decouple Check-In waiver from Check-Out waiver
+      const isCheckInWaived = Boolean(
+        override.checkInWaived ?? 
+        override.isCheckInWaived ?? 
+        (override.adminCheckInDecision === 'waived') ?? 
+        (adminDecision === 'waived') ?? 
+        override.isWaived
+      );
+      const isCheckOutWaived = Boolean(
+        override.checkOutWaived ?? 
+        override.isCheckOutWaived ?? 
+        (override.adminCheckOutDecision === 'waived') ?? 
+        (adminDecision === 'waived' && cOut && cOut < SHIFT_RULES.EARLY_THRESHOLD) ?? 
+        (override.isWaived && cOut && cOut < SHIFT_RULES.EARLY_THRESHOLD)
+      );
+      const isWaived = isCheckInWaived || isCheckOutWaived;
+
+      let workedHours = 8;
+      if (cIn && cOut && cIn.includes(':') && cOut.includes(':')) {
+        const [inH, inM] = cIn.split(':').map(Number);
+        const [outH, outM] = cOut.split(':').map(Number);
+        const inTotal = inH * 60 + (inM || 0);
+        const outTotal = outH * 60 + (outM || 0);
+        if (outTotal > inTotal) {
+          const gross = outTotal - inTotal;
+          const breakStart = 12 * 60;
+          const breakEnd = 13 * 60;
+          const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
+          workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
+        }
       }
+
+      const checkInStatus = getCheckInStatus(cIn, isCheckInWaived, isPenalized);
+      const checkOutStatus = getCheckOutStatus(cOut, isCheckOutWaived, isPenalized, isToday);
+
+      return {
+        hasRecord: true,
+        isFriday,
+        isFuture,
+        isToday,
+        status: (override.status as any) || 'Present',
+        checkInTime: cIn,
+        checkOutTime: cOut,
+        rawCheckIn: override.rawCheckIn || cIn,
+        rawCheckOut: override.rawCheckOut || cOut,
+        checkInNote: override.checkInNote || override.note || '',
+        checkOutNote: override.checkOutNote || '',
+        note: override.note || override.checkInNote || '',
+        adminNote: override.adminNote || '',
+        adminCheckInNote: override.adminCheckInNote || override.adminNote || '',
+        adminCheckOutNote: override.adminCheckOutNote || '',
+        adminDecision,
+        adminCheckInDecision: override.adminCheckInDecision || (isCheckInWaived ? 'waived' : null),
+        adminCheckOutDecision: override.adminCheckOutDecision || (isCheckOutWaived ? 'waived' : null),
+        isWaived,
+        isCheckInWaived,
+        isCheckOutWaived,
+        workedHours: override.status === 'Present' ? workedHours : 0,
+        warehouseName: 'کۆمپانیای سەرەکی ئاشڵی',
+        historyLogs: override.historyLogs || [],
+        hasAdminOverride: true,
+        checkInStatus,
+        checkOutStatus
+      };
     }
-
-    const checkInStatus = getCheckInStatus(cIn, isWaived, isPenalized);
-    const checkOutStatus = getCheckOutStatus(cOut, isWaived, isPenalized, isToday);
-
-    return {
-      hasRecord: true,
-      isFriday,
-      isFuture,
-      isToday,
-      status: (override.status as any) || 'Present',
-      checkInTime: cIn,
-      checkOutTime: cOut,
-      rawCheckIn: override.rawCheckIn || cIn,
-      rawCheckOut: override.rawCheckOut || cOut,
-      checkInNote: override.checkInNote || override.note || '',
-      checkOutNote: override.checkOutNote || '',
-      note: override.note || override.checkInNote || '',
-      adminNote: override.adminNote || '',
-      adminCheckInNote: override.adminCheckInNote || override.adminNote || '',
-      adminCheckOutNote: override.adminCheckOutNote || '',
-      adminDecision,
-      isWaived,
-      workedHours: override.status === 'Present' ? workedHours : 0,
-      warehouseName: 'کۆمپانیای سەرەکی ئاشڵی',
-      historyLogs: override.historyLogs || [],
-      hasAdminOverride: true,
-      checkInStatus,
-      checkOutStatus
-    };
   }
 
   // 2. Friday Holiday
@@ -367,23 +435,7 @@ export function resolveEmployeeDayAttendance(
     };
   }
 
-  // 4. Past or Today: Search actual GPS logs from server
-  const dayRecords = attendanceLogs.filter(log => {
-    const logDate = log.date || (log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || '');
-    if (logDate !== dateStr) return false;
-
-    const logEmpId = (log.employeeId || log.userId || '').toString().trim().toLowerCase();
-    const logName = (log.name || log.userName || log.employeeName || '').trim().toLowerCase();
-
-    return (
-      logEmpId === empId || 
-      logEmpId === empNum || 
-      logEmpId === `emp-${empNum}` ||
-      (empAlt && logEmpId === empAlt) ||
-      (logName && (logName === empName || logName.includes(empName) || empName.includes(logName)))
-    );
-  });
-
+  // 4. Past or Today: Search actual GPS logs from server (sorted chronologically so latest wins - کۆتا داتا)
   let checkInTime = '';
   let checkOutTime = '';
   let rawCheckIn = '';
@@ -395,15 +447,20 @@ export function resolveEmployeeDayAttendance(
   let adminCheckInNote = '';
   let adminCheckOutNote = '';
   let adminDecision: 'waived' | 'penalized' | null = null;
+  let adminCheckInDecision: 'waived' | 'penalized' | null = null;
+  let adminCheckOutDecision: 'waived' | 'penalized' | null = null;
   let isWaived = false;
+  let isCheckInWaived = false;
+  let isCheckOutWaived = false;
   let warehouseName = 'کۆمپانیای سەرەکی ئاشڵی';
   let historyLogs: any[] = [];
 
-  for (const r of (dayRecords as any[])) {
+  for (const r of (sortedDayRecords as any[])) {
     const inCandidate = r.checkInTime || r.check_in_time || (r.checkIn ? (r.checkIn.includes(' ') ? r.checkIn.split(' ')[1]?.slice(0, 5) : r.checkIn.includes('T') ? r.checkIn.split('T')[1]?.slice(0, 5) : r.checkIn.slice(0, 5)) : '');
     const outCandidate = r.checkOutTime || r.check_out_time || (r.checkOut ? (r.checkOut.includes(' ') ? r.checkOut.split(' ')[1]?.slice(0, 5) : r.checkOut.includes('T') ? r.checkOut.split('T')[1]?.slice(0, 5) : r.checkOut.slice(0, 5)) : '');
 
-    if (inCandidate && !checkInTime) checkInTime = inCandidate.slice(0, 5);
+    // Latest candidates win (کۆتا داتا)
+    if (inCandidate) checkInTime = inCandidate.slice(0, 5);
     if (outCandidate) checkOutTime = outCandidate.slice(0, 5);
     if (r.rawCheckInTime || r.raw_check_in_time) rawCheckIn = (r.rawCheckInTime || r.raw_check_in_time).slice(0, 5);
     if (r.rawCheckOutTime || r.raw_check_out_time) rawCheckOut = (r.rawCheckOutTime || r.raw_check_out_time).slice(0, 5);
@@ -412,19 +469,23 @@ export function resolveEmployeeDayAttendance(
     const outN = r.check_out_note || r.checkOutNote || r.checkout_note;
     const genN = r.note || r.notes || r.reason || r.employeeNote || r.employee_note;
     
-    if (inN && !checkInNote) checkInNote = inN;
-    if (outN && !checkOutNote) checkOutNote = outN;
-    if (genN && !note) note = genN;
+    if (inN) checkInNote = inN;
+    if (outN) checkOutNote = outN;
+    if (genN) note = genN;
 
     const admInN = r.adminCheckInNote || r.admin_check_in_note;
     const admOutN = r.adminCheckOutNote || r.admin_check_out_note;
     const admN = r.adminNote || r.admin_note || r.editNote || r.edit_note;
 
-    if (admInN && !adminCheckInNote) adminCheckInNote = admInN;
-    if (admOutN && !adminCheckOutNote) adminCheckOutNote = admOutN;
-    if (admN && !adminNote) adminNote = admN;
+    if (admInN) adminCheckInNote = admInN;
+    if (admOutN) adminCheckOutNote = admOutN;
+    if (admN) adminNote = admN;
 
+    if (r.adminCheckInDecision) adminCheckInDecision = r.adminCheckInDecision as 'waived' | 'penalized';
+    if (r.adminCheckOutDecision) adminCheckOutDecision = r.adminCheckOutDecision as 'waived' | 'penalized';
     if (r.adminDecision) adminDecision = r.adminDecision as 'waived' | 'penalized';
+    if (r.checkInWaived !== undefined) isCheckInWaived = Boolean(r.checkInWaived);
+    if (r.checkOutWaived !== undefined) isCheckOutWaived = Boolean(r.checkOutWaived);
     if (r.isWaived !== undefined) isWaived = Boolean(r.isWaived);
 
     if (r.historyLogs && Array.isArray(r.historyLogs) && r.historyLogs.length > 0) {
@@ -467,10 +528,13 @@ export function resolveEmployeeDayAttendance(
     workedHours = 8;
   }
 
-  const isPenalized = adminDecision === 'penalized';
-  const resolvedWaived = Boolean(isWaived || adminDecision === 'waived');
-  const checkInStatus = getCheckInStatus(checkInTime, resolvedWaived, isPenalized);
-  const checkOutStatus = getCheckOutStatus(checkOutTime, resolvedWaived, isPenalized, isToday);
+  const isPenalized = adminDecision === 'penalized' || adminCheckInDecision === 'penalized' || adminCheckOutDecision === 'penalized';
+  const resolvedCheckInWaived = Boolean(isCheckInWaived || adminCheckInDecision === 'waived' || (adminDecision === 'waived' && checkInTime > SHIFT_RULES.GRACE_TIME) || (isWaived && checkInTime > SHIFT_RULES.GRACE_TIME));
+  const resolvedCheckOutWaived = Boolean(isCheckOutWaived || adminCheckOutDecision === 'waived' || (adminDecision === 'waived' && checkOutTime && checkOutTime < SHIFT_RULES.EARLY_THRESHOLD) || (isWaived && checkOutTime && checkOutTime < SHIFT_RULES.EARLY_THRESHOLD));
+  const resolvedWaived = resolvedCheckInWaived || resolvedCheckOutWaived || isWaived || adminDecision === 'waived';
+
+  const checkInStatus = getCheckInStatus(checkInTime, resolvedCheckInWaived, isPenalized);
+  const checkOutStatus = getCheckOutStatus(checkOutTime, resolvedCheckOutWaived, isPenalized, isToday);
 
   return {
     hasRecord,
@@ -490,7 +554,11 @@ export function resolveEmployeeDayAttendance(
     adminCheckOutNote,
     historyLogs,
     adminDecision: adminDecision || (resolvedWaived ? 'waived' : null),
+    adminCheckInDecision: adminCheckInDecision || (resolvedCheckInWaived ? 'waived' : null),
+    adminCheckOutDecision: adminCheckOutDecision || (resolvedCheckOutWaived ? 'waived' : null),
     isWaived: resolvedWaived,
+    isCheckInWaived: resolvedCheckInWaived,
+    isCheckOutWaived: resolvedCheckOutWaived,
     warehouseName,
     workedHours,
     hasAdminOverride: false,

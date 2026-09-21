@@ -121,8 +121,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   const [modalAdminCheckInNote, setModalAdminCheckInNote] = useState<string>('');
   const [modalAdminCheckOutNote, setModalAdminCheckOutNote] = useState<string>('');
   const [modalAdminDecision, setModalAdminDecision] = useState<'waived' | 'penalized' | null>(null);
+  const [modalCheckInDecision, setModalCheckInDecision] = useState<'waived' | 'penalized' | null>(null);
+  const [modalCheckOutDecision, setModalCheckOutDecision] = useState<'waived' | 'penalized' | null>(null);
   const [isSavingModal, setIsSavingModal] = useState<boolean>(false);
-
 
   // Dynamic Manual Overrides Map for cell statuses (Initialized with instant cache if available)
   const [manualStatusMap, setManualStatusMap] = useState<Record<string, { 
@@ -139,7 +140,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     adminCheckOutNote?: string;
     historyLogs?: any[];
     adminDecision?: 'waived' | 'penalized' | null;
+    adminCheckInDecision?: 'waived' | 'penalized' | null;
+    adminCheckOutDecision?: 'waived' | 'penalized' | null;
     isWaived?: boolean;
+    isCheckInWaived?: boolean;
+    isCheckOutWaived?: boolean;
+    deletedAt?: number;
   }>>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -608,11 +614,18 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     setSelectedDayModal({ emp, dayItem, info });
     setModalStatus(info.status === 'Empty' ? 'Present' : info.status);
     setModalCheckIn(info.checkInTime || '08:00');
-    setModalCheckOut(info.checkOutTime || '17:00');
+    // Keep checkOutTime empty if not yet recorded, never force 17:00 when employee is still working
+    setModalCheckOut(info.checkOutTime || '');
     setModalAdminNote(info.adminNote || '');
     setModalAdminCheckInNote(info.adminCheckInNote || info.adminNote || '');
     setModalAdminCheckOutNote(info.adminCheckOutNote || '');
-    setModalAdminDecision((info.adminDecision as 'waived' | 'penalized') || (info.isWaived ? 'waived' : null));
+    
+    // Decoupled decisions
+    const checkInDec = info.adminCheckInDecision || (info.isCheckInWaived ? 'waived' : (info.adminDecision as 'waived' | 'penalized' | null) || (info.isWaived ? 'waived' : null));
+    const checkOutDec = info.adminCheckOutDecision || (info.isCheckOutWaived ? 'waived' : null);
+    setModalCheckInDecision(checkInDec);
+    setModalCheckOutDecision(checkOutDec);
+    setModalAdminDecision(checkInDec || checkOutDec || null);
   };
 
   // Save Modal Changes to Supabase
@@ -625,19 +638,20 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     const combinedAdminNote = [modalAdminCheckInNote, modalAdminCheckOutNote].filter(Boolean).join(' | ') || modalAdminNote;
 
     const prevCheckIn = info.checkInTime || info.rawCheckIn || '08:00';
-    const prevCheckOut = info.checkOutTime || info.rawCheckOut || '17:00';
+    const prevCheckOut = info.checkOutTime || info.rawCheckOut || '';
     const isCheckInChanged = modalStatus === 'Present' && modalCheckIn !== prevCheckIn;
     const isCheckOutChanged = modalStatus === 'Present' && modalCheckOut !== prevCheckOut;
     const isStatusChanged = modalStatus !== info.status;
     const isNoteAdded = Boolean(modalAdminCheckInNote || modalAdminCheckOutNote || modalAdminNote);
-    const prevDecision = info.adminDecision || (info.isWaived ? 'waived' : null);
-    const isDecisionChanged = modalAdminDecision !== prevDecision;
-    const isNoteChanged = modalAdminCheckInNote !== (info.adminCheckInNote || '') || modalAdminCheckOutNote !== (info.adminCheckOutNote || '') || (modalAdminNote && modalAdminNote !== info.adminNote);
+    const isCheckInWaived = modalCheckInDecision === 'waived';
+    const isCheckOutWaived = modalCheckOutDecision === 'waived';
+    const isWaived = isCheckInWaived || isCheckOutWaived;
+    const resolvedAdminDecision = modalCheckInDecision || modalCheckOutDecision || null;
 
     const nowFormatted = format(new Date(), 'yyyy/MM/dd - hh:mm a');
     const existingLogs = Array.isArray(info.historyLogs) ? [...info.historyLogs] : [];
 
-    if (isCheckInChanged || isCheckOutChanged || isStatusChanged || isNoteAdded || isDecisionChanged || isNoteChanged) {
+    if (isCheckInChanged || isCheckOutChanged || isStatusChanged || isNoteAdded || modalCheckInDecision || modalCheckOutDecision) {
       existingLogs.unshift({
         id: `log-${Date.now()}`,
         time: nowFormatted,
@@ -645,17 +659,17 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         checkInFrom: isCheckInChanged ? prevCheckIn : undefined,
         checkInTo: isCheckInChanged ? modalCheckIn : undefined,
         checkOutFrom: isCheckOutChanged ? prevCheckOut : undefined,
-        checkOutTo: isCheckOutChanged ? modalCheckOut : undefined,
+        checkOutTo: isCheckOutChanged ? (modalCheckOut || undefined) : undefined,
         statusFrom: isStatusChanged ? info.status : undefined,
         statusTo: isStatusChanged ? modalStatus : undefined,
         adminCheckInNote: modalAdminCheckInNote || undefined,
         adminCheckOutNote: modalAdminCheckOutNote || undefined,
         adminNote: combinedAdminNote || undefined,
-        adminDecision: modalAdminDecision || undefined,
-        decisionLabel: modalAdminDecision === 'waived' 
-          ? 'چاوپۆشیکردن (لێخۆشبوون لە سەرپێچی/درەنگکەوتن)' 
-          : modalAdminDecision === 'penalized' 
-          ? 'حسابکردن لەسەر کارمەند (سزا و مانەوەی ئاگاداری)' 
+        adminDecision: resolvedAdminDecision || undefined,
+        decisionLabel: isWaived 
+          ? 'چاوپۆشیکردن (لێخۆشبوون لە سەرپێچی)' 
+          : resolvedAdminDecision === 'penalized' 
+          ? 'حسابکردن لەسەر کارمەند (سزا)' 
           : undefined,
       });
     }
@@ -663,7 +677,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     const newRecord = {
       status: modalStatus,
       checkInTime: modalStatus === 'Present' ? modalCheckIn : modalStatus === 'Leave' ? 'مۆڵەت' : undefined,
-      checkOutTime: modalStatus === 'Present' ? modalCheckOut : modalStatus === 'Leave' ? 'مۆڵەت' : undefined,
+      checkOutTime: modalStatus === 'Present' ? (modalCheckOut || undefined) : modalStatus === 'Leave' ? 'مۆڵەت' : undefined,
       adminNote: combinedAdminNote,
       adminCheckInNote: modalAdminCheckInNote,
       adminCheckOutNote: modalAdminCheckOutNote,
@@ -671,10 +685,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       checkOutNote: info.checkOutNote,
       note: info.note || info.checkInNote,
       rawCheckIn: info.rawCheckIn || info.checkInTime || '08:00',
-      rawCheckOut: info.rawCheckOut || info.checkOutTime || '17:00',
+      rawCheckOut: info.rawCheckOut || info.checkOutTime || '',
       historyLogs: existingLogs,
-      adminDecision: modalAdminDecision,
-      isWaived: modalAdminDecision === 'waived',
+      adminDecision: resolvedAdminDecision,
+      adminCheckInDecision: modalCheckInDecision,
+      adminCheckOutDecision: modalCheckOutDecision,
+      isWaived,
+      isCheckInWaived,
+      isCheckOutWaived,
     };
 
     try {
@@ -703,7 +721,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           date: dayItem.dateStr,
           status: modalStatus,
           checkInTime: modalStatus === 'Present' ? modalCheckIn : undefined,
-          checkOutTime: modalStatus === 'Present' ? modalCheckOut : undefined,
+          checkOutTime: modalStatus === 'Present' ? (modalCheckOut || undefined) : undefined,
           adminNote: combinedAdminNote || undefined,
           adminCheckInNote: modalAdminCheckInNote || undefined,
           adminCheckOutNote: modalAdminCheckOutNote || undefined,
@@ -711,8 +729,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           checkInNote: info.checkInNote || undefined,
           checkOutNote: info.checkOutNote || undefined,
           historyLogs: existingLogs,
-          adminDecision: modalAdminDecision,
-          isWaived: modalAdminDecision === 'waived',
+          adminDecision: resolvedAdminDecision,
+          adminCheckInDecision: modalCheckInDecision,
+          adminCheckOutDecision: modalCheckOutDecision,
+          isWaived,
+          isCheckInWaived,
+          isCheckOutWaived,
         })
       });
 
@@ -724,32 +746,23 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     }
   };
 
-  // 🗑️ Delete / Clear Record -> Sets to Empty '-' and Deletes from Supabase
+  // 🗑️ Delete / Clear Record -> Removes overrides so subsequent live check-ins show immediately
   const handleDeleteDayRecord = async () => {
     if (!selectedDayModal) return;
     if (!confirm('ئایا دڵنیایت لە سڕینەوەی ئەم داتایە بە تەواوی؟ خانەکە بەتاڵ دەبێتەوە.')) return;
     const { emp, dayItem } = selectedDayModal;
     const key = `${emp.id}_${dayItem.dateStr}`;
+    const rawNum = emp.id.replace('emp-', '');
 
     // 1. Close modal IMMEDIATELY (0ms reaction)
     setSelectedDayModal(null);
 
-    // 2. Optimistic Clean Blank Update
+    // 2. Cleanly remove key from override map so it doesn't block future live check-ins
     setManualStatusMap(prev => {
-      const next = {
-        ...prev,
-        [key]: {
-          status: 'Empty',
-          checkInTime: '',
-          checkOutTime: '',
-          rawCheckIn: '',
-          rawCheckOut: '',
-          adminNote: '',
-          note: '',
-          hasRecord: false,
-          workedHours: 0,
-        }
-      };
+      const next = { ...prev };
+      delete next[key];
+      delete next[`${rawNum}_${dayItem.dateStr}`];
+      delete next[`emp-${rawNum}_${dayItem.dateStr}`];
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(next));
@@ -758,7 +771,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       return next;
     });
 
-    // 3. Persistent server sync in background
+    // 3. Persistent server sync in background (deletes from attendance and attendance_logs in Supabase)
     try {
       await fetch('/api/attendance/admin/manual-record', {
         method: 'POST',
@@ -773,7 +786,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       });
       loadSavedRecords();
     } catch (e) {
-      console.error('Failed to delete record:', e);
+      console.error('Error deleting record:', e);
     }
   };
 
@@ -961,14 +974,18 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           globalWorkedHours += hrs;
           const inT = (info.checkInTime || '08:00').slice(0, 5);
           const outT = (info.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00')).slice(0, 5);
-          const inPrintColor = info.checkInStatus?.printColor || (info.isWaived ? '#059669' : inT > '08:15' ? '#dc2626' : '#0f172a');
-          const outPrintColor = info.checkOutStatus?.printColor || '#64748b';
-          const isLate = inT > '08:15' && !info.isWaived && info.adminDecision !== 'waived';
+          const isCheckInWaived = Boolean(info.isCheckInWaived || info.checkInStatus?.isWaived || (info.isWaived && inT > '08:15') || info.adminCheckInDecision === 'waived');
+          const isCheckOutWaived = Boolean(info.isCheckOutWaived || info.checkOutStatus?.isWaived || info.adminCheckOutDecision === 'waived');
+          const isCellWaived = isCheckInWaived || isCheckOutWaived || info.isWaived;
+          const inPrintColor = info.checkInStatus?.printColor || (isCheckInWaived ? '#9333ea' : inT > '08:15' ? '#dc2626' : '#0f172a');
+          const outPrintColor = info.checkOutStatus?.printColor || (isCheckOutWaived ? '#9333ea' : '#64748b');
+          const isLate = inT > '08:15' && !isCheckInWaived;
           if (isLate) globalLateCount++;
           
           cellContent = `
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;">
               <span style="font-weight: 800; font-size: ${isFullRange ? '7px' : '8px'}; color: ${inPrintColor}; font-family: monospace; white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 1px;">
+                ${isCellWaived ? '<span style="display:inline-block; width:4px; height:4px; border-radius:50%; background-color:#9333ea; margin-left:1px;" title="لێخۆشبوو (بازنەی مۆر)"></span>' : ''}
                 <span>${inT}</span>
               </span>
               <span style="font-weight: 700; font-size: ${isFullRange ? '6px' : '7px'}; color: ${outPrintColor}; font-family: monospace; white-space: nowrap;">
@@ -1366,59 +1383,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         </div>
       </div>
 
-      {/* 🌟 Apple Fitness Style Monthly KPI Summary Cards Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
-          <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">ئامادەبووی ئەمڕۆ</div>
-            <div className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
-              {companyStats.presentToday} <span className="text-xs text-slate-400 font-medium">/ {activeEmployees.length}</span>
-            </div>
-          </div>
-          <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
-          <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">کۆی کاژێری ئیشکردن</div>
-            <div className="text-lg font-black text-blue-600 dark:text-blue-400 font-mono mt-0.5">
-              {companyStats.totalHours.toLocaleString()} <span className="text-xs text-slate-400 font-medium">h</span>
-            </div>
-          </div>
-          <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-            <Clock className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
-          <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">درەنگکەوتن</div>
-            <div className="text-lg font-black text-amber-600 dark:text-amber-400 font-mono mt-0.5">
-              {companyStats.totalLate} <span className="text-xs text-slate-400 font-medium">جار</span>
-            </div>
-          </div>
-          <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-            <TrendingUp className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
-          <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">ڕێژەی ئامادەبوون</div>
-            <div className="text-lg font-black text-slate-900 dark:text-white font-mono mt-0.5">
-              %{companyStats.rate}
-            </div>
-          </div>
-          <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-            <BarChart3 className="w-5 h-5" />
-          </div>
-        </div>
-      </div>
-
       {/* 🍏 Apple iOS Clean Matrix Table Card with Crisp Grid Borders & Fluid Viewport Height */}
-      <div className="w-full overflow-x-auto border border-slate-300 dark:border-white/15 rounded-xl shadow-xs bg-white dark:bg-[#2c2c2e] max-h-[calc(100vh-210px)] min-h-[560px] overflow-y-auto">
+      <div className="w-full overflow-x-auto border border-slate-300 dark:border-white/15 rounded-xl shadow-xs bg-white dark:bg-[#2c2c2e] max-h-[calc(100vh-140px)] min-h-[580px] overflow-y-auto">
         <table className={`w-full text-right border-collapse border border-slate-300 dark:border-white/15 ${tableFitMode === 'fit' ? 'table-fixed text-[11px]' : 'text-xs'}`}>
           <thead className="sticky top-0 bg-slate-50/98 dark:bg-[#2c2c2e]/98 backdrop-blur-md z-20">
             <tr className="border-b-2 border-slate-300 dark:border-slate-700">
@@ -1645,8 +1611,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     }
 
                     const isLateRaw = isPresent && inTime > '08:15';
-                    const isWaived = Boolean(info.isWaived || info.adminDecision === 'waived');
-                    const isLate = isLateRaw && !isWaived;
+                    const isCheckInWaived = Boolean(info.isCheckInWaived || (info.isWaived && isLateRaw) || info.adminCheckInDecision === 'waived' || (info.adminDecision === 'waived' && isLateRaw));
+                    const isCheckOutWaived = Boolean(info.isCheckOutWaived || info.adminCheckOutDecision === 'waived');
+                    const isWaived = Boolean(isCheckInWaived || isCheckOutWaived || info.isWaived || info.adminDecision === 'waived');
+                    const isLate = isLateRaw && !isCheckInWaived;
 
                     return (
                       <td 
@@ -1727,11 +1695,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           />
                         )}
 
-                        {/* 🟢 Green Dot Indicator for Excused / Waived by Admin */}
-                        {(info.checkInStatus?.isWaived || info.checkOutStatus?.isWaived) && (
+                        {/* 🟣 Purple Circle Indicator for Excused / Waived by Admin (بازنەی مۆر) */}
+                        {(info.checkInStatus?.isWaived || info.checkOutStatus?.isWaived || isWaived) && (
                           <span 
-                            className="absolute top-0.5 left-0.5 w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 ring-1 ring-white shadow-xs z-10" 
-                            title="لێخۆشبوو (چاوپۆشیکراو لەلایەن ئەدمین)"
+                            className="absolute top-0.5 left-0.5 w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-purple-600 ring-2 ring-purple-300 dark:ring-purple-900 shadow-xs z-10" 
+                            title="لێخۆشبوو (بازنەی مۆر - لێخۆشبوونی ئەدمین)"
                           />
                         )}
 
@@ -2032,53 +2000,115 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   </div>
                 )}
 
-                {/* ⚖️ سەرپشکی و بڕیاری ئەدمین (Admin Waiver / Discretion) */}
-                <div className="space-y-2 bg-slate-50 dark:bg-[#1c1c1e] p-3.5 rounded-xl border border-slate-200/60 dark:border-white/5">
-                  <div className="flex items-center justify-between">
+                {/* ⚖️ سەرپشکی و بڕیاری ئەدمین بۆ کاتی هاتن و ڕۆیشتن بە جیاکراوەیی */}
+                <div className="space-y-3 bg-slate-50 dark:bg-[#1c1c1e] p-3.5 rounded-xl border border-slate-200/60 dark:border-white/5">
+                  <div className="flex items-center justify-between pb-1 border-b border-slate-200/50 dark:border-white/5">
                     <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <span>⚖️ بڕیاری سەرپشکی ئەدمین (Waiver / Leniency):</span>
+                      <span>⚖️ بڕیاری سەرپشکی و لێخۆشبوونی ئەدمین (Waivers):</span>
                     </label>
                     <span className="text-[10px] font-mono text-slate-400">Admin Authority</span>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    ئایا لە کاتی درەنگ هاتن یان زوو ڕۆیشتن چاوپۆشی لێدەکەیت یان وەک سەرپێچی حساب دەکرێت؟
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setModalAdminDecision(prev => prev === 'waived' ? null : 'waived')}
-                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
-                        modalAdminDecision === 'waived'
-                          ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm font-black ring-2 ring-emerald-400'
-                          : 'bg-white dark:bg-[#2c2c2e] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800/40 hover:bg-emerald-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-1.5 text-xs">
-                        <span>🟢</span>
-                        <span>چاوپۆشیکردن (لێخۆشبوون)</span>
-                      </span>
-                      <span className={`text-[9.5px] font-medium ${modalAdminDecision === 'waived' ? 'text-emerald-100' : 'text-slate-400'}`}>
-                        کات بە سەوز دەنووسرێت (لێخۆشبوو)
-                      </span>
-                    </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setModalAdminDecision(prev => prev === 'penalized' ? null : 'penalized')}
-                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
-                        modalAdminDecision === 'penalized'
-                          ? 'bg-rose-600 text-white border-rose-700 shadow-sm font-black ring-2 ring-rose-400'
-                          : 'bg-white dark:bg-[#2c2c2e] text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-800/40 hover:bg-rose-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-1.5 text-xs">
-                        <span>🔴</span>
-                        <span>حسابکردن لەسەر کارمەند</span>
-                      </span>
-                      <span className={`text-[9.5px] font-medium ${modalAdminDecision === 'penalized' ? 'text-rose-100' : 'text-slate-400'}`}>
-                        کات بە سوور دەنووسرێت (سەرپێچی)
-                      </span>
-                    </button>
+                  {/* ١. لێخۆشبوون لە درەنگ هاتن */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                      <span>• لێخۆشبوون لە درەنگ هاتن (بەیانی):</span>
+                      <span className="font-mono text-[10px] text-purple-600 dark:text-purple-400">کاتی هاتن: {modalCheckIn}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalCheckInDecision(prev => prev === 'waived' ? null : 'waived');
+                          setModalAdminDecision(prev => prev === 'waived' ? null : 'waived');
+                        }}
+                        className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                          modalCheckInDecision === 'waived'
+                            ? 'bg-purple-600 text-white border-purple-700 shadow-sm font-black ring-2 ring-purple-400'
+                            : 'bg-white dark:bg-[#2c2c2e] text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800/40 hover:bg-purple-50'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5 text-xs">
+                          <span>🟣</span>
+                          <span>لێخۆشبوون (بازنەی مۆر)</span>
+                        </span>
+                        <span className={`text-[9px] font-medium ${modalCheckInDecision === 'waived' ? 'text-purple-100' : 'text-slate-400'}`}>
+                          سزا نادرێت و بازنەی مۆر دەردەکەوێت
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalCheckInDecision(prev => prev === 'penalized' ? null : 'penalized');
+                          setModalAdminDecision(prev => prev === 'penalized' ? null : 'penalized');
+                        }}
+                        className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                          modalCheckInDecision === 'penalized'
+                            ? 'bg-rose-600 text-white border-rose-700 shadow-sm font-black ring-2 ring-rose-400'
+                            : 'bg-white dark:bg-[#2c2c2e] text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-800/40 hover:bg-rose-50'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5 text-xs">
+                          <span>🔴</span>
+                          <span>حسابکردن (سزا)</span>
+                        </span>
+                        <span className={`text-[9px] font-medium ${modalCheckInDecision === 'penalized' ? 'text-rose-100' : 'text-slate-400'}`}>
+                          وەک سەرپێچی دەوام حساب دەکرێت
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ٢. لێخۆشبوون لە زوو ڕۆیشتن */}
+                  <div className="space-y-1.5 pt-1.5 border-t border-slate-200/50 dark:border-white/5">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                      <span>• لێخۆشبوون لە زوو ڕۆیشتن (چوونەوە):</span>
+                      <span className="font-mono text-[10px] text-purple-600 dark:text-purple-400">کاتی ڕۆیشتن: {modalCheckOut || 'بەردەوام'}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalCheckOutDecision(prev => prev === 'waived' ? null : 'waived');
+                          setModalAdminDecision(prev => prev === 'waived' ? null : 'waived');
+                        }}
+                        className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                          modalCheckOutDecision === 'waived'
+                            ? 'bg-purple-600 text-white border-purple-700 shadow-sm font-black ring-2 ring-purple-400'
+                            : 'bg-white dark:bg-[#2c2c2e] text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800/40 hover:bg-purple-50'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5 text-xs">
+                          <span>🟣</span>
+                          <span>لێخۆشبوون (بازنەی مۆر)</span>
+                        </span>
+                        <span className={`text-[9px] font-medium ${modalCheckOutDecision === 'waived' ? 'text-purple-100' : 'text-slate-400'}`}>
+                          سزا نادرێت و بازنەی مۆر دەردەکەوێت
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalCheckOutDecision(prev => prev === 'penalized' ? null : 'penalized');
+                          setModalAdminDecision(prev => prev === 'penalized' ? null : 'penalized');
+                        }}
+                        className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                          modalCheckOutDecision === 'penalized'
+                            ? 'bg-rose-600 text-white border-rose-700 shadow-sm font-black ring-2 ring-rose-400'
+                            : 'bg-white dark:bg-[#2c2c2e] text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-800/40 hover:bg-rose-50'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5 text-xs">
+                          <span>🔴</span>
+                          <span>حسابکردن (سزا)</span>
+                        </span>
+                        <span className={`text-[9px] font-medium ${modalCheckOutDecision === 'penalized' ? 'text-rose-100' : 'text-slate-400'}`}>
+                          وەک سەرپێچی دەوام حساب دەکرێت
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
