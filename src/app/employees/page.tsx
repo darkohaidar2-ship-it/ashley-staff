@@ -622,7 +622,7 @@ function EmployeesPage() {
                             <div className="flex items-center gap-3">
                               <div className="relative shrink-0">
                                 <Avatar className="h-9 w-9 rounded-xl border border-slate-200/80 dark:border-white/10 shadow-2xs">
-                                  <AvatarImage src={emp.photoUrl || ''} alt={emp.name} className="object-cover" />
+                                  <AvatarImage src={emp.photoUrl || (emp as any).photo || ''} alt={emp.name} className="object-cover" />
                                   <AvatarFallback className="rounded-xl bg-gradient-to-tr from-indigo-50 to-blue-50 text-indigo-700 font-black text-xs">
                                     {emp.name.slice(0, 2)}
                                   </AvatarFallback>

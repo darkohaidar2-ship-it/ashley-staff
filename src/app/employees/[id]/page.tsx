@@ -579,8 +579,8 @@ function EmployeeDetailPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <div className="w-20 h-20 bg-slate-800 border-2 border-slate-600 overflow-hidden flex items-center justify-center text-white text-xl font-black flex-shrink-0 shadow-md relative group">
-              {selectedEmployee.photoUrl ? (
-                <img src={selectedEmployee.photoUrl} alt={selectedEmployee.name} className="w-full h-full object-cover" />
+              {(selectedEmployee.photoUrl || (selectedEmployee as any).photo) ? (
+                <img src={selectedEmployee.photoUrl || (selectedEmployee as any).photo} alt={selectedEmployee.name} className="w-full h-full object-cover" />
               ) : (
                 <span>{(selectedEmployee.name || '').slice(0, 2)}</span>
               )}

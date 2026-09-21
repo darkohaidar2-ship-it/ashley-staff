@@ -787,6 +787,7 @@ export default function MobileAttendanceOneTap() {
           phone: profilePhone.trim(),
           hireDate: profileHireDate,
           photo: profilePhoto,
+          photoUrl: profilePhoto,
           ...(profilePin.trim().length >= 4 ? { pin: profilePin.trim() } : {}),
         })
       });

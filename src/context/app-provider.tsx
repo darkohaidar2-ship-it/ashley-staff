@@ -495,6 +495,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         const targetKey = eventMap[row.id];
                         if (targetKey) {
                             window.dispatchEvent(new CustomEvent(`ashley_sb_sync_${targetKey}`, { detail: parsed }));
+                        } else if (row.id === 'ashley_employee_profiles') {
+                            fetchEmployees().then((updatedList) => {
+                                if (updatedList && updatedList.length > 0) {
+                                    window.dispatchEvent(new CustomEvent('ashley_sb_sync_employees', { detail: updatedList }));
+                                }
+                            });
                         } else if (row.id === 'ashley_salary_settings') {
                             setLocalSettings((prev) => ({ ...prev, salarySettings: parsed }));
                         } else if (row.id === 'ashley_global_settings') {

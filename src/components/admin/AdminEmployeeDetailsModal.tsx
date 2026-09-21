@@ -331,8 +331,8 @@ export function AdminEmployeeDetailsModal({
         <div className="px-6 py-4 bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/60 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3.5">
             <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-indigo-600 to-blue-500 overflow-hidden flex items-center justify-center text-white text-lg font-black shadow-sm flex-shrink-0">
-              {employee.photoUrl ? (
-                <img src={employee.photoUrl} alt={employee.name} className="w-full h-full object-cover" />
+              {(employee.photoUrl || (employee as any).photo) ? (
+                <img src={employee.photoUrl || (employee as any).photo} alt={employee.name} className="w-full h-full object-cover" />
               ) : (
                 <span>{employee.fullName3Part ? employee.fullName3Part.charAt(0) : employee.name.charAt(0)}</span>
               )}

@@ -909,7 +909,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       return NextResponse.json(result, { status: result.success ? 200 : 400 });
     }
 
-    if ((pathStr === 'update-profile' || pathStr === 'profile') && method === 'POST') {
+    if (pathStr === 'update-profile' && method === 'POST') {
       const payload = await req.json();
       const result = await updateEmployeeProfile(supabase, payload);
       return NextResponse.json(result, { status: result.success ? 200 : 400 });
@@ -3313,7 +3313,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     if (pathStr === 'profile' && method === 'POST') {
       try {
         const body = await req.json();
-        const { userId, name, phone, address, emergencyContact, nationalId, bloodType, birthDate, photoUrl, pin } = body;
+        const { userId, name, phone, address, emergencyContact, nationalId, bloodType, birthDate, hireDate, photoUrl, photo, avatar, pin } = body;
         
         if (!userId) {
           return NextResponse.json({ error: 'userId is required' }, { status: 400 });
@@ -3321,11 +3321,17 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
         const cleanEmpId = userId.toString().trim();
         const rawNum = cleanEmpId.replace('emp-', '');
+        const incomingPhoto = photoUrl || photo || avatar || null;
+        const effectiveHireDate = hireDate || birthDate || null;
         
-        let finalPhotoUrl = photoUrl;
-        if (photoUrl && typeof photoUrl === 'string' && photoUrl.startsWith('data:image')) {
-          const uploaded = await uploadSelfieToStorage(cleanEmpId, 'profile', 'avatar', photoUrl);
-          if (uploaded) finalPhotoUrl = uploaded;
+        let finalPhotoUrl = incomingPhoto;
+        if (incomingPhoto && typeof incomingPhoto === 'string' && incomingPhoto.startsWith('data:image')) {
+          try {
+            const uploaded = await uploadSelfieToStorage(cleanEmpId, 'profile', 'avatar', incomingPhoto);
+            if (uploaded) finalPhotoUrl = uploaded;
+          } catch (storageErr) {
+            console.warn('Storage upload failed, retaining base64 dataUrl:', storageErr);
+          }
         }
 
         // 1. Resilient Profile Registry in warehouses
@@ -3337,40 +3343,74 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           emergencyContact,
           pin,
           photo: finalPhotoUrl,
-          hireDate: birthDate,
+          hireDate: effectiveHireDate,
         });
 
-        // 2. Keep ashley_employees in sync
+        // 2. Keep ashley_employees in sync with photoUrl so the entire website updates
         try {
           const { data: wRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_employees').maybeSingle();
+          let empList: any[] = [];
           if (wRow?.qr_code) {
-            let empList = JSON.parse(wRow.qr_code);
-            if (Array.isArray(empList)) {
-              const idx = empList.findIndex((e: any) => e.id === cleanEmpId || e.id === `emp-${rawNum}`);
-              if (idx >= 0) {
-                empList[idx] = {
-                  ...empList[idx],
-                  ...(name ? { name, fullName3Part: name } : {}),
-                  ...(phone ? { phone } : {}),
-                  ...(finalPhotoUrl ? { photoUrl: finalPhotoUrl } : {}),
-                  ...(pin ? { pin, password: pin } : {}),
-                };
-                await supabase.from('warehouses').upsert({
-                  id: 'ashley_employees',
-                  name: 'Ashley Official Employees Directory',
-                  qr_code: JSON.stringify(empList)
-                });
-              }
-            }
+            try { empList = JSON.parse(wRow.qr_code); } catch {}
           }
-        } catch {}
+          if (!Array.isArray(empList) || empList.length === 0) {
+            empList = [...ASHLEY_OFFICIAL_EMPLOYEES];
+          }
+
+          const idx = empList.findIndex((e: any) => 
+            e.id === cleanEmpId || 
+            e.id === `emp-${rawNum}` || 
+            e.id === rawNum || 
+            e.employeeId === cleanEmpId || 
+            e.employeeId === rawNum
+          );
+
+          if (idx >= 0) {
+            empList[idx] = {
+              ...empList[idx],
+              ...(name ? { name, fullName3Part: name } : {}),
+              ...(phone ? { phone } : {}),
+              ...(finalPhotoUrl ? { photoUrl: finalPhotoUrl, photo: finalPhotoUrl } : {}),
+              ...(effectiveHireDate ? { startDate: effectiveHireDate, employmentStartDate: effectiveHireDate } : {}),
+              ...(pin ? { pin, password: pin } : {}),
+            };
+          } else {
+            empList.push({
+              id: cleanEmpId.startsWith('emp-') ? cleanEmpId : `emp-${cleanEmpId}`,
+              employeeId: rawNum,
+              name: name || cleanEmpId,
+              phone: phone || '',
+              photoUrl: finalPhotoUrl || '',
+              photo: finalPhotoUrl || '',
+              pin: pin || '1001',
+              role: 'Employee',
+              isActive: true,
+            });
+          }
+
+          await supabase.from('warehouses').upsert({
+            id: 'ashley_employees',
+            name: 'Ashley Official Employees Directory',
+            qr_code: JSON.stringify(empList),
+            lat: 0,
+            lng: 0,
+            radius: 0,
+          });
+        } catch (wErr) {
+          console.warn('Failed to sync ashley_employees directory:', wErr);
+        }
 
         // 3. Update in users table safely
         try {
-          await supabase.from('users').update({ role: 'Employee', updated_at: new Date().toISOString() }).or(`id.eq.${cleanEmpId},id.eq.${rawNum},id.eq.emp-${rawNum}`);
+          const userUpdate: any = { role: 'Employee', updated_at: new Date().toISOString() };
+          if (finalPhotoUrl) userUpdate.avatar = finalPhotoUrl;
+          if (phone) userUpdate.phone = phone;
+          if (pin && pin.length >= 4) userUpdate.pin = pin;
+          if (name) userUpdate.name = name;
+          await supabase.from('users').update(userUpdate).or(`id.eq.${cleanEmpId},id.eq.${rawNum},id.eq.emp-${rawNum}`);
         } catch {}
 
-        return NextResponse.json({ success: true, photoUrl: finalPhotoUrl, message: 'پڕۆفایل بە سەرکەوتوویی لە سوپابەیس نوێکرایەوە' });
+        return NextResponse.json({ success: true, photoUrl: finalPhotoUrl, message: 'پڕۆفایل و وێنە بە سەرکەوتوویی لە سوپابەیس نوێکرانەوە' });
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
       }
