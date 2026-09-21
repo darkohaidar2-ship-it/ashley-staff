@@ -499,13 +499,20 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
 
         {/* Quick Month Filter & Exports */}
         <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
-          <span className="text-slate-500 dark:text-slate-400 font-bold">مانگ:</span>
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-white font-bold text-xs focus:outline-none focus:ring-1 focus:ring-[#007AFF]"
-          />
+          {/* 📅 Icon-only Month Picker */}
+          <div 
+            className="relative h-8 w-8 rounded-full flex items-center justify-center bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/40 shadow-2xs transition-all cursor-pointer"
+            title={`دیاریکردنی مانگ (${selectedMonth})`}
+          >
+            <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              title={`دیاریکردنی مانگ (${selectedMonth})`}
+            />
+          </div>
 
           <button
             onClick={handleExportPDF}

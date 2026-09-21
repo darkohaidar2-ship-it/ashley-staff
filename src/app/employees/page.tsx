@@ -479,9 +479,6 @@ function EmployeesPage() {
                     <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-tight">
                       لیستی گشتی کارمەندان (Ashley Master Employees Directory)
                     </h2>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold">
-                      سەرچاوەی سەرەکی و یەکگرتووی کارمەندان • {filteredEmployees.length} کارمەند دۆزرایەوە
-                    </p>
                   </div>
                 </div>
 

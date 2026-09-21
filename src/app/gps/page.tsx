@@ -106,9 +106,6 @@ function GpsLocationsPage() {
                   <span>Geofence 2.0</span>
                 </span>
               </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                دیاریکردنی شوێنی فەرمی کارگە و کۆگاکان لەسەر نەخشە و سنووری ڕێگەپێدراو بۆ دەوام
-              </p>
             </div>
           </div>
 

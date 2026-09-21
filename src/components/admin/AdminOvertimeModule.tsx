@@ -603,9 +603,6 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                 🟢 چالاک و پەیوەستکراو بە ئامادەبوون
               </span>
             </h2>
-            <p className="text-[11px] text-orange-200/90 font-medium mt-0.5">
-              کالێندەری ۱ تا ۳۱ی مانگی 8ی 2026، ئاماری ڕۆژانە و کاتی زیادەی مانگانە، حازر بۆ چاپکردن
-            </p>
           </div>
         </div>
 
@@ -659,13 +656,20 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 font-mono">
-          <span className="text-slate-600 text-xs font-bold">مانگ:</span>
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="input-classic font-bold bg-white"
-          />
+          {/* 📅 Icon-only Month Picker */}
+          <div 
+            className="relative h-8 w-8 rounded-full flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-2xs transition-all cursor-pointer"
+            title={`دیاریکردنی مانگ (${selectedMonth})`}
+          >
+            <Calendar className="w-4 h-4 text-blue-600" />
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              title={`دیاریکردنی مانگ (${selectedMonth})`}
+            />
+          </div>
 
           <button
             onClick={handleExportPDF}

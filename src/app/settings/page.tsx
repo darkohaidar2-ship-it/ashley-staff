@@ -24,8 +24,7 @@ import {
   Card, 
   CardContent, 
   CardHeader, 
-  CardTitle, 
-  CardDescription 
+  CardTitle 
 } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -56,7 +55,6 @@ function ImageControl({
           <span>{label}</span>
           {value && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
         </CardTitle>
-        <CardDescription className="text-[11px] text-slate-500 dark:text-slate-400">{description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 pt-3">
         <div className="relative w-full h-28 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-2 flex items-center justify-center bg-slate-50/50 dark:bg-white/5 overflow-hidden">
@@ -274,9 +272,6 @@ function SettingsPage() {
               <h1 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
                 ناسنامەی فەرمی کۆمپانیا و ڕێکخستنی لۆگۆکان
               </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                ڕێکخستنی کۆمپانیای دایک (گروپی دیوان)، بریکاری سەرەکی مۆبیلیاتی ئاشڵی، دروشم، و جیاکردنەوەی لۆگۆی وێبسایت لە ڕاپۆرتەکان.
-              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -294,9 +289,6 @@ function SettingsPage() {
               <Building2 className="w-4 h-4 text-amber-500" />
               <span>زانیارییە فەرمییەکان، ناو و کورتەی کۆمپانیاکان</span>
             </CardTitle>
-            <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
-              دەتوانیت ناو و کورتە (Subtitle)ی هەر کۆمپانیایەک بە ئارەزووی خۆت بنووسیت، بۆ نموونە لەبری 'کۆمپانیای دایک' بنووسیت 'ناسنامەی مۆبیلیات'.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -312,7 +304,6 @@ function SettingsPage() {
                   placeholder="کۆمپانیای گروپی دیوان"
                   className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
                 />
-                <p className="text-[10px] text-slate-400">ناوی فەرمی کۆمپانیا.</p>
               </div>
 
               {/* Mother Company Subtitle */}
@@ -326,7 +317,6 @@ function SettingsPage() {
                   placeholder="ناسنامەی مۆبیلیات"
                   className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
                 />
-                <p className="text-[10px] text-slate-400">دەقی ژێر ناوی دیوان (وەک: ناسنامەی مۆبیلیات).</p>
               </div>
 
               {/* Agency Title */}
@@ -340,7 +330,6 @@ function SettingsPage() {
                   placeholder="بریکاری سەرەکی مۆبیلیاتی ئاشڵین لە هەموو عێراق"
                   className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
                 />
-                <p className="text-[10px] text-slate-400">پێگەی فەرمی کۆمپانیا لە عێراقدا.</p>
               </div>
 
               {/* Brand Name (Ashley Furniture) */}
@@ -354,7 +343,6 @@ function SettingsPage() {
                   placeholder="کۆمپانیای مۆبیلیاتی ئاشڵی"
                   className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
                 />
-                <p className="text-[10px] text-slate-400">ناوی فەرمی براند.</p>
               </div>
 
               {/* Brand Subtitle */}
@@ -368,7 +356,6 @@ function SettingsPage() {
                   placeholder="Official Document یان بەڵگەنامەی فەرمی"
                   className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
                 />
-                <p className="text-[10px] text-slate-400">دەقی ژێر ناوی ئاشڵی لەسەر ڕاپۆرتەکان.</p>
               </div>
 
               {/* Brand Slogan */}
@@ -382,7 +369,6 @@ function SettingsPage() {
                   placeholder="Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)"
                   className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
                 />
-                <p className="text-[10px] text-slate-400">دروشمی فەرمی براند لە سەر ڕاپۆرت و پەڕەکان.</p>
               </div>
 
               {/* Center Document Title */}
@@ -396,7 +382,6 @@ function SettingsPage() {
                   placeholder="خشتەی تۆماری ئامادەبوونی فەرمی"
                   className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
                 />
-                <p className="text-[10px] text-slate-400">تایتڵی گەورەی بابەت لە ناوەڕاستی وەرەقەی فەرمی.</p>
               </div>
 
               {/* Center Document Subtitle / Code */}
@@ -410,7 +395,6 @@ function SettingsPage() {
                   placeholder="کۆمپانیای گروپی دیوان • بریکاری سەرەکی مۆبیلیاتی ئاشڵی"
                   className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
                 />
-                <p className="text-[10px] text-slate-400">دەقی ژێر تایتڵی سەرەکی یان کورتەی بابەت.</p>
               </div>
             </div>
           </CardContent>
@@ -428,9 +412,6 @@ function SettingsPage() {
                 ڕەنگی دەستی
               </Badge>
             </div>
-            <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
-              دەتوانیت ڕەنگی دەقەکان، تایتڵی ناوەڕاست، دروشم، و هێڵە فەرمییەکان بە خواستی خۆت دیاری بکەیت.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
             {/* Quick Color Presets */}
@@ -519,7 +500,6 @@ function SettingsPage() {
                     className="h-9 text-xs font-mono font-bold uppercase"
                   />
                 </div>
-                <p className="text-[10px] text-slate-400">ڕەنگی هێڵی جیاکەرەوە و ناوی سەرەکی کۆمپانیاکان.</p>
               </div>
 
               {/* Title Color */}
@@ -541,7 +521,6 @@ function SettingsPage() {
                     className="h-9 text-xs font-mono font-bold uppercase"
                   />
                 </div>
-                <p className="text-[10px] text-slate-400">ڕەنگی دەقی تایتڵی بابەت لە ناوەڕاستدا.</p>
               </div>
 
               {/* Accent & Subtitle Color */}
@@ -563,7 +542,6 @@ function SettingsPage() {
                     className="h-9 text-xs font-mono font-bold uppercase"
                   />
                 </div>
-                <p className="text-[10px] text-slate-400">ڕەنگی دەقی ناسنامەی مۆبیلیات و کورتەی براند.</p>
               </div>
             </div>
           </CardContent>
@@ -576,9 +554,6 @@ function SettingsPage() {
               <Clock className="w-4 h-4 text-[#007AFF]" />
               <span>کاتەکانی دەوامی فەرمی و ماوەی لێخۆشبوون (Official Shift & Attendance Rules)</span>
             </CardTitle>
-            <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
-              ئەم کاتانە بنەمای ئەژمارکردنی هاتن لە کاتی خۆیدا، درەنگکەوتن، ڕۆیشتنی پێشوەختە، و ئۆڤەرتایمن لە هەموو بەشەکانی سیستەمدا.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -595,7 +570,6 @@ function SettingsPage() {
                   onChange={e => updateShiftSetting('checkInTime', e.target.value)}
                   className="h-10 text-sm font-mono font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
                 />
-                <p className="text-[10px] text-slate-400">کاتی فەرمی هاتن (پێشگریمانە: 08:00 بەیانی).</p>
               </div>
 
               {/* Check-Out Time */}
@@ -610,7 +584,6 @@ function SettingsPage() {
                   onChange={e => updateShiftSetting('checkOutTime', e.target.value)}
                   className="h-10 text-sm font-mono font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
                 />
-                <p className="text-[10px] text-slate-400">کاتی فەرمی دەرچوون (پێشگریمانە: 17:00 ئێوارە).</p>
               </div>
 
               {/* Grace Period */}
@@ -627,7 +600,6 @@ function SettingsPage() {
                   onChange={e => updateShiftSetting('graceMinutes', parseInt(e.target.value) || 0)}
                   className="h-10 text-sm font-mono font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
                 />
-                <p className="text-[10px] text-slate-400">ماوەی ڕێگەپێدراو پێش ئەوەی درەنگکەوتن ئەژمار بکرێت (15 خولەک).</p>
               </div>
 
             </div>
@@ -668,7 +640,6 @@ function SettingsPage() {
         <div className="space-y-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">جیاکردنەوەی لۆگۆکان (Website Logo vs Report Logo)</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">دەتوانیت لۆگۆی جیاواز بۆ وێبسایت دیاری بکەیت بە بەراورد بە لۆگۆی ڕاپۆرت و چاپ.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

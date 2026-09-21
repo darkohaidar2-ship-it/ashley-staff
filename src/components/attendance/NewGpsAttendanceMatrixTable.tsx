@@ -123,9 +123,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   const [modalAdminDecision, setModalAdminDecision] = useState<'waived' | 'penalized' | null>(null);
   const [isSavingModal, setIsSavingModal] = useState<boolean>(false);
 
-  // Status Drag & Drop Quick Palette
-  const [selectedPaletteStatus, setSelectedPaletteStatus] = useState<string>('Present');
-  const [draggedStatus, setDraggedStatus] = useState<string | null>(null);
 
   // Dynamic Manual Overrides Map for cell statuses (Initialized with instant cache if available)
   const [manualStatusMap, setManualStatusMap] = useState<Record<string, { 
@@ -780,35 +777,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     }
   };
 
-  // Drag & Drop Instant Drop
-  const handleDirectDrop = async (userId: string, userName: string, dateStr: string, status: string) => {
-    const key = `${userId}_${dateStr}`;
-    setManualStatusMap(prev => {
-      const next = {
-        ...prev,
-        [key]: {
-          status,
-          checkInTime: status === 'Present' ? '08:00' : status === 'Leave' ? 'مۆڵەت' : undefined,
-          checkOutTime: status === 'Present' ? '17:00' : status === 'Leave' ? 'مۆڵەت' : undefined
-        }
-      };
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(next));
-        } catch {}
-      }
-      return next;
-    });
-
-    try {
-      await fetch('/api/attendance/admin/manual-record', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, userName, date: dateStr, status })
-      });
-      loadSavedRecords();
-    } catch (e) {}
-  };
 
   // 🖨️ Filtered Employees for Print
   const printEmployees = useMemo(() => {
@@ -1310,58 +1278,47 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                کلیک لەسەر ناوی کارمەند بکە بۆ دۆسیەی HR — کلیک لەسەر خانەکان بکە بۆ دەستکاری.
-              </p>
             </div>
           </div>
 
-          {/* Month Navigator, Screen Fit Mode, & Print Controls */}
+          {/* Icon-Only Action Controls & Search */}
           <div className="flex flex-wrap items-center gap-2">
-
-
-            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-[#3a3a3c] px-3 py-1.5 rounded-full border border-slate-200/60 dark:border-white/5">
-              <Calendar className="w-3.5 h-3.5 text-blue-500" />
+            {/* 📅 Icon-only Month Calendar Picker */}
+            <div 
+              className="relative h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white flex items-center justify-center transition-all active:scale-90 border border-slate-200/80 dark:border-white/10 cursor-pointer shadow-2xs shrink-0" 
+              title={`دیاریکردنی مانگ (${selectedMonth})`}
+            >
+              <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               <input
                 type="month"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="bg-transparent text-slate-900 dark:text-white font-bold font-mono focus:outline-none cursor-pointer text-xs"
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                title={`دیاریکردنی مانگ (${selectedMonth})`}
               />
             </div>
             
-            {/* 🎯 Multi-Select Toggle Button */}
+            {/* 🎯 Icon-only Multi-Select Toggle Button */}
             <button 
               type="button"
               onClick={() => {
                 setIsMultiSelectMode(prev => !prev);
                 if (isMultiSelectMode) setSelectedCells({});
               }} 
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer border ${
+              className={`relative h-8 w-8 rounded-full flex items-center justify-center transition-all active:scale-90 cursor-pointer border shadow-2xs shrink-0 ${
                 isMultiSelectMode 
                   ? 'bg-[#007AFF] text-white border-[#007AFF] shadow-sm ring-2 ring-blue-400/40' 
                   : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-[#007AFF] dark:text-blue-400 border-blue-200/60 dark:border-blue-800/40'
               }`}
-              title="دیاریکردنی چەندین ڕۆژ یان خانە لە خشتەکە — دەتوانیت وەک شیت بە ماوس ڕایبکێشیت (Drag-to-Select)"
+              title="دەستکاری فرە-ڕۆژ (Multi-Select)"
+              aria-label="دەستکاری فرە-ڕۆژ"
             >
-              <CheckSquare className="w-3.5 h-3.5" />
-              <span>{isMultiSelectMode ? 'مودێ فرە-خانە (چالاکە)' : 'دەستکاری فرە-ڕۆژ'}</span>
+              <CheckSquare className="w-4 h-4" />
               {selectedCount > 0 && (
-                <span className="bg-white text-[#007AFF] text-[10px] font-mono px-1.5 py-0.5 rounded-full font-black">
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-mono w-4 h-4 rounded-full flex items-center justify-center font-black">
                   {selectedCount}
                 </span>
               )}
-            </button>
-
-            {/* 📅 Batch Days Range Tool Button */}
-            <button 
-              type="button"
-              onClick={() => setShowBatchModal(true)} 
-              className="px-3.5 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer border border-indigo-200/60 dark:border-indigo-800/40"
-              title="دیاریکردنی مەودای چەندین ڕۆژ (بۆ نموونە لە ڕۆژی ١ تا ١٥ بۆ هەمووان)"
-            >
-              <CalendarRange className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span>داخڵکردنی چەند ڕۆژێک</span>
             </button>
 
             {/* 🖨️ Icon-only Print Button */}
@@ -1384,57 +1341,27 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             </button>
 
-            {/* 📄 Official Ashley Letterhead PDF Button */}
+            {/* 📄 Icon-only Official Ashley Letterhead PDF Button */}
             <button
               onClick={handleExportOfficialLetterheadPDF}
-              className="h-8 px-3 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+              className="h-8 w-8 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white flex items-center justify-center shadow-xs transition-all active:scale-90 cursor-pointer"
               title="ڕاپۆرتی فەرمی بە وەرەقەی سەری ئاشڵی (PDF)"
+              aria-label="ڕاپۆرتی فەرمی"
             >
-              <FileText className="w-3.5 h-3.5 text-white" />
-              <span>ڕاپۆرتی فەرمی</span>
+              <FileText className="w-4 h-4 text-white" />
             </button>
-          </div>
-        </div>
 
-        {/* Status Drag & Drop Quick Palette Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-white/5">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1 px-1">
-              <Move className="w-3.5 h-3.5 text-indigo-500" />
-              <span>ڕاکێشان (Drag & Drop):</span>
-            </span>
-            {[
-              { key: 'Present', label: 'ئامادەبوو', dot: 'bg-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200/60' },
-              { key: 'Leave', label: 'مۆڵەت', dot: 'bg-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200/60' },
-              { key: 'Absent', label: 'غیاب', dot: 'bg-rose-500', bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border-rose-200/60' },
-              { key: 'Holiday', label: 'پشوو (هەینی)', dot: 'bg-blue-500', bg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border-blue-200/60' }
-            ].map(p => (
-              <div
-                key={p.key}
-                draggable={true}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', p.key);
-                  setDraggedStatus(p.key);
-                }}
-                onDragEnd={() => setDraggedStatus(null)}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-grab active:cursor-grabbing select-none flex items-center gap-1.5 shadow-2xs ${p.bg}`}
-              >
-                <span className={`w-2 h-2 rounded-full ${p.dot}`} />
-                <span>{p.label}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Quick Search */}
-          <div className="relative min-w-[220px]">
-            <Search className="w-3.5 h-3.5 absolute right-3 top-2.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="گەڕان لە کارمەندان..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-3 pr-8 py-1.5 rounded-full bg-slate-100 dark:bg-[#3a3a3c] border border-slate-200/60 dark:border-white/5 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 placeholder-slate-400"
-            />
+            {/* Quick Search */}
+            <div className="relative w-36 sm:w-48">
+              <Search className="w-3.5 h-3.5 absolute right-2.5 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="گەڕان..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-2.5 pr-8 py-1.5 rounded-full bg-slate-100 dark:bg-[#3a3a3c] border border-slate-200/60 dark:border-white/5 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 placeholder-slate-400"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -1724,20 +1651,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     return (
                       <td 
                         key={d.dateStr}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.dataTransfer.dropEffect = 'copy';
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          const dropped = e.dataTransfer.getData('text/plain') || draggedStatus;
-                          if (dropped) {
-                            handleDirectDrop(emp.id, emp.name, d.dateStr, dropped);
-                          }
-                        }}
-                        onDragStart={(e) => {
-                          e.preventDefault();
-                        }}
                         onMouseDown={(e) => {
                           if (e.button !== 0) return; // Left mouse button only
 

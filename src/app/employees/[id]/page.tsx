@@ -896,17 +896,21 @@ function EmployeeDetailPage() {
                 <h3 className="font-black text-sm text-slate-900">
                   خشتەی ئامادەبوون و کاتەکانی دەوام — {selectedEmployee.name}
                 </h3>
-                <p className="text-[11px] text-slate-500 font-bold">تەواوی وردەکاری هاتن و چوونەکان بە ڕەنگی سەوز</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 border border-slate-300">
-              <Calendar className="w-4 h-4 text-blue-700" />
+            {/* 📅 Icon-only Month Picker */}
+            <div 
+              className="relative h-8 w-8 rounded-full flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-2xs transition-all cursor-pointer"
+              title={`دیاریکردنی مانگ (${selectedMonth})`}
+            >
+              <Calendar className="w-4 h-4 text-blue-600" />
               <input
                 type="month"
                 value={selectedMonth}
                 onChange={e => setSelectedMonth(e.target.value)}
-                className="bg-transparent text-xs font-bold font-mono text-slate-900 outline-none cursor-pointer"
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                title={`دیاریکردنی مانگ (${selectedMonth})`}
               />
             </div>
           </div>

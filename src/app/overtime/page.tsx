@@ -32,9 +32,6 @@ function OvertimePage() {
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
               تۆمار و ئاماری کاتی زیادە (Overtime Management)
             </h1>
-            <p className="text-xs text-slate-500 font-medium">
-              سیستەمی بەڕێوەبردن، ئاماری ڕۆژانە و مانگانەی کاتی زیادەی کارمەندان (پەیوەست بە ئامادەبوون)
-            </p>
           </div>
         </div>
 
