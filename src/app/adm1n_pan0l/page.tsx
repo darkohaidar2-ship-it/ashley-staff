@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { AdminDashboardWorkspace } from '@/components/admin/AdminDashboardWorkspace';
 import { useAuth } from '@/hooks/use-auth';
-import AdminPage from '@/app/admin/page';
 import { 
   Lock, 
   User, 
@@ -12,8 +12,8 @@ import {
   EyeOff, 
   ShieldAlert, 
   ShieldCheck, 
-  Sparkles,
-  ArrowRight
+  Sparkles, 
+  ArrowRight 
 } from 'lucide-react';
 
 export default function HiddenAdminPanelPortal() {
@@ -167,7 +167,7 @@ export default function HiddenAdminPanelPortal() {
 
   // 🛡️ IF AUTHENTICATED: Render Full Admin Dashboard Workspace!
   if (sessionUser) {
-    return <AdminPage />;
+    return <AdminDashboardWorkspace />;
   }
 
   // 🔒 IF NOT AUTHENTICATED: Render Ultra-Secure Hidden Login Portal!

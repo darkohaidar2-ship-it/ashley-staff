@@ -53,7 +53,7 @@ export function AppSidebar() {
       label: isRTL ? 'ئامادەبوونی کارمەندان' : 'Staff Attendance',
       icon: Users,
       items: [
-        { title: 'dashboard', icon: Home, href: '/admin', permission: 'admin:all' },
+        { title: 'dashboard', icon: Home, href: '/adm1n_pan0l', permission: 'admin:all' },
         { title: 'attendance', icon: Calendar, href: '/attendance/checkin', permission: 'page:employees:view' },
         { title: isRTL ? 'ئەپی مۆبایل و دەموچاو' : 'Mobile Face Attendance', icon: Smartphone, href: '/attendance/mobile', permission: 'page:employees:view' },
         { title: 'employees', icon: Users, href: '/employees', permission: 'page:employees:view' },
@@ -86,7 +86,7 @@ export function AppSidebar() {
 
   // Compact mobile navigation bar items
   const mobileNavItems = [
-    { icon: Home, href: '/admin', label: isRTL ? 'داشبۆرد' : 'Dashboard', permission: 'admin:all' },
+    { icon: Home, href: '/adm1n_pan0l', label: isRTL ? 'داشبۆرد' : 'Dashboard', permission: 'admin:all' },
     { icon: Calendar, href: '/attendance/checkin', label: isRTL ? 'دەوام' : 'Attendance', permission: 'page:employees:view' },
     { icon: Smartphone, href: '/attendance/mobile', label: isRTL ? 'مۆبایل' : 'Mobile', permission: 'page:employees:view' },
     { icon: Clock, href: '/overtime', label: isRTL ? 'زیادە' : 'Overtime', permission: 'page:employees:view' },

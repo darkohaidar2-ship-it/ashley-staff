@@ -377,7 +377,7 @@ function EmployeeDetailPage() {
         </div>
         <h2 className="text-lg font-black text-slate-900 mb-2">کارمەند نەدۆزرایەوە</h2>
         <p className="text-xs text-slate-500 font-bold mb-4">ئەم کۆدە (${employeeId}) لە سیستەمدا بوونی نییە.</p>
-        <Link href="/admin" className="px-4 py-2 bg-slate-900 text-white text-xs font-black hover:bg-slate-800">
+        <Link href="/adm1n_pan0l" className="px-4 py-2 bg-slate-900 text-white text-xs font-black hover:bg-slate-800">
           ← گەڕانەوە بۆ پانێڵی سەرەکی
         </Link>
       </div>
@@ -517,7 +517,7 @@ function EmployeeDetailPage() {
       <div className="bg-white border-2 border-slate-300 p-3.5 shadow-sm flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Link
-            href="/admin"
+            href="/adm1n_pan0l"
             className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 active:bg-black text-white text-xs font-black flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
             title="گەڕانەوە بۆ پانێڵی فەرمی ئەدمین"
           >

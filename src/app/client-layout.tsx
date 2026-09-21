@@ -48,10 +48,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
   const isStandalonePage = 
     pathname === '/' || 
-    pathname === '/adminpanel' || 
     pathname === '/login' || 
     pathname?.startsWith('/attendance') || 
-    pathname?.startsWith('/admin') ||
     pathname?.startsWith('/adm1n_pan0l') ||
     pathname?.includes('mobile');
 

@@ -20,7 +20,7 @@ function OvertimePage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/80 backdrop-blur-xl p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm no-print">
         <div className="flex items-center gap-3">
-          <Link href="/admin">
+          <Link href="/adm1n_pan0l">
             <Button variant="ghost" size="icon" className="rounded-full hover:bg-slate-100">
               <ArrowLeft className={cn("h-5 w-5", isRTL && "rotate-180")} />
             </Button>
@@ -39,7 +39,7 @@ function OvertimePage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Link href="/admin">
+          <Link href="/adm1n_pan0l">
             <Button variant="outline" className="btn-classic text-xs font-bold gap-1.5">
               <span>گەرانەوە بۆ داشبۆردی سەرەکی</span>
             </Button>
