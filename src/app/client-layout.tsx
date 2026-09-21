@@ -63,19 +63,19 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       <LanguageProvider>
         <AppProvider>
           <DynamicFontInjector>
+            <TopNavbar />
             {isStandalonePage ? (
               // 📱 STANDALONE CLEAN IMMERSIVE FULLSCREEN SHELL
-              <div className="min-h-screen w-full bg-white dark:bg-[#1c1c1e] text-slate-900 dark:text-white font-sans antialiased dir-rtl p-0 m-0" dir="rtl">
+              <div className="min-h-[calc(100vh-48px)] w-full bg-white dark:bg-[#1c1c1e] text-slate-900 dark:text-white font-sans antialiased dir-rtl p-0 m-0" dir="rtl">
                 {children}
               </div>
             ) : (
               // 🖥️ FULL ERP DESKTOP WORKSPACE (FOR MAIN ADMIN DESKTOP)
-              <div className="min-h-screen bg-[#f2f2f7] dark:bg-[#1c1c1e] text-slate-900 dark:text-white font-sans antialiased flex flex-col dir-rtl" dir="rtl">
-                <TopNavbar />
+              <div className="min-h-[calc(100vh-48px)] bg-[#f2f2f7] dark:bg-[#1c1c1e] text-slate-900 dark:text-white font-sans antialiased flex flex-col dir-rtl" dir="rtl">
                 <main className="flex-1 w-full max-w-[1920px] mx-auto px-3 md:px-6 py-4">
                   {children}
                 </main>
-                <footer className="w-full bg-white/70 dark:bg-[#2c2c2e]/70 backdrop-blur-md border-t border-slate-200/80 dark:border-white/5 p-2 flex flex-wrap items-center justify-between text-xs font-mono text-slate-500 dark:text-slate-400 select-none">
+                <footer className="w-full bg-white/70 dark:bg-[#2c2c2e]/70 backdrop-blur-md border-t border-slate-200/80 dark:border-white/5 p-2 flex flex-wrap items-center justify-between text-xs font-mono text-slate-500 dark:text-slate-400 select-none print:hidden">
                   <div className="flex items-center gap-2">
                     <span className="statusbar-segment text-emerald-700 dark:text-emerald-400 font-bold">● SUPABASE ONLINE</span>
                     <span className="statusbar-segment font-bold">ASHLEY ERP iOS ENGINE</span>

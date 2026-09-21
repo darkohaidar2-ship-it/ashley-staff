@@ -30,7 +30,7 @@ interface AdminOvertimeModuleProps {
 }
 
 export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
-  const { overtime, setOvertime, attendanceLogs } = useAppContext();
+  const { overtime, setOvertime, attendanceLogs, settings } = useAppContext();
   
   const [selectedDate, setSelectedDate] = useState<string>(() => '2026-08-01');
   const [selectedMonth, setSelectedMonth] = useState<string>(() => '2026-08');
@@ -487,7 +487,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         { header: 'بڕی پارە (IQD)', key: 'amount', align: 'center' },
         { header: 'تێبینی و جۆری ئیش', key: 'note', align: 'right' },
       ];
-      const data = dailyRecords.map(r => ({
+      const data: Record<string, any>[] = dailyRecords.map(r => ({
         name: r.employeeName,
         role: r.employeeRole,
         checkOutTime: formatTime12H(r.checkOutTime),
@@ -495,18 +495,26 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         amount: `${r.totalAmount.toLocaleString()} IQD`,
         note: r.note || '-',
       }));
+
+      // Append prominent Grand Total row inside the table
+      data.push({
+        name: '⭐ کۆی گشتی شایستەی ڕۆژ',
+        role: `${dailyRecords.length} کارمەند`,
+        checkOutTime: '—',
+        hours: `${totalDailyHours.toFixed(1)} کاتژمێر`,
+        amount: `${totalDailyCost.toLocaleString()} IQD`,
+        note: 'کۆی شایستەی خەرجکردنی ئیزافەی ئەمڕۆ',
+      });
+
       exportToPDF({
         title: 'ڕاپۆرتی کاتی زیادەی ڕۆژانەی کارمەندان (Daily Overtime Report)',
-        subtitle: 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی - پەیوەستکراو بە ئامادەبوون',
+        subtitle: 'کۆمپانیای مۆبیلیاتی ئاشڵی — تۆماری فەرمی کاتی زیادەی کارمەندان',
         period: selectedDate,
         columns: cols,
         data,
         fileName: `Ashley_Daily_Overtime_${selectedDate}`,
-        summaryCards: [
-          { label: 'کۆی کارمەندانی خاوەن ئیزافە', value: `${dailyRecords.length} کارمەند`, color: '#1e40af' },
-          { label: 'کۆی کاتژمێری ئیزافە', value: `${totalDailyHours.toFixed(1)} کاتژمێر`, color: '#047857' },
-          { label: 'کۆی گشتی پارەی شایستە', value: `${totalDailyCost.toLocaleString()} IQD`, color: '#065f46' },
-        ],
+        settings,
+        summaryText: `کۆی کارمەندانی خاوەن ئیزافە لەم بەروارەدا: ${dailyRecords.length} کارمەند • کۆی گشتی کاتژمێری ئیزافەی ڕۆژ: ${totalDailyHours.toFixed(1)} کاتژمێر • کۆی گشتی پارەی شایستەی ئیزافە بۆ خەرجکردن: ${totalDailyCost.toLocaleString()} دیناری عێراقی (IQD).`,
       });
     } else {
       const cols: ExportTableColumn[] = [
@@ -515,24 +523,30 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         { header: 'کاتی زیادەی کارکردن', key: 'hours', align: 'center' },
         { header: 'کۆی شایستەی پارە (IQD)', key: 'amount', align: 'center' },
       ];
-      const data = monthlySummary.map(s => ({
+      const data: Record<string, any>[] = monthlySummary.map(s => ({
         name: s.name,
         role: s.role,
         hours: `${s.totalHours.toFixed(1)} کاتژمێر`,
         amount: `${s.totalAmount.toLocaleString()} IQD`,
       }));
+
+      // Append prominent Grand Total row inside the table
+      data.push({
+        name: '⭐ کۆی گشتی شایستەی مانگ',
+        role: `${monthlySummary.length} کارمەند`,
+        hours: `${totalMonthlyHours.toFixed(1)} کاتژمێر`,
+        amount: `${totalMonthlyCost.toLocaleString()} IQD`,
+      });
+
       exportToPDF({
         title: 'ڕاپۆرتی ئاماری مانگانەی کاتی زیادەی کارمەندان (Monthly Overtime Report)',
-        subtitle: 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی - تەنها کارمەندانی خاوەن ئیزافە',
+        subtitle: 'کۆمپانیای مۆبیلیاتی ئاشڵی — تەنها کارمەندانی خاوەن ئیزافە',
         period: `مانگی ${selectedMonth}`,
         columns: cols,
         data,
         fileName: `Ashley_Monthly_Overtime_${selectedMonth}`,
-        summaryCards: [
-          { label: 'کارمەندانی خاوەن ئیزافە', value: `${monthlySummary.length} کارمەند`, color: '#1e40af' },
-          { label: 'کۆی کاتژمێری مانگ', value: `${totalMonthlyHours.toFixed(1)} کاتژمێر`, color: '#047857' },
-          { label: 'کۆی گشتی پارەی ئیزافە', value: `${totalMonthlyCost.toLocaleString()} IQD`, color: '#065f46' },
-        ],
+        settings,
+        summaryText: `کۆی کارمەندانی خاوەن ئیزافەی مانگ: ${monthlySummary.length} کارمەند • کۆی گشتی کاتژمێری زیادەی تۆمارکراو: ${totalMonthlyHours.toFixed(1)} کاتژمێر • کۆی گشتی پارەی شایستەی کاتی زیادەی مانگ: ${totalMonthlyCost.toLocaleString()} دیناری عێراقی (IQD).`,
       });
     }
   };

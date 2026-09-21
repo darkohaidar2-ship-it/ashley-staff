@@ -17,6 +17,7 @@ export interface ExportReportOptions {
   columns: ExportTableColumn[];
   data: Record<string, any>[];
   summaryCards?: Array<{ label: string; value: string | number; color?: string }>;
+  summaryText?: string;
   kpiNotes?: string[];
   orientation?: 'landscape' | 'portrait';
   fileName?: string;
@@ -210,7 +211,10 @@ export function exportToPDF(options: ExportReportOptions) {
   let activeSettings = options.settings;
   if (!activeSettings && typeof window !== 'undefined') {
     try {
-      const stored = localStorage.getItem('ashley_global_settings');
+      const stored = 
+        localStorage.getItem('ashley_terminal_settings') ||
+        localStorage.getItem('ashley_global_settings') ||
+        localStorage.getItem('ashley_app_settings');
       if (stored) {
         activeSettings = JSON.parse(stored);
       }
@@ -222,9 +226,9 @@ export function exportToPDF(options: ExportReportOptions) {
   const motherCompany = activeSettings?.motherCompanyName || 'کۆمپانیای گروپی دیوان';
   const motherCompanySubtitle = activeSettings?.motherCompanySubtitle || 'ناسنامەی مۆبیلیات';
   const brandName = activeSettings?.brandName || 'کۆمپانیای مۆبیلیاتی ئاشڵی';
-  const brandSubtitle = activeSettings?.brandSubtitle || activeSettings?.brandSlogan || 'Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)';
+  const brandSubtitle = activeSettings?.brandSubtitle || activeSettings?.brandSlogan || activeSettings?.agencyTitle || 'Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)';
   const diwanLogo = activeSettings?.diwanLogo || '/diwan-logo.svg';
-  const reportLogo = activeSettings?.reportLogo || activeSettings?.ashleyLogo || activeSettings?.appLogo || '/ashley-logo.png';
+  const reportLogo = activeSettings?.reportLogo || activeSettings?.ashleyLogo || activeSettings?.appLogo || activeSettings?.websiteLogo || '/ashley-logo.png';
   const primaryColor = activeSettings?.letterheadPrimaryColor || '#0f172a';
   const accentColor = activeSettings?.letterheadAccentColor || '#d97706';
   const titleColor = activeSettings?.letterheadTitleColor || primaryColor;
@@ -381,54 +385,67 @@ export function exportToPDF(options: ExportReportOptions) {
       margin-bottom: 6px;
     }
 
-    /* 📊 VIBRANT SUMMARY KPI CARDS */
-    .summary-grid {
-      display: grid;
-      grid-template-columns: repeat(${Math.max(1, Math.min(summaryCards.length, 5))}, 1fr);
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-    .summary-card {
+    /* 📝 EXECUTIVE WRITTEN SUMMARY RIBBON (NOT A TABLE/GRID) */
+    .executive-summary-ribbon {
       background: #f8fafc !important;
-      border: 1.5px solid #cbd5e1;
+      border: 1px solid #cbd5e1 !important;
+      border-right: 5px solid ${primaryColor} !important;
       border-radius: 8px;
-      padding: 8px 12px;
-      text-align: center;
-      position: relative;
-      overflow: hidden;
+      padding: 9px 14px;
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 12px;
+      font-size: 11px;
+      line-height: 1.6;
+      color: #1e293b;
+      page-break-inside: avoid;
     }
-    .summary-card:nth-child(1) {
-      border-top: 4px solid #2563eb !important;
-      background: #eff6ff !important;
+    .summary-ribbon-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 900;
+      color: ${primaryColor};
+      white-space: nowrap;
+      padding-left: 12px;
+      border-left: 1.5px solid #cbd5e1;
+      font-size: 11px;
     }
-    .summary-card:nth-child(2) {
-      border-top: 4px solid #d97706 !important;
-      background: #fffbeb !important;
-    }
-    .summary-card:nth-child(3) {
-      border-top: 4px solid #059669 !important;
-      background: #ecfdf5 !important;
-    }
-    .summary-card:nth-child(4) {
-      border-top: 4px solid #7c3aed !important;
-      background: #f5f3ff !important;
-    }
-    .summary-card:nth-child(5) {
-      border-top: 4px solid #e11d48 !important;
-      background: #fff1f2 !important;
-    }
-    .summary-card .label {
-      font-size: 10px;
-      font-weight: 800;
+    .summary-ribbon-text {
+      flex: 1;
+      font-weight: 700;
       color: #334155;
-      display: block;
-      margin-bottom: 3px;
     }
-    .summary-card .value {
-      font-size: 14px;
+    .summary-ribbon-text .summary-item {
+      display: inline-block;
+      white-space: nowrap;
+    }
+    .summary-ribbon-text strong {
+      color: #0f172a;
+      font-weight: 900;
+    }
+    .summary-ribbon-text .summary-val {
+      font-family: Consolas, monospace;
       font-weight: 900;
       color: #0f172a;
-      font-family: Consolas, monospace;
+      padding: 1.5px 6px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      border: 1px solid #cbd5e1;
+      margin-right: 2px;
+    }
+
+    /* Total row highlight */
+    .tr-total-row {
+      background-color: #f1f5f9 !important;
+      font-weight: 900 !important;
+      border-top: 2.5px solid ${primaryColor} !important;
+    }
+    .tr-total-row td {
+      font-weight: 900 !important;
+      color: #0f172a !important;
     }
 
     /* 📋 COLORFUL FULL-WIDTH TABLE */
@@ -637,21 +654,26 @@ export function exportToPDF(options: ExportReportOptions) {
       </div>
     </div>
 
-    <!-- Summary KPI Cards -->
+    <!-- 📝 Executive Written Summary Ribbon (Narrative Text, Not a Grid/Table) -->
     ${
-      summaryCards.length > 0
+      (options.summaryText || (summaryCards && summaryCards.length > 0))
         ? `
-    <div class="summary-grid">
-      ${summaryCards
-        .map(
-          c => `
-      <div class="summary-card">
-        <span class="label">${c.label}</span>
-        <span class="value" style="${c.color ? `color:${c.color};` : ''}">${c.value}</span>
+    <div class="executive-summary-ribbon">
+      <div class="summary-ribbon-title">
+        <span>📝</span>
+        <span>پوختە و کۆی گشتی:</span>
       </div>
-      `
-        )
-        .join('')}
+      <div class="summary-ribbon-text">
+        ${
+          options.summaryText
+            ? options.summaryText
+            : summaryCards
+                .map(
+                  c => `<span class="summary-item"><strong>${c.label}:</strong> <span class="summary-val" style="${c.color ? `color:${c.color}; border-color:${c.color}60;` : ''}">${c.value}</span></span>`
+                )
+                .join(' &nbsp;•&nbsp; ')
+        }
+      </div>
     </div>
     `
         : ''
@@ -676,9 +698,13 @@ export function exportToPDF(options: ExportReportOptions) {
       <tbody>
         ${data
           .map(
-            (row, index) => `
-          <tr>
-            <td style="text-align: center; color: #64748b; font-family: monospace;">${index + 1}</td>
+            (row, index) => {
+              const isTotalRow = Object.values(row).some(
+                v => typeof v === 'string' && (v.includes('⭐') || v.includes('کۆی گشتی') || v.includes('📊 کۆی'))
+              );
+              return `
+          <tr class="${isTotalRow ? 'tr-total-row' : ''}">
+            <td style="text-align: center; color: #64748b; font-family: monospace;">${isTotalRow ? '★' : index + 1}</td>
             ${columns
               .map(col => {
                 const val = row[col.key] !== undefined && row[col.key] !== null ? String(row[col.key]) : '-';
@@ -711,7 +737,8 @@ export function exportToPDF(options: ExportReportOptions) {
               })
               .join('')}
           </tr>
-        `
+        `;
+            }
           )
           .join('')}
       </tbody>
@@ -785,7 +812,10 @@ export function exportMonthlyMultiPageDailyPDF(options: MonthDailyReportOptions)
   let activeSettings = options.settings;
   if (!activeSettings && typeof window !== 'undefined') {
     try {
-      const stored = localStorage.getItem('ashley_global_settings');
+      const stored = 
+        localStorage.getItem('ashley_terminal_settings') ||
+        localStorage.getItem('ashley_global_settings') ||
+        localStorage.getItem('ashley_app_settings');
       if (stored) {
         activeSettings = JSON.parse(stored);
       }

@@ -25,7 +25,7 @@ interface AdminExpensesModuleProps {
 }
 
 export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesModuleProps = {}) {
-  const { employees: contextEmployees, expenses, setExpenses, bonuses, setBonuses, withdrawals, setWithdrawals } = useAppContext();
+  const { employees: contextEmployees, expenses, setExpenses, bonuses, setBonuses, withdrawals, setWithdrawals, settings } = useAppContext();
   const employees = propEmployees || contextEmployees || [];
 
   const [selectedMonth, setSelectedMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'));
@@ -294,18 +294,28 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
           note: `کۆی مەسروفاتی ئەم کارمەندە`,
         });
       });
+
+      // Append prominent Grand Total row inside the table
+      data.push({
+        empName: '⭐ کۆی گشتی مەسروفات',
+        date: '—',
+        type: '—',
+        from: '—',
+        to: '—',
+        trip: '—',
+        amount: `${totalExp.toLocaleString()} IQD`,
+        note: `کۆی تەواوی خەرجی پسوولەکانی مانگی ${selectedMonth}`,
+      });
+
       exportToPDF({
         title: 'ڕاپۆرتی مەسروفات و خەرجییەکانی کارمەندان (Ashley Expenses Ledger)',
-        subtitle: 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی',
+        subtitle: 'کۆمپانیای مۆبیلیاتی ئاشڵی — پسوولە و وەسیڵەی خەرجییەکان',
         period: `مانگی ${selectedMonth}`,
         columns: cols,
         data,
         fileName: `Ashley_Expenses_${selectedMonth}`,
-        summaryCards: [
-          { label: 'کۆی خەرجی مەسروفات', value: `${totalExp.toLocaleString()} IQD`, color: '#007AFF' },
-          { label: 'ژمارەی پسوولەکان', value: `${monthlyExpenses.length} دانە` },
-          { label: 'ژمارەی کارمەندان', value: `${Object.keys(groupedExpenses).length} کەس` },
-        ],
+        settings,
+        summaryText: `کۆی گشتی خەرجی مەسروفاتی مانگ: ${totalExp.toLocaleString()} دیناری عێراقی (IQD) • ژمارەی گشتی پسوولەکان: ${monthlyExpenses.length} پسوولە • ژمارەی ئەو کارمەندانەی خەرجییان هەبووە: ${Object.keys(groupedExpenses).length} کارمەند.`,
       });
     } else if (activeTab === 'bonuses') {
       const cols: ExportTableColumn[] = [
@@ -320,17 +330,24 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         amount: `${Number(b.totalAmount || b.amount || 0).toLocaleString()} IQD`,
         reason: b.reason || b.note || b.notes || '-',
       }));
+
+      // Append prominent Grand Total row inside the table
+      data.push({
+        empName: '⭐ کۆی گشتی پاداشتەکانی مانگ',
+        date: '—',
+        amount: `${totalBon.toLocaleString()} IQD`,
+        reason: `کۆی گشتی بۆ ${monthlyBonuses.length} کارمەند`,
+      });
+
       exportToPDF({
         title: 'ڕاپۆرتی پاداشت و بەخششی کارمەندان (Employee Bonuses Report)',
-        subtitle: 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی',
+        subtitle: 'کۆمپانیای مۆبیلیاتی ئاشڵی — تۆماری فەرمی پاداشتەکان',
         period: `مانگی ${selectedMonth}`,
         columns: cols,
         data,
         fileName: `Ashley_Bonuses_${selectedMonth}`,
-        summaryCards: [
-          { label: 'کۆی پاداشتەکان', value: `${totalBon.toLocaleString()} IQD`, color: '#047857' },
-          { label: 'کارمەندانی وەرگر', value: `${monthlyBonuses.length} کەس` },
-        ],
+        settings,
+        summaryText: `کۆی گشتی پاداشت و بەخششەکانی مانگ: ${totalBon.toLocaleString()} دیناری عێراقی (IQD) • ژمارەی کارمەندانی وەرگری پاداشت: ${monthlyBonuses.length} کارمەند.`,
       });
     } else {
       const cols: ExportTableColumn[] = [
@@ -345,17 +362,24 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         amount: `${Number(w.amount || 0).toLocaleString()} IQD`,
         note: w.note || w.notes || '-',
       }));
+
+      // Append prominent Grand Total row inside the table
+      data.push({
+        empName: '⭐ کۆی گشتی پێشینە و سەحبی مانگ',
+        date: '—',
+        amount: `${totalWth.toLocaleString()} IQD`,
+        note: `کۆی گشتی ${monthlyWithdrawals.length} جار ڕاکێشان`,
+      });
+
       exportToPDF({
         title: 'ڕاپۆرتی ڕاکێشانی پێشینەی کارمەندان (Cash Withdrawals Report)',
-        subtitle: 'کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی',
+        subtitle: 'کۆمپانیای مۆبیلیاتی ئاشڵی — تۆماری پێشینەی دارایی',
         period: `مانگی ${selectedMonth}`,
         columns: cols,
         data,
         fileName: `Ashley_Withdrawals_${selectedMonth}`,
-        summaryCards: [
-          { label: 'کۆی ڕاکێشانی پێشینە', value: `${totalWth.toLocaleString()} IQD`, color: '#b45309' },
-          { label: 'تۆمارەکان', value: `${monthlyWithdrawals.length} جار` },
-        ],
+        settings,
+        summaryText: `کۆی گشتی ڕاکێشانی پێشینەی کارمەندان لەم مانگەدا: ${totalWth.toLocaleString()} دیناری عێراقی (IQD) • ژمارەی جارەکانی ڕاکێشان: ${monthlyWithdrawals.length} جار.`,
       });
     }
   };
