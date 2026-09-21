@@ -3277,14 +3277,30 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       });
     }
 
+    if (pathStr === 'admin/overtime-notes' && method === 'GET') {
+      const url = new URL(req.url);
+      const month = url.searchParams.get('month') || 'global';
+      const settingsKey = `ot_notes_${month}`;
+      try {
+        const notes = await getAttendanceSettingsFromStore<any>(settingsKey, {});
+        return NextResponse.json({ success: true, notes });
+      } catch (err: any) {
+        return NextResponse.json({ notes: {} });
+      }
+    }
+
     if (pathStr === 'admin/overtime-notes' && method === 'POST') {
-      const { month, noteKey, note } = await req.json();
+      const { month, noteKey, note, notes } = await req.json();
       const settingsKey = `ot_notes_${month || 'global'}`;
       try {
-        const currentNotes = await getAttendanceSettingsFromStore<any>(settingsKey, {});
-        currentNotes[noteKey] = note;
+        let currentNotes = await getAttendanceSettingsFromStore<any>(settingsKey, {});
+        if (notes && typeof notes === 'object') {
+          currentNotes = { ...currentNotes, ...notes };
+        } else if (noteKey) {
+          currentNotes[noteKey] = note || '';
+        }
         await saveAttendanceSettingsToStore(settingsKey, currentNotes);
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, notes: currentNotes });
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
       }

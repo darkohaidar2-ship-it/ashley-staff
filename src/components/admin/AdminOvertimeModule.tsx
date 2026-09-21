@@ -63,8 +63,9 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
     note: ''
   });
 
-  // Keep notes synchronized with localStorage
+  // Keep notes synchronized with localStorage and Supabase Cloud
   useEffect(() => {
+    let isMounted = true;
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem(`ashley_admin_notes_${selectedMonth}`);
@@ -75,15 +76,51 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         }
       } catch {}
     }
+
+    // Cloud fetch from Supabase
+    fetch(`/api/attendance/admin/overtime-notes?month=${selectedMonth}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!isMounted || !data?.notes) return;
+        setAdminNotes(prev => {
+          const merged = { ...prev, ...data.notes };
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem(`ashley_admin_notes_${selectedMonth}`, JSON.stringify(merged));
+            } catch {}
+          }
+          return merged;
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedMonth, employees]);
 
-  const handleSaveNote = (key: string) => {
+  const handleSaveNote = async (key: string) => {
     const updated = { ...adminNotes, [key]: tempNoteText.trim() };
     setAdminNotes(updated);
     if (typeof window !== 'undefined') {
       localStorage.setItem(`ashley_admin_notes_${selectedMonth}`, JSON.stringify(updated));
     }
     setEditingNoteKey(null);
+
+    // Save to Supabase Cloud
+    try {
+      await fetch('/api/attendance/admin/overtime-notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: selectedMonth,
+          noteKey: key,
+          note: tempNoteText.trim()
+        })
+      });
+    } catch (err) {
+      console.warn('Could not sync note to cloud:', err);
+    }
   };
 
   // Form State for Manual Overtime Entry
