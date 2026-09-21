@@ -116,7 +116,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
   // Modal Form States
   const [modalStatus, setModalStatus] = useState<string>('Present');
   const [modalCheckIn, setModalCheckIn] = useState<string>('08:00');
-  const [modalCheckOut, setModalCheckOut] = useState<string>('17:00');
+  const [modalCheckOut, setModalCheckOut] = useState<string>('');
   const [modalAdminNote, setModalAdminNote] = useState<string>('');
   const [modalAdminCheckInNote, setModalAdminCheckInNote] = useState<string>('');
   const [modalAdminCheckOutNote, setModalAdminCheckOutNote] = useState<string>('');
@@ -889,7 +889,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             totalHours += (info.workedHours !== undefined ? info.workedHours : 8);
             const inT = (info.checkInTime || '08:00').slice(0, 5);
             if (inT > '08:15') lateCount++;
-            return `هاتن: ${info.checkInTime || '08:00'} | ڕۆیشتن: ${info.checkOutTime || '17:00'}`;
+            return `هاتن: ${info.checkInTime || '08:00'} | ڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '-')}`;
           }
           if (d.isFriday || info.status === 'Holiday') return 'پشوو (هەینی)';
           if (info.status === 'Leave' || info.status === 'مۆڵەت') return 'مۆڵەت';
@@ -986,7 +986,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           totalWorkedHours += hrs;
           globalWorkedHours += hrs;
           const inT = (info.checkInTime || '08:00').slice(0, 5);
-          const outT = (info.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00')).slice(0, 5);
+          const outT = (info.checkOutTime || (d.isToday ? 'بەردەوام' : '-')).slice(0, 5);
           const isCheckInWaived = Boolean(info.isCheckInWaived || info.checkInStatus?.isWaived || (info.isWaived && inT > '08:15') || info.adminCheckInDecision === 'waived');
           const isCheckOutWaived = Boolean(info.isCheckOutWaived || info.checkOutStatus?.isWaived || info.adminCheckOutDecision === 'waived');
           const isCellWaived = isCheckInWaived || isCheckOutWaived || info.isWaived;
@@ -1298,9 +1298,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 <h2 className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white">
                   خشتەی مانگانەی ئامادەبوونی کارمەندان
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-[#007AFF] dark:text-blue-400 border border-blue-200/50 dark:border-blue-800/40 font-mono">
-                  08:30 - 16:30
-                </span>
                 {isWaitingData && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 animate-pulse">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
@@ -1571,9 +1568,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                             <span className="truncate">{emp.fullName3Part || emp.name}</span>
                             <ExternalLink className="w-2.5 h-2.5 text-slate-400 group-hover:text-[#007AFF] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                           </div>
-                          <div className={`${tableFitMode === 'fit' ? 'text-[8.5px]' : 'text-[10px]'} font-mono text-slate-400 dark:text-slate-500 truncate`}>
-                            {isDarko ? 'بەڕێوەبەر' : emp.role || 'Staff'} ({emp.id})
-                          </div>
                         </div>
                       </Link>
                     </div>
@@ -1584,7 +1578,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     const theme = DAY_THEMES[d.dayOfWeek] || DAY_THEMES[6];
                     const isPresent = info.status === 'Present' || Boolean(info.checkInTime);
                     const inTime = (info.checkInTime || '08:00').slice(0, 5);
-                    const outTime = info.checkOutTime ? info.checkOutTime.slice(0, 5) : (d.isToday ? 'بەردەوام' : '17:00');
+                    const outTime = info.checkOutTime ? info.checkOutTime.slice(0, 5) : (d.isToday ? 'بەردەوام' : '-');
 
                     const cellKey = `${emp.id}_${d.dateStr}`;
                     const isCellSelected = Boolean(selectedCells[cellKey]);
@@ -1680,7 +1674,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                             handleCellClick(emp, d);
                           }
                         }}
-                        title={`هاتن: ${info.checkInTime || '08:00'} (${info.checkInStatus?.label || ''})\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00')} (${info.checkOutStatus?.label || ''})${info.checkInNote ? `\n📝 تێبینی هاتن: ${info.checkInNote}` : ''}${info.checkOutNote ? `\n⏱️ تێبینی ڕۆیشتن / ئیزافە: ${info.checkOutNote}` : ''}${info.note && info.note !== info.checkInNote && info.note !== info.checkOutNote ? `\n📝 تێبینی: ${info.note}` : ''}${info.adminNote ? `\n🛡️ تێبینی ئەدمین: ${info.adminNote}` : ''}`}
+                        title={`هاتن: ${info.checkInTime || '08:00'} (${info.checkInStatus?.label || ''})\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : 'تۆمار نەکراوە')} (${info.checkOutStatus?.label || ''})${info.checkInNote ? `\n📝 تێبینی هاتن: ${info.checkInNote}` : ''}${info.checkOutNote ? `\n⏱️ تێبینی ڕۆیشتن / ئیزافە: ${info.checkOutNote}` : ''}${info.note && info.note !== info.checkInNote && info.note !== info.checkOutNote ? `\n📝 تێبینی: ${info.note}` : ''}${info.adminNote ? `\n🛡️ تێبینی ئەدمین: ${info.adminNote}` : ''}`}
                         className={`relative text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 select-none transition-all ${
                           isCellSelected 
                             ? 'ring-2 ring-[#007AFF] bg-blue-100 dark:bg-blue-900/90 font-black shadow-md z-20 scale-[1.03]' 
@@ -1901,7 +1895,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-bold text-slate-600 dark:text-slate-300">کاتی چوون (مۆبایل):</span>
                       <span className="font-black font-mono text-blue-600 dark:text-blue-400 text-sm">
-                        {selectedDayModal.info.rawCheckOut || selectedDayModal.info.checkOutTime || '17:00'}
+                        {selectedDayModal.info.rawCheckOut || selectedDayModal.info.checkOutTime || (selectedDayModal.dayItem.isToday ? 'بەردەوام' : 'تۆمار نەکراوە')}
                       </span>
                     </div>
                     <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-white/5">

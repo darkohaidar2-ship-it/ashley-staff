@@ -71,16 +71,16 @@ const COMPANY_LOCATIONS: GeofenceRegion[] = [
   {
     id: 'ashley-base-main',
     name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
-    lat: 35.508918,
-    lng: 45.452935,
-    radiusMeters: 350,
+    lat: 35.562431,
+    lng: 45.474792,
+    radiusMeters: 400,
   },
   {
     id: 'huana-warehouse-loc',
     name: 'کۆگای سەرەکی هوانە (Huana Warehouse)',
-    lat: 35.562431,
-    lng: 45.474792,
-    radiusMeters: 350,
+    lat: 35.508918,
+    lng: 45.452935,
+    radiusMeters: 400,
   },
 ];
 
@@ -389,13 +389,14 @@ export default function MobileAttendanceOneTap() {
     fetch('/api/attendance/location')
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          const mapped: GeofenceRegion[] = data.map((loc: any) => ({
+        const rawList = Array.isArray(data) ? data : (data?.locations || []);
+        if (Array.isArray(rawList) && rawList.length > 0) {
+          const mapped: GeofenceRegion[] = rawList.map((loc: any) => ({
             id: loc.id || loc.name,
-            name: loc.name || 'لۆکەیشنی فەرمی ئاشڵی',
+            name: loc.name || 'کۆمپانیای سەرەکی ئاشڵی',
             lat: parseFloat(loc.lat),
             lng: parseFloat(loc.lng),
-            radiusMeters: loc.radius || loc.radiusMeters || 350,
+            radiusMeters: parseFloat(loc.radius) || parseFloat(loc.radiusMeters) || 400,
           }));
           setCompanyLocations(mapped);
         }
@@ -499,7 +500,7 @@ export default function MobileAttendanceOneTap() {
               minDistance = dist;
               matchedName = loc.name;
             }
-            if (dist <= (loc.radiusMeters || 350)) {
+            if (dist <= (loc.radiusMeters || 400)) {
               insideAny = true;
               matchedName = loc.name;
               break;

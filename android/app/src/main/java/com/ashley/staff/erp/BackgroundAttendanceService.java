@@ -50,13 +50,13 @@ public class BackgroundAttendanceService extends Service implements LocationList
     private SharedPreferences prefs;
 
     // Company Locations
-    private static final double ASHLEY_BASE_LAT = 35.508918;
-    private static final double ASHLEY_BASE_LNG = 45.452935;
-    private static final float ASHLEY_BASE_RADIUS = 160f; // meters
+    private static final double ASHLEY_BASE_LAT = 35.562431;
+    private static final double ASHLEY_BASE_LNG = 45.474792;
+    private static final float ASHLEY_BASE_RADIUS = 400f; // meters
 
-    private static final double HUANA_LAT = 35.562431;
-    private static final double HUANA_LNG = 45.474792;
-    private static final float HUANA_RADIUS = 160f; // meters
+    private static final double HUANA_LAT = 35.508918;
+    private static final double HUANA_LNG = 45.452935;
+    private static final float HUANA_RADIUS = 400f; // meters
 
     private long lastTriggerTime = 0;
 
@@ -204,8 +204,21 @@ public class BackgroundAttendanceService extends Service implements LocationList
         boolean insideHuana = distHuana[0] <= HUANA_RADIUS;
         boolean isInsideAny = insideAshley || insideHuana;
 
-        String matchedName = insideHuana ? "کۆگای سەرەکی هوانە" : "کۆمپانیای سەرەکی ئاشڵی";
-        float closestDistance = insideHuana ? distHuana[0] : distAshley[0];
+        String matchedName;
+        float closestDistance;
+        if (insideAshley && !insideHuana) {
+            matchedName = "کۆمپانیای سەرەکی ئاشڵی";
+            closestDistance = distAshley[0];
+        } else if (insideHuana && !insideAshley) {
+            matchedName = "کۆگای هوانە";
+            closestDistance = distHuana[0];
+        } else if (distAshley[0] <= distHuana[0]) {
+            matchedName = "کۆمپانیای سەرەکی ئاشڵی";
+            closestDistance = distAshley[0];
+        } else {
+            matchedName = "کۆگای هوانە";
+            closestDistance = distHuana[0];
+        }
 
         handleGeofenceLogic(isInsideAny, lat, lng, closestDistance, matchedName);
     }

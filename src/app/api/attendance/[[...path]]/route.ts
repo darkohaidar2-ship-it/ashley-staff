@@ -12,17 +12,17 @@ export const fetchCache = 'force-no-store';
 let GLOBAL_SAVED_LOCATIONS = [
   {
     id: 'ashley-base-main',
-    name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
-    lat: 35.5571,
-    lng: 45.4352,
-    radiusMeters: 350
+    name: 'کۆمپانیای سەرەکی ئاشڵی',
+    lat: 35.562431,
+    lng: 45.474792,
+    radiusMeters: 400
   },
   {
     id: 'huana-warehouse-main',
-    name: 'کۆگای سەرەکی هوانە (Huana Warehouse)',
-    lat: 35.6012,
-    lng: 45.3850,
-    radiusMeters: 350
+    name: 'کۆگای هوانە',
+    lat: 35.508918,
+    lng: 45.452935,
+    radiusMeters: 400
   }
 ];
 
@@ -1302,9 +1302,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       let targetWh = allBranches[0] || {
         id: 'ashley-base-main',
         name: 'کۆمپانیای سەرەکی ئاشڵی',
-        lat: 35.508918,
-        lng: 45.452935,
-        radius: 350,
+        lat: 35.562431,
+        lng: 45.474792,
+        radius: 400,
       };
 
       let minDistance = Infinity;
@@ -2105,7 +2105,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
           // 💾 Normal Upsert
           const rawIn = checkInTime || '08:00';
-          const rawOut = checkOutTime || '17:00';
+          const rawOut = checkOutTime || null;
           const empNote = note || null;
           const combinedAdminNote = adminNote || [adminCheckInNote, adminCheckOutNote].filter(Boolean).join(' | ') || null;
           const rowId = `att-${cleanEmpId}-${date}`;
@@ -2133,11 +2133,11 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             status: status || 'Present',
             warehouse_name: 'کۆمپانیای سەرەکی ئاشڵی',
             check_in_time: status === 'Present' ? (checkInTime || '08:00') : status === 'Leave' ? 'مۆڵەت' : null,
-            check_out_time: status === 'Present' ? (checkOutTime || '17:00') : status === 'Leave' ? 'مۆڵەت' : null,
+            check_out_time: status === 'Present' ? (checkOutTime || null) : status === 'Leave' ? 'مۆڵەت' : null,
             raw_check_in_time: rawIn,
             raw_check_out_time: rawOut,
-            adjusted_check_in_time: checkInTime,
-            adjusted_check_out_time: checkOutTime,
+            adjusted_check_in_time: checkInTime || null,
+            adjusted_check_out_time: checkOutTime || null,
             note: empNote,
             check_in_note: empNote,
             check_out_note: checkOutNote || null,
@@ -3081,10 +3081,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
       const primary = locations.find((l: any) => l.id === 'main-company-location') || locations[0] || {
         id: 'main-company-location',
-        name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
-        lat: 35.5571,
-        lng: 45.4352,
-        radiusMeters: 50,
+        name: 'کۆمپانیای سەرەکی ئاشڵی',
+        lat: 35.562431,
+        lng: 45.474792,
+        radiusMeters: 400,
       };
 
       return NextResponse.json(

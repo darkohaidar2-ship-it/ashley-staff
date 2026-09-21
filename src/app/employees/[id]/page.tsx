@@ -1022,7 +1022,7 @@ function EmployeeDetailPage() {
                                 : 'bg-slate-100 text-slate-900 border border-slate-300'
                             }`}>
                               {d.checkOutStatus?.isWaived ? '🟢 ' : (d.checkOutStatus?.status === 'early_unexcused' || d.checkOutStatus?.status === 'overtime_unexcused') ? '🔴 ' : '🏁 '}
-                              {d.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00')}
+                              {d.checkOutTime || (d.isToday ? 'بەردەوام' : '-')}
                             </span>
                             <span className="text-[10px] font-bold mt-0.5" style={{ color: d.checkOutStatus?.printColor }}>
                               {d.checkOutStatus?.label}
