@@ -250,6 +250,36 @@ export function resolveEmployeeDayAttendance(
     return timeA.localeCompare(timeB);
   });
 
+  // Pre-calculate live notes from actual attendance logs for this employee & day
+  let liveCheckInNote = '';
+  let liveCheckOutNote = '';
+  let liveNote = '';
+
+  for (const r of (sortedDayRecords as any[])) {
+    const isEnterLog = r.log_type === 'Check In' || r.action === 'Check In' || r.type?.includes('In') || r.type?.includes('هاتن');
+    const isExitLog = r.log_type === 'Check Out' || r.action === 'Check Out' || r.type?.includes('Out') || r.type?.includes('دەرچوون') || r.type?.includes('ڕۆیشتن');
+
+    const inN = r.check_in_note || r.checkInNote || r.checkin_note || r.check_in_edit_note;
+    const outN = r.check_out_note || r.checkOutNote || r.checkout_note || r.check_out_edit_note;
+    const rawN = r.note || r.notes || r.reason || r.employeeNote || r.employee_note || r.edit_note || r.editNote || '';
+
+    let cleanN = typeof rawN === 'string' ? rawN.trim() : '';
+    if (cleanN.includes('): ')) {
+      cleanN = cleanN.split('): ')[1]?.trim() || cleanN;
+    } else if (cleanN.startsWith('لەڕێگەی مۆبایل') || cleanN === 'مۆبایل') {
+      cleanN = '';
+    }
+
+    if (inN) liveCheckInNote = inN;
+    else if (isEnterLog && cleanN) liveCheckInNote = cleanN;
+
+    if (outN) liveCheckOutNote = outN;
+    else if (isExitLog && cleanN) liveCheckOutNote = cleanN;
+
+    if (cleanN) liveNote = cleanN;
+  }
+  if (!liveCheckInNote && liveNote) liveCheckInNote = liveNote;
+
   // 1. 🛡️ CHECK ADMIN MANUAL OVERRIDE
   const override = 
     overridesMap[`${emp.id}_${dateStr}`] || 
@@ -355,9 +385,9 @@ export function resolveEmployeeDayAttendance(
         checkOutTime: cOut,
         rawCheckIn: override.rawCheckIn || cIn,
         rawCheckOut: override.rawCheckOut || cOut,
-        checkInNote: override.checkInNote || override.note || '',
-        checkOutNote: override.checkOutNote || '',
-        note: override.note || override.checkInNote || '',
+        checkInNote: override.checkInNote || override.note || liveCheckInNote || '',
+        checkOutNote: override.checkOutNote || liveCheckOutNote || '',
+        note: override.note || override.checkInNote || liveNote || '',
         adminNote: override.adminNote || '',
         adminCheckInNote: override.adminCheckInNote || override.adminNote || '',
         adminCheckOutNote: override.adminCheckOutNote || '',
@@ -440,9 +470,9 @@ export function resolveEmployeeDayAttendance(
   let checkOutTime = '';
   let rawCheckIn = '';
   let rawCheckOut = '';
-  let checkInNote = '';
-  let checkOutNote = '';
-  let note = '';
+  let checkInNote = liveCheckInNote;
+  let checkOutNote = liveCheckOutNote;
+  let note = liveNote;
   let adminNote = '';
   let adminCheckInNote = '';
   let adminCheckOutNote = '';

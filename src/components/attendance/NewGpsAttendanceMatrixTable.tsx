@@ -256,9 +256,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             const checkOutTime = r.checkOutTime || r.check_out_time || existing.checkOutTime;
             const rawCheckIn = r.rawCheckInTime || r.raw_check_in_time || r.rawCheckIn || existing.rawCheckIn || checkInTime;
             const rawCheckOut = r.rawCheckOutTime || r.raw_check_out_time || r.rawCheckOut || existing.rawCheckOut || checkOutTime;
-            const note = r.note || r.notes || r.reason || r.employeeNote || existing.note;
-            const checkInNote = r.check_in_note || r.checkInNote || note || existing.checkInNote;
-            const checkOutNote = r.check_out_note || r.checkOutNote || existing.checkOutNote;
+            const rawNote = r.note || r.notes || r.reason || r.employeeNote || r.edit_note || r.editNote || existing.note;
+            let cleanNote = rawNote;
+            if (typeof cleanNote === 'string' && cleanNote.includes('): ')) {
+              cleanNote = cleanNote.split('): ')[1] || cleanNote;
+            }
+            const checkInNote = r.check_in_edit_note || r.check_in_note || r.checkInNote || cleanNote || existing.checkInNote;
+            const checkOutNote = r.check_out_edit_note || r.check_out_note || r.checkOutNote || existing.checkOutNote;
+            const note = cleanNote || checkInNote || existing.note;
             const adminNote = r.adminNote || r.admin_note || r.editNote || existing.adminNote;
             const adminCheckInNote = r.adminCheckInNote || r.admin_check_in_note || adminNote || existing.adminCheckInNote;
             const adminCheckOutNote = r.adminCheckOutNote || r.admin_check_out_note || existing.adminCheckOutNote;
@@ -1667,7 +1672,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                             handleCellClick(emp, d);
                           }
                         }}
-                        title={`هاتن: ${info.checkInTime || '08:00'} (${info.checkInStatus?.label || ''})\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00')} (${info.checkOutStatus?.label || ''})${info.adminNote ? `\nتێبینی ئەدمین: ${info.adminNote}` : ''}`}
+                        title={`هاتن: ${info.checkInTime || '08:00'} (${info.checkInStatus?.label || ''})\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '17:00')} (${info.checkOutStatus?.label || ''})${info.checkInNote ? `\n📝 تێبینی هاتن: ${info.checkInNote}` : ''}${info.checkOutNote ? `\n⏱️ تێبینی ڕۆیشتن / ئیزافە: ${info.checkOutNote}` : ''}${info.note && info.note !== info.checkInNote && info.note !== info.checkOutNote ? `\n📝 تێبینی: ${info.note}` : ''}${info.adminNote ? `\n🛡️ تێبینی ئەدمین: ${info.adminNote}` : ''}`}
                         className={`relative text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 select-none transition-all ${
                           isCellSelected 
                             ? 'ring-2 ring-[#007AFF] bg-blue-100 dark:bg-blue-900/90 font-black shadow-md z-20 scale-[1.03]' 
@@ -1700,6 +1705,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           <span 
                             className="absolute top-0.5 left-0.5 w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-purple-600 ring-2 ring-purple-300 dark:ring-purple-900 shadow-xs z-10" 
                             title="لێخۆشبوو (بازنەی مۆر - لێخۆشبوونی ئەدمین)"
+                          />
+                        )}
+
+                        {/* 📝 Note Indicator Dot (Employee Note / Overtime Note) */}
+                        {(info.checkInNote || info.checkOutNote || info.note) && (
+                          <span 
+                            className="absolute bottom-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 ring-1 ring-blue-200 dark:ring-blue-900 shadow-xs z-10" 
+                            title={`تێبینی کارمەند:\n${[info.checkInNote, info.checkOutNote].filter(Boolean).join('\n') || info.note}`}
                           />
                         )}
 
@@ -1861,11 +1874,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     </div>
                     <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-white/5">
                       <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 block">
-                        ( تێبینی کارمەند ) :
+                        ( تێبینی هاتنی کارمەند ) :
                       </span>
                       <div className="p-2 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-[11px] font-medium">
                         {selectedDayModal.info.checkInNote || selectedDayModal.info.note ? (
-                          <span className="text-slate-800 dark:text-indigo-200">
+                          <span className="text-indigo-950 dark:text-indigo-100 font-bold">
                             {selectedDayModal.info.checkInNote || selectedDayModal.info.note}
                           </span>
                         ) : (
@@ -1885,11 +1898,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     </div>
                     <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-white/5">
                       <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 block">
-                        ( تێبینی کارمەند ) :
+                        ( تێبینی ڕۆیشتن / ئیزافەی کارمەند ) :
                       </span>
                       <div className="p-2 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-[11px] font-medium">
                         {selectedDayModal.info.checkOutNote ? (
-                          <span className="text-slate-800 dark:text-indigo-200">
+                          <span className="text-indigo-950 dark:text-indigo-100 font-bold">
                             {selectedDayModal.info.checkOutNote}
                           </span>
                         ) : (

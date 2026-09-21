@@ -1464,15 +1464,13 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       if (existingRecord) {
         if (existingRecord.check_in) upsertPayload.check_in = existingRecord.check_in;
         if (existingRecord.check_in_time) upsertPayload.check_in_time = existingRecord.check_in_time;
-        if (existingRecord.raw_check_in_time) upsertPayload.raw_check_in_time = existingRecord.raw_check_in_time;
         if (existingRecord.check_in_address) upsertPayload.check_in_address = existingRecord.check_in_address;
-        if (existingRecord.check_in_note) upsertPayload.check_in_note = existingRecord.check_in_note;
-        if (existingRecord.note) upsertPayload.note = existingRecord.note;
+        if (existingRecord.check_in_edit_note) upsertPayload.check_in_edit_note = existingRecord.check_in_edit_note;
+        if (existingRecord.check_out_edit_note) upsertPayload.check_out_edit_note = existingRecord.check_out_edit_note;
       }
 
       if (!upsertPayload.check_in_time && effectiveCheckInTime) {
         upsertPayload.check_in_time = effectiveCheckInTime;
-        upsertPayload.raw_check_in_time = effectiveCheckInTime;
         if (!upsertPayload.check_in) {
           upsertPayload.check_in = logCheckInRow?.created_at || nowIso;
         }
@@ -1483,13 +1481,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         const checkInTimeFinal = existingRecord?.check_in_time || timeStr;
         upsertPayload.check_in = existingRecord?.check_in || nowIso;
         upsertPayload.check_in_time = checkInTimeFinal;
-        upsertPayload.raw_check_in_time = existingRecord?.raw_check_in_time || checkInTimeFinal;
         if (attachedNote) {
-          upsertPayload.check_in_note = attachedNote;
-          upsertPayload.note = attachedNote;
+          upsertPayload.check_in_edit_note = attachedNote;
         }
-        if (lat !== undefined && !existingRecord?.check_in_lat) upsertPayload.check_in_lat = parseFloat(lat);
-        if (lng !== undefined && !existingRecord?.check_in_lng) upsertPayload.check_in_lng = parseFloat(lng);
         upsertPayload.check_in_address = existingRecord?.check_in_address || address || targetWh.name;
 
         // When checking in, clear checkout
@@ -1509,21 +1503,16 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         // Check-Out: Latest exit of the day
         upsertPayload.check_out = nowIso;
         upsertPayload.check_out_time = timeStr;
-        upsertPayload.raw_check_out_time = timeStr;
         if (attachedNote) {
-          upsertPayload.check_out_note = attachedNote;
-          upsertPayload.note = attachedNote;
+          upsertPayload.check_out_edit_note = attachedNote;
         }
-        if (lat !== undefined) upsertPayload.check_out_lat = parseFloat(lat);
-        if (lng !== undefined) upsertPayload.check_out_lng = parseFloat(lng);
         upsertPayload.check_out_address = address || targetWh.name;
 
         // Preserve initial check_in
         const inTimeFinal = existingRecord?.check_in_time || upsertPayload.check_in_time;
         if (existingRecord?.check_in) upsertPayload.check_in = existingRecord.check_in;
         if (inTimeFinal) upsertPayload.check_in_time = inTimeFinal;
-        if (existingRecord?.raw_check_in_time) upsertPayload.raw_check_in_time = existingRecord.raw_check_in_time;
-        if (existingRecord?.check_in_note) upsertPayload.check_in_note = existingRecord.check_in_note;
+        if (existingRecord?.check_in_edit_note) upsertPayload.check_in_edit_note = existingRecord.check_in_edit_note;
         if (existingRecord?.status) upsertPayload.status = existingRecord.status;
 
         // Calculate Early Exit and Overtime against dynamic shift end
@@ -1541,28 +1530,16 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         } else {
           upsertPayload.overtime_minutes = 0;
         }
-
-        // Calculate Net Worked Hours deducting 12:00-13:00 Lunch Break
-        if (inTimeFinal && timeStr) {
-          const [inH, inM] = inTimeFinal.split(':').map(Number);
-          const inTotal = inH * 60 + (inM || 0);
-          const outTotal = outH * 60 + (outM || 0);
-          if (outTotal > inTotal) {
-            const grossMinutes = outTotal - inTotal;
-            const breakStart = 12 * 60; // 720
-            const breakEnd = 13 * 60;   // 780
-            const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
-            const netMinutes = Math.max(0, grossMinutes - overlap);
-            upsertPayload.total_hours = parseFloat((netMinutes / 60).toFixed(1));
-          }
-        }
       }
 
       // Upsert to attendance table
       try {
-        await supabase.from('attendance').upsert(upsertPayload);
+        const { error: attUpsertErr } = await supabase.from('attendance').upsert(upsertPayload);
+        if (attUpsertErr) {
+          console.error('Attendance upsert error:', attUpsertErr);
+        }
       } catch (upErr) {
-        console.error('Attendance upsert error:', upErr);
+        console.error('Attendance upsert exception:', upErr);
       }
 
       // Insert log entry to attendance_logs
@@ -1883,6 +1860,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
               checkOut: r.check_out_time ? `${r.date} ${r.check_out_time}` : (r.check_out || ''),
               checkOutTime: r.check_out_time || '',
               time: r.check_in_time ? `${r.date} ${r.check_in_time}` : (r.date || ''),
+              checkInNote: r.check_in_edit_note || '',
+              checkOutNote: r.check_out_edit_note || '',
+              note: [r.check_in_edit_note, r.check_out_edit_note].filter(Boolean).join(' | ') || '',
+              notes: [r.check_in_edit_note, r.check_out_edit_note].filter(Boolean).join(' | ') || '',
               warehouseName: r.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
               status: r.status || 'Present'
             });
@@ -1902,6 +1883,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 date: r.date,
                 time: `${r.date} ${r.check_in_time}`,
                 checkInTime: r.check_in_time,
+                checkInNote: r.check_in_edit_note || '',
+                note: r.check_in_edit_note || '',
+                notes: r.check_in_edit_note || '',
                 warehouseName: r.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
                 status: 'verified'
               });
@@ -1922,6 +1906,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 date: r.date,
                 time: `${r.date} ${r.check_out_time}`,
                 checkOutTime: r.check_out_time,
+                checkOutNote: r.check_out_edit_note || '',
+                note: r.check_out_edit_note || '',
+                notes: r.check_out_edit_note || '',
                 warehouseName: r.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
                 status: 'verified'
               });
@@ -1938,7 +1925,18 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
           if (logsData && logsData.length > 0) {
             logsData.forEach(l => {
-              const logTypeClean = l.log_type === 'Check Out' || l.log_type?.includes('Out') ? 'دەرچوون (Check Out)' : 'هاتن (Check In)';
+              const isCheckInLog = l.log_type === 'Check In' || l.log_type?.includes('In') || l.log_type?.includes('هاتن');
+              const isCheckOutLog = l.log_type === 'Check Out' || l.log_type?.includes('Out') || l.log_type?.includes('دەرچوون') || l.log_type?.includes('ڕۆیشتن');
+              const logTypeClean = isCheckOutLog ? 'دەرچوون (Check Out)' : 'هاتن (Check In)';
+
+              let rawEditNote = l.edit_note || '';
+              let displayReason = rawEditNote;
+              if (displayReason.includes('): ')) {
+                displayReason = displayReason.split('): ')[1] || displayReason;
+              } else if (displayReason.startsWith('لەڕێگەی مۆبایل')) {
+                displayReason = '';
+              }
+
               uniqueMap.set(l.id, {
                 id: l.id,
                 employeeId: l.employee_id,
@@ -1950,9 +1948,14 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 action: l.log_type,
                 date: l.log_date,
                 time: `${l.log_date} ${l.log_time_str}`,
-                checkInTime: (l.log_type === 'Check In' || l.log_type?.includes('In')) ? l.log_time_str : undefined,
-                checkOutTime: (l.log_type === 'Check Out' || l.log_type?.includes('Out')) ? l.log_time_str : undefined,
-                notes: l.notes,
+                checkInTime: isCheckInLog ? l.log_time_str : undefined,
+                checkOutTime: isCheckOutLog ? l.log_time_str : undefined,
+                checkInNote: isCheckInLog ? (displayReason || rawEditNote) : undefined,
+                checkOutNote: isCheckOutLog ? (displayReason || rawEditNote) : undefined,
+                note: displayReason || rawEditNote || '',
+                notes: displayReason || rawEditNote || '',
+                edit_note: l.edit_note,
+                editNote: l.edit_note,
                 warehouseName: l.location_address || 'کۆمپانیای سەرەکی ئاشڵی',
                 status: 'verified'
               });
@@ -2605,10 +2608,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
               rawCheckOutTime: a.raw_check_out_time || manualOverride?.rawCheckOut || a.check_out_time,
               rawCheckIn: a.raw_check_in_time || manualOverride?.rawCheckIn || a.check_in_time,
               rawCheckOut: a.raw_check_out_time || manualOverride?.rawCheckOut || a.check_out_time,
-              note: a.note || manualOverride?.note || a.notes,
-              notes: a.notes || a.note || manualOverride?.note,
-              checkInNote: a.check_in_note || manualOverride?.checkInNote || a.note,
-              checkOutNote: a.check_out_note || manualOverride?.checkOutNote,
+              note: manualOverride?.note || a.check_in_edit_note || a.check_out_edit_note || a.note || a.notes || '',
+              notes: manualOverride?.note || a.check_in_edit_note || a.check_out_edit_note || a.notes || a.note || '',
+              checkInNote: manualOverride?.checkInNote || a.check_in_edit_note || a.check_in_note || manualOverride?.note || a.note || '',
+              checkOutNote: manualOverride?.checkOutNote || a.check_out_edit_note || a.check_out_note || '',
               adminNote: manualOverride?.adminNote || a.admin_note || a.adminNote,
               adminCheckInNote: manualOverride?.adminCheckInNote || a.admin_check_in_note || a.adminCheckInNote,
               historyLogs: manualOverride?.historyLogs || [],
