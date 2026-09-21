@@ -79,6 +79,18 @@ export function TopNavbar() {
   const pathname = usePathname();
   const { settings } = useAppContext();
 
+  // 🚫 شریتی سەرەوە لە مۆبایل و کیۆسکی دەموچاو دەشاردرێتەوە - تەنها بۆ بەشەکانی ئەدمین کارایە
+  const isMobileOrKiosk = 
+    pathname === '/' || 
+    pathname === '/attendance/mobile' || 
+    pathname === '/attendance/checkin' || 
+    pathname?.startsWith('/attendance') || 
+    pathname === '/login';
+
+  if (isMobileOrKiosk) {
+    return null;
+  }
+
   const brandName = settings?.brandName || 'ئاشڵی';
   const appLogo = settings?.appLogo || settings?.websiteLogo;
 

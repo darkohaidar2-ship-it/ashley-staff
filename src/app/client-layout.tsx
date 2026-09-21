@@ -66,7 +66,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             <TopNavbar />
             {isStandalonePage ? (
               // 📱 STANDALONE CLEAN IMMERSIVE FULLSCREEN SHELL
-              <div className="min-h-[calc(100vh-48px)] w-full bg-white dark:bg-[#1c1c1e] text-slate-900 dark:text-white font-sans antialiased dir-rtl p-0 m-0" dir="rtl">
+              <div className="min-h-screen w-full bg-white dark:bg-[#1c1c1e] text-slate-900 dark:text-white font-sans antialiased dir-rtl p-0 m-0" dir="rtl">
                 {children}
               </div>
             ) : (
