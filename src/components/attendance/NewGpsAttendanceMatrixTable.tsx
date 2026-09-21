@@ -271,7 +271,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               ? r.historyLogs
               : (existing.historyLogs || []);
             const adminDecision = r.adminDecision || existing.adminDecision || null;
-            const isWaived = Boolean(r.isWaived ?? (adminDecision === 'waived') ?? existing.isWaived);
+            const adminCheckInDecision = r.adminCheckInDecision || existing.adminCheckInDecision || null;
+            const adminCheckOutDecision = r.adminCheckOutDecision || existing.adminCheckOutDecision || null;
+            const isCheckInWaived = Boolean(r.isCheckInWaived ?? (adminCheckInDecision === 'waived') ?? existing.isCheckInWaived);
+            const isCheckOutWaived = Boolean(r.isCheckOutWaived ?? (adminCheckOutDecision === 'waived') ?? existing.isCheckOutWaived);
+            const isWaived = Boolean(r.isWaived ?? (adminDecision === 'waived') ?? (isCheckInWaived || isCheckOutWaived) ?? existing.isWaived);
 
             map[k] = {
               status: r.status,
@@ -287,7 +291,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               adminCheckOutNote,
               historyLogs,
               adminDecision,
+              adminCheckInDecision,
+              adminCheckOutDecision,
               isWaived,
+              isCheckInWaived,
+              isCheckOutWaived,
             };
           }
         });

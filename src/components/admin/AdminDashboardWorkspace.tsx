@@ -381,56 +381,7 @@ export function AdminDashboardWorkspace() {
         </div>
       </header>
 
-      {/* 📊 4 LIVE KPI SUMMARY CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 p-3.5 rounded-[20px] border border-slate-200/80 dark:border-white/5 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-            <Users className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[11px] text-slate-400 font-bold block">کارمەندانی چالاک</span>
-            <p className="text-base sm:text-lg font-black text-slate-900 dark:text-white font-mono mt-0.5">
-              {dashboardKpis.activeStaff} <span className="text-[10px] font-normal text-slate-500">کارمەند</span>
-            </p>
-          </div>
-        </div>
 
-        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 p-3.5 rounded-[20px] border border-slate-200/80 dark:border-white/5 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-            <Clock className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[11px] text-slate-400 font-bold block">کاتی زیادەی مانگ</span>
-            <p className="text-base sm:text-lg font-black text-slate-900 dark:text-white font-mono mt-0.5">
-              +{dashboardKpis.totalOtHours} <span className="text-[10px] font-normal text-slate-500">کاتژمێر</span>
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 p-3.5 rounded-[20px] border border-slate-200/80 dark:border-white/5 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-            <DollarSign className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[11px] text-slate-400 font-bold block">شایستەی ئیزافە</span>
-            <p className="text-base sm:text-lg font-black text-slate-900 dark:text-white font-mono mt-0.5">
-              {dashboardKpis.totalOtCost} <span className="text-[10px] font-normal text-slate-500">IQD</span>
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 p-3.5 rounded-[20px] border border-slate-200/80 dark:border-white/5 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-            <MapPin className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[11px] text-slate-400 font-bold block">لۆکەیشنەکانی GPS</span>
-            <p className="text-base sm:text-lg font-black text-slate-900 dark:text-white font-mono mt-0.5">
-              {dashboardKpis.totalLocations} <span className="text-[10px] font-normal text-slate-500">شوێن</span>
-            </p>
-          </div>
-        </div>
-      </div>
 
       {/* ========================================================================= */}
       {/* 📊 VIEW 1: 31-DAY GPS ATTENDANCE MATRIX (PRIMARY MASTER TABLE) */}
