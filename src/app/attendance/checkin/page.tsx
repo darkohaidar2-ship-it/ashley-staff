@@ -201,7 +201,7 @@ export default function FaceKioskPage() {
     }
 
     try {
-      await fetch('/api/attendance/autonomous-event', {
+      const res = await fetch('/api/attendance/autonomous-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -216,6 +216,17 @@ export default function FaceKioskPage() {
         }),
       });
 
+      const data = await res.json();
+      if (!res.ok) {
+        setStatusText(`⚠️ ${data.error || 'هەڵە لە تۆمارکردنی ئامادەبوون'}`);
+        playChime(false);
+        setTimeout(() => {
+          setScanState('idle');
+          isProcessingRef.current = false;
+        }, 3500);
+        return;
+      }
+
       const actionTextKurdish = action === 'ENTER' ? 'هاتنت تۆمارکرا' : 'ڕۆیشتنت تۆمارکرا';
       playChime(true);
       speakGreeting(userName, actionTextKurdish);
@@ -224,7 +235,7 @@ export default function FaceKioskPage() {
         id: userId,
         name: userName,
         action,
-        timeStr,
+        timeStr: data.time || timeStr,
       });
       setScanState('matched');
 
@@ -234,9 +245,14 @@ export default function FaceKioskPage() {
         setStatusText('لە چاوەڕوانی کارمەندی دواتر...');
         isProcessingRef.current = false;
       }, 4000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error logging kiosk attendance:', err);
-      isProcessingRef.current = false;
+      setStatusText(`⚠️ هەڵە لە پەیوەندی بە سێرڤەر: ${err.message || ''}`);
+      playChime(false);
+      setTimeout(() => {
+        setScanState('idle');
+        isProcessingRef.current = false;
+      }, 3500);
     }
   };
 

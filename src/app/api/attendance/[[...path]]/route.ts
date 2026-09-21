@@ -1346,29 +1346,79 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const isCheckIn = event === 'ENTER';
 
       // 3. Find existing record for today
-      const { data: existingRecord } = await supabase
+      // Resilient ID & Name matching across formats (emp-02, emp-2, 02, 2, Kurdish name)
+      const cleanId = (userId || '').toString().trim();
+      const rawNum = cleanId.replace(/^emp-0*/i, '');
+      const paddedNum = rawNum ? rawNum.padStart(2, '0') : '';
+      const idCandidates = Array.from(new Set([
+        cleanId,
+        cleanId.toLowerCase(),
+        `emp-${rawNum}`,
+        `emp-${paddedNum}`,
+        rawNum,
+        paddedNum
+      ].filter(Boolean)));
+
+      const { data: recordsForToday } = await supabase
         .from('attendance')
         .select('*')
-        .eq('user_id', userId)
-        .eq('date', dateStr)
-        .maybeSingle();
+        .eq('date', dateStr);
+
+      let existingRecord = (recordsForToday || []).find((r: any) => {
+        const rUser = (r.user_id || '').toString().trim().toLowerCase();
+        const rName = (r.user_name || '').toString().trim().toLowerCase();
+        const targetName = (matchedName || '').trim().toLowerCase();
+
+        const idMatches = idCandidates.some(c => c.toLowerCase() === rUser);
+        const nameMatches = Boolean(targetName && rName && (rName === targetName || rName.includes(targetName) || targetName.includes(rName)));
+        return idMatches || nameMatches;
+      });
+
+      // Also check attendance_logs for an ENTER log today if existingRecord doesn't have check_in_time
+      let logCheckInTime: string | null = null;
+      let logCheckInRow: any = null;
+      if (!existingRecord?.check_in_time) {
+        const { data: logsForToday } = await supabase
+          .from('attendance_logs')
+          .select('*')
+          .eq('log_date', dateStr)
+          .order('created_at', { ascending: true });
+
+        const matchingLog = (logsForToday || []).find((l: any) => {
+          const lEmp = (l.employee_id || '').toString().trim().toLowerCase();
+          const lName = (l.employee_name || '').toString().trim().toLowerCase();
+          const targetName = (matchedName || '').trim().toLowerCase();
+          const idMatches = idCandidates.some(c => c.toLowerCase() === lEmp);
+          const nameMatches = Boolean(targetName && lName && (lName === targetName || lName.includes(targetName) || targetName.includes(lName)));
+          const isEnter = (l.log_type || '').includes('In') || (l.log_type || '').includes('هاتن');
+          return (idMatches || nameMatches) && isEnter;
+        });
+
+        if (matchingLog) {
+          logCheckInTime = matchingLog.log_time_str || (matchingLog.created_at ? matchingLog.created_at.split('T')[1].slice(0, 5) : '08:15');
+          logCheckInRow = matchingLog;
+        }
+      }
+
+      const effectiveCheckInTime = existingRecord?.check_in_time || existingRecord?.raw_check_in_time || logCheckInTime;
+      const effectiveCheckOutTime = existingRecord?.check_out_time || existingRecord?.raw_check_out_time;
 
       // 🛑 2. Strict 1-Punch Daily Guard: Only 1 check-in and 1 check-out per day
-      if (isCheckIn && existingRecord?.check_in_time) {
+      if (isCheckIn && effectiveCheckInTime) {
         return NextResponse.json({ 
-          error: `⚠️ هاتنی ئەمڕۆت پێشتر لە کاتژمێر (${existingRecord.check_in_time}) تۆمارکراوە. ڕۆژانە تەنها یەکجار ڕێگەپێدراوە.` 
+          error: `⚠️ هاتنی ئەمڕۆت پێشتر لە کاتژمێر (${effectiveCheckInTime}) تۆمارکراوە. ڕۆژانە تەنها یەکجار ڕێگەپێدراوە.` 
         }, { status: 400 });
       }
 
-      if (!isCheckIn && !existingRecord?.check_in_time) {
+      if (!isCheckIn && !effectiveCheckInTime) {
         return NextResponse.json({ 
           error: `⚠️ پێویستە سەرەتا هاتنی دەوام تۆمار بکەیت پێش ئەوەی ڕۆیشتن تۆمار بکەیت.` 
         }, { status: 400 });
       }
 
-      if (!isCheckIn && existingRecord?.check_out_time) {
+      if (!isCheckIn && effectiveCheckOutTime) {
         return NextResponse.json({ 
-          error: `⚠️ ڕۆیشتنی ئەمڕۆت پێشتر لە کاتژمێر (${existingRecord.check_out_time}) تۆمارکراوە. ڕۆژانە تەنها یەکجار ڕێگەپێدراوە.` 
+          error: `⚠️ ڕۆیشتنی ئەمڕۆت پێشتر لە کاتژمێر (${effectiveCheckOutTime}) تۆمارکراوە. ڕۆژانە تەنها یەکجار ڕێگەپێدراوە.` 
         }, { status: 400 });
       }
 
@@ -1398,13 +1448,13 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         }
       }
 
-      const rowId = existingRecord?.id || `${userId}-${dateStr}`;
+      const rowId = existingRecord?.id || `${existingRecord?.user_id || userId}-${dateStr}`;
       const nowIso = new Date().toISOString();
 
       let upsertPayload: any = {
         id: rowId,
-        user_id: userId,
-        user_name: matchedName,
+        user_id: existingRecord?.user_id || userId,
+        user_name: existingRecord?.user_name || matchedName,
         date: dateStr,
         warehouse_id: targetWh.id,
         warehouse_name: targetWh.name,
@@ -1418,6 +1468,14 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         if (existingRecord.check_in_address) upsertPayload.check_in_address = existingRecord.check_in_address;
         if (existingRecord.check_in_note) upsertPayload.check_in_note = existingRecord.check_in_note;
         if (existingRecord.note) upsertPayload.note = existingRecord.note;
+      }
+
+      if (!upsertPayload.check_in_time && effectiveCheckInTime) {
+        upsertPayload.check_in_time = effectiveCheckInTime;
+        upsertPayload.raw_check_in_time = effectiveCheckInTime;
+        if (!upsertPayload.check_in) {
+          upsertPayload.check_in = logCheckInRow?.created_at || nowIso;
+        }
       }
 
       if (isCheckIn) {
