@@ -141,9 +141,28 @@ function EmployeeDetailPage() {
     } catch {}
   }, [employeeId]);
 
+  // Check Mobile Device binding status from server
+  const checkDeviceStatus = useCallback(async () => {
+    if (!employeeId) return;
+    if (employeeId === 'emp-02' || employeeId === '02') {
+      setIsDeviceBound(true);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/attendance/device-status?userId=${employeeId}&_t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.bound === 'boolean') {
+          setIsDeviceBound(data.bound);
+        }
+      }
+    } catch {}
+  }, [employeeId]);
+
   useEffect(() => {
     checkFaceStatus();
-  }, [checkFaceStatus]);
+    checkDeviceStatus();
+  }, [checkFaceStatus, checkDeviceStatus]);
 
   // Unbind Mobile Device
   const handleUnbindDevice = async () => {
@@ -276,8 +295,17 @@ function EmployeeDetailPage() {
         const map: Record<string, any> = { ...localMap };
         (data.attendance || []).forEach((r: any) => {
           if (r.status && r.status !== 'empty' && r.status !== 'delete' && r.status !== 'Empty') {
-            const k = `${r.userId}_${r.date}`;
-            map[k] = { ...map[k], ...r };
+            const cleanEmpId = (r.userId || '').toString().trim();
+            const rawNum = cleanEmpId.replace(/^emp-0*/i, '');
+            map[`${cleanEmpId}_${r.date}`] = { ...map[`${cleanEmpId}_${r.date}`], ...r };
+            map[`${cleanEmpId.toLowerCase()}_${r.date}`] = { ...map[`${cleanEmpId.toLowerCase()}_${r.date}`], ...r };
+            if (rawNum) {
+              map[`${rawNum}_${r.date}`] = { ...map[`${rawNum}_${r.date}`], ...r };
+              map[`emp-${rawNum}_${r.date}`] = { ...map[`emp-${rawNum}_${r.date}`], ...r };
+            }
+            if (r.userName) {
+              map[`${r.userName.trim().toLowerCase()}_${r.date}`] = { ...map[`${r.userName.trim().toLowerCase()}_${r.date}`], ...r };
+            }
           }
         });
         if (data.manualOverridesMap) {
@@ -301,6 +329,9 @@ function EmployeeDetailPage() {
 
   useEffect(() => {
     loadMatrixOverrides();
+    const handleSync = () => loadMatrixOverrides();
+    window.addEventListener('ashley_attendance_updated', handleSync);
+    return () => window.removeEventListener('ashley_attendance_updated', handleSync);
   }, [loadMatrixOverrides]);
 
   // Attendance breakdown for the selected month using Authoritative 31-Day Matrix

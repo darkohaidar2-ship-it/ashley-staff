@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAppContext } from '@/context/app-provider';
 import { 
-  Camera, 
   ShieldCheck, 
   Users, 
   Clock, 
@@ -24,12 +23,6 @@ interface NavSection {
 }
 
 const NAV_SECTIONS: NavSection[] = [
-  {
-    title: 'کیۆسکی دەموچاو',
-    href: '/attendance/checkin',
-    icon: Camera,
-    matches: ['/attendance/checkin'],
-  },
   {
     title: 'داشبۆردی ئەدمین',
     href: '/adm1n_pan0l',

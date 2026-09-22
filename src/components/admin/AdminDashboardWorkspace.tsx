@@ -60,7 +60,7 @@ export function AdminDashboardWorkspace() {
 
   // Selected Employee for Detailed 360° Monthly Modal
   const [selectedEmp360, setSelectedEmp360] = useState<Employee | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-08');
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'));
   const [faceEnrollEmp, setFaceEnrollEmp] = useState<Employee | null>(null);
 
   // Security Auth Guard

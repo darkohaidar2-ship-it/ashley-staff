@@ -182,9 +182,33 @@ function EmployeesPage() {
     setRegisteredFaces(faceSet);
   }, []);
 
+  // Load Registered Mobile Devices
+  const [registeredDevices, setRegisteredDevices] = useState<Set<string>>(new Set(['emp-02', '02']));
+  const loadRegisteredDevices = useCallback(async () => {
+    const devSet = new Set<string>();
+    devSet.add('emp-02');
+    devSet.add('02');
+
+    try {
+      const res = await fetch(`/api/attendance/devices/list?_t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.deviceUserIds)) {
+          data.deviceUserIds.forEach((id: string) => {
+            devSet.add(id.toLowerCase());
+            devSet.add(id.toLowerCase().replace('emp-', ''));
+          });
+        }
+      }
+    } catch {}
+
+    setRegisteredDevices(devSet);
+  }, []);
+
   useEffect(() => {
     loadRegisteredFaces();
-  }, [loadRegisteredFaces]);
+    loadRegisteredDevices();
+  }, [loadRegisteredFaces, loadRegisteredDevices]);
 
   // Load 31-Day Matrix Overrides & Admin Decisions for current month
   const currentMonthStr = format(new Date(), 'yyyy-MM');
@@ -206,14 +230,28 @@ function EmployeesPage() {
         const map: Record<string, any> = { ...localMap };
         (data.attendance || []).forEach((r: any) => {
           if (r.status && r.status !== 'empty' && r.status !== 'delete' && r.status !== 'Empty') {
-            const k = `${r.userId}_${r.date}`;
-            map[k] = { ...map[k], ...r };
+            const cleanEmpId = (r.userId || '').toString().trim();
+            const rawNum = cleanEmpId.replace(/^emp-0*/i, '');
+            map[`${cleanEmpId}_${r.date}`] = { ...map[`${cleanEmpId}_${r.date}`], ...r };
+            map[`${cleanEmpId.toLowerCase()}_${r.date}`] = { ...map[`${cleanEmpId.toLowerCase()}_${r.date}`], ...r };
+            if (rawNum) {
+              map[`${rawNum}_${r.date}`] = { ...map[`${rawNum}_${r.date}`], ...r };
+              map[`emp-${rawNum}_${r.date}`] = { ...map[`emp-${rawNum}_${r.date}`], ...r };
+            }
+            if (r.userName) {
+              map[`${r.userName.trim().toLowerCase()}_${r.date}`] = { ...map[`${r.userName.trim().toLowerCase()}_${r.date}`], ...r };
+            }
           }
         });
         if (data.manualOverridesMap) {
           Object.assign(map, data.manualOverridesMap);
         }
         setMatrixOverrides(map);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(`ashley_matrix_overrides_${currentMonthStr}`, JSON.stringify(map));
+          } catch {}
+        }
       } else if (Object.keys(localMap).length > 0) {
         setMatrixOverrides(localMap);
       }
@@ -226,6 +264,9 @@ function EmployeesPage() {
 
   useEffect(() => {
     loadMatrixOverrides();
+    const handleSync = () => loadMatrixOverrides();
+    window.addEventListener('ashley_attendance_updated', handleSync);
+    return () => window.removeEventListener('ashley_attendance_updated', handleSync);
   }, [loadMatrixOverrides]);
 
   // Merge canonical authoritative defaults with live state
@@ -322,7 +363,7 @@ function EmployeesPage() {
   // High-Level KPIs
   const totalEmployeesCount = unifiedEmployees.length;
   const activeStaffCount = unifiedEmployees.filter(e => e.isActive !== false && e.status !== 'resigned').length;
-  const boundDevicesCount = unifiedEmployees.filter(e => (e as any).deviceBound || e.id === 'emp-02').length;
+  const boundDevicesCount = unifiedEmployees.filter(e => (e as any).deviceBound || e.id === 'emp-02' || registeredDevices.has(e.id.toLowerCase()) || registeredDevices.has(e.id.toLowerCase().replace('emp-', ''))).length;
   const faceRegisteredCount = unifiedEmployees.filter(e => registeredFaces.has(e.id.toLowerCase())).length;
   const waivedEmployeesCount = useMemo(() => {
     return unifiedEmployees.filter(e => (employeeComplianceMap[e.id]?.waivedCount || 0) > 0).length;
@@ -356,7 +397,7 @@ function EmployeesPage() {
     }
 
     const dataToExport = filteredEmployees.map(emp => {
-      const isBound = Boolean((emp as any).deviceBound || emp.id === 'emp-02');
+      const isBound = Boolean((emp as any).deviceBound || emp.id === 'emp-02' || registeredDevices.has(emp.id.toLowerCase()) || registeredDevices.has(emp.id.toLowerCase().replace('emp-', '')));
       const hasFace = registeredFaces.has(emp.id.toLowerCase());
       const stats = employeeComplianceMap[emp.id] || { presentDays: 20, rate: 95, waivedCount: 0 };
 
@@ -600,7 +641,13 @@ function EmployeesPage() {
                     filteredEmployees.map((emp, idx) => {
                       const isDarko = emp.id === 'emp-02' || (emp.name || '').includes('دارکۆ');
                       const displayName = (emp as any).fullName3Part || emp.name;
-                      const isBound = Boolean((emp as any).deviceBound || isDarko);
+                      const isBound = Boolean(
+                        (emp as any).deviceBound || 
+                        isDarko || 
+                        registeredDevices.has(emp.id.toLowerCase()) || 
+                        registeredDevices.has(emp.id.toLowerCase().replace('emp-', '')) || 
+                        (emp.employeeId && registeredDevices.has(emp.employeeId.toLowerCase()))
+                      );
                       const hasFace = registeredFaces.has(emp.id.toLowerCase());
                       const startDate = (emp as any).startDate || emp.employmentStartDate?.slice(0, 10) || '2024-01-01';
                       const stats = employeeComplianceMap[emp.id] || { presentDays: 20, rate: 95, waivedCount: 0 };

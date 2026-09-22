@@ -529,7 +529,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
         };
 
-        window.addEventListener('ashley_attendance_updated', syncSupabaseAttendance);
+        const handleAttendanceDeleted = (e: Event) => {
+            const customEv = e as CustomEvent;
+            const { empId, dateStr, name } = customEv.detail || {};
+            if (!dateStr) return;
+
+            const cleanEmpId = (empId || '').toString().trim().toLowerCase();
+            const rawNum = cleanEmpId.replace(/^emp-0*/i, '') || cleanEmpId.replace('emp-', '');
+            const rawNumPadded = rawNum.length === 1 ? `0${rawNum}` : rawNum;
+            const cleanName = (name || '').toString().trim().toLowerCase();
+
+            setAttendanceLogs((prev) => {
+                const next = prev.filter((l: any) => {
+                    const lDate = l.date || l.log_date || (l.time ? l.time.split(' ')[0] : l.createdAt?.split('T')[0]);
+                    if (lDate !== dateStr) return true;
+
+                    const lEmp = (l.employeeId || l.userId || '').toString().trim().toLowerCase();
+                    const lName = (l.employeeName || l.userName || l.name || '').toString().trim().toLowerCase();
+
+                    const idMatches = lEmp === cleanEmpId || lEmp === rawNum || lEmp === rawNumPadded || lEmp === `emp-${rawNum}` || lEmp === `emp-${rawNumPadded}`;
+                    const nameMatches = Boolean(cleanName && lName && (lName === cleanName || lName.includes(cleanName) || cleanName.includes(lName)));
+
+                    return !idMatches && !nameMatches;
+                });
+                return next;
+            });
+        };
+
+        // Debounced sync for ashley_attendance_updated so fast cloud writes can settle before fetch
+        let updateDebounceTimer: NodeJS.Timeout | null = null;
+        const handleAttendanceUpdated = () => {
+            if (updateDebounceTimer) clearTimeout(updateDebounceTimer);
+            updateDebounceTimer = setTimeout(() => {
+                syncSupabaseAttendance();
+            }, 1200);
+        };
+
+        window.addEventListener('ashley_attendance_deleted', handleAttendanceDeleted);
+        window.addEventListener('ashley_attendance_updated', handleAttendanceUpdated);
         window.addEventListener('storage', syncSupabaseAttendance);
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -538,7 +575,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return () => {
             supabase.removeChannel(channel);
             clearInterval(interval);
-            window.removeEventListener('ashley_attendance_updated', syncSupabaseAttendance);
+            if (updateDebounceTimer) clearTimeout(updateDebounceTimer);
+            window.removeEventListener('ashley_attendance_deleted', handleAttendanceDeleted);
+            window.removeEventListener('ashley_attendance_updated', handleAttendanceUpdated);
             window.removeEventListener('storage', syncSupabaseAttendance);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };

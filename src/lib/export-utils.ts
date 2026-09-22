@@ -16,13 +16,14 @@ export interface ExportReportOptions {
   period?: string;
   columns: ExportTableColumn[];
   data: Record<string, any>[];
-  summaryCards?: Array<{ label: string; value: string | number; color?: string }>;
+  summaryCards?: Array<{ label: string; value: string | number; color?: string; icon?: string }>;
   summaryText?: string;
   kpiNotes?: string[];
   orientation?: 'landscape' | 'portrait';
   fileName?: string;
   settings?: any;
   documentCode?: string;
+  reportType?: 'overtime' | 'expenses' | 'bonuses' | 'withdrawals' | 'general';
 }
 
 export interface DailyReportRow {
@@ -38,8 +39,11 @@ export interface DailyReportRow {
   checkOutNote?: string;
   durationStr: string;
   overtimeStr: string;
+  monthlyOvertimeStr?: string;
+  monthlyOvertimeHours?: number;
   adminNote?: string;
   status: 'present' | 'absent' | 'off' | 'future' | 'leave';
+  isWaived?: boolean;
 }
 
 export interface MonthDailyReportOptions {
@@ -187,7 +191,7 @@ export function exportToPDF(options: ExportReportOptions) {
     columns,
     data,
     summaryCards = [],
-    orientation = 'landscape',
+    orientation = 'portrait',
     fileName = 'Ashley_Report',
   } = options;
 
@@ -228,22 +232,23 @@ export function exportToPDF(options: ExportReportOptions) {
   const brandName = activeSettings?.brandName || 'کۆمپانیای مۆبیلیاتی ئاشڵی';
   const brandSubtitle = activeSettings?.brandSubtitle || activeSettings?.brandSlogan || activeSettings?.agencyTitle || 'Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)';
   const diwanLogo = activeSettings?.diwanLogo || '/diwan-logo.svg';
-  const reportLogo = activeSettings?.reportLogo || activeSettings?.ashleyLogo || activeSettings?.appLogo || activeSettings?.websiteLogo || '/ashley-logo.png';
+  const reportLogo = activeSettings?.reportLogo || activeSettings?.ashleyLogo || activeSettings?.websiteLogo || activeSettings?.appLogo || '/ashley-logo.svg';
   const primaryColor = activeSettings?.letterheadPrimaryColor || '#0f172a';
   const accentColor = activeSettings?.letterheadAccentColor || '#d97706';
   const titleColor = activeSettings?.letterheadTitleColor || primaryColor;
-  const docCode = options.documentCode || 'ASH-DGP-2026';
+  const docCode = options.documentCode || 'ASH-ERP-2026';
 
   const html = `
 <!DOCTYPE html>
 <html lang="ku" dir="rtl">
 <head>
+  <base href="${typeof window !== 'undefined' ? window.location.origin : ''}/">
   <meta charset="UTF-8">
   <title>${title} - ${fileName}</title>
   <style>
     @page {
       size: ${orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait'};
-      margin: 8mm 8mm 12mm 8mm;
+      margin: 8mm 8mm 10mm 8mm;
     }
     *, *::before, *::after {
       box-sizing: border-box;
@@ -271,7 +276,7 @@ export function exportToPDF(options: ExportReportOptions) {
       padding: 10px;
       color: #0f172a;
       background: #ffffff;
-      font-size: 11px;
+      font-size: 10.5px;
       line-height: 1.4;
       direction: rtl;
     }
@@ -281,11 +286,11 @@ export function exportToPDF(options: ExportReportOptions) {
       margin: 0 auto;
     }
     
-    /* 🌟 OFFICIAL 3-PART ASHLEY LETTERHEAD */
+    /* 🏛️ OFFICIAL DUAL-BRAND ERP LETTERHEAD */
     .official-letterhead {
       border-bottom: 2.5px solid ${primaryColor};
       padding-bottom: 10px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -305,19 +310,36 @@ export function exportToPDF(options: ExportReportOptions) {
       text-align: center;
       padding: 0 8px;
     }
+    .letterhead-center .doc-badge {
+      display: inline-block;
+      font-size: 8px;
+      font-weight: 800;
+      color: #d97706;
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      padding: 1.5px 8px;
+      border-radius: 10px;
+      margin-bottom: 3px;
+      letter-spacing: 0.2px;
+    }
     .letterhead-center h1 {
       margin: 0;
-      font-size: 16px;
+      font-size: 15.5px;
       font-weight: 900;
       color: ${titleColor};
       letter-spacing: -0.2px;
-      line-height: 1.3;
+      line-height: 1.25;
     }
     .letterhead-center .period-badge {
       font-size: 10px;
-      font-weight: bold;
-      color: #64748b;
+      font-weight: 800;
+      color: #475569;
       margin-top: 3px;
+      display: inline-block;
+      background: #f1f5f9;
+      padding: 2px 10px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
     }
     .letterhead-left {
       display: flex;
@@ -351,110 +373,83 @@ export function exportToPDF(options: ExportReportOptions) {
       object-fit: contain;
     }
 
-    /* ✍️ Official 3-Role Signatures Strip */
-    .report-signatures {
-      margin-top: 22px;
-      display: flex;
-      justify-content: space-between;
-      gap: 14px;
-      text-align: right;
+    /* 📊 MODERN EXECUTIVE ERP KPI CARDS */
+    .erp-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
       page-break-inside: avoid;
-      break-inside: avoid;
-      direction: rtl;
     }
-    .signature-card {
-      flex: 1;
-      background: #f8fafc;
-      padding: 8px 12px;
-      border-radius: 8px;
+    .erp-kpi-card {
+      background: #ffffff;
       border: 1px solid #cbd5e1;
+      border-top: 3.5px solid #2563eb;
+      border-radius: 6px;
+      padding: 6px 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
     }
-    .signature-role {
-      font-size: 10.5px;
-      font-weight: 800;
-      color: #0f172a;
-      text-align: center;
-      margin-bottom: 6px;
-      border-bottom: 1px solid #e2e8f0;
-      padding-bottom: 3px;
-    }
-    .signature-line {
+    .erp-kpi-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       font-size: 9px;
-      font-weight: 700;
-      color: #475569;
-      margin-bottom: 6px;
+      font-weight: 800;
+      color: #64748b;
+      margin-bottom: 2px;
+    }
+    .erp-kpi-card-val {
+      font-size: 13.5px;
+      font-weight: 900;
+      color: #0f172a;
+      font-family: 'NRT', Consolas, monospace;
+      white-space: nowrap;
+      text-align: right;
+      direction: ltr;
     }
 
-    /* 📝 EXECUTIVE WRITTEN SUMMARY RIBBON (NOT A TABLE/GRID) */
+    /* 📝 EXECUTIVE NARRATIVE SUMMARY RIBBON */
     .executive-summary-ribbon {
       background: #f8fafc !important;
       border: 1px solid #cbd5e1 !important;
-      border-right: 5px solid ${primaryColor} !important;
-      border-radius: 8px;
-      padding: 9px 14px;
-      margin-bottom: 12px;
+      border-right: 4.5px solid ${primaryColor} !important;
+      border-radius: 6px;
+      padding: 7px 12px;
+      margin-bottom: 10px;
       display: flex;
       flex-direction: row;
       align-items: center;
-      gap: 12px;
-      font-size: 11px;
-      line-height: 1.6;
+      gap: 10px;
+      font-size: 10.5px;
+      line-height: 1.5;
       color: #1e293b;
       page-break-inside: avoid;
     }
     .summary-ribbon-title {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       font-weight: 900;
       color: ${primaryColor};
       white-space: nowrap;
-      padding-left: 12px;
+      padding-left: 10px;
       border-left: 1.5px solid #cbd5e1;
-      font-size: 11px;
+      font-size: 10.5px;
     }
     .summary-ribbon-text {
       flex: 1;
       font-weight: 700;
       color: #334155;
     }
-    .summary-ribbon-text .summary-item {
-      display: inline-block;
-      white-space: nowrap;
-    }
-    .summary-ribbon-text strong {
-      color: #0f172a;
-      font-weight: 900;
-    }
-    .summary-ribbon-text .summary-val {
-      font-family: Consolas, monospace;
-      font-weight: 900;
-      color: #0f172a;
-      padding: 1.5px 6px;
-      background: #e2e8f0;
-      border-radius: 4px;
-      border: 1px solid #cbd5e1;
-      margin-right: 2px;
-    }
 
-    /* Total row highlight */
-    .tr-total-row {
-      background-color: #f1f5f9 !important;
-      font-weight: 900 !important;
-      border-top: 2.5px solid ${primaryColor} !important;
-    }
-    .tr-total-row td {
-      font-weight: 900 !important;
-      color: #0f172a !important;
-    }
-
-    /* 📋 COLORFUL FULL-WIDTH TABLE */
+    /* 📋 HIGH-PRECISION ERP TABLE STYLING */
     table {
       width: 100% !important;
-      border-collapse: collapse !important;
-      margin-top: 6px;
+      border-collapse: separate !important;
+      border-spacing: 0 !important;
+      margin-top: 4px;
       page-break-inside: auto;
-      border: 1.5px solid #64748b !important;
+      border: 1px solid #cbd5e1 !important;
       border-radius: 6px;
       overflow: hidden;
     }
@@ -468,114 +463,255 @@ export function exportToPDF(options: ExportReportOptions) {
     tfoot {
       display: table-footer-group;
     }
-    th {
-      background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%) !important;
+    thead th {
+      background: #0f172a !important;
       color: #ffffff !important;
       font-weight: 900;
-      font-size: 10.5px;
+      font-size: 10px;
       padding: 7px 8px;
-      border: 1px solid #475569;
+      border-left: 1px solid #334155;
+      border-bottom: 2px solid #0f172a;
       text-align: right;
+      letter-spacing: -0.2px;
     }
-    td {
+    thead th:last-child {
+      border-left: none;
+    }
+    tbody td {
       padding: 6px 8px;
-      border: 1px solid #cbd5e1;
-      font-size: 10.5px;
+      border-bottom: 1px solid #e2e8f0;
+      border-left: 1px solid #f1f5f9;
+      font-size: 10px;
       font-weight: 700;
-      color: #0f172a;
+      color: #1e293b;
+      vertical-align: middle;
     }
-    tbody tr:nth-child(even) {
+    tbody td:last-child {
+      border-left: none;
+    }
+    tbody tr.tr-data-row:nth-child(even) {
       background-color: #f8fafc !important;
     }
-    tbody tr:nth-child(odd) {
+    tbody tr.tr-data-row:nth-child(odd) {
       background-color: #ffffff !important;
     }
 
-    /* 🌟 TWO DISTINCT 24-HOUR COLORS (GREEN FOR IN, BLUE FOR OUT) */
-    .badge-in-time {
+    /* Subtotal Rows */
+    tbody tr.tr-subtotal-row {
+      background-color: #f1f5f9 !important;
+      border-top: 1.5px dashed #94a3b8 !important;
+      border-bottom: 1.5px solid #cbd5e1 !important;
+    }
+    tbody tr.tr-subtotal-row td {
+      font-weight: 800 !important;
+      color: #0f172a !important;
+      background-color: #f1f5f9 !important;
+    }
+
+    /* Grand Total Row */
+    tbody tr.tr-grand-total-row {
+      background: #0f172a !important;
+      border-top: 2.5px solid #d97706 !important;
+      border-bottom: 2.5px solid #0f172a !important;
+    }
+    tbody tr.tr-grand-total-row td {
+      color: #ffffff !important;
+      font-weight: 900 !important;
+      font-size: 11px !important;
+      padding: 7px 9px !important;
+      background: #0f172a !important;
+    }
+
+    /* 🏷️ SPECIALIZED ERP BADGES */
+    .badge-money {
       background: #ecfdf5 !important;
       color: #065f46 !important;
       border: 1.5px solid #10b981 !important;
-      padding: 2.5px 8px;
+      padding: 2px 7px;
+      border-radius: 5px;
+      font-weight: 900;
+      font-family: Consolas, monospace;
+      display: inline-block;
+      white-space: nowrap;
+      font-size: 10px;
+      direction: ltr;
+    }
+    .badge-money-subtotal {
+      background: #d1fae5 !important;
+      color: #064e3b !important;
+      border-color: #059669 !important;
+      font-size: 10.5px;
+    }
+    .badge-money-grand {
+      background: #10b981 !important;
+      color: #ffffff !important;
+      border: 1.5px solid #059669 !important;
+      font-size: 11.5px !important;
+      padding: 3px 9px !important;
+      font-family: Consolas, monospace;
+    }
+    .badge-ot {
+      background: #fffbeb !important;
+      color: #b45309 !important;
+      border: 1.5px solid #f59e0b !important;
+      padding: 2px 7px;
       border-radius: 5px;
       font-weight: 900;
       display: inline-block;
       white-space: nowrap;
-      font-family: Consolas, monospace;
+      font-size: 10px;
+    }
+    .badge-ot-grand {
+      background: #f59e0b !important;
+      color: #ffffff !important;
+      border-color: #d97706 !important;
+      font-size: 11px !important;
+      padding: 2.5px 8px !important;
     }
     .badge-out-time {
       background: #f0f9ff !important;
       color: #0369a1 !important;
       border: 1.5px solid #0284c7 !important;
-      padding: 2.5px 8px;
+      padding: 2px 7px;
       border-radius: 5px;
       font-weight: 900;
       display: inline-block;
       white-space: nowrap;
       font-family: Consolas, monospace;
+      font-size: 10px;
     }
-    .badge-edited {
-      background: #eff6ff !important;
-      color: #1e40af !important;
-      border: 1.5px solid #60a5fa !important;
-      padding: 2.5px 8px;
+    .badge-in-time {
+      background: #ecfdf5 !important;
+      color: #065f46 !important;
+      border: 1.5px solid #10b981 !important;
+      padding: 2px 7px;
       border-radius: 5px;
       font-weight: 900;
       display: inline-block;
       white-space: nowrap;
+      font-family: Consolas, monospace;
+      font-size: 10px;
+    }
+    .badge-empty {
+      color: #94a3b8;
+      font-weight: bold;
     }
     .badge-date {
       background: #f8fafc !important;
       color: #0f172a !important;
-      border: 1px solid #94a3b8 !important;
+      border: 1px solid #cbd5e1 !important;
       padding: 2px 6px;
       border-radius: 4px;
       font-weight: 800;
       font-family: Consolas, monospace;
       display: inline-block;
       white-space: nowrap;
+      font-size: 9.5px;
     }
-    .badge-ot {
-      background: #fffbeb !important;
-      color: #b45309 !important;
-      border: 1.5px solid #f59e0b !important;
-      padding: 2.5px 8px;
-      border-radius: 5px;
-      font-weight: 900;
+    .badge-role {
+      background: #f8fafc;
+      color: #475569;
+      border: 1px solid #e2e8f0;
+      padding: 1.5px 6px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 700;
       display: inline-block;
       white-space: nowrap;
     }
-    .badge-money {
-      background: #ecfdf5 !important;
-      color: #065f46 !important;
-      border: 1.5px solid #10b981 !important;
-      padding: 2.5px 8px;
+    .badge-type {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 7px;
+      border-radius: 5px;
+      font-size: 9.5px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .badge-taxi {
+      background: #fef3c7 !important;
+      color: #92400e !important;
+      border: 1px solid #fcd34d !important;
+    }
+    .badge-fuel {
+      background: #fee2e2 !important;
+      color: #991b1b !important;
+      border: 1px solid #fca5a5 !important;
+    }
+    .badge-food {
+      background: #ffedd5 !important;
+      color: #9a3412 !important;
+      border: 1px solid #fdba74 !important;
+    }
+    .badge-office {
+      background: #e0e7ff !important;
+      color: #3730a3 !important;
+      border: 1px solid #a5b4fc !important;
+    }
+    .badge-other {
+      background: #f1f5f9 !important;
+      color: #475569 !important;
+      border: 1px solid #cbd5e1 !important;
+    }
+    .badge-trip {
+      background: #f1f5f9 !important;
+      color: #1e293b !important;
+      border: 1px solid #cbd5e1 !important;
+      padding: 1.5px 6px;
+      border-radius: 10px;
+      font-size: 9px;
+      font-weight: 800;
+      display: inline-block;
+    }
+    .badge-loc {
+      font-size: 9.5px;
+      color: #334155;
+      font-weight: 700;
+    }
+    .badge-edited {
+      background: #eff6ff !important;
+      color: #1e40af !important;
+      border: 1.5px solid #60a5fa !important;
+      padding: 2px 7px;
       border-radius: 5px;
       font-weight: 900;
-      font-family: Consolas, monospace;
       display: inline-block;
       white-space: nowrap;
     }
 
-    /* Footer & Signatures */
-    .report-footer {
-      margin-top: 24px;
+    /* ✍️ OFFICIAL SIGNATURE BOX (SINGLE: بەڕێوەبەری کۆگا) */
+    .report-signatures {
+      margin-top: 18px;
       display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      padding-top: 12px;
-      border-top: 2px dashed #94a3b8;
-      font-size: 10px;
-      color: #475569;
+      justify-content: flex-end;
       page-break-inside: avoid;
+      break-inside: avoid;
+      direction: rtl;
     }
-    .signature-box {
+    .signature-card {
+      width: 220px;
+      background: #f8fafc;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1.5px solid #cbd5e1;
       text-align: center;
-      width: 190px;
-      border-top: 1.5px solid #334155;
-      padding-top: 6px;
-      font-weight: bold;
+    }
+    .signature-role {
+      font-size: 11px;
+      font-weight: 800;
       color: #0f172a;
+      text-align: center;
+      margin-bottom: 6px;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 4px;
+    }
+    .signature-line {
+      font-size: 9.5px;
+      font-weight: 700;
+      color: #475569;
+      margin-bottom: 6px;
+      text-align: right;
     }
 
     /* Print Controls */
@@ -626,60 +762,38 @@ export function exportToPDF(options: ExportReportOptions) {
   </div>
 
   <div class="report-container">
-    <!-- 🌟 OFFICIAL 3-PART ASHLEY LETTERHEAD -->
+    <!-- 🏛️ OFFICIAL DUAL-BRAND ERP LETTERHEAD -->
     <div class="official-letterhead">
-      <!-- 1. لای ڕاست: لۆگۆ و ناوی گروپی دیوان -->
+      <!-- 1. Right: Mother Company & Diwan Logo -->
       <div class="letterhead-right">
-        <img src="${diwanLogo}" alt="Diwan Logo" class="letterhead-logo" onerror="this.style.display='none'">
+        <img src="${diwanLogo}" alt="${motherCompany}" class="letterhead-logo" onerror="this.style.display='none'">
         <div>
           <div class="company-title">${motherCompany}</div>
           <div class="company-subtitle">${motherCompanySubtitle}</div>
         </div>
       </div>
 
-      <!-- 2. ناوەڕاست: تەنها تایتڵی فەرمی بابەتەکە -->
+      <!-- 2. Center: Document Title & Metadata -->
       <div class="letterhead-center">
+        <div class="doc-badge">سیستەمی کارگێڕی و ژمێریاری • Ashley ERP</div>
         <h1>${title}</h1>
-        ${period ? `<div class="period-badge">ماوە: ${period}</div>` : (subtitle ? `<div class="period-badge">${subtitle}</div>` : '')}
+        ${period ? `<div class="period-badge">ماوە / بەروار: ${period}</div>` : (subtitle ? `<div class="period-badge">${subtitle}</div>` : '')}
       </div>
 
-      <!-- 3. لای چەپ: ناوی ئاشڵی، بەروار و کۆد و لۆگۆی ئاشڵی -->
+      <!-- 3. Left: Brand Name, Code, Logo -->
       <div class="letterhead-left">
         <div>
           <div class="company-title">${brandName}</div>
           <div class="company-subtitle">${brandSubtitle}</div>
-          <div class="meta-code">${currentDateStr} (${currentTimeStr}) • کۆدی فەرمی: ${docCode}</div>
+          <div class="meta-code">${currentDateStr} (${currentTimeStr}) • کۆد: ${docCode}</div>
         </div>
-        <img src="${reportLogo}" alt="Ashley Logo" class="letterhead-logo" onerror="this.style.display='none'">
+        <img src="${reportLogo}" alt="${brandName}" class="letterhead-logo" onerror="this.style.display='none'">
       </div>
     </div>
 
-    <!-- 📝 Executive Written Summary Ribbon (Narrative Text, Not a Grid/Table) -->
-    ${
-      (options.summaryText || (summaryCards && summaryCards.length > 0))
-        ? `
-    <div class="executive-summary-ribbon">
-      <div class="summary-ribbon-title">
-        <span>📝</span>
-        <span>پوختە و کۆی گشتی:</span>
-      </div>
-      <div class="summary-ribbon-text">
-        ${
-          options.summaryText
-            ? options.summaryText
-            : summaryCards
-                .map(
-                  c => `<span class="summary-item"><strong>${c.label}:</strong> <span class="summary-val" style="${c.color ? `color:${c.color}; border-color:${c.color}60;` : ''}">${c.value}</span></span>`
-                )
-                .join(' &nbsp;•&nbsp; ')
-        }
-      </div>
-    </div>
-    `
-        : ''
-    }
 
-    <!-- Main Data Table -->
+
+    <!-- 📋 Main Data Table -->
     <table>
       <thead>
         <tr>
@@ -699,12 +813,20 @@ export function exportToPDF(options: ExportReportOptions) {
         ${data
           .map(
             (row, index) => {
-              const isTotalRow = Object.values(row).some(
-                v => typeof v === 'string' && (v.includes('⭐') || v.includes('کۆی گشتی') || v.includes('📊 کۆی'))
+              const isGrandTotalRow = Object.values(row).some(
+                v => typeof v === 'string' && (v.includes('⭐') || v.includes('کۆی گشتی'))
               );
+              const isSubtotalRow = !isGrandTotalRow && Object.values(row).some(
+                v => typeof v === 'string' && (v.includes('📊 کۆی') || v.includes('کۆی مەسروفاتی'))
+              );
+
+              let trClass = 'tr-data-row';
+              if (isGrandTotalRow) trClass = 'tr-grand-total-row';
+              else if (isSubtotalRow) trClass = 'tr-subtotal-row';
+
               return `
-          <tr class="${isTotalRow ? 'tr-total-row' : ''}">
-            <td style="text-align: center; color: #64748b; font-family: monospace;">${isTotalRow ? '★' : index + 1}</td>
+          <tr class="${trClass}">
+            <td style="text-align: center; color: ${isGrandTotalRow ? '#ffffff' : '#64748b'}; font-family: monospace; font-weight: 800;">${isGrandTotalRow ? '★' : (isSubtotalRow ? '•' : index + 1)}</td>
             ${columns
               .map(col => {
                 const val = row[col.key] !== undefined && row[col.key] !== null ? String(row[col.key]) : '-';
@@ -713,20 +835,66 @@ export function exportToPDF(options: ExportReportOptions) {
                 const lowerKey = col.key.toLowerCase();
                 const lowerVal = val.toLowerCase();
 
-                if (lowerVal.includes('گۆڕاو') || lowerVal.includes('دەستکاریکراو') || lowerVal.includes('edited') || lowerVal.includes('modified') || lowerKey.includes('edit')) {
-                  formattedCell = `<span class="badge-edited">✏️ ${formatTime24H(val)}</span>`;
-                } else if (lowerKey.includes('in') || lowerKey.includes('هاتن') || lowerVal.includes('📥')) {
-                  const badge = getAttendanceTimeBadge(val, 'in');
-                  formattedCell = `<span class="${badge.cssClass}">📥 ${badge.formattedTime}</span>`;
-                } else if (lowerKey.includes('out') || lowerKey.includes('ڕۆشتن') || lowerKey.includes('دەرچوون') || lowerKey.includes('چون') || lowerVal.includes('📤')) {
-                  const badge = getAttendanceTimeBadge(val, 'out');
-                  formattedCell = `<span class="${badge.cssClass}">📤 ${badge.formattedTime}</span>`;
-                } else if (lowerKey.includes('date') || lowerKey.includes('بەروار') || /^\d{4}-\d{2}-\d{2}$/.test(val)) {
-                  formattedCell = `<span class="badge-date">📅 ${val}</span>`;
-                } else if (lowerKey.includes('amount') || lowerKey.includes('cost') || lowerKey.includes('pay') || lowerVal.includes('iqd')) {
-                  formattedCell = `<span class="badge-money">${val}</span>`;
-                } else if (lowerKey.includes('hour') || lowerKey.includes('overtime') || lowerVal.includes('کاتژمێر')) {
-                  formattedCell = `<span class="badge-ot">${val}</span>`;
+                if (isGrandTotalRow) {
+                  if (lowerKey.includes('amount') || lowerKey.includes('cost') || lowerKey.includes('pay') || lowerVal.includes('iqd')) {
+                    formattedCell = `<span class="badge-money-grand">${val}</span>`;
+                  } else if (lowerKey.includes('hour') || lowerKey.includes('overtime')) {
+                    formattedCell = `<span class="badge-ot-grand">${val}</span>`;
+                  } else {
+                    formattedCell = `<strong>${val}</strong>`;
+                  }
+                } else if (isSubtotalRow) {
+                  if (lowerKey.includes('amount') || lowerKey.includes('cost') || lowerKey.includes('pay') || lowerVal.includes('iqd')) {
+                    formattedCell = `<span class="badge-money badge-money-subtotal">${val}</span>`;
+                  } else {
+                    formattedCell = `<strong>${val}</strong>`;
+                  }
+                } else {
+                  // Normal Data Rows
+                  if (lowerVal.includes('گۆڕاو') || lowerVal.includes('دەستکاریکراو') || lowerVal.includes('edited') || lowerVal.includes('modified') || lowerKey.includes('edit')) {
+                    formattedCell = `<span class="badge-edited">✏️ ${formatTime24H(val)}</span>`;
+                  } else if (lowerKey.includes('in') || lowerKey.includes('هاتن') || lowerVal.includes('📥')) {
+                    const badge = getAttendanceTimeBadge(val, 'in');
+                    formattedCell = `<span class="${badge.cssClass}">📥 ${badge.formattedTime}</span>`;
+                  } else if (lowerKey.includes('checkout') || lowerKey.includes('out') || lowerKey.includes('دەرچوون') || lowerKey.includes('چون') || lowerVal.includes('📤')) {
+                    if (val !== '-' && val !== '—') {
+                      formattedCell = `<span class="badge-out-time">🕒 ${formatTime24H(val)}</span>`;
+                    } else {
+                      formattedCell = `<span class="badge-empty">—</span>`;
+                    }
+                  } else if (lowerKey.includes('date') || lowerKey.includes('بەروار') || /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                    formattedCell = `<span class="badge-date">📅 ${val}</span>`;
+                  } else if (lowerKey === 'type' || lowerKey === 'category' || lowerKey.includes('جۆر')) {
+                    if (val.includes('تەکسی') || lowerVal.includes('taxi')) {
+                      formattedCell = `<span class="badge-type badge-taxi">🚕 ${val}</span>`;
+                    } else if (val.includes('بەنزین') || lowerVal.includes('fuel')) {
+                      formattedCell = `<span class="badge-type badge-fuel">⛽ ${val}</span>`;
+                    } else if (val.includes('خواردن') || lowerVal.includes('food')) {
+                      formattedCell = `<span class="badge-type badge-food">🍔 ${val}</span>`;
+                    } else if (val.includes('مەکتەب') || lowerVal.includes('office')) {
+                      formattedCell = `<span class="badge-type badge-office">🏢 ${val}</span>`;
+                    } else if (val !== '-' && val !== '—') {
+                      formattedCell = `<span class="badge-type badge-other">📦 ${val}</span>`;
+                    }
+                  } else if (lowerKey.includes('trip') || lowerKey.includes('سەفەر')) {
+                    if (val !== '-' && val !== '—') {
+                      formattedCell = `<span class="badge-trip">🚗 ${val}</span>`;
+                    } else {
+                      formattedCell = `<span style="color:#94a3b8;">—</span>`;
+                    }
+                  } else if (lowerKey === 'from' || lowerKey === 'to') {
+                    if (val !== '-' && val !== '—') {
+                      formattedCell = `<span class="badge-loc">${lowerKey === 'from' ? '📍 لە: ' : '🏁 بۆ: '}${val}</span>`;
+                    } else {
+                      formattedCell = `<span style="color:#94a3b8;">—</span>`;
+                    }
+                  } else if (lowerKey.includes('amount') || lowerKey.includes('cost') || lowerKey.includes('pay') || lowerVal.includes('iqd')) {
+                    formattedCell = `<span class="badge-money">${val}</span>`;
+                  } else if (lowerKey.includes('hour') || lowerKey.includes('overtime') || lowerVal.includes('کاتژمێر')) {
+                    formattedCell = `<span class="badge-ot">⚡ ${val}</span>`;
+                  } else if (lowerKey.includes('role') || lowerKey.includes('پۆست')) {
+                    formattedCell = `<span class="badge-role">${val}</span>`;
+                  }
                 }
 
                 return `
@@ -744,30 +912,16 @@ export function exportToPDF(options: ExportReportOptions) {
       </tbody>
     </table>
 
-    <!-- ✍️ Official 3-Role Signatures Strip -->
+    <!-- ✍️ شوێنی واژووی فەرمی (تەنها یەک شوێنی واژوو: بەڕێوەبەری کۆگا) -->
     <div class="report-signatures">
       <div class="signature-card">
-        <div class="signature-role">سەرپەرشتیاری ئایتی</div>
-        <div class="signature-line">ناو: ................................................................</div>
-        <div class="signature-line" style="margin-bottom: 0;">واژوو: ..............................................................</div>
-      </div>
-      <div class="signature-card">
-        <div class="signature-role">بەڕێوەبەری ژمێریاری و کۆگا</div>
-        <div class="signature-line">ناو: ................................................................</div>
-        <div class="signature-line" style="margin-bottom: 0;">واژوو: ..............................................................</div>
-      </div>
-      <div class="signature-card">
-        <div class="signature-role">بەڕێوەبەری گشتی</div>
-        <div class="signature-line">ناو: ................................................................</div>
-        <div class="signature-line" style="margin-bottom: 0;">واژوو: ..............................................................</div>
+        <div class="signature-role">بەڕێوەبەری کۆگا</div>
+        <div class="signature-line">بەروار: ..... / ..... / 2026</div>
+        <div class="signature-line" style="margin-bottom: 0;">واژوو و مۆر: .......................................</div>
       </div>
     </div>
 
-    <!-- Official System Footer Strip -->
-    <div style="margin-top: 12px; padding-top: 6px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; font-size: 8.5px; color: #64748b; direction: rtl;">
-      <span>سیستەمی بەڕێوەبردنی سەرچاوەکانی مرۆیی ئاشڵی (Ashley ERP 2026)</span>
-      <span>بەڵگەنامەی فەرمی وەرگیراو لە سیستەم • دەرچوون: ${currentDateStr} (${currentTimeStr})</span>
-    </div>
+
 
   </div>
 
@@ -948,30 +1102,16 @@ export function exportMonthlyMultiPageDailyPDF(options: MonthDailyReportOptions)
         </tbody>
       </table>
 
-      <!-- ✍️ Official 3-Role Signatures Strip -->
+      <!-- ✍️ Official Signature Box (Single: بەڕێوەبەری کۆگا) -->
       <div class="report-signatures">
         <div class="signature-card">
-          <div class="signature-role">سەرپەرشتیاری ئایتی</div>
-          <div class="signature-line">ناو: ................................................................</div>
-          <div class="signature-line" style="margin-bottom: 0;">واژوو: ..............................................................</div>
-        </div>
-        <div class="signature-card">
-          <div class="signature-role">بەڕێوەبەری ژمێریاری و کۆگا</div>
-          <div class="signature-line">ناو: ................................................................</div>
-          <div class="signature-line" style="margin-bottom: 0;">واژوو: ..............................................................</div>
-        </div>
-        <div class="signature-card">
-          <div class="signature-role">بەڕێوەبەری گشتی</div>
-          <div class="signature-line">ناو: ................................................................</div>
-          <div class="signature-line" style="margin-bottom: 0;">واژوو: ..............................................................</div>
+          <div class="signature-role">بەڕێوەبەری کۆگا</div>
+          <div class="signature-line">بەروار: ..... / ..... / 2026</div>
+          <div class="signature-line" style="margin-bottom: 0;">واژوو و مۆر: .......................................</div>
         </div>
       </div>
 
-      <!-- Page Footer Strip -->
-      <div style="margin-top: 6px; padding-top: 4px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; font-size: 8px; color: #64748b; direction: rtl;">
-        <span>کۆمپانیای ئاشڵی (Ashley ERP 2026) — مانگی ${month} (ڕۆژی ${day.dayNum})</span>
-        <span>بەڵگەنامەی فەرمیی دەوامی کارمەندان — کۆپی ئەلیکترۆنی • ${currentDateStr} (${currentTimeStr})</span>
-      </div>
+
     </div>
     `;
   }).join('\n');
@@ -1193,23 +1333,22 @@ export function exportMonthlyMultiPageDailyPDF(options: MonthDailyReportOptions)
       font-family: Consolas, monospace;
     }
 
-    /* ✍️ Official 3-Role Signatures Strip */
+    /* ✍️ Official Signature Box (Single: بەڕێوەبەری کۆگا) */
     .report-signatures {
       margin-top: 10px;
       display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      text-align: right;
+      justify-content: flex-end;
       page-break-inside: avoid;
       break-inside: avoid;
       direction: rtl;
     }
     .signature-card {
-      flex: 1;
+      width: 200px;
       background: #f8fafc;
-      padding: 6px 10px;
+      padding: 6px 12px;
       border-radius: 6px;
       border: 1px solid #cbd5e1;
+      text-align: center;
     }
     .signature-role {
       font-size: 9.5px;
@@ -1225,6 +1364,7 @@ export function exportMonthlyMultiPageDailyPDF(options: MonthDailyReportOptions)
       font-weight: 700;
       color: #475569;
       margin-bottom: 4px;
+      text-align: right;
     }
 
     /* Print Controls */
@@ -1771,44 +1911,17 @@ export function exportAshleyOfficialLetterheadPDF(options: AshleyOfficialReportO
       </tbody>
     </table>
 
-    <!-- واژووەکانی خوارەوە بەپێی ئەرکەکان (Signatures without pre-printed names or seals) -->
-    <div style="margin-top: 22px; display: flex; justify-content: space-between; gap: 14px; text-align: right; page-break-inside: avoid; break-inside: avoid; direction: rtl;">
-      <!-- Right: سەرپەرشتیاری ئایتی -->
-      <div style="flex: 1; background: #f8fafc; padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1;">
-        <div style="font-size: 11px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
-          سەرپەرشتیاری ئایتی
+    <!-- ✍️ شوێنی واژووی فەرمی (تەنها یەک شوێنی واژوو: بەڕێوەبەری کۆگا) -->
+    <div style="margin-top: 20px; display: flex; justify-content: flex-end; page-break-inside: avoid; break-inside: avoid; direction: rtl;">
+      <div style="width: 220px; background: #f8fafc; padding: 10px 14px; border-radius: 8px; border: 1.5px solid #cbd5e1; text-align: center;">
+        <div style="font-size: 11px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+          بەڕێوەبەری کۆگا
         </div>
-        <div style="font-size: 9px; font-weight: 700; color: #475569; margin-bottom: 10px;">
-          ناو: ................................................................
+        <div style="font-size: 9.5px; font-weight: 700; color: #475569; margin-bottom: 6px; text-align: right;">
+          بەروار: ..... / ..... / 2026
         </div>
-        <div style="font-size: 9px; font-weight: 700; color: #475569;">
-          واژوو: ..............................................................
-        </div>
-      </div>
-
-      <!-- Center: بەڕێوەبەری ژمێریاری و کۆگا -->
-      <div style="flex: 1; background: #f8fafc; padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1;">
-        <div style="font-size: 11px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
-          بەڕێوەبەری ژمێریاری و کۆگا
-        </div>
-        <div style="font-size: 9px; font-weight: 700; color: #475569; margin-bottom: 10px;">
-          ناو: ................................................................
-        </div>
-        <div style="font-size: 9px; font-weight: 700; color: #475569;">
-          واژوو: ..............................................................
-        </div>
-      </div>
-
-      <!-- Left: بەڕێوەبەری گشتی -->
-      <div style="flex: 1; background: #f8fafc; padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1;">
-        <div style="font-size: 11px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
-          بەڕێوەبەری گشتی
-        </div>
-        <div style="font-size: 9px; font-weight: 700; color: #475569; margin-bottom: 10px;">
-          ناو: ................................................................
-        </div>
-        <div style="font-size: 9px; font-weight: 700; color: #475569;">
-          واژوو: ..............................................................
+        <div style="font-size: 9.5px; font-weight: 700; color: #475569; text-align: right;">
+          واژوو و مۆر: .......................................
         </div>
       </div>
     </div>

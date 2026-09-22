@@ -222,7 +222,8 @@ export function resolveEmployeeDayAttendance(
 ): UnifiedAttendanceDayInfo {
   const { dateStr, isFriday, isFuture, isToday } = dayItem;
   const empId = (emp.id || '').toString().trim().toLowerCase();
-  const empNum = empId.replace('emp-', '');
+  const empNumRaw = empId.replace(/^emp-0*/i, '') || empId.replace('emp-', '');
+  const empNumPadded = empNumRaw.length === 1 ? `0${empNumRaw}` : empNumRaw;
   const empAlt = (emp.employeeId || '').toString().trim().toLowerCase();
   const empName = (emp.name || emp.fullName3Part || '').trim().toLowerCase();
 
@@ -236,8 +237,10 @@ export function resolveEmployeeDayAttendance(
 
     return (
       logEmpId === empId || 
-      logEmpId === empNum || 
-      logEmpId === `emp-${empNum}` ||
+      logEmpId === empNumRaw || 
+      logEmpId === empNumPadded ||
+      logEmpId === `emp-${empNumRaw}` ||
+      logEmpId === `emp-${empNumPadded}` ||
       (empAlt && logEmpId === empAlt) ||
       (logName && (logName === empName || logName.includes(empName) || empName.includes(logName)))
     );
@@ -283,23 +286,38 @@ export function resolveEmployeeDayAttendance(
   // 1. 🛡️ CHECK ADMIN MANUAL OVERRIDE
   const override = 
     overridesMap[`${emp.id}_${dateStr}`] || 
-    overridesMap[`${empNum}_${dateStr}`] || 
-    overridesMap[`emp-${empNum}_${dateStr}`] ||
-    (empAlt ? overridesMap[`${empAlt}_${dateStr}`] : null);
+    overridesMap[`${empId}_${dateStr}`] || 
+    overridesMap[`${empNumRaw}_${dateStr}`] || 
+    overridesMap[`${empNumPadded}_${dateStr}`] || 
+    overridesMap[`emp-${empNumRaw}_${dateStr}`] ||
+    overridesMap[`emp-${empNumPadded}_${dateStr}`] ||
+    (empAlt ? overridesMap[`${empAlt}_${dateStr}`] : null) ||
+    (empName ? overridesMap[`${empName}_${dateStr}`] : null);
 
   if (override) {
-    const isOverrideEmpty = override.status === 'empty' || override.status === 'Empty' || override.status === 'delete';
+    const isOverrideEmpty = 
+      override.status === 'empty' || 
+      override.status === 'Empty' || 
+      override.status === 'delete' || 
+      override.status === 'deleted' ||
+      override.action === 'delete';
     
-    // If override is marked empty/deleted, but employee checked in again on mobile/live logs, do NOT block the new live checkin!
-    const hasSubsequentLiveCheckIn = sortedDayRecords.some(r => {
+    // If override is marked empty/deleted:
+    // Past days CAN NEVER be resurrected by old logs.
+    // Today can only be resurrected if an employee checked in strictly AFTER the admin deleted the record.
+    const hasSubsequentLiveCheckIn = isToday && sortedDayRecords.some(r => {
       const inTime = r.checkInTime || r.check_in_time || r.checkIn;
       if (!inTime) return false;
-      if (override.deletedAt || override.timestamp) {
-        const rTime = new Date(r.created_at || r.createdAt || r.time || 0).getTime();
-        const oTime = new Date(override.deletedAt || override.timestamp || 0).getTime();
-        return rTime > oTime;
+      const logTs = r.created_at || r.createdAt || r.time;
+      const overrideTs = override.deletedAt || override.timestamp;
+      if (logTs && overrideTs) {
+        const rTime = new Date(logTs).getTime();
+        const oTime = new Date(overrideTs).getTime();
+        if (!isNaN(rTime) && !isNaN(oTime)) {
+          return rTime > oTime;
+        }
       }
-      return true;
+      return false;
     });
 
     if (isOverrideEmpty && !hasSubsequentLiveCheckIn) {
@@ -357,8 +375,8 @@ export function resolveEmployeeDayAttendance(
       );
       const isWaived = isCheckInWaived || isCheckOutWaived;
 
-      let workedHours = 8;
-      if (cIn && cOut && cIn.includes(':') && cOut.includes(':')) {
+      let workedHours = 0;
+      if (cIn && cOut && cIn.includes(':') && cOut.includes(':') && cOut !== 'بەردەوام') {
         const [inH, inM] = cIn.split(':').map(Number);
         const [outH, outM] = cOut.split(':').map(Number);
         const inTotal = inH * 60 + (inM || 0);
@@ -370,6 +388,10 @@ export function resolveEmployeeDayAttendance(
           const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
           workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
         }
+      } else if (cIn && (!cOut || cOut === 'بەردەوام') && isToday) {
+        workedHours = 0;
+      } else if (cIn && !cOut && !isToday) {
+        workedHours = 8;
       }
 
       const checkInStatus = getCheckInStatus(cIn, isCheckInWaived, isPenalized);
@@ -542,7 +564,7 @@ export function resolveEmployeeDayAttendance(
   }
 
   let workedHours = 0;
-  if (checkInTime && checkOutTime) {
+  if (checkInTime && checkOutTime && checkInTime.includes(':') && checkOutTime.includes(':') && checkOutTime !== 'بەردەوام') {
     const [inH, inM] = checkInTime.split(':').map(Number);
     const [outH, outM] = checkOutTime.split(':').map(Number);
     const inTotal = inH * 60 + (inM || 0);
@@ -554,7 +576,9 @@ export function resolveEmployeeDayAttendance(
       const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
       workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
     }
-  } else if (hasRecord) {
+  } else if (hasRecord && isToday && (!checkOutTime || checkOutTime === 'بەردەوام')) {
+    workedHours = 0;
+  } else if (hasRecord && !isToday) {
     workedHours = 8;
   }
 

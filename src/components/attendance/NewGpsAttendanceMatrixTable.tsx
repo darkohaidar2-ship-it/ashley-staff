@@ -145,7 +145,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     isWaived?: boolean;
     isCheckInWaived?: boolean;
     isCheckOutWaived?: boolean;
-    deletedAt?: number;
+    deletedAt?: number | string;
+    [key: string]: any;
   }>>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -248,8 +249,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         const data = await res.json();
         const map: Record<string, any> = { ...localMap };
         (data.attendance || []).forEach((r: any) => {
+          const k = `${r.userId}_${r.date}`;
+          // 🛡️ Never resurrect a record that has been marked deleted/empty by admin
+          if (map[k]?.status === 'empty' || map[k]?.status === 'delete' || map[k]?.status === 'Empty') {
+            return;
+          }
           if (r.status && r.status !== 'empty' && r.status !== 'delete' && r.status !== 'Empty') {
-            const k = `${r.userId}_${r.date}`;
             const existing = map[k] || {};
 
             const checkInTime = r.checkInTime || r.check_in_time || existing.checkInTime;
@@ -328,7 +333,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
   useEffect(() => {
     loadSavedRecords();
-    const interval = setInterval(loadSavedRecords, 5000);
+    const interval = setInterval(loadSavedRecords, 30000);
     return () => clearInterval(interval);
   }, [loadSavedRecords]);
 
@@ -554,15 +559,38 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
     setIsApplyingBatch(true);
 
-    // Optimistic instant UI update
+    // Optimistic instant UI update with authoritative tombstones
     setManualStatusMap(prev => {
       const next = { ...prev };
       selectedList.forEach(item => {
-        const key = `${item.empId}_${item.dateStr}`;
+        const empId = item.empId;
+        const rawNum = empId.replace(/^emp-0*/i, '') || empId.replace('emp-', '');
+        const rawNumPadded = rawNum.length === 1 ? `0${rawNum}` : rawNum;
+        const empName = (item.empName || '').trim();
+
+        const allKeys = [
+          `${empId}_${item.dateStr}`,
+          `${rawNum}_${item.dateStr}`,
+          `${rawNumPadded}_${item.dateStr}`,
+          `emp-${rawNum}_${item.dateStr}`,
+          `emp-${rawNumPadded}_${item.dateStr}`,
+        ];
+        if (empName) allKeys.push(`${empName.toLowerCase()}_${item.dateStr}`);
+
         if (targetStatus === 'Empty') {
-          delete next[key];
+          const tombstone = {
+            status: 'empty',
+            action: 'delete',
+            deletedAt: new Date().toISOString(),
+            userId: empId,
+            userName: empName,
+            date: item.dateStr
+          };
+          allKeys.forEach(k => {
+            next[k] = tombstone;
+          });
         } else {
-          next[key] = {
+          const overrideData = {
             status: targetStatus,
             checkInTime: targetStatus === 'Present' ? targetIn : targetStatus === 'Leave' ? 'مۆڵەت' : undefined,
             checkOutTime: targetStatus === 'Present' ? targetOut : targetStatus === 'Leave' ? 'مۆڵەت' : undefined,
@@ -573,15 +601,44 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             isWaived: false,
             adminDecision: null,
           };
+          allKeys.forEach(k => {
+            next[k] = overrideData;
+          });
         }
       });
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(next));
+          window.dispatchEvent(new Event('ashley_attendance_updated'));
         } catch {}
       }
       return next;
     });
+
+    // If batch delete: purge from local storage caches
+    if (targetStatus === 'Empty' && typeof window !== 'undefined') {
+      try {
+        const purgeKeys = new Set(selectedList.map(s => `${s.empId}_${s.dateStr}`));
+        const purgeLocal = (storageKey: string) => {
+          const raw = localStorage.getItem(storageKey);
+          if (!raw) return;
+          try {
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+              const filtered = list.filter((l: any) => {
+                const lDate = l.date || l.log_date || (l.time ? l.time.split(' ')[0] : l.createdAt?.split('T')[0]);
+                const lEmp = (l.employeeId || l.userId || '').toString().trim();
+                return !purgeKeys.has(`${lEmp}_${lDate}`);
+              });
+              localStorage.setItem(storageKey, JSON.stringify(filtered));
+            }
+          } catch {}
+        };
+        purgeLocal('ashley_live_checkins');
+        purgeLocal('ashley_local_attendanceLogs');
+        purgeLocal('ashley_sb_attendanceLogs');
+      } catch {}
+    }
 
     // Close modal and clear selection immediately (0ms UI feedback)
     setSelectedCells({});
@@ -593,7 +650,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         userId: item.empId,
         userName: item.empName,
         date: item.dateStr,
-        status: targetStatus,
+        status: targetStatus === 'Empty' ? 'empty' : targetStatus,
         action: targetStatus === 'Empty' ? 'delete' : undefined,
         checkInTime: targetStatus === 'Present' ? targetIn : undefined,
         checkOutTime: targetStatus === 'Present' ? targetOut : undefined,
@@ -601,19 +658,17 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         adminCheckInNote: targetNote || undefined,
       }));
 
-      await fetch('/api/attendance/admin/manual-record', {
+      void fetch('/api/attendance/admin/manual-record', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ records: recordsPayload })
-      });
-
-      loadSavedRecords();
+      }).catch(err => console.error('Batch save error:', err));
     } catch (err) {
       console.error('Batch save error:', err);
     } finally {
       setIsApplyingBatch(false);
     }
-  }, [batchStatus, batchCheckIn, batchCheckOut, batchNote, selectedCells, selectedMonth, loadSavedRecords]);
+  }, [batchStatus, batchCheckIn, batchCheckOut, batchNote, selectedCells, selectedMonth]);
 
 
   // Lookup record function for any employee & day with absolute Admin Override priority
@@ -724,8 +779,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       setSelectedDayModal(null);
       setIsSavingModal(false);
 
-      // 2. Persistent server sync in background
-      await fetch('/api/attendance/admin/manual-record', {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('ashley_attendance_updated'));
+      }
+
+      // 2. Persistent server sync in background (non-blocking)
+      void fetch('/api/attendance/admin/manual-record', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -749,9 +808,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           isCheckInWaived,
           isCheckOutWaived,
         })
-      });
-
-      loadSavedRecords();
+      }).catch(e => console.error('Error saving modal attendance edit:', e));
     } catch (e) {
       console.error('Error saving modal attendance edit:', e);
     } finally {
@@ -759,23 +816,45 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     }
   };
 
-  // 🗑️ Delete / Clear Record -> Removes overrides so subsequent live check-ins show immediately
+  // 🗑️ Delete / Clear Record -> Instant 0ms reaction & bulletproof permanent deletion
   const handleDeleteDayRecord = async () => {
     if (!selectedDayModal) return;
     if (!confirm('ئایا دڵنیایت لە سڕینەوەی ئەم داتایە بە تەواوی؟ خانەکە بەتاڵ دەبێتەوە.')) return;
     const { emp, dayItem } = selectedDayModal;
-    const key = `${emp.id}_${dayItem.dateStr}`;
-    const rawNum = emp.id.replace('emp-', '');
+    const empId = (emp.id || '').toString().trim();
+    const rawNum = empId.replace(/^emp-0*/i, '') || empId.replace('emp-', '');
+    const rawNumPadded = rawNum.length === 1 ? `0${rawNum}` : rawNum;
+    const empName = (emp.fullName3Part || emp.name || '').trim();
+
+    const allKeys = [
+      `${empId}_${dayItem.dateStr}`,
+      `${rawNum}_${dayItem.dateStr}`,
+      `${rawNumPadded}_${dayItem.dateStr}`,
+      `emp-${rawNum}_${dayItem.dateStr}`,
+      `emp-${rawNumPadded}_${dayItem.dateStr}`,
+    ];
+    if (empName) {
+      allKeys.push(`${empName.toLowerCase()}_${dayItem.dateStr}`);
+    }
+
+    const tombstone = {
+      status: 'empty',
+      action: 'delete',
+      deletedAt: new Date().toISOString(),
+      userId: empId,
+      userName: empName,
+      date: dayItem.dateStr
+    };
 
     // 1. Close modal IMMEDIATELY (0ms reaction)
     setSelectedDayModal(null);
 
-    // 2. Cleanly remove key from override map so it doesn't block future live check-ins
+    // 2. Set authoritative deletion tombstone across all variations
     setManualStatusMap(prev => {
       const next = { ...prev };
-      delete next[key];
-      delete next[`${rawNum}_${dayItem.dateStr}`];
-      delete next[`emp-${rawNum}_${dayItem.dateStr}`];
+      allKeys.forEach(k => {
+        next[k] = tombstone;
+      });
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(next));
@@ -784,23 +863,52 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       return next;
     });
 
-    // 3. Persistent server sync in background (deletes from attendance and attendance_logs in Supabase)
-    try {
-      await fetch('/api/attendance/admin/manual-record', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: emp.id,
-          userName: emp.fullName3Part || emp.name,
-          date: dayItem.dateStr,
-          action: 'delete',
-          status: 'empty'
-        })
-      });
-      loadSavedRecords();
-    } catch (e) {
-      console.error('Error deleting record:', e);
+    // 3. Purge cached live logs from browser storage so no background cycle revives it
+    if (typeof window !== 'undefined') {
+      try {
+        const purgeLogs = (storageKey: string) => {
+          const raw = localStorage.getItem(storageKey);
+          if (!raw) return;
+          try {
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+              const filtered = list.filter((l: any) => {
+                const lDate = l.date || l.log_date || (l.time ? l.time.split(' ')[0] : l.createdAt?.split('T')[0]);
+                if (lDate !== dayItem.dateStr) return true;
+                const lEmp = (l.employeeId || l.userId || '').toString().trim().toLowerCase();
+                const lName = (l.employeeName || l.userName || l.name || '').toString().trim().toLowerCase();
+                if (lEmp === empId.toLowerCase() || lEmp === rawNum || lEmp === rawNumPadded || lEmp === `emp-${rawNum}` || lEmp === `emp-${rawNumPadded}`) return false;
+                if (empName && (lName === empName.toLowerCase() || lName.includes(empName.toLowerCase()))) return false;
+                return true;
+              });
+              localStorage.setItem(storageKey, JSON.stringify(filtered));
+            }
+          } catch {}
+        };
+
+        purgeLogs('ashley_live_checkins');
+        purgeLogs('ashley_local_attendanceLogs');
+        purgeLogs('ashley_sb_attendanceLogs');
+
+        window.dispatchEvent(new CustomEvent('ashley_attendance_deleted', {
+          detail: { empId, dateStr: dayItem.dateStr, name: empName }
+        }));
+        window.dispatchEvent(new Event('ashley_attendance_updated'));
+      } catch {}
     }
+
+    // 4. Persistent server sync in background (non-blocking)
+    void fetch('/api/attendance/admin/manual-record', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: emp.id,
+        userName: emp.fullName3Part || emp.name,
+        date: dayItem.dateStr,
+        action: 'delete',
+        status: 'empty'
+      })
+    }).catch(e => console.error('Error deleting record:', e));
   };
 
 

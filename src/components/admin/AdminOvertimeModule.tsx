@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Employee } from '@/lib/types';
 import { useAppContext } from '@/context/app-provider';
 import { 
@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { format, getDaysInMonth, getDay } from 'date-fns';
 import { exportToPDF, exportToCSV, formatTime12H, type ExportTableColumn } from '@/lib/export-utils';
+import { resolveEmployeeDayAttendance } from '@/lib/attendance-helpers';
 
 interface AdminOvertimeModuleProps {
   employees: Employee[];
@@ -99,6 +100,121 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
     };
   }, [selectedMonth, employees]);
 
+  // 31-Day Matrix Overrides Map (Shared Single Source of Truth)
+  const [matrixOverrides, setMatrixOverrides] = useState<Record<string, any>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(`ashley_matrix_overrides_${selectedMonth}`);
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return {};
+  });
+
+  const loadMatrixOverrides = useCallback(async () => {
+    try {
+      let localMap: Record<string, any> = {};
+      if (typeof window !== 'undefined') {
+        try {
+          const cached = localStorage.getItem(`ashley_matrix_overrides_${selectedMonth}`);
+          if (cached) localMap = JSON.parse(cached);
+        } catch {}
+      }
+
+      const res = await fetch(`/api/attendance/admin/report?t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        const map: Record<string, any> = { ...localMap };
+        (data.attendance || []).forEach((r: any) => {
+          if (r.status && r.status !== 'empty' && r.status !== 'delete' && r.status !== 'Empty') {
+            const k = `${r.userId}_${r.date}`;
+            const existing = map[k] || {};
+
+            const checkInTime = r.checkInTime || r.check_in_time || existing.checkInTime;
+            const checkOutTime = r.checkOutTime || r.check_out_time || existing.checkOutTime;
+            const rawCheckIn = r.rawCheckInTime || r.raw_check_in_time || r.rawCheckIn || existing.rawCheckIn || checkInTime;
+            const rawCheckOut = r.rawCheckOutTime || r.raw_check_out_time || r.rawCheckOut || existing.rawCheckOut || checkOutTime;
+            const rawNote = r.note || r.notes || r.reason || r.employeeNote || r.edit_note || r.editNote || existing.note;
+            let cleanNote = rawNote;
+            if (typeof cleanNote === 'string' && cleanNote.includes('): ')) {
+              cleanNote = cleanNote.split('): ')[1] || cleanNote;
+            }
+            const checkInNote = r.check_in_edit_note || r.check_in_note || r.checkInNote || cleanNote || existing.checkInNote;
+            const checkOutNote = r.check_out_edit_note || r.check_out_note || r.checkOutNote || existing.checkOutNote;
+            const note = cleanNote || checkInNote || existing.note;
+            const adminNote = r.adminNote || r.admin_note || r.editNote || existing.adminNote;
+            const adminCheckInNote = r.adminCheckInNote || r.admin_check_in_note || adminNote || existing.adminCheckInNote;
+            const adminCheckOutNote = r.adminCheckOutNote || r.admin_check_out_note || existing.adminCheckOutNote;
+            const adminDecision = r.adminDecision || existing.adminDecision || null;
+            const adminCheckInDecision = r.adminCheckInDecision || existing.adminCheckInDecision || null;
+            const adminCheckOutDecision = r.adminCheckOutDecision || existing.adminCheckOutDecision || null;
+            const isCheckInWaived = Boolean(r.isCheckInWaived ?? (adminCheckInDecision === 'waived') ?? existing.isCheckInWaived);
+            const isCheckOutWaived = Boolean(r.isCheckOutWaived ?? (adminCheckOutDecision === 'waived') ?? existing.isCheckOutWaived);
+            const isWaived = Boolean(r.isWaived ?? (adminDecision === 'waived') ?? (isCheckInWaived || isCheckOutWaived) ?? existing.isWaived);
+
+            const recordObj = {
+              status: r.status,
+              checkInTime,
+              checkOutTime,
+              rawCheckIn,
+              rawCheckOut,
+              note,
+              checkInNote,
+              checkOutNote,
+              adminNote,
+              adminCheckInNote,
+              adminCheckOutNote,
+              adminDecision,
+              adminCheckInDecision,
+              adminCheckOutDecision,
+              isWaived,
+              isCheckInWaived,
+              isCheckOutWaived,
+              historyLogs: r.historyLogs || existing.historyLogs || [],
+            };
+
+            const cleanEmpId = (r.userId || '').toString().trim();
+            const rawNum = cleanEmpId.replace(/^emp-0*/i, '');
+            map[`${cleanEmpId}_${r.date}`] = recordObj;
+            map[`${cleanEmpId.toLowerCase()}_${r.date}`] = recordObj;
+            if (rawNum) {
+              map[`${rawNum}_${r.date}`] = recordObj;
+              map[`emp-${rawNum}_${r.date}`] = recordObj;
+              map[`emp-${rawNum.padStart(2, '0')}_${r.date}`] = recordObj;
+            }
+            if (r.userName) {
+              map[`${r.userName.trim().toLowerCase()}_${r.date}`] = recordObj;
+            }
+          }
+        });
+        setMatrixOverrides(map);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(map));
+          } catch {}
+        }
+      } else if (Object.keys(localMap).length > 0) {
+        setMatrixOverrides(localMap);
+      }
+    } catch {}
+  }, [selectedMonth]);
+
+  useEffect(() => {
+    loadMatrixOverrides();
+    const handleUpdate = () => {
+      if (typeof window !== 'undefined') {
+        try {
+          const cached = localStorage.getItem(`ashley_matrix_overrides_${selectedMonth}`);
+          if (cached) {
+            setMatrixOverrides(JSON.parse(cached));
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener('ashley_attendance_updated', handleUpdate);
+    return () => window.removeEventListener('ashley_attendance_updated', handleUpdate);
+  }, [loadMatrixOverrides, selectedMonth]);
+
   const handleSaveNote = async (key: string) => {
     const updated = { ...adminNotes, [key]: tempNoteText.trim() };
     setAdminNotes(updated);
@@ -106,6 +222,43 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       localStorage.setItem(`ashley_admin_notes_${selectedMonth}`, JSON.stringify(updated));
     }
     setEditingNoteKey(null);
+
+    // Also update matrixOverrides so 31-day table gets the note!
+    const [empId, dateStr] = key.split('_');
+    if (empId && dateStr) {
+      const existing = matrixOverrides[key] || {};
+      const updatedOverride = {
+        ...existing,
+        checkOutNote: tempNoteText.trim(),
+        adminNote: tempNoteText.trim(),
+      };
+      const nextMap = { ...matrixOverrides, [key]: updatedOverride };
+      setMatrixOverrides(nextMap);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(nextMap));
+        } catch {}
+      }
+
+      try {
+        fetch('/api/attendance/admin/manual-record', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            records: [{
+              userId: empId,
+              date: dateStr,
+              checkOutNote: tempNoteText.trim(),
+              adminNote: tempNoteText.trim(),
+            }]
+          })
+        });
+      } catch {}
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('ashley_attendance_updated'));
+      }
+    }
 
     // Save to Supabase Cloud
     try {
@@ -122,6 +275,26 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       console.warn('Could not sync note to cloud:', err);
     }
   };
+
+  // Gather all live & prop attendance logs
+  const allCombinedLogs = useMemo(() => {
+    let list: any[] = [...(attendanceLogs || [])];
+    if (typeof window !== 'undefined') {
+      try {
+        const rawLive = localStorage.getItem('ashley_live_checkins');
+        if (rawLive) {
+          const liveList = JSON.parse(rawLive);
+          if (Array.isArray(liveList)) list = [...liveList, ...list];
+        }
+        const rawLocal = localStorage.getItem('ashley_local_attendanceLogs');
+        if (rawLocal) {
+          const localList = JSON.parse(rawLocal);
+          if (Array.isArray(localList)) list = [...list, ...localList];
+        }
+      } catch {}
+    }
+    return list;
+  }, [attendanceLogs]);
 
   // Form State for Manual Overtime Entry
   const [selectedEmpId, setSelectedEmpId] = useState<string>('');
@@ -146,7 +319,12 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
 
   const shiftEndMins = useMemo(() => timeToMinutes(shiftEndTime), [shiftEndTime]);
 
-  // Generate combined overtime records dynamically from Attendance Logs + Manual Entries + Google Sheet
+  const [yearStr, monthStr] = selectedMonth.split('-');
+  const yearNum = parseInt(yearStr || '2026', 10);
+  const monthNum = parseInt(monthStr || '08', 10);
+  const totalDaysInMonth = useMemo(() => getDaysInMonth(new Date(yearNum, monthNum - 1, 1)), [yearNum, monthNum]);
+
+  // Generate combined overtime records dynamically from 31-Day Attendance Matrix + Manual Entries
   const allOvertimeRecords = useMemo(() => {
     const recordsMap = new Map<string, {
       id: string;
@@ -163,88 +341,53 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       source: 'attendance' | 'manual' | 'sheet';
     }>();
 
-    // 1. Process Attendance Logs
-    const dateEmpGroups: Record<string, typeof attendanceLogs> = {};
-    (attendanceLogs || []).forEach(log => {
-      const logDate = log.date || (log.time ? log.time.split(' ')[0] : log.createdAt?.split('T')[0] || '');
-      if (!logDate) return;
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-      const logEmpId = (log.employeeId || log.userId || '').toString().trim().toLowerCase();
-      const logName = (log.name || log.userName || (log as any).employeeName || '').toString().trim().toLowerCase();
+    // 1. Process 31-Day Attendance Matrix for each active employee (> 8 hours rule)
+    activeEmployees.forEach(emp => {
+      for (let d = 1; d <= totalDaysInMonth; d++) {
+        const dStr = d < 10 ? `0${d}` : `${d}`;
+        const dayDateStr = `${selectedMonth}-${dStr}`;
+        const dateObj = new Date(yearNum, monthNum - 1, d);
+        const dayOfWeek = getDay(dateObj);
+        const isFri = dayOfWeek === 5;
+        const isFut = dayDateStr > todayStr;
+        const isTod = dayDateStr === todayStr;
 
-      const matchedEmp = activeEmployees.find(emp => {
-        const targetEmpId = (emp.id || '').toString().trim().toLowerCase();
-        const empCode = emp.employeeId ? `emp-${emp.employeeId}`.toLowerCase() : '';
-        const empName1 = (emp.fullName3Part || '').toString().trim().toLowerCase();
-        const empName2 = (emp.name || '').toString().trim().toLowerCase();
-
-        return (
-          (logEmpId && logEmpId === targetEmpId) ||
-          (empCode && logEmpId === empCode) ||
-          (logName && empName1 && (logName === empName1 || logName.includes(empName1) || empName1.includes(logName))) ||
-          (logName && empName2 && (logName === empName2 || logName.includes(empName2) || empName2.includes(logName)))
+        const resolved = resolveEmployeeDayAttendance(
+          emp,
+          { dayNum: d, dateStr: dayDateStr, isFriday: isFri, isFuture: isFut, isToday: isTod },
+          matrixOverrides,
+          allCombinedLogs
         );
-      });
 
-      if (matchedEmp) {
-        const groupKey = `${matchedEmp.id}_${logDate}`;
-        if (!dateEmpGroups[groupKey]) dateEmpGroups[groupKey] = [];
-        dateEmpGroups[groupKey].push(log);
-      }
-    });
+        if (resolved.status === 'Present' && resolved.workedHours > 8) {
+          const otHours = parseFloat((resolved.workedHours - 8).toFixed(1));
+          const noteKey = `${emp.id}_${dayDateStr}`;
+          const note = resolved.checkOutNote || resolved.checkInNote || resolved.adminNote || adminNotes[noteKey] || '';
+          const recKey = `${emp.id}_${dayDateStr}`;
 
-    Object.entries(dateEmpGroups).forEach(([groupKey, logs]) => {
-      const [empId, dateStr] = groupKey.split('_');
-      const emp = activeEmployees.find(e => e.id === empId);
-      if (!emp) return;
-
-      const checkInLog = logs.find(l => {
-        const t = (l.type || '').toLowerCase();
-        return t.includes('in') || t.includes('هاتن') || !!(l as any).checkInTime;
-      });
-      const checkOutLog = logs.find(l => {
-        const t = (l.type || '').toLowerCase();
-        return t.includes('out') || t.includes('دەرچوون') || t.includes('ڕۆشتن') || !!(l as any).checkOutTime;
-      });
-
-      const checkInTimeStr = checkInLog?.time 
-        ? (checkInLog.time.includes(' ') ? checkInLog.time.split(' ')[1]?.slice(0, 5) : checkInLog.time.slice(0, 5))
-        : (checkInLog as any)?.checkInTime?.slice(0, 5) || '08:00';
-
-      const checkOutTimeStr = checkOutLog?.time 
-        ? (checkOutLog.time.includes(' ') ? checkOutLog.time.split(' ')[1]?.slice(0, 5) : checkOutLog.time.slice(0, 5))
-        : (checkOutLog as any)?.checkOutTime?.slice(0, 5) || null;
-
-      if (checkOutTimeStr) {
-        const checkOutMins = timeToMinutes(checkOutTimeStr);
-        if (checkOutMins > shiftEndMins) {
-          const overtimeMins = checkOutMins - shiftEndMins;
-          const otHours = Math.round((overtimeMins / 60) * 10) / 10;
-          const noteKey = `${emp.id}_${dateStr}`;
-          const savedNote = adminNotes[noteKey] || (logs[0] as any)?.notes || '';
-
-          const recKey = `${emp.id}_${dateStr}`;
           recordsMap.set(recKey, {
-            id: `att_${emp.id}_${dateStr}`,
+            id: `att_${emp.id}_${dayDateStr}`,
             employeeId: emp.id,
             employeeName: emp.fullName3Part || emp.name || 'کارمەند',
             employeeRole: emp.role || 'کارمەند',
-            date: dateStr,
-            checkInTime: checkInTimeStr,
-            checkOutTime: checkOutTimeStr,
+            date: dayDateStr,
+            checkInTime: resolved.checkInTime || '08:00',
+            checkOutTime: resolved.checkOutTime || '17:00',
             hours: otHours,
             rate: hourlyRate,
             totalAmount: Math.round(otHours * hourlyRate),
-            note: savedNote,
+            note,
             source: 'attendance',
           });
         }
       }
     });
 
-    // 2. Process Manual / Stored Overtime Entries (Excluding any legacy seed records)
+    // 2. Process Manual / Stored Overtime Entries
     (overtime || []).forEach((r: any) => {
-      if (!r.date) return;
+      if (!r.date || !r.date.startsWith(selectedMonth)) return;
       if (r.id?.includes('sheet') || r.id?.includes('seed') || r.source === 'sheet') return;
       const emp = employees.find(e => e.id === (r.employeeId || r.userId));
       const hoursNum = parseFloat(r.hours || 0);
@@ -259,6 +402,8 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         employeeName: r.employeeName || emp?.fullName3Part || emp?.name || 'کارمەند',
         employeeRole: emp?.role || 'کارمەند',
         date: r.date,
+        checkInTime: r.checkInTime || null,
+        checkOutTime: r.checkOutTime || null,
         hours: hoursNum,
         rate: rateNum,
         totalAmount: Number(r.totalAmount || (hoursNum * rateNum)),
@@ -268,7 +413,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
     });
 
     return Array.from(recordsMap.values()).sort((a, b) => b.date.localeCompare(a.date));
-  }, [attendanceLogs, activeEmployees, overtime, shiftEndMins, hourlyRate, adminNotes, employees]);
+  }, [activeEmployees, totalDaysInMonth, selectedMonth, yearNum, monthNum, matrixOverrides, allCombinedLogs, adminNotes, overtime, hourlyRate, employees]);
 
   // Days in selected month for 1-31 Calendar bar
   const monthDaysList = useMemo(() => {
@@ -509,11 +654,20 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       exportToPDF({
         title: 'ڕاپۆرتی کاتی زیادەی ڕۆژانەی کارمەندان (Daily Overtime Report)',
         subtitle: 'کۆمپانیای مۆبیلیاتی ئاشڵی — تۆماری فەرمی کاتی زیادەی کارمەندان',
-        period: selectedDate,
+        period: `بەرواری ${selectedDate}`,
         columns: cols,
         data,
         fileName: `Ashley_Daily_Overtime_${selectedDate}`,
         settings,
+        reportType: 'overtime',
+        orientation: 'portrait',
+        documentCode: `ASH-OT-${selectedDate.replace(/-/g, '')}`,
+        summaryCards: [
+          { label: 'کارمەندانی خاوەن ئیزافە', value: `${dailyRecords.length} کارمەند`, color: '#2563eb', icon: '👥' },
+          { label: 'کۆی کاتژمێری ئیزافە', value: `${totalDailyHours.toFixed(1)} کاتژمێر`, color: '#d97706', icon: '⚡' },
+          { label: 'کۆی شایستەی پارە', value: `${totalDailyCost.toLocaleString()} IQD`, color: '#059669', icon: '💰' },
+          { label: 'بەرواری ڕۆژ', value: selectedDate, color: '#475569', icon: '📅' },
+        ],
         summaryText: `کۆی کارمەندانی خاوەن ئیزافە لەم بەروارەدا: ${dailyRecords.length} کارمەند • کۆی گشتی کاتژمێری ئیزافەی ڕۆژ: ${totalDailyHours.toFixed(1)} کاتژمێر • کۆی گشتی پارەی شایستەی ئیزافە بۆ خەرجکردن: ${totalDailyCost.toLocaleString()} دیناری عێراقی (IQD).`,
       });
     } else {
@@ -546,6 +700,15 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         data,
         fileName: `Ashley_Monthly_Overtime_${selectedMonth}`,
         settings,
+        reportType: 'overtime',
+        orientation: 'portrait',
+        documentCode: `ASH-OTM-${selectedMonth.replace(/-/g, '')}`,
+        summaryCards: [
+          { label: 'کارمەندانی خاوەن ئیزافە', value: `${monthlySummary.length} کارمەند`, color: '#2563eb', icon: '👥' },
+          { label: 'کۆی کاتژمێری مانگ', value: `${totalMonthlyHours.toFixed(1)} کاتژمێر`, color: '#d97706', icon: '⚡' },
+          { label: 'کۆی گشتی شایستەی ئیزافە', value: `${totalMonthlyCost.toLocaleString()} IQD`, color: '#059669', icon: '💰' },
+          { label: 'مانگی ژمێریاری', value: selectedMonth, color: '#475569', icon: '📅' },
+        ],
         summaryText: `کۆی کارمەندانی خاوەن ئیزافەی مانگ: ${monthlySummary.length} کارمەند • کۆی گشتی کاتژمێری زیادەی تۆمارکراو: ${totalMonthlyHours.toFixed(1)} کاتژمێر • کۆی گشتی پارەی شایستەی کاتی زیادەی مانگ: ${totalMonthlyCost.toLocaleString()} دیناری عێراقی (IQD).`,
       });
     }
