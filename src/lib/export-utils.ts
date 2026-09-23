@@ -496,16 +496,16 @@ export function exportToPDF(options: ExportReportOptions) {
       background-color: #ffffff !important;
     }
 
-    /* Subtotal Rows */
+    /* Subtotal Rows (Light Yellow Highlight) */
     tbody tr.tr-subtotal-row {
-      background-color: #f1f5f9 !important;
-      border-top: 1.5px dashed #94a3b8 !important;
-      border-bottom: 1.5px solid #cbd5e1 !important;
+      background-color: #fef9c3 !important;
+      border-top: 1.5px dashed #ca8a04 !important;
+      border-bottom: 1.5px solid #eab308 !important;
     }
     tbody tr.tr-subtotal-row td {
       font-weight: 800 !important;
-      color: #0f172a !important;
-      background-color: #f1f5f9 !important;
+      color: #713f12 !important;
+      background-color: #fef9c3 !important;
     }
 
     /* Grand Total Row */
@@ -537,9 +537,9 @@ export function exportToPDF(options: ExportReportOptions) {
       direction: ltr;
     }
     .badge-money-subtotal {
-      background: #d1fae5 !important;
-      color: #064e3b !important;
-      border-color: #059669 !important;
+      background: #fef08a !important;
+      color: #854d0e !important;
+      border: 1.5px solid #ca8a04 !important;
       font-size: 10.5px;
     }
     .badge-money-grand {
@@ -816,9 +816,9 @@ export function exportToPDF(options: ExportReportOptions) {
               const isGrandTotalRow = Object.values(row).some(
                 v => typeof v === 'string' && (v.includes('⭐') || v.includes('کۆی گشتی'))
               );
-              const isSubtotalRow = !isGrandTotalRow && Object.values(row).some(
-                v => typeof v === 'string' && (v.includes('📊 کۆی') || v.includes('کۆی مەسروفاتی'))
-              );
+              const isSubtotalRow = !isGrandTotalRow && (Boolean((row as any).isSubtotal) || Object.values(row).some(
+                v => typeof v === 'string' && (v.includes('📊 کۆی') || v.includes('کۆی مەسروفاتی') || v.includes('کۆی ئەو کارمەندە') || v.includes('کۆی ئەم کارمەندە'))
+              ));
 
               let trClass = 'tr-data-row';
               if (isGrandTotalRow) trClass = 'tr-grand-total-row';
@@ -826,7 +826,7 @@ export function exportToPDF(options: ExportReportOptions) {
 
               return `
           <tr class="${trClass}">
-            <td style="text-align: center; color: ${isGrandTotalRow ? '#ffffff' : '#64748b'}; font-family: monospace; font-weight: 800;">${isGrandTotalRow ? '★' : (isSubtotalRow ? '•' : index + 1)}</td>
+            <td style="text-align: center; color: ${isGrandTotalRow ? '#ffffff' : (isSubtotalRow ? '#713f12' : '#64748b')}; font-family: monospace; font-weight: 800;">${isGrandTotalRow ? '★' : (isSubtotalRow ? '•' : index + 1)}</td>
             ${columns
               .map(col => {
                 const val = row[col.key] !== undefined && row[col.key] !== null ? String(row[col.key]) : '-';

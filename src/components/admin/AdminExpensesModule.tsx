@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, Fragment } from 'react';
 import type { Employee } from '@/lib/types';
 import { useAppContext } from '@/context/app-provider';
 import { 
@@ -41,6 +41,54 @@ export interface ArchivedVoucher {
   itemCount: number;
   items: any[];
 }
+
+export interface EmployeeExpenseGroup {
+  employeeKey: string;
+  employeeName: string;
+  items: any[];
+  totalAmount: number;
+}
+
+export const resolveExpenseEmployeeName = (item: any, employeesList: Employee[] = []): string => {
+  if (item.employeeName && typeof item.employeeName === 'string' && item.employeeName.trim()) {
+    return item.employeeName.trim();
+  }
+  if (item.employeeId) {
+    const emp = employeesList.find(e => e.id === item.employeeId);
+    if (emp) return emp.fullName3Part || emp.name;
+    return item.employeeId;
+  }
+  return '🏢 مەسروفاتی گشتی کۆگا';
+};
+
+export const groupExpensesByEmployee = (items: any[] = [], employeesList: Employee[] = []): EmployeeExpenseGroup[] => {
+  const groupMap = new Map<string, EmployeeExpenseGroup>();
+
+  items.forEach(item => {
+    const empName = resolveExpenseEmployeeName(item, employeesList);
+    const key = item.employeeId || empName;
+
+    if (!groupMap.has(key)) {
+      groupMap.set(key, {
+        employeeKey: key,
+        employeeName: empName,
+        items: [],
+        totalAmount: 0,
+      });
+    }
+
+    const group = groupMap.get(key)!;
+    group.items.push(item);
+    group.totalAmount += Number(item.amount || item.totalAmount || 0);
+  });
+
+  // Sort items inside each group by date ascending
+  groupMap.forEach(group => {
+    group.items.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  });
+
+  return Array.from(groupMap.values());
+};
 
 interface AdminExpensesModuleProps {
   employees?: Employee[];
@@ -513,21 +561,40 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       { header: 'تێبینی', key: 'note', align: 'right' },
     ];
 
-    const sorted = [...monthlyExpensesList].sort((a: any, b: any) => (a.date || '').localeCompare(b.date || ''));
-    const data: Record<string, any>[] = sorted.map((item: any, idx: number) => {
-      const emp = employees.find(e => e.id === item.employeeId);
-      const empName = item.employeeName || (emp ? (emp.fullName3Part || emp.name) : (item.employeeId ? item.employeeId : '🏢 مەسروفاتی گشتی کۆگا'));
-      const route = (item.from || item.to) ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—';
-      return {
-        index: idx + 1,
-        date: item.date || '—',
-        empName,
-        type: typeLabels[item.type] || item.category || 'تەکسی',
-        route,
-        trip: item.trip || '—',
-        amount: `${Number(item.amount || 0).toLocaleString()} IQD`,
-        note: item.note || item.reason || '—',
-      };
+    const groups = groupExpensesByEmployee(monthlyExpensesList, employees);
+    const data: Record<string, any>[] = [];
+    let globalIdx = 0;
+
+    groups.forEach(group => {
+      group.items.forEach(item => {
+        globalIdx += 1;
+        const route = (item.from || item.to) ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—';
+        data.push({
+          index: globalIdx,
+          date: item.date || '—',
+          empName: group.employeeName,
+          type: typeLabels[item.type] || item.category || 'تەکسی',
+          route,
+          trip: item.trip || '—',
+          amount: `${Number(item.amount || 0).toLocaleString()} IQD`,
+          note: item.note || item.reason || '—',
+        });
+      });
+
+      // 🟡 Highlighted Subtotal Row for Employee with Multiple Expenses
+      if (group.items.length > 1) {
+        data.push({
+          isSubtotal: true,
+          index: '•',
+          date: '—',
+          empName: `کۆی ئەو کارمەندە (${group.employeeName})`,
+          type: '—',
+          route: '—',
+          trip: `${group.items.length} پسوولە`,
+          amount: `${group.totalAmount.toLocaleString()} IQD`,
+          note: '—',
+        });
+      }
     });
 
     data.push({
@@ -719,21 +786,40 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       { header: 'تێبینی', key: 'note' },
     ];
 
-    const sorted = [...monthlyExpensesList].sort((a: any, b: any) => (a.date || '').localeCompare(b.date || ''));
-    const data = sorted.map((item: any, idx: number) => {
-      const emp = employees.find(e => e.id === item.employeeId);
-      const empName = item.employeeName || (emp ? (emp.fullName3Part || emp.name) : (item.employeeId ? item.employeeId : 'مەسروفاتی گشتی کارگە'));
-      return {
-        index: idx + 1,
-        date: item.date || '—',
-        empName,
-        type: typeLabels[item.type] || item.category || 'تەکسی',
-        from: item.from || '—',
-        to: item.to || '—',
-        trip: item.trip || '—',
-        amount: Number(item.amount || 0),
-        note: item.note || item.reason || '—',
-      };
+    const groups = groupExpensesByEmployee(monthlyExpensesList, employees);
+    const data: Record<string, any>[] = [];
+    let globalIdx = 0;
+
+    groups.forEach(group => {
+      group.items.forEach(item => {
+        globalIdx += 1;
+        data.push({
+          index: globalIdx,
+          date: item.date || '—',
+          empName: group.employeeName,
+          type: typeLabels[item.type] || item.category || 'تەکسی',
+          from: item.from || '—',
+          to: item.to || '—',
+          trip: item.trip || '—',
+          amount: Number(item.amount || 0),
+          note: item.note || item.reason || '—',
+        });
+      });
+
+      // 🟡 Subtotal Row for Employee with Multiple Expenses
+      if (group.items.length > 1) {
+        data.push({
+          index: '',
+          date: '—',
+          empName: `کۆی ئەو کارمەندە (${group.employeeName})`,
+          type: '—',
+          from: '',
+          to: '',
+          trip: `${group.items.length} پسوولە`,
+          amount: group.totalAmount,
+          note: '',
+        });
+      }
     });
 
     data.push({
@@ -1163,16 +1249,38 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         { header: 'تێبینی', key: 'note', align: 'right' },
       ];
 
-      const data: Record<string, any>[] = voucher.items.map((e: any) => ({
-        empName: e.employeeName || employees.find(emp => emp.id === e.employeeId)?.fullName3Part || 'مەسروفاتی گشتی کارگە',
-        date: e.date,
-        type: typeLabels[e.type] || e.title || e.category || 'تەکسی',
-        from: e.from || '—',
-        to: e.to || '—',
-        trip: e.trip || '—',
-        amount: `${Number(e.amount || 0).toLocaleString()} IQD`,
-        note: e.note || '—',
-      }));
+      const groups = groupExpensesByEmployee(voucher.items, employees);
+      const data: Record<string, any>[] = [];
+
+      groups.forEach(group => {
+        group.items.forEach((e: any) => {
+          data.push({
+            empName: group.employeeName,
+            date: e.date,
+            type: typeLabels[e.type] || e.title || e.category || 'تەکسی',
+            from: e.from || '—',
+            to: e.to || '—',
+            trip: e.trip || '—',
+            amount: `${Number(e.amount || 0).toLocaleString()} IQD`,
+            note: e.note || '—',
+          });
+        });
+
+        // 🟡 Highlighted Subtotal Row for Employee with Multiple Expenses
+        if (group.items.length > 1) {
+          data.push({
+            isSubtotal: true,
+            empName: `کۆی ئەو کارمەندە (${group.employeeName})`,
+            date: '—',
+            type: '—',
+            from: '—',
+            to: '—',
+            trip: `${group.items.length} پسوولە`,
+            amount: `${group.totalAmount.toLocaleString()} IQD`,
+            note: '—',
+          });
+        }
+      });
 
       // Single Grand Total Row at the bottom
       data.push({
@@ -1864,30 +1972,62 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                      {monthlyExpensesList.map((item: any, idx: number) => {
-                        const emp = employees.find(e => e.id === item.employeeId);
-                        const empName = item.employeeName || (emp ? (emp.fullName3Part || emp.name) : (item.employeeId ? item.employeeId : '🏢 مەسروفاتی گشتی کۆگا'));
-                        return (
-                          <tr key={item.id || idx} className="hover:bg-slate-50/70 dark:hover:bg-white/5 transition-colors">
-                            <td className="p-3 text-center font-mono text-slate-400 font-bold">{idx + 1}</td>
-                            <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">📅 {item.date}</td>
-                            <td className="p-3 font-bold text-slate-900 dark:text-white">{empName}</td>
-                            <td className="p-3 text-center">
-                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeColors[item.type as keyof typeof typeColors]?.bg || ''} ${typeColors[item.type as keyof typeof typeColors]?.text || ''} ${typeColors[item.type as keyof typeof typeColors]?.border || ''}`}>
-                                {typeLabels[item.type] || item.category || 'تەکسی'}
-                              </span>
-                            </td>
-                            <td className="p-3 text-slate-600 dark:text-slate-300">
-                              {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—'}
-                            </td>
-                            <td className="p-3 text-center font-mono text-slate-500">{item.trip || '—'}</td>
-                            <td className="p-3 text-center font-mono font-bold text-blue-600 dark:text-blue-400">
-                              {Number(item.amount || 0).toLocaleString()} IQD
-                            </td>
-                            <td className="p-3 text-slate-500">{item.note || item.reason || '—'}</td>
-                          </tr>
-                        );
-                      })}
+                      {(() => {
+                        const groups = groupExpensesByEmployee(monthlyExpensesList, employees);
+                        let globalIdx = 0;
+                        return groups.map((group) => {
+                          const hasMultiple = group.items.length > 1;
+                          return (
+                            <Fragment key={group.employeeKey}>
+                              {group.items.map((item: any) => {
+                                globalIdx += 1;
+                                const currentIdx = globalIdx;
+                                return (
+                                  <tr key={item.id || currentIdx} className="hover:bg-slate-50/70 dark:hover:bg-white/5 transition-colors">
+                                    <td className="p-3 text-center font-mono text-slate-400 font-bold">{currentIdx}</td>
+                                    <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">📅 {item.date}</td>
+                                    <td className="p-3 font-bold text-slate-900 dark:text-white">{group.employeeName}</td>
+                                    <td className="p-3 text-center">
+                                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeColors[item.type as keyof typeof typeColors]?.bg || ''} ${typeColors[item.type as keyof typeof typeColors]?.text || ''} ${typeColors[item.type as keyof typeof typeColors]?.border || ''}`}>
+                                        {typeLabels[item.type] || item.category || 'تەکسی'}
+                                      </span>
+                                    </td>
+                                    <td className="p-3 text-slate-600 dark:text-slate-300">
+                                      {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—'}
+                                    </td>
+                                    <td className="p-3 text-center font-mono text-slate-500">{item.trip || '—'}</td>
+                                    <td className="p-3 text-center font-mono font-bold text-blue-600 dark:text-blue-400">
+                                      {Number(item.amount || 0).toLocaleString()} IQD
+                                    </td>
+                                    <td className="p-3 text-slate-500">{item.note || item.reason || '—'}</td>
+                                  </tr>
+                                );
+                              })}
+
+                              {/* 🟡 Highlighted Subtotal Row for Employee with Multiple Expenses */}
+                              {hasMultiple && (
+                                <tr className="bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border-y-2 border-amber-300 dark:border-amber-700 font-bold print:bg-[#fef9c3] print:text-[#713f12]">
+                                  <td colSpan={5} className="p-3 text-right">
+                                    <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
+                                      <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
+                                      <span>کۆی ئەو کارمەندە ({group.employeeName})</span>
+                                    </div>
+                                  </td>
+                                  <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
+                                    {group.items.length} پسوولە
+                                  </td>
+                                  <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-100 text-xs">
+                                    {group.totalAmount.toLocaleString()} IQD
+                                  </td>
+                                  <td className="p-3 text-amber-800 dark:text-amber-300 text-xs">
+                                    —
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        });
+                      })()}
                       <tr className="bg-slate-900 text-white font-black">
                         <td colSpan={6} className="p-3 text-right">
                           کۆی گشتی مەسروفاتی مانگی ({selectedMonth}):
@@ -2610,66 +2750,137 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                    {draftItems.map((item, idx) => (
-                      <tr 
-                        key={item.id} 
-                        className={`transition-colors ${
-                          editingDraftItemId === item.id 
-                            ? 'bg-amber-50/80 dark:bg-amber-950/30' 
-                            : 'hover:bg-slate-50/70 dark:hover:bg-white/5'
-                        }`}
-                      >
-                        <td className="p-3 text-center font-mono text-slate-400 font-bold">{idx + 1}</td>
-                        <td className="p-3 font-bold text-slate-900 dark:text-white">{item.employeeName || 'گشتی'}</td>
-                        <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">📅 {item.date}</td>
-                        {activeTab === 'expenses' && (
-                          <td className="p-3 text-center">
-                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeColors[item.type as keyof typeof typeColors]?.bg} ${typeColors[item.type as keyof typeof typeColors]?.text} ${typeColors[item.type as keyof typeof typeColors]?.border}`}>
-                              {typeLabels[item.type] || item.category || 'تەکسی'}
-                            </span>
-                          </td>
-                        )}
-                        {activeTab === 'expenses' && (
-                          <td className="p-3 text-slate-600 dark:text-slate-300">
-                            {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—'}
-                          </td>
-                        )}
-                        {activeTab === 'expenses' && (
-                          <td className="p-3 text-center font-mono text-slate-500">{item.trip || '—'}</td>
-                        )}
-                        <td className="p-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          {Number(item.amount || item.totalAmount || 0).toLocaleString()} IQD
-                        </td>
-                        <td className="p-3 text-slate-500">{item.note || item.reason || '—'}</td>
-                        <td className="p-3 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {/* ✏️ EDIT DRAFT ITEM */}
-                            <button
-                              type="button"
-                              onClick={() => handleStartEditDraftItem(item)}
-                              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                                editingDraftItemId === item.id 
-                                  ? 'bg-amber-500 text-white shadow-2xs' 
-                                  : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'
-                              }`}
-                              title="دەستکاریکردنی ئەم پسوولەیە"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
+                    {activeTab === 'expenses' ? (
+                      (() => {
+                        const groups = groupExpensesByEmployee(draftItems, employees);
+                        let globalIdx = 0;
+                        return groups.map((group) => {
+                          const hasMultiple = group.items.length > 1;
+                          return (
+                            <Fragment key={group.employeeKey}>
+                              {group.items.map((item: any) => {
+                                globalIdx += 1;
+                                const currentIdx = globalIdx;
+                                return (
+                                  <tr 
+                                    key={item.id || currentIdx} 
+                                    className={`transition-colors ${
+                                      editingDraftItemId === item.id 
+                                        ? 'bg-amber-50/80 dark:bg-amber-950/30' 
+                                        : 'hover:bg-slate-50/70 dark:hover:bg-white/5'
+                                    }`}
+                                  >
+                                    <td className="p-3 text-center font-mono text-slate-400 font-bold">{currentIdx}</td>
+                                    <td className="p-3 font-bold text-slate-900 dark:text-white">{group.employeeName}</td>
+                                    <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">📅 {item.date}</td>
+                                    <td className="p-3 text-center">
+                                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeColors[item.type as keyof typeof typeColors]?.bg} ${typeColors[item.type as keyof typeof typeColors]?.text} ${typeColors[item.type as keyof typeof typeColors]?.border}`}>
+                                        {typeLabels[item.type] || item.category || 'تەکسی'}
+                                      </span>
+                                    </td>
+                                    <td className="p-3 text-slate-600 dark:text-slate-300">
+                                      {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—'}
+                                    </td>
+                                    <td className="p-3 text-center font-mono text-slate-500">{item.trip || '—'}</td>
+                                    <td className="p-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                      {Number(item.amount || item.totalAmount || 0).toLocaleString()} IQD
+                                    </td>
+                                    <td className="p-3 text-slate-500">{item.note || item.reason || '—'}</td>
+                                    <td className="p-3 text-center">
+                                      <div className="flex items-center justify-center gap-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleStartEditDraftItem(item)}
+                                          className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                                            editingDraftItemId === item.id 
+                                              ? 'bg-amber-500 text-white shadow-2xs' 
+                                              : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                                          }`}
+                                          title="دەستکاریکردنی ئەم پسوولەیە"
+                                        >
+                                          <Edit3 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveDraftItem(item.id)}
+                                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all cursor-pointer"
+                                          title="سڕینەوە لەم لیستەدا"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
 
-                            {/* 🗑️ REMOVE ITEM */}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveDraftItem(item.id)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all cursor-pointer"
-                              title="سڕینەوە لەم لیستەدا"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              {/* 🟡 Highlighted Subtotal Row for Employee with Multiple Expenses */}
+                              {hasMultiple && (
+                                <tr className="bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border-y-2 border-amber-300 dark:border-amber-700 font-bold print:bg-[#fef9c3] print:text-[#713f12]">
+                                  <td colSpan={5} className="p-3 text-right">
+                                    <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
+                                      <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
+                                      <span>کۆی ئەو کارمەندە ({group.employeeName})</span>
+                                    </div>
+                                  </td>
+                                  <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
+                                    {group.items.length} پسوولە
+                                  </td>
+                                  <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-100 text-xs">
+                                    {group.totalAmount.toLocaleString()} IQD
+                                  </td>
+                                  <td className="p-3 text-amber-800 dark:text-amber-300 text-xs">—</td>
+                                  <td className="p-3 text-center text-amber-800 dark:text-amber-300 text-xs">—</td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        });
+                      })()
+                    ) : (
+                      draftItems.map((item, idx) => (
+                        <tr 
+                          key={item.id} 
+                          className={`transition-colors ${
+                            editingDraftItemId === item.id 
+                              ? 'bg-amber-50/80 dark:bg-amber-950/30' 
+                              : 'hover:bg-slate-50/70 dark:hover:bg-white/5'
+                          }`}
+                        >
+                          <td className="p-3 text-center font-mono text-slate-400 font-bold">{idx + 1}</td>
+                          <td className="p-3 font-bold text-slate-900 dark:text-white">{item.employeeName || 'گشتی'}</td>
+                          <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">📅 {item.date}</td>
+                          <td className="p-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            {Number(item.amount || item.totalAmount || 0).toLocaleString()} IQD
+                          </td>
+                          <td className="p-3 text-slate-500">{item.note || item.reason || '—'}</td>
+                          <td className="p-3 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditDraftItem(item)}
+                                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                                  editingDraftItemId === item.id 
+                                    ? 'bg-amber-500 text-white shadow-2xs' 
+                                    : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                                }`}
+                                title="دەستکاریکردنی ئەم پسوولەیە"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveDraftItem(item.id)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all cursor-pointer"
+                                title="سڕینەوە لەم لیستەدا"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -2795,32 +3006,76 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                  {selectedVoucher.items.map((item: any, idx: number) => (
-                    <tr key={item.id || idx} className="hover:bg-slate-50/70 dark:hover:bg-white/5">
-                      <td className="p-3 text-center font-mono text-slate-400 font-bold">{idx + 1}</td>
-                      <td className="p-3 font-bold text-slate-900 dark:text-white">{item.employeeName || 'گشتی'}</td>
-                      <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">📅 {item.date}</td>
-                      {selectedVoucher.type === 'expenses' && (
-                        <td className="p-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeColors[item.type as keyof typeof typeColors]?.bg || ''} ${typeColors[item.type as keyof typeof typeColors]?.text || ''} ${typeColors[item.type as keyof typeof typeColors]?.border || ''}`}>
-                            {typeLabels[item.type] || item.category || 'تەکسی'}
-                          </span>
+                  {selectedVoucher.type === 'expenses' ? (
+                    (() => {
+                      const groups = groupExpensesByEmployee(selectedVoucher.items, employees);
+                      let globalIdx = 0;
+                      return groups.map((group) => {
+                        const hasMultiple = group.items.length > 1;
+                        return (
+                          <Fragment key={group.employeeKey}>
+                            {group.items.map((item: any) => {
+                              globalIdx += 1;
+                              const currentIdx = globalIdx;
+                              return (
+                                <tr key={item.id || currentIdx} className="hover:bg-slate-50/70 dark:hover:bg-white/5">
+                                  <td className="p-3 text-center font-mono text-slate-400 font-bold">{currentIdx}</td>
+                                  <td className="p-3 font-bold text-slate-900 dark:text-white">{group.employeeName}</td>
+                                  <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">📅 {item.date}</td>
+                                  <td className="p-3 text-center">
+                                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeColors[item.type as keyof typeof typeColors]?.bg || ''} ${typeColors[item.type as keyof typeof typeColors]?.text || ''} ${typeColors[item.type as keyof typeof typeColors]?.border || ''}`}>
+                                      {typeLabels[item.type] || item.category || 'تەکسی'}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 text-slate-600 dark:text-slate-300">
+                                    {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—'}
+                                  </td>
+                                  <td className="p-3 text-center font-mono text-slate-500">{item.trip || '—'}</td>
+                                  <td className="p-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                    {Number(item.amount || item.totalAmount || 0).toLocaleString()} IQD
+                                  </td>
+                                  <td className="p-3 text-slate-500">{item.note || item.reason || '—'}</td>
+                                </tr>
+                              );
+                            })}
+
+                            {/* 🟡 Highlighted Subtotal Row for Employee with Multiple Expenses */}
+                            {hasMultiple && (
+                              <tr className="bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border-y-2 border-amber-300 dark:border-amber-700 font-bold print:bg-[#fef9c3] print:text-[#713f12]">
+                                <td colSpan={5} className="p-3 text-right">
+                                  <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
+                                    <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
+                                    <span>کۆی ئەو کارمەندە ({group.employeeName})</span>
+                                  </div>
+                                </td>
+                                <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
+                                  {group.items.length} پسوولە
+                                </td>
+                                <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-100 text-xs">
+                                  {group.totalAmount.toLocaleString()} IQD
+                                </td>
+                                <td className="p-3 text-amber-800 dark:text-amber-300 text-xs">
+                                  —
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      });
+                    })()
+                  ) : (
+                    selectedVoucher.items.map((item: any, idx: number) => (
+                      <tr key={item.id || idx} className="hover:bg-slate-50/70 dark:hover:bg-white/5">
+                        <td className="p-3 text-center font-mono text-slate-400 font-bold">{idx + 1}</td>
+                        <td className="p-3 font-bold text-slate-900 dark:text-white">{item.employeeName || 'گشتی'}</td>
+                        <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">📅 {item.date}</td>
+                        <td className="p-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {Number(item.amount || item.totalAmount || 0).toLocaleString()} IQD
                         </td>
-                      )}
-                      {selectedVoucher.type === 'expenses' && (
-                        <td className="p-3 text-slate-600 dark:text-slate-300">
-                          {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—'}
-                        </td>
-                      )}
-                      {selectedVoucher.type === 'expenses' && (
-                        <td className="p-3 text-center font-mono text-slate-500">{item.trip || '—'}</td>
-                      )}
-                      <td className="p-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                        {Number(item.amount || item.totalAmount || 0).toLocaleString()} IQD
-                      </td>
-                      <td className="p-3 text-slate-500">{item.note || item.reason || '—'}</td>
-                    </tr>
-                  ))}
+                        <td className="p-3 text-slate-500">{item.note || item.reason || '—'}</td>
+                      </tr>
+                    ))
+                  )}
                   
                   {/* Final Grand Total Row */}
                   <tr className="bg-slate-900 text-white font-black">
