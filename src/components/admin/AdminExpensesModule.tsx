@@ -581,8 +581,8 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         });
       });
 
-      // 🟡 Highlighted Subtotal Row for Employee with Multiple Expenses
-      if (group.items.length > 1) {
+      // 🟡 Highlighted Subtotal Row for Employee
+      if (group.items.length > 0) {
         data.push({
           isSubtotal: true,
           index: '•',
@@ -806,8 +806,8 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         });
       });
 
-      // 🟡 Subtotal Row for Employee with Multiple Expenses
-      if (group.items.length > 1) {
+      // 🟡 Subtotal Row for Employee
+      if (group.items.length > 0) {
         data.push({
           index: '',
           date: '—',
@@ -1266,8 +1266,8 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
           });
         });
 
-        // 🟡 Highlighted Subtotal Row for Employee with Multiple Expenses
-        if (group.items.length > 1) {
+        // 🟡 Highlighted Subtotal Row for Employee
+        if (group.items.length > 0) {
           data.push({
             isSubtotal: true,
             empName: `کۆی ئەو کارمەندە (${group.employeeName})`,
@@ -1976,7 +1976,6 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                         const groups = groupExpensesByEmployee(monthlyExpensesList, employees);
                         let globalIdx = 0;
                         return groups.map((group) => {
-                          const hasMultiple = group.items.length > 1;
                           return (
                             <Fragment key={group.employeeKey}>
                               {group.items.map((item: any) => {
@@ -2004,26 +2003,24 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                                 );
                               })}
 
-                              {/* 🟡 Highlighted Subtotal Row for Employee with Multiple Expenses */}
-                              {hasMultiple && (
-                                <tr className="bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border-y-2 border-amber-300 dark:border-amber-700 font-bold print:bg-[#fef9c3] print:text-[#713f12]">
-                                  <td colSpan={5} className="p-3 text-right">
-                                    <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
-                                      <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
-                                      <span>کۆی ئەو کارمەندە ({group.employeeName})</span>
-                                    </div>
-                                  </td>
-                                  <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
-                                    {group.items.length} پسوولە
-                                  </td>
-                                  <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-100 text-xs">
-                                    {group.totalAmount.toLocaleString()} IQD
-                                  </td>
-                                  <td className="p-3 text-amber-800 dark:text-amber-300 text-xs">
-                                    —
-                                  </td>
-                                </tr>
-                              )}
+                              {/* 🟡 Highlighted Subtotal Row for Employee */}
+                              <tr className="bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border-y-2 border-amber-300 dark:border-amber-700 font-bold print:bg-[#fef9c3] print:text-[#713f12]">
+                                <td colSpan={5} className="p-3 text-right">
+                                  <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
+                                    <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
+                                    <span>کۆی ئەو کارمەندە ({group.employeeName})</span>
+                                  </div>
+                                </td>
+                                <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
+                                  {group.items.length} پسوولە
+                                </td>
+                                <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-100 text-xs">
+                                  {group.totalAmount.toLocaleString()} IQD
+                                </td>
+                                <td className="p-3 text-amber-800 dark:text-amber-300 text-xs">
+                                  —
+                                </td>
+                              </tr>
                             </Fragment>
                           );
                         });
@@ -2755,7 +2752,6 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                         const groups = groupExpensesByEmployee(draftItems, employees);
                         let globalIdx = 0;
                         return groups.map((group) => {
-                          const hasMultiple = group.items.length > 1;
                           return (
                             <Fragment key={group.employeeKey}>
                               {group.items.map((item: any) => {
@@ -2814,25 +2810,23 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                                 );
                               })}
 
-                              {/* 🟡 Highlighted Subtotal Row for Employee with Multiple Expenses */}
-                              {hasMultiple && (
-                                <tr className="bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border-y-2 border-amber-300 dark:border-amber-700 font-bold print:bg-[#fef9c3] print:text-[#713f12]">
-                                  <td colSpan={5} className="p-3 text-right">
-                                    <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
-                                      <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
-                                      <span>کۆی ئەو کارمەندە ({group.employeeName})</span>
-                                    </div>
-                                  </td>
-                                  <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
-                                    {group.items.length} پسوولە
-                                  </td>
-                                  <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-100 text-xs">
-                                    {group.totalAmount.toLocaleString()} IQD
-                                  </td>
-                                  <td className="p-3 text-amber-800 dark:text-amber-300 text-xs">—</td>
-                                  <td className="p-3 text-center text-amber-800 dark:text-amber-300 text-xs">—</td>
-                                </tr>
-                              )}
+                              {/* 🟡 Highlighted Subtotal Row for Employee */}
+                              <tr className="bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border-y-2 border-amber-300 dark:border-amber-700 font-bold print:bg-[#fef9c3] print:text-[#713f12]">
+                                <td colSpan={5} className="p-3 text-right">
+                                  <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
+                                    <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
+                                    <span>کۆی ئەو کارمەندە ({group.employeeName})</span>
+                                  </div>
+                                </td>
+                                <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
+                                  {group.items.length} پسوولە
+                                </td>
+                                <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-100 text-xs">
+                                  {group.totalAmount.toLocaleString()} IQD
+                                </td>
+                                <td className="p-3 text-amber-800 dark:text-amber-300 text-xs">—</td>
+                                <td className="p-3 text-center text-amber-800 dark:text-amber-300 text-xs">—</td>
+                              </tr>
                             </Fragment>
                           );
                         });
@@ -3011,7 +3005,6 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                       const groups = groupExpensesByEmployee(selectedVoucher.items, employees);
                       let globalIdx = 0;
                       return groups.map((group) => {
-                        const hasMultiple = group.items.length > 1;
                         return (
                           <Fragment key={group.employeeKey}>
                             {group.items.map((item: any) => {
@@ -3039,26 +3032,24 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                               );
                             })}
 
-                            {/* 🟡 Highlighted Subtotal Row for Employee with Multiple Expenses */}
-                            {hasMultiple && (
-                              <tr className="bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border-y-2 border-amber-300 dark:border-amber-700 font-bold print:bg-[#fef9c3] print:text-[#713f12]">
-                                <td colSpan={5} className="p-3 text-right">
-                                  <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
-                                    <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
-                                    <span>کۆی ئەو کارمەندە ({group.employeeName})</span>
-                                  </div>
-                                </td>
-                                <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
-                                  {group.items.length} پسوولە
-                                </td>
-                                <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-100 text-xs">
-                                  {group.totalAmount.toLocaleString()} IQD
-                                </td>
-                                <td className="p-3 text-amber-800 dark:text-amber-300 text-xs">
-                                  —
-                                </td>
-                              </tr>
-                            )}
+                            {/* 🟡 Highlighted Subtotal Row for Employee */}
+                            <tr className="bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border-y-2 border-amber-300 dark:border-amber-700 font-bold print:bg-[#fef9c3] print:text-[#713f12]">
+                              <td colSpan={5} className="p-3 text-right">
+                                <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
+                                  <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
+                                  <span>کۆی ئەو کارمەندە ({group.employeeName})</span>
+                                </div>
+                              </td>
+                              <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
+                                {group.items.length} پسوولە
+                              </td>
+                              <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-100 text-xs">
+                                {group.totalAmount.toLocaleString()} IQD
+                              </td>
+                              <td className="p-3 text-amber-800 dark:text-amber-300 text-xs">
+                                —
+                              </td>
+                            </tr>
                           </Fragment>
                         );
                       });
