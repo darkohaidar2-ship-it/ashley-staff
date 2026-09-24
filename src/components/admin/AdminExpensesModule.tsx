@@ -138,6 +138,136 @@ export const PRESET_WITHDRAWAL_REASONS: string[] = [
   'پێشینەی نەخۆشی / چارەسەر',
 ];
 
+// -------------------------------------------------------------
+// 🧠 SMART AUTOCOMPLETE & FREQUENCY-BASED TEXT PREDICTION
+// -------------------------------------------------------------
+export interface FieldFrequencyMap {
+  from: Record<string, number>;
+  to: Record<string, number>;
+  trip: Record<string, number>;
+  note: Record<string, number>;
+}
+
+export const FIELD_HISTORY_KEY = 'ashley_expenses_field_frequency_v1';
+
+export const normalizeKurdish = (str: string): string => {
+  if (!str) return '';
+  return str
+    .replace(/[\u0640]/g, '') // remove tatweel / kashida (ـ)
+    .replace(/[\u200B-\u200D\uFEFF]/g, '') // remove zero-width chars
+    .replace(/[ي]/g, 'ی') // normalize arabic yeh to kurdish yeh
+    .replace(/[ك]/g, 'ک') // normalize arabic kaf to kurdish kaf
+    .replace(/[ھ]/g, 'ه') // normalize heh
+    .trim()
+    .toLowerCase();
+};
+
+export const getTopSuggestion = (value: string, historyMap: Record<string, number> = {}): string | null => {
+  const query = normalizeKurdish(value);
+  if (!query || query.length === 0) return null;
+
+  const matches: { text: string; count: number }[] = [];
+
+  for (const [text, count] of Object.entries(historyMap || {})) {
+    const norm = normalizeKurdish(text);
+    if (norm.startsWith(query) && norm !== query) {
+      matches.push({ text, count });
+    }
+  }
+
+  if (matches.length === 0) return null;
+
+  matches.sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    return a.text.length - b.text.length;
+  });
+
+  return matches[0].text;
+};
+
+interface SmartSuggestInputProps {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  historyMap: Record<string, number>;
+  placeholder?: string;
+  className?: string;
+  inputRef?: any;
+  autoFocus?: boolean;
+  subLabel?: React.ReactNode;
+}
+
+export function SmartSuggestInput({
+  label,
+  value,
+  onChange,
+  historyMap,
+  placeholder,
+  className = '',
+  inputRef,
+  autoFocus,
+  subLabel,
+}: SmartSuggestInputProps) {
+  const topSuggestion = useMemo(() => getTopSuggestion(value, historyMap), [value, historyMap]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Tab' && topSuggestion) {
+      e.preventDefault();
+      onChange(topSuggestion);
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+          {label} {subLabel}
+        </label>
+        {topSuggestion && (
+          <button
+            type="button"
+            onClick={() => onChange(topSuggestion)}
+            className="text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800 transition-all flex items-center gap-1 cursor-pointer animate-in fade-in"
+            title="کلیک بکە یان Tab دابگرە بۆ دانانی ئەم پێشنیارە"
+          >
+            <Sparkles className="w-3 h-3 text-amber-500 animate-pulse" />
+            <span className="text-[10px] text-blue-400 font-mono">Tab ↹</span>
+            <span className="opacity-75">پێشنیار:</span>
+            <span className="underline font-black">{topSuggestion}</span>
+          </button>
+        )}
+      </div>
+
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          className={`w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-[#2c2c2e] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium ${className}`}
+        />
+
+        {topSuggestion && (
+          <div
+            onClick={() => onChange(topSuggestion)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-900/60 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-[10px] font-bold cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-800 transition-all shadow-2xs select-none"
+            title="کلیک بکە یان Tab دابگرە بۆ قبوڵکردنی ئەم پێشنیارە"
+          >
+            <span className="opacity-75 text-[9px]">💡</span>
+            <span className="font-black text-blue-800 dark:text-white">{topSuggestion}</span>
+            <kbd className="font-mono text-[9px] bg-white dark:bg-[#1c1c1e] text-blue-600 dark:text-blue-300 px-1 py-0.2 rounded border border-blue-200 dark:border-white/10 shadow-3xs">
+              Tab ↹
+            </kbd>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface AdminExpensesModuleProps {
   employees?: Employee[];
 }
@@ -278,6 +408,109 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
 
   // 🔍 Selected Reason Filter for Monthly Analytics breakdown
   const [selectedReasonFilter, setSelectedReasonFilter] = useState<string | null>(null);
+
+  // 🧠 Field History & Frequency Storage for Smart Autocomplete
+  const [fieldHistory, setFieldHistory] = useState<FieldFrequencyMap>(() => {
+    const initial: FieldFrequencyMap = {
+      from: {
+        'کارگەی ئاشڵی': 20,
+        'کۆگای ئاشڵی': 15,
+        'کۆگا': 12,
+        'سلێمانی': 10,
+        'هوانە': 8,
+        'نقڵ': 7,
+      },
+      to: {
+        'هوانە': 25,
+        'بازاڕی سلێمانی': 18,
+        'کۆگای ئاشڵی': 15,
+        'شوێنی کڕیار': 12,
+        'کارگەی ئاشڵی': 10,
+        'نقڵ': 8,
+        'کۆگا': 7,
+      },
+      trip: {
+        '1': 30,
+        '2': 15,
+        'چوون و گەڕانەوە': 10,
+      },
+      note: {
+        'کرێ تەکسی بۆ چون لێدانی لەزگەی فرۆشراوە': 20,
+        'کرێ تەکسی کار باری کۆمپانیا': 18,
+        'کرێ تەکسی بۆ نقڵ': 15,
+        'کرێ تەکسی هاتنەوە لە نقڵ': 15,
+        'کرێ تەکسی بۆ ڕێکخستنی کۆگا': 12,
+        'نان خواردن دەرەوەی شار': 12,
+        'مەسروفاتی دەرەوەی شار': 10,
+      },
+    };
+
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(FIELD_HISTORY_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return {
+            from: { ...initial.from, ...(parsed.from || {}) },
+            to: { ...initial.to, ...(parsed.to || {}) },
+            trip: { ...initial.trip, ...(parsed.trip || {}) },
+            note: { ...initial.note, ...(parsed.note || {}) },
+          };
+        }
+      } catch (err) {
+        console.error('Error loading field history:', err);
+      }
+    }
+    return initial;
+  });
+
+  // Automatically index past entries from expenses and archived vouchers into fieldHistory
+  useEffect(() => {
+    const newFrom: Record<string, number> = {};
+    const newTo: Record<string, number> = {};
+    const newTrip: Record<string, number> = {};
+    const newNote: Record<string, number> = {};
+
+    const processItem = (item: any) => {
+      if (item.from && typeof item.from === 'string' && item.from.trim()) {
+        const f = item.from.trim();
+        newFrom[f] = (newFrom[f] || 0) + 1;
+      }
+      if (item.to && typeof item.to === 'string' && item.to.trim()) {
+        const t = item.to.trim();
+        newTo[t] = (newTo[t] || 0) + 1;
+      }
+      if (item.trip && typeof item.trip === 'string' && item.trip.trim()) {
+        const tr = item.trip.trim();
+        newTrip[tr] = (newTrip[tr] || 0) + 1;
+      }
+      const n = (item.note || item.reason || '').trim();
+      if (n) {
+        newNote[n] = (newNote[n] || 0) + 1;
+      }
+    };
+
+    (expenses || []).forEach(processItem);
+    (archivedVouchers || []).forEach(v => {
+      (v.items || []).forEach(processItem);
+    });
+
+    setFieldHistory(prev => {
+      const merged: FieldFrequencyMap = {
+        from: { ...prev.from },
+        to: { ...prev.to },
+        trip: { ...prev.trip },
+        note: { ...prev.note },
+      };
+
+      for (const [k, v] of Object.entries(newFrom)) merged.from[k] = (merged.from[k] || 0) + v;
+      for (const [k, v] of Object.entries(newTo)) merged.to[k] = (merged.to[k] || 0) + v;
+      for (const [k, v] of Object.entries(newTrip)) merged.trip[k] = (merged.trip[k] || 0) + v;
+      for (const [k, v] of Object.entries(newNote)) merged.note[k] = (merged.note[k] || 0) + v;
+
+      return merged;
+    });
+  }, [expenses, archivedVouchers]);
 
   // ⚡ Preset reasons for current tab / category
   const currentPresetReasons = useMemo(() => {
@@ -1211,6 +1444,30 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         setLastAddedFeedback(`✓ ڕاکێشانی پێشینە بە بڕی ${numAmount.toLocaleString()} IQD بۆ (${empName}) زیادکرا!`);
       }
     }
+
+    // 🧠 Learn and store text entries in fieldHistory for future smart suggestions
+    const recordText = (field: 'from' | 'to' | 'trip' | 'note', text: string) => {
+      if (!text || !text.trim()) return;
+      const t = text.trim();
+      setFieldHistory(prev => {
+        const next = {
+          ...prev,
+          [field]: {
+            ...prev[field],
+            [t]: (prev[field][t] || 0) + 1,
+          },
+        };
+        try {
+          localStorage.setItem(FIELD_HISTORY_KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    };
+
+    if (fromLoc) recordText('from', fromLoc);
+    if (toLoc) recordText('to', toLoc);
+    if (tripNo) recordText('trip', tripNo);
+    if (note) recordText('note', note);
 
     // Reset specific fields for rapid entry, but keep selected Employee and Date!
     setAmount('');
@@ -2884,47 +3141,32 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                 </div>
               )}
 
-              {/* Row 3: Route Details (From, To, Trip) for Expenses */}
+              {/* Row 3: Route Details (From, To, Trip) for Expenses with Smart Suggestion */}
               {activeTab === 'expenses' && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                      لە (From)
-                    </label>
-                    <input
-                      type="text"
-                      value={fromLoc}
-                      onChange={(e) => setFromLoc(e.target.value)}
-                      placeholder="بۆ نموونە: کارگەی ئاشڵی"
-                      className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-[#2c2c2e] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
+                  <SmartSuggestInput
+                    label="لە (From)"
+                    value={fromLoc}
+                    onChange={setFromLoc}
+                    historyMap={fieldHistory.from}
+                    placeholder="بۆ نموونە: کارگەی ئاشڵی"
+                  />
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                      بۆ (To)
-                    </label>
-                    <input
-                      type="text"
-                      value={toLoc}
-                      onChange={(e) => setToLoc(e.target.value)}
-                      placeholder="بۆ نموونە: بازاڕی سلێمانی"
-                      className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-[#2c2c2e] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
+                  <SmartSuggestInput
+                    label="بۆ (To)"
+                    value={toLoc}
+                    onChange={setToLoc}
+                    historyMap={fieldHistory.to}
+                    placeholder="بۆ نموونە: هوانە، بازاڕی سلێمانی"
+                  />
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                      ژمارەی سەفەر
-                    </label>
-                    <input
-                      type="text"
-                      value={tripNo}
-                      onChange={(e) => setTripNo(e.target.value)}
-                      placeholder="1, 2, چوون و گەڕانەوە"
-                      className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-[#2c2c2e] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
+                  <SmartSuggestInput
+                    label="ژمارەی سەفەر"
+                    value={tripNo}
+                    onChange={setTripNo}
+                    historyMap={fieldHistory.trip}
+                    placeholder="1, 2, چوون و گەڕانەوە"
+                  />
                 </div>
               )}
 
@@ -2976,21 +3218,23 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
 
               {/* Row 5: Note / Reason & Action Buttons */}
               <div className="flex flex-col sm:flex-row items-end gap-3">
-                <div className="w-full space-y-1">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                    {activeTab === 'bonuses' ? 'هۆکاری پاداشت' : 'دەقی تێبینی'}
-                    <span className="text-[10px] font-normal text-slate-400 mr-1.5">(دەتوانیت لە هۆکارە جێگیرەکانی سەرەوە هەڵبژێریت یان لێرە دەستی بنووسیت)</span>
-                  </label>
-                  <input
-                    type="text"
+                <div className="w-full">
+                  <SmartSuggestInput
+                    label={activeTab === 'bonuses' ? 'هۆکاری پاداشت' : 'دەقی تێبینی'}
+                    subLabel={
+                      <span className="text-[10px] font-normal text-slate-400 mr-1.5 font-sans">
+                        (دەتوانیت لە هۆکارە جێگیرەکانی سەرەوە هەڵبژێریت یان بنووسیت)
+                      </span>
+                    }
                     value={note}
-                    onChange={(e) => setNote(e.target.value)}
+                    onChange={setNote}
+                    historyMap={fieldHistory.note}
                     placeholder={activeTab === 'bonuses' ? 'پاداشتی دەستخۆشی کارکردن' : 'تێبینی بنووسە یان لە سەرەوە هەڵبژێرە...'}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#2c2c2e] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    className="py-2"
                   />
                 </div>
 
-                <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 mb-0.5">
                   <button
                     type="submit"
                     className={`w-full sm:w-auto shrink-0 px-6 py-2.5 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer ${
