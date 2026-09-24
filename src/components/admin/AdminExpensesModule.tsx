@@ -31,7 +31,11 @@ import {
   Tag,
   Filter,
   Settings,
-  RotateCcw
+  RotateCcw,
+  PieChart,
+  TrendingUp,
+  Zap,
+  Award
 } from 'lucide-react';
 import { format, addMonths, subMonths } from 'date-fns';
 import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
@@ -423,8 +427,11 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   const [selectedEmpId, setSelectedEmpId] = useState('');
   const [note, setNote] = useState('');
 
-  // 🔍 Selected Reason Filter for Monthly Analytics breakdown
+  // 🔍 Selected Filters & Mode for Monthly Analytics Digital Studio
   const [selectedReasonFilter, setSelectedReasonFilter] = useState<string | null>(null);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
+  const [selectedDayFilter, setSelectedDayFilter] = useState<number | null>(null);
+  const [analyticsGraphMode, setAnalyticsGraphMode] = useState<'categories' | 'reasons' | 'daily' | 'distribution'>('categories');
 
   // 🧠 Field History & Frequency Storage for Smart Autocomplete
   const [fieldHistory, setFieldHistory] = useState<FieldFrequencyMap>(() => {
@@ -929,18 +936,109 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     return Object.values(map).sort((a, b) => b.total - a.total);
   }, [monthlyExpensesList]);
 
-  // Filtered monthly expenses by reason if selected
+  // Filtered monthly expenses by reason, category, and day if selected
   const filteredMonthlyExpenses = useMemo(() => {
-    if (!selectedReasonFilter) return monthlyExpensesList;
-    return monthlyExpensesList.filter((item: any) => {
-      const rawReason = (item.note || item.reason || 'بێ تێبینی').trim();
-      return rawReason === selectedReasonFilter;
-    });
-  }, [monthlyExpensesList, selectedReasonFilter]);
+    let list = monthlyExpensesList;
+    if (selectedCategoryFilter) {
+      list = list.filter((item: any) => {
+        const cat = item.type || item.category || 'other';
+        return cat === selectedCategoryFilter;
+      });
+    }
+    if (selectedReasonFilter) {
+      list = list.filter((item: any) => {
+        const rawReason = (item.note || item.reason || 'بێ تێبینی').trim();
+        return rawReason === selectedReasonFilter;
+      });
+    }
+    if (selectedDayFilter !== null) {
+      list = list.filter((item: any) => {
+        if (!item.date) return false;
+        return parseInt(item.date.split('-')[2] || '0', 10) === selectedDayFilter;
+      });
+    }
+    return list;
+  }, [monthlyExpensesList, selectedCategoryFilter, selectedReasonFilter, selectedDayFilter]);
 
   const filteredMonthlyTotalExp = useMemo(() => {
     return filteredMonthlyExpenses.reduce((sum, item: any) => sum + Number(item.amount || item.totalAmount || 0), 0);
   }, [filteredMonthlyExpenses]);
+
+  // Executive KPI Badges:
+  // 1. Top Category
+  const topCategory = useMemo(() => {
+    const entries = Object.entries(categoryBreakdown);
+    if (entries.length === 0) return null;
+    const sorted = [...entries].sort((a, b) => b[1].total - a[1].total);
+    if (sorted[0] && sorted[0][1].total > 0) {
+      const percentage = monthlyTotalExp > 0 ? Math.round((sorted[0][1].total / monthlyTotalExp) * 100) : 0;
+      return { key: sorted[0][0], ...sorted[0][1], percentage };
+    }
+    return null;
+  }, [categoryBreakdown, monthlyTotalExp]);
+
+  // 2. Top Reason
+  const topReason = useMemo(() => {
+    if (reasonBreakdown.length === 0 || reasonBreakdown[0].total === 0) return null;
+    const item = reasonBreakdown[0];
+    const percentage = monthlyTotalExp > 0 ? Math.round((item.total / monthlyTotalExp) * 100) : 0;
+    return { ...item, percentage };
+  }, [reasonBreakdown, monthlyTotalExp]);
+
+  // 3. Daily Expenses Breakdown & Peak Day
+  const dailyStats = useMemo(() => {
+    const parts = selectedMonth.split('-');
+    const year = parseInt(parts[0], 10) || new Date().getFullYear();
+    const month = parseInt(parts[1], 10) || (new Date().getMonth() + 1);
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    const dailyMap: Record<number, { day: number; dateStr: string; total: number; count: number; items: any[] }> = {};
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dStr = d < 10 ? `0${d}` : `${d}`;
+      const fullDate = `${selectedMonth}-${dStr}`;
+      dailyMap[d] = { day: d, dateStr: fullDate, total: 0, count: 0, items: [] };
+    }
+
+    monthlyExpensesList.forEach((e: any) => {
+      if (!e.date) return;
+      const dayNum = parseInt(e.date.split('-')[2] || '0', 10);
+      if (dayNum >= 1 && dayNum <= daysInMonth) {
+        dailyMap[dayNum].total += Number(e.amount || e.totalAmount || 0);
+        dailyMap[dayNum].count += 1;
+        dailyMap[dayNum].items.push(e);
+      }
+    });
+
+    const list = Object.values(dailyMap);
+    const activeDays = list.filter(d => d.total > 0);
+    const avgDaily = activeDays.length > 0 ? Math.round(monthlyTotalExp / activeDays.length) : 0;
+    const peakDay = [...list].sort((a, b) => b.total - a.total)[0] || null;
+
+    return {
+      days: list,
+      activeDaysCount: activeDays.length,
+      avgDaily,
+      peakDay: peakDay && peakDay.total > 0 ? peakDay : null,
+      maxDayAmount: Math.max(...list.map(d => d.total), 1)
+    };
+  }, [selectedMonth, monthlyExpensesList, monthlyTotalExp]);
+
+  // Category-Filtered Reasons Breakdown
+  const categoryFilteredReasons = useMemo(() => {
+    if (!selectedCategoryFilter) return reasonBreakdown;
+    const map: Record<string, { count: number; total: number; label: string; category?: string }> = {};
+    monthlyExpensesList.forEach((e: any) => {
+      const cat = (e.type as string) || (e.category as string) || 'other';
+      if (cat !== selectedCategoryFilter) return;
+      const rawReason = (e.note || e.reason || 'بێ تێبینی').trim();
+      if (!map[rawReason]) {
+        map[rawReason] = { count: 0, total: 0, label: rawReason, category: cat };
+      }
+      map[rawReason].count += 1;
+      map[rawReason].total += Number(e.amount || 0);
+    });
+    return Object.values(map).sort((a, b) => b.total - a.total);
+  }, [monthlyExpensesList, selectedCategoryFilter, reasonBreakdown]);
 
   // Per-Employee Comprehensive Financial Aggregation for the Month
   const employeeFinancialStats = useMemo(() => {
@@ -2295,25 +2393,618 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
             </div>
           </div>
 
-          {/* Expenses Category Breakdown */}
-          <div className="p-4 bg-white dark:bg-[#1c1c1e] border border-slate-200/80 dark:border-white/10 rounded-2xl shadow-xs space-y-3">
-            <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-2">
-              <span>🏷️ وردەکاری جۆرەکانی مەسروفات لەم مانگەدا ({selectedMonth}):</span>
-            </h3>
-
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-              {Object.entries(categoryBreakdown).map(([k, v]) => (
-                <div key={k} className={`p-2.5 rounded-xl border ${typeColors[k as keyof typeof typeColors]?.bg || 'bg-slate-50'} ${typeColors[k as keyof typeof typeColors]?.border || 'border-slate-200'}`}>
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span>{v.label}</span>
-                    <span className="text-[10px] opacity-75 font-mono">{v.count} پسوولە</span>
+          {/* ========================================================= */}
+          {/* 📊 INTERACTIVE DIGITAL ANALYTICS STUDIO & GRAPH TOOLKIT    */}
+          {/* ========================================================= */}
+          <div className="p-4 sm:p-5 bg-white dark:bg-[#1c1c1e] border border-slate-200/80 dark:border-white/10 rounded-2xl shadow-sm space-y-4">
+            
+            {/* Header Toolbar: Title, Active Filters & View Switcher */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 dark:border-white/5 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 text-white flex items-center justify-center shadow-xs">
+                    <BarChart3 className="w-4 h-4" />
                   </div>
-                  <p className="text-sm font-black font-mono mt-1 text-slate-900 dark:text-white">
-                    {v.total.toLocaleString()} IQD
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>گرافی دیجیتاڵی و شیکاری مەسروفات</span>
+                      <span className="px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 text-[10px] font-mono font-bold border border-purple-200/60 dark:border-purple-800">
+                        مانگی {monthDisplayLabel}
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      شیکاری ڕوون و بینراوی پۆلێنەکان، تێبینییەکان و دابەشبوونی ڕۆژانەی خەرجی
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* View Switcher Buttons (Categories, Reasons, Daily Curve, Distribution) */}
+              <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 dark:bg-white/5 rounded-xl border border-slate-200/60 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setAnalyticsGraphMode('categories')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    analyticsGraphMode === 'categories'
+                      ? 'bg-white dark:bg-[#2c2c2e] text-blue-600 dark:text-blue-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Tag className="w-3.5 h-3.5" />
+                  <span>🏷️ پۆلێنەکان</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAnalyticsGraphMode('reasons')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    analyticsGraphMode === 'reasons'
+                      ? 'bg-white dark:bg-[#2c2c2e] text-amber-600 dark:text-amber-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>📝 تێبینی و هۆکارەکان</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAnalyticsGraphMode('daily')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    analyticsGraphMode === 'daily'
+                      ? 'bg-white dark:bg-[#2c2c2e] text-indigo-600 dark:text-indigo-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  <span>📈 چەماوەی ڕۆژانە</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAnalyticsGraphMode('distribution')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    analyticsGraphMode === 'distribution'
+                      ? 'bg-white dark:bg-[#2c2c2e] text-emerald-600 dark:text-emerald-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <PieChart className="w-3.5 h-3.5" />
+                  <span>🍩 دابەشکاری (%)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Active Drill-Down Filter Chips Bar (Shows up when user clicks any element to filter) */}
+            {(selectedCategoryFilter || selectedReasonFilter || selectedDayFilter !== null) && (
+              <div className="flex flex-wrap items-center gap-2 p-2.5 bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-xl text-xs">
+                <span className="font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1">
+                  <Filter className="w-3.5 h-3.5 text-blue-600" />
+                  <span>فلتەری کارلێککار:</span>
+                </span>
+
+                {selectedCategoryFilter && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white dark:bg-[#2c2c2e] border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 font-bold shadow-2xs">
+                    <span>پۆلێن: {typeLabels[selectedCategoryFilter] || selectedCategoryFilter}</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategoryFilter(null)}
+                      className="text-slate-400 hover:text-rose-500 cursor-pointer ml-1"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
+
+                {selectedReasonFilter && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white dark:bg-[#2c2c2e] border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 font-bold shadow-2xs">
+                    <span>تێبینی: {selectedReasonFilter}</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedReasonFilter(null)}
+                      className="text-slate-400 hover:text-rose-500 cursor-pointer ml-1"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
+
+                {selectedDayFilter !== null && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white dark:bg-[#2c2c2e] border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 font-bold shadow-2xs">
+                    <span>ڕۆژی: {selectedDayFilter}ی مانگ</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDayFilter(null)}
+                      className="text-slate-400 hover:text-rose-500 cursor-pointer ml-1"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategoryFilter(null);
+                    setSelectedReasonFilter(null);
+                    setSelectedDayFilter(null);
+                  }}
+                  className="mr-auto px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold transition-colors cursor-pointer text-[11px]"
+                >
+                  پاککردنەوەی هەمووی ✕
+                </button>
+              </div>
+            )}
+
+            {/* Row of 4 Executive Micro-Metric Badges */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+              {/* Badge 1: Top Category */}
+              <div 
+                onClick={() => topCategory && setSelectedCategoryFilter(prev => prev === topCategory.key ? null : topCategory.key)}
+                className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                  selectedCategoryFilter === topCategory?.key
+                    ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-500 ring-2 ring-blue-500/20'
+                    : 'bg-slate-50/70 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 border-slate-200/80 dark:border-white/10'
+                }`}
+                title="کلیک بکە بۆ فلتەرکردنی ئەم پۆلێنە"
+              >
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                    <Award className="w-3.5 h-3.5 text-amber-500" />
+                    <span>باوترین پۆلێن</span>
+                  </div>
+                  <p className="text-xs font-black text-slate-900 dark:text-white line-clamp-1">
+                    {topCategory ? topCategory.label : 'هیچ خەرجییەک نییە'}
+                  </p>
+                  <p className="text-[11px] font-mono text-blue-600 dark:text-blue-400 font-bold">
+                    {topCategory ? `${topCategory.total.toLocaleString()} IQD` : '—'}
                   </p>
                 </div>
-              ))}
+                {topCategory && (
+                  <span className="px-2 py-1 rounded-lg bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-mono font-black text-xs shrink-0">
+                    %{topCategory.percentage}
+                  </span>
+                )}
+              </div>
+
+              {/* Badge 2: Top Reason */}
+              <div 
+                onClick={() => topReason && setSelectedReasonFilter(prev => prev === topReason.label ? null : topReason.label)}
+                className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                  selectedReasonFilter === topReason?.label
+                    ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/20'
+                    : 'bg-slate-50/70 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 border-slate-200/80 dark:border-white/10'
+                }`}
+                title="کلیک بکە بۆ فلتەرکردنی ئەم هۆکارە"
+              >
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                    <span>باوترین تێبینی</span>
+                  </div>
+                  <p className="text-xs font-black text-slate-900 dark:text-white line-clamp-1">
+                    {topReason ? topReason.label : '—'}
+                  </p>
+                  <p className="text-[11px] font-mono text-amber-600 dark:text-amber-400 font-bold">
+                    {topReason ? `${topReason.total.toLocaleString()} IQD` : '—'}
+                  </p>
+                </div>
+                {topReason && (
+                  <span className="px-2 py-1 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-mono font-black text-xs shrink-0">
+                    {topReason.count} پسوولە
+                  </span>
+                )}
+              </div>
+
+              {/* Badge 3: Daily Average */}
+              <div className="p-3 rounded-xl border bg-slate-50/70 dark:bg-white/5 border-slate-200/80 dark:border-white/10 flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>تێکڕای ڕۆژانە</span>
+                  </div>
+                  <p className="text-xs font-black text-slate-900 dark:text-white font-mono">
+                    {dailyStats.avgDaily.toLocaleString()} IQD
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    لە {dailyStats.activeDaysCount} ڕۆژی چالاکدا
+                  </p>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                  📅
+                </div>
+              </div>
+
+              {/* Badge 4: Peak Spending Day */}
+              <div 
+                onClick={() => dailyStats.peakDay && setSelectedDayFilter(prev => prev === dailyStats.peakDay?.day ? null : dailyStats.peakDay!.day)}
+                className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                  selectedDayFilter === dailyStats.peakDay?.day
+                    ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-500 ring-2 ring-purple-500/20'
+                    : 'bg-slate-50/70 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 border-slate-200/80 dark:border-white/10'
+                }`}
+                title="کلیک بکە بۆ بینینی خەرجییەکانی ڕۆژی لوتکە"
+              >
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                    <Zap className="w-3.5 h-3.5 text-purple-500" />
+                    <span>ڕۆژی لوتکەی خەرجی</span>
+                  </div>
+                  <p className="text-xs font-black text-purple-700 dark:text-purple-300 font-mono">
+                    {dailyStats.peakDay ? dailyStats.peakDay.dateStr : '—'}
+                  </p>
+                  <p className="text-[11px] font-mono text-purple-600 dark:text-purple-400 font-bold">
+                    {dailyStats.peakDay ? `${dailyStats.peakDay.total.toLocaleString()} IQD` : '—'}
+                  </p>
+                </div>
+                {dailyStats.peakDay && (
+                  <span className="px-2 py-1 rounded-lg bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-mono font-black text-xs shrink-0">
+                    👑 لوتکە
+                  </span>
+                )}
+              </div>
             </div>
+
+            {/* ========================================================= */}
+            {/* VIEW MODE 1: CATEGORIES VIEW                             */}
+            {/* ========================================================= */}
+            {analyticsGraphMode === 'categories' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <span>دابەشبوونی مەسروفات بەپێی پۆلێنەکان ({categories.length} پۆلێن):</span>
+                    <span className="text-[10px] text-slate-400 font-normal">(کلیک لە هەر پۆلێنێک بکە بۆ فلتەرکردن و وردبوونەوە لە تێبینییەکانی)</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {categories.map((cat) => {
+                    const data = categoryBreakdown[cat.key] || { count: 0, total: 0, label: cat.label };
+                    const isSelected = selectedCategoryFilter === cat.key;
+                    const percentage = monthlyTotalExp > 0 ? Math.round((data.total / monthlyTotalExp) * 100) : 0;
+                    const palette = typeColors[cat.key] || { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' };
+
+                    return (
+                      <div
+                        key={cat.key}
+                        onClick={() => setSelectedCategoryFilter(prev => prev === cat.key ? null : cat.key)}
+                        className={`p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden group ${
+                          isSelected
+                            ? 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-500 ring-2 ring-blue-500/30 shadow-xs'
+                            : 'bg-white dark:bg-[#242426] border-slate-200/80 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold border ${palette.bg} ${palette.text} ${palette.border}`}>
+                              {cat.label}
+                            </span>
+                            {isSelected && (
+                              <span className="text-[10px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/60 px-1.5 py-0.5 rounded-md">
+                                ✓ چالاکە
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] font-mono text-slate-400 font-bold">
+                            {data.count} پسوولە
+                          </span>
+                        </div>
+
+                        <div className="flex items-baseline justify-between mb-2">
+                          <span className="text-base font-black font-mono text-slate-900 dark:text-white">
+                            {data.total.toLocaleString()} <span className="text-xs font-normal text-slate-400">IQD</span>
+                          </span>
+                          <span className="text-xs font-mono font-black text-slate-600 dark:text-slate-300">
+                            %{percentage}
+                          </span>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="w-full h-2 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${
+                              isSelected ? 'bg-blue-600' : 'bg-gradient-to-r from-blue-500 to-indigo-600'
+                            }`}
+                            style={{ width: `${Math.min(percentage, 100)}%` }}
+                          />
+                        </div>
+
+                        {/* Drill-down prompt */}
+                        <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-[10px] text-slate-400">
+                          <span className="group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors font-medium">
+                            {isSelected ? 'فلتەرکراوە • کلیک بکە بۆ لابردن' : 'کلیک بکە بۆ فلتەرکردنی ئەم پۆلێنە'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedCategoryFilter(cat.key);
+                              setAnalyticsGraphMode('reasons');
+                            }}
+                            className="text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer"
+                          >
+                            تێبینییەکان ⬅️
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* VIEW MODE 2: REASONS & NOTES RANKING                      */}
+            {/* ========================================================= */}
+            {analyticsGraphMode === 'reasons' && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      ڕیزبەندی تێبینی و هۆکارەکان ({categoryFilteredReasons.length} هۆکار):
+                    </span>
+                    {selectedCategoryFilter && (
+                      <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-bold text-[11px]">
+                        فلتەرکراو بۆ پۆلێنی: {typeLabels[selectedCategoryFilter] || selectedCategoryFilter}
+                      </span>
+                    )}
+                  </div>
+                  {selectedCategoryFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategoryFilter(null)}
+                      className="text-blue-600 dark:text-blue-400 text-xs font-bold hover:underline cursor-pointer"
+                    >
+                      پیشاندانی تێبینی سەرجەم پۆلێنەکان ✕
+                    </button>
+                  )}
+                </div>
+
+                {categoryFilteredReasons.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 text-xs border border-dashed border-slate-200 dark:border-white/10 rounded-xl">
+                    هیچ تێبینییەک بۆ ئەم مانگە یاخود ئەم پۆلێنە نەدۆزرایەوە.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-[360px] overflow-y-auto pr-1">
+                    {categoryFilteredReasons.map((item, idx) => {
+                      const isSelected = selectedReasonFilter === item.label;
+                      const percentage = monthlyTotalExp > 0 ? Math.round((item.total / monthlyTotalExp) * 100) : 0;
+                      const maxReasonTotal = categoryFilteredReasons[0]?.total || 1;
+                      const relativeBar = Math.round((item.total / maxReasonTotal) * 100);
+
+                      return (
+                        <div
+                          key={item.label}
+                          onClick={() => setSelectedReasonFilter(prev => prev === item.label ? null : item.label)}
+                          className={`p-3 rounded-xl border transition-all cursor-pointer space-y-1.5 ${
+                            isSelected
+                              ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/30 shadow-xs'
+                              : 'bg-white dark:bg-[#242426] border-slate-200/80 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                              <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 flex items-center justify-center font-mono font-bold text-[10px] shrink-0">
+                                {idx + 1}
+                              </span>
+                              <span className="text-xs font-bold text-slate-900 dark:text-white truncate" title={item.label}>
+                                {item.label}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 rounded shrink-0">
+                              {item.count} پسوولە
+                            </span>
+                          </div>
+
+                          <div className="flex items-baseline justify-between text-xs">
+                            <span className="font-mono font-black text-amber-600 dark:text-amber-400">
+                              {item.total.toLocaleString()} IQD
+                            </span>
+                            <span className="text-[11px] font-mono font-bold text-slate-400">
+                              %{percentage}
+                            </span>
+                          </div>
+
+                          {/* Relative Bar */}
+                          <div className="w-full h-1.5 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                isSelected ? 'bg-amber-500' : 'bg-gradient-to-r from-amber-400 to-amber-600'
+                              }`}
+                              style={{ width: `${Math.min(relativeBar, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* VIEW MODE 3: DAILY SPENDING TIMELINE / HISTOGRAM          */}
+            {/* ========================================================= */}
+            {analyticsGraphMode === 'daily' && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <span>چەماوە و بەرزی خەرجی لە ڕۆژانی مانگی ({selectedMonth}):</span>
+                    <span className="text-[10px] text-slate-400 font-normal">(کلیک لە هەر ڕۆژێک بکە بۆ بینینی پسوولەکانی ئەو ڕۆژە)</span>
+                  </span>
+                  {selectedDayFilter !== null && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDayFilter(null)}
+                      className="text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer"
+                    >
+                      پیشاندانی هەموو ڕۆژەکان ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Histogram Bars Container */}
+                <div className="p-3 bg-slate-50/70 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-xl overflow-x-auto">
+                  <div className="min-w-[650px] flex items-end gap-1.5 h-44 pt-6 pb-2 px-1">
+                    {dailyStats.days.map((day) => {
+                      const heightPercent = dailyStats.maxDayAmount > 0 
+                        ? Math.max(Math.round((day.total / dailyStats.maxDayAmount) * 100), 4)
+                        : 4;
+                      const hasSpend = day.total > 0;
+                      const isPeak = dailyStats.peakDay?.day === day.day;
+                      const isSelected = selectedDayFilter === day.day;
+
+                      return (
+                        <div
+                          key={day.day}
+                          onClick={() => hasSpend && setSelectedDayFilter(prev => prev === day.day ? null : day.day)}
+                          className={`flex-1 flex flex-col items-center justify-end h-full group relative cursor-pointer ${
+                            !hasSpend ? 'opacity-40 cursor-default' : ''
+                          }`}
+                        >
+                          {/* Tooltip on Hover */}
+                          {hasSpend && (
+                            <div className="absolute -top-12 z-20 hidden group-hover:flex flex-col items-center bg-slate-900 text-white text-[10px] px-2 py-1 rounded-md shadow-lg pointer-events-none whitespace-nowrap">
+                              <span className="font-bold">{day.dateStr}</span>
+                              <span className="font-mono text-emerald-300 font-black">{day.total.toLocaleString()} IQD ({day.count} پسوولە)</span>
+                              <div className="w-2 h-2 bg-slate-900 rotate-45 -mb-1 mt-0.5"></div>
+                            </div>
+                          )}
+
+                          {/* Peak Crown */}
+                          {isPeak && (
+                            <span className="text-[11px] mb-1 animate-bounce pointer-events-none">
+                              👑
+                            </span>
+                          )}
+
+                          {/* Bar */}
+                          <div
+                            style={{ height: `${hasSpend ? heightPercent : 4}%` }}
+                            className={`w-full max-w-[20px] rounded-t-md transition-all duration-300 ${
+                              isSelected
+                                ? 'bg-purple-600 ring-2 ring-purple-400'
+                                : isPeak
+                                ? 'bg-gradient-to-t from-amber-500 to-amber-300 shadow-xs'
+                                : hasSpend
+                                ? 'bg-gradient-to-t from-blue-600 to-indigo-400 hover:brightness-110'
+                                : 'bg-slate-200 dark:bg-white/10'
+                            }`}
+                          />
+
+                          {/* Day Number Label */}
+                          <span className={`text-[10px] font-mono mt-1 font-bold ${
+                            isSelected
+                              ? 'text-purple-600 dark:text-purple-400 font-black'
+                              : isPeak
+                              ? 'text-amber-600 dark:text-amber-400 font-black'
+                              : 'text-slate-500'
+                          }`}>
+                            {day.day}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Day Inspector Card if a day is clicked */}
+                {selectedDayFilter !== null && (
+                  <div className="p-3 bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-xl flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-purple-900 dark:text-purple-200">
+                        پسوولەکانی ڕۆژی {selectedDayFilter}ی مانگ ({dailyStats.days.find(d => d.day === selectedDayFilter)?.dateStr}):
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-purple-200/80 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 font-mono font-bold">
+                        {dailyStats.days.find(d => d.day === selectedDayFilter)?.total.toLocaleString()} IQD
+                      </span>
+                      <span className="text-slate-500">
+                        ({dailyStats.days.find(d => d.day === selectedDayFilter)?.count} پسوولە)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDayFilter(null)}
+                      className="text-rose-600 hover:underline font-bold cursor-pointer"
+                    >
+                      لابردنی فلتەری ئەم ڕۆژە ✕
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* VIEW MODE 4: VISUAL DISTRIBUTION & SHARES                */}
+            {/* ========================================================= */}
+            {analyticsGraphMode === 'distribution' && (
+              <div className="space-y-4">
+                <div>
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2">
+                    دابەشبوونی سەدیی (Percentage Share) بودجەی مەسروفات لەم مانگەدا:
+                  </span>
+
+                  {/* Multi-segment Horizontal Stacked Bar */}
+                  <div className="w-full h-6 bg-slate-100 dark:bg-white/5 rounded-xl overflow-hidden flex shadow-inner p-0.5 border border-slate-200 dark:border-white/10">
+                    {categories.map((cat) => {
+                      const data = categoryBreakdown[cat.key];
+                      if (!data || data.total <= 0) return null;
+                      const percentage = monthlyTotalExp > 0 ? (data.total / monthlyTotalExp) * 100 : 0;
+                      if (percentage <= 0) return null;
+                      const palette = typeColors[cat.key] || { bg: 'bg-blue-500' };
+
+                      return (
+                        <div
+                          key={cat.key}
+                          style={{ width: `${percentage}%` }}
+                          onClick={() => setSelectedCategoryFilter(prev => prev === cat.key ? null : cat.key)}
+                          className={`h-full first:rounded-r-lg last:rounded-l-lg transition-all hover:opacity-85 cursor-pointer relative group flex items-center justify-center text-[10px] text-white font-bold font-mono overflow-hidden ${
+                            palette.bg.replace('bg-', 'bg-').split(' ')[0].replace('50', '600')
+                          }`}
+                          title={`${cat.label}: ${data.total.toLocaleString()} IQD (${Math.round(percentage)}%)`}
+                        >
+                          {percentage >= 8 && `${Math.round(percentage)}%`}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Summary Matrix Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                  {categories.map((cat) => {
+                    const data = categoryBreakdown[cat.key] || { count: 0, total: 0, label: cat.label };
+                    const percentage = monthlyTotalExp > 0 ? Math.round((data.total / monthlyTotalExp) * 100) : 0;
+                    const palette = typeColors[cat.key] || { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' };
+                    const isSelected = selectedCategoryFilter === cat.key;
+
+                    return (
+                      <div
+                        key={cat.key}
+                        onClick={() => setSelectedCategoryFilter(prev => prev === cat.key ? null : cat.key)}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-500 ring-2 ring-blue-500/20 shadow-xs'
+                            : `${palette.bg} ${palette.border} hover:brightness-95`
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-xs font-bold">
+                          <span className={palette.text}>{cat.label}</span>
+                          <span className="font-mono text-[11px] font-black">%{percentage}</span>
+                        </div>
+                        <p className="text-sm font-black font-mono mt-1 text-slate-900 dark:text-white">
+                          {data.total.toLocaleString()} IQD
+                        </p>
+                        <span className="text-[10px] opacity-75 font-mono block mt-0.5">
+                          {data.count} پسوولە
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
           </div>
 
           {/* Sub-Tab Navigation Bar to inspect and print each section separately */}
@@ -2613,9 +3304,13 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                     <TrendingDown className="w-4 h-4 text-blue-600" />
                     <h3 className="text-sm font-black text-slate-900 dark:text-white">
                       لیستی تەواوی پسوولەکانی مەسروفاتی مانگی ({selectedMonth})
-                      {selectedReasonFilter && (
+                      {(selectedCategoryFilter || selectedReasonFilter || selectedDayFilter !== null) && (
                         <span className="text-xs font-bold text-blue-600 dark:text-blue-400 mr-2">
-                          (فلتەرکراو بەپێی: {selectedReasonFilter})
+                          (فلتەرکراو بەپێی: {[
+                            selectedCategoryFilter ? `پۆلێنی ${typeLabels[selectedCategoryFilter] || selectedCategoryFilter}` : null,
+                            selectedReasonFilter ? `تێبینی ${selectedReasonFilter}` : null,
+                            selectedDayFilter !== null ? `ڕۆژی ${selectedDayFilter}` : null,
+                          ].filter(Boolean).join(' • ')})
                         </span>
                       )}
                     </h3>
@@ -2623,21 +3318,31 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                   <div className="text-xs font-bold text-slate-500">
                     <span>
                       ژمارەی پسوولەکان: <strong className="text-slate-900 dark:text-white">{filteredMonthlyExpenses.length}</strong>
-                      {selectedReasonFilter && <span className="text-slate-400 font-normal"> لە کۆی {monthlyExpensesList.length}</span>}
+                      {(selectedCategoryFilter || selectedReasonFilter || selectedDayFilter !== null) && <span className="text-slate-400 font-normal"> لە کۆی {monthlyExpensesList.length}</span>}
                       {' • '}کۆی مەسروفات: <strong className="text-blue-600 dark:text-blue-400 font-mono">{filteredMonthlyTotalExp.toLocaleString()} IQD</strong>
                     </span>
                   </div>
                 </div>
 
-                {selectedReasonFilter && (
+                {(selectedCategoryFilter || selectedReasonFilter || selectedDayFilter !== null) && (
                   <div className="px-4 py-2 bg-blue-50/70 dark:bg-blue-950/30 border-b border-blue-100 dark:border-blue-900/40 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 font-bold text-blue-900 dark:text-blue-200">
                       <Filter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                      <span>خشتەکە تەنها خەرجییەکانی «{selectedReasonFilter}» پیشان دەدات.</span>
+                      <span>
+                        خشتەکە فلتەرکراوە بەپێی: {[
+                          selectedCategoryFilter ? `پۆلێنی «${typeLabels[selectedCategoryFilter] || selectedCategoryFilter}»` : null,
+                          selectedReasonFilter ? `تێبینی «${selectedReasonFilter}»` : null,
+                          selectedDayFilter !== null ? `ڕۆژی «${selectedDayFilter}»` : null,
+                        ].filter(Boolean).join(' • ')}
+                      </span>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setSelectedReasonFilter(null)}
+                      onClick={() => {
+                        setSelectedCategoryFilter(null);
+                        setSelectedReasonFilter(null);
+                        setSelectedDayFilter(null);
+                      }}
                       className="text-xs font-bold text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-white underline cursor-pointer"
                     >
                       پیشاندانی هەموو مەسروفاتەکان ✕
@@ -2647,11 +3352,15 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
 
                 {filteredMonthlyExpenses.length === 0 ? (
                   <div className="p-12 text-center text-slate-400 text-xs space-y-2">
-                    <p>{selectedReasonFilter ? `هیچ مەسروفاتێک بۆ هۆکاری «${selectedReasonFilter}» لەم مانگەدا تۆمار نەکراوە.` : `هیچ مەسروفاتێک بۆ مانگی (${selectedMonth}) تۆمار نەکراوە.`}</p>
-                    {selectedReasonFilter && (
+                    <p>{(selectedCategoryFilter || selectedReasonFilter || selectedDayFilter !== null) ? 'هیچ مەسروفاتێک بەپێی ئەم فلتەرانە لەم مانگەدا تۆمار نەکراوە.' : `هیچ مەسروفاتێک بۆ مانگی (${selectedMonth}) تۆمار نەکراوە.`}</p>
+                    {(selectedCategoryFilter || selectedReasonFilter || selectedDayFilter !== null) && (
                       <button
                         type="button"
-                        onClick={() => setSelectedReasonFilter(null)}
+                        onClick={() => {
+                          setSelectedCategoryFilter(null);
+                          setSelectedReasonFilter(null);
+                          setSelectedDayFilter(null);
+                        }}
                         className="px-3 py-1.5 rounded-lg bg-blue-600 text-white font-bold text-xs cursor-pointer hover:bg-blue-700"
                       >
                         گەڕانەوە بۆ هەموو خەرجییەکان
