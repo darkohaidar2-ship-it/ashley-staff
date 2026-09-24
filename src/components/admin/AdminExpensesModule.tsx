@@ -25,7 +25,11 @@ import {
   X,
   BarChart3,
   FileSpreadsheet,
-  Download
+  Download,
+  Sparkles,
+  Check,
+  Tag,
+  Filter
 } from 'lucide-react';
 import { format, addMonths, subMonths } from 'date-fns';
 import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
@@ -89,6 +93,50 @@ export const groupExpensesByEmployee = (items: any[] = [], employeesList: Employ
 
   return Array.from(groupMap.values());
 };
+
+// -------------------------------------------------------------
+// ⚡ PRESET STANDARDIZED REASONS / NOTES FOR FAST ENTRY & ANALYTICS
+// -------------------------------------------------------------
+export const PRESET_EXPENSE_REASONS: Record<string, string[]> = {
+  taxi: [
+    'کرێ تەکسی بۆ چون لێدانی لەزگەی فرۆشراوە',
+    'کرێ تەکسی کار باری کۆمپانیا',
+    'کرێ تەکسی بۆ ڕێکخستنی کۆگا',
+    'کرێ تەکسی بۆ نقڵ',
+    'کرێ تەکسی هاتنەوە لە نقڵ',
+  ],
+  food: [
+    'نان خواردن دەرەوەی شار',
+    'نان خواردنی کارمەندان',
+    'چای و قاوە و میوانداری',
+  ],
+  other: [
+    'مەسروفاتی دەرەوەی شار',
+    'مەسروفاتی کارگە و کۆگا',
+    'مەسروفاتی پاککەرەوە و پێداویستی',
+  ],
+  fuel: [
+    'بەنزینی ئۆتۆمبێلی کۆمپانیا',
+    'بەنزینی مۆلیدەی کارگە',
+  ],
+  office: [
+    'کەلوپەلی ئۆفیس و کارگێڕی',
+    'چاپەمەنی و وەرەقە و مەرکەب',
+  ],
+};
+
+export const PRESET_BONUS_REASONS: string[] = [
+  'پاداشتی دەستخۆشی کارکردن',
+  'پاداشتی زیادەکارکردن (ئۆڤەرتایم)',
+  'پاداشتی بەرهەمداری و چالاکی',
+  'پاداشتی جەژن / بۆنە',
+];
+
+export const PRESET_WITHDRAWAL_REASONS: string[] = [
+  'پێشینەی مووچەی مانگانە',
+  'پێشینەی پێویستی کتوپڕ',
+  'پێشینەی نەخۆشی / چارەسەر',
+];
 
 interface AdminExpensesModuleProps {
   employees?: Employee[];
@@ -227,6 +275,49 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   const [tripNo, setTripNo] = useState('');
   const [selectedEmpId, setSelectedEmpId] = useState('');
   const [note, setNote] = useState('');
+
+  // 🔍 Selected Reason Filter for Monthly Analytics breakdown
+  const [selectedReasonFilter, setSelectedReasonFilter] = useState<string | null>(null);
+
+  // ⚡ Preset reasons for current tab / category
+  const currentPresetReasons = useMemo(() => {
+    if (activeTab === 'expenses') {
+      return PRESET_EXPENSE_REASONS[expenseType] || [];
+    }
+    if (activeTab === 'bonuses') {
+      return PRESET_BONUS_REASONS;
+    }
+    if (activeTab === 'withdrawals') {
+      return PRESET_WITHDRAWAL_REASONS;
+    }
+    return [];
+  }, [activeTab, expenseType]);
+
+  const handleSelectPresetReason = (reasonText: string) => {
+    setNote(reasonText);
+
+    // Smart autofill for taxi routes & trip
+    if (activeTab === 'expenses' && expenseType === 'taxi') {
+      if (reasonText === 'کرێ تەکسی بۆ نقڵ') {
+        if (!fromLoc) setFromLoc('کارگە / کۆگا');
+        if (!toLoc) setToLoc('نقڵ');
+        if (!tripNo) setTripNo('1');
+      } else if (reasonText === 'کرێ تەکسی هاتنەوە لە نقڵ') {
+        if (!fromLoc) setFromLoc('نقڵ');
+        if (!toLoc) setToLoc('کارگە / کۆگا');
+        if (!tripNo) setTripNo('1');
+      } else if (reasonText === 'کرێ تەکسی بۆ چون لێدانی لەزگەی فرۆشراوە') {
+        if (!fromLoc) setFromLoc('کارگە');
+        if (!toLoc) setToLoc('شوێنی کڕیار');
+        if (!tripNo) setTripNo('1');
+      } else if (reasonText === 'کرێ تەکسی بۆ ڕێکخستنی کۆگا') {
+        if (!toLoc) setToLoc('کۆگا');
+        if (!tripNo) setTripNo('1');
+      } else if (reasonText === 'کرێ تەکسی کار باری کۆمپانیا') {
+        if (!tripNo) setTripNo('1');
+      }
+    }
+  };
 
   // UX Feedback for fast entry
   const [lastAddedFeedback, setLastAddedFeedback] = useState<string | null>(null);
@@ -399,6 +490,40 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     return map;
   }, [monthlyExpensesList]);
 
+  // Reason / Note breakdown for monthly expenses analytics
+  const reasonBreakdown = useMemo(() => {
+    const map: Record<string, { count: number; total: number; label: string; category?: string }> = {};
+
+    monthlyExpensesList.forEach((e: any) => {
+      const rawReason = (e.note || e.reason || 'بێ تێبینی').trim();
+      if (!map[rawReason]) {
+        map[rawReason] = {
+          count: 0,
+          total: 0,
+          label: rawReason,
+          category: e.type || e.category,
+        };
+      }
+      map[rawReason].count += 1;
+      map[rawReason].total += Number(e.amount || 0);
+    });
+
+    return Object.values(map).sort((a, b) => b.total - a.total);
+  }, [monthlyExpensesList]);
+
+  // Filtered monthly expenses by reason if selected
+  const filteredMonthlyExpenses = useMemo(() => {
+    if (!selectedReasonFilter) return monthlyExpensesList;
+    return monthlyExpensesList.filter((item: any) => {
+      const rawReason = (item.note || item.reason || 'بێ تێبینی').trim();
+      return rawReason === selectedReasonFilter;
+    });
+  }, [monthlyExpensesList, selectedReasonFilter]);
+
+  const filteredMonthlyTotalExp = useMemo(() => {
+    return filteredMonthlyExpenses.reduce((sum, item: any) => sum + Number(item.amount || item.totalAmount || 0), 0);
+  }, [filteredMonthlyExpenses]);
+
   // Per-Employee Comprehensive Financial Aggregation for the Month
   const employeeFinancialStats = useMemo(() => {
     const map: Record<string, {
@@ -561,7 +686,11 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       { header: 'تێبینی', key: 'note', align: 'right' },
     ];
 
-    const groups = groupExpensesByEmployee(monthlyExpensesList, employees);
+    const targetExpenses = selectedReasonFilter 
+      ? monthlyExpensesList.filter((item: any) => (item.note || item.reason || 'بێ تێبینی').trim() === selectedReasonFilter)
+      : monthlyExpensesList;
+    const targetTotal = targetExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const groups = groupExpensesByEmployee(targetExpenses, employees);
     const data: Record<string, any>[] = [];
     let globalIdx = 0;
 
@@ -601,22 +730,26 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       isGrandTotal: true,
       index: '★',
       date: 'کۆی گشتی',
-      empName: `${monthlyExpensesList.length} پسوولە`,
+      empName: `${targetExpenses.length} پسوولە`,
       type: '—',
       route: '—',
       trip: '—',
-      amount: `${monthlyTotalExp.toLocaleString()} IQD`,
+      amount: `${targetTotal.toLocaleString()} IQD`,
       note: '',
     });
 
     exportToPDF({
-      title: 'ڕاپۆرتی مانگانەی مەسروفات و خەرجییەکان',
-      subtitle: 'کۆمپانیای مۆبیلیاتی ئاشڵی — لیستی وردەکاری سەرجەم مەسروفاتەکانی مانگ',
-      period: `مانگی ${monthDisplayLabel}`,
+      title: selectedReasonFilter ? `ڕاپۆرتی مەسروفات — هۆکاری (${selectedReasonFilter})` : 'ڕاپۆرتی مانگانەی مەسروفات و خەرجییەکان',
+      subtitle: selectedReasonFilter 
+        ? `کۆمپانیای مۆبیلیاتی ئاشڵی — لیستی خەرجییەکان فلتەرکراو بەپێی: ${selectedReasonFilter}`
+        : 'کۆمپانیای مۆبیلیاتی ئاشڵی — لیستی وردەکاری سەرجەم مەسروفاتەکانی مانگ',
+      period: `مانگی ${monthDisplayLabel}${selectedReasonFilter ? ` • ${selectedReasonFilter}` : ''}`,
       columns: cols,
       data,
       orientation: 'portrait',
-      fileName: `Ashley_Monthly_Expenses_${selectedMonth}`,
+      fileName: selectedReasonFilter 
+        ? `Ashley_Expenses_${selectedMonth}_${selectedReasonFilter.replace(/\s+/g, '_')}`
+        : `Ashley_Monthly_Expenses_${selectedMonth}`,
       documentCode: `ASH-EXP-${selectedMonth.replace(/-/g, '')}`,
     });
   };
@@ -786,7 +919,11 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       { header: 'تێبینی', key: 'note' },
     ];
 
-    const groups = groupExpensesByEmployee(monthlyExpensesList, employees);
+    const targetExpenses = selectedReasonFilter 
+      ? monthlyExpensesList.filter((item: any) => (item.note || item.reason || 'بێ تێبینی').trim() === selectedReasonFilter)
+      : monthlyExpensesList;
+    const targetTotal = targetExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const groups = groupExpensesByEmployee(targetExpenses, employees);
     const data: Record<string, any>[] = [];
     let globalIdx = 0;
 
@@ -825,16 +962,22 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     data.push({
       index: 9999,
       date: 'کۆی گشتی',
-      empName: `${monthlyExpensesList.length} پسوولە`,
+      empName: `${targetExpenses.length} پسوولە`,
       type: 'گشتی',
       from: '',
       to: '',
       trip: '',
-      amount: monthlyTotalExp,
+      amount: targetTotal,
       note: '',
     });
 
-    exportToCSV(cols, data, `Ashley_Monthly_Expenses_${selectedMonth}`);
+    exportToCSV(
+      cols, 
+      data, 
+      selectedReasonFilter 
+        ? `Ashley_Monthly_Expenses_${selectedMonth}_${selectedReasonFilter.replace(/\s+/g, '_')}`
+        : `Ashley_Monthly_Expenses_${selectedMonth}`
+    );
   };
 
   // -------------------------------------------------------------
@@ -1939,107 +2082,225 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
           {/* SUBTAB 2 CONTENT: FULL MONTHLY EXPENSES TABLE             */}
           {/* ========================================================= */}
           {analyticsSubTab === 'expenses' && (
-            <div className="bg-white dark:bg-[#1c1c1e] border border-slate-200/80 dark:border-white/10 rounded-2xl shadow-xs overflow-hidden">
-              <div className="p-4 border-b border-slate-100 dark:border-white/5 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <TrendingDown className="w-4 h-4 text-blue-600" />
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                    لیستی تەواوی پسوولەکانی مەسروفاتی مانگی ({selectedMonth})
-                  </h3>
-                </div>
-                <div className="text-xs font-bold text-slate-500">
-                  <span>ژمارەی پسوولەکان: <strong className="text-slate-900 dark:text-white">{monthlyExpensesList.length}</strong> • کۆی مەسروفات: <strong className="text-blue-600 dark:text-blue-400 font-mono">{monthlyTotalExp.toLocaleString()} IQD</strong></span>
-                </div>
-              </div>
+            <div className="space-y-4">
+              {/* 📊 Reason-based Breakdown Cards & Statistics for Expenses */}
+              {monthlyExpensesList.length > 0 && reasonBreakdown.length > 0 && (
+                <div className="p-4 bg-white dark:bg-[#1c1c1e] border border-slate-200/80 dark:border-white/10 rounded-2xl shadow-xs space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-500" />
+                      <h4 className="text-xs font-black text-slate-900 dark:text-white">
+                        ئاماری خەرجییەکان بەپێی هۆکار و تێبینییە جێگیرەکان لە مانگی ({selectedMonth}):
+                      </h4>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-400 font-bold">
+                        {reasonBreakdown.length} هۆکاری جیاواز
+                      </span>
+                      {selectedReasonFilter && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedReasonFilter(null)}
+                          className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/10 text-[11px] font-bold text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                        >
+                          پیشاندانی هەموو هۆکارەکان ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
-              {monthlyExpensesList.length === 0 ? (
-                <div className="p-12 text-center text-slate-400 text-xs">
-                  هیچ مەسروفاتێک بۆ مانگی ({selectedMonth}) تۆمار نەکراوە.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-right border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 font-bold">
-                        <th className="p-3 text-center w-12">#</th>
-                        <th className="p-3 text-center">بەروار</th>
-                        <th className="p-3">ناوی کارمەند</th>
-                        <th className="p-3 text-center">جۆری خەرجی</th>
-                        <th className="p-3">لە / بۆ</th>
-                        <th className="p-3 text-center">ژ.سەفەر</th>
-                        <th className="p-3 text-center">بڕی پارە (IQD)</th>
-                        <th className="p-3">تێبینی</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                      {(() => {
-                        const groups = groupExpensesByEmployee(monthlyExpensesList, employees);
-                        let globalIdx = 0;
-                        return groups.map((group) => {
-                          return (
-                            <Fragment key={group.employeeKey}>
-                              {group.items.map((item: any) => {
-                                globalIdx += 1;
-                                const currentIdx = globalIdx;
-                                return (
-                                  <tr key={item.id || currentIdx} className="hover:bg-slate-50/70 dark:hover:bg-white/5 transition-colors">
-                                    <td className="p-3 text-center font-mono text-slate-400 font-bold">{currentIdx}</td>
-                                    <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">📅 {item.date}</td>
-                                    <td className="p-3 font-bold text-slate-900 dark:text-white">{group.employeeName}</td>
-                                    <td className="p-3 text-center">
-                                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeColors[item.type as keyof typeof typeColors]?.bg || ''} ${typeColors[item.type as keyof typeof typeColors]?.text || ''} ${typeColors[item.type as keyof typeof typeColors]?.border || ''}`}>
-                                        {typeLabels[item.type] || item.category || 'تەکسی'}
-                                      </span>
-                                    </td>
-                                    <td className="p-3 text-slate-600 dark:text-slate-300">
-                                      {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—'}
-                                    </td>
-                                    <td className="p-3 text-center font-mono text-slate-500">{item.trip || '—'}</td>
-                                    <td className="p-3 text-center font-mono font-bold text-blue-600 dark:text-blue-400">
-                                      {Number(item.amount || 0).toLocaleString()} IQD
-                                    </td>
-                                    <td className="p-3 text-slate-500">{item.note || item.reason || '—'}</td>
-                                  </tr>
-                                );
-                              })}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
+                    {reasonBreakdown.map((item) => {
+                      const isFilterActive = selectedReasonFilter === item.label;
+                      const percentage = monthlyTotalExp > 0 ? Math.round((item.total / monthlyTotalExp) * 100) : 0;
+                      return (
+                        <button
+                          key={item.label}
+                          type="button"
+                          onClick={() => setSelectedReasonFilter(prev => prev === item.label ? null : item.label)}
+                          className={`p-3 rounded-xl border text-right transition-all cursor-pointer space-y-1.5 ${
+                            isFilterActive
+                              ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-500 ring-2 ring-blue-500/30 shadow-xs'
+                              : 'bg-slate-50/70 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 border-slate-200/80 dark:border-white/10'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1" title={item.label}>
+                              {item.label}
+                            </span>
+                            <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                              isFilterActive
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-200/80 dark:bg-white/10 text-slate-700 dark:text-slate-300'
+                            }`}>
+                              {item.count} پسوولە
+                            </span>
+                          </div>
 
-                              {/* 🟡 Highlighted Subtotal Row for Employee */}
-                              <tr className="bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border-y-2 border-amber-300 dark:border-amber-700 font-bold print:bg-[#fef9c3] print:text-[#713f12]">
-                                <td colSpan={5} className="p-3 text-right">
-                                  <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
-                                    <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
-                                    <span>کۆی گشتی ({group.employeeName})</span>
-                                  </div>
-                                </td>
-                                <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
-                                  {group.items.length} پسوولە
-                                </td>
-                                <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-100 text-xs">
-                                  {group.totalAmount.toLocaleString()} IQD
-                                </td>
-                                <td className="p-3 text-amber-800 dark:text-amber-300 text-xs">
-                                  —
-                                </td>
-                              </tr>
-                            </Fragment>
-                          );
-                        });
-                      })()}
-                      <tr className="bg-slate-900 text-white font-black">
-                        <td colSpan={6} className="p-3 text-right">
-                          کۆی گشتی مەسروفاتی مانگی ({selectedMonth}):
-                        </td>
-                        <td className="p-3 text-center font-mono text-blue-400 text-sm">
-                          {monthlyTotalExp.toLocaleString()} IQD
-                        </td>
-                        <td className="p-3 text-slate-400 font-normal">
-                          {monthlyExpensesList.length} پسوولە
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+                          <div className="flex items-baseline justify-between text-xs">
+                            <span className="font-mono font-black text-blue-600 dark:text-blue-400">
+                              {item.total.toLocaleString()} IQD
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono font-bold">
+                              %{percentage}
+                            </span>
+                          </div>
+
+                          <div className="w-full h-1.5 bg-slate-200/80 dark:bg-white/10 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-blue-600 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min(percentage, 100)}%` }}
+                            />
+                          </div>
+
+                          <div className="text-[10px] text-slate-400 pt-0.5 flex items-center justify-between">
+                            <span>{isFilterActive ? '✓ فلتەر کراوە' : 'کلیک بکە بۆ فلتەرکردنی خشتە'}</span>
+                            {isFilterActive && <span className="text-rose-500 font-bold">لابردن ✕</span>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
+
+              {/* Table Container */}
+              <div className="bg-white dark:bg-[#1c1c1e] border border-slate-200/80 dark:border-white/10 rounded-2xl shadow-xs overflow-hidden">
+                <div className="p-4 border-b border-slate-100 dark:border-white/5 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <TrendingDown className="w-4 h-4 text-blue-600" />
+                    <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                      لیستی تەواوی پسوولەکانی مەسروفاتی مانگی ({selectedMonth})
+                      {selectedReasonFilter && (
+                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400 mr-2">
+                          (فلتەرکراو بەپێی: {selectedReasonFilter})
+                        </span>
+                      )}
+                    </h3>
+                  </div>
+                  <div className="text-xs font-bold text-slate-500">
+                    <span>
+                      ژمارەی پسوولەکان: <strong className="text-slate-900 dark:text-white">{filteredMonthlyExpenses.length}</strong>
+                      {selectedReasonFilter && <span className="text-slate-400 font-normal"> لە کۆی {monthlyExpensesList.length}</span>}
+                      {' • '}کۆی مەسروفات: <strong className="text-blue-600 dark:text-blue-400 font-mono">{filteredMonthlyTotalExp.toLocaleString()} IQD</strong>
+                    </span>
+                  </div>
+                </div>
+
+                {selectedReasonFilter && (
+                  <div className="px-4 py-2 bg-blue-50/70 dark:bg-blue-950/30 border-b border-blue-100 dark:border-blue-900/40 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 font-bold text-blue-900 dark:text-blue-200">
+                      <Filter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span>خشتەکە تەنها خەرجییەکانی «{selectedReasonFilter}» پیشان دەدات.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedReasonFilter(null)}
+                      className="text-xs font-bold text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-white underline cursor-pointer"
+                    >
+                      پیشاندانی هەموو مەسروفاتەکان ✕
+                    </button>
+                  </div>
+                )}
+
+                {filteredMonthlyExpenses.length === 0 ? (
+                  <div className="p-12 text-center text-slate-400 text-xs space-y-2">
+                    <p>{selectedReasonFilter ? `هیچ مەسروفاتێک بۆ هۆکاری «${selectedReasonFilter}» لەم مانگەدا تۆمار نەکراوە.` : `هیچ مەسروفاتێک بۆ مانگی (${selectedMonth}) تۆمار نەکراوە.`}</p>
+                    {selectedReasonFilter && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedReasonFilter(null)}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 text-white font-bold text-xs cursor-pointer hover:bg-blue-700"
+                      >
+                        گەڕانەوە بۆ هەموو خەرجییەکان
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-right border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 font-bold">
+                          <th className="p-3 text-center w-12">#</th>
+                          <th className="p-3 text-center">بەروار</th>
+                          <th className="p-3">ناوی کارمەند</th>
+                          <th className="p-3 text-center">جۆری خەرجی</th>
+                          <th className="p-3">لە / بۆ</th>
+                          <th className="p-3 text-center">ژ.سەفەر</th>
+                          <th className="p-3 text-center">بڕی پارە (IQD)</th>
+                          <th className="p-3">تێبینی</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                        {(() => {
+                          const groups = groupExpensesByEmployee(filteredMonthlyExpenses, employees);
+                          let globalIdx = 0;
+                          return groups.map((group) => {
+                            return (
+                              <Fragment key={group.employeeKey}>
+                                {group.items.map((item: any) => {
+                                  globalIdx += 1;
+                                  const currentIdx = globalIdx;
+                                  return (
+                                    <tr key={item.id || currentIdx} className="hover:bg-slate-50/70 dark:hover:bg-white/5 transition-colors">
+                                      <td className="p-3 text-center font-mono text-slate-400 font-bold">{currentIdx}</td>
+                                      <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">📅 {item.date}</td>
+                                      <td className="p-3 font-bold text-slate-900 dark:text-white">{group.employeeName}</td>
+                                      <td className="p-3 text-center">
+                                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeColors[item.type as keyof typeof typeColors]?.bg || ''} ${typeColors[item.type as keyof typeof typeColors]?.text || ''} ${typeColors[item.type as keyof typeof typeColors]?.border || ''}`}>
+                                          {typeLabels[item.type] || item.category || 'تەکسی'}
+                                        </span>
+                                      </td>
+                                      <td className="p-3 text-slate-600 dark:text-slate-300">
+                                        {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—'}
+                                      </td>
+                                      <td className="p-3 text-center font-mono text-slate-500">{item.trip || '—'}</td>
+                                      <td className="p-3 text-center font-mono font-bold text-blue-600 dark:text-blue-400">
+                                        {Number(item.amount || 0).toLocaleString()} IQD
+                                      </td>
+                                      <td className="p-3 text-slate-500">{item.note || item.reason || '—'}</td>
+                                    </tr>
+                                  );
+                                })}
+
+                                {/* 🟡 Highlighted Subtotal Row for Employee */}
+                                <tr className="bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border-y-2 border-amber-300 dark:border-amber-700 font-bold print:bg-[#fef9c3] print:text-[#713f12]">
+                                  <td colSpan={5} className="p-3 text-right">
+                                    <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
+                                      <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
+                                      <span>کۆی گشتی ({group.employeeName})</span>
+                                    </div>
+                                  </td>
+                                  <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
+                                    {group.items.length} پسوولە
+                                  </td>
+                                  <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-100 text-xs">
+                                    {group.totalAmount.toLocaleString()} IQD
+                                  </td>
+                                  <td className="p-3 text-amber-800 dark:text-amber-300 text-xs">
+                                    —
+                                  </td>
+                                </tr>
+                              </Fragment>
+                            );
+                          });
+                        })()}
+                        <tr className="bg-slate-900 text-white font-black">
+                          <td colSpan={6} className="p-3 text-right">
+                            {selectedReasonFilter ? `کۆی خەرجییە فلتەرکراوەکان (${selectedReasonFilter}):` : `کۆی گشتی مەسروفاتی مانگی (${selectedMonth}):`}
+                          </td>
+                          <td className="p-3 text-center font-mono text-blue-400 text-sm">
+                            {filteredMonthlyTotalExp.toLocaleString()} IQD
+                          </td>
+                          <td className="p-3 text-slate-400 font-normal">
+                            {filteredMonthlyExpenses.length} پسوولە
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -2667,18 +2928,65 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                 </div>
               )}
 
-              {/* Row 4: Note / Reason & Action Buttons */}
+              {/* Row 4: Preset Standard Reasons / Notes */}
+              {currentPresetReasons.length > 0 && (
+                <div className="space-y-2 p-3 bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-900/40 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 animate-pulse shrink-0" />
+                      <span>هۆکار و تێبینییە جێگیرەکان (کلیک بکە بۆ دیاریکردنی خێرا):</span>
+                    </label>
+                    {note && (
+                      <button
+                        type="button"
+                        onClick={() => setNote('')}
+                        className="text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                      >
+                        پاککردنەوەی تێبینی ✕
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {currentPresetReasons.map((reasonText) => {
+                      const isSelected = note === reasonText;
+                      return (
+                        <button
+                          key={reasonText}
+                          type="button"
+                          onClick={() => handleSelectPresetReason(reasonText)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border text-right ${
+                            isSelected
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs scale-102 ring-2 ring-blue-400/30'
+                              : 'bg-white dark:bg-[#2c2c2e] text-slate-700 dark:text-slate-200 border-slate-200 dark:border-white/10 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40'
+                          }`}
+                        >
+                          {isSelected ? (
+                            <Check className="w-3.5 h-3.5 text-white shrink-0" />
+                          ) : (
+                            <Tag className="w-3 h-3 text-slate-400 shrink-0" />
+                          )}
+                          <span>{reasonText}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Row 5: Note / Reason & Action Buttons */}
               <div className="flex flex-col sm:flex-row items-end gap-3">
                 <div className="w-full space-y-1">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                    {activeTab === 'bonuses' ? 'هۆکاری پاداشت' : 'تێبینی'}
+                    {activeTab === 'bonuses' ? 'هۆکاری پاداشت' : 'دەقی تێبینی'}
+                    <span className="text-[10px] font-normal text-slate-400 mr-1.5">(دەتوانیت لە هۆکارە جێگیرەکانی سەرەوە هەڵبژێریت یان لێرە دەستی بنووسیت)</span>
                   </label>
                   <input
                     type="text"
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    placeholder={activeTab === 'bonuses' ? 'پاداشتی دەستخۆشی کارکردن' : 'تێبینی نووسین...'}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#2c2c2e] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder={activeTab === 'bonuses' ? 'پاداشتی دەستخۆشی کارکردن' : 'تێبینی بنووسە یان لە سەرەوە هەڵبژێرە...'}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#2c2c2e] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                   />
                 </div>
 
