@@ -29,7 +29,9 @@ import {
   Sparkles,
   Check,
   Tag,
-  Filter
+  Filter,
+  Settings,
+  RotateCcw
 } from 'lucide-react';
 import { format, addMonths, subMonths } from 'date-fns';
 import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
@@ -95,9 +97,22 @@ export const groupExpensesByEmployee = (items: any[] = [], employeesList: Employ
 };
 
 // -------------------------------------------------------------
-// ⚡ PRESET STANDARDIZED REASONS / NOTES FOR FAST ENTRY & ANALYTICS
+// ⚡ MANAGEABLE EXPENSE CATEGORIES & PRESET REASONS
 // -------------------------------------------------------------
-export const PRESET_EXPENSE_REASONS: Record<string, string[]> = {
+export interface CustomCategory {
+  key: string;
+  label: string;
+}
+
+export const DEFAULT_EXPENSE_CATEGORIES: CustomCategory[] = [
+  { key: 'taxi', label: 'کرێی تەکسی' },
+  { key: 'fuel', label: 'بەنزین' },
+  { key: 'food', label: 'خواردن' },
+  { key: 'office', label: 'مەکتەب' },
+  { key: 'other', label: 'تر' },
+];
+
+export const DEFAULT_PRESET_EXPENSE_REASONS: Record<string, string[]> = {
   taxi: [
     'کرێ تەکسی بۆ چون لێدانی لەزگەی فرۆشراوە',
     'کرێ تەکسی کار باری کۆمپانیا',
@@ -124,6 +139,8 @@ export const PRESET_EXPENSE_REASONS: Record<string, string[]> = {
     'چاپەمەنی و وەرەقە و مەرکەب',
   ],
 };
+
+export const PRESET_EXPENSE_REASONS = DEFAULT_PRESET_EXPENSE_REASONS;
 
 export const PRESET_BONUS_REASONS: string[] = [
   'پاداشتی دەستخۆشی کارکردن',
@@ -399,7 +416,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   // Form Fields for Item Input
   const [date, setDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [amount, setAmount] = useState('');
-  const [expenseType, setExpenseType] = useState<'taxi' | 'fuel' | 'food' | 'office' | 'other'>('taxi');
+  const [expenseType, setExpenseType] = useState<string>('taxi');
   const [fromLoc, setFromLoc] = useState('');
   const [toLoc, setToLoc] = useState('');
   const [tripNo, setTripNo] = useState('');
@@ -512,10 +529,205 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     });
   }, [expenses, archivedVouchers]);
 
+  // 📁 Manageable Categories & Preset Reasons
+  const [categories, setCategories] = useState<CustomCategory[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ashley_custom_expense_categories_v2');
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return DEFAULT_EXPENSE_CATEGORIES;
+  });
+
+  const [presetReasons, setPresetReasons] = useState<Record<string, string[]>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ashley_custom_preset_reasons_v2');
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return DEFAULT_PRESET_EXPENSE_REASONS;
+  });
+
+  // Modal State for managing Categories and Reasons
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
+  const [managerActiveTab, setManagerActiveTab] = useState<'categories' | 'reasons'>('categories');
+  const [managerSelectedCatKey, setManagerSelectedCatKey] = useState<string>('taxi');
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategoryKey, setEditingCategoryKey] = useState<string | null>(null);
+  const [editingCategoryLabel, setEditingCategoryLabel] = useState('');
+
+  const [newReasonText, setNewReasonText] = useState('');
+  const [editingReasonIndex, setEditingReasonIndex] = useState<number | null>(null);
+  const [editingReasonText, setEditingReasonText] = useState('');
+
+  // Category Actions
+  const handleAddCategory = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newCategoryName.trim()) return;
+    const trimmed = newCategoryName.trim();
+    if (categories.some(c => c.label === trimmed)) {
+      alert('ئەم پۆلێنە پێشتر بوونی هەیە!');
+      return;
+    }
+    const newKey = `cat_${Date.now()}`;
+    const updated = [...categories, { key: newKey, label: trimmed }];
+    setCategories(updated);
+    try {
+      localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
+    } catch {}
+    setPresetReasons(prev => {
+      const next = { ...prev, [newKey]: [] };
+      try {
+        localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    setNewCategoryName('');
+    setExpenseType(newKey);
+    setManagerSelectedCatKey(newKey);
+  };
+
+  const handleSaveEditCategory = (key: string) => {
+    if (!editingCategoryLabel.trim()) return;
+    const trimmed = editingCategoryLabel.trim();
+    const updated = categories.map(c => c.key === key ? { ...c, label: trimmed } : c);
+    setCategories(updated);
+    try {
+      localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
+    } catch {}
+    setEditingCategoryKey(null);
+    setEditingCategoryLabel('');
+  };
+
+  const handleDeleteCategory = (key: string) => {
+    if (categories.length <= 1) {
+      alert('ناتوانی هەموو پۆلێنەکان بسڕیتەوە! پێویستە لانیکەم یەک پۆلێن هەبێت.');
+      return;
+    }
+    const cat = categories.find(c => c.key === key);
+    if (!window.confirm(`ئایا دڵنیایت لە سڕینەوەی پۆلێنی «${cat?.label || key}»؟`)) return;
+    const updated = categories.filter(c => c.key !== key);
+    setCategories(updated);
+    try {
+      localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
+    } catch {}
+    if (expenseType === key) {
+      setExpenseType(updated[0]?.key || 'taxi');
+    }
+    if (managerSelectedCatKey === key) {
+      setManagerSelectedCatKey(updated[0]?.key || 'taxi');
+    }
+  };
+
+  // Preset Reason Actions
+  const handleAddReason = (catKey: string, e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newReasonText.trim()) return;
+    const trimmed = newReasonText.trim();
+    const currentList = presetReasons[catKey] || [];
+    if (currentList.includes(trimmed)) {
+      alert('ئەم تێبینییە پێشتر بوونی هەیە لەم پۆلێنەدا!');
+      return;
+    }
+    const updatedList = [...currentList, trimmed];
+    const updatedMap = { ...presetReasons, [catKey]: updatedList };
+    setPresetReasons(updatedMap);
+    try {
+      localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
+    } catch {}
+    setNewReasonText('');
+  };
+
+  const handleSaveEditReason = (catKey: string, index: number) => {
+    if (!editingReasonText.trim()) return;
+    const trimmed = editingReasonText.trim();
+    const currentList = presetReasons[catKey] || [];
+    const updatedList = currentList.map((r, i) => i === index ? trimmed : r);
+    const updatedMap = { ...presetReasons, [catKey]: updatedList };
+    setPresetReasons(updatedMap);
+    try {
+      localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
+    } catch {}
+    setEditingReasonIndex(null);
+    setEditingReasonText('');
+  };
+
+  const handleDeleteReason = (catKey: string, index: number) => {
+    const currentList = presetReasons[catKey] || [];
+    const targetText = currentList[index];
+    if (!window.confirm(`ئایا دڵنیایت لە سڕینەوەی تێبینی «${targetText}»؟`)) return;
+    const updatedList = currentList.filter((_, i) => i !== index);
+    const updatedMap = { ...presetReasons, [catKey]: updatedList };
+    setPresetReasons(updatedMap);
+    try {
+      localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
+    } catch {}
+  };
+
+  const handleResetCategoryAndReasons = () => {
+    if (!window.confirm('ئایا دڵنیایت لە گەڕاندنەوەی سەرجەم پۆلێن و تێبینییەکان بۆ باری بنەڕەتی سەرەتایی؟')) return;
+    setCategories(DEFAULT_EXPENSE_CATEGORIES);
+    setPresetReasons(DEFAULT_PRESET_EXPENSE_REASONS);
+    try {
+      localStorage.removeItem('ashley_custom_expense_categories_v2');
+      localStorage.removeItem('ashley_custom_preset_reasons_v2');
+    } catch {}
+    setExpenseType('taxi');
+    setManagerSelectedCatKey('taxi');
+    alert('سەرجەم پۆلێن و تێبینییەکان گەڕانەوە بۆ باری بنەڕەتی سەرەتایی.');
+  };
+
+  const categoryPills = categories;
+
+  const typeLabels: Record<string, string> = useMemo(() => {
+    const map: Record<string, string> = {
+      taxi: 'کرێی تەکسی',
+      fuel: 'بەنزین',
+      food: 'خواردن',
+      office: 'مەکتەب',
+      other: 'تر',
+    };
+    categories.forEach(c => {
+      map[c.key] = c.label;
+    });
+    return map;
+  }, [categories]);
+
+  const defaultPalette = [
+    { bg: 'bg-blue-50 dark:bg-blue-950/40', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
+    { bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800' },
+    { bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' },
+    { bg: 'bg-purple-50 dark:bg-purple-950/40', text: 'text-purple-700 dark:text-purple-300', border: 'border-purple-200 dark:border-purple-800' },
+    { bg: 'bg-rose-50 dark:bg-rose-950/40', text: 'text-rose-700 dark:text-rose-300', border: 'border-rose-200 dark:border-rose-800' },
+    { bg: 'bg-indigo-50 dark:bg-indigo-950/40', text: 'text-indigo-700 dark:text-indigo-300', border: 'border-indigo-200 dark:border-indigo-800' },
+    { bg: 'bg-cyan-50 dark:bg-cyan-950/40', text: 'text-cyan-700 dark:text-cyan-300', border: 'border-cyan-200 dark:border-cyan-800' },
+    { bg: 'bg-teal-50 dark:bg-teal-950/40', text: 'text-teal-700 dark:text-teal-300', border: 'border-teal-200 dark:border-teal-800' },
+    { bg: 'bg-orange-50 dark:bg-orange-950/40', text: 'text-orange-700 dark:text-orange-300', border: 'border-orange-200 dark:border-orange-800' },
+    { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-700' },
+  ];
+
+  const typeColors = useMemo(() => {
+    const map: Record<string, { bg: string; text: string; border: string }> = {
+      taxi: defaultPalette[0],
+      fuel: defaultPalette[1],
+      food: defaultPalette[2],
+      office: defaultPalette[3],
+      other: defaultPalette[9],
+    };
+    categories.forEach((c, idx) => {
+      if (!map[c.key]) {
+        map[c.key] = defaultPalette[(idx + 4) % defaultPalette.length];
+      }
+    });
+    return map;
+  }, [categories]);
+
   // ⚡ Preset reasons for current tab / category
   const currentPresetReasons = useMemo(() => {
     if (activeTab === 'expenses') {
-      return PRESET_EXPENSE_REASONS[expenseType] || [];
+      return presetReasons[expenseType] || [];
     }
     if (activeTab === 'bonuses') {
       return PRESET_BONUS_REASONS;
@@ -524,7 +736,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       return PRESET_WITHDRAWAL_REASONS;
     }
     return [];
-  }, [activeTab, expenseType]);
+  }, [activeTab, expenseType, presetReasons]);
 
   const handleSelectPresetReason = (reasonText: string) => {
     setNote(reasonText);
@@ -555,30 +767,6 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   // UX Feedback for fast entry
   const [lastAddedFeedback, setLastAddedFeedback] = useState<string | null>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
-
-  const categoryPills = [
-    { key: 'taxi' as const, label: 'کرێی تەکسی' },
-    { key: 'fuel' as const, label: 'بەنزین' },
-    { key: 'food' as const, label: 'خواردن' },
-    { key: 'office' as const, label: 'مەکتەب' },
-    { key: 'other' as const, label: 'تر' },
-  ];
-
-  const typeLabels: Record<string, string> = {
-    taxi: 'کرێی تەکسی',
-    fuel: 'بەنزین',
-    food: 'خواردن',
-    office: 'مەکتەب',
-    other: 'تر'
-  };
-
-  const typeColors: Record<string, { bg: string; text: string; border: string }> = {
-    taxi: { bg: 'bg-blue-50 dark:bg-blue-950/40', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
-    fuel: { bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800' },
-    food: { bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' },
-    office: { bg: 'bg-purple-50 dark:bg-purple-950/40', text: 'text-purple-700 dark:text-purple-300', border: 'border-purple-200 dark:border-purple-800' },
-    other: { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-700' },
-  };
 
   const activeEmployees = useMemo(() => {
     return employees.filter(e => e.status !== 'resigned' && e.isActive !== false);
@@ -705,13 +893,10 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
 
   // Category breakdown for expenses
   const categoryBreakdown = useMemo(() => {
-    const map: Record<string, { count: number; total: number; label: string }> = {
-      taxi: { count: 0, total: 0, label: 'کرێی تەکسی' },
-      fuel: { count: 0, total: 0, label: 'بەنزین' },
-      food: { count: 0, total: 0, label: 'خواردن' },
-      office: { count: 0, total: 0, label: 'مەکتەب' },
-      other: { count: 0, total: 0, label: 'تر' },
-    };
+    const map: Record<string, { count: number; total: number; label: string }> = {};
+    categories.forEach(c => {
+      map[c.key] = { count: 0, total: 0, label: c.label };
+    });
 
     monthlyExpensesList.forEach((e: any) => {
       const t = (e.type as string) || 'other';
@@ -721,7 +906,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     });
 
     return map;
-  }, [monthlyExpensesList]);
+  }, [monthlyExpensesList, categories, typeLabels]);
 
   // Reason / Note breakdown for monthly expenses analytics
   const reasonBreakdown = useMemo(() => {
@@ -3119,9 +3304,22 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
               {/* Row 2: Category Pills (for expenses) */}
               {activeTab === 'expenses' && (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                    پۆلێنی خەرجی:
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                      پۆلێنی خەرجی:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setManagerActiveTab('categories');
+                        setIsCategoryManagerOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>ڕێکخستنی پۆلێنەکان</span>
+                    </button>
+                  </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {categoryPills.map(p => (
                       <button
@@ -3137,6 +3335,18 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                         {p.label}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setManagerActiveTab('categories');
+                        setIsCategoryManagerOpen(true);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 border border-dashed border-blue-300 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer flex items-center gap-1"
+                      title="پۆلێنی نوێ زیادبکە"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>پۆلێنی نوێ</span>
+                    </button>
                   </div>
                 </div>
               )}
@@ -3171,22 +3381,38 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
               )}
 
               {/* Row 4: Preset Standard Reasons / Notes */}
-              {currentPresetReasons.length > 0 && (
+              {(currentPresetReasons.length > 0 || activeTab === 'expenses') && (
                 <div className="space-y-2 p-3 bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-900/40 rounded-xl">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-black text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 animate-pulse shrink-0" />
                       <span>هۆکار و تێبینییە جێگیرەکان (کلیک بکە بۆ دیاریکردنی خێرا):</span>
                     </label>
-                    {note && (
-                      <button
-                        type="button"
-                        onClick={() => setNote('')}
-                        className="text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
-                      >
-                        پاککردنەوەی تێبینی ✕
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {activeTab === 'expenses' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManagerSelectedCatKey(expenseType);
+                            setManagerActiveTab('reasons');
+                            setIsCategoryManagerOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100 hover:underline cursor-pointer bg-white/70 dark:bg-white/10 px-2 py-0.5 rounded-md border border-blue-200/60 dark:border-blue-800"
+                        >
+                          <Settings className="w-3 h-3" />
+                          <span>دەستکاریکردنی تێبینییەکان</span>
+                        </button>
+                      )}
+                      {note && (
+                        <button
+                          type="button"
+                          onClick={() => setNote('')}
+                          className="text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                        >
+                          پاککردنەوەی تێبینی ✕
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -3212,6 +3438,22 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                         </button>
                       );
                     })}
+
+                    {activeTab === 'expenses' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManagerSelectedCatKey(expenseType);
+                          setManagerActiveTab('reasons');
+                          setIsCategoryManagerOpen(true);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 border border-dashed border-blue-300 dark:border-blue-700 hover:bg-white dark:hover:bg-blue-950/40 cursor-pointer flex items-center gap-1"
+                        title="تێبینی جێگیری نوێ زیادبکە"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>تێبینی نوێ</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -3634,6 +3876,367 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* ⚙️ MODAL: MANAGE EXPENSE CATEGORIES & PRESET NOTES        */}
+      {/* ========================================================= */}
+      {isCategoryManagerOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200 font-sans" dir="rtl">
+          <div className="bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-slate-50/80 dark:bg-white/5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                  <Settings className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                    ڕێکخستنی پۆلێن و تێبینییەکان
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    زیادکردن، گۆڕین و سڕینەوەی پۆلێنەکانی مەسروفات و تێبینییە جێگیرەکان
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCategoryManagerOpen(false);
+                  setEditingCategoryKey(null);
+                  setEditingReasonIndex(null);
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Navigation Tabs (Categories vs Notes) */}
+            <div className="p-3 border-b border-slate-200 dark:border-white/10 bg-slate-50/40 dark:bg-white/[0.02]">
+              <div className="flex items-center gap-2 p-1 bg-slate-200/70 dark:bg-white/10 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManagerActiveTab('categories');
+                    setEditingCategoryKey(null);
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    managerActiveTab === 'categories'
+                      ? 'bg-white dark:bg-[#2c2c2e] text-blue-600 dark:text-blue-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                  }`}
+                >
+                  <Tag className="w-3.5 h-3.5" />
+                  <span>پۆلێنەکانی مەسروفات ({categories.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManagerActiveTab('reasons');
+                    setEditingReasonIndex(null);
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    managerActiveTab === 'reasons'
+                      ? 'bg-white dark:bg-[#2c2c2e] text-blue-600 dark:text-blue-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>تێبینییە جێگیرەکان</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Content Area */}
+            <div className="p-4 overflow-y-auto space-y-4 flex-1">
+              {/* TAB 1: CATEGORIES */}
+              {managerActiveTab === 'categories' && (
+                <div className="space-y-4">
+                  {/* Add New Category Form */}
+                  <form
+                    onSubmit={handleAddCategory}
+                    className="flex items-center gap-2 bg-slate-50 dark:bg-white/5 p-2 rounded-xl border border-slate-200 dark:border-white/10"
+                  >
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="ناوی پۆلێنی نوێ بنووسە (بۆ نموونە: چاککردنەوە)..."
+                      className="flex-1 bg-white dark:bg-[#2c2c2e] border border-slate-300 dark:border-white/15 rounded-lg px-3 py-2 text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newCategoryName.trim()}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>زیادکردن</span>
+                    </button>
+                  </form>
+
+                  {/* Categories List */}
+                  <div className="space-y-2">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block">
+                      پۆلێنە بەردەستەکان (دەتوانی ناویان بگۆڕیت یان بسڕیتەوە):
+                    </span>
+
+                    <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
+                      {categories.map((cat) => {
+                        const isEditing = editingCategoryKey === cat.key;
+                        const reasonCount = (presetReasons[cat.key] || []).length;
+
+                        return (
+                          <div
+                            key={cat.key}
+                            className="flex items-center justify-between gap-2 p-2.5 bg-white dark:bg-[#242426] border border-slate-200 dark:border-white/10 rounded-xl hover:border-slate-300 dark:hover:border-white/20 transition-colors"
+                          >
+                            {isEditing ? (
+                              <div className="flex items-center gap-2 flex-1">
+                                <input
+                                  type="text"
+                                  value={editingCategoryLabel}
+                                  onChange={(e) => setEditingCategoryLabel(e.target.value)}
+                                  className="flex-1 bg-slate-50 dark:bg-[#1c1c1e] border border-blue-500 rounded-lg px-2.5 py-1 text-xs text-slate-900 dark:text-white focus:outline-hidden"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveEditCategory(cat.key);
+                                    if (e.key === 'Escape') setEditingCategoryKey(null);
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveEditCategory(cat.key)}
+                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg cursor-pointer flex items-center gap-1"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>پاشەکەوت</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCategoryKey(null)}
+                                  className="px-2 py-1 bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300 text-[11px] font-bold rounded-lg cursor-pointer"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                                    {cat.label}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-full font-mono">
+                                    {reasonCount} تێبینی
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setManagerSelectedCatKey(cat.key);
+                                      setManagerActiveTab('reasons');
+                                    }}
+                                    className="px-2 py-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition-colors cursor-pointer"
+                                    title="بینینی تێبینییەکانی ئەم پۆلێنە"
+                                  >
+                                    تێبینییەکان
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingCategoryKey(cat.key);
+                                      setEditingCategoryLabel(cat.label);
+                                    }}
+                                    className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-colors cursor-pointer"
+                                    title="دەستکاریکردنی ناو"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCategory(cat.key)}
+                                    className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors cursor-pointer"
+                                    title="سڕینەوەی ئەم پۆلێنە"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: PRESET REASONS */}
+              {managerActiveTab === 'reasons' && (
+                <div className="space-y-4">
+                  {/* Select Category */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                      پۆلێنی مەبەست هەڵبژێرە:
+                    </label>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {categories.map((c) => (
+                        <button
+                          key={c.key}
+                          type="button"
+                          onClick={() => {
+                            setManagerSelectedCatKey(c.key);
+                            setEditingReasonIndex(null);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            managerSelectedCatKey === c.key
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                          }`}
+                        >
+                          {c.label} ({ (presetReasons[c.key] || []).length })
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Add New Reason Form */}
+                  <form
+                    onSubmit={(e) => handleAddReason(managerSelectedCatKey, e)}
+                    className="flex items-center gap-2 bg-slate-50 dark:bg-white/5 p-2 rounded-xl border border-slate-200 dark:border-white/10"
+                  >
+                    <input
+                      type="text"
+                      value={newReasonText}
+                      onChange={(e) => setNewReasonText(e.target.value)}
+                      placeholder={`تێبینی نوێ بنووسە بۆ «${categories.find(c => c.key === managerSelectedCatKey)?.label || managerSelectedCatKey}»...`}
+                      className="flex-1 bg-white dark:bg-[#2c2c2e] border border-slate-300 dark:border-white/15 rounded-lg px-3 py-2 text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newReasonText.trim()}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>زیادکردن</span>
+                    </button>
+                  </form>
+
+                  {/* Reasons List */}
+                  <div className="space-y-2">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block">
+                      تێبینییە جێگیرەکان بۆ پۆلێنی «{categories.find(c => c.key === managerSelectedCatKey)?.label || managerSelectedCatKey}»:
+                    </span>
+
+                    {(!presetReasons[managerSelectedCatKey] || presetReasons[managerSelectedCatKey].length === 0) ? (
+                      <div className="p-6 text-center text-slate-400 dark:text-slate-500 text-xs border border-dashed border-slate-200 dark:border-white/10 rounded-xl">
+                        هیچ تێبینییەکی جێگیر نییە بۆ ئەم پۆلێنە. لە فۆڕمەکەی سەرەوە زیادبکە.
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
+                        {presetReasons[managerSelectedCatKey].map((reason, index) => {
+                          const isEditing = editingReasonIndex === index;
+
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between gap-2 p-2.5 bg-white dark:bg-[#242426] border border-slate-200 dark:border-white/10 rounded-xl hover:border-slate-300 dark:hover:border-white/20 transition-colors"
+                            >
+                              {isEditing ? (
+                                <div className="flex items-center gap-2 flex-1">
+                                  <input
+                                    type="text"
+                                    value={editingReasonText}
+                                    onChange={(e) => setEditingReasonText(e.target.value)}
+                                    className="flex-1 bg-slate-50 dark:bg-[#1c1c1e] border border-blue-500 rounded-lg px-2.5 py-1 text-xs text-slate-900 dark:text-white focus:outline-hidden"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleSaveEditReason(managerSelectedCatKey, index);
+                                      if (e.key === 'Escape') setEditingReasonIndex(null);
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveEditReason(managerSelectedCatKey, index)}
+                                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg cursor-pointer flex items-center gap-1"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>پاشەکەوت</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingReasonIndex(null)}
+                                    className="px-2 py-1 bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300 text-[11px] font-bold rounded-lg cursor-pointer"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <span className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                                    {reason}
+                                  </span>
+
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingReasonIndex(index);
+                                        setEditingReasonText(reason);
+                                      }}
+                                      className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-colors cursor-pointer"
+                                      title="دەستکاریکردنی تێبینی"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteReason(managerSelectedCatKey, index)}
+                                      className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors cursor-pointer"
+                                      title="سڕینەوەی ئەم تێبینییە"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer with Reset to Defaults and Close */}
+            <div className="p-3 border-t border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleResetCategoryAndReasons}
+                className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 font-bold flex items-center gap-1 hover:underline cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>گەڕاندنەوە بۆ باری بنەڕەتی</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCategoryManagerOpen(false);
+                  setEditingCategoryKey(null);
+                  setEditingReasonIndex(null);
+                }}
+                className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+              >
+                داخستن
+              </button>
             </div>
           </div>
         </div>
