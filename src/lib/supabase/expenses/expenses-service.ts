@@ -1,4 +1,4 @@
-﻿import { fetchSupabaseJson, saveSupabaseJson } from '@/lib/supabase/client';
+import { fetchSupabaseJson, saveSupabaseJson } from '@/lib/supabase/client';
 import type { Expense, Bonus, CashWithdrawal, SalarySettings } from '@/lib/types';
 import { initialData, initialSettings } from '@/context/initial-data';
 
@@ -106,3 +106,81 @@ export async function saveSalarySettings(settings: SalarySettings): Promise<bool
     settings
   );
 }
+
+// ===================== CUSTOM EXPENSE CATEGORIES & PRESET REASONS (CLOUD SYNC) =====================
+const CUSTOM_EXPENSE_CATEGORIES_KEY = 'ashley_custom_expense_categories_v2';
+const CUSTOM_PRESET_REASONS_KEY = 'ashley_custom_preset_reasons_v2';
+const ARCHIVED_VOUCHERS_LEDGER_KEY = 'ashley_archived_vouchers_ledger_v3';
+
+export interface CustomExpenseCategory {
+  id: string;
+  label: string;
+  color: string;
+}
+
+export async function fetchCustomExpenseCategories(): Promise<CustomExpenseCategory[] | null> {
+  try {
+    return await fetchSupabaseJson<CustomExpenseCategory[] | null>(CUSTOM_EXPENSE_CATEGORIES_KEY, null);
+  } catch (err) {
+    console.error('[ExpensesService] Error fetching custom categories from Supabase:', err);
+    return null;
+  }
+}
+
+export async function saveCustomExpenseCategories(categories: CustomExpenseCategory[]): Promise<boolean> {
+  try {
+    return await saveSupabaseJson<CustomExpenseCategory[]>(
+      CUSTOM_EXPENSE_CATEGORIES_KEY,
+      'Ashley Custom Expense Categories',
+      categories
+    );
+  } catch (err) {
+    console.error('[ExpensesService] Error saving custom categories to Supabase:', err);
+    return false;
+  }
+}
+
+export async function fetchCustomPresetReasons(): Promise<Record<string, string[]> | null> {
+  try {
+    return await fetchSupabaseJson<Record<string, string[]> | null>(CUSTOM_PRESET_REASONS_KEY, null);
+  } catch (err) {
+    console.error('[ExpensesService] Error fetching custom preset reasons from Supabase:', err);
+    return null;
+  }
+}
+
+export async function saveCustomPresetReasons(reasonsMap: Record<string, string[]>): Promise<boolean> {
+  try {
+    return await saveSupabaseJson<Record<string, string[]>>(
+      CUSTOM_PRESET_REASONS_KEY,
+      'Ashley Custom Preset Reasons',
+      reasonsMap
+    );
+  } catch (err) {
+    console.error('[ExpensesService] Error saving custom preset reasons to Supabase:', err);
+    return false;
+  }
+}
+
+export async function fetchArchivedVouchers(): Promise<any[] | null> {
+  try {
+    return await fetchSupabaseJson<any[] | null>(ARCHIVED_VOUCHERS_LEDGER_KEY, null);
+  } catch (err) {
+    console.error('[ExpensesService] Error fetching archived vouchers from Supabase:', err);
+    return null;
+  }
+}
+
+export async function saveArchivedVouchers(vouchers: any[]): Promise<boolean> {
+  try {
+    return await saveSupabaseJson<any[]>(
+      ARCHIVED_VOUCHERS_LEDGER_KEY,
+      'Ashley Archived Vouchers Ledger',
+      vouchers
+    );
+  } catch (err) {
+    console.error('[ExpensesService] Error saving archived vouchers to Supabase:', err);
+    return false;
+  }
+}
+

@@ -1,7 +1,6 @@
 
 import { type Metadata, type Viewport } from "next";
 import './globals.css';
-import '@carbon/styles/css/styles.css';
 import { ClientLayout } from './client-layout';
 
 export const viewport: Viewport = {

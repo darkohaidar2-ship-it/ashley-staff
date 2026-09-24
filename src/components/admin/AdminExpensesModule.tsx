@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect, Fragment } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
 import type { Employee } from '@/lib/types';
 import { useAppContext } from '@/context/app-provider';
 import { 
@@ -37,10 +37,24 @@ import {
   Zap,
   Award,
   GitBranch,
-  Workflow
+  Workflow,
+  Minimize2,
+  Maximize2,
+  ShieldCheck
 } from 'lucide-react';
 import { format, addMonths, subMonths } from 'date-fns';
 import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
+import { 
+  fetchCustomExpenseCategories, 
+  saveCustomExpenseCategories, 
+  fetchCustomPresetReasons, 
+  saveCustomPresetReasons, 
+  fetchArchivedVouchers, 
+  saveArchivedVouchers 
+} from '@/lib/supabase';
+import { CategoryManagerModal } from './expenses/CategoryManagerModal';
+import { AuditLogModal } from './expenses/AuditLogModal';
+import { PayrollSummarySlip } from './expenses/PayrollSummarySlip';
 
 export interface ArchivedVoucher {
   id: string;
@@ -304,6 +318,9 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     setBonuses, 
     withdrawals, 
     setWithdrawals, 
+    overtime,
+    activityLogs,
+    setActivityLogs,
     settings 
   } = useAppContext();
 
@@ -324,8 +341,28 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   // Selected Voucher to Inspect
   const [selectedVoucher, setSelectedVoucher] = useState<ArchivedVoucher | null>(null);
 
-  // Sub-Tab for Monthly Financial Analytics: 'combined' vs 'expenses' vs 'bonuses' vs 'withdrawals'
-  const [analyticsSubTab, setAnalyticsSubTab] = useState<'combined' | 'expenses' | 'bonuses' | 'withdrawals'>('combined');
+  // Sub-Tab for Monthly Financial Analytics: 'combined' vs 'expenses' vs 'bonuses' vs 'withdrawals' vs 'payroll'
+  const [analyticsSubTab, setAnalyticsSubTab] = useState<'combined' | 'expenses' | 'bonuses' | 'withdrawals' | 'payroll'>('combined');
+
+  // Audit Log History Modal State
+  const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
+
+  // Helper to record an audit action in Supabase
+  const logAudit = useCallback((action: 'create' | 'update' | 'delete', entity: string, description: string, entityId?: string) => {
+    const newLog = {
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      userId: 'admin',
+      username: 'بەڕێوەبەر',
+      action,
+      entity,
+      entityId,
+      description,
+      timestamp: new Date().toISOString(),
+    };
+    if (setActivityLogs) {
+      setActivityLogs((prev: any) => [newLog, ...(prev || [])]);
+    }
+  }, [setActivityLogs]);
 
   // ✏️ EDITING STATE for Archived Lists and Draft Items
   const [editingVoucherId, setEditingVoucherId] = useState<string | null>(null);
@@ -345,7 +382,57 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     return [];
   });
 
-  // Sync Archived Vouchers to LocalStorage
+  // 🔘 Table Density Mode: 'cozy' (spacious) vs 'compact' (sleek and dense)
+  const [tableDensity, setTableDensity] = useState<'cozy' | 'compact'>('cozy');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ashley_table_density') as 'cozy' | 'compact';
+      if (saved === 'cozy' || saved === 'compact') {
+        setTableDensity(saved);
+      }
+    }
+  }, []);
+
+  // 🌟 Real-Time Cloud Sync on Mount: Pull custom categories, preset reasons, and vouchers from Supabase
+  useEffect(() => {
+    fetchCustomExpenseCategories().then(cloudCats => {
+      if (cloudCats && cloudCats.length > 0) {
+        setCategories(cloudCats as any);
+        try {
+          localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(cloudCats));
+        } catch {}
+      }
+    });
+
+    fetchCustomPresetReasons().then(cloudReasons => {
+      if (cloudReasons && Object.keys(cloudReasons).length > 0) {
+        setPresetReasons(cloudReasons);
+        try {
+          localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(cloudReasons));
+        } catch {}
+      }
+    });
+
+    fetchArchivedVouchers().then(cloudVouchers => {
+      if (cloudVouchers && cloudVouchers.length > 0) {
+        setArchivedVouchers(cloudVouchers);
+        try {
+          localStorage.setItem('ashley_archived_vouchers_ledger_v3', JSON.stringify(cloudVouchers));
+        } catch {}
+      }
+    });
+  }, []);
+
+  const toggleTableDensity = () => {
+    const next = tableDensity === 'cozy' ? 'compact' : 'cozy';
+    setTableDensity(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ashley_table_density', next);
+    }
+  };
+
+  // Sync Archived Vouchers to LocalStorage & Supabase Cloud
   const saveVouchersToStorage = (updated: ArchivedVoucher[]) => {
     setArchivedVouchers(updated);
     if (typeof window !== 'undefined') {
@@ -355,6 +442,10 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         console.error('Failed to save vouchers to localStorage:', err);
       }
     }
+    // 🌟 Realtime Supabase Cloud Sync
+    saveArchivedVouchers(updated).catch(err => {
+      console.error('Failed to sync vouchers to Supabase cloud:', err);
+    });
   };
 
   // Auto-Group Existing Legacy Data into Archived Lists on First Load so NO user data is lost
@@ -586,13 +677,23 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     try {
       localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
     } catch {}
+    // 🌟 Supabase Cloud Sync
+    saveCustomExpenseCategories(updated as any).catch(err => {
+      console.error('Failed to sync categories to Supabase:', err);
+    });
+
     setPresetReasons(prev => {
       const next = { ...prev, [newKey]: [] };
       try {
         localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(next));
       } catch {}
+      saveCustomPresetReasons(next).catch(err => {
+        console.error('Failed to sync preset reasons to Supabase:', err);
+      });
       return next;
     });
+
+    logAudit('create', 'category', `زیادکردنی پۆلێنی نوێی «${trimmed}» بۆ خەرجییەکان`);
     setNewCategoryName('');
     setExpenseType(newKey);
     setManagerSelectedCatKey(newKey);
@@ -606,6 +707,10 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     try {
       localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
     } catch {}
+    saveCustomExpenseCategories(updated as any).catch(err => {
+      console.error('Failed to sync updated categories to Supabase:', err);
+    });
+    logAudit('update', 'category', `دەستکاریکردنی ناوی پۆلێن بۆ «${trimmed}»`);
     setEditingCategoryKey(null);
     setEditingCategoryLabel('');
   };
@@ -622,6 +727,10 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     try {
       localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
     } catch {}
+    saveCustomExpenseCategories(updated as any).catch(err => {
+      console.error('Failed to sync deleted category to Supabase:', err);
+    });
+    logAudit('delete', 'category', `سڕینەوەی پۆلێنی «${cat?.label || key}»`);
     if (expenseType === key) {
       setExpenseType(updated[0]?.key || 'taxi');
     }
@@ -646,6 +755,10 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     try {
       localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
     } catch {}
+    saveCustomPresetReasons(updatedMap).catch(err => {
+      console.error('Failed to sync preset reasons to Supabase:', err);
+    });
+    logAudit('create', 'preset_reason', `زیادکردنی تێبینی «${trimmed}» بۆ پۆلێنی ${catKey}`);
     setNewReasonText('');
   };
 
@@ -659,6 +772,10 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     try {
       localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
     } catch {}
+    saveCustomPresetReasons(updatedMap).catch(err => {
+      console.error('Failed to sync edited preset reason to Supabase:', err);
+    });
+    logAudit('update', 'preset_reason', `دەستکاریکردنی تێبینی بۆ «${trimmed}» لە پۆلێنی ${catKey}`);
     setEditingReasonIndex(null);
     setEditingReasonText('');
   };
@@ -673,6 +790,10 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     try {
       localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
     } catch {}
+    saveCustomPresetReasons(updatedMap).catch(err => {
+      console.error('Failed to sync deleted preset reason to Supabase:', err);
+    });
+    logAudit('delete', 'preset_reason', `سڕینەوەی تێبینی «${targetText}» لە پۆلێنی ${catKey}`);
   };
 
   const handleResetCategoryAndReasons = () => {
@@ -683,6 +804,9 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       localStorage.removeItem('ashley_custom_expense_categories_v2');
       localStorage.removeItem('ashley_custom_preset_reasons_v2');
     } catch {}
+    saveCustomExpenseCategories(DEFAULT_EXPENSE_CATEGORIES as any).catch(() => {});
+    saveCustomPresetReasons(DEFAULT_PRESET_EXPENSE_REASONS).catch(() => {});
+    logAudit('update', 'category', 'گەڕاندنەوەی پۆلێن و تێبینییەکان بۆ ڕێکخستنی بنەڕەتی');
     setExpenseType('taxi');
     setManagerSelectedCatKey('taxi');
     alert('سەرجەم پۆلێن و تێبینییەکان گەڕانەوە بۆ باری بنەڕەتی سەرەتایی.');
@@ -2123,6 +2247,9 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     }
   }, [selectedMonth]);
 
+  // 📐 Dynamic Table Density Padding Helper
+  const cellPad = tableDensity === 'compact' ? 'py-1.5 px-2.5 text-[11px]' : 'p-3 text-xs';
+
   return (
     <div className="space-y-5 dir-rtl" dir="rtl">
       
@@ -2197,8 +2324,39 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
           </button>
         </div>
 
-        {/* View Indicator Badge */}
+        {/* View Indicator Badge & Sleek Density Toggle */}
         <div className="flex items-center gap-2">
+          {/* 🔘 Sleek Table Density Toggle (Compact vs Cozy) */}
+          <button
+            type="button"
+            onClick={toggleTableDensity}
+            className="px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer active:scale-95"
+            title={tableDensity === 'cozy' ? 'گۆڕینی دیمەن بۆ شێوازی ناسک و کۆکراوە (Compact Mode)' : 'گۆڕینی دیمەن بۆ شێوازی فراوان (Cozy Mode)'}
+          >
+            {tableDensity === 'cozy' ? (
+              <>
+                <Minimize2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                <span className="hidden sm:inline text-[11px]">شێوازی ناسک (کۆکراوە)</span>
+              </>
+            ) : (
+              <>
+                <Maximize2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                <span className="hidden sm:inline text-[11px]">شێوازی فراوان (Cozy)</span>
+              </>
+            )}
+          </button>
+
+          {/* 📜 Audit Trail History Button */}
+          <button
+            type="button"
+            onClick={() => setIsAuditLogOpen(true)}
+            className="px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer active:scale-95"
+            title="بینینی مێژووی دەستکارییەکان و چاودێری دارایی (Audit Trail)"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+            <span className="hidden sm:inline text-[11px]">مێژووی چاودێری</span>
+          </button>
+
           {activeTab === 'analytics' ? (
             <span className="px-3 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-xs font-bold flex items-center gap-1.5">
               <BarChart3 className="w-3.5 h-3.5" />
@@ -3297,6 +3455,20 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                 <Banknote className="w-3.5 h-3.5" />
                 <span>🏧 وردەکاری پێشینە ({monthlyWithdrawalsList.length} جار)</span>
               </button>
+
+              {/* SubTab 5: Payroll Summary Slip Bridge */}
+              <button
+                type="button"
+                onClick={() => setAnalyticsSubTab('payroll')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  analyticsSubTab === 'payroll'
+                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-xs scale-102'
+                    : 'bg-white dark:bg-[#1c1c1e] text-indigo-700 dark:text-indigo-300 hover:bg-slate-100 dark:hover:bg-white/5 border border-indigo-200/80 dark:border-indigo-800/40'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>💵 پوختەی مووچەی مانگانە (Payroll Slip)</span>
+              </button>
             </div>
 
             {/* Current SubTab Action Buttons (Print & Excel) */}
@@ -3828,6 +4000,23 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
               )}
             </div>
           )}
+
+          {/* ========================================================= */}
+          {/* SUBTAB 5 CONTENT: MONTHLY PAYROLL SUMMARY SLIP            */}
+          {/* ========================================================= */}
+          {analyticsSubTab === 'payroll' && (
+            <PayrollSummarySlip
+              employees={employees}
+              expenses={monthlyExpensesList}
+              bonuses={monthlyBonusesList}
+              overtime={(overtime || []).filter((o: any) => o.date && o.date.startsWith(selectedMonth))}
+              withdrawals={monthlyWithdrawalsList}
+              selectedMonth={selectedMonth}
+              monthDisplayLabel={monthDisplayLabel}
+              tableDensity={tableDensity}
+              onLogAudit={logAudit}
+            />
+          )}
         </div>
       )}
 
@@ -3966,12 +4155,12 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                 <table className="w-full text-right border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 font-bold">
-                      <th className="p-3 text-center w-12">#</th>
-                      <th className="p-3">ناوی لیست / کاتی خەزنکردن (Real-Time)</th>
-                      <th className="p-3 text-center">ژمارەی پسوولەکان</th>
-                      <th className="p-3 text-center">مەودای بەرواری خەرجییەکان</th>
-                      <th className="p-3 text-center">کۆی گشتی (IQD)</th>
-                      <th className="p-3 text-center w-52">کردارەکان</th>
+                      <th className={`${cellPad} text-center w-12`}>#</th>
+                      <th className={cellPad}>ناوی لیست / کاتی خەزنکردن (Real-Time)</th>
+                      <th className={`${cellPad} text-center`}>ژمارەی پسوولەکان</th>
+                      <th className={`${cellPad} text-center`}>مەودای بەرواری خەرجییەکان</th>
+                      <th className={`${cellPad} text-center`}>کۆی گشتی (IQD)</th>
+                      <th className={`${cellPad} text-center w-52`}>کردارەکان</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-white/5">
@@ -3980,17 +4169,17 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                         key={voucher.id} 
                         className="hover:bg-slate-50/70 dark:hover:bg-white/5 transition-colors group"
                       >
-                        <td className="p-3 text-center font-mono text-slate-400 font-bold">
+                        <td className={`${cellPad} text-center font-mono text-slate-400 font-bold`}>
                           {idx + 1}
                         </td>
 
-                        <td className="p-3 font-bold text-slate-900 dark:text-white">
+                        <td className={`${cellPad} font-bold text-slate-900 dark:text-white`}>
                           <div className="flex items-center gap-2">
                             <span className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
                               <Clock className="w-3.5 h-3.5" />
                             </span>
                             <div>
-                              <span className="block text-xs font-black text-slate-900 dark:text-white">
+                              <span className="block text-xs font-bold text-slate-900 dark:text-white">
                                 {voucher.name}
                               </span>
                               <span className="text-[10px] text-slate-400 font-normal">
@@ -4000,23 +4189,23 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                           </div>
                         </td>
 
-                        <td className="p-3 text-center">
+                        <td className={`${cellPad} text-center`}>
                           <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 font-bold text-[11px]">
                             {voucher.itemCount} پسوولە
                           </span>
                         </td>
 
-                        <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-400 font-bold">
+                        <td className={`${cellPad} text-center font-mono text-slate-600 dark:text-slate-400 font-bold`}>
                           📅 {voucher.dateRange}
                         </td>
 
-                        <td className="p-3 text-center">
-                          <span className="px-3 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-mono font-black text-xs">
+                        <td className={`${cellPad} text-center`}>
+                          <span className="px-3 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-mono font-bold text-xs">
                             {voucher.totalAmount.toLocaleString()} IQD
                           </span>
                         </td>
 
-                        <td className="p-3 text-center">
+                        <td className={`${cellPad} text-center`}>
                           <div className="flex items-center justify-center gap-1.5">
                             {/* View / Inspect */}
                             <button
@@ -4470,15 +4659,15 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                 <table className="w-full text-right border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 font-bold">
-                      <th className="p-3 text-center w-10">#</th>
-                      <th className="p-3">ناوی کارمەند</th>
-                      <th className="p-3 text-center">بەروار</th>
-                      {activeTab === 'expenses' && <th className="p-3 text-center">جۆر</th>}
-                      {activeTab === 'expenses' && <th className="p-3">لە / بۆ</th>}
-                      {activeTab === 'expenses' && <th className="p-3 text-center">ژ.سەفەر</th>}
-                      <th className="p-3 text-center">بڕی پارە (IQD)</th>
-                      <th className="p-3">تێبینی</th>
-                      <th className="p-3 text-center w-24">دەستکاری / سڕینەوە</th>
+                      <th className={`${cellPad} text-center w-10`}>#</th>
+                      <th className={cellPad}>ناوی کارمەند</th>
+                      <th className={`${cellPad} text-center`}>بەروار</th>
+                      {activeTab === 'expenses' && <th className={`${cellPad} text-center`}>جۆر</th>}
+                      {activeTab === 'expenses' && <th className={cellPad}>لە / بۆ</th>}
+                      {activeTab === 'expenses' && <th className={`${cellPad} text-center`}>ژ.سەفەر</th>}
+                      <th className={`${cellPad} text-center`}>بڕی پارە (IQD)</th>
+                      <th className={cellPad}>تێبینی</th>
+                      <th className={`${cellPad} text-center w-24`}>دەستکاری / سڕینەوە</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-white/5">
@@ -4501,23 +4690,23 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                                         : 'hover:bg-slate-50/70 dark:hover:bg-white/5'
                                     }`}
                                   >
-                                    <td className="p-3 text-center font-mono text-slate-400 font-bold">{currentIdx}</td>
-                                    <td className="p-3 font-bold text-slate-900 dark:text-white">{group.employeeName}</td>
-                                    <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">📅 {item.date}</td>
-                                    <td className="p-3 text-center">
+                                    <td className={`${cellPad} text-center font-mono text-slate-400 font-bold`}>{currentIdx}</td>
+                                    <td className={`${cellPad} font-bold text-slate-900 dark:text-white`}>{group.employeeName}</td>
+                                    <td className={`${cellPad} text-center font-mono text-slate-600 dark:text-slate-300`}>📅 {item.date}</td>
+                                    <td className={`${cellPad} text-center`}>
                                       <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeColors[item.type as keyof typeof typeColors]?.bg} ${typeColors[item.type as keyof typeof typeColors]?.text} ${typeColors[item.type as keyof typeof typeColors]?.border}`}>
                                         {typeLabels[item.type] || item.category || 'تەکسی'}
                                       </span>
                                     </td>
-                                    <td className="p-3 text-slate-600 dark:text-slate-300">
+                                    <td className={`${cellPad} text-slate-600 dark:text-slate-300`}>
                                       {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—'}
                                     </td>
-                                    <td className="p-3 text-center font-mono text-slate-500">{item.trip || '—'}</td>
-                                    <td className="p-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                    <td className={`${cellPad} text-center font-mono text-slate-500`}>{item.trip || '—'}</td>
+                                    <td className={`${cellPad} text-center font-mono font-bold text-emerald-600 dark:text-emerald-400`}>
                                       {Number(item.amount || item.totalAmount || 0).toLocaleString()} IQD
                                     </td>
-                                    <td className="p-3 text-slate-500">{item.note || item.reason || '—'}</td>
-                                    <td className="p-3 text-center">
+                                    <td className={`${cellPad} text-slate-500`}>{item.note || item.reason || '—'}</td>
+                                    <td className={`${cellPad} text-center`}>
                                       <div className="flex items-center justify-center gap-1.5">
                                         <button
                                           type="button"
@@ -4547,20 +4736,20 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
 
                               {/* 🟡 Highlighted Subtotal Row for Employee */}
                               <tr className="bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border-y-2 border-amber-300 dark:border-amber-700 font-bold print:bg-[#fef9c3] print:text-[#713f12]">
-                                <td colSpan={5} className="p-3 text-right">
-                                  <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
+                                <td colSpan={5} className={`${cellPad} text-right`}>
+                                  <div className="flex items-center gap-2 font-bold text-xs text-amber-900 dark:text-amber-200">
                                     <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
                                     <span>کۆی گشتی ({group.employeeName})</span>
                                   </div>
                                 </td>
-                                <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
+                                <td className={`${cellPad} text-center font-mono font-bold text-amber-900 dark:text-amber-200 text-xs`}>
                                   {group.items.length} پسوولە
                                 </td>
-                                <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-100 text-xs">
+                                <td className={`${cellPad} text-center font-mono font-bold text-amber-900 dark:text-amber-100 text-xs`}>
                                   {group.totalAmount.toLocaleString()} IQD
                                 </td>
-                                <td className="p-3 text-amber-800 dark:text-amber-300 text-xs">—</td>
-                                <td className="p-3 text-center text-amber-800 dark:text-amber-300 text-xs">—</td>
+                                <td className={`${cellPad} text-amber-800 dark:text-amber-300 text-xs`}>—</td>
+                                <td className={`${cellPad} text-center text-amber-800 dark:text-amber-300 text-xs`}>—</td>
                               </tr>
                             </Fragment>
                           );
@@ -4576,14 +4765,14 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                               : 'hover:bg-slate-50/70 dark:hover:bg-white/5'
                           }`}
                         >
-                          <td className="p-3 text-center font-mono text-slate-400 font-bold">{idx + 1}</td>
-                          <td className="p-3 font-bold text-slate-900 dark:text-white">{item.employeeName || 'گشتی'}</td>
-                          <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">📅 {item.date}</td>
-                          <td className="p-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          <td className={`${cellPad} text-center font-mono text-slate-400 font-bold`}>{idx + 1}</td>
+                          <td className={`${cellPad} font-bold text-slate-900 dark:text-white`}>{item.employeeName || 'گشتی'}</td>
+                          <td className={`${cellPad} text-center font-mono text-slate-600 dark:text-slate-300`}>📅 {item.date}</td>
+                          <td className={`${cellPad} text-center font-mono font-bold text-emerald-600 dark:text-emerald-400`}>
                             {Number(item.amount || item.totalAmount || 0).toLocaleString()} IQD
                           </td>
-                          <td className="p-3 text-slate-500">{item.note || item.reason || '—'}</td>
-                          <td className="p-3 text-center">
+                          <td className={`${cellPad} text-slate-500`}>{item.note || item.reason || '—'}</td>
+                          <td className={`${cellPad} text-center`}>
                             <div className="flex items-center justify-center gap-1.5">
                               <button
                                 type="button"
@@ -4724,14 +4913,14 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
               <table className="w-full text-right border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 font-bold">
-                    <th className="p-3 text-center w-10">#</th>
-                    <th className="p-3">ناوی کارمەند</th>
-                    <th className="p-3 text-center">بەروار</th>
-                    {selectedVoucher.type === 'expenses' && <th className="p-3 text-center">جۆر</th>}
-                    {selectedVoucher.type === 'expenses' && <th className="p-3">لە / بۆ</th>}
-                    {selectedVoucher.type === 'expenses' && <th className="p-3 text-center">ژ.سەفەر</th>}
-                    <th className="p-3 text-center">بڕی پارە (IQD)</th>
-                    <th className="p-3">تێبینی</th>
+                    <th className={`${cellPad} text-center w-10`}>#</th>
+                    <th className={cellPad}>ناوی کارمەند</th>
+                    <th className={`${cellPad} text-center`}>بەروار</th>
+                    {selectedVoucher.type === 'expenses' && <th className={`${cellPad} text-center`}>جۆر</th>}
+                    {selectedVoucher.type === 'expenses' && <th className={cellPad}>لە / بۆ</th>}
+                    {selectedVoucher.type === 'expenses' && <th className={`${cellPad} text-center`}>ژ.سەفەر</th>}
+                    <th className={`${cellPad} text-center`}>بڕی پارە (IQD)</th>
+                    <th className={cellPad}>تێبینی</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/5">
@@ -4747,41 +4936,41 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                               const currentIdx = globalIdx;
                               return (
                                 <tr key={item.id || currentIdx} className="hover:bg-slate-50/70 dark:hover:bg-white/5">
-                                  <td className="p-3 text-center font-mono text-slate-400 font-bold">{currentIdx}</td>
-                                  <td className="p-3 font-bold text-slate-900 dark:text-white">{group.employeeName}</td>
-                                  <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">📅 {item.date}</td>
-                                  <td className="p-3 text-center">
+                                  <td className={`${cellPad} text-center font-mono text-slate-400 font-bold`}>{currentIdx}</td>
+                                  <td className={`${cellPad} font-bold text-slate-900 dark:text-white`}>{group.employeeName}</td>
+                                  <td className={`${cellPad} text-center font-mono text-slate-600 dark:text-slate-300`}>📅 {item.date}</td>
+                                  <td className={`${cellPad} text-center`}>
                                     <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeColors[item.type as keyof typeof typeColors]?.bg || ''} ${typeColors[item.type as keyof typeof typeColors]?.text || ''} ${typeColors[item.type as keyof typeof typeColors]?.border || ''}`}>
                                       {typeLabels[item.type] || item.category || 'تەکسی'}
                                     </span>
                                   </td>
-                                  <td className="p-3 text-slate-600 dark:text-slate-300">
+                                  <td className={`${cellPad} text-slate-600 dark:text-slate-300`}>
                                     {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—'}
                                   </td>
-                                  <td className="p-3 text-center font-mono text-slate-500">{item.trip || '—'}</td>
-                                  <td className="p-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                  <td className={`${cellPad} text-center font-mono text-slate-500`}>{item.trip || '—'}</td>
+                                  <td className={`${cellPad} text-center font-mono font-bold text-emerald-600 dark:text-emerald-400`}>
                                     {Number(item.amount || item.totalAmount || 0).toLocaleString()} IQD
                                   </td>
-                                  <td className="p-3 text-slate-500">{item.note || item.reason || '—'}</td>
+                                  <td className={`${cellPad} text-slate-500`}>{item.note || item.reason || '—'}</td>
                                 </tr>
                               );
                             })}
 
                             {/* 🟡 Highlighted Subtotal Row for Employee */}
                             <tr className="bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border-y-2 border-amber-300 dark:border-amber-700 font-bold print:bg-[#fef9c3] print:text-[#713f12]">
-                              <td colSpan={5} className="p-3 text-right">
-                                <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
+                              <td colSpan={5} className={`${cellPad} text-right`}>
+                                <div className="flex items-center gap-2 font-bold text-xs text-amber-900 dark:text-amber-200">
                                   <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
                                   <span>کۆی گشتی ({group.employeeName})</span>
                                 </div>
                               </td>
-                              <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
+                              <td className={`${cellPad} text-center font-mono font-bold text-amber-900 dark:text-amber-200 text-xs`}>
                                 {group.items.length} پسوولە
                               </td>
-                              <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-100 text-xs">
+                              <td className={`${cellPad} text-center font-mono font-bold text-amber-900 dark:text-amber-100 text-xs`}>
                                 {group.totalAmount.toLocaleString()} IQD
                               </td>
-                              <td className="p-3 text-amber-800 dark:text-amber-300 text-xs">
+                              <td className={`${cellPad} text-amber-800 dark:text-amber-300 text-xs`}>
                                 —
                               </td>
                             </tr>
@@ -4792,13 +4981,13 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                   ) : (
                     selectedVoucher.items.map((item: any, idx: number) => (
                       <tr key={item.id || idx} className="hover:bg-slate-50/70 dark:hover:bg-white/5">
-                        <td className="p-3 text-center font-mono text-slate-400 font-bold">{idx + 1}</td>
-                        <td className="p-3 font-bold text-slate-900 dark:text-white">{item.employeeName || 'گشتی'}</td>
-                        <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">📅 {item.date}</td>
-                        <td className="p-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        <td className={`${cellPad} text-center font-mono text-slate-400 font-bold`}>{idx + 1}</td>
+                        <td className={`${cellPad} font-bold text-slate-900 dark:text-white`}>{item.employeeName || 'گشتی'}</td>
+                        <td className={`${cellPad} text-center font-mono text-slate-600 dark:text-slate-300`}>📅 {item.date}</td>
+                        <td className={`${cellPad} text-center font-mono font-bold text-emerald-600 dark:text-emerald-400`}>
                           {Number(item.amount || item.totalAmount || 0).toLocaleString()} IQD
                         </td>
-                        <td className="p-3 text-slate-500">{item.note || item.reason || '—'}</td>
+                        <td className={`${cellPad} text-slate-500`}>{item.note || item.reason || '—'}</td>
                       </tr>
                     ))
                   )}
@@ -4825,363 +5014,49 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       {/* ========================================================= */}
       {/* ⚙️ MODAL: MANAGE EXPENSE CATEGORIES & PRESET NOTES        */}
       {/* ========================================================= */}
-      {isCategoryManagerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200 font-sans" dir="rtl">
-          <div className="bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-            {/* Header */}
-            <div className="p-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-slate-50/80 dark:bg-white/5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
-                  <Settings className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                    ڕێکخستنی پۆلێن و تێبینییەکان
-                  </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    زیادکردن، گۆڕین و سڕینەوەی پۆلێنەکانی مەسروفات و تێبینییە جێگیرەکان
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCategoryManagerOpen(false);
-                  setEditingCategoryKey(null);
-                  setEditingReasonIndex(null);
-                }}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <CategoryManagerModal
+        isOpen={isCategoryManagerOpen}
+        onClose={() => {
+          setIsCategoryManagerOpen(false);
+          setEditingCategoryKey(null);
+          setEditingReasonIndex(null);
+        }}
+        categories={categories}
+        presetReasons={presetReasons}
+        activeTab={managerActiveTab}
+        setActiveTab={setManagerActiveTab}
+        selectedCatKey={managerSelectedCatKey}
+        setSelectedCatKey={setManagerSelectedCatKey}
+        newCategoryName={newCategoryName}
+        setNewCategoryName={setNewCategoryName}
+        editingCategoryKey={editingCategoryKey}
+        setEditingCategoryKey={setEditingCategoryKey}
+        editingCategoryLabel={editingCategoryLabel}
+        setEditingCategoryLabel={setEditingCategoryLabel}
+        newReasonText={newReasonText}
+        setNewReasonText={setNewReasonText}
+        editingReasonIndex={editingReasonIndex}
+        setEditingReasonIndex={setEditingReasonIndex}
+        editingReasonText={editingReasonText}
+        setEditingReasonText={setEditingReasonText}
+        onAddCategory={handleAddCategory}
+        onSaveEditCategory={handleSaveEditCategory}
+        onDeleteCategory={handleDeleteCategory}
+        onAddReason={(e) => handleAddReason(managerSelectedCatKey, e)}
+        onSaveEditReason={handleSaveEditReason}
+        onDeleteReason={handleDeleteReason}
+        onResetDefaults={handleResetCategoryAndReasons}
+      />
 
-            {/* Navigation Tabs (Categories vs Notes) */}
-            <div className="p-3 border-b border-slate-200 dark:border-white/10 bg-slate-50/40 dark:bg-white/[0.02]">
-              <div className="flex items-center gap-2 p-1 bg-slate-200/70 dark:bg-white/10 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setManagerActiveTab('categories');
-                    setEditingCategoryKey(null);
-                  }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                    managerActiveTab === 'categories'
-                      ? 'bg-white dark:bg-[#2c2c2e] text-blue-600 dark:text-blue-400 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                  }`}
-                >
-                  <Tag className="w-3.5 h-3.5" />
-                  <span>پۆلێنەکانی مەسروفات ({categories.length})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setManagerActiveTab('reasons');
-                    setEditingReasonIndex(null);
-                  }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                    managerActiveTab === 'reasons'
-                      ? 'bg-white dark:bg-[#2c2c2e] text-blue-600 dark:text-blue-400 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                  }`}
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>تێبینییە جێگیرەکان</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Content Area */}
-            <div className="p-4 overflow-y-auto space-y-4 flex-1">
-              {/* TAB 1: CATEGORIES */}
-              {managerActiveTab === 'categories' && (
-                <div className="space-y-4">
-                  {/* Add New Category Form */}
-                  <form
-                    onSubmit={handleAddCategory}
-                    className="flex items-center gap-2 bg-slate-50 dark:bg-white/5 p-2 rounded-xl border border-slate-200 dark:border-white/10"
-                  >
-                    <input
-                      type="text"
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      placeholder="ناوی پۆلێنی نوێ بنووسە (بۆ نموونە: چاککردنەوە)..."
-                      className="flex-1 bg-white dark:bg-[#2c2c2e] border border-slate-300 dark:border-white/15 rounded-lg px-3 py-2 text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!newCategoryName.trim()}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>زیادکردن</span>
-                    </button>
-                  </form>
-
-                  {/* Categories List */}
-                  <div className="space-y-2">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block">
-                      پۆلێنە بەردەستەکان (دەتوانی ناویان بگۆڕیت یان بسڕیتەوە):
-                    </span>
-
-                    <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
-                      {categories.map((cat) => {
-                        const isEditing = editingCategoryKey === cat.key;
-                        const reasonCount = (presetReasons[cat.key] || []).length;
-
-                        return (
-                          <div
-                            key={cat.key}
-                            className="flex items-center justify-between gap-2 p-2.5 bg-white dark:bg-[#242426] border border-slate-200 dark:border-white/10 rounded-xl hover:border-slate-300 dark:hover:border-white/20 transition-colors"
-                          >
-                            {isEditing ? (
-                              <div className="flex items-center gap-2 flex-1">
-                                <input
-                                  type="text"
-                                  value={editingCategoryLabel}
-                                  onChange={(e) => setEditingCategoryLabel(e.target.value)}
-                                  className="flex-1 bg-slate-50 dark:bg-[#1c1c1e] border border-blue-500 rounded-lg px-2.5 py-1 text-xs text-slate-900 dark:text-white focus:outline-hidden"
-                                  autoFocus
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleSaveEditCategory(cat.key);
-                                    if (e.key === 'Escape') setEditingCategoryKey(null);
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => handleSaveEditCategory(cat.key)}
-                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg cursor-pointer flex items-center gap-1"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                  <span>پاشەکەوت</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingCategoryKey(null)}
-                                  className="px-2 py-1 bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300 text-[11px] font-bold rounded-lg cursor-pointer"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            ) : (
-                              <>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                                    {cat.label}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-full font-mono">
-                                    {reasonCount} تێبینی
-                                  </span>
-                                </div>
-
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setManagerSelectedCatKey(cat.key);
-                                      setManagerActiveTab('reasons');
-                                    }}
-                                    className="px-2 py-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition-colors cursor-pointer"
-                                    title="بینینی تێبینییەکانی ئەم پۆلێنە"
-                                  >
-                                    تێبینییەکان
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingCategoryKey(cat.key);
-                                      setEditingCategoryLabel(cat.label);
-                                    }}
-                                    className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-colors cursor-pointer"
-                                    title="دەستکاریکردنی ناو"
-                                  >
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteCategory(cat.key)}
-                                    className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors cursor-pointer"
-                                    title="سڕینەوەی ئەم پۆلێنە"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 2: PRESET REASONS */}
-              {managerActiveTab === 'reasons' && (
-                <div className="space-y-4">
-                  {/* Select Category */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                      پۆلێنی مەبەست هەڵبژێرە:
-                    </label>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {categories.map((c) => (
-                        <button
-                          key={c.key}
-                          type="button"
-                          onClick={() => {
-                            setManagerSelectedCatKey(c.key);
-                            setEditingReasonIndex(null);
-                          }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            managerSelectedCatKey === c.key
-                              ? 'bg-blue-600 text-white shadow-xs'
-                              : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
-                          }`}
-                        >
-                          {c.label} ({ (presetReasons[c.key] || []).length })
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Add New Reason Form */}
-                  <form
-                    onSubmit={(e) => handleAddReason(managerSelectedCatKey, e)}
-                    className="flex items-center gap-2 bg-slate-50 dark:bg-white/5 p-2 rounded-xl border border-slate-200 dark:border-white/10"
-                  >
-                    <input
-                      type="text"
-                      value={newReasonText}
-                      onChange={(e) => setNewReasonText(e.target.value)}
-                      placeholder={`تێبینی نوێ بنووسە بۆ «${categories.find(c => c.key === managerSelectedCatKey)?.label || managerSelectedCatKey}»...`}
-                      className="flex-1 bg-white dark:bg-[#2c2c2e] border border-slate-300 dark:border-white/15 rounded-lg px-3 py-2 text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!newReasonText.trim()}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>زیادکردن</span>
-                    </button>
-                  </form>
-
-                  {/* Reasons List */}
-                  <div className="space-y-2">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block">
-                      تێبینییە جێگیرەکان بۆ پۆلێنی «{categories.find(c => c.key === managerSelectedCatKey)?.label || managerSelectedCatKey}»:
-                    </span>
-
-                    {(!presetReasons[managerSelectedCatKey] || presetReasons[managerSelectedCatKey].length === 0) ? (
-                      <div className="p-6 text-center text-slate-400 dark:text-slate-500 text-xs border border-dashed border-slate-200 dark:border-white/10 rounded-xl">
-                        هیچ تێبینییەکی جێگیر نییە بۆ ئەم پۆلێنە. لە فۆڕمەکەی سەرەوە زیادبکە.
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
-                        {presetReasons[managerSelectedCatKey].map((reason, index) => {
-                          const isEditing = editingReasonIndex === index;
-
-                          return (
-                            <div
-                              key={index}
-                              className="flex items-center justify-between gap-2 p-2.5 bg-white dark:bg-[#242426] border border-slate-200 dark:border-white/10 rounded-xl hover:border-slate-300 dark:hover:border-white/20 transition-colors"
-                            >
-                              {isEditing ? (
-                                <div className="flex items-center gap-2 flex-1">
-                                  <input
-                                    type="text"
-                                    value={editingReasonText}
-                                    onChange={(e) => setEditingReasonText(e.target.value)}
-                                    className="flex-1 bg-slate-50 dark:bg-[#1c1c1e] border border-blue-500 rounded-lg px-2.5 py-1 text-xs text-slate-900 dark:text-white focus:outline-hidden"
-                                    autoFocus
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') handleSaveEditReason(managerSelectedCatKey, index);
-                                      if (e.key === 'Escape') setEditingReasonIndex(null);
-                                    }}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSaveEditReason(managerSelectedCatKey, index)}
-                                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg cursor-pointer flex items-center gap-1"
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                    <span>پاشەکەوت</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingReasonIndex(null)}
-                                    className="px-2 py-1 bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300 text-[11px] font-bold rounded-lg cursor-pointer"
-                                  >
-                                    ✕
-                                  </button>
-                                </div>
-                              ) : (
-                                <>
-                                  <span className="text-xs font-medium text-slate-800 dark:text-slate-200">
-                                    {reason}
-                                  </span>
-
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEditingReasonIndex(index);
-                                        setEditingReasonText(reason);
-                                      }}
-                                      className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-colors cursor-pointer"
-                                      title="دەستکاریکردنی تێبینی"
-                                    >
-                                      <Edit3 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteReason(managerSelectedCatKey, index)}
-                                      className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors cursor-pointer"
-                                      title="سڕینەوەی ئەم تێبینییە"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Footer with Reset to Defaults and Close */}
-            <div className="p-3 border-t border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={handleResetCategoryAndReasons}
-                className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 font-bold flex items-center gap-1 hover:underline cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>گەڕاندنەوە بۆ باری بنەڕەتی</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCategoryManagerOpen(false);
-                  setEditingCategoryKey(null);
-                  setEditingReasonIndex(null);
-                }}
-                className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
-              >
-                داخستن
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ========================================================= */}
+      {/* 🛡️ MODAL: AUDIT TRAIL / ACTIVITY HISTORY LOG               */}
+      {/* ========================================================= */}
+      <AuditLogModal
+        isOpen={isAuditLogOpen}
+        onClose={() => setIsAuditLogOpen(false)}
+        logs={activityLogs || []}
+        onClearLogs={setActivityLogs ? () => setActivityLogs([]) : undefined}
+      />
 
     </div>
   );

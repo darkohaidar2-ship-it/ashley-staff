@@ -97,10 +97,33 @@
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* 🌟 SLEEK KURDISH & RTL TYPOGRAPHY REFINEMENTS */
+  [dir="rtl"], .dir-rtl {
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Prevent character/counter collapse in heavy Kurdish characters */
+  [dir="rtl"] .font-black, .dir-rtl .font-black {
+    font-weight: 800 !important;
+    letter-spacing: -0.012em;
   }
 }
 
 @layer utilities {
+  .sleek-card {
+    border-radius: 1.25rem !important;
+    border: 1px solid rgba(226, 232, 240, 0.8) !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04) !important;
+  }
+  .dark .sleek-card {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3) !important;
+  }
   /* ==========================================================================
      APPLE iOS GLASS PANELS & LIQUID RETINA CARDS
      ========================================================================== */
