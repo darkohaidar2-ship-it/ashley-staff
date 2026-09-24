@@ -813,11 +813,11 @@ export function exportToPDF(options: ExportReportOptions) {
         ${data
           .map(
             (row, index) => {
-              const isGrandTotalRow = Object.values(row).some(
-                v => typeof v === 'string' && (v.includes('⭐') || v.includes('کۆی گشتی'))
+              const isSubtotalRow = Boolean((row as any).isSubtotal) || Object.values(row).some(
+                v => typeof v === 'string' && (v.includes('📊 کۆی') || v.includes('کۆی مەسروفاتی') || v.includes('کۆی ئەو کارمەندە') || v.includes('کۆی ئەم کارمەندە') || (v.includes('کۆی گشتی') && v.includes('(')))
               );
-              const isSubtotalRow = !isGrandTotalRow && (Boolean((row as any).isSubtotal) || Object.values(row).some(
-                v => typeof v === 'string' && (v.includes('📊 کۆی') || v.includes('کۆی مەسروفاتی') || v.includes('کۆی ئەو کارمەندە') || v.includes('کۆی ئەم کارمەندە'))
+              const isGrandTotalRow = !isSubtotalRow && (Boolean((row as any).isGrandTotal) || Object.values(row).some(
+                v => typeof v === 'string' && (v.includes('⭐') || v === 'کۆی گشتی' || v.includes('کۆی گشتی مانگ') || v.includes('کۆی گشتی مەسروفات') || v.includes('کۆی گشتی پسوولەکانی'))
               ));
 
               let trClass = 'tr-data-row';

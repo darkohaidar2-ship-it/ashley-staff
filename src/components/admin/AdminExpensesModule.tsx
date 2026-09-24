@@ -587,7 +587,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
           isSubtotal: true,
           index: '•',
           date: '—',
-          empName: `کۆی ئەو کارمەندە (${group.employeeName})`,
+          empName: `کۆی گشتی (${group.employeeName})`,
           type: '—',
           route: '—',
           trip: `${group.items.length} پسوولە`,
@@ -811,7 +811,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         data.push({
           index: '',
           date: '—',
-          empName: `کۆی ئەو کارمەندە (${group.employeeName})`,
+          empName: `کۆی گشتی (${group.employeeName})`,
           type: '—',
           from: '',
           to: '',
@@ -1270,7 +1270,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         if (group.items.length > 0) {
           data.push({
             isSubtotal: true,
-            empName: `کۆی ئەو کارمەندە (${group.employeeName})`,
+            empName: `کۆی گشتی (${group.employeeName})`,
             date: '—',
             type: '—',
             from: '—',
@@ -2008,7 +2008,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                                 <td colSpan={5} className="p-3 text-right">
                                   <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
                                     <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
-                                    <span>کۆی ئەو کارمەندە ({group.employeeName})</span>
+                                    <span>کۆی گشتی ({group.employeeName})</span>
                                   </div>
                                 </td>
                                 <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
@@ -2815,7 +2815,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                                 <td colSpan={5} className="p-3 text-right">
                                   <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
                                     <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
-                                    <span>کۆی ئەو کارمەندە ({group.employeeName})</span>
+                                    <span>کۆی گشتی ({group.employeeName})</span>
                                   </div>
                                 </td>
                                 <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
@@ -3037,7 +3037,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                               <td colSpan={5} className="p-3 text-right">
                                 <div className="flex items-center gap-2 font-black text-xs text-amber-900 dark:text-amber-200">
                                   <span className="text-amber-600 dark:text-amber-400 text-sm">📊</span>
-                                  <span>کۆی ئەو کارمەندە ({group.employeeName})</span>
+                                  <span>کۆی گشتی ({group.employeeName})</span>
                                 </div>
                               </td>
                               <td className="p-3 text-center font-mono font-black text-amber-900 dark:text-amber-200 text-xs">
