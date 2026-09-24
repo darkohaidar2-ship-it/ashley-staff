@@ -35,7 +35,9 @@ import {
   PieChart,
   TrendingUp,
   Zap,
-  Award
+  Award,
+  GitBranch,
+  Workflow
 } from 'lucide-react';
 import { format, addMonths, subMonths } from 'date-fns';
 import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
@@ -431,7 +433,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   const [selectedReasonFilter, setSelectedReasonFilter] = useState<string | null>(null);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
   const [selectedDayFilter, setSelectedDayFilter] = useState<number | null>(null);
-  const [analyticsGraphMode, setAnalyticsGraphMode] = useState<'categories' | 'reasons' | 'daily' | 'distribution'>('categories');
+  const [analyticsGraphMode, setAnalyticsGraphMode] = useState<'flowchart' | 'categories' | 'reasons' | 'daily' | 'distribution'>('flowchart');
 
   // 🧠 Field History & Frequency Storage for Smart Autocomplete
   const [fieldHistory, setFieldHistory] = useState<FieldFrequencyMap>(() => {
@@ -1039,6 +1041,55 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     });
     return Object.values(map).sort((a, b) => b.total - a.total);
   }, [monthlyExpensesList, selectedCategoryFilter, reasonBreakdown]);
+
+  // 🌳 Hierarchical Flowchart Data: Root -> Categories -> Preset Reasons
+  const flowchartData = useMemo(() => {
+    const nodes = categories.map((cat) => {
+      const catExpenses = monthlyExpensesList.filter((e: any) => {
+        const t = e.type || e.category || 'other';
+        return t === cat.key;
+      });
+
+      const catTotal = catExpenses.reduce((sum, e: any) => sum + Number(e.amount || e.totalAmount || 0), 0);
+      const catCount = catExpenses.length;
+      const catPercentage = monthlyTotalExp > 0 ? Math.round((catTotal / monthlyTotalExp) * 100) : 0;
+
+      // Group reasons under this category
+      const reasonsMap: Record<string, { label: string; total: number; count: number }> = {};
+      catExpenses.forEach((e: any) => {
+        const raw = (e.note || e.reason || 'بێ تێبینی').trim();
+        if (!reasonsMap[raw]) {
+          reasonsMap[raw] = { label: raw, total: 0, count: 0 };
+        }
+        reasonsMap[raw].total += Number(e.amount || e.totalAmount || 0);
+        reasonsMap[raw].count += 1;
+      });
+
+      const reasonsList = Object.values(reasonsMap)
+        .sort((a, b) => b.total - a.total)
+        .map((r) => ({
+          ...r,
+          percentOfCat: catTotal > 0 ? Math.round((r.total / catTotal) * 100) : 0,
+          percentOfTotal: monthlyTotalExp > 0 ? Math.round((r.total / monthlyTotalExp) * 100) : 0,
+        }));
+
+      return {
+        key: cat.key,
+        label: cat.label,
+        total: catTotal,
+        count: catCount,
+        percentage: catPercentage,
+        reasons: reasonsList,
+      };
+    });
+
+    return {
+      rootTotal: monthlyTotalExp,
+      rootCount: monthlyExpensesList.length,
+      categories: nodes,
+    };
+  }, [categories, monthlyExpensesList, monthlyTotalExp]);
+
 
   // Per-Employee Comprehensive Financial Aggregation for the Month
   const employeeFinancialStats = useMemo(() => {
@@ -2419,8 +2470,21 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                 </div>
               </div>
 
-              {/* View Switcher Buttons (Categories, Reasons, Daily Curve, Distribution) */}
+              {/* View Switcher Buttons (Flowchart, Categories, Reasons, Daily Curve, Distribution) */}
               <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 dark:bg-white/5 rounded-xl border border-slate-200/60 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setAnalyticsGraphMode('flowchart')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    analyticsGraphMode === 'flowchart'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Workflow className="w-3.5 h-3.5" />
+                  <span>🔀 فلۆو چارت (Flowchart)</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setAnalyticsGraphMode('categories')}
@@ -2644,6 +2708,174 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                 )}
               </div>
             </div>
+
+            {/* ========================================================= */}
+            {/* VIEW MODE: FLOWCHART TREE (فلۆو چارتی پەیوەندی مەسروفات)  */}
+            {/* ========================================================= */}
+            {analyticsGraphMode === 'flowchart' && (
+              <div className="space-y-4 pt-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Workflow className="w-4 h-4 text-purple-600 animate-pulse" />
+                    <span>هێڵکاری فلۆو چارتی مەسروفات (کۆی گشتی ⬅️ پۆلێنەکان ⬅️ تێبینییەکان):</span>
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    (کلیک لە هەر بەشێک یان هۆکارێک بکە بۆ بینینی پسوولەکانی لە خوارەوە)
+                  </span>
+                </div>
+
+                {/* Flowchart Visual Surface */}
+                <div className="p-4 sm:p-6 bg-slate-50/70 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/10 rounded-2xl overflow-x-auto shadow-inner">
+                  <div className="min-w-[800px] flex flex-col items-center">
+                    
+                    {/* LEVEL 0: ROOT MASTER NODE */}
+                    <div className="flex flex-col items-center">
+                      <div 
+                        onClick={() => {
+                          setSelectedCategoryFilter(null);
+                          setSelectedReasonFilter(null);
+                          setSelectedDayFilter(null);
+                        }}
+                        className={`px-6 py-3.5 rounded-2xl bg-gradient-to-r from-purple-700 via-indigo-600 to-blue-700 text-white shadow-md border-2 border-white/20 flex items-center gap-3.5 cursor-pointer hover:scale-102 transition-all active:scale-98 relative group ${
+                          !selectedCategoryFilter && !selectedReasonFilter && selectedDayFilter === null
+                            ? 'ring-4 ring-purple-400/40'
+                            : ''
+                        }`}
+                        title="کلیک بکە بۆ پیشاندانی سەرجەم خەرجییەکان"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-lg shadow-inner">
+                          🏛️
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] font-bold text-purple-200 block uppercase tracking-wider">
+                            کۆی گشتی بودجەی مەسروفات
+                          </span>
+                          <span className="text-lg font-black font-mono tracking-tight">
+                            {monthlyTotalExp.toLocaleString()} IQD
+                          </span>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-lg bg-white/20 text-[11px] font-bold font-mono">
+                          {monthlyExpensesList.length} پسوولە • 100%
+                        </span>
+                      </div>
+
+                      {/* Stem Connector down to Trunk */}
+                      <div className="w-0.5 h-6 bg-gradient-to-b from-indigo-500 to-slate-400 dark:to-slate-600" />
+                    </div>
+
+                    {/* HORIZONTAL TRUNK LINE & CATEGORY COLUMNS */}
+                    <div className="w-full relative">
+                      {/* Horizontal connecting trunk bar */}
+                      <div className="hidden md:block absolute top-0 left-12 right-12 h-0.5 bg-slate-300 dark:bg-white/20" />
+
+                      {/* Columns Grid */}
+                      <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${Math.min(categories.length, 5)} gap-4 pt-3`}>
+                        {flowchartData.categories.map((cat) => {
+                          const isSelectedCat = selectedCategoryFilter === cat.key;
+                          const palette = typeColors[cat.key] || { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' };
+
+                          return (
+                            <div key={cat.key} className="flex flex-col items-center">
+                              {/* Vertical Drop from Trunk to Category Card */}
+                              <div className="w-0.5 h-3 bg-slate-300 dark:bg-white/20" />
+
+                              {/* LEVEL 1: CATEGORY PROCESS NODE */}
+                              <div
+                                onClick={() => setSelectedCategoryFilter(prev => prev === cat.key ? null : cat.key)}
+                                className={`w-full p-3 rounded-xl border-2 transition-all cursor-pointer relative shadow-xs hover:shadow-md ${
+                                  isSelectedCat
+                                    ? 'bg-blue-50/90 dark:bg-blue-950/50 border-blue-600 ring-2 ring-blue-500/30'
+                                    : 'bg-white dark:bg-[#242426] border-slate-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-1 mb-1">
+                                  <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold border ${palette.bg} ${palette.text} ${palette.border}`}>
+                                    {cat.label}
+                                  </span>
+                                  <span className="text-[10px] font-mono font-black text-slate-500 dark:text-slate-400">
+                                    %{cat.percentage}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-baseline justify-between text-xs font-mono font-black text-slate-900 dark:text-white mt-1.5">
+                                  <span>{cat.total.toLocaleString()} IQD</span>
+                                  <span className="text-[10px] text-slate-400 font-normal">
+                                    {cat.count} پسوولە
+                                  </span>
+                                </div>
+
+                                {/* Mini Progress bar */}
+                                <div className="w-full h-1 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden mt-2">
+                                  <div
+                                    className={`h-full rounded-full ${
+                                      isSelectedCat ? 'bg-blue-600' : 'bg-gradient-to-r from-blue-500 to-indigo-600'
+                                    }`}
+                                    style={{ width: `${Math.min(cat.percentage, 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Stem down to Reasons */}
+                              <div className="w-0.5 h-3 bg-slate-300 dark:bg-white/20" />
+
+                              {/* LEVEL 2: REASONS & NOTES SUB-TREE LEAVES */}
+                              <div className="w-full space-y-1.5">
+                                {cat.reasons.length === 0 ? (
+                                  <div className="p-2 text-center text-[10px] text-slate-400 dark:text-slate-500 border border-dashed border-slate-200 dark:border-white/10 rounded-lg">
+                                    بێ پسوولە
+                                  </div>
+                                ) : (
+                                  cat.reasons.map((r) => {
+                                    const isSelectedReason = selectedReasonFilter === r.label;
+                                    return (
+                                      <div
+                                        key={r.label}
+                                        onClick={() => setSelectedReasonFilter(prev => prev === r.label ? null : r.label)}
+                                        className={`p-2 rounded-lg border text-right transition-all cursor-pointer relative group text-xs ${
+                                          isSelectedReason
+                                            ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 ring-2 ring-amber-500/20 shadow-xs'
+                                            : 'bg-white/90 dark:bg-[#1f1f22] border-slate-200/70 dark:border-white/5 hover:border-amber-400 dark:hover:border-amber-500/50'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between text-[11px] font-bold">
+                                          <span className="truncate text-slate-800 dark:text-slate-200" title={r.label}>
+                                            • {r.label}
+                                          </span>
+                                          <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 font-bold shrink-0">
+                                            %{r.percentOfCat}
+                                          </span>
+                                        </div>
+
+                                        <div className="flex items-center justify-between text-[10px] font-mono mt-1 text-slate-500 dark:text-slate-400">
+                                          <span className="font-black text-slate-700 dark:text-slate-300">
+                                            {r.total.toLocaleString()} IQD
+                                          </span>
+                                          <span>{r.count} پسوولە</span>
+                                        </div>
+
+                                        {/* Relative Bar */}
+                                        <div className="w-full h-0.5 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden mt-1">
+                                          <div
+                                            className="h-full bg-amber-500 rounded-full"
+                                            style={{ width: `${Math.min(r.percentOfCat, 100)}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ========================================================= */}
             {/* VIEW MODE 1: CATEGORIES VIEW                             */}
