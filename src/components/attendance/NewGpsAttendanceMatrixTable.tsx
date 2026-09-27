@@ -40,7 +40,7 @@ import * as XLSX from 'xlsx';
 import { AdminEmployeeDetailsModal } from '@/components/admin/AdminEmployeeDetailsModal';
 import { exportAshleyOfficialLetterheadPDF, type AshleyOfficialReportRow } from '@/lib/export-utils';
 import { useAppContext } from '@/context/app-provider';
-import { resolveEmployeeDayAttendance, getCheckInStatus, getCheckOutStatus } from '@/lib/attendance-helpers';
+import { resolveEmployeeDayAttendance, getCheckInStatus, getCheckOutStatus, translateRoleToKurdish } from '@/lib/attendance-helpers';
 
 interface NewGpsAttendanceMatrixTableProps {
   employees: Employee[];
@@ -1137,14 +1137,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#fcfcfd'}; page-break-inside: avoid;">
           <td style="border: 0.5px solid #cbd5e1; padding: ${isFullRange ? '3px 4px' : '6px 8px'}; font-weight: 800; text-align: right; white-space: nowrap; width: ${isFullRange ? '105px' : '135px'};">
             <div style="color: #0f172a; font-weight: 800; font-size: ${isFullRange ? '8px' : '9.5px'}; overflow: hidden; text-overflow: ellipsis;">${idx + 1}. ${emp.fullName3Part || emp.name}</div>
-            <div style="font-size: ${isFullRange ? '6.5px' : '8px'}; color: #64748b; font-family: monospace; font-weight: 500; margin-top: 0.5px;">${emp.role || 'Staff'} <span style="opacity: 0.6;">(${emp.id})</span></div>
+            <div style="font-size: ${isFullRange ? '6.5px' : '8px'}; color: #64748b; font-family: monospace; font-weight: 500; margin-top: 0.5px;">${translateRoleToKurdish(emp.role)} <span style="opacity: 0.6;">(${emp.id})</span></div>
           </td>
           ${dayCells}
           <td style="border: 0.5px solid #cbd5e1; padding: 2px; text-align: center; width: ${isFullRange ? '30px' : '45px'};">
             <span style="display: inline-block; background: rgba(16, 185, 129, 0.12); color: #047857; border: 0.5px solid rgba(16, 185, 129, 0.3); border-radius: 4px; padding: 1px 2px; font-weight: 800; font-family: monospace; font-size: ${isFullRange ? '7px' : '8.5px'};">${presentCount}</span>
           </td>
           <td style="border: 0.5px solid #cbd5e1; padding: 2px; text-align: center; width: ${isFullRange ? '30px' : '45px'};">
-            <span style="display: inline-block; background: rgba(0, 122, 255, 0.10); color: #007AFF; border: 0.5px solid rgba(0, 122, 255, 0.25); border-radius: 4px; padding: 1px 2px; font-weight: 800; font-family: monospace; font-size: ${isFullRange ? '7px' : '8.5px'};">${totalWorkedHours}h</span>
+            <span style="display: inline-block; background: rgba(0, 122, 255, 0.10); color: #007AFF; border: 0.5px solid rgba(0, 122, 255, 0.25); border-radius: 4px; padding: 1px 2px; font-weight: 800; font-family: monospace; font-size: ${isFullRange ? '7px' : '8.5px'};">${totalWorkedHours} ک</span>
           </td>
           <td style="border: 0.5px solid #cbd5e1; padding: 2px; text-align: center; width: ${isFullRange ? '26px' : '38px'};">
             <span style="display: inline-block; ${absentCount > 0 ? 'background: rgba(239, 68, 68, 0.12); color: #b91c1c; border: 0.5px solid rgba(239, 68, 68, 0.3);' : 'color: #94a3b8;'} border-radius: 4px; padding: 1px 2px; font-weight: 800; font-family: monospace; font-size: ${isFullRange ? '7px' : '8.5px'};">${absentCount > 0 ? absentCount : '-'}</span>
@@ -1171,7 +1171,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       <html dir="rtl" lang="ckb">
       <head>
         <meta charset="UTF-8">
-        <title>Ashley Attendance Sheet - ${selectedMonth} (Days ${printStartDay}-${printEndDay})</title>
+        <title>خشتەی ئامادەبوون - ${selectedMonth} (${printStartDay}-${printEndDay})</title>
         <style>
           @font-face {
             font-family: 'NRT';
@@ -1273,7 +1273,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   ${brandSubtitle || slogan}
                 </div>
                 <div style="font-size: 7.5px; font-family: monospace; color: #64748b; margin-top: 1px;">
-                  ${todayStr} • کۆدی فەرمی: ASH-DGP-2026
+                  ${todayStr}
                 </div>
               </div>
               <img src="${reportLogo}" alt="Ashley Logo" style="height: 40px; max-width: 120px; object-fit: contain;" onerror="this.style.display='none'" />
@@ -1288,7 +1288,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             </div>
             <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 6px; text-align: center; background: #ffffff; border-top: 2.5px solid #059669;">
               <div style="font-size: 7.5px; font-weight: 700; color: #64748b;">کۆی کاژێرەکانی دەوام</div>
-              <div style="font-size: 11px; font-weight: 900; color: #059669; font-family: monospace;">${globalWorkedHours}h</div>
+              <div style="font-size: 11px; font-weight: 900; color: #059669; font-family: monospace;">${globalWorkedHours} ک</div>
             </div>
             <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 6px; text-align: center; background: #ffffff; border-top: 2.5px solid #d97706;">
               <div style="font-size: 7.5px; font-weight: 700; color: #64748b;">حاڵەتەکانی دواکەوتن</div>
@@ -1445,7 +1445,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   ? 'bg-[#007AFF] text-white border-[#007AFF] shadow-sm ring-2 ring-blue-400/40' 
                   : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-[#007AFF] dark:text-blue-400 border-blue-200/60 dark:border-blue-800/40'
               }`}
-              title="دەستکاری فرە-ڕۆژ (Multi-Select)"
+              title="دەستکاری فرە-ڕۆژ"
               aria-label="دەستکاری فرە-ڕۆژ"
             >
               <CheckSquare className="w-4 h-4" />
@@ -1460,7 +1460,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             <button 
               onClick={() => setShowPrintModal(true)} 
               className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white flex items-center justify-center transition-all active:scale-90 border border-slate-200/80 dark:border-white/10 cursor-pointer shadow-2xs"
-              title="چاپکردنی تایبەت (Print)"
+              title="چاپکردنی تایبەت"
               aria-label="چاپکردن"
             >
               <Printer className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -1470,7 +1470,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             <button
               onClick={handleExportExcelMatrix}
               className="h-8 w-8 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 flex items-center justify-center transition-all active:scale-90 cursor-pointer border border-emerald-200/80 dark:border-emerald-800/40 shadow-2xs"
-              title="داگرتنی خشتە بە شێوازی ئێکسڵ (.xlsx)"
+              title="داگرتنی خشتەی ئێکسڵ"
               aria-label="ئێکسڵ"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
@@ -1480,7 +1480,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             <button
               onClick={handleExportOfficialLetterheadPDF}
               className="h-8 w-8 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white flex items-center justify-center shadow-xs transition-all active:scale-90 cursor-pointer"
-              title="ڕاپۆرتی فەرمی بە وەرەقەی سەری ئاشڵی (PDF)"
+              title="ڕاپۆرتی فەرمی"
               aria-label="ڕاپۆرتی فەرمی"
             >
               <FileText className="w-4 h-4 text-white" />
@@ -1510,7 +1510,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 tableFitMode === 'fit' ? 'w-[145px] min-w-[145px] px-2 py-2 text-[11px]' : 'min-w-[200px] px-3 py-3 text-xs'
               }`}>
                 <div className="flex items-center justify-between">
-                  <span>کارمەند (دۆسیەی HR)</span>
+                  <span>کارمەند</span>
                   {isMultiSelectMode && (
                     <button
                       type="button"
@@ -1575,7 +1575,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 tableFitMode === 'fit' ? 'w-[40px] min-w-[40px] px-0.5 py-1 text-[9px]' : 'min-w-[76px] px-2.5 py-2'
               }`}>
                 <div>کۆی کاژێر</div>
-                <div className="text-[8px] font-medium text-blue-700 dark:text-blue-400">Hours</div>
+                <div className="text-[8px] font-medium text-blue-700 dark:text-blue-400">کاتژمێر</div>
               </th>
               <th className={`bg-amber-50/90 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300 font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 text-center ${
                 tableFitMode === 'fit' ? 'w-[32px] min-w-[32px] px-0.5 py-1 text-[9px]' : 'min-w-[62px] px-2 py-2'
@@ -1593,7 +1593,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 tableFitMode === 'fit' ? 'w-[36px] min-w-[36px] px-0.5 py-1 text-[9px]' : 'min-w-[65px] px-2 py-2'
               }`}>
                 <div>ڕێژە ٪</div>
-                <div className="text-[7.5px] font-bold text-slate-600 font-mono">Rate</div>
+                <div className="text-[7.5px] font-bold text-slate-600 font-mono">پابەندی</div>
               </th>
             </tr>
           </thead>
@@ -1856,7 +1856,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       <span className={`inline-block font-mono font-bold ${
                         tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2.5 py-1 rounded-xl text-xs'
                       } bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20`}>
-                        {empPresentDays}{tableFitMode === 'fit' ? 'd' : ' ڕۆژ'}
+                        {empPresentDays}{tableFitMode === 'fit' ? '' : ' ڕۆژ'}
                       </span>
                     )}
                   </td>
@@ -1867,7 +1867,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       <span className={`inline-block font-mono font-bold ${
                         tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2.5 py-1 rounded-xl text-xs'
                       } bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/20`}>
-                        {empTotalHours}h
+                        {empTotalHours} ک
                       </span>
                     )}
                   </td>
@@ -1937,7 +1937,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       {selectedDayModal.emp.fullName3Part || selectedDayModal.emp.name}
                     </h3>
                     <span className="text-[10px] font-semibold bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 rounded-full border border-slate-200/50 dark:border-white/5">
-                      {selectedDayModal.emp.role || 'کارمەند'}
+                      {translateRoleToKurdish(selectedDayModal.emp.role)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
@@ -1970,7 +1970,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     <Smartphone className="w-3.5 h-3.5 text-[#007AFF]" />
                     <span>داتای تۆمارکراوی مۆبایلی کارمەند:</span>
                   </span>
-                  <span className="text-[10px] font-medium text-slate-400">GPS Auto-Tracked</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2032,9 +2031,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                     <span>دەستکاری و پەسەندکردنی ئەدمین:</span>
-                  </span>
-                  <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-full border border-blue-200/40">
-                    Admin Adjust
                   </span>
                 </div>
 
@@ -2127,9 +2123,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 <div className="space-y-3 bg-slate-50 dark:bg-[#1c1c1e] p-3.5 rounded-xl border border-slate-200/60 dark:border-white/5">
                   <div className="flex items-center justify-between pb-1 border-b border-slate-200/50 dark:border-white/5">
                     <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <span>⚖️ بڕیاری سەرپشکی و لێخۆشبوونی ئەدمین (Waivers):</span>
+                      <span>⚖️ بڕیاری سەرپشکی و لێخۆشبوونی ئەدمین:</span>
                     </label>
-                    <span className="text-[10px] font-mono text-slate-400">Admin Authority</span>
                   </div>
 
                   {/* ١. لێخۆشبوون لە درەنگ هاتن */}
@@ -2237,15 +2232,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               </div>
 
               {/* ------------------------------------------------------------- */}
-              {/* 📜 بەشی ٣: تۆماری تەواوی مێژووی گۆڕانکارییەکان (Change History Log) */}
+              {/* 📜 بەشی ٣: تۆماری تەواوی مێژووی گۆڕانکارییەکان */}
               {/* ------------------------------------------------------------- */}
               <div className="bg-white dark:bg-[#2c2c2e] rounded-2xl p-4 border border-slate-200/70 dark:border-white/5 shadow-xs space-y-2.5">
                 <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-white/5">
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5 text-amber-500" />
-                    <span>مێژووی دەستکاری و گۆڕانکارییەکان (Change History Log):</span>
+                    <span>مێژووی دەستکاری و گۆڕانکارییەکان:</span>
                   </span>
-                  <span className="text-[10px] text-slate-400 font-mono">Audit Trail</span>
                 </div>
 
                 <div className="space-y-2 text-xs">
@@ -2303,11 +2297,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         </div>
                       )}
 
-                      {/* 📜 ٣. مێژووی تەواوی گۆڕانکارییە پێشووەکان (Detailed Audit Trail Timeline) */}
+                      {/* 📜 ٣. مێژووی تەواوی گۆڕانکارییە پێشووەکان */}
                       {Array.isArray(selectedDayModal.info.historyLogs) && selectedDayModal.info.historyLogs.length > 0 && (
                         <div className="space-y-2 pt-1 border-t border-slate-200/60 dark:border-white/5">
                           <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block px-1">
-                            مێژووی دەستکارییە بەردەستەکان (Timeline):
+                            مێژووی دەستکارییەکان:
                           </span>
                           {selectedDayModal.info.historyLogs.map((log: any, idx: number) => (
                             <div key={log.id || idx} className="p-3 rounded-2xl bg-slate-50 dark:bg-[#1c1c1e] border border-slate-200/70 dark:border-white/5 space-y-1.5 shadow-2xs">
@@ -2377,7 +2371,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     </div>
                   ) : (
                     <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#1c1c1e] border border-slate-100 dark:border-white/5 text-center text-slate-400 dark:text-slate-500 text-[11px] italic">
-                      تۆماری مێژوو: تا ئێستا هیچ دەستکارییەکی پێشوو لەلایەن ئەدمینەوە بۆ ئەم ڕۆژە ئەنجام نەدراوە.
+                      تا ئێستا هیچ دەستکارییەکی پێشوو لەلایەن ئەدمینەوە ئەنجام نەدراوە.
                     </div>
                   )}
                 </div>
@@ -2421,9 +2415,6 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       )}
 
       {/* ========================================================================= */}
-      {/* 🖨️ WINDOWS 11 SHARP MODAL: CUSTOM RANGE PRINT (SEPARATED NEW TAB) */}
-      {/* ========================================================================= */}
-      {/* ========================================================================= */}
       {/* 🍏 APPLE iOS STYLE MODAL: CUSTOM RANGE PRINT */}
       {/* ========================================================================= */}
       {showPrintModal && (
@@ -2438,9 +2429,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </div>
                 <div>
                   <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                    چاپکردنی تایبەت (Google Sheets View)
+                    چاپکردنی تایبەت
                   </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">ڕێکخستنی مەودای چاپ لە تابی نوێ</p>
                 </div>
               </div>
               <button 
@@ -2675,7 +2665,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 type="button"
                 onClick={clearAllSelection}
                 className="p-1.5 rounded-xl bg-white/10 hover:bg-rose-600 active:scale-95 text-slate-300 hover:text-white transition-all cursor-pointer"
-                title="لابردنی دیاریکردن (Cancel)"
+                title="لابردنی دیاریکردن"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2706,11 +2696,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </div>
                 <div>
                   <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
-                    داخڵکردن و دەستکاری فرە-ڕۆژ (Bulk Entry)
+                    دەستکاری فرە-ڕۆژ
                   </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    دیاریکردنی چەند ڕۆژێک یان مەودا و تۆمارکردنی یەک داتا بە یەک کلیک
-                  </p>
                 </div>
               </div>
               <button
@@ -2742,14 +2729,13 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </div>
               )}
 
-              {/* 1. مەودای ڕۆژەکان و کارمەندان (Range & Target) */}
+              {/* 1. مەودای ڕۆژەکان و کارمەندان */}
               <div className="bg-white dark:bg-[#2c2c2e] p-4 rounded-2xl border border-slate-200/70 dark:border-white/5 shadow-xs space-y-3">
                 <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-white/5">
                   <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-blue-500" />
                     <span>١. دیاریکردنی کارمەندان و مەودای ڕۆژەکان:</span>
                   </span>
-                  <span className="text-[10px] font-mono text-slate-400">Target & Range</span>
                 </div>
 
                 {/* Employee Target */}
@@ -2841,14 +2827,13 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </div>
               </div>
 
-              {/* 2. داتای نوێ بۆ جێبەجێکردن (New Attendance Data) */}
+              {/* 2. داتای نوێ بۆ جێبەجێکردن */}
               <div className="bg-white dark:bg-[#2c2c2e] p-4 rounded-2xl border border-slate-200/70 dark:border-white/5 shadow-xs space-y-3">
                 <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-white/5">
                   <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
                     <span>٢. داتای نوێ بۆ داخڵکردن بە یەکجار:</span>
                   </span>
-                  <span className="text-[10px] font-mono text-slate-400">Values to Apply</span>
                 </div>
 
                 {/* Status Choice */}

@@ -38,7 +38,8 @@ import {
 import { 
   resolveEmployeeDayAttendance, 
   getCheckInStatus, 
-  getCheckOutStatus 
+  getCheckOutStatus,
+  translateRoleToKurdish
 } from '@/lib/attendance-helpers';
 
 interface AdminDailyAttendanceTableProps {
@@ -416,7 +417,7 @@ export function AdminDailyAttendanceTable({
         index: idx + 1,
         empId: emp.id,
         name: emp.fullName3Part || emp.name,
-        role: emp.role || 'کارمەند',
+        role: translateRoleToKurdish(emp.role),
         checkInTime,
         checkInOriginalTime,
         checkInNote,
@@ -789,9 +790,9 @@ export function AdminDailyAttendanceTable({
       fileName: `Ashley_Daily_Attendance_${selectedDate}`,
       summaryCards: [
         { label: 'کۆی گشتی کارمەندان', value: `${currentDayData.summary.totalEmployees} کەس`, color: '#2563eb' },
-        { label: 'ئامادەبووان (Present)', value: `${currentDayData.summary.presentCount} کەس`, color: '#059669' },
-        { label: 'دواکەوتوو (Late > 08:15)', value: `${currentDayData.summary.lateCount} کەس`, color: '#e11d48' },
-        { label: 'خاوەن ئیزافە (Overtime)', value: `${currentDayData.summary.overtimeCount} کەس (+${currentDayData.summary.totalOvertimeHours}ک)`, color: '#7c3aed' },
+        { label: 'ئامادەبووان', value: `${currentDayData.summary.presentCount} کەس`, color: '#059669' },
+        { label: 'دواکەوتوو (دوای 08:15)', value: `${currentDayData.summary.lateCount} کەس`, color: '#e11d48' },
+        { label: 'خاوەن ئیزافە', value: `${currentDayData.summary.overtimeCount} کەس (+${currentDayData.summary.totalOvertimeHours}ک)`, color: '#7c3aed' },
       ],
     });
   };
@@ -828,7 +829,7 @@ export function AdminDailyAttendanceTable({
       month: selectedMonth,
       daysData: allMonthDaysData,
       title: `ڕاپۆرتی ۳۱ لاپەڕەیی ئامادەبوونی مانگی (${selectedMonth})`,
-      subtitle: `کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی (Ashley Enterprise ERP)`,
+      subtitle: `کۆمپانیای ئاشڵی بۆ پیشەسازی و بازرگانی`,
     });
   };
 
@@ -979,8 +980,8 @@ export function AdminDailyAttendanceTable({
             type="button"
             onClick={handlePrintSingleDayPDF}
             className="h-8 w-8 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white flex items-center justify-center shadow-2xs transition-all active:scale-90 cursor-pointer"
-            title="پرێنتکردنی داتای ئەمڕۆ (Print Day PDF)"
-            aria-label="Print Day PDF"
+            title="پرێنتکردنی داتای ئەمڕۆ"
+            aria-label="پرێنتی ڕۆژ"
           >
             <Printer className="w-4 h-4 text-white" />
           </button>
@@ -991,7 +992,7 @@ export function AdminDailyAttendanceTable({
             onClick={handlePrint31DayMonthPDF}
             className="h-8 px-3 rounded-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all active:scale-90 cursor-pointer"
             title="پرێنتی گشتی ۳۱ ڕۆژ (۳۱ لاپەڕە)"
-            aria-label="Print 31-Day Month PDF"
+            aria-label="پرێنتی ۳۱ ڕۆژ"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
             <span>۳۱ لاپەڕە</span>
@@ -1002,8 +1003,8 @@ export function AdminDailyAttendanceTable({
             type="button"
             onClick={handleExportDayCSV}
             className="h-8 w-8 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-700/40 flex items-center justify-center cursor-pointer transition-all active:scale-90 shadow-2xs"
-            title="داگرتنی CSV بۆ ئەمڕۆ"
-            aria-label="CSV Day"
+            title="داگرتنی خشتەی ئەمڕۆ"
+            aria-label="خشتەی ڕۆژ"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
           </button>
@@ -1013,8 +1014,8 @@ export function AdminDailyAttendanceTable({
             type="button"
             onClick={handleExportMonthCSV}
             className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white flex items-center justify-center cursor-pointer transition-all active:scale-90 border border-slate-200/80 dark:border-white/10 shadow-2xs"
-            title="داگرتنی CSV بۆ تەواوی مانگ"
-            aria-label="CSV Month"
+            title="داگرتنی خشتەی تەواوی مانگ"
+            aria-label="خشتەی مانگ"
           >
             <FileSpreadsheet className="w-4 h-4 text-slate-600 dark:text-slate-400" />
           </button>
@@ -1063,9 +1064,9 @@ export function AdminDailyAttendanceTable({
 
         <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
           <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">خاوەن ئیزافە (Overtime)</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">خاوەن ئیزافە</div>
             <div className="text-lg font-black text-purple-600 dark:text-purple-400 font-mono mt-0.5">
-              {currentDayData.summary.overtimeCount} <span className="text-xs text-purple-500 font-medium">({currentDayData.summary.totalOvertimeHours}h)</span>
+              {currentDayData.summary.overtimeCount} <span className="text-xs text-purple-500 font-medium">({currentDayData.summary.totalOvertimeHours} ک)</span>
             </div>
           </div>
           <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
@@ -1133,7 +1134,7 @@ export function AdminDailyAttendanceTable({
                           <ExternalLink className="w-3 h-3 opacity-30 group-hover:opacity-100 text-blue-500 transition-opacity" />
                         </Link>
                         {row.isWaived && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-purple-600 border border-white shadow-xs inline-block shrink-0" title="لێخۆشبوو لە سەرپێچی (Waiver)" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-purple-600 border border-white shadow-xs inline-block shrink-0" title="لێخۆشبوو لە سەرپێچی" />
                         )}
                       </div>
                     </td>
@@ -1391,10 +1392,10 @@ export function AdminDailyAttendanceTable({
                   💎 کۆی گشتی ئامادەبووان و کاتەکانی ئیزافە ({selectedDate}):
                 </td>
                 <td className="p-3 text-center font-mono font-black text-xs sm:text-sm bg-purple-900/60 text-purple-200 border-x border-slate-700">
-                  {currentDayData.summary.totalOvertimeHours > 0 ? `+${currentDayData.summary.totalOvertimeHours}h` : '-'}
+                  {currentDayData.summary.totalOvertimeHours > 0 ? `+${currentDayData.summary.totalOvertimeHours} ک` : '-'}
                 </td>
                 <td className="p-3 text-center font-mono font-black text-xs sm:text-sm bg-amber-900/60 text-amber-200 border-x border-slate-700">
-                  {currentDayData.summary.totalMonthlyOvertimeHours > 0 ? `${currentDayData.summary.totalMonthlyOvertimeHours}h` : '-'}
+                  {currentDayData.summary.totalMonthlyOvertimeHours > 0 ? `${currentDayData.summary.totalMonthlyOvertimeHours} ک` : '-'}
                 </td>
                 <td className="p-3 text-slate-300 text-xs font-bold text-center">
                   {currentDayData.summary.presentCount} کارمەند ئامادەبووە
@@ -1464,7 +1465,7 @@ export function AdminDailyAttendanceTable({
                   {/* Check-In Time */}
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-black text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
-                      <span>📥 کاتی هاتن (Check-In):</span>
+                      <span>📥 کاتی هاتن:</span>
                     </label>
                     <input
                       type="time"
@@ -1489,7 +1490,7 @@ export function AdminDailyAttendanceTable({
                   {/* Check-Out Time */}
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-black text-blue-800 dark:text-blue-300 flex items-center justify-between">
-                      <span>📤 کاتی ڕۆیشتن (Check-Out):</span>
+                      <span>📤 کاتی ڕۆیشتن:</span>
                       {modalCheckOut && (
                         <button
                           type="button"
@@ -1565,7 +1566,7 @@ export function AdminDailyAttendanceTable({
                   className="w-4 h-4 text-purple-600 rounded-md border-purple-300 focus:ring-purple-500"
                 />
                 <span className="text-xs font-bold">
-                  🟣 لێخۆشبوون (Waiver) بۆ ئەم دەوامە ئەژمار بکرێت (بازنەی مۆر دەخرێتە سەر خانەکە)
+                  🟣 لێخۆشبوون بۆ ئەم دەوامە ئەژمار بکرێت (بازنەی مۆر)
                 </span>
               </label>
 
@@ -1639,7 +1640,7 @@ export function AdminDailyAttendanceTable({
                   <Clock className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black">ڕاپۆرتی دەرچوونی کاتی کارمەندان (Excursions)</h3>
+                  <h3 className="text-base font-black">ڕاپۆرتی دەرچوونی کاتی کارمەندان</h3>
                   <p className="text-xs text-amber-100 font-bold">بۆ بەرواری ({selectedDate})</p>
                 </div>
               </div>

@@ -321,7 +321,7 @@ export function AdminDashboardWorkspace() {
               }`}
             >
               <Table className="w-3.5 h-3.5" />
-              <span>خشتەی مانگانە (Matrix)</span>
+              <span>خشتەی مانگانە</span>
             </button>
 
             <button
@@ -334,7 +334,7 @@ export function AdminDashboardWorkspace() {
               }`}
             >
               <Calendar className="w-3.5 h-3.5" />
-              <span>ڕۆژانە (Daily)</span>
+              <span>ڕۆژانە</span>
             </button>
 
             <button
@@ -345,7 +345,7 @@ export function AdminDashboardWorkspace() {
                   ? 'bg-white dark:bg-[#1c1c1e] text-[#007AFF] shadow-2xs font-black'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
-              title="ئامرازەکانی ئەدمین"
+              title="ئامرازەکان"
             >
               <Wrench className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">ئامرازەکان</span>
@@ -418,7 +418,7 @@ export function AdminDashboardWorkspace() {
           <div className="bg-white/80 dark:bg-[#2c2c2e]/80 p-5 rounded-[24px] border border-slate-200/80 dark:border-white/5 shadow-sm space-y-4">
             <div className="flex items-center gap-2.5 text-slate-900 dark:text-white border-b border-slate-100 dark:border-white/10 pb-3">
               <Wrench className="w-5 h-5 text-[#007AFF]" />
-              <h2 className="text-sm sm:text-base font-black">ئامرازە باڵاکانی سەرپەرشتیاری سیستم (Admin Tools)</h2>
+              <h2 className="text-sm sm:text-base font-black">ئامرازەکانی سیستەم</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
@@ -427,37 +427,31 @@ export function AdminDashboardWorkspace() {
               <div className="p-4 bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200/60 dark:border-rose-900/40 rounded-2xl space-y-3">
                 <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400 font-black text-xs">
                   <Trash2 className="w-4 h-4" />
-                  <span>سڕینەوە و ڕیسێتی سەرجەم تۆمارەکانی ئامادەبوون</span>
+                  <span>سڕینەوەی تۆمارەکانی ئامادەبوون</span>
                 </div>
-                <p className="text-[11px] text-rose-800/80 dark:text-rose-300 leading-relaxed font-medium">
-                  سەرجەم لۆگە تۆمارکراوەکانی چێک‌ئین و چێک‌ئاوت، مۆڵەت و غیابەکان لە سێرڤەر و کاشی مۆبایل پاکدەکاتەوە.
-                </p>
                 <button
                   type="button"
                   onClick={handleWipeAllAttendance}
                   className="w-full py-2.5 px-3 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>سڕینەوەی هەموو تۆمارەکانی دەوام (Wipe Attendance)</span>
+                  <span>سڕینەوەی هەموو تۆمارەکان</span>
                 </button>
               </div>
 
-              {/* JSON System Backup */}
+              {/* System Backup */}
               <div className="p-4 bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40 rounded-2xl space-y-3">
                 <div className="flex items-center gap-2 text-[#007AFF] dark:text-blue-400 font-black text-xs">
                   <Download className="w-4 h-4" />
-                  <span>داگرتنی باکئەپی گشتی (JSON Backup)</span>
+                  <span>هەڵگرتنی داتای سیستەم</span>
                 </div>
-                <p className="text-[11px] text-blue-800/80 dark:text-blue-300 leading-relaxed font-medium">
-                  هەناردەکردنی سەرجەم داتاکانی سیستەم، کارمەندان، ڕێکخستنەکان و ئامادەبوون وەک فایلی پارێزراوی JSON.
-                </p>
                 <button
                   type="button"
                   onClick={exportStateAsJson}
                   className="w-full py-2.5 px-3 bg-[#007AFF] hover:bg-blue-600 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>داگرتنی فایلی باکئەپ (Export JSON)</span>
+                  <span>داگرتنی فایلی یەدەگ</span>
                 </button>
               </div>
 
@@ -465,11 +459,8 @@ export function AdminDashboardWorkspace() {
               <div className="p-4 bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-900/40 rounded-2xl space-y-3">
                 <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400 font-black text-xs">
                   <KeyRound className="w-4 h-4" />
-                  <span>وشەی نهێنی بەڕێوەبەر (Admin Password)</span>
+                  <span>وشەی تێپەڕی بەڕێوەبەر</span>
                 </div>
-                <p className="text-[11px] text-indigo-800/80 dark:text-indigo-300 leading-relaxed font-medium">
-                  گۆڕینی تێپەڕەوشەی چوونەژوورەوەی ئەدمین بۆ سیستەم و بەشە هەستیارەکان.
-                </p>
                 <button
                   type="button"
                   onClick={() => setShowPasswordModal(true)}
@@ -484,17 +475,14 @@ export function AdminDashboardWorkspace() {
               <div className="p-4 bg-purple-50/70 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-900/40 rounded-2xl space-y-3">
                 <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400 font-black text-xs">
                   <Settings className="w-4 h-4" />
-                  <span>ناسنامەی فەرمی کۆمپانیا و لۆگۆکان</span>
+                  <span>ناسنامەی کۆمپانیا و لۆگۆکان</span>
                 </div>
-                <p className="text-[11px] text-purple-800/80 dark:text-purple-300 leading-relaxed font-medium">
-                  دەستکاریکردنی ناوی گروپی دیوان، بریکاری ئاشڵی، دروشم و لۆگۆکانی وێبسایت و ڕاپۆرت.
-                </p>
                 <Link
                   href="/settings"
                   className="w-full py-2.5 px-3 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 text-center"
                 >
                   <Settings className="w-3.5 h-3.5" />
-                  <span>چوون بۆ پەڕەی ناسنامە و لۆگۆکان</span>
+                  <span>ناسنامە و لۆگۆکان</span>
                 </Link>
               </div>
 

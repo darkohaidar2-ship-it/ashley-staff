@@ -82,8 +82,7 @@ export function AdminPasswordChangeModal({ isOpen, onClose }: AdminPasswordChang
               <KeyRound className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-black">گۆڕینی وشەی تێپەڕی ئەدمین (Admin Security)</h3>
-              <p className="text-[10px] text-slate-400 font-semibold">پاشەکەوتکردنی ڕاستەوخۆ لەسەر داتابەیسی سوپابەیس</p>
+              <h3 className="text-sm font-black">گۆڕینی وشەی تێپەڕی بەڕێوەبەر</h3>
             </div>
           </div>
 
@@ -109,55 +108,55 @@ export function AdminPasswordChangeModal({ isOpen, onClose }: AdminPasswordChang
         <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs font-bold">
           <div>
             <label className="block text-slate-700 dark:text-slate-300 mb-1">
-              وشەی تێپەڕی ئێستا (Current Password):
+              وشەی تێپەڕی ئێستا:
             </label>
             <input
               type="password"
               required
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="وشەی تێپەڕی ئێستات..."
+              placeholder="••••••"
               className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white outline-none font-mono"
             />
           </div>
 
           <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
             <label className="block text-slate-700 dark:text-slate-300 mb-1">
-              ناوی بەکارهێنەری نوێ (ئارەزوومەندانە):
+              ناوی بەکارهێنەری نوێ:
             </label>
             <input
               type="text"
               value={newUsername}
               onChange={(e) => setNewUsername(e.target.value)}
-              placeholder="admin (ئەگەر بەتاڵ بێت ناگۆڕێت)"
+              placeholder="ئارەزوومەندانە"
               className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white outline-none font-mono"
             />
           </div>
 
           <div>
             <label className="block text-slate-700 dark:text-slate-300 mb-1">
-              وشەی تێپەڕی نوێ (New Password):
+              وشەی تێپەڕی نوێ:
             </label>
             <input
               type="password"
               required
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="وشەی تێپەڕی نوێ..."
+              placeholder="••••••"
               className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white outline-none font-mono"
             />
           </div>
 
           <div>
             <label className="block text-slate-700 dark:text-slate-300 mb-1">
-              دووبارەکردنەوەی وشەی تێپەڕی نوێ (Confirm New Password):
+              دووبارەکردنەوەی وشەی تێپەڕی نوێ:
             </label>
             <input
               type="password"
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="دووبارەکردنەوە..."
+              placeholder="••••••"
               className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white outline-none font-mono"
             />
           </div>

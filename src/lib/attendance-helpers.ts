@@ -24,6 +24,26 @@ export const SHIFT_RULES = {
   EARLY_THRESHOLD: '16:55',
 } as const;
 
+export function translateRoleToKurdish(role?: string | null): string {
+  if (!role) return 'کارمەند';
+  const r = role.trim();
+  const low = r.toLowerCase();
+  if (low === 'manager' || low === 'general manager' || low === 'admin') return 'بەڕێوەبەر';
+  if (low === 'employee supervisor' || low === 'supervisor') return 'سەرپەرشتیار';
+  if (low === 'transport supervisor') return 'سەرپەرشتیاری گواستنەوە';
+  if (low === 'accountant') return 'ژمێریار';
+  if (low === 'warehouse' || low === 'warehouse supervisor') return 'سەرپەرشتیاری کۆگا';
+  if (low === 'employee' || low === 'staff' || low === 'worker') return 'کارمەند';
+  return r
+    .replace(/Employee Supervisor/gi, 'سەرپەرشتیاری کارمەندان')
+    .replace(/Transport Supervisor/gi, 'سەرپەرشتیاری گواستنەوە')
+    .replace(/General Manager/gi, 'بەڕێوەبەری گشتی')
+    .replace(/Manager/gi, 'بەڕێوەبەر')
+    .replace(/Supervisor/gi, 'سەرپەرشتیار')
+    .replace(/Employee/gi, 'کارمەند')
+    .replace(/Staff/gi, 'کارمەند');
+}
+
 export interface CheckInStatusResult {
   isLate: boolean;
   isWaived: boolean;

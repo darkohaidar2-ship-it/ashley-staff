@@ -31,24 +31,25 @@ import {
   Laptop,
   ShieldAlert
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, getDaysInMonth, getDay } from 'date-fns';
 import { getDistanceMeters, sendLocalNotification, type GeofenceRegion } from '@/lib/background-geofence';
 import { extractFaceDescriptor, loadFaceModels, matchFaceDescriptors } from '@/lib/face-recognition';
+import { resolveEmployeeDayAttendance, translateRoleToKurdish, type UnifiedAttendanceDayInfo } from '@/lib/attendance-helpers';
 
 // Default Employees Fallback with Official PINs
 const ASHLEY_DEFAULT_EMPLOYEES = [
-  { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', role: 'Employee', pin: '1001' },
-  { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', role: 'Manager', pin: '1002' },
-  { id: 'emp-03', name: 'شادیار هوشیار', role: 'Employee Supervisor', pin: '1003' },
-  { id: 'emp-04', name: 'هەڤاڵ حبیب حەمەڕەزا', role: 'Transport Supervisor', pin: '1004' },
-  { id: 'emp-05', name: 'عیماد سەباح نوری', role: 'Employee', pin: '1005' },
-  { id: 'emp-06', name: 'کامەران عومەر ڕووئوف', role: 'Employee', pin: '1006' },
-  { id: 'emp-07', name: 'ڕابەر محەمەد مەحمود', role: 'Employee', pin: '1007' },
-  { id: 'emp-08', name: 'دانەر محەمەد باسام', role: 'Employee', pin: '1008' },
-  { id: 'emp-09', name: 'ڕێبین سەباح نوری', role: 'Employee', pin: '1009' },
-  { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', role: 'Employee', pin: '1010' },
-  { id: 'emp-11', name: 'شادومان یادگار رحیم', role: 'Employee', pin: '1011' },
-  { id: 'emp-12', name: 'سەروەت قادر', role: 'Employee', pin: '1012' },
+  { id: 'emp-01', name: 'سه هەند مەریوان حەمەسەعید', role: 'کارمەند', pin: '1001' },
+  { id: 'emp-02', name: 'دارکۆ حەیدەر حسێن', role: 'بەڕێوەبەر', pin: '1002' },
+  { id: 'emp-03', name: 'شادیار هوشیار', role: 'سەرپەرشتیاری کارمەندان', pin: '1003' },
+  { id: 'emp-04', name: 'هەڤاڵ حبیب حەمەڕەزا', role: 'سەرپەرشتیاری گواستنەوە', pin: '1004' },
+  { id: 'emp-05', name: 'عیماد سەباح نوری', role: 'کارمەند', pin: '1005' },
+  { id: 'emp-06', name: 'کامەران عومەر ڕووئوف', role: 'کارمەند', pin: '1006' },
+  { id: 'emp-07', name: 'ڕابەر محەمەد مەحمود', role: 'کارمەند', pin: '1007' },
+  { id: 'emp-08', name: 'دانەر محەمەد باسام', role: 'کارمەند', pin: '1008' },
+  { id: 'emp-09', name: 'ڕێبین سەباح نوری', role: 'کارمەند', pin: '1009' },
+  { id: 'emp-10', name: 'بەهرەمەند ڕزگار عزیز', role: 'کارمەند', pin: '1010' },
+  { id: 'emp-11', name: 'شادومان یادگار رحیم', role: 'کارمەند', pin: '1011' },
+  { id: 'emp-12', name: 'سەروەت قادر', role: 'کارمەند', pin: '1012' },
 ];
 
 const OFFICIAL_PIN_MAP: Record<string, string> = {
@@ -70,14 +71,14 @@ const OFFICIAL_PIN_MAP: Record<string, string> = {
 const COMPANY_LOCATIONS: GeofenceRegion[] = [
   {
     id: 'ashley-base-main',
-    name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
+    name: 'کۆمپانیای سەرەکی ئاشڵی',
     lat: 35.562431,
     lng: 45.474792,
     radiusMeters: 400,
   },
   {
     id: 'huana-warehouse-loc',
-    name: 'کۆگای سەرەکی هوانە (Huana Warehouse)',
+    name: 'کۆگای سەرەکی هوانە',
     lat: 35.508918,
     lng: 45.452935,
     radiusMeters: 400,
@@ -443,9 +444,12 @@ export default function MobileAttendanceOneTap() {
   const [selectedChip, setSelectedChip] = useState<string>('');
   const [customReason, setCustomReason] = useState<string>('');
 
-  // Monthly Attendance Records
+  // Monthly Attendance Records & Real System Sheet States
   const [monthlyLogs, setMonthlyLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
+  const [selectedSheetMonth, setSelectedSheetMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'));
+  const [empOverridesMap, setEmpOverridesMap] = useState<Record<string, any>>({});
+  const [selectedDayDetail, setSelectedDayDetail] = useState<(UnifiedAttendanceDayInfo & { dateStr: string; dayNum: number; dayNameKu: string }) | null>(null);
 
   // Logout / Unbind Modal
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -625,7 +629,7 @@ export default function MobileAttendanceOneTap() {
         if (Array.isArray(rawList) && rawList.length > 0) {
           const mapped: GeofenceRegion[] = rawList.map((loc: any) => ({
             id: loc.id || loc.name,
-            name: loc.name || 'کۆمپانیای سەرەکی ئاشڵی',
+            name: String(loc.name || 'کۆمپانیای سەرەکی ئاشڵی').replace(/\s*\([^)]*[A-Za-z][^)]*\)/g, ''),
             lat: parseFloat(loc.lat),
             lng: parseFloat(loc.lng),
             radiusMeters: parseFloat(loc.radius) || parseFloat(loc.radiusMeters) || 400,
@@ -646,14 +650,17 @@ export default function MobileAttendanceOneTap() {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed?.id) {
-          setEmployeeProfile(parsed);
+          setEmployeeProfile({
+            ...parsed,
+            role: translateRoleToKurdish(parsed.role),
+          });
         }
       }
       const cachedEmps = localStorage.getItem('ashley_cached_employees_v1');
       if (cachedEmps) {
         const parsedEmps = JSON.parse(cachedEmps);
         if (Array.isArray(parsedEmps) && parsedEmps.length > 0) {
-          setAllEmployees(parsedEmps);
+          setAllEmployees(parsedEmps.map((e: any) => ({ ...e, role: translateRoleToKurdish(e.role) })));
         }
       }
     } catch {}
@@ -670,6 +677,7 @@ export default function MobileAttendanceOneTap() {
           const mapped = valid.map((e: any) => ({
             ...e,
             name: e.fullName3Part || e.kurdishName || e.name,
+            role: translateRoleToKurdish(e.role),
             pin: e.pin || e.password || OFFICIAL_PIN_MAP[e.id] || (e.id === 'emp-02' ? '1002' : '1001'),
           }));
           setAllEmployees(mapped);
@@ -694,6 +702,7 @@ export default function MobileAttendanceOneTap() {
           const mapped = valid.map((e: any) => ({
             ...e,
             name: e.fullName3Part || e.kurdishName || e.name,
+            role: translateRoleToKurdish(e.role),
             pin: e.pin || e.password || OFFICIAL_PIN_MAP[e.id] || (e.id === 'emp-02' ? '1002' : '1001'),
           }));
           setAllEmployees(mapped);
@@ -723,7 +732,7 @@ export default function MobileAttendanceOneTap() {
 
     return new Promise((resolve, reject) => {
       if (typeof navigator === 'undefined' || !navigator.geolocation) {
-        const err = new Error('ئامێرەکەت پشتگیری لە دیاریکردنی شوێنی جوگرافی (GPS) ناکات.');
+        const err = new Error('ئامێرەکەت پشتگیری لە دیاریکردنی شوێن ناکات.');
         setGpsState('error');
         setGpsErrorMessage(err.message);
         setIsInsideGeofence(false);
@@ -772,13 +781,13 @@ export default function MobileAttendanceOneTap() {
         (err) => {
           setGpsState('error');
           setIsInsideGeofence(false);
-          let msg = 'نەتوانرا شوێنی جوگرافی GPS وەربگیرێت.';
+          let msg = 'نەتوانرا شوێنی جوگرافی وەربگیرێت.';
           if (err.code === 1) {
-            msg = '⚠️ تکایە دەسەڵاتی (Permission)ی شوێن (Location) پێ بدە تا بتوانیت ئامادەبوون تۆمار بکەیت.';
+            msg = '⚠️ تکایە دەسەڵاتی شوێن لە مۆبایلەکەتدا چالاک بکە.';
           } else if (err.code === 2) {
-            msg = '⚠️ شوێنی GPS بەردەست نییە. تکایە دڵنیابە لە کارکردنی Location لە مۆبایلەکەتدا.';
+            msg = '⚠️ دیاریکردنی شوێن لە مۆبایلەکەتدا ناچالاکە.';
           } else if (err.code === 3) {
-            msg = '⚠️ کاتی وەرگرتنی شوێنی GPS بەسەرچوو (Timeout). تکایە دووبارە تاقی بکەرەوە.';
+            msg = '⚠️ کاتی وەرگرتنی شوێن بەسەرچوو. دووبارە تاقی بکەرەوە.';
           }
           setGpsErrorMessage(msg);
           reject(new Error(msg));
@@ -869,65 +878,91 @@ export default function MobileAttendanceOneTap() {
     }
   }, [employeeProfile, matchedLocationName]);
 
-  // 5. Fetch monthly attendance history (Server-Authoritative when online, Cached + Outbox when offline)
+  // 5. Fetch monthly attendance history & Admin SSOT Sheet Overrides (Server-Authoritative when online, Cached + Outbox when offline)
   const fetchMonthlyHistory = useCallback(async () => {
     if (!employeeProfile?.id) return;
-    const historyCacheKey = `ashley_monthly_logs_${employeeProfile.id}`;
+    const historyCacheKey = `ashley_monthly_logs_${employeeProfile.id}_${selectedSheetMonth}`;
+    const overridesCacheKey = `ashley_emp_overrides_${employeeProfile.id}_${selectedSheetMonth}`;
     setLoadingLogs(true);
     try {
-      const todayIso = getTrustedBaghdadNow().dateStr;
-      const currentMonth = todayIso.slice(0, 7);
-      const res = await fetch(`/api/attendance/logs?t=${Date.now()}`, { cache: 'no-store' });
-      anchorServerTime(null, res.headers.get('Date'));
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        const cleanTarget = employeeProfile.id.toLowerCase().replace(/^emp-0*/i, '') || employeeProfile.id.toLowerCase().replace('emp-', '');
-        const targetName = (employeeProfile.name || '').trim().toLowerCase();
+      const [logsRes, reportRes] = await Promise.all([
+        fetch(`/api/attendance/logs?t=${Date.now()}`, { cache: 'no-store' }),
+        fetch(`/api/attendance/admin/report?month=${selectedSheetMonth}&_t=${Date.now()}`, { cache: 'no-store' }),
+      ]);
+      anchorServerTime(null, logsRes.headers.get('Date'));
+      const [logsData, reportData] = await Promise.all([
+        logsRes.json().catch(() => []),
+        reportRes.json().catch(() => ({})),
+      ]);
 
-        const empLogs = data.filter((l: any) => {
+      const cleanTarget = employeeProfile.id.toLowerCase().replace(/^emp-0*/i, '') || employeeProfile.id.toLowerCase().replace('emp-', '');
+      const paddedTarget = `emp-${cleanTarget.padStart(2, '0')}`;
+      const targetName = (employeeProfile.name || '').trim().toLowerCase();
+
+      if (Array.isArray(logsData)) {
+        const empLogs = logsData.filter((l: any) => {
           const lDate = l.date || (l.time ? l.time.split(' ')[0] : '');
-          if (!lDate.startsWith(currentMonth)) return false;
-          // Exclude shift summary rows from the event feed so only explicit Check In / Check Out events show
-          if (!l.type && !l.action) return false;
+          if (!lDate.startsWith(selectedSheetMonth)) return false;
           const rawId = (l.employeeId || l.userId || '').toString().toLowerCase();
           const cleanLId = rawId.replace(/^emp-0*/i, '') || rawId.replace('emp-', '');
           const lName = (l.employeeName || l.userName || l.name || '').toString().trim().toLowerCase();
           return rawId === employeeProfile.id.toLowerCase() || cleanLId === cleanTarget || (lName && targetName && lName === targetName);
         });
-        const sliced = empLogs.slice(0, 31);
-        setMonthlyLogs(sliced);
+        setMonthlyLogs(empLogs);
         try {
-          localStorage.setItem(historyCacheKey, JSON.stringify(sliced));
+          localStorage.setItem(historyCacheKey, JSON.stringify(empLogs));
         } catch {}
       }
+
+      if (reportData && typeof reportData.overrides === 'object' && reportData.overrides !== null) {
+        const allOverrides = reportData.overrides;
+        const myOverrides = {
+          ...(allOverrides[cleanTarget] || {}),
+          ...(allOverrides[paddedTarget] || {}),
+          ...(allOverrides[employeeProfile.id] || {}),
+        };
+        setEmpOverridesMap(myOverrides);
+        try {
+          localStorage.setItem(overridesCacheKey, JSON.stringify(myOverrides));
+        } catch {}
+      } else {
+        setEmpOverridesMap({});
+      }
     } catch {
-      // Offline fallback: retain last synced monthly history + append any unsent offline punches
+      // Offline fallback: retain last synced monthly history + overrides + append any unsent offline punches
       try {
         const cachedRaw = localStorage.getItem(historyCacheKey);
         const cachedList: any[] = cachedRaw ? JSON.parse(cachedRaw) : [];
+        const cachedOvRaw = localStorage.getItem(overridesCacheKey);
+        const cachedOv: Record<string, any> = cachedOvRaw ? JSON.parse(cachedOvRaw) : {};
+
         const rawQ = localStorage.getItem(OFFLINE_QUEUE_KEY);
         const qList: OfflinePunchItem[] = rawQ ? JSON.parse(rawQ) : [];
         const myQueued = Array.isArray(qList)
           ? qList
-              .filter(x => x.userId === employeeProfile.id)
+              .filter(x => x.userId === employeeProfile.id && x.trustedDateStr.startsWith(selectedSheetMonth))
               .map(x => ({
                 id: x.id,
                 employeeId: x.userId,
                 employeeName: x.userName,
-                type: x.event === 'EXIT' ? 'دەرچوون (Check Out)' : 'هاتن (Check In)',
+                type: x.event === 'EXIT' ? 'دەرچوون' : 'هاتن',
                 action: x.event === 'EXIT' ? 'Check Out' : 'Check In',
                 date: x.trustedDateStr,
                 time: `${x.trustedDateStr} ${x.trustedTimeStr}`,
+                checkInTime: x.event === 'ENTER' ? x.trustedTimeStr : undefined,
+                checkOutTime: x.event === 'EXIT' ? x.trustedTimeStr : undefined,
                 warehouseName: x.regionName,
-                status: 'pending_offline',
+                note: x.note,
+                status: 'Present',
               }))
           : [];
-        setMonthlyLogs([...myQueued, ...cachedList].slice(0, 31));
+        setMonthlyLogs([...myQueued, ...cachedList]);
+        setEmpOverridesMap(cachedOv);
       } catch {}
     } finally {
       setLoadingLogs(false);
     }
-  }, [employeeProfile]);
+  }, [employeeProfile, selectedSheetMonth]);
 
   useEffect(() => {
     if (employeeProfile?.id) {
@@ -945,6 +980,7 @@ export default function MobileAttendanceOneTap() {
       const liveSyncInterval = setInterval(() => {
         if (typeof document !== 'undefined' && document.visibilityState === 'visible' && navigator.onLine) {
           fetchTodayShift();
+          fetchMonthlyHistory();
         }
       }, 10000);
 
@@ -1040,7 +1076,7 @@ export default function MobileAttendanceOneTap() {
       (isDarko && (pinInput.trim() === '1002' || pinInput.trim() === '1001'));
 
     if (!isPinMatch) {
-      setAuthError('❌ کۆدی نهێنی (PIN) هەڵەیە! تکایە کۆدی دروست بنووسە.');
+      setAuthError('❌ کۆدی نهێنی هەڵەیە!');
       playRejectSound();
       return;
     }
@@ -1283,7 +1319,7 @@ export default function MobileAttendanceOneTap() {
             });
 
             // Complete login
-            const profileData = { id: selectedEmp.id, name: selectedEmp.name, role: selectedEmp.role || 'Employee' };
+            const profileData = { id: selectedEmp.id, name: selectedEmp.name, role: translateRoleToKurdish(selectedEmp.role) };
             localStorage.setItem('ashley_bound_employee_profile', JSON.stringify(profileData));
             setEmployeeProfile(profileData);
             setFaceScanSuccess(true);
@@ -1426,7 +1462,7 @@ export default function MobileAttendanceOneTap() {
               setFaceScanSuccess(true);
               playWelcomeMusic();
 
-              const profileData = { id: selectedEmp.id, name: selectedEmp.name, role: selectedEmp.role || 'Employee' };
+              const profileData = { id: selectedEmp.id, name: selectedEmp.name, role: translateRoleToKurdish(selectedEmp.role) };
               localStorage.setItem('ashley_bound_employee_profile', JSON.stringify(profileData));
               setEmployeeProfile(profileData);
               sendLocalNotification('🎉 بەخێربێیت', `بەخێربێیت ${selectedEmp.name}`);
@@ -1701,6 +1737,7 @@ export default function MobileAttendanceOneTap() {
         playCheckOutMusic();
       }
 
+      fetchMonthlyHistory();
       setTimeout(() => setFeedbackToast(null), 7000);
     };
 
@@ -1753,7 +1790,7 @@ export default function MobileAttendanceOneTap() {
         };
         setLiveTodayShift(updatedShift);
         localStorage.setItem(`ashley_shift_state_${todayIso}_${employeeProfile.id}`, JSON.stringify(updatedShift));
-        setFeedbackToast(reasonNote ? `🎉 هاتنت لە کاتژمێر (${assignedTime}) تۆمارکرا (تێبینی: ${reasonNote}).` : `🎉 دەستخۆش! هاتنت لە کاتژمێر (${assignedTime}) بە سەرکەوتوویی تۆمارکرا.`);
+        setFeedbackToast(reasonNote ? `🎉 هاتنت لە کاتژمێر (${assignedTime}) تۆمارکرا (تێبینی: ${reasonNote}).` : `🎉 هاتنت لە کاتژمێر (${assignedTime}) تۆمارکرا.`);
         playCheckInMusic();
       } else {
         const updatedShift = {
@@ -1764,7 +1801,7 @@ export default function MobileAttendanceOneTap() {
         };
         setLiveTodayShift(updatedShift);
         localStorage.setItem(`ashley_shift_state_${todayIso}_${employeeProfile.id}`, JSON.stringify(updatedShift));
-        setFeedbackToast(reasonNote ? `👋 ڕۆیشتنت لە کاتژمێر (${assignedTime}) تۆمارکرا (تێبینی: ${reasonNote}).` : `👋 دەستخۆش و ماندوو نەبیت! ڕۆیشتنت لە کاتژمێر (${assignedTime}) تۆمارکرا.`);
+        setFeedbackToast(reasonNote ? `👋 ڕۆیشتنت لە کاتژمێر (${assignedTime}) تۆمارکرا (تێبینی: ${reasonNote}).` : `👋 ڕۆیشتنت لە کاتژمێر (${assignedTime}) تۆمارکرا.`);
         playCheckOutMusic();
       }
 
@@ -1782,11 +1819,10 @@ export default function MobileAttendanceOneTap() {
   const handleCheckInClick = async () => {
     try {
       setTriggerLoading(true);
-      // 🛰️ Single-shot GPS activation ONLY for 1 second on demand
       const geo = await requestSingleGpsPosition();
       
       if (!geo.insideAny) {
-        alert(`⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${geo.minDistance} مەتر دووریت).\nتکایە بگە بە شوێنی کارگە یان کۆگای ئاشڵی بۆ تۆمارکردنی هاتن.`);
+        alert(`⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${geo.minDistance} مەتر دووریت).`);
         setTriggerLoading(false);
         return;
       }
@@ -1802,10 +1838,9 @@ export default function MobileAttendanceOneTap() {
         return;
       }
 
-      // 🚀 Direct 1-tap check-in with GPS verification
       await handleOneTapAttendance('ENTER', undefined, geo);
     } catch (err: any) {
-      alert(err.message || 'هەڵە لە وەرگرتنی شوێنی GPS.');
+      alert(err.message || 'هەڵە لە دیاریکردنی شوێن.');
       setTriggerLoading(false);
     }
   };
@@ -1813,11 +1848,10 @@ export default function MobileAttendanceOneTap() {
   const handleCheckOutClick = async () => {
     try {
       setTriggerLoading(true);
-      // 🛰️ Single-shot GPS activation ONLY for 1 second on demand
       const geo = await requestSingleGpsPosition();
 
       if (!geo.insideAny) {
-        alert(`⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${geo.minDistance} مەتر دووریت).\nدەبێت لە ناو کارگە یان کۆگای ئاشڵی بیت بۆ تۆمارکردنی ڕۆیشتن.`);
+        alert(`⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${geo.minDistance} مەتر دووریت).`);
         setTriggerLoading(false);
         return;
       }
@@ -1841,10 +1875,9 @@ export default function MobileAttendanceOneTap() {
         return;
       }
 
-      // 🚀 Direct 1-tap check-out with GPS verification
       await handleOneTapAttendance('EXIT', undefined, geo);
     } catch (err: any) {
-      alert(err.message || 'هەڵە لە وەرگرتنی شوێنی GPS.');
+      alert(err.message || 'هەڵە لە دیاریکردنی شوێن.');
       setTriggerLoading(false);
     }
   };
@@ -1855,7 +1888,7 @@ export default function MobileAttendanceOneTap() {
     const finalNote = customText ? (chipText ? `${chipText} - ${customText}` : customText) : chipText;
     
     if (!finalNote || !finalNote.trim()) {
-      alert('⚠️ داخڵکردنی هۆکار و تێبینی ئیجبارییە بۆ تۆمارکردن! تکایە هۆکارێک هەڵبژێرە یان بنووسە.');
+      alert('⚠️ تکایە هۆکارێک هەڵبژێرە یان بنووسە.');
       return;
     }
     handleOneTapAttendance(pendingAction, finalNote);
@@ -1866,122 +1899,193 @@ export default function MobileAttendanceOneTap() {
     if (!workedMinutes || workedMinutes <= 0) return '٠ خولەک';
     const h = Math.floor(workedMinutes / 60);
     const m = workedMinutes % 60;
-    if (h > 0 && m > 0) return `${h} کاتژمێر و ${m} خولەک`;
+    if (h > 0 && m > 0) return `${h} ک و ${m} خ`;
     if (h > 0) return `${h} کاتژمێر`;
     return `${m} خولەک`;
   }, [workedMinutes]);
 
+  // 📊 REAL 31-DAY SYSTEM MONTHLY SHEET FOR THE LOGGED-IN EMPLOYEE (SSOT)
+  const { employeeMonthSheet, sheetStats } = useMemo(() => {
+    if (!employeeProfile?.id) {
+      return {
+        employeeMonthSheet: [] as Array<UnifiedAttendanceDayInfo & { dateStr: string; dayNum: number; dayNameKu: string; isFriday: boolean; isToday: boolean; weekIdx: number }>,
+        sheetStats: { presentDays: 0, totalHours: 0, lateCount: 0, absentCount: 0, commitmentRate: 100 },
+      };
+    }
+
+    const [yStr, mStr] = (selectedSheetMonth || format(new Date(), 'yyyy-MM')).split('-');
+    const year = parseInt(yStr, 10) || new Date().getFullYear();
+    const month = parseInt(mStr, 10) || (new Date().getMonth() + 1);
+    const monthDate = new Date(year, month - 1, 1);
+    const totalDays = getDaysInMonth(monthDate);
+    const todayIso = currentDateStr || format(new Date(), 'yyyy-MM-dd');
+
+    const kuDayNames: Record<number, string> = {
+      0: 'یەکشەممە',
+      1: 'دووشەممە',
+      2: 'سێشەممە',
+      3: 'چوارشەممە',
+      4: 'پێنجشەممە',
+      5: 'هەینی',
+      6: 'شەممە',
+    };
+
+    let currentWeekIdx = 0;
+    let presentDays = 0;
+    let totalHours = 0;
+    let lateCount = 0;
+    let absentCount = 0;
+    let elapsedWorkdays = 0;
+
+    const rows: Array<UnifiedAttendanceDayInfo & { dateStr: string; dayNum: number; dayNameKu: string; isFriday: boolean; isToday: boolean; weekIdx: number }> = [];
+
+    const combinedLogs = [...monthlyLogs];
+    if (liveTodayShift && (liveTodayShift.checkInTime || liveTodayShift.checkOutTime)) {
+      combinedLogs.push({
+        ...liveTodayShift,
+        employeeId: employeeProfile.id,
+        employeeName: employeeProfile.name,
+        date: todayIso,
+      });
+    }
+
+    for (let d = 1; d <= totalDays; d++) {
+      const dateObj = new Date(year, month - 1, d);
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dayOfWeek = getDay(dateObj);
+      if (d > 1 && dayOfWeek === 6) {
+        currentWeekIdx++;
+      }
+      const isFriday = dayOfWeek === 5;
+      const isToday = dateStr === todayIso;
+      const isFuture = dateStr > todayIso;
+
+      const resolved = resolveEmployeeDayAttendance(
+        { id: employeeProfile.id, name: employeeProfile.name },
+        { dayNum: d, dateStr, isFriday, isFuture, isToday },
+        empOverridesMap,
+        combinedLogs,
+        false
+      );
+
+      if (resolved.status === 'Present') {
+        presentDays++;
+        totalHours += resolved.workedHours || 0;
+      }
+      if (resolved.checkInStatus.isLate && !resolved.checkInStatus.isWaived) {
+        lateCount++;
+      }
+      if (resolved.status === 'Absent' || resolved.status === 'Leave' || resolved.status === 'غیاب' || resolved.status === 'مۆڵەت') {
+        absentCount++;
+      }
+      if (!isFriday && !isFuture) {
+        elapsedWorkdays++;
+      }
+
+      rows.push({
+        ...resolved,
+        dateStr,
+        dayNum: d,
+        dayNameKu: kuDayNames[dayOfWeek] || '',
+        isFriday,
+        isToday,
+        weekIdx: currentWeekIdx,
+      });
+    }
+
+    const denom = Math.max(1, elapsedWorkdays);
+    const commitmentRate = Math.min(100, Math.round((presentDays / denom) * 100));
+
+    return {
+      employeeMonthSheet: rows,
+      sheetStats: {
+        presentDays,
+        totalHours: Number(totalHours.toFixed(1)),
+        lateCount,
+        absentCount,
+        commitmentRate,
+      },
+    };
+  }, [employeeProfile, selectedSheetMonth, currentDateStr, empOverridesMap, monthlyLogs, liveTodayShift]);
+
   // =========================================================================
-  // VIEW 0: DESKTOP PC BLOCKER SCREEN (ANTI-FRAUD & STRICT MOBILE ONLY)
+  // VIEW 0: DESKTOP PC BLOCKER SCREEN
   // =========================================================================
   if (isDesktop && !masterBypass) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4 dir-rtl select-none font-sans" dir="rtl">
-        <div className="w-full max-w-md bg-slate-900/95 border border-slate-800 p-8 rounded-3xl shadow-2xl space-y-6 text-center backdrop-blur-xl">
-          {/* Logo & Warning Visual */}
-          <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
-            <div className="w-20 h-20 rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-inner">
-              <Laptop className="w-10 h-10 text-slate-400" />
-            </div>
-            <div className="absolute -bottom-1 -right-1 w-9 h-9 bg-rose-600 rounded-full border-2 border-slate-900 flex items-center justify-center text-white shadow-md">
-              <X className="w-5 h-5 stroke-[3]" />
+        <div className="w-full max-w-md bg-slate-900/95 border border-slate-800 p-8 rounded-3xl shadow-2xl space-y-5 text-center backdrop-blur-xl">
+          <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
+            <div className="w-20 h-20 rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+              <Smartphone className="w-10 h-10 text-emerald-400" />
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <span className="inline-block px-3 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full text-xs font-black">
-              🚫 بەکارهێنان لەسەر کۆمپیوتەر ڕێگەپێنەدراوە
+              🚫 تەنها بۆ مۆبایل
             </span>
-            <h1 className="text-xl font-black text-white">ئەم پەڕەیە تەنها بۆ مۆبایلە</h1>
-            <p className="text-xs text-slate-300 leading-relaxed font-medium">
-              بۆ پاراستنی دروستیی دەوام و ڕێگری لە ساختەکاری یان دەستکاریکردنی شوێنی جوگرافی (GPS)، تۆمارکردنی ئامادەبوون تەنها لە ڕێگەی <strong>مۆبایلی دەستی کارمەند</strong> ڕێگەپێدراوە.
-            </p>
+            <h1 className="text-xl font-black text-white">تکایە بە مۆبایل بیکەرەوە</h1>
           </div>
 
-          <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800/80 text-right space-y-3">
-            <div className="flex items-start gap-2.5 text-xs text-slate-300">
-              <Smartphone className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <span>تکایە ئەم لینکە لە وێبگەڕی مۆبایلەکەتەوە (Chrome یان Safari) بکەرەوە:</span>
-            </div>
-            <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-xs font-mono text-emerald-400 break-all select-all text-center font-bold">
-              https://ashley-staff.vercel.app
-            </div>
-            <div className="text-[11px] text-slate-400 text-center font-medium">
-              یاخود ئەپڵیکەیشنی فەرمی <strong>Ashley Staff</strong> دابەزێنە سەر مۆبایلی ئەندرۆید.
-            </div>
-          </div>
-
-          <div className="pt-1 text-center">
-            <span className="text-[11px] text-slate-500 font-medium">
-              سیستەمی بەڕێوەبردن و کۆنترۆڵی ئامادەبوونی ئاشڵی
-            </span>
-          </div>
-        </div>
-
-        {/* Modal for Admin Master Bypass */}
-        {showBypassModal && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="w-full max-w-xs bg-slate-900 border border-slate-700 p-5 rounded-2xl shadow-2xl space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-black text-white">تێپەڕاندنی بەڕێوەبەر (Bypass)</h3>
-                <button 
-                  onClick={() => setShowBypassModal(false)}
-                  className="text-slate-400 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <p className="text-[11px] text-slate-400">
-                کۆدی ماستەری ئەدمین بنووسە بۆ پشکنین لەسەر کۆمپیوتەر:
-              </p>
-
-              <form onSubmit={handleBypassSubmit} className="space-y-3">
-                <input
-                  type="password"
-                  value={bypassPin}
-                  onChange={(e) => setBypassPin(e.target.value)}
-                  placeholder="Master PIN"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-center text-sm font-mono text-white focus:outline-none focus:border-emerald-500"
-                  autoFocus
-                />
-                {bypassError && (
-                  <p className="text-[11px] text-rose-400 text-center font-bold">{bypassError}</p>
-                )}
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition"
-                  >
-                    چوونەژوورەوە
-                  </button>
-                  <button
-                    type="button"
+          {showBypassModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="w-full max-w-xs bg-slate-900 border border-slate-700 p-5 rounded-2xl shadow-2xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-black text-white">چوونەژوورەوەی بەڕێوەبەر</h3>
+                  <button 
                     onClick={() => setShowBypassModal(false)}
-                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium"
+                    className="text-slate-400 hover:text-white"
                   >
-                    داخستن
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
-              </form>
+
+                <form onSubmit={handleBypassSubmit} className="space-y-3">
+                  <input
+                    type="password"
+                    value={bypassPin}
+                    onChange={(e) => setBypassPin(e.target.value)}
+                    placeholder="••••"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-center text-sm font-mono text-white focus:outline-none focus:border-emerald-500"
+                    autoFocus
+                  />
+                  {bypassError && (
+                    <p className="text-[11px] text-rose-400 text-center font-bold">{bypassError}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition"
+                    >
+                      چوونەژوورەوە
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowBypassModal(false)}
+                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium"
+                    >
+                      داخستن
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   }
 
   // =========================================================================
-  // VIEW 1: MODERN LIGHT 2FA (CUSTOM SCROLLABLE LIST & MULTI-ANGLE FACE ID)
+  // VIEW 1: MODERN LIGHT 2FA
   // =========================================================================
   if (!employeeProfile) {
     const selectedEmp = allEmployees.find(e => e.id === selectedEmpId);
 
-    // 🌟 FULLSCREEN FACE ID SCANNER (APPLE / PIXEL STYLE)
     if (authStep === 'FACE_SCAN') {
       return (
         <div className="fixed inset-0 z-[999] bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white flex flex-col justify-between items-center p-4 sm:p-6 select-none overflow-hidden" dir="rtl">
-          {/* 🌟 Top Navigation Bar */}
           <div className="w-full max-w-md flex items-center justify-between pt-2">
             <button
               type="button"
@@ -1995,7 +2099,7 @@ export default function MobileAttendanceOneTap() {
             </button>
 
             <div className="text-center">
-              <span className="text-[11px] font-bold text-slate-400 block">پشکنینی ناسنامەی ڕوخسار (Face ID)</span>
+              <span className="text-[11px] font-bold text-slate-400 block">پشکنینی ڕوخسار</span>
               <h2 className="text-base font-black text-white flex items-center justify-center gap-1.5 mt-0.5">
                 <span>👤</span>
                 <span>{selectedEmp?.name || 'کارمەند'}</span>
@@ -2007,30 +2111,28 @@ export default function MobileAttendanceOneTap() {
             </div>
           </div>
 
-          {/* 📊 Enrollment Progress Indicator */}
           {(!hasRegisteredFace || registeredDescriptors.length === 0) && (
             <div className="w-full max-w-xs bg-white/5 border border-white/10 backdrop-blur-md p-2.5 rounded-2xl space-y-1.5 text-center mt-2">
               <div className="flex items-center justify-between text-xs font-black">
                 <span className="text-amber-300 flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>تۆمارکردن (٣ گۆشە):</span>
+                  <span>تۆمارکردن:</span>
                 </span>
                 <span className="text-emerald-400 font-mono">
                   {enrollmentStage === 1 && '١/٣ پێشەوە'}
                   {enrollmentStage === 2 && '٢/٣ لای ڕاست'}
                   {enrollmentStage === 3 && '٣/٣ لای چەپ'}
-                  {enrollmentStage === 4 && 'تەواو بوو! 🎉'}
+                  {enrollmentStage === 4 && 'تەواو بوو 🎉'}
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-1.5 pt-0.5">
-                <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 1 && capturedDescriptors.frontal ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : enrollmentStage === 1 ? 'bg-amber-400 animate-pulse' : 'bg-white/10'}`} />
-                <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 2 && capturedDescriptors.right ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : enrollmentStage === 2 ? 'bg-amber-400 animate-pulse' : 'bg-white/10'}`} />
-                <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 3 && capturedDescriptors.left ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : enrollmentStage === 3 ? 'bg-amber-400 animate-pulse' : 'bg-white/10'}`} />
+                <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 1 && capturedDescriptors.frontal ? 'bg-emerald-500' : enrollmentStage === 1 ? 'bg-amber-400 animate-pulse' : 'bg-white/10'}`} />
+                <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 2 && capturedDescriptors.right ? 'bg-emerald-500' : enrollmentStage === 2 ? 'bg-amber-400 animate-pulse' : 'bg-white/10'}`} />
+                <div className={`h-2 rounded-full transition-all duration-300 ${enrollmentStage >= 3 && capturedDescriptors.left ? 'bg-emerald-500' : enrollmentStage === 3 ? 'bg-amber-400 animate-pulse' : 'bg-white/10'}`} />
               </div>
             </div>
           )}
 
-          {/* 🌟 Large Apple Face ID Viewport */}
           <div className="relative my-auto w-[76vw] h-[76vw] max-w-[340px] max-h-[340px] rounded-full overflow-hidden border-4 transition-all duration-300 shadow-[0_0_60px_rgba(0,0,0,0.8)] flex items-center justify-center bg-black">
             <video
               ref={videoRef}
@@ -2040,14 +2142,12 @@ export default function MobileAttendanceOneTap() {
               className="w-full h-full object-cover scale-x-[-1]"
             />
 
-            {/* Apple Face ID Biometric Alignment Ring */}
             <div className={`absolute inset-3 rounded-full border-3 border-dashed transition-all duration-300 pointer-events-none ${
               isAngleAligned 
                 ? 'border-emerald-400 ring-12 ring-emerald-500/30 scale-102 shadow-[0_0_30px_rgba(16,185,129,0.6)]' 
                 : 'border-white/40 animate-pulse'
             }`} />
 
-            {/* Dynamic Target Direction Guides */}
             {(!hasRegisteredFace || registeredDescriptors.length === 0) && cameraActive && (
               <>
                 {enrollmentStage === 1 && (
@@ -2056,7 +2156,7 @@ export default function MobileAttendanceOneTap() {
                       isAngleAligned ? 'border-emerald-400 bg-emerald-500/20' : 'border-amber-300/60 bg-white/5'
                     }`}>
                       <span className="text-xs font-black px-2.5 py-1 rounded-full bg-black/70 text-white backdrop-blur-md">
-                        {isAngleAligned ? '✅ پێشەوە ڕێکە' : '🎯 سەیری پێشەوە بکە'}
+                        {isAngleAligned ? '✅ پێشەوە' : '🎯 پێشەوە'}
                       </span>
                     </div>
                   </div>
@@ -2065,9 +2165,9 @@ export default function MobileAttendanceOneTap() {
                 {enrollmentStage === 2 && (
                   <div className="absolute inset-0 flex items-center justify-end pr-5 pointer-events-none">
                     <div className={`px-3 py-1.5 rounded-2xl text-xs font-black flex items-center gap-1.5 shadow-2xl transition-all ${
-                      isAngleAligned ? 'bg-emerald-500 text-white scale-110 shadow-emerald-500/50' : 'bg-amber-400 text-slate-950 animate-bounce'
+                      isAngleAligned ? 'bg-emerald-500 text-white scale-110' : 'bg-amber-400 text-slate-950 animate-bounce'
                     }`}>
-                      <span>👉 سەرت بسوڕێنە لای ڕاست</span>
+                      <span>👉 لای ڕاست</span>
                       {isAngleAligned && <CheckCircle2 className="w-4 h-4 text-white" />}
                     </div>
                   </div>
@@ -2076,37 +2176,24 @@ export default function MobileAttendanceOneTap() {
                 {enrollmentStage === 3 && (
                   <div className="absolute inset-0 flex items-center justify-start pl-5 pointer-events-none">
                     <div className={`px-3 py-1.5 rounded-2xl text-xs font-black flex items-center gap-1.5 shadow-2xl transition-all ${
-                      isAngleAligned ? 'bg-emerald-500 text-white scale-110 shadow-emerald-500/50' : 'bg-amber-400 text-slate-950 animate-bounce'
+                      isAngleAligned ? 'bg-emerald-500 text-white scale-110' : 'bg-amber-400 text-slate-950 animate-bounce'
                     }`}>
                       {isAngleAligned && <CheckCircle2 className="w-4 h-4 text-white" />}
-                      <span>سەرت بسوڕێنە لای چەپ 👈</span>
+                      <span>لای چەپ 👈</span>
                     </div>
                   </div>
                 )}
-
-                {/* Floating Top Mini HUD */}
-                <div className={`absolute top-4 px-3.5 py-1 rounded-full text-[11px] font-black shadow-lg backdrop-blur-md flex items-center gap-1.5 transition-all ${
-                  isAngleAligned ? 'bg-emerald-500 text-white' : 'bg-black/80 text-amber-300 border border-amber-400/30'
-                }`}>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span>
-                    {enrollmentStage === 1 && (isAngleAligned ? 'سەیرکردنی پێشەوە (پەسەندە)' : 'سەیری پێشەوە بکە')}
-                    {enrollmentStage === 2 && (isAngleAligned ? 'لای ڕاست (پەسەندە)' : 'سەرت بسوڕێنە لای ڕاست 👉')}
-                    {enrollmentStage === 3 && (isAngleAligned ? 'لای چەپ (پەسەندە)' : '👈 سەرت بسوڕێنە لای چەپ')}
-                  </span>
-                </div>
               </>
             )}
 
             {!cameraActive && (
               <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center text-white text-xs p-3">
                 <RefreshCw className="w-8 h-8 animate-spin mb-3 text-emerald-400" />
-                <span className="font-bold">خەریکی پەیوەندی بە کامێرای مۆبایل...</span>
+                <span className="font-bold">کردنەوەی کامێرا...</span>
               </div>
             )}
           </div>
 
-          {/* 🎮 Bottom Controls */}
           <div className="w-full max-w-md space-y-3 pb-2">
             {(!hasRegisteredFace || registeredDescriptors.length === 0) && cameraActive && enrollmentStage <= 3 && (
               <button
@@ -2126,8 +2213,8 @@ export default function MobileAttendanceOneTap() {
                 <Camera className="w-5 h-5" />
                 <span>
                   {isAngleAligned
-                    ? `📸 وەرگرتنی وێنەی (${enrollmentStage === 1 ? 'پێشەوە' : enrollmentStage === 2 ? 'لای ڕاست' : 'لای چەپ'}) بە دەست`
-                    : 'سەرت ڕێکبخە لەگەڵ چوارچێوەکە...'}
+                    ? `📸 گرتنی وێنە (${enrollmentStage === 1 ? 'پێشەوە' : enrollmentStage === 2 ? 'لای ڕاست' : 'لای چەپ'})`
+                    : 'ڕێککردنی ڕوخسار...'}
                 </span>
               </button>
             )}
@@ -2160,7 +2247,7 @@ export default function MobileAttendanceOneTap() {
                 }}
                 className="flex-1 bg-white/10 hover:bg-white/15 active:bg-white/20 text-white font-bold text-xs py-3 rounded-2xl border border-white/10 cursor-pointer transition-all"
               >
-                گەڕانەوە بۆ کۆدی PIN
+                گەڕانەوە
               </button>
               {faceMismatchError && (
                 <button
@@ -2179,191 +2266,175 @@ export default function MobileAttendanceOneTap() {
 
     return (
       <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col items-center justify-center p-4 dir-rtl select-none" dir="rtl">
-        <div className="w-full max-w-sm bg-white border border-slate-200 p-6 rounded-3xl shadow-xl space-y-5">
+        <div className="w-full max-w-sm bg-white border border-slate-200 p-6 rounded-3xl shadow-xl space-y-4">
           
-          {/* Company Branding */}
-          <div className="text-center space-y-2">
-            <div className="w-16 h-16 mx-auto rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white p-2 flex items-center justify-center">
-              <img src="/ashley-logo.png" alt="Ashley Logo" className="w-full h-full object-contain" />
+          <div className="text-center space-y-1.5">
+            <div className="w-14 h-14 mx-auto rounded-2xl overflow-hidden border border-slate-200 shadow-xs bg-white p-2 flex items-center justify-center">
+              <img src="/ashley-logo.png" alt="لۆگۆی ئاشڵی" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-lg font-black text-slate-900">سیستەمی دەوامی ئاشڵی</h1>
-            <p className="text-xs text-slate-500 font-medium">
-              چوونەژوورەوەی پارێزراوی دوو فاکتەری (PIN + دەموچاو)
-            </p>
           </div>
 
-          {/* 2FA Step Indicator Tabs */}
           <div className="flex items-center justify-center gap-2 pb-1 border-b border-slate-100">
             <div className="flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800">
               <KeyRound className="w-3.5 h-3.5" />
-              <span>١. هەڵبژاردنی ناو و PIN</span>
+              <span>١. ناو و کۆدی نهێنی</span>
             </div>
             <div className="w-4 h-0.5 bg-slate-200" />
             <div className="flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-500">
               <ScanFace className="w-3.5 h-3.5" />
-              <span>٢. سکانی دەموچاو</span>
+              <span>٢. پشکنینی ڕوخسار</span>
             </div>
           </div>
 
-          {/* ------------------------------------------------------------- */}
-          {/* STEP 1: CUSTOM SCROLLABLE EMPLOYEE LIST & PIN ENTRY           */}
-          {/* ------------------------------------------------------------- */}
-          <form onSubmit={handleStep1PinSubmit} className="space-y-4">
-              
-              {/* 📋 IN-APP SCROLLABLE EMPLOYEE SELECTOR (No native select!) */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-black text-slate-800 block">
-                    ناوی خۆت هەڵبژێرە لە لیستەکەدا:
-                  </label>
-                  <span className="text-[10px] text-slate-400 font-bold">
-                    {filteredEmployees.length} کارمەند
-                  </span>
-                </div>
-
-                {/* Search Box + Live List Refresh */}
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      value={searchEmployeeQuery}
-                      onChange={(e) => setSearchEmployeeQuery(e.target.value)}
-                      placeholder="گەڕانی خێرا لە ناوەکان..."
-                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold pr-8 pl-3 py-2 rounded-xl focus:border-emerald-600 focus:bg-white focus:outline-none"
-                    />
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5" />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={loadLiveEmployees}
-                    title="نوێکردنەوەی ڕاستەوخۆی لیستی کارمەندان"
-                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl border border-slate-200 cursor-pointer active:scale-95 transition-all"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${isRefreshingEmployees ? 'animate-spin text-emerald-600' : ''}`} />
-                  </button>
-                </div>
-
-                {/* Scrollable Container (Always Pure White & High-Contrast) */}
-                <div className="border-2 border-slate-200 rounded-2xl bg-white p-1.5 max-h-52 overflow-y-auto space-y-1 shadow-inner scrollbar-thin">
-                  {filteredEmployees.map((emp) => {
-                    const isSelected = selectedEmpId === emp.id;
-                    const isManager = emp.id === 'emp-02' || (emp.role && emp.role.includes('Manager'));
-
-                    return (
-                      <div
-                        key={emp.id}
-                        onClick={() => {
-                          setSelectedEmpId(emp.id);
-                          setAuthError(null);
-                        }}
-                        className={`w-full text-right p-2.5 rounded-xl border transition-all flex items-center justify-between cursor-pointer select-none ${
-                          isSelected
-                            ? 'bg-emerald-50 border-emerald-500 shadow-xs ring-1 ring-emerald-500'
-                            : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs ${
-                            isSelected 
-                              ? 'bg-emerald-600 text-white' 
-                              : isManager 
-                              ? 'bg-amber-100 text-amber-900' 
-                              : 'bg-slate-100 text-slate-700'
-                          }`}>
-                            {emp.name.charAt(0)}
-                          </div>
-                          <div>
-                            <span className="text-xs font-black text-slate-900 block leading-tight">
-                              {emp.name}
-                            </span>
-                            <span className="text-[10px] text-slate-500 font-bold">
-                              {emp.role || 'کارمەند'}
-                            </span>
-                          </div>
-                        </div>
-
-                        {isSelected && (
-                          <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-                            <CheckCircle2 className="w-4 h-4" />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* PIN Code Field */}
-              <div className="pt-1">
-                <label className="block text-xs font-black text-slate-800 mb-1.5">
-                  پین کۆدی ٤ ژمارەیی (PIN):
+          <form onSubmit={handleStep1PinSubmit} className="space-y-3.5">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black text-slate-800 block">
+                  ناوی کارمەند
                 </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={8}
-                    value={pinInput}
-                    onChange={(e) => {
-                      setPinInput(e.target.value);
-                      setAuthError(null);
-                    }}
-                    placeholder="بۆ نموونە: 1002"
-                    required
-                    className="w-full bg-white border-2 border-slate-300 text-slate-900 text-center font-mono text-base font-black p-3.5 rounded-xl tracking-widest focus:border-emerald-600 focus:outline-none shadow-xs placeholder:text-slate-300"
-                  />
-                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-4" />
-                </div>
+                <span className="text-[10px] text-slate-400 font-bold">
+                  {filteredEmployees.length} کارمەند
+                </span>
               </div>
 
-              {authError && (
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs font-bold text-center">
-                  {authError}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={searchEmployeeQuery}
+                    onChange={(e) => setSearchEmployeeQuery(e.target.value)}
+                    placeholder="گەڕان لە ناوەکان..."
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold pr-8 pl-3 py-2 rounded-xl focus:border-emerald-600 focus:bg-white focus:outline-none"
+                  />
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5" />
                 </div>
+                <button
+                  type="button"
+                  onClick={loadLiveEmployees}
+                  title="نوێکردنەوە"
+                  className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl border border-slate-200 cursor-pointer active:scale-95 transition-all"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isRefreshingEmployees ? 'animate-spin text-emerald-600' : ''}`} />
+                </button>
+              </div>
+
+              <div className="border-2 border-slate-200 rounded-2xl bg-white p-1.5 max-h-52 overflow-y-auto space-y-1 shadow-inner scrollbar-thin">
+                {filteredEmployees.map((emp) => {
+                  const isSelected = selectedEmpId === emp.id;
+                  const roleKu = translateRoleToKurdish(emp.role);
+                  const isManager = emp.id === 'emp-02' || roleKu.includes('بەڕێوەبەر');
+
+                  return (
+                    <div
+                      key={emp.id}
+                      onClick={() => {
+                        setSelectedEmpId(emp.id);
+                        setAuthError(null);
+                      }}
+                      className={`w-full text-right p-2.5 rounded-xl border transition-all flex items-center justify-between cursor-pointer select-none ${
+                        isSelected
+                          ? 'bg-emerald-50 border-emerald-500 shadow-xs ring-1 ring-emerald-500'
+                          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs ${
+                          isSelected 
+                            ? 'bg-emerald-600 text-white' 
+                            : isManager 
+                            ? 'bg-amber-100 text-amber-900' 
+                            : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {emp.name.charAt(0)}
+                        </div>
+                        <div>
+                          <span className="text-xs font-black text-slate-900 block leading-tight">
+                            {emp.name}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-bold">
+                            {roleKu}
+                          </span>
+                        </div>
+                      </div>
+
+                      {isSelected && (
+                        <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-1">
+              <label className="block text-xs font-black text-slate-800 mb-1">
+                کۆدی نهێنی (٤ ژمارە)
+              </label>
+              <div className="relative">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={8}
+                  value={pinInput}
+                  onChange={(e) => {
+                    setPinInput(e.target.value);
+                    setAuthError(null);
+                  }}
+                  placeholder="••••"
+                  required
+                  className="w-full bg-white border-2 border-slate-300 text-slate-900 text-center font-mono text-base font-black p-3 rounded-xl tracking-widest focus:border-emerald-600 focus:outline-none shadow-xs placeholder:text-slate-300"
+                />
+                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+              </div>
+            </div>
+
+            {authError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs font-bold text-center">
+                {authError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={authLoading || !selectedEmpId}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-xs py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {authLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <span>چوونەژوورەوە</span>
+                  <ArrowRight className="w-4 h-4 rotate-180" />
+                </>
               )}
-
-              <button
-                type="submit"
-                disabled={authLoading || !selectedEmpId}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-xs py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                {authLoading ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <span>بەردەوامبە بۆ سکانی دەموچاو</span>
-                    <ArrowRight className="w-4 h-4 rotate-180" />
-                  </>
-                )}
-              </button>
-            </form>
-
-          <p className="text-[10px] text-center text-slate-400">
-            Ashley Furniture Industry • سلێمانی - هەولێر
-          </p>
+            </button>
+          </form>
         </div>
       </div>
     );
   }
 
   // =========================================================================
-  // VIEW 2: ULTRA-SIMPLE MODERN LIGHT ATTENDANCE DASHBOARD
+  // VIEW 2: PURE VISUAL ATTENDANCE DASHBOARD + REAL 31-DAY SYSTEM SHEET
   // =========================================================================
   const isCheckedIn = Boolean(liveTodayShift.checkInTime && !liveTodayShift.checkOutTime);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col max-w-md mx-auto dir-rtl select-none pb-8" dir="rtl">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col max-w-md mx-auto dir-rtl select-none pb-10" dir="rtl">
       
       {/* 🌟 TOP MODERN LIGHT HEADER */}
-      <header className="p-3.5 bg-white border-b border-slate-200 flex items-center justify-between sticky top-0 z-50 shadow-xs">
+      <header className="p-3 bg-white border-b border-slate-200 flex items-center justify-between sticky top-0 z-50 shadow-xs">
         <div 
           onClick={handleOpenProfileModal}
           className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity"
-          title="بینین و نوێکردنەوەی پڕۆفایل"
+          title="پڕۆفایلی کارمەند"
         >
           <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center justify-center font-black text-emerald-800 text-xs shadow-xs overflow-hidden">
             {profilePhoto ? (
-              <img src={profilePhoto} alt="Employee Avatar" className="w-full h-full object-cover" />
+              <img src={profilePhoto} alt={employeeProfile.name} className="w-full h-full object-cover" />
             ) : (
               <span>{employeeProfile.name.charAt(0)}</span>
             )}
@@ -2373,7 +2444,7 @@ export default function MobileAttendanceOneTap() {
               <span>{employeeProfile.name}</span>
               <Sparkles className="w-3 h-3 text-amber-500" />
             </h2>
-            <p className="text-[10px] text-emerald-700 font-bold">{employeeProfile.role || 'کارمەندی فەرمی'}</p>
+            <p className="text-[10px] text-emerald-700 font-bold">{translateRoleToKurdish(employeeProfile.role)}</p>
           </div>
         </div>
 
@@ -2383,7 +2454,7 @@ export default function MobileAttendanceOneTap() {
               type="button"
               onClick={handleInstallPwaClick}
               className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] flex items-center gap-1 font-black cursor-pointer transition-colors shadow-2xs"
-              title="دابەزاندنی بەرنامە لەسەر مۆبایل (PWA)"
+              title="دابەزاندنی بەرنامە"
             >
               <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
               <span>دابەزاندن</span>
@@ -2392,7 +2463,7 @@ export default function MobileAttendanceOneTap() {
           <button 
             onClick={() => setShowLogoutModal(true)}
             className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[10px] flex items-center gap-1 font-bold cursor-pointer transition-colors"
-            title="ڕیستکردن یان دەرچوون"
+            title="دەرچوون"
           >
             <LogOut className="w-3.5 h-3.5 text-rose-600" />
             <span>دەرچوون</span>
@@ -2400,11 +2471,11 @@ export default function MobileAttendanceOneTap() {
         </div>
       </header>
 
-      <main className="p-4 space-y-4 flex-1">
+      <main className="p-3.5 space-y-3.5 flex-1">
 
         {/* 📡 OFFLINE MODE & AUTO-SYNC QUEUE BANNER */}
         {(!isOnline || offlineQueue.length > 0 || isSyncingOffline) && (
-          <div className={`p-3 rounded-2xl border text-xs flex items-center justify-between gap-2 shadow-xs transition-all ${
+          <div className={`p-2.5 rounded-2xl border text-xs flex items-center justify-between gap-2 shadow-xs transition-all ${
             !isOnline
               ? 'bg-amber-50 border-amber-300 text-amber-900'
               : 'bg-blue-50 border-blue-300 text-blue-900'
@@ -2414,18 +2485,12 @@ export default function MobileAttendanceOneTap() {
                 !isOnline ? 'bg-amber-500 animate-ping' : 'bg-blue-600 animate-spin'
               }`} />
               <div className="leading-snug">
-                {!isOnline ? (
-                  <p className="font-black">
-                    📡 دۆخی ئۆفڵاین چالاکە • چێک-ئین و چێک-ئاوت بەردەستە
-                  </p>
-                ) : (
-                  <p className="font-black">
-                    🔄 ناردنی خۆکاری داتای ئۆفڵاین بۆ سیستەم...
-                  </p>
-                )}
+                <p className="font-black text-[11px]">
+                  {!isOnline ? '📡 دۆخی ئۆفڵاین چالاکە' : '🔄 هاوکاتکردنی داتا لەگەڵ سیستەم...'}
+                </p>
                 {offlineQueue.length > 0 && (
-                  <p className="text-[10px] opacity-85 font-bold mt-0.5">
-                    ⏳ {offlineQueue.length} تۆماری هاتن/ڕۆیشتن هەڵگیراوە و بە کاتی ڕاستەقینە دەگاتە سیستەم
+                  <p className="text-[10px] opacity-85 font-bold">
+                    ⏳ {offlineQueue.length} تۆمار لە چاوەڕوانی ناردندایە
                   </p>
                 )}
               </div>
@@ -2442,150 +2507,114 @@ export default function MobileAttendanceOneTap() {
           </div>
         )}
 
-        {/* 🕒 LIVE REAL-TIME CLOCK & DATE (Tamper-Proof True Time) */}
-        <div className="text-center p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
-          <p className="text-[11px] font-mono text-slate-500 font-bold mb-1">
-            📅 {currentDateStr || '2026-09-07'}
-          </p>
-          <div className="text-3xl sm:text-4xl font-black font-mono tracking-wider text-slate-900 flex items-center justify-center gap-1.5">
-            <Clock className="w-6 h-6 text-emerald-600 animate-pulse" />
-            <span>{currentTimeStr || '08:00:00'}</span>
-          </div>
-        </div>
-
-        {/* 📍 GPS GEOFENCE STATUS (Pure On-Demand Indicator) */}
-        <div className="p-3.5 rounded-2xl border border-slate-200/80 bg-white shadow-xs flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-              gpsState === 'acquiring' 
-                ? 'bg-amber-100 text-amber-700 animate-spin' 
-                : gpsState === 'ready' 
-                ? isInsideGeofence ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                : 'bg-blue-50 text-blue-600'
-            }`}>
-              {gpsState === 'acquiring' ? (
-                <RefreshCw className="w-4 h-4" />
-              ) : (
-                <MapPin className="w-4 h-4" />
-              )}
-            </div>
-            <div className="text-xs leading-tight">
-              <p className="font-black text-slate-800">
-                {gpsState === 'acquiring' 
-                  ? '📡 لە وەرگرتنی کاتیی شوێنی GPS لە مانگی دەستکرد...' 
-                  : gpsState === 'ready'
-                  ? (isInsideGeofence 
-                      ? `🟢 لە ناو سنووری کارگەیت (${matchedLocationName})` 
-                      : `⚠️ لە دەرەوەی سنووریت (${distanceMeters} مەتر دووریت)`)
-                  : '📍 دیاریکردنی شوێن بە GPS: تەنها لە کاتی کلیک (On-Demand)'}
-              </p>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                {gpsState === 'ready' 
-                  ? `دووری لە کارگە: ${distanceMeters} مەتر (ڕێگەپێدراو: تا ٣٥٠م)`
-                  : 'بەردەوام کار ناکات؛ تەنها لە کاتی تۆمارکردن بۆ ١ چرکە دەکوژێتەوە'}
-              </p>
+        {/* 🕒 COMPACT VISUAL CLOCK + GPS STATUS BAR */}
+        <div className="grid grid-cols-2 gap-2.5">
+          <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col items-center justify-center">
+            <span className="text-[10px] font-mono text-slate-500 font-bold">{currentDateStr || '2026-09-07'}</span>
+            <div className="text-xl font-black font-mono tracking-wider text-slate-900 flex items-center gap-1 mt-0.5">
+              <Clock className="w-4 h-4 text-emerald-600" />
+              <span>{currentTimeStr || '08:00:00'}</span>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                await requestSingleGpsPosition();
-              } catch (e: any) {
-                alert(e.message || 'هەڵە لە وەرگرتنی GPS');
-              }
-            }}
-            disabled={gpsState === 'acquiring' || triggerLoading}
-            className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-[11px] font-bold border border-slate-200 flex items-center gap-1 cursor-pointer transition-all shrink-0"
-            title="پشکنینی کاتیی شوێنی ئێستا"
-          >
-            <Compass className="w-3.5 h-3.5 text-blue-600" />
-            <span>پشکنین</span>
-          </button>
+          <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs flex items-center justify-between gap-1.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                gpsState === 'acquiring' 
+                  ? 'bg-amber-100 text-amber-700 animate-spin' 
+                  : gpsState === 'ready' 
+                  ? isInsideGeofence ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                  : 'bg-blue-50 text-blue-600'
+              }`}>
+                {gpsState === 'acquiring' ? <RefreshCw className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-black text-slate-800 truncate">
+                  {gpsState === 'acquiring'
+                    ? 'پشکنینی شوێن...'
+                    : gpsState === 'ready'
+                    ? isInsideGeofence ? 'لە ناو کارگە' : `${distanceMeters} م دوور`
+                    : 'دیاریکردنی شوێن'}
+                </p>
+                <p className="text-[9px] text-slate-500 font-bold truncate">
+                  {matchedLocationName}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => requestSingleGpsPosition().catch(() => {})}
+              disabled={gpsState === 'acquiring' || triggerLoading}
+              className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 border border-slate-200 cursor-pointer shrink-0"
+              title="پشکنینی شوێن"
+            >
+              <Compass className="w-4 h-4 text-blue-600" />
+            </button>
+          </div>
         </div>
 
         {/* 🔔 FEEDBACK TOAST */}
         {feedbackToast && (
-          <div className="p-3.5 rounded-2xl bg-emerald-600 text-white font-black text-xs text-center shadow-md animate-bounce">
+          <div className="p-3 rounded-2xl bg-emerald-600 text-white font-black text-xs text-center shadow-md">
             {feedbackToast}
           </div>
         )}
 
         {/* ============================================================ */}
-        {/* 🚀 THE HERO 1-TAP ATTENDANCE ACTION BUTTON                   */}
+        {/* 🚀 PURE VISUAL 1-TAP ATTENDANCE ACTION                       */}
         {/* ============================================================ */}
-        <div className="pt-2 space-y-3">
-
-          {/* 🔒 OUTSIDE GEOFENCE WARNING BANNER */}
-          {!isInsideGeofence && (
-            <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-300 dark:border-amber-800 rounded-2xl flex items-start gap-3 text-xs shadow-xs">
-              <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center shrink-0 text-amber-700 dark:text-amber-300">
-                <Lock className="w-5 h-5" />
-              </div>
-              <div className="space-y-1 flex-1">
-                <p className="font-black text-amber-900 dark:text-amber-200 text-xs">
-                  ⚠️ تۆ لە دەرەوەی بازنەی دیاریکراوی کۆمپانیایت!
-                </p>
-                <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
-                  دوگمەکانی هاتن و ڕۆیشتن قوفڵکراون ({distanceMeters} مەتر دووریت لە {matchedLocationName}). بە گەیشتنت بە ناو سنووری دیاریکراو دوگمەکان ئۆتۆماتیکی دەکرێنەوە.
-                </p>
-                <p className="text-[10px] text-amber-700 dark:text-amber-400 font-bold pt-0.5">
-                  💡 کاتێک دەگەیتە شوێنی کار، دوگمەی «پشکنین» لەسەر کارتی شوێن لە سەرەوە دابگرە.
-                </p>
-              </div>
-            </div>
-          )}
-
+        <div>
           {!liveTodayShift.checkInTime ? (
-            /* STATE 1: NOT CHECKED IN YET -> CHECK-IN BUTTON (LOCKED IF OUTSIDE GEOFENCE) */
             <button
               onClick={handleCheckInClick}
               disabled={!isInsideGeofence || triggerLoading}
-              className={`w-full p-6 rounded-3xl shadow-lg transition-all flex flex-col items-center justify-center gap-2 border-2 ${
+              className={`w-full p-5 rounded-3xl shadow-md transition-all flex items-center justify-between gap-3 border-2 ${
                 !isInsideGeofence
-                  ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-500 border-slate-300 dark:border-slate-700 cursor-not-allowed opacity-90'
-                  : 'cursor-pointer bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-98 text-white shadow-emerald-700/20 border-emerald-500'
+                  ? 'bg-slate-100 text-slate-500 border-slate-300 cursor-not-allowed'
+                  : 'cursor-pointer bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-98 text-white border-emerald-500'
               }`}
             >
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                !isInsideGeofence ? 'bg-slate-200 dark:bg-slate-700 text-amber-500' : 'bg-white/20 text-white'
-              }`}>
-                {triggerLoading ? (
-                  <RefreshCw className="w-8 h-8 animate-spin" />
-                ) : !isInsideGeofence ? (
-                  <Lock className="w-8 h-8 text-amber-600 dark:text-amber-400" />
-                ) : (
-                  <CheckCircle2 className="w-9 h-9 text-white" />
-                )}
+              <div className="flex items-center gap-3">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                  !isInsideGeofence ? 'bg-slate-200 text-amber-600' : 'bg-white/20 text-white'
+                }`}>
+                  {triggerLoading ? (
+                    <RefreshCw className="w-6 h-6 animate-spin" />
+                  ) : !isInsideGeofence ? (
+                    <Lock className="w-6 h-6" />
+                  ) : (
+                    <CheckCircle2 className="w-7 h-7" />
+                  )}
+                </div>
+                <div className="text-right">
+                  <span className="text-base font-black block">
+                    {triggerLoading
+                      ? 'تۆمارکردن...'
+                      : !isInsideGeofence
+                      ? 'قوفڵکراوە (لە دەرەوەی کارگە)'
+                      : 'تۆمارکردنی هاتن'}
+                  </span>
+                  <span className={`text-[11px] font-bold ${!isInsideGeofence ? 'text-amber-700' : 'text-emerald-100'}`}>
+                    {!isInsideGeofence ? `دووری: ${distanceMeters} مەتر` : 'دەوامی فەرمی 08:00'}
+                  </span>
+                </div>
               </div>
-              <span className="text-lg font-black tracking-wide">
-                {triggerLoading 
-                  ? '📡 وەرگرتنی شوێن و تۆمارکردن...' 
-                  : !isInsideGeofence 
-                  ? '🔒 دوگمەی هاتن قوفڵکراوە (لە دەرەوەی کارگەیت)' 
-                  : '🟢 تۆمارکردنی هاتن (Check In)'}
-              </span>
-              <span className={`text-xs font-medium ${
-                !isInsideGeofence ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-100'
-              }`}>
-                {!isInsideGeofence 
-                  ? `تۆ ${distanceMeters} مەتر دووریت لە کارگە - تکایە بگە بە سنووری دیاریکراو` 
-                  : 'دەوامی فەرمی: 08:00 - تۆ لە ناو سنووری ڕێگەپێدراوی کارگەیت'}
+              <span className="text-xs font-mono font-black px-2.5 py-1 rounded-xl bg-black/15">
+                08:00
               </span>
             </button>
           ) : isCheckedIn ? (
-            /* STATE 2: CURRENTLY AT WORK -> CHECK-OUT BUTTON (LOCKED IF OUTSIDE GEOFENCE) */
-            <div className="space-y-3">
-              <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-2xl flex items-center justify-between text-xs shadow-xs">
+            <div className="space-y-2.5">
+              <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center justify-between text-xs">
                 <div>
-                  <span className="text-[10px] text-emerald-800 block font-black">کاتی دەستپێکردنی دەوام:</span>
-                  <span className="font-mono text-base font-black text-emerald-900">
+                  <span className="text-[10px] text-emerald-800 block font-bold">هاتنی ئەمڕۆ</span>
+                  <span className="font-mono text-sm font-black text-emerald-900">
                     🟢 {liveTodayShift.checkInTime}
                   </span>
                 </div>
                 <div className="text-left font-mono">
-                  <span className="text-[10px] text-slate-600 block font-bold">ماوەی کارکردن (بەبێ پشووی نیوەڕۆ):</span>
+                  <span className="text-[10px] text-slate-600 block font-bold">کاتی کارکردن</span>
                   <span className="text-xs font-black text-amber-800">
                     ⏱️ {formattedWorkedHours}
                   </span>
@@ -2595,221 +2624,378 @@ export default function MobileAttendanceOneTap() {
               <button
                 onClick={handleCheckOutClick}
                 disabled={!isInsideGeofence || triggerLoading}
-                className={`w-full p-6 rounded-3xl shadow-lg transition-all flex flex-col items-center justify-center gap-2 border-2 ${
+                className={`w-full p-5 rounded-3xl shadow-md transition-all flex items-center justify-between gap-3 border-2 ${
                   !isInsideGeofence
-                    ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-500 border-slate-300 dark:border-slate-700 cursor-not-allowed opacity-90'
-                    : 'cursor-pointer bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 active:scale-98 text-white shadow-rose-700/20 border-rose-500'
+                    ? 'bg-slate-100 text-slate-500 border-slate-300 cursor-not-allowed'
+                    : 'cursor-pointer bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 active:scale-98 text-white border-rose-500'
                 }`}
               >
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                  !isInsideGeofence ? 'bg-slate-200 dark:bg-slate-700 text-amber-500' : 'bg-white/20 text-white'
-                }`}>
-                  {triggerLoading ? (
-                    <RefreshCw className="w-8 h-8 animate-spin" />
-                  ) : !isInsideGeofence ? (
-                    <Lock className="w-8 h-8 text-amber-600 dark:text-amber-400" />
-                  ) : (
-                    <DoorOpen className="w-9 h-9 text-white" />
-                  )}
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                    !isInsideGeofence ? 'bg-slate-200 text-amber-600' : 'bg-white/20 text-white'
+                  }`}>
+                    {triggerLoading ? (
+                      <RefreshCw className="w-6 h-6 animate-spin" />
+                    ) : !isInsideGeofence ? (
+                      <Lock className="w-6 h-6" />
+                    ) : (
+                      <DoorOpen className="w-7 h-7" />
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <span className="text-base font-black block">
+                      {triggerLoading
+                        ? 'تۆمارکردن...'
+                        : !isInsideGeofence
+                        ? 'قوفڵکراوە (لە دەرەوەی کارگە)'
+                        : 'تۆمارکردنی دەرچوون'}
+                    </span>
+                    <span className={`text-[11px] font-bold ${!isInsideGeofence ? 'text-amber-700' : 'text-rose-100'}`}>
+                      {!isInsideGeofence ? `دووری: ${distanceMeters} مەتر` : 'کۆتایی دەوام 17:00'}
+                    </span>
+                  </div>
                 </div>
-                <span className="text-lg font-black tracking-wide">
-                  {triggerLoading 
-                    ? '📡 وەرگرتنی شوێن و تۆمارکردن...' 
-                    : !isInsideGeofence 
-                    ? '🔒 دوگمەی ڕۆیشتن قوفڵکراوە (لە دەرەوەی کارگەیت)' 
-                    : '🔴 تۆمارکردنی ڕۆیشتن (Check Out)'}
-                </span>
-                <span className={`text-xs font-medium ${
-                  !isInsideGeofence ? 'text-amber-700 dark:text-amber-400' : 'text-rose-100'
-                }`}>
-                  {!isInsideGeofence 
-                    ? `تۆ ${distanceMeters} مەتر دووریت لە کارگە - بۆ تۆمارکردن دەبێت لە ناو سنوور بیت` 
-                    : 'کاتی کۆتایی دەوام: 17:00 - تۆ لە ناو سنووری ڕێگەپێدراوی کارگەیت'}
+                <span className="text-xs font-mono font-black px-2.5 py-1 rounded-xl bg-black/15">
+                  17:00
                 </span>
               </button>
             </div>
           ) : (
-            /* STATE 3: SHIFT COMPLETED TODAY */
-            <div className="p-5 bg-white border-2 border-slate-200 rounded-3xl text-center space-y-3 shadow-sm">
-              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center">
-                <CheckCircle2 className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-slate-900">دەوامی ئەمڕۆت تەواو بووە 🎉</h3>
-                <p className="text-xs text-slate-500 mt-0.5 font-medium">دەستخۆش و ماندوو نەبیت!</p>
+            <div className="p-4 bg-white border-2 border-emerald-200 rounded-3xl space-y-2.5 shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs font-black text-slate-900">دەوامی ئەمڕۆ تەواو بووە 🎉</span>
+                </div>
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                  تۆمارکراو
+                </span>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 text-center p-3 bg-slate-50 rounded-2xl font-mono text-xs border border-slate-200">
+              <div className="grid grid-cols-3 gap-2 text-center p-2.5 bg-slate-50 rounded-2xl font-mono text-xs border border-slate-200">
                 <div>
-                  <span className="text-[10px] text-slate-500 block">هاتن</span>
+                  <span className="text-[10px] text-slate-500 block font-sans font-bold">هاتن</span>
                   <span className="text-emerald-700 font-black">{liveTodayShift.checkInTime}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 block">ڕۆیشتن</span>
+                  <span className="text-[10px] text-slate-500 block font-sans font-bold">دەرچوون</span>
                   <span className="text-rose-700 font-black">{liveTodayShift.checkOutTime}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 block">کۆی کارکردن</span>
+                  <span className="text-[10px] text-slate-500 block font-sans font-bold">کاتژمێر</span>
                   <span className="text-amber-800 font-black">{formattedWorkedHours}</span>
                 </div>
-              </div>
-
-              <div className="text-[11px] text-slate-500 font-medium pt-1 flex items-center justify-center gap-1.5 bg-slate-50 py-2 rounded-xl border border-slate-200">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>ڕۆژانە تەنها یەکجار هاتن و یەکجار ڕۆیشتن ڕێگەپێدراوە.</span>
               </div>
             </div>
           )}
         </div>
 
         {/* ============================================================ */}
-        {/* 👤 EMPLOYEE SELF-SERVICE PROFILE CARD */}
-        <div className="bg-white border border-slate-200 p-3.5 rounded-2xl shadow-xs flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 overflow-hidden">
-              {profilePhoto ? (
-                <img src={profilePhoto} alt="Employee Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-5 h-5" />
-              )}
-            </div>
-            <div>
-              <h4 className="text-xs font-black text-slate-900">پڕۆفایلی تایبەتی کارمەند</h4>
-              <p className="text-[10px] text-slate-500 font-bold">وێنە، مۆبایل، بەرواری دەستبەکاربوون، PIN</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleOpenProfileModal}
-            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-xs cursor-pointer transition-colors"
-          >
-            دەستکاریکردن
-          </button>
-        </div>
-
-        {/* 📊 EMPLOYEE'S OWN MONTHLY ATTENDANCE LOG (Clean Light Table) */}
+        {/* 📊 REAL 31-DAY SYSTEM MONTHLY ATTENDANCE SHEET (SSOT)        */}
         {/* ============================================================ */}
-        <div className="pt-3">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-              <span>مێژووی دەوامی ئەم مانگەی تۆ</span>
-            </h3>
-            <button 
-              onClick={fetchMonthlyHistory} 
-              className="text-[10px] text-slate-600 hover:text-slate-900 font-bold flex items-center gap-1 cursor-pointer"
-            >
-              <RefreshCw className={`w-3 h-3 ${loadingLogs ? 'animate-spin' : ''}`} />
-              <span>نوێکردنەوە</span>
-            </button>
+        <div className="bg-white border border-slate-200 rounded-3xl p-3.5 shadow-xs space-y-3">
+          {/* Sheet Header & Month Picker */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <div className="w-7 h-7 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
+                <Calendar className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-black text-slate-900">خشتەی فەرمی ئامادەبوون</h3>
+                <span className="text-[9px] text-emerald-700 font-bold block">هاوکاتکراو لەگەڵ سیستەم</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <input
+                type="month"
+                value={selectedSheetMonth}
+                onChange={(e) => {
+                  if (e.target.value) setSelectedSheetMonth(e.target.value);
+                }}
+                dir="ltr"
+                className="bg-slate-100 border border-slate-200 text-slate-800 text-[11px] font-mono font-black px-2 py-1 rounded-xl focus:outline-none focus:border-emerald-500"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  fetchTodayShift();
+                  fetchMonthlyHistory();
+                }}
+                className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 cursor-pointer active:scale-95"
+                title="نوێکردنەوە"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingLogs ? 'animate-spin text-emerald-600' : ''}`} />
+              </button>
+            </div>
           </div>
 
-          <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
-            <table className="w-full text-right text-xs">
-              <thead className="bg-slate-100 text-slate-700 text-[10px] font-black border-b border-slate-200">
-                <tr>
-                  <th className="p-2.5">بەروار</th>
-                  <th className="p-2.5 text-center">هاتن</th>
-                  <th className="p-2.5 text-center">ڕۆیشتن</th>
-                  <th className="p-2.5 text-center">دۆخ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-bold font-mono text-[11px]">
-                {monthlyLogs.length === 0 ? (
+          {/* 4 Visual Summary KPI Cards */}
+          <div className="grid grid-cols-4 gap-1.5 text-center">
+            <div className="p-2 rounded-2xl bg-emerald-50/80 border border-emerald-200">
+              <span className="text-[9px] text-emerald-800 font-bold block">ئامادەبوون</span>
+              <span className="text-sm font-black font-mono text-emerald-900">{sheetStats.presentDays}</span>
+            </div>
+            <div className="p-2 rounded-2xl bg-blue-50/80 border border-blue-200">
+              <span className="text-[9px] text-blue-800 font-bold block">کاتژمێر</span>
+              <span className="text-sm font-black font-mono text-blue-900">{sheetStats.totalHours} ک</span>
+            </div>
+            <div className="p-2 rounded-2xl bg-amber-50/80 border border-amber-200">
+              <span className="text-[9px] text-amber-800 font-bold block">دواکەوتن</span>
+              <span className="text-sm font-black font-mono text-amber-900">{sheetStats.lateCount}</span>
+            </div>
+            <div className="p-2 rounded-2xl bg-purple-50/80 border border-purple-200">
+              <span className="text-[9px] text-purple-800 font-bold block">پابەندبوون</span>
+              <span className="text-sm font-black font-mono text-purple-900">{sheetStats.commitmentRate}%</span>
+            </div>
+          </div>
+
+          {/* Full 31-Day System Table */}
+          <div className="border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="max-h-[420px] overflow-y-auto scrollbar-thin">
+              <table className="w-full text-right text-[11px]">
+                <thead className="bg-slate-800 text-white text-[10px] font-black sticky top-0 z-10">
                   <tr>
-                    <td colSpan={4} className="p-6 text-center text-slate-400 font-sans">
-                      تۆماری ئامادەبوون بۆ ئەم مانگە نییە.
-                    </td>
+                    <th className="py-2 px-2.5">ڕۆژ</th>
+                    <th className="py-2 px-1.5 text-center">هاتن</th>
+                    <th className="py-2 px-1.5 text-center">دەرچوون</th>
+                    <th className="py-2 px-1.5 text-center">کاتژمێر</th>
+                    <th className="py-2 px-2 text-center">دۆخ</th>
                   </tr>
-                ) : (
-                  monthlyLogs.map((log, idx) => (
-                    <tr key={log.id || idx} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-2.5 text-slate-700">{log.date || log.time?.split(' ')[0]}</td>
-                      <td className="p-2.5 text-center text-emerald-700 font-black">
-                        {log.checkInTime || log.check_in_time || '—'}
-                      </td>
-                      <td className="p-2.5 text-center text-rose-700 font-black">
-                        {log.checkOutTime || log.check_out_time || '—'}
-                      </td>
-                      <td className="p-2.5 text-center">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 font-sans">
-                          ئامادەبوو
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-200 font-mono">
+                  {employeeMonthSheet.map((day) => {
+                    const weekBg =
+                      day.isToday
+                        ? 'bg-emerald-50/90 ring-1 ring-inset ring-emerald-400'
+                        : day.isFriday
+                        ? 'bg-slate-100/80 text-slate-400'
+                        : day.weekIdx % 2 === 0
+                        ? 'bg-white'
+                        : 'bg-slate-50/60';
+
+                    const hoursFormatted = day.workedHours > 0 ? `${day.workedHours} ک` : '—';
+
+                    return (
+                      <tr
+                        key={day.dateStr}
+                        onClick={() => setSelectedDayDetail(day)}
+                        className={`${weekBg} hover:bg-emerald-50/60 transition-colors cursor-pointer`}
+                      >
+                        {/* Day Number & Kurdish Weekday */}
+                        <td className="py-2 px-2.5 font-sans">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-mono text-[11px] font-black ${
+                              day.isToday
+                                ? 'bg-emerald-600 text-white'
+                                : day.isFriday
+                                ? 'bg-slate-200 text-slate-600'
+                                : 'bg-slate-100 text-slate-800'
+                            }`}>
+                              {String(day.dayNum).padStart(2, '0')}
+                            </span>
+                            <div>
+                              <span className={`text-[10px] font-black block leading-tight ${
+                                day.isFriday ? 'text-slate-500' : 'text-slate-800'
+                              }`}>
+                                {day.dayNameKu}
+                              </span>
+                              {day.isToday && (
+                                <span className="text-[8px] text-emerald-700 font-black">ئەمڕۆ</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Check-In Time + Late/Waiver Dot */}
+                        <td className="py-2 px-1.5 text-center font-black">
+                          {day.checkInTime ? (
+                            <div className="inline-flex items-center justify-center gap-1">
+                              <span className={day.checkInStatus.isLate && !day.checkInStatus.isWaived ? 'text-amber-700' : 'text-emerald-700'}>
+                                {day.checkInTime}
+                              </span>
+                              {day.checkInStatus.isWaived || day.isCheckInWaived ? (
+                                <span className="w-2 h-2 rounded-full bg-purple-600 inline-block" title="لێخۆشبوونی دواکەوتن" />
+                              ) : day.checkInStatus.isLate ? (
+                                <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" title="دواکەوتن" />
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+
+                        {/* Check-Out Time + Early Waiver Dot */}
+                        <td className="py-2 px-1.5 text-center font-black">
+                          {day.checkOutTime ? (
+                            <div className="inline-flex items-center justify-center gap-1">
+                              <span className="text-rose-700">{day.checkOutTime}</span>
+                              {(day.checkOutStatus.isWaived || day.isCheckOutWaived) && (
+                                <span className="w-2 h-2 rounded-full bg-purple-600 inline-block" title="لێخۆشبوونی زوو دەرچوون" />
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+
+                        {/* Worked Hours */}
+                        <td className="py-2 px-1.5 text-center font-black text-slate-700">
+                          {day.status === 'Present' && day.workedHours > 0 ? hoursFormatted : '—'}
+                        </td>
+
+                        {/* Status Badge & Note Indicator */}
+                        <td className="py-2 px-2 text-center font-sans">
+                          <div className="inline-flex items-center justify-center gap-1">
+                            {day.isWaived || day.checkInStatus.isWaived || day.checkOutStatus.isWaived ? (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-100 text-purple-800 border border-purple-300">
+                                لێخۆشبوو
+                              </span>
+                            ) : day.status === 'Present' ? (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                ئامادەبوو
+                              </span>
+                            ) : day.status === 'Leave' || day.status === 'مۆڵەت' ? (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300">
+                                مۆڵەت
+                              </span>
+                            ) : day.status === 'Absent' || day.status === 'غیاب' ? (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">
+                                غیاب
+                              </span>
+                            ) : day.status === 'Holiday' || day.isFriday ? (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-200 text-slate-600">
+                                پشوو
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 font-mono">—</span>
+                            )}
+                            {(day.note || day.adminNote) && (
+                              <span className="w-2 h-2 rounded-full bg-blue-500 inline-block shrink-0" title={day.adminNote || day.note} />
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
       </main>
 
-      {/* ⚠️ REASON / EXPLANATION MODAL (LATE / EARLY / OVERTIME - Light Mode) */}
+      {/* 🔍 DAY DETAIL MODAL (READ-ONLY SYSTEM RECORD VIEW FOR EMPLOYEE) */}
+      {selectedDayDetail && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4" onClick={() => setSelectedDayDetail(null)}>
+          <div className="bg-white border border-slate-200 p-5 rounded-3xl max-w-sm w-full space-y-4 text-right shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h4 className="text-sm font-black text-slate-900">
+                  ڕۆژی {selectedDayDetail.dayNameKu} ({selectedDayDetail.dateStr})
+                </h4>
+                <span className="text-[10px] text-emerald-700 font-bold">وردەکاری تۆماری سیستەم</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDayDetail(null)}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center p-3 bg-slate-50 rounded-2xl border border-slate-200 font-mono text-xs">
+              <div>
+                <span className="text-[10px] text-slate-500 block font-sans font-bold">هاتن</span>
+                <span className="font-black text-emerald-700">{selectedDayDetail.checkInTime || '—'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 block font-sans font-bold">دەرچوون</span>
+                <span className="font-black text-rose-700">{selectedDayDetail.checkOutTime || '—'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 block font-sans font-bold">کاتژمێر</span>
+                <span className="font-black text-blue-800">
+                  {selectedDayDetail.workedHours > 0 ? `${selectedDayDetail.workedHours} ک` : '—'}
+                </span>
+              </div>
+            </div>
+
+            {(selectedDayDetail.isWaived || selectedDayDetail.checkInStatus.isWaived || selectedDayDetail.checkOutStatus.isWaived) && (
+              <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs font-bold flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-600 shrink-0" />
+                <span>لێخۆشبوونی فەرمی بەڕێوەبەری هەیە</span>
+              </div>
+            )}
+
+            {(selectedDayDetail.adminNote || selectedDayDetail.note) && (
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                <span className="text-[10px] font-black text-slate-600 block">تێبینی تۆمارکراو:</span>
+                <p className="text-xs font-bold text-slate-800 leading-relaxed">{selectedDayDetail.adminNote || selectedDayDetail.note}</p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setSelectedDayDetail(null)}
+              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs cursor-pointer"
+            >
+              داخستن
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ⚠️ REASON MODAL (LATE / EARLY / OVERTIME) */}
       {showReasonModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-5 rounded-3xl max-w-sm w-full space-y-4 text-right shadow-2xl">
-            
             <div className="text-center space-y-1">
-              <div className={`w-12 h-12 rounded-full mx-auto flex items-center justify-center ${
+              <div className={`w-11 h-11 rounded-full mx-auto flex items-center justify-center ${
                 reasonType === 'LATE_IN' ? 'bg-amber-100 text-amber-700' :
                 reasonType === 'EARLY_OUT' ? 'bg-rose-100 text-rose-700' :
                 'bg-emerald-100 text-emerald-700'
               }`}>
-                <Clock className="w-6 h-6" />
+                <Clock className="w-5 h-5" />
               </div>
               <h4 className="text-sm font-black text-slate-900">
-                {reasonType === 'LATE_IN' && '⚠️ ڕوونکردنەوەی درەنگکەوتن (دوای 08:15)'}
-                {reasonType === 'EARLY_OUT' && '⚠️ ڕوونکردنەوەی دەرچوونی زوو (پێش 16:45)'}
-                {reasonType === 'OVERTIME_OUT' && '⏱️ تۆمارکردنی کاتی زیادە / ئیزافە (دوای 17:15)'}
+                {reasonType === 'LATE_IN' && 'هۆکاری دواکەوتن (دوای 08:15)'}
+                {reasonType === 'EARLY_OUT' && 'هۆکاری زوو دەرچوون (پێش 16:45)'}
+                {reasonType === 'OVERTIME_OUT' && 'هۆکاری کاتی زیادە (دوای 17:15)'}
               </h4>
-              <p className="text-xs text-slate-500">
-                {reasonType === 'LATE_IN' && 'دەوامی فەرمی لە 08:00 دەستپێدەکات. تکایە هۆکاری درەنگکەوتن دیاری بکە:'}
-                {reasonType === 'EARLY_OUT' && 'کاتی فەرمی ڕۆیشتن 17:00یە. تکایە هۆکاری دەرچوونی پێشوەختە دیاری بکە:'}
-                {reasonType === 'OVERTIME_OUT' && 'دەستخۆش بۆ کاتی زیادە! تکایە هۆکاری مانەوە دیاری بکە:'}
-              </p>
             </div>
 
-            {/* Quick Reason Chips */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-black text-slate-700 block">هەڵبژاردنی خێرا (بە ١ کلیک):</label>
-              <div className="grid grid-cols-1 gap-1.5">
-                {(reasonType === 'LATE_IN' ? LATE_IN_CHIPS : reasonType === 'EARLY_OUT' ? EARLY_OUT_CHIPS : OVERTIME_CHIPS).map((chip) => (
-                  <button
-                    key={chip}
-                    type="button"
-                    onClick={() => setSelectedChip(chip)}
-                    className={`p-2.5 rounded-xl text-xs font-bold text-right border transition-all cursor-pointer flex items-center justify-between ${
-                      selectedChip === chip 
-                        ? 'bg-amber-50 border-amber-400 text-amber-900 shadow-xs' 
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span>{chip}</span>
-                    {selectedChip === chip && <CheckCircle2 className="w-4 h-4 text-amber-600" />}
-                  </button>
-                ))}
-              </div>
+            <div className="grid grid-cols-1 gap-1.5">
+              {(reasonType === 'LATE_IN' ? LATE_IN_CHIPS : reasonType === 'EARLY_OUT' ? EARLY_OUT_CHIPS : OVERTIME_CHIPS).map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => setSelectedChip(chip)}
+                  className={`p-2.5 rounded-xl text-xs font-bold text-right border transition-all cursor-pointer flex items-center justify-between ${
+                    selectedChip === chip 
+                      ? 'bg-amber-50 border-amber-400 text-amber-900 shadow-xs' 
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <span>{chip}</span>
+                  {selectedChip === chip && <CheckCircle2 className="w-4 h-4 text-amber-600" />}
+                </button>
+              ))}
             </div>
 
-            {/* Custom Reason Note Input */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-black text-slate-700 block">تێبینی و وردەکاری زیاتر:</label>
-                <span className="text-[10px] text-rose-600 font-bold">* نووسین یان هەڵبژاردن ئیجبارییە</span>
-              </div>
-              <input
-                type="text"
-                value={customReason}
-                onChange={(e) => setCustomReason(e.target.value)}
-                placeholder="هۆکاری درەنگکەوتن یان ڕۆیشتن بنووسە..."
-                className="w-full bg-white border border-slate-300 text-slate-900 text-xs p-2.5 rounded-xl focus:border-amber-600 focus:outline-none"
-              />
-            </div>
+            <input
+              type="text"
+              value={customReason}
+              onChange={(e) => setCustomReason(e.target.value)}
+              placeholder="تێبینی زیاتر..."
+              className="w-full bg-white border border-slate-300 text-slate-900 text-xs p-2.5 rounded-xl focus:border-amber-600 focus:outline-none"
+            />
 
-            {/* Modal Buttons */}
-            <div className="flex gap-2 pt-2">
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
                 onClick={submitReasonAttendance}
@@ -2817,39 +3003,35 @@ export default function MobileAttendanceOneTap() {
                 className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs py-3 rounded-xl shadow-md cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>پەسەندکردن و تۆمارکردن</span>
+                <span>تۆمارکردن</span>
               </button>
               <button
                 type="button"
                 onClick={() => setShowReasonModal(false)}
                 className="px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-3 rounded-xl border border-slate-200 cursor-pointer"
               >
-                پاشگەزبوونەوە
+                داخستن
               </button>
             </div>
-
           </div>
         </div>
       )}
 
-      {/* 🔒 UNBIND / LOGOUT MODAL (Light Mode) */}
+      {/* 🔒 UNBIND / LOGOUT MODAL */}
       {showLogoutModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-5 rounded-3xl max-w-xs w-full space-y-4 text-center shadow-2xl">
-            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 mx-auto flex items-center justify-center">
-              <Lock className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-full bg-rose-100 text-rose-600 mx-auto flex items-center justify-center">
+              <Lock className="w-5 h-5" />
             </div>
-            <div>
-              <h4 className="text-sm font-black text-slate-900">دەرچوون یان گۆڕینی مۆبایل</h4>
-              <p className="text-xs text-slate-500 mt-1">تکایە پین کۆدی کارمەند یان پاسۆردی ئەدمین بنووسە:</p>
-            </div>
+            <h4 className="text-sm font-black text-slate-900">دەرچوون لە هەژمار</h4>
 
             <form onSubmit={handleLogout} className="space-y-3">
               <input
                 type="password"
                 value={logoutPin}
                 onChange={(e) => setLogoutPin(e.target.value)}
-                placeholder="PIN"
+                placeholder="کۆدی نهێنی"
                 autoFocus
                 className="w-full bg-white border-2 border-slate-300 text-slate-900 text-center font-mono text-base font-bold p-2.5 rounded-xl focus:border-rose-500 focus:outline-none"
               />
@@ -2867,7 +3049,7 @@ export default function MobileAttendanceOneTap() {
                   onClick={() => { setShowLogoutModal(false); setLogoutError(null); }}
                   className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2.5 rounded-xl border border-slate-200 cursor-pointer"
                 >
-                  پاشگەزبوونەوە
+                  داخستن
                 </button>
               </div>
             </form>
@@ -2875,23 +3057,16 @@ export default function MobileAttendanceOneTap() {
         </div>
       )}
 
-
-
-      {/* 👤 EMPLOYEE SELF-SERVICE PROFILE MODAL (Light Mode) */}
+      {/* 👤 EMPLOYEE SELF-SERVICE PROFILE MODAL */}
       {showProfileModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-5 rounded-3xl max-w-sm w-full space-y-4 text-right shadow-2xl max-h-[90vh] overflow-y-auto">
-            
-            {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
                   <User className="w-4 h-4" />
                 </div>
-                <div>
-                  <h4 className="text-sm font-black text-slate-900">پڕۆفایلی کارمەند</h4>
-                  <p className="text-[10px] text-slate-500 font-medium">زانیارییە کەسییەکان و PIN</p>
-                </div>
+                <h4 className="text-sm font-black text-slate-900">پڕۆفایلی کارمەند</h4>
               </div>
               <button
                 type="button"
@@ -2902,12 +3077,11 @@ export default function MobileAttendanceOneTap() {
               </button>
             </div>
 
-            {/* Photo Avatar Section */}
-            <div className="flex flex-col items-center justify-center py-2">
+            <div className="flex flex-col items-center justify-center py-1">
               <div className="relative group">
                 <div className="w-20 h-20 rounded-full border-3 border-emerald-500 overflow-hidden shadow-md bg-slate-100 flex items-center justify-center">
                   {profilePhoto ? (
-                    <img src={profilePhoto} alt="Employee Photo" className="w-full h-full object-cover" />
+                    <img src={profilePhoto} alt={employeeProfile?.name || 'کارمەند'} className="w-full h-full object-cover" />
                   ) : (
                     <span className="text-2xl font-black text-slate-600">
                       {(employeeProfile?.name || 'ک').charAt(0)}
@@ -2932,17 +3106,15 @@ export default function MobileAttendanceOneTap() {
               </div>
               <p className="text-xs font-black text-slate-900 mt-2">{employeeProfile?.name}</p>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold mt-0.5">
-                {employeeProfile?.role || 'کارمەندی فەرمی'}
+                {translateRoleToKurdish(employeeProfile?.role)}
               </span>
             </div>
 
-            {/* Form Fields */}
             <form onSubmit={handleSaveProfile} className="space-y-3 pt-1">
-              {/* Phone Field */}
               <div>
                 <label className="text-[11px] font-black text-slate-700 block mb-1 flex items-center gap-1">
                   <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>ژمارەی مۆبایل:</span>
+                  <span>ژمارەی مۆبایل</span>
                 </label>
                 <input
                   type="tel"
@@ -2954,11 +3126,10 @@ export default function MobileAttendanceOneTap() {
                 />
               </div>
 
-              {/* Hire Date Field */}
               <div>
                 <label className="text-[11px] font-black text-slate-700 block mb-1 flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>بەرواری دەستبەکاربوون:</span>
+                  <span>بەرواری دەستبەکاربوون</span>
                 </label>
                 <input
                   type="date"
@@ -2969,25 +3140,22 @@ export default function MobileAttendanceOneTap() {
                 />
               </div>
 
-              {/* Change PIN Field */}
               <div>
                 <label className="text-[11px] font-black text-slate-700 block mb-1 flex items-center gap-1">
                   <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>گۆڕینی کۆدی نهێنی (PIN):</span>
+                  <span>کۆدی نهێنی نوێ</span>
                 </label>
                 <input
                   type="password"
                   maxLength={6}
                   value={profilePin}
                   onChange={(e) => setProfilePin(e.target.value)}
-                  placeholder="PIN ی نوێ (٤ بۆ ٦ ژمارە)"
+                  placeholder="••••"
                   dir="ltr"
                   className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-xs font-mono font-bold p-2.5 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-colors"
                 />
-                <p className="text-[10px] text-slate-400 mt-1">ئەگەر ناتەوێت PIN بگۆڕیت، بە بەتاڵی جێی بهێڵە.</p>
               </div>
 
-              {/* Error & Success Alerts */}
               {profileError && (
                 <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-1.5">
                   <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
@@ -2996,13 +3164,12 @@ export default function MobileAttendanceOneTap() {
               )}
 
               {profileSaveSuccess && (
-                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-1.5 animate-bounce">
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
-                  <span>زانیارییەکانت بە سەرکەوتوویی پاشەکەوت کران!</span>
+                  <span>پاشەکەوت کرا</span>
                 </div>
               )}
 
-              {/* Action Buttons */}
               <div className="flex gap-2 pt-2">
                 <button
                   type="submit"
@@ -3010,14 +3177,11 @@ export default function MobileAttendanceOneTap() {
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-xs py-2.5 rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
                 >
                   {isSavingProfile ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>خەریکی پاشەکەوتکردن...</span>
-                    </>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <>
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>پاشەکەوتکردنی گۆڕانکارییەکان</span>
+                      <span>پاشەکەوتکردن</span>
                     </>
                   )}
                 </button>
@@ -3034,7 +3198,7 @@ export default function MobileAttendanceOneTap() {
         </div>
       )}
 
-      {/* 📲 PWA INSTALL GUIDE & 1-TAP MODAL */}
+      {/* 📲 PWA INSTALL MODAL */}
       {showPwaInstallModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
@@ -3044,7 +3208,7 @@ export default function MobileAttendanceOneTap() {
                   <Smartphone className="w-4 h-4" />
                 </div>
                 <h3 className="text-sm font-black text-slate-900">
-                  دابەزاندنی بەرنامە لەسەر مۆبایل (PWA)
+                  دابەزاندنی بەرنامە لەسەر مۆبایل
                 </h3>
               </div>
               <button
@@ -3056,17 +3220,17 @@ export default function MobileAttendanceOneTap() {
               </button>
             </div>
 
-            <div className="space-y-3 text-xs text-slate-700 leading-relaxed">
-              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-1.5">
-                <p className="font-black text-emerald-900">🤖 بۆ ئەندرۆید (Google Chrome):</p>
+            <div className="space-y-2.5 text-xs text-slate-700 leading-relaxed">
+              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-1">
+                <p className="font-black text-emerald-900">🤖 مۆبایلی ئەندرۆید:</p>
                 <p>١. لە سەرەوەی وێبگەڕەکە پەنجە بنێ بە سێ خاڵەکە <strong>(⋮)</strong>.</p>
-                <p>٢. هەڵبژاردنی <strong>«Install app»</strong> یان <strong>«Add to Home screen»</strong> دابگرە.</p>
+                <p>٢. دوگمەی <strong>دابەزاندنی بەرنامە</strong> یان <strong>زیادکردن بۆ شاشەی سەرەکی</strong> دابگرە.</p>
               </div>
 
-              <div className="p-3 rounded-2xl bg-blue-50 border border-blue-200 space-y-1.5">
-                <p className="font-black text-blue-900">🍏 بۆ ئایفۆن (Safari):</p>
-                <p>١. لە خوارەوەی شاشەکە دوگمەی <strong>Share (⬆️)</strong> دابگرە.</p>
-                <p>٢. هەڵبژاردنی <strong>«Add to Home Screen»</strong> دابگرە و پاشان <strong>Add</strong> بکە.</p>
+              <div className="p-3 rounded-2xl bg-blue-50 border border-blue-200 space-y-1">
+                <p className="font-black text-blue-900">🍏 مۆبایلی ئایفۆن:</p>
+                <p>١. لە خوارەوەی شاشەکە دوگمەی هاوبەشکردن <strong>(⬆️)</strong> دابگرە.</p>
+                <p>٢. دوگمەی <strong>زیادکردن بۆ شاشەی سەرەکی</strong> هەڵبژێرە.</p>
               </div>
             </div>
 

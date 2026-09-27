@@ -356,15 +356,8 @@ export default function FaceKioskPage() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-black text-white tracking-wide">سیستەمی ناسینەوەی دەموچاو (Ashley AI Kiosk)</h1>
-              <span className="text-[10px] bg-blue-600/20 text-blue-400 border border-blue-500/40 font-mono font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-blue-400" />
-                <span>Biometric AI 4.0</span>
-              </span>
+              <h1 className="text-base font-black text-white tracking-wide">سیستەمی ناسینەوەی ڕوخسار</h1>
             </div>
-            <p className="text-xs text-slate-400 font-bold mt-0.5">
-              تۆمارکردنی خێرای هاتن و چوون بۆ هەموو ستافی ئاشڵی
-            </p>
           </div>
         </div>
 
@@ -394,8 +387,7 @@ export default function FaceKioskPage() {
             <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center space-y-4 text-center p-6">
               <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
               <div className="space-y-1">
-                <p className="text-sm font-black text-white">لە بارکردنی مۆدێلی ژیریی دەستکردی دەموچاو...</p>
-                <p className="text-xs text-slate-400">AI Face Neural Networks Loading</p>
+                <p className="text-sm font-black text-white">لە بارکردنی سیستەمی ناسینەوەی ڕوخسار...</p>
               </div>
             </div>
           )}
@@ -432,7 +424,7 @@ export default function FaceKioskPage() {
 
               <div className="space-y-1">
                 <span className="text-xs font-mono font-black text-emerald-400 uppercase tracking-widest">
-                  {matchedEmployee.action === 'ENTER' ? '🎉 بەخێربێیت (CHECK-IN)' : '🏁 کاتی ڕۆیشتن (CHECK-OUT)'}
+                  {matchedEmployee.action === 'ENTER' ? '🎉 بەخێربێیت — هاتن' : '🏁 کاتی ڕۆیشتن'}
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-black text-white">
                   {matchedEmployee.name}
@@ -444,7 +436,7 @@ export default function FaceKioskPage() {
               </div>
 
               <div className="p-3 bg-emerald-950/60 border border-emerald-500/40 rounded-xl text-xs font-bold text-emerald-200 max-w-sm">
-                دەوامی تۆ بە سەرکەوتوویی لە داتابەیسی سەرەکی ئاشڵی تۆمارکرا.
+                دەوامی تۆ بە سەرکەوتوویی تۆمارکرا.
               </div>
             </div>
           )}
@@ -462,7 +454,7 @@ export default function FaceKioskPage() {
                 mode === 'AUTO' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
               }`}
             >
-              🔄 دۆخی خۆکار (Auto)
+              🔄 خۆکار
             </button>
             <button
               type="button"
@@ -471,7 +463,7 @@ export default function FaceKioskPage() {
                 mode === 'ENTER' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
               }`}
             >
-              🟢 هاتن (Check-In)
+              🟢 هاتن
             </button>
             <button
               type="button"
@@ -480,7 +472,7 @@ export default function FaceKioskPage() {
                 mode === 'EXIT' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
               }`}
             >
-              🔴 ڕۆیشتن (Check-Out)
+              🔴 ڕۆیشتن
             </button>
           </div>
 
@@ -496,7 +488,7 @@ export default function FaceKioskPage() {
               className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white rounded-none border border-slate-700 text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
             >
               <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-              <span>پین کۆد</span>
+              <span>کۆد</span>
             </button>
 
             <button
@@ -516,8 +508,8 @@ export default function FaceKioskPage() {
 
       {/* 4. FOOTER INFO */}
       <footer className="px-6 py-3 bg-slate-900/60 border-t border-slate-800 text-center text-xs text-slate-500 font-bold flex items-center justify-between">
-        <span>سیستەمی فەرمی ئامادەبوونی بیۆمەتری ئاشڵی (Ashley Furniture ERP)</span>
-        <span className="font-mono text-[11px] text-slate-400">HQ Ashley & Huana Gateways</span>
+        <span>سیستەمی ئامادەبوونی ئاشڵی</span>
+        <span className="font-mono text-[11px] text-slate-400">لقی سەرەکی و هوانە</span>
       </footer>
 
       {/* MANUAL PIN MODAL FALLBACK */}
@@ -527,7 +519,7 @@ export default function FaceKioskPage() {
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-black text-white flex items-center gap-1.5">
                 <KeyRound className="w-4 h-4 text-amber-400" />
-                <span>تۆمارکردنی دەوام بە پین کۆد (PIN Code)</span>
+                <span>تۆمارکردنی دەوام بە کۆد</span>
               </h3>
               <button 
                 type="button" 
@@ -540,7 +532,7 @@ export default function FaceKioskPage() {
 
             <form onSubmit={handlePinSubmit} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300">پین کۆدی تایبەتی کارمەند (PIN):</label>
+                <label className="text-xs font-bold text-slate-300">کۆدی تایبەتی کارمەند:</label>
                 <input
                   type="password"
                   maxLength={6}

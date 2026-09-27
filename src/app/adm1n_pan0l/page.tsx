@@ -190,11 +190,7 @@ export default function HiddenAdminPanelPortal() {
             <ShieldCheck className="w-8 h-8" />
           </div>
           <div className="space-y-1">
-            <span className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 text-[10px] font-mono font-bold">
-              🔒 SECRET EXECUTIVE GATEWAY
-            </span>
             <h1 className="text-xl font-black text-white tracking-tight">سیستەمی بەڕێوەبەرایەتی باڵای ئاشڵی</h1>
-            <p className="text-xs text-slate-400 font-medium">پەڕەی دەستگەیشتنی تایبەت بە ئەدمین (adm1n_pan0l)</p>
           </div>
         </div>
 
@@ -223,7 +219,7 @@ export default function HiddenAdminPanelPortal() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-black text-slate-300 mb-1.5">
-              ناوی بەکارهێنەر (Username):
+              ناوی بەکارهێنەر:
             </label>
             <div className="relative">
               <input
@@ -231,7 +227,7 @@ export default function HiddenAdminPanelPortal() {
                 disabled={isLocked || loading}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="admin"
+                placeholder="ناوی بەکارهێنەر"
                 className="w-full px-3.5 py-3 rounded-xl border border-slate-700 bg-slate-800/80 text-white text-sm font-bold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all disabled:opacity-50"
                 autoComplete="username"
                 autoFocus
@@ -242,7 +238,7 @@ export default function HiddenAdminPanelPortal() {
 
           <div>
             <label className="block text-xs font-black text-slate-300 mb-1.5">
-              وشەی تێپەڕ (Password):
+              وشەی تێپەڕ:
             </label>
             <div className="relative">
               <input

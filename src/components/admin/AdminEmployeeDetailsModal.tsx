@@ -24,6 +24,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { getDaysInMonth, getDay, format } from 'date-fns';
+import { translateRoleToKurdish } from '@/lib/attendance-helpers';
 
 export function formatMinutesHuman(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -254,11 +255,11 @@ export function AdminEmployeeDetailsModal({
       { header: '#', key: 'dayNum', width: '35px', align: 'center' },
       { header: 'بەروار', key: 'dateStr', width: '85px', align: 'center' },
       { header: 'ڕۆژ', key: 'dayName', width: '60px', align: 'center' },
-      { header: 'کاتی هاتن (In)', key: 'checkInTime', width: '75px', align: 'center' },
-      { header: 'کاتی دەرچوون (Out)', key: 'checkOutTime', width: '75px', align: 'center' },
+      { header: 'کاتی هاتن', key: 'checkInTime', width: '75px', align: 'center' },
+      { header: 'کاتی دەرچوون', key: 'checkOutTime', width: '75px', align: 'center' },
       { header: 'کاتی کارکردن', key: 'workedHours', width: '75px', align: 'center' },
       { header: 'ئیزافە', key: 'overtimeHours', width: '65px', align: 'center' },
-      { header: 'بڕی پارە (IQD)', key: 'overtimeAmount', width: '85px', align: 'center' },
+      { header: 'بڕی پارە (د.ع)', key: 'overtimeAmount', width: '85px', align: 'center' },
       { header: 'جۆری ئیش و تێبینی', key: 'note', align: 'right' },
       { header: 'دۆخ', key: 'statusLabel', width: '60px', align: 'center' },
     ];
@@ -271,14 +272,14 @@ export function AdminEmployeeDetailsModal({
       checkOutTime: r.checkOutTime ? formatTime24H(r.checkOutTime) : '-',
       workedHours: r.workedHours > 0 ? `${r.workedHours} ک` : '-',
       overtimeHours: r.overtimeHours > 0 ? `+${r.overtimeHours} ک` : '-',
-      overtimeAmount: r.overtimeAmount > 0 ? `${r.overtimeAmount.toLocaleString()} IQD` : '-',
+      overtimeAmount: r.overtimeAmount > 0 ? `${r.overtimeAmount.toLocaleString()} د.ع` : '-',
       note: r.note || '-',
       statusLabel: r.status === 'present' ? 'ئامادە' : r.status === 'off' ? 'پشوو' : r.status === 'future' ? 'داهاتوو' : 'غایب',
     }));
 
     exportToPDF({
       title: `ڕاپۆرتی دەوام و کاتی زیادەی کارمەند: ${employee.fullName3Part || employee.name}`,
-      subtitle: `کۆمپانیای ئاشڵی — بەشی سەرچاوە مرۆییەکان (HR) — مانگی ${selectedMonth}`,
+      subtitle: `کۆمپانیای ئاشڵی — بەشی سەرچاوە مرۆییەکان — مانگی ${selectedMonth}`,
       period: `مانگی ${selectedMonth} (تەواوی ۳۱ ڕۆژ)`,
       columns: cols,
       data,
@@ -288,7 +289,7 @@ export function AdminEmployeeDetailsModal({
         { label: 'کۆی کارکردن', value: `${totals.totalWorkedHours} کاتژمێر`, color: '#d97706' },
         { label: 'کۆی دواکەوتن', value: totals.totalLateMins > 0 ? `+${totals.totalLateMins} خ` : 'بێ دواکەوتن', color: '#be123c' },
         { label: 'کۆی کاتی ئیزافە', value: `+${totals.totalOtHours} کاتژمێر`, color: '#7c3aed' },
-        { label: 'شایستەی پارە (IQD)', value: `${totals.totalOtPay.toLocaleString()} IQD`, color: '#059669' },
+        { label: 'شایستەی پارە (د.ع)', value: `${totals.totalOtPay.toLocaleString()} د.ع`, color: '#059669' },
       ],
     });
   };
@@ -302,7 +303,7 @@ export function AdminEmployeeDetailsModal({
       { header: 'کاتی دەرچوون', key: 'checkOutTime' },
       { header: 'کاتی کارکردن', key: 'workedHours' },
       { header: 'ئیزافە (کاتژمێر)', key: 'overtimeHours' },
-      { header: 'شایستەی ئیزافە (IQD)', key: 'overtimeAmount' },
+      { header: 'شایستەی ئیزافە (د.ع)', key: 'overtimeAmount' },
       { header: 'تێبینی و جۆری ئیش', key: 'note' },
       { header: 'دۆخ', key: 'statusLabel' },
     ];
@@ -343,7 +344,7 @@ export function AdminEmployeeDetailsModal({
                   {employee.fullName3Part || employee.name}
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-[#007AFF] dark:text-blue-400 border border-blue-200/50 dark:border-blue-800/40 text-[10px] font-mono font-bold">
-                  EMP-{employee.employeeId || employee.id.replace('emp-', '')}
+                  #{employee.employeeId || employee.id.replace('emp-', '')}
                 </span>
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                   employee.status === 'resigned' || employee.isActive === false
@@ -356,7 +357,7 @@ export function AdminEmployeeDetailsModal({
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5 flex items-center gap-3">
                 <span className="flex items-center gap-1">
                   <Briefcase className="w-3.5 h-3.5 text-blue-500" />
-                  {employee.role || 'کارمەند'}
+                  {translateRoleToKurdish(employee.role)}
                 </span>
                 {employee.phone && (
                   <span className="flex items-center gap-1 font-mono">
@@ -447,7 +448,7 @@ export function AdminEmployeeDetailsModal({
           <div className="bg-white dark:bg-[#2c2c2e] p-3 rounded-2xl border border-slate-200/60 dark:border-white/5 shadow-xs">
             <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-bold">کۆی کاتی کارکردن</span>
             <p className="text-base font-black text-amber-600 dark:text-amber-400 font-mono mt-0.5">
-              {totals.totalWorkedHours} <span className="text-xs font-medium text-slate-400">h</span>
+              {totals.totalWorkedHours} <span className="text-xs font-medium text-slate-400">ک</span>
             </p>
           </div>
 
@@ -461,14 +462,14 @@ export function AdminEmployeeDetailsModal({
           <div className="bg-white dark:bg-[#2c2c2e] p-3 rounded-2xl border border-slate-200/60 dark:border-white/5 shadow-xs">
             <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-bold">کاتی زیادە</span>
             <p className="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
-              +{totals.totalOtHours} <span className="text-xs font-medium text-slate-400">h</span>
+              +{totals.totalOtHours} <span className="text-xs font-medium text-slate-400">ک</span>
             </p>
           </div>
 
           <div className="bg-white dark:bg-[#2c2c2e] p-3 rounded-2xl border border-slate-200/60 dark:border-white/5 shadow-xs col-span-2 sm:col-span-1">
             <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-bold">شایستەی پارە</span>
             <p className="text-sm font-black text-purple-600 dark:text-purple-400 font-mono mt-0.5">
-              +{totals.totalOtPay.toLocaleString()} <span className="text-[10px] font-medium text-slate-400">IQD</span>
+              +{totals.totalOtPay.toLocaleString()} <span className="text-[10px] font-medium text-slate-400">د.ع</span>
             </p>
           </div>
         </div>
@@ -492,8 +493,8 @@ export function AdminEmployeeDetailsModal({
                   <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 w-10 text-center">#</th>
                   <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">بەروار</th>
                   <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">ڕۆژ</th>
-                  <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">هاتن (In)</th>
-                  <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">دەرچوون (Out)</th>
+                  <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">هاتن</th>
+                  <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">دەرچوون</th>
                   <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">کاتی کارکردن</th>
                   <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">ئیزافە</th>
                   <th className="p-2.5 border-l border-slate-200/80 dark:border-white/5 text-center">بڕی پارە</th>
@@ -533,10 +534,10 @@ export function AdminEmployeeDetailsModal({
                         )}
                       </td>
                       <td className="p-2.5 border-l border-slate-100 dark:border-white/5 text-center font-mono font-bold text-blue-600 dark:text-blue-400">
-                        {rec.workedHours > 0 ? `${rec.workedHours}h` : '-'}
+                        {rec.workedHours > 0 ? `${rec.workedHours} ک` : '-'}
                       </td>
                       <td className="p-2.5 border-l border-slate-100 dark:border-white/5 text-center font-mono font-bold text-amber-600 dark:text-amber-400">
-                        {hasOt ? `+${rec.overtimeHours}h` : '-'}
+                        {hasOt ? `+${rec.overtimeHours} ک` : '-'}
                       </td>
                       <td className="p-2.5 border-l border-slate-100 dark:border-white/5 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
                         {rec.overtimeAmount > 0 ? `+${rec.overtimeAmount.toLocaleString()}` : '-'}
