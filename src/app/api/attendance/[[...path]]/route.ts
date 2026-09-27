@@ -617,46 +617,91 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       }
 
       try {
-        // 1. Fetch attendance row for today
-        const { data: allRecords } = await supabase
-          .from('attendance')
-          .select('*')
-          .eq('date', dateStr);
+        // 1. Fetch attendance rows, logs, and authoritative Admin Overrides for today in parallel
+        const [{ data: allRecords }, { data: logsData }, { data: setRow }] = await Promise.all([
+          supabase.from('attendance').select('*').eq('date', dateStr),
+          supabase.from('attendance_logs').select('*').eq('log_date', dateStr).order('created_at', { ascending: true }),
+          supabase.from('warehouses').select('qr_code').eq('id', 'ashley_manual_attendance_records').maybeSingle(),
+        ]);
 
-        let record = (allRecords || []).find((r: any) => {
+        let manualOverridesMap: Record<string, any> = {};
+        if (setRow?.qr_code) {
+          try {
+            manualOverridesMap = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+          } catch {}
+        }
+
+        const cleanId = userId.toString().trim();
+        const uRaw = cleanId.replace(/^emp-0*/i, '') || cleanId.replace('emp-', '');
+        const uRawPadded = uRaw.length === 1 ? `0${uRaw}` : uRaw;
+        const uNameLower = userName.trim().toLowerCase();
+
+        const manualOverride =
+          manualOverridesMap[`${cleanId}_${dateStr}`] ||
+          manualOverridesMap[`${uRaw}_${dateStr}`] ||
+          manualOverridesMap[`${uRawPadded}_${dateStr}`] ||
+          manualOverridesMap[`emp-${uRaw}_${dateStr}`] ||
+          manualOverridesMap[`emp-${uRawPadded}_${dateStr}`] ||
+          (uNameLower ? manualOverridesMap[`${uNameLower}_${dateStr}`] : null);
+
+        // If Admin explicitly deleted/cleared this record, return empty state immediately
+        const isDeletedByAdmin = Boolean(
+          manualOverride &&
+          (manualOverride.status === 'empty' ||
+           manualOverride.status === 'Empty' ||
+           manualOverride.status === 'delete' ||
+           manualOverride.status === 'deleted' ||
+           manualOverride.action === 'delete')
+        );
+
+        if (isDeletedByAdmin) {
+          return NextResponse.json({
+            serverEpochMs: Date.now(),
+            checkInTime: null,
+            checkOutTime: null,
+            isCurrentlyInside: false,
+            status: null,
+            warehouseName: null,
+            date: dateStr,
+            logs: [],
+            intervals: [],
+            totalWorkMinutes: 0,
+            totalExcursionMinutes: 0,
+            remainingMinutes: 480,
+            overtimeMinutes: 0,
+            standardShiftMinutes: 480,
+          }, { headers: noCacheHeaders });
+        }
+
+        const matchingRecords = (allRecords || []).filter((r: any) => {
           const rUser = (r.user_id || '').toString().toLowerCase();
           const rName = (r.user_name || '').toString().toLowerCase();
-          const uId = userId.toLowerCase();
-          const uRaw = uId.replace('emp-', '');
-          const uName = userName.toLowerCase();
+          const uId = cleanId.toLowerCase();
 
           return (
-            (userId && (rUser === uId || rUser === uRaw || rUser === `emp-${uRaw}`)) ||
-            (userName && (rName === uName || rName.includes(uName) || uName.includes(rName)))
+            (cleanId && (rUser === uId || rUser === uRaw.toLowerCase() || rUser === `emp-${uRaw.toLowerCase()}` || rUser === `emp-${uRawPadded.toLowerCase()}`)) ||
+            (uNameLower && (rName === uNameLower || rName.includes(uNameLower) || uNameLower.includes(rName)))
           );
         });
 
-        // 2. Fetch all logs for today
-        const { data: logsData } = await supabase
-          .from('attendance_logs')
-          .select('*')
-          .eq('log_date', dateStr)
-          .order('created_at', { ascending: true });
+        // Prefer Admin-edited record (`att-...` or one with `adjusted_check_in_time`) if multiple exist
+        const record =
+          matchingRecords.find((r: any) => String(r.id || '').startsWith('att-') || r.adjusted_check_in_time) ||
+          matchingRecords[0] ||
+          null;
 
         const empLogs = (logsData || []).filter((l: any) => {
+          if (l.log_type === 'Admin Edit') return false;
           const lEmp = (l.employee_id || '').toString().toLowerCase();
           const lName = (l.employee_name || '').toString().toLowerCase();
-          const target = userId.toLowerCase();
-          const raw = target.replace('emp-', '');
-          const uName = userName.toLowerCase();
+          const target = cleanId.toLowerCase();
 
           return (
-            (userId && (lEmp === target || lEmp === raw || lEmp === `emp-${raw}`)) ||
-            (userName && (lName === uName || lName.includes(uName) || uName.includes(lName)))
+            (cleanId && (lEmp === target || lEmp === uRaw.toLowerCase() || lEmp === `emp-${uRaw.toLowerCase()}` || lEmp === `emp-${uRawPadded.toLowerCase()}`)) ||
+            (uNameLower && (lName === uNameLower || lName.includes(uNameLower) || uNameLower.includes(lName)))
           );
         });
 
-        // Compute chronological logs & intervals
         const chronologicalLogs = empLogs.map((l: any) => ({
           id: l.id,
           time: l.log_time_str || (l.created_at ? l.created_at.split('T')[1].slice(0, 5) : '08:30'),
@@ -666,106 +711,80 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           createdAt: l.created_at
         }));
 
-        let firstCheckIn = record?.check_in_time || null;
-        let lastCheckOut = record?.check_out_time || null;
-        let isCurrentlyInside = false;
+        const firstLogIn = chronologicalLogs.find(x => x.type === 'ENTER')?.time || null;
+        const lastLog = chronologicalLogs.length > 0 ? chronologicalLogs[chronologicalLogs.length - 1] : null;
+        const lastLogOut = (lastLog && lastLog.type === 'EXIT') ? lastLog.time : null;
 
-        if (chronologicalLogs.length > 0) {
-          const firstIn = chronologicalLogs.find(x => x.type === 'ENTER');
-          if (firstIn && !firstCheckIn) firstCheckIn = firstIn.time;
-          
-          const lastLog = chronologicalLogs[chronologicalLogs.length - 1];
-          isCurrentlyInside = lastLog.type === 'ENTER';
-          if (isCurrentlyInside) {
+        // Authoritative Final Check-In & Check-Out Time (Admin Override > Attendance Row > Logs)
+        let firstCheckIn: string | null =
+          (manualOverride && manualOverride.checkInTime !== undefined ? manualOverride.checkInTime : null) ||
+          record?.adjusted_check_in_time ||
+          record?.check_in_time ||
+          firstLogIn ||
+          null;
+
+        let lastCheckOut: string | null = null;
+        if (manualOverride && 'checkOutTime' in manualOverride) {
+          lastCheckOut = manualOverride.checkOutTime || null;
+        } else if (record && (record.adjusted_check_out_time !== undefined || record.check_out_time !== undefined)) {
+          lastCheckOut = record.adjusted_check_out_time || record.check_out_time || null;
+        } else {
+          lastCheckOut = lastLogOut;
+        }
+
+        if (firstCheckIn === 'مۆڵەت' || manualOverride?.status === 'Absent' || record?.status === 'Absent') {
+          if (manualOverride?.status === 'Absent' || record?.status === 'Absent') {
+            firstCheckIn = null;
             lastCheckOut = null;
-          } else {
-            lastCheckOut = lastLog.time;
           }
         }
 
-        // Calculate intervals (Work Sessions vs Excursions)
-        const intervals: Array<{ inTime: string; outTime: string | null; durationMinutes: number; type: 'work' | 'excursion' }> = [];
-        let activeIn: string | null = null;
-        let activeOut: string | null = null;
-        let totalWorkMinutes = 0;
-        let totalExcursionMinutes = 0;
+        const isCurrentlyInside = Boolean(firstCheckIn && !lastCheckOut);
 
         const parseMinutes = (t: string) => {
-          if (!t) return 0;
+          if (!t || !t.includes(':')) return 0;
           const [h, m] = t.split(':').map(Number);
           return (h || 0) * 60 + (m || 0);
         };
 
         const nowMinutes = parseMinutes(timeStr);
+        let totalWorkMinutes = 0;
+        let totalExcursionMinutes = 0;
+        const intervals: Array<{ inTime: string; outTime: string | null; durationMinutes: number; type: 'work' | 'excursion' }> = [];
 
-        for (let i = 0; i < chronologicalLogs.length; i++) {
-          const item = chronologicalLogs[i];
-          if (item.type === 'ENTER') {
-            if (activeOut) {
-              const excDuration = Math.max(0, parseMinutes(item.time) - parseMinutes(activeOut));
-              totalExcursionMinutes += excDuration;
-              intervals.push({
-                inTime: activeOut,
-                outTime: item.time,
-                durationMinutes: excDuration,
-                type: 'excursion'
-              });
-              activeOut = null;
-            }
-            activeIn = item.time;
-          } else if (item.type === 'EXIT') {
-            if (activeIn) {
-              const workDuration = Math.max(0, parseMinutes(item.time) - parseMinutes(activeIn));
-              totalWorkMinutes += workDuration;
-              intervals.push({
-                inTime: activeIn,
-                outTime: item.time,
-                durationMinutes: workDuration,
-                type: 'work'
-              });
-              activeIn = null;
-            }
-            activeOut = item.time;
+        if (firstCheckIn && firstCheckIn.includes(':')) {
+          const startM = parseMinutes(firstCheckIn);
+          const endM = (lastCheckOut && lastCheckOut.includes(':')) ? parseMinutes(lastCheckOut) : nowMinutes;
+          if (endM > startM) {
+            const gross = endM - startM;
+            const breakStart = 12 * 60;
+            const breakEnd = 13 * 60;
+            const lunchOverlap = Math.max(0, Math.min(endM, breakEnd) - Math.max(startM, breakStart));
+            totalWorkMinutes = Math.max(0, gross - lunchOverlap);
           }
-        }
-
-        // Active ongoing work session
-        if (activeIn) {
-          const ongoingDuration = Math.max(0, nowMinutes - parseMinutes(activeIn));
-          totalWorkMinutes += ongoingDuration;
           intervals.push({
-            inTime: activeIn,
-            outTime: null,
-            durationMinutes: ongoingDuration,
+            inTime: firstCheckIn,
+            outTime: lastCheckOut,
+            durationMinutes: totalWorkMinutes,
             type: 'work'
           });
-        } else if (intervals.length === 0 && firstCheckIn) {
-          // Fallback if checkInTime is recorded on record but logs were not yet populated
-          const startM = parseMinutes(firstCheckIn);
-          if (lastCheckOut) {
-            const endM = parseMinutes(lastCheckOut);
-            const dur = Math.max(0, endM - startM);
-            totalWorkMinutes = dur;
-            intervals.push({ inTime: firstCheckIn, outTime: lastCheckOut, durationMinutes: dur, type: 'work' });
-          } else {
-            const dur = Math.max(0, nowMinutes - startM);
-            totalWorkMinutes = dur;
-            intervals.push({ inTime: firstCheckIn, outTime: null, durationMinutes: dur, type: 'work' });
-            isCurrentlyInside = true;
-          }
         }
 
         const standardShiftMinutes = 480; // 8 hours
         const remainingMinutes = Math.max(0, standardShiftMinutes - totalWorkMinutes);
         const overtimeMinutes = Math.max(0, totalWorkMinutes - standardShiftMinutes);
+        const finalStatus = manualOverride?.status || record?.status || (firstCheckIn ? 'Present' : null);
 
         return NextResponse.json({
           serverEpochMs: Date.now(),
           checkInTime: firstCheckIn,
           checkOutTime: lastCheckOut,
           isCurrentlyInside,
-          status: record?.status || (firstCheckIn ? 'Present' : null),
+          status: finalStatus,
           warehouseName: record?.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
+          note: manualOverride?.note || record?.check_in_edit_note || record?.note || null,
+          adminNote: manualOverride?.adminNote || record?.admin_note || null,
+          isWaived: Boolean(manualOverride?.isWaived ?? (manualOverride?.adminDecision === 'waived')),
           date: dateStr,
           logs: chronologicalLogs,
           intervals,
@@ -813,6 +832,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }
           await supabase.from('attendance').delete().neq('id', '___non_existent___');
           await supabase.from('attendance_logs').delete().neq('id', '___non_existent___');
+          await supabase.from('warehouses').delete().eq('id', 'ashley_manual_attendance_records');
         } else {
           let query = supabase.from('attendance').delete().eq('date', dateStr);
           if (userId) {
@@ -826,6 +846,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }
           await logQuery;
         }
+        CACHED_ADMIN_REPORT = null;
 
         return NextResponse.json({ success: true, message: 'داتاکانی دەوام بە سەرکەوتوویی سڕانەوە' });
       } catch (err: any) {
@@ -1612,6 +1633,41 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         console.warn('Auto log insert error:', logErr);
       }
 
+      // Clear any previous deletion tombstone in ashley_manual_attendance_records for today so the new punch is authoritative
+      try {
+        const { data: setRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_manual_attendance_records').maybeSingle();
+        if (setRow?.qr_code) {
+          const currentSettings = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+          const allKeyVars = [
+            `${cleanId}_${dateStr}`,
+            `${rawNum}_${dateStr}`,
+            `${paddedNum}_${dateStr}`,
+            `emp-${rawNum}_${dateStr}`,
+            `emp-${paddedNum}_${dateStr}`,
+            `${(matchedName || '').toLowerCase()}_${dateStr}`,
+          ];
+          let changed = false;
+          for (const k of allKeyVars) {
+            if (currentSettings[k]) {
+              delete currentSettings[k];
+              changed = true;
+            }
+          }
+          if (changed) {
+            await supabase.from('warehouses').upsert({
+              id: 'ashley_manual_attendance_records',
+              name: 'Ashley Manual Attendance Overrides Store',
+              qr_code: JSON.stringify(currentSettings),
+              lat: 0,
+              lng: 0,
+              radius: 0,
+            });
+          }
+        }
+      } catch {}
+
+      CACHED_ADMIN_REPORT = null;
+
       return NextResponse.json({
         success: true,
         action: isCheckIn ? 'Check In' : 'Check Out',
@@ -1897,18 +1953,24 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }
         } catch {}
 
-        const isDeletedTombstone = (empId: string, logDate: string, empName?: string) => {
-          if (!empId || !logDate) return false;
+        const getManualOverride = (empId: string, logDate: string, empName?: string) => {
+          if (!empId || !logDate) return null;
           const clean = empId.toString().replace(/^emp-0*/i, '') || empId.toString().replace('emp-', '');
           const cleanPadded = clean.length === 1 ? `0${clean}` : clean;
           const nameClean = (empName || '').toString().trim().toLowerCase();
-          const ov = 
+          return (
             manualOverridesMap[`${empId}_${logDate}`] ||
             manualOverridesMap[`${clean}_${logDate}`] ||
             manualOverridesMap[`${cleanPadded}_${logDate}`] ||
             manualOverridesMap[`emp-${clean}_${logDate}`] ||
             manualOverridesMap[`emp-${cleanPadded}_${logDate}`] ||
-            (nameClean ? manualOverridesMap[`${nameClean}_${logDate}`] : null);
+            (nameClean ? manualOverridesMap[`${nameClean}_${logDate}`] : null) ||
+            null
+          );
+        };
+
+        const isDeletedTombstone = (empId: string, logDate: string, empName?: string) => {
+          const ov = getManualOverride(empId, logDate, empName);
           return Boolean(ov && (ov.status === 'empty' || ov.status === 'Empty' || ov.status === 'delete' || ov.status === 'deleted' || ov.action === 'delete'));
         };
 
@@ -1921,8 +1983,20 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         if (attendance && attendance.length > 0) {
           attendance.forEach(r => {
             if (isDeletedTombstone(r.user_id, r.date, r.user_name)) return;
+            const ov = getManualOverride(r.user_id, r.date, r.user_name);
+            const effInTime = ov?.checkInTime || r.adjusted_check_in_time || r.check_in_time || '';
+            const effOutTime = ov?.checkOutTime || r.adjusted_check_out_time || r.check_out_time || '';
+            const effStatus = ov?.status || r.status || 'Present';
+            const effNote = ov?.note || [r.check_in_edit_note, r.check_out_edit_note].filter(Boolean).join(' | ') || '';
+
+            const cleanId = (r.user_id || '').toString().replace(/^emp-0*/i, '') || r.user_id;
+            const shiftKey = `shift-${cleanId}-${r.date}`;
+
+            // If a manual override row (`att-...`) already set this shiftKey, don't overwrite with stale row
+            if (uniqueMap.has(shiftKey) && !String(r.id).startsWith('att-')) return;
+
             // Unified Daily Shift Record
-            uniqueMap.set(r.id, {
+            uniqueMap.set(shiftKey, {
               id: r.id,
               employeeId: r.user_id,
               userId: r.user_id,
@@ -1930,24 +2004,24 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
               userName: r.user_name,
               name: r.user_name,
               date: r.date,
-              checkIn: r.check_in_time ? `${r.date} ${r.check_in_time}` : (r.check_in || ''),
-              checkInTime: r.check_in_time || '',
-              checkOut: r.check_out_time ? `${r.date} ${r.check_out_time}` : (r.check_out || ''),
-              checkOutTime: r.check_out_time || '',
-              time: r.check_in_time ? `${r.date} ${r.check_in_time}` : (r.date || ''),
-              checkInNote: r.check_in_edit_note || '',
-              checkOutNote: r.check_out_edit_note || '',
-              note: [r.check_in_edit_note, r.check_out_edit_note].filter(Boolean).join(' | ') || '',
-              notes: [r.check_in_edit_note, r.check_out_edit_note].filter(Boolean).join(' | ') || '',
+              checkIn: effInTime ? `${r.date} ${effInTime}` : (r.check_in || ''),
+              checkInTime: effInTime,
+              checkOut: effOutTime ? `${r.date} ${effOutTime}` : (r.check_out || ''),
+              checkOutTime: effOutTime,
+              time: effInTime ? `${r.date} ${effInTime}` : (r.date || ''),
+              checkInNote: ov?.note || r.check_in_edit_note || '',
+              checkOutNote: ov?.note || r.check_out_edit_note || '',
+              note: effNote,
+              notes: effNote,
               warehouseName: r.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
-              status: r.status || 'Present'
+              status: effStatus
             });
 
             // Explicit Check-In Event
-            if (r.check_in_time) {
-              const inId = `${r.id}-in`;
+            if (effInTime) {
+              const inId = `in-${cleanId}-${r.date}`;
               uniqueMap.set(inId, {
-                id: inId,
+                id: `${r.id}-in`,
                 employeeId: r.user_id,
                 userId: r.user_id,
                 employeeName: r.user_name,
@@ -1956,21 +2030,21 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 type: 'هاتن (Check In)',
                 action: 'Check In',
                 date: r.date,
-                time: `${r.date} ${r.check_in_time}`,
-                checkInTime: r.check_in_time,
-                checkInNote: r.check_in_edit_note || '',
-                note: r.check_in_edit_note || '',
-                notes: r.check_in_edit_note || '',
+                time: `${r.date} ${effInTime}`,
+                checkInTime: effInTime,
+                checkInNote: ov?.note || r.check_in_edit_note || '',
+                note: ov?.note || r.check_in_edit_note || '',
+                notes: ov?.note || r.check_in_edit_note || '',
                 warehouseName: r.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
                 status: 'verified'
               });
             }
 
             // Explicit Check-Out Event
-            if (r.check_out_time) {
-              const outId = `${r.id}-out`;
+            if (effOutTime) {
+              const outId = `out-${cleanId}-${r.date}`;
               uniqueMap.set(outId, {
-                id: outId,
+                id: `${r.id}-out`,
                 employeeId: r.user_id,
                 userId: r.user_id,
                 employeeName: r.user_name,
@@ -1979,11 +2053,11 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 type: 'دەرچوون (Check Out)',
                 action: 'Check Out',
                 date: r.date,
-                time: `${r.date} ${r.check_out_time}`,
-                checkOutTime: r.check_out_time,
-                checkOutNote: r.check_out_edit_note || '',
-                note: r.check_out_edit_note || '',
-                notes: r.check_out_edit_note || '',
+                time: `${r.date} ${effOutTime}`,
+                checkOutTime: effOutTime,
+                checkOutNote: ov?.note || r.check_out_edit_note || '',
+                note: ov?.note || r.check_out_edit_note || '',
+                notes: ov?.note || r.check_out_edit_note || '',
                 warehouseName: r.warehouse_name || 'کۆمپانیای سەرەکی ئاشڵی',
                 status: 'verified'
               });
@@ -2000,12 +2074,24 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
           if (logsData && logsData.length > 0) {
             logsData.forEach(l => {
+              if (l.log_type === 'Admin Edit') return;
               if (isDeletedTombstone(l.employee_id, l.log_date, l.employee_name)) return;
+              const ov = getManualOverride(l.employee_id, l.log_date, l.employee_name);
               const isCheckInLog = l.log_type === 'Check In' || l.log_type?.includes('In') || l.log_type?.includes('هاتن');
               const isCheckOutLog = l.log_type === 'Check Out' || l.log_type?.includes('Out') || l.log_type?.includes('دەرچوون') || l.log_type?.includes('ڕۆیشتن');
               const logTypeClean = isCheckOutLog ? 'دەرچوون (Check Out)' : 'هاتن (Check In)';
 
-              let rawEditNote = l.edit_note || '';
+              const cleanId = (l.employee_id || '').toString().replace(/^emp-0*/i, '') || l.employee_id;
+              const dedupKey = isCheckOutLog ? `out-${cleanId}-${l.log_date}` : `in-${cleanId}-${l.log_date}`;
+              if (uniqueMap.has(dedupKey)) return;
+
+              const finalLogTime = (isCheckInLog && ov?.checkInTime)
+                ? ov.checkInTime
+                : (isCheckOutLog && ov?.checkOutTime)
+                  ? ov.checkOutTime
+                  : l.log_time_str;
+
+              let rawEditNote = ov?.note || l.edit_note || '';
               let displayReason = rawEditNote;
               if (displayReason.includes('): ')) {
                 displayReason = displayReason.split('): ')[1] || displayReason;
@@ -2013,7 +2099,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 displayReason = '';
               }
 
-              uniqueMap.set(l.id, {
+              uniqueMap.set(dedupKey, {
                 id: l.id,
                 employeeId: l.employee_id,
                 userId: l.employee_id,
@@ -2023,15 +2109,15 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 type: logTypeClean,
                 action: l.log_type,
                 date: l.log_date,
-                time: `${l.log_date} ${l.log_time_str}`,
-                checkInTime: isCheckInLog ? l.log_time_str : undefined,
-                checkOutTime: isCheckOutLog ? l.log_time_str : undefined,
+                time: `${l.log_date} ${finalLogTime}`,
+                checkInTime: isCheckInLog ? finalLogTime : undefined,
+                checkOutTime: isCheckOutLog ? finalLogTime : undefined,
                 checkInNote: isCheckInLog ? (displayReason || rawEditNote) : undefined,
                 checkOutNote: isCheckOutLog ? (displayReason || rawEditNote) : undefined,
                 note: displayReason || rawEditNote || '',
                 notes: displayReason || rawEditNote || '',
-                edit_note: l.edit_note,
-                editNote: l.edit_note,
+                edit_note: rawEditNote,
+                editNote: rawEditNote,
                 warehouseName: l.location_address || 'کۆمپانیای سەرەکی ئاشڵی',
                 status: 'verified'
               });
@@ -2237,30 +2323,67 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             userName, isWaived, adminDecision, historyLogs 
           } = item;
           const cleanEmpId = (userId || '').toString().trim();
-          const rawNum = cleanEmpId.replace('emp-', '');
+          const rawNum = cleanEmpId.replace(/^emp-0*/i, '') || cleanEmpId.replace('emp-', '');
+          const rawNumPadded = rawNum.length === 1 ? `0${rawNum}` : rawNum;
           const recordKey = `${cleanEmpId}_${date}`;
 
-          // 💾 Normal Upsert
+          const isWaivedFinal =
+            adminDecision === 'waived' ||
+            isWaived === true ||
+            (adminDecision !== 'penalized' && Boolean(currentSettings[recordKey]?.isWaived));
+
           const rawIn = checkInTime || '08:00';
           const rawOut = checkOutTime || null;
           const empNote = note || null;
           const combinedAdminNote = adminNote || [adminCheckInNote, adminCheckOutNote].filter(Boolean).join(' | ') || null;
           const rowId = `att-${cleanEmpId}-${date}`;
 
+          // Unified Mathematical Calculations from Final Authoritative Times
           let totalHours = 8;
-          if (status === 'Present' && checkInTime && checkOutTime) {
+          let lateMinutes = 0;
+          let earlyOutMinutes = 0;
+          let overtimeMinutes = 0;
+
+          if ((status === 'Present' || status === 'Late') && checkInTime && checkInTime.includes(':')) {
             const [inH, inM] = checkInTime.split(':').map(Number);
-            const [outH, outM] = checkOutTime.split(':').map(Number);
-            const inTotal = inH * 60 + (inM || 0);
-            const outTotal = outH * 60 + (outM || 0);
-            if (outTotal > inTotal) {
-              const gross = outTotal - inTotal;
-              const breakStart = 12 * 60;
-              const breakEnd = 13 * 60;
-              const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
-              totalHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
+            const inTotal = (inH || 0) * 60 + (inM || 0);
+            const shiftStartTotal = 8 * 60; // 08:00
+            const lateThreshold = shiftStartTotal + 15; // 08:15
+            if (!isWaivedFinal && inTotal > lateThreshold) {
+              lateMinutes = inTotal - shiftStartTotal;
+            }
+
+            if (checkOutTime && checkOutTime.includes(':')) {
+              const [outH, outM] = checkOutTime.split(':').map(Number);
+              const outTotal = (outH || 0) * 60 + (outM || 0);
+              const shiftEndTotal = 17 * 60; // 17:00
+              if (outTotal > inTotal) {
+                const gross = outTotal - inTotal;
+                const breakStart = 12 * 60;
+                const breakEnd = 13 * 60;
+                const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
+                totalHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
+              }
+              if (outTotal < shiftEndTotal - 15) {
+                earlyOutMinutes = shiftEndTotal - outTotal;
+              } else if (outTotal > shiftEndTotal + 15) {
+                overtimeMinutes = outTotal - shiftEndTotal;
+              }
             }
           }
+
+          const finalCheckInValue =
+            (status === 'Present' || status === 'Late')
+              ? (checkInTime || '08:00')
+              : status === 'Leave'
+              ? 'مۆڵەت'
+              : null;
+          const finalCheckOutValue =
+            (status === 'Present' || status === 'Late')
+              ? (checkOutTime || null)
+              : status === 'Leave'
+              ? 'مۆڵەت'
+              : null;
 
           const upsertData: any = {
             id: rowId,
@@ -2269,12 +2392,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             date: date,
             status: status || 'Present',
             warehouse_name: 'کۆمپانیای سەرەکی ئاشڵی',
-            check_in_time: status === 'Present' ? (checkInTime || '08:00') : status === 'Leave' ? 'مۆڵەت' : null,
-            check_out_time: status === 'Present' ? (checkOutTime || null) : status === 'Leave' ? 'مۆڵەت' : null,
+            check_in_time: finalCheckInValue,
+            check_out_time: finalCheckOutValue,
             raw_check_in_time: rawIn,
             raw_check_out_time: rawOut,
-            adjusted_check_in_time: checkInTime || null,
-            adjusted_check_out_time: checkOutTime || null,
+            adjusted_check_in_time: finalCheckInValue,
+            adjusted_check_out_time: finalCheckOutValue,
             note: empNote,
             check_in_note: empNote,
             check_out_note: checkOutNote || null,
@@ -2282,12 +2405,22 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             admin_check_in_note: adminCheckInNote || null,
             admin_check_out_note: adminCheckOutNote || null,
             total_hours: totalHours,
-            late_minutes: 0,
-            early_out_minutes: 0,
-            overtime_minutes: 0,
+            late_minutes: lateMinutes,
+            early_out_minutes: earlyOutMinutes,
+            overtime_minutes: overtimeMinutes,
           };
 
+          // Remove any stale duplicate rows for this employee & date so rowId is the single authoritative row
+          const idVariations = Array.from(new Set([
+            cleanEmpId,
+            rawNum,
+            rawNumPadded,
+            `emp-${rawNum}`,
+            `emp-${rawNumPadded}`,
+          ].filter(Boolean)));
+
           try {
+            await supabase.from('attendance').delete().in('user_id', idVariations).eq('date', date).neq('id', rowId);
             const { error: upsertErr } = await supabase.from('attendance').upsert(upsertData);
             if (upsertErr) {
               await supabase.from('attendance').upsert({
@@ -2303,7 +2436,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             }
           } catch {}
 
-          currentSettings[recordKey] = {
+          const overridePayload = {
             userId: cleanEmpId,
             userName: upsertData.user_name,
             date: date,
@@ -2320,30 +2453,53 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             adminCheckOutNote: adminCheckOutNote || null,
             historyLogs: historyLogs || currentSettings[recordKey]?.historyLogs || [],
             adminDecision: adminDecision || (isWaived ? 'waived' : null) || currentSettings[recordKey]?.adminDecision || null,
-            isWaived: adminDecision === 'waived' || isWaived === true || (adminDecision !== 'penalized' && Boolean(currentSettings[recordKey]?.isWaived)),
+            isWaived: isWaivedFinal,
             updatedAt: new Date().toISOString()
           };
 
+          const allKeyVars = [
+            `${cleanEmpId}_${date}`,
+            `${rawNum}_${date}`,
+            `${rawNumPadded}_${date}`,
+            `emp-${rawNum}_${date}`,
+            `emp-${rawNumPadded}_${date}`,
+          ];
+          if (userName) {
+            allKeyVars.push(`${userName.trim().toLowerCase()}_${date}`);
+          }
+          allKeyVars.forEach(k => {
+            currentSettings[k] = overridePayload;
+          });
+
+          // Sync attendance_logs to match the final authoritative Check-In and Check-Out times
           try {
-            await supabase.from('attendance_logs').upsert({
-              id: `manual-${cleanEmpId}-${date}`,
-              employee_id: cleanEmpId,
-              employee_name: upsertData.user_name,
-              log_type: 'Admin Edit',
-              log_date: date,
-              log_time_str: upsertData.check_in_time || '08:00',
-              location_address: '🛡️ دەستکاری ئەدمین',
-              notes: JSON.stringify({ 
-                adminNote: combinedAdminNote,
-                adminCheckInNote,
-                adminCheckOutNote,
-                rawCheckIn: rawIn,
-                rawCheckOut: rawOut,
-                checkInTime: upsertData.check_in_time,
-                checkOutTime: upsertData.check_out_time
-              }),
-              created_at: new Date().toISOString()
-            });
+            await supabase.from('attendance_logs').delete().in('employee_id', idVariations).eq('log_date', date);
+            if (finalCheckInValue && finalCheckInValue.includes(':')) {
+              await supabase.from('attendance_logs').upsert({
+                id: `manual-in-${cleanEmpId}-${date}`,
+                employee_id: cleanEmpId,
+                employee_name: upsertData.user_name,
+                log_type: 'Check In',
+                log_date: date,
+                log_time_str: finalCheckInValue,
+                location_address: 'کۆمپانیای سەرەکی ئاشڵی',
+                edit_note: combinedAdminNote || empNote || '🛡️ پەسەندکراو لەلایەن ئەدمین',
+                created_at: new Date().toISOString()
+              });
+            }
+            if (finalCheckOutValue && finalCheckOutValue.includes(':')) {
+              await supabase.from('attendance_logs').upsert({
+                id: `manual-out-${cleanEmpId}-${date}`,
+                employee_id: cleanEmpId,
+                employee_name: upsertData.user_name,
+                log_type: 'Check Out',
+                log_date: date,
+                log_time_str: finalCheckOutValue,
+                location_address: 'کۆمپانیای سەرەکی ئاشڵی',
+                edit_note: adminCheckOutNote || checkOutNote || combinedAdminNote || '🛡️ پەسەندکراو لەلایەن ئەدمین',
+                created_at: new Date().toISOString()
+              });
+            }
           } catch {}
 
           lastUpsertData = upsertData;
@@ -3840,6 +3996,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if (pathStr === 'logs' && method === 'DELETE') {
       try {
+        CACHED_ADMIN_REPORT = null;
         // SECURITY: Require explicit admin header to prevent accidental mass deletion
         const adminConfirm = req.headers.get('x-admin-wipe-confirm');
         if (adminConfirm !== 'CONFIRMED_WIPE_ALL') {
@@ -3853,6 +4010,13 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         // Full purge ONLY with explicit admin confirmation header
         await supabase.from('attendance_logs').delete().neq('id', '000');
         await supabase.from('attendance').delete().neq('id', '000');
+        try {
+          await supabase.from('warehouses').upsert({
+            id: 'ashley_manual_attendance_records',
+            name: 'MANUAL_ATTENDANCE_OVERRIDES',
+            qr_code: JSON.stringify({})
+          }, { onConflict: 'id' });
+        } catch {}
         return NextResponse.json({ success: true, message: 'هەموو تۆمارەکان بە ڕێگەپێدانی ئەدمین سڕانەوە' });
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
@@ -3861,6 +4025,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
     if ((params.path || [])[0] === 'logs' && (params.path || [])[1] && method === 'DELETE') {
       try {
+        CACHED_ADMIN_REPORT = null;
         const logId = (params.path || [])[1];
         const searchParams = req.nextUrl.searchParams;
         const employeeId = searchParams.get('employeeId');
@@ -3870,37 +4035,70 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         // 1. Delete from attendance_logs
         await supabase.from('attendance_logs').delete().eq('id', logId);
 
-        // 2. Also delete/clear from attendance table if employeeId and dateStr are provided
+        // 2. Also delete/clear from attendance table & manual overrides if employeeId and dateStr are provided
         if (employeeId && dateStr) {
+          const clean = employeeId.toString().replace(/^emp-0*/i, '') || employeeId.toString().replace('emp-', '');
+          const cleanPadded = clean.length === 1 ? `0${clean}` : clean;
+          const idVars = Array.from(new Set([employeeId, clean, cleanPadded, `emp-${clean}`, `emp-${cleanPadded}`]));
           const isCheckOut = logType?.includes('Out') || logType?.includes('دەرچوون');
+
           if (isCheckOut) {
-            await supabase.from('attendance_logs').delete().eq('employee_id', employeeId).eq('log_date', dateStr).eq('log_type', 'Check Out');
+            await supabase.from('attendance_logs').delete().in('employee_id', idVars).eq('log_date', dateStr).in('log_type', ['Check Out', 'دەرچوون']);
             await supabase.from('attendance').update({
               check_out: null,
               check_out_time: null,
+              adjusted_check_out_time: null,
               check_out_selfie: null,
               check_out_original_time: null,
               check_out_edit_note: null,
-            }).eq('user_id', employeeId).eq('date', dateStr);
+            }).in('user_id', idVars).eq('date', dateStr);
           } else {
-            await supabase.from('attendance_logs').delete().eq('employee_id', employeeId).eq('log_date', dateStr).eq('log_type', 'Check In');
+            await supabase.from('attendance_logs').delete().in('employee_id', idVars).eq('log_date', dateStr).in('log_type', ['Check In', 'هاتن', 'Admin Edit']);
             await supabase.from('attendance').update({
               check_in: null,
               check_in_time: null,
+              adjusted_check_in_time: null,
               check_in_selfie: null,
               check_in_original_time: null,
               check_in_edit_note: null,
-            }).eq('user_id', employeeId).eq('date', dateStr);
+            }).in('user_id', idVars).eq('date', dateStr);
           }
+
+          // Synchronize ashley_manual_attendance_records
+          try {
+            const { data: setRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_manual_attendance_records').maybeSingle();
+            if (setRow?.qr_code) {
+              const currentRecords = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+              let changed = false;
+              idVars.forEach(v => {
+                const k = `${v}_${dateStr}`;
+                if (currentRecords[k]) {
+                  if (isCheckOut) {
+                    currentRecords[k] = { ...currentRecords[k], checkOutTime: '' };
+                  } else {
+                    currentRecords[k] = { ...currentRecords[k], checkInTime: '', checkOutTime: '', status: 'empty', action: 'delete' };
+                  }
+                  changed = true;
+                }
+              });
+              if (changed) {
+                await supabase.from('warehouses').upsert({
+                  id: 'ashley_manual_attendance_records',
+                  name: 'MANUAL_ATTENDANCE_OVERRIDES',
+                  qr_code: JSON.stringify(currentRecords)
+                }, { onConflict: 'id' });
+              }
+            }
+          } catch {}
         }
 
         // 3. Composite ID handling
         if (logId.endsWith('-in')) {
           const rawId = logId.replace('-in', '');
-          await supabase.from('attendance').update({ check_in_time: null, check_in: null, check_in_selfie: null }).eq('id', rawId);
+          await supabase.from('attendance').update({ check_in_time: null, adjusted_check_in_time: null, check_in: null, check_in_selfie: null }).eq('id', rawId);
         } else if (logId.endsWith('-out')) {
           const rawId = logId.replace('-out', '');
-          await supabase.from('attendance').update({ check_out_time: null, check_out: null, check_out_selfie: null }).eq('id', rawId);
+          await supabase.from('attendance').update({ check_out_time: null, adjusted_check_out_time: null, check_out: null, check_out_selfie: null }).eq('id', rawId);
         } else {
           await supabase.from('attendance').delete().eq('id', logId);
         }
@@ -3916,6 +4114,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if ((params.path || [])[0] === 'logs' && (params.path || [])[1] && method === 'PATCH') {
       try {
+        CACHED_ADMIN_REPORT = null;
         const logId = (params.path || [])[1];
         const body = await req.json();
         const { newTime, note, logType, employeeId, dateStr, oldTime } = body;
@@ -3931,23 +4130,51 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         }).eq('id', logId);
 
         if (employeeId && dateStr) {
-           const { data: attRecord } = await supabase.from('attendance').select('*').eq('user_id', employeeId).eq('date', dateStr).maybeSingle();
-           if (attRecord) {
-              const isCheckOut = logType?.includes('Out') || logType?.includes('دەرچوون');
-              if (isCheckOut) {
-                 await supabase.from('attendance').update({
-                   check_out_original_time: attRecord.check_out_original_time || attRecord.check_out_time,
-                   check_out_time: newTime,
-                   check_out_edit_note: note
-                 }).eq('id', attRecord.id);
-              } else {
-                 await supabase.from('attendance').update({
-                   check_in_original_time: attRecord.check_in_original_time || attRecord.check_in_time,
-                   check_in_time: newTime,
-                   check_in_edit_note: note
-                 }).eq('id', attRecord.id);
-              }
+           const clean = employeeId.toString().replace(/^emp-0*/i, '') || employeeId.toString().replace('emp-', '');
+           const cleanPadded = clean.length === 1 ? `0${clean}` : clean;
+           const idVars = Array.from(new Set([employeeId, clean, cleanPadded, `emp-${clean}`, `emp-${cleanPadded}`]));
+           const isCheckOut = logType?.includes('Out') || logType?.includes('دەرچوون');
+
+           if (isCheckOut) {
+              await supabase.from('attendance').update({
+                check_out_original_time: oldTime || null,
+                check_out_time: newTime,
+                adjusted_check_out_time: newTime,
+                check_out_edit_note: note
+              }).in('user_id', idVars).eq('date', dateStr);
+           } else {
+              await supabase.from('attendance').update({
+                check_in_original_time: oldTime || null,
+                check_in_time: newTime,
+                adjusted_check_in_time: newTime,
+                check_in_edit_note: note
+              }).in('user_id', idVars).eq('date', dateStr);
            }
+
+           // Synchronize ashley_manual_attendance_records if entry exists
+           try {
+             const { data: setRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_manual_attendance_records').maybeSingle();
+             const currentRecords = setRow?.qr_code ? (typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code) : {};
+             let changed = false;
+             idVars.forEach(v => {
+               const k = `${v}_${dateStr}`;
+               if (currentRecords[k]) {
+                 if (isCheckOut) {
+                   currentRecords[k] = { ...currentRecords[k], checkOutTime: newTime, note };
+                 } else {
+                   currentRecords[k] = { ...currentRecords[k], checkInTime: newTime, note };
+                 }
+                 changed = true;
+               }
+             });
+             if (changed) {
+               await supabase.from('warehouses').upsert({
+                 id: 'ashley_manual_attendance_records',
+                 name: 'MANUAL_ATTENDANCE_OVERRIDES',
+                 qr_code: JSON.stringify(currentRecords)
+               }, { onConflict: 'id' });
+             }
+           } catch {}
         }
         return NextResponse.json({ success: true });
       } catch (err: any) {

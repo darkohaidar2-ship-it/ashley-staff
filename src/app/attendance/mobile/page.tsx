@@ -869,28 +869,62 @@ export default function MobileAttendanceOneTap() {
     }
   }, [employeeProfile, matchedLocationName]);
 
-  // 5. Fetch monthly attendance history
+  // 5. Fetch monthly attendance history (Server-Authoritative when online, Cached + Outbox when offline)
   const fetchMonthlyHistory = useCallback(async () => {
     if (!employeeProfile?.id) return;
+    const historyCacheKey = `ashley_monthly_logs_${employeeProfile.id}`;
     setLoadingLogs(true);
     try {
       const todayIso = getTrustedBaghdadNow().dateStr;
       const currentMonth = todayIso.slice(0, 7);
-      const res = await fetch(`/api/attendance/logs?t=${Date.now()}`);
+      const res = await fetch(`/api/attendance/logs?t=${Date.now()}`, { cache: 'no-store' });
       anchorServerTime(null, res.headers.get('Date'));
       const data = await res.json();
       if (Array.isArray(data)) {
+        const cleanTarget = employeeProfile.id.toLowerCase().replace(/^emp-0*/i, '') || employeeProfile.id.toLowerCase().replace('emp-', '');
+        const targetName = (employeeProfile.name || '').trim().toLowerCase();
+
         const empLogs = data.filter((l: any) => {
           const lDate = l.date || (l.time ? l.time.split(' ')[0] : '');
           if (!lDate.startsWith(currentMonth)) return false;
-          const lId = (l.employeeId || l.userId || '').toString().toLowerCase();
-          const target = employeeProfile.id.toLowerCase();
-          return lId === target || lId === target.replace('emp-', '');
+          // Exclude shift summary rows from the event feed so only explicit Check In / Check Out events show
+          if (!l.type && !l.action) return false;
+          const rawId = (l.employeeId || l.userId || '').toString().toLowerCase();
+          const cleanLId = rawId.replace(/^emp-0*/i, '') || rawId.replace('emp-', '');
+          const lName = (l.employeeName || l.userName || l.name || '').toString().trim().toLowerCase();
+          return rawId === employeeProfile.id.toLowerCase() || cleanLId === cleanTarget || (lName && targetName && lName === targetName);
         });
-        setMonthlyLogs(empLogs.slice(0, 31));
+        const sliced = empLogs.slice(0, 31);
+        setMonthlyLogs(sliced);
+        try {
+          localStorage.setItem(historyCacheKey, JSON.stringify(sliced));
+        } catch {}
       }
-    } catch {}
-    finally {
+    } catch {
+      // Offline fallback: retain last synced monthly history + append any unsent offline punches
+      try {
+        const cachedRaw = localStorage.getItem(historyCacheKey);
+        const cachedList: any[] = cachedRaw ? JSON.parse(cachedRaw) : [];
+        const rawQ = localStorage.getItem(OFFLINE_QUEUE_KEY);
+        const qList: OfflinePunchItem[] = rawQ ? JSON.parse(rawQ) : [];
+        const myQueued = Array.isArray(qList)
+          ? qList
+              .filter(x => x.userId === employeeProfile.id)
+              .map(x => ({
+                id: x.id,
+                employeeId: x.userId,
+                employeeName: x.userName,
+                type: x.event === 'EXIT' ? 'دەرچوون (Check Out)' : 'هاتن (Check In)',
+                action: x.event === 'EXIT' ? 'Check Out' : 'Check In',
+                date: x.trustedDateStr,
+                time: `${x.trustedDateStr} ${x.trustedTimeStr}`,
+                warehouseName: x.regionName,
+                status: 'pending_offline',
+              }))
+          : [];
+        setMonthlyLogs([...myQueued, ...cachedList].slice(0, 31));
+      } catch {}
+    } finally {
       setLoadingLogs(false);
     }
   }, [employeeProfile]);
@@ -899,13 +933,28 @@ export default function MobileAttendanceOneTap() {
     if (employeeProfile?.id) {
       fetchTodayShift();
       fetchMonthlyHistory();
-      
-      // Gentle refresh ONLY when returning/focusing tab, no 24/7 background interval
-      const onFocus = () => {
-        fetchTodayShift();
+
+      const onFocusOrVisible = () => {
+        if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+          fetchTodayShift();
+          fetchMonthlyHistory();
+        }
       };
-      window.addEventListener('focus', onFocus);
-      return () => window.removeEventListener('focus', onFocus);
+
+      // Live foreground sync every 10s while app is open & online so Admin edits/deletions reflect immediately
+      const liveSyncInterval = setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible' && navigator.onLine) {
+          fetchTodayShift();
+        }
+      }, 10000);
+
+      window.addEventListener('focus', onFocusOrVisible);
+      document.addEventListener('visibilitychange', onFocusOrVisible);
+      return () => {
+        window.removeEventListener('focus', onFocusOrVisible);
+        document.removeEventListener('visibilitychange', onFocusOrVisible);
+        clearInterval(liveSyncInterval);
+      };
     }
   }, [employeeProfile, fetchTodayShift, fetchMonthlyHistory]);
 
