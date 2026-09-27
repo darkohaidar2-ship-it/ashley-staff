@@ -452,16 +452,27 @@ export default function MobileAttendanceOneTap() {
   const [logoutPin, setLogoutPin] = useState('');
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
-  // 📡 Offline Mode & Sync Queue States
+  // 📡 Offline Mode, PWA Install & Sync Queue States
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [offlineQueue, setOfflineQueue] = useState<OfflinePunchItem[]>([]);
   const [isSyncingOffline, setIsSyncingOffline] = useState<boolean>(false);
   const isSyncingRef = useRef<boolean>(false);
+  const [deferredPwaPrompt, setDeferredPwaPrompt] = useState<any>(null);
+  const [isStandalonePwa, setIsStandalonePwa] = useState<boolean>(false);
+  const [showPwaInstallModal, setShowPwaInstallModal] = useState<boolean>(false);
 
-  // Register Scoped Service Worker for Check-In Page Offline Support
+  // Register Scoped Service Worker & Capture PWA Install Prompt
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setIsOnline(navigator.onLine);
+      const checkStandalone = () => {
+        const isStandalone =
+          window.matchMedia('(display-mode: standalone)').matches ||
+          (window.navigator as any).standalone === true;
+        setIsStandalonePwa(Boolean(isStandalone));
+      };
+      checkStandalone();
+
       try {
         const storedQueue = localStorage.getItem(OFFLINE_QUEUE_KEY);
         if (storedQueue) {
@@ -471,19 +482,48 @@ export default function MobileAttendanceOneTap() {
       } catch {}
 
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
       }
+
+      const handleBeforeInstallPrompt = (e: Event) => {
+        e.preventDefault();
+        setDeferredPwaPrompt(e);
+      };
+      const handleAppInstalled = () => {
+        setDeferredPwaPrompt(null);
+        setIsStandalonePwa(true);
+        setShowPwaInstallModal(false);
+      };
 
       const handleOnline = () => setIsOnline(true);
       const handleOffline = () => setIsOnline(false);
+      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.addEventListener('appinstalled', handleAppInstalled);
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
       return () => {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        window.removeEventListener('appinstalled', handleAppInstalled);
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
       };
     }
   }, []);
+
+  const handleInstallPwaClick = async () => {
+    if (deferredPwaPrompt) {
+      try {
+        deferredPwaPrompt.prompt();
+        const choice = await deferredPwaPrompt.userChoice;
+        if (choice?.outcome === 'accepted') {
+          setDeferredPwaPrompt(null);
+          setIsStandalonePwa(true);
+        }
+        return;
+      } catch {}
+    }
+    setShowPwaInstallModal(true);
+  };
 
   // 1. Tamper-Proof Clock Tick + Offline Elapsed Time Counter
   useEffect(() => {
@@ -2338,6 +2378,17 @@ export default function MobileAttendanceOneTap() {
         </div>
 
         <div className="flex items-center gap-1.5">
+          {!isStandalonePwa && (
+            <button
+              type="button"
+              onClick={handleInstallPwaClick}
+              className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] flex items-center gap-1 font-black cursor-pointer transition-colors shadow-2xs"
+              title="دابەزاندنی بەرنامە لەسەر مۆبایل (PWA)"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+              <span>دابەزاندن</span>
+            </button>
+          )}
           <button 
             onClick={() => setShowLogoutModal(true)}
             className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[10px] flex items-center gap-1 font-bold cursor-pointer transition-colors"
@@ -2979,6 +3030,53 @@ export default function MobileAttendanceOneTap() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 📲 PWA INSTALL GUIDE & 1-TAP MODAL */}
+      {showPwaInstallModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <Smartphone className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-black text-slate-900">
+                  دابەزاندنی بەرنامە لەسەر مۆبایل (PWA)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPwaInstallModal(false)}
+                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-700 leading-relaxed">
+              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-1.5">
+                <p className="font-black text-emerald-900">🤖 بۆ ئەندرۆید (Google Chrome):</p>
+                <p>١. لە سەرەوەی وێبگەڕەکە پەنجە بنێ بە سێ خاڵەکە <strong>(⋮)</strong>.</p>
+                <p>٢. هەڵبژاردنی <strong>«Install app»</strong> یان <strong>«Add to Home screen»</strong> دابگرە.</p>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-blue-50 border border-blue-200 space-y-1.5">
+                <p className="font-black text-blue-900">🍏 بۆ ئایفۆن (Safari):</p>
+                <p>١. لە خوارەوەی شاشەکە دوگمەی <strong>Share (⬆️)</strong> دابگرە.</p>
+                <p>٢. هەڵبژاردنی <strong>«Add to Home Screen»</strong> دابگرە و پاشان <strong>Add</strong> بکە.</p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowPwaInstallModal(false)}
+              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs cursor-pointer"
+            >
+              تێگەیشتم
+            </button>
           </div>
         </div>
       )}

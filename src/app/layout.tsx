@@ -9,26 +9,33 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
+  themeColor: '#059669',
 };
 
 export const metadata: Metadata = {
-  title: "Ashley Nexus Hub | سیستەمی ئاشڵی",
+  title: "سیستەمی دەوامی ئاشڵی | Ashley Attendance",
   description: "Advanced ERP & Attendance System",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: "ئامادەبوونی ئاشڵی",
+    title: "ئاشڵی دەوام",
   },
   icons: {
     icon: [
       {
-        url: "/icon.png",
-        href: "/icon.png",
+        url: "/icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
+      },
+      {
+        url: "/icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
       },
     ],
-    shortcut: "/icon.png",
-    apple: "/icon.png",
+    shortcut: "/icon-192.png",
+    apple: "/icon-192.png",
   },
 };
 
@@ -38,16 +45,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="ku" dir="rtl" suppressHydrationWarning>
       <head>
-        <link rel="manifest" href="/manifest.json" />
-        <link rel="icon" type="image/png" href="/icon.png" />
-        <link rel="apple-touch-icon" href="/icon.png" />
-        <link rel="apple-touch-icon-precomposed" href="/icon.png" />
-        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="ئامادەبوونی ئاشڵی" />
+        <meta name="apple-mobile-web-app-title" content="ئاشڵی دەوام" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className="antialiased min-h-screen" suppressHydrationWarning>
