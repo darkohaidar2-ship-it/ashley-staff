@@ -1244,7 +1244,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const { 
         userId, deviceToken, event, lat, lng, warehouseId, 
         employeeName, userName, name, note, reason,
-        isOfflineSync, elapsedMs, deviceEpochAtPunch
+        isOfflineSync, elapsedMs, deviceEpochAtPunch, reconciledTimeStr
       } = body;
       let attachedNote = note || reason || null;
 
@@ -1259,13 +1259,13 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const isKiosk = deviceToken === 'kiosk-main' || deviceToken === 'kiosk';
       const isMasterBypass = body.masterBypass === true;
 
-      if (isDesktopOS && !isKiosk && !isMasterBypass) {
+      if (isDesktopOS && !isKiosk && !isMasterBypass && !isOfflineSync) {
         return NextResponse.json({
           error: '🚫 تۆمارکردنی ئامادەبوون لە ڕێگەی کۆمپیوتەر (Desktop) قەدەغەیە! تکایە تەنها لە مۆبایلی دەستی خۆتەوە ئەنجامی بدە.'
         }, { status: 403 });
       }
 
-      // 1. Fetch user & Strict Device Binding using central registry
+      // 1. Fetch user & Device Binding using central registry
       let matchedName = userName || employeeName || name || DEFAULT_EMPLOYEE_NAMES[userId] || 'کارمەند';
       
       try {
@@ -1280,51 +1280,47 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           try { registry = JSON.parse(regRow.qr_code); } catch {}
         }
 
-        const userBinding = registry[userId];
-
-        if (userBinding && !userBinding.unbound && userBinding.deviceToken && !isKiosk) {
-          // Employee account already has a bound phone: verify incoming device matches
-          if (deviceToken && userBinding.deviceToken !== deviceToken) {
-            return NextResponse.json({
-              error: '⚠️ ئەم ئەکاونتە بەستراوەتەوە بە مۆبایلێکی ترەوە. ناتوانیت لە ڕێگەی ئامێری جیاوازەوە ئامادەبوون تۆمار بکەیت.'
-            }, { status: 403 });
-          }
-        } else if (deviceToken && !isKiosk) {
-          // Check if this phone is already bound to a DIFFERENT employee account
+        if (deviceToken && !isKiosk) {
+          // Check if this exact token is already bound to a DIFFERENT employee account
           for (const [otherId, otherInfo] of Object.entries<any>(registry)) {
-            if (otherId !== userId && otherInfo && !otherInfo.unbound && otherInfo.deviceToken === deviceToken) {
+            if (otherId !== userId && otherInfo && !otherInfo.unbound && otherInfo.deviceToken === deviceToken && !isOfflineSync) {
               return NextResponse.json({
                 error: `❌ ئەم مۆبایلە پێشتر بە هەژماری (${otherInfo.userName || otherId}) بەستراوەتەوە! هەر مۆبایلێک تەنها بۆ یەک ئەکاونتە.`
               }, { status: 403 });
             }
           }
 
-          // First time this employee uses their phone: bind it securely
-          registry[userId] = {
-            userId,
-            userName: matchedName,
-            deviceToken,
-            boundAt: new Date().toISOString(),
-            unbound: false
-          };
-          await supabase.from('warehouses').upsert({
-            id: 'ashley_device_bindings',
-            name: 'Ashley Device & Hardware Registry',
-            qr_code: JSON.stringify(registry),
-            lat: 0,
-            lng: 0,
-            radius: 0
-          });
+          // Bind or refresh token for this employee (supports Chrome PWA + Browser seamlessly)
+          if (!registry[userId] || registry[userId].deviceToken !== deviceToken || registry[userId].unbound) {
+            registry[userId] = {
+              userId,
+              userName: matchedName,
+              deviceToken,
+              boundAt: new Date().toISOString(),
+              unbound: false
+            };
+            await supabase.from('warehouses').upsert({
+              id: 'ashley_device_bindings',
+              name: 'Ashley Device & Hardware Registry',
+              qr_code: JSON.stringify(registry),
+              lat: 0,
+              lng: 0,
+              radius: 0
+            });
+          }
         }
       } catch (devErr) {
         console.warn('Device registry check warning:', devErr);
       }
 
-      // 2. Geofence Distance Validation across ALL branches
+      // 2. Geofence Distance Validation across ALL branches (DB + Global Saved Locations)
       const { data: warehouses } = await supabase.from('warehouses').select('*');
-      const allBranches = (warehouses && warehouses.length > 0) ? warehouses : GLOBAL_SAVED_LOCATIONS;
+      const validDbBranches = (warehouses || []).filter(
+        (l: any) => l.lat && l.lng && parseFloat(l.lat) > 10 && parseFloat(l.lng) > 10 && !l.name?.toLowerCase().includes('face')
+      );
+      const allBranches = [...validDbBranches, ...GLOBAL_SAVED_LOCATIONS];
 
-      let targetWh = allBranches[0] || {
+      let targetWh: any = allBranches[0] || {
         id: 'ashley-base-main',
         name: 'کۆمپانیای سەرەکی ئاشڵی',
         lat: 35.562431,
@@ -1345,8 +1341,8 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       }
 
       // 🛑 1. Strict Geofence Check: Must be within designated location boundary
-      if (lat !== undefined && lng !== undefined && minDistance !== Infinity) {
-        const allowedRadius = targetWh.radius || targetWh.radiusMeters || 350;
+      if (!isOfflineSync && lat !== undefined && lng !== undefined && minDistance !== Infinity) {
+        const allowedRadius = Math.max(Number(targetWh.radius) || 0, Number(targetWh.radiusMeters) || 0, 400);
         if (minDistance > allowedRadius) {
           return NextResponse.json({ 
             error: `⚠️ تۆ لە دەرەوەی سنووری کارگەیت (${Math.round(minDistance)} مەتر دووریت). تۆمارکردن بە مەرجی بوون لە ناو لۆکەیشنی دیاریکراوە.` 
@@ -1374,7 +1370,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         }
       }
 
-      const { dateStr, timeStr } = getBaghdadDateTime(punchDateObj);
+      const baghdadNow = getBaghdadDateTime(punchDateObj);
+      const dateStr = baghdadNow.dateStr;
+      const timeStr = (isOfflineSync && typeof reconciledTimeStr === 'string' && /^\d{2}:\d{2}$/.test(reconciledTimeStr) && (!elapsedMs || elapsedMs <= 0))
+        ? reconciledTimeStr
+        : baghdadNow.timeStr;
+
       if (isOfflineSync) {
         const offlineTag = `📡 تۆمارکراو بە ئۆفڵاین (کاتی ڕاستەقینە: ${timeStr}${clockDriftNote})`;
         attachedNote = attachedNote ? `${attachedNote} — ${offlineTag}` : offlineTag;

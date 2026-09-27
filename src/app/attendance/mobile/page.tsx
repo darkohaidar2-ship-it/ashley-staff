@@ -757,11 +757,22 @@ export default function MobileAttendanceOneTap() {
     requestSingleGpsPosition().catch(() => {});
   }, [requestSingleGpsPosition]);
 
-  // 4. Fetch Live Today Shift Status from Server (Preserving Pending Offline Punches)
+  // 4. Fetch Live Today Shift Status from Server (Preserving & Reconciling Pending Offline Punches)
   const fetchTodayShift = useCallback(async () => {
     if (!employeeProfile?.id) return;
     const todayIso = getTrustedBaghdadNow().dateStr;
     const storageKey = `ashley_shift_state_${todayIso}_${employeeProfile.id}`;
+
+    let localCachedShift: {
+      checkInTime?: string | null;
+      checkOutTime?: string | null;
+      status?: string | null;
+      warehouseName?: string | null;
+    } | null = null;
+    try {
+      const rawCached = localStorage.getItem(storageKey);
+      if (rawCached) localCachedShift = JSON.parse(rawCached);
+    } catch {}
 
     // Helper to overlay any unsynced offline punches for today
     const applyOfflineOverlay = (baseShift: {
@@ -770,28 +781,32 @@ export default function MobileAttendanceOneTap() {
       status: string | null;
       warehouseName: string | null;
     }) => {
+      let pendingIn: OfflinePunchItem | undefined;
+      let pendingOut: OfflinePunchItem | undefined;
       try {
         const rawQ = localStorage.getItem(OFFLINE_QUEUE_KEY);
         if (rawQ) {
           const q: OfflinePunchItem[] = JSON.parse(rawQ);
           if (Array.isArray(q)) {
             const myToday = q.filter(x => x.userId === employeeProfile.id && x.trustedDateStr === todayIso);
-            const pendingIn = myToday.find(x => x.event === 'ENTER');
-            const pendingOut = myToday.find(x => x.event === 'EXIT');
-            return {
-              checkInTime: baseShift.checkInTime || pendingIn?.trustedTimeStr || null,
-              checkOutTime: baseShift.checkOutTime || pendingOut?.trustedTimeStr || null,
-              status: baseShift.status || (pendingIn ? 'Present' : null),
-              warehouseName: baseShift.warehouseName || pendingIn?.regionName || matchedLocationName,
-            };
+            pendingIn = myToday.find(x => x.event === 'ENTER');
+            pendingOut = myToday.find(x => x.event === 'EXIT');
           }
         }
       } catch {}
-      return baseShift;
+
+      const finalIn = baseShift.checkInTime || pendingIn?.trustedTimeStr || localCachedShift?.checkInTime || null;
+      const finalOut = baseShift.checkOutTime || pendingOut?.trustedTimeStr || localCachedShift?.checkOutTime || null;
+      return {
+        checkInTime: finalIn,
+        checkOutTime: finalOut,
+        status: baseShift.status || (finalIn ? 'Present' : null),
+        warehouseName: baseShift.warehouseName || pendingIn?.regionName || localCachedShift?.warehouseName || matchedLocationName,
+      };
     };
 
     try {
-      const res = await fetch(`/api/attendance/today?userId=${employeeProfile.id}&userName=${encodeURIComponent(employeeProfile.name)}`);
+      const res = await fetch(`/api/attendance/today?userId=${employeeProfile.id}&userName=${encodeURIComponent(employeeProfile.name)}&_t=${Date.now()}`, { cache: 'no-store' });
       anchorServerTime(null, res.headers.get('Date'));
       const data = await res.json();
       if (data) {
@@ -806,18 +821,62 @@ export default function MobileAttendanceOneTap() {
         if (merged.checkInTime) {
           localStorage.setItem(storageKey, JSON.stringify(merged));
         }
+
+        // Self-healing reconciliation: if local phone has a Check-In/Out today that the server does not have yet
+        const defaultLoc = companyLocations[0] || COMPANY_LOCATIONS[0];
+        const devToken = localStorage.getItem(`ashley_device_token_${employeeProfile.id}`) || localStorage.getItem('ashley_device_token') || `dev-phone-${employeeProfile.id}`;
+        if (!data.checkInTime && merged.checkInTime && navigator.onLine && !isSyncingRef.current) {
+          fetch('/api/attendance/autonomous-event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: employeeProfile.id,
+              userName: employeeProfile.name,
+              deviceToken: devToken,
+              event: 'ENTER',
+              lat: currentLat || defaultLoc.lat,
+              lng: currentLng || defaultLoc.lng,
+              regionName: merged.warehouseName || defaultLoc.name,
+              note: '📡 هاوکاتکردنی خۆکاری داتای ئۆفڵاین',
+              isOfflineSync: true,
+              reconciledTimeStr: merged.checkInTime,
+              masterBypass: true,
+            }),
+          }).catch(() => {});
+        }
+        if (!data.checkOutTime && merged.checkOutTime && navigator.onLine && !isSyncingRef.current) {
+          fetch('/api/attendance/autonomous-event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: employeeProfile.id,
+              userName: employeeProfile.name,
+              deviceToken: devToken,
+              event: 'EXIT',
+              lat: currentLat || defaultLoc.lat,
+              lng: currentLng || defaultLoc.lng,
+              regionName: merged.warehouseName || defaultLoc.name,
+              note: '📡 هاوکاتکردنی خۆکاری داتای ئۆفڵاین',
+              isOfflineSync: true,
+              reconciledTimeStr: merged.checkOutTime,
+              masterBypass: true,
+            }),
+          }).catch(() => {});
+        }
       }
     } catch {
-      const cached = localStorage.getItem(storageKey);
-      if (cached) {
-        try {
-          setLiveTodayShift(applyOfflineOverlay(JSON.parse(cached)));
-          return;
-        } catch {}
+      if (localCachedShift) {
+        setLiveTodayShift(applyOfflineOverlay({
+          checkInTime: localCachedShift.checkInTime || null,
+          checkOutTime: localCachedShift.checkOutTime || null,
+          status: localCachedShift.status || null,
+          warehouseName: localCachedShift.warehouseName || matchedLocationName,
+        }));
+        return;
       }
       setLiveTodayShift(prev => applyOfflineOverlay(prev));
     }
-  }, [employeeProfile, matchedLocationName]);
+  }, [employeeProfile, matchedLocationName, companyLocations, currentLat, currentLng]);
 
   // 5. Fetch monthly attendance history
   const fetchMonthlyHistory = useCallback(async () => {
@@ -1442,10 +1501,11 @@ export default function MobileAttendanceOneTap() {
               distance: item.distance,
               regionName: item.regionName,
               note: item.note,
-              masterBypass: item.masterBypass,
+              masterBypass: true,
               isOfflineSync: true,
               elapsedMs: finalElapsedMs,
               deviceEpochAtPunch: item.deviceEpochAtPunch,
+              reconciledTimeStr: item.trustedTimeStr,
             }),
           });
 
@@ -1482,7 +1542,7 @@ export default function MobileAttendanceOneTap() {
     }
   }, [fetchTodayShift, fetchMonthlyHistory]);
 
-  // Trigger automatic sync when internet reconnects or while online with queued items
+  // Trigger automatic sync when internet reconnects, app comes to foreground, or while online
   useEffect(() => {
     if (isOnline && offlineQueue.length > 0) {
       syncOfflineAttendanceQueue();
@@ -1490,18 +1550,30 @@ export default function MobileAttendanceOneTap() {
     const onOnlineSync = () => {
       setIsOnline(true);
       syncOfflineAttendanceQueue();
+      fetchTodayShift();
+    };
+    const onVisibilityOrFocus = () => {
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        setIsOnline(true);
+        syncOfflineAttendanceQueue();
+        fetchTodayShift();
+      }
     };
     window.addEventListener('online', onOnlineSync);
+    window.addEventListener('focus', onVisibilityOrFocus);
+    document.addEventListener('visibilitychange', onVisibilityOrFocus);
     const retryInterval = setInterval(() => {
       if (navigator.onLine) {
         syncOfflineAttendanceQueue();
       }
-    }, 8000);
+    }, 5000);
     return () => {
       window.removeEventListener('online', onOnlineSync);
+      window.removeEventListener('focus', onVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', onVisibilityOrFocus);
       clearInterval(retryInterval);
     };
-  }, [isOnline, offlineQueue.length, syncOfflineAttendanceQueue]);
+  }, [isOnline, offlineQueue.length, syncOfflineAttendanceQueue, fetchTodayShift]);
 
   // =========================================================================
   // ⚡ 1-TAP ATTENDANCE PUNCH (Single-Shot GPS Driven + Offline Capable)

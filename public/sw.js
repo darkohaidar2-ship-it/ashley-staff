@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ashley-checkin-offline-v1';
+const CACHE_NAME = 'ashley-checkin-offline-v2';
 
 const PRECACHE_URLS = [
   '/',
@@ -79,20 +79,20 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (isStaticAsset) {
-    // Stale-While-Revalidate for fast offline asset loading
+    // Network-First with Offline Cache Fallback (always fresh online, 100% available offline)
     event.respondWith(
-      caches.match(request).then((cached) => {
-        const networkFetch = fetch(request)
-          .then((response) => {
-            if (response && response.status === 200) {
-              const copy = response.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-            }
-            return response;
-          })
-          .catch(() => cached);
-        return cached || networkFetch;
-      })
+      fetch(request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(async () => {
+          return await caches.match(request);
+        })
     );
   }
 });
+
