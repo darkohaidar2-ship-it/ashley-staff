@@ -14,6 +14,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "Ashley Nexus Hub | سیستەمی ئاشڵی",
   description: "Advanced ERP & Attendance System",
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -39,6 +40,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link rel="manifest" href="/manifest.json" />
         <link rel="icon" type="image/png" href="/icon.png" />
         <link rel="apple-touch-icon" href="/icon.png" />
         <link rel="apple-touch-icon-precomposed" href="/icon.png" />

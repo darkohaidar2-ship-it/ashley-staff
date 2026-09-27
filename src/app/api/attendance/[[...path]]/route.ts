@@ -32,8 +32,8 @@ let CACHED_DEVICE_REGISTRY: { data: Record<string, any>; timestamp: number } | n
 let CACHED_ADMIN_REPORT: { data: any; timestamp: number } | null = null;
 
 // Get current Date and Time in Asia/Baghdad timezone (Kurdish Local Time)
-function getBaghdadDateTime() {
-  const now = new Date();
+function getBaghdadDateTime(customDate?: Date) {
+  const now = customDate || new Date();
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Baghdad',
     year: 'numeric',
@@ -46,7 +46,9 @@ function getBaghdadDateTime() {
 
   const getVal = (type: string) => parts.find(p => p.type === type)!.value;
   const dateStr = `${getVal('year')}-${getVal('month')}-${getVal('day')}`;
-  const timeStr = `${getVal('hour')}:${getVal('minute')}`;
+  let hourVal = getVal('hour');
+  if (hourVal === '24') hourVal = '00';
+  const timeStr = `${hourVal}:${getVal('minute')}`;
 
   return { dateStr, timeStr };
 }
@@ -758,6 +760,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         const overtimeMinutes = Math.max(0, totalWorkMinutes - standardShiftMinutes);
 
         return NextResponse.json({
+          serverEpochMs: Date.now(),
           checkInTime: firstCheckIn,
           checkOutTime: lastCheckOut,
           isCurrentlyInside,
@@ -777,6 +780,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       }
 
       return NextResponse.json({
+        serverEpochMs: Date.now(),
         checkInTime: null,
         checkOutTime: null,
         isCurrentlyInside: false,
@@ -1237,8 +1241,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if ((pathStr === 'auto-geofence' || pathStr === 'autonomous-event') && method === 'POST') {
       const body = await req.json();
-      const { userId, deviceToken, event, lat, lng, warehouseId, employeeName, userName, name, note, reason } = body;
-      const attachedNote = note || reason || null;
+      const { 
+        userId, deviceToken, event, lat, lng, warehouseId, 
+        employeeName, userName, name, note, reason,
+        isOfflineSync, elapsedMs, deviceEpochAtPunch
+      } = body;
+      let attachedNote = note || reason || null;
 
       if (!userId || !event) {
         return NextResponse.json({ error: 'userId and event (ENTER/EXIT) are required' }, { status: 400 });
@@ -1346,7 +1354,31 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         }
       }
 
-      const { dateStr, timeStr } = getBaghdadDateTime();
+      // ⏱️ Tamper-Proof Offline Time Reconstruction:
+      // True Punch Time = (Server Now) - (Elapsed Time Since Offline Punch)
+      const serverNowMs = Date.now();
+      let punchDateObj: Date | undefined = undefined;
+      let clockDriftNote = '';
+
+      if (isOfflineSync) {
+        const safeElapsedMs = typeof elapsedMs === 'number' && !isNaN(elapsedMs)
+          ? Math.max(0, Math.min(elapsedMs, 16 * 3600 * 1000))
+          : 0;
+        punchDateObj = new Date(serverNowMs - safeElapsedMs);
+
+        if (typeof deviceEpochAtPunch === 'number' && deviceEpochAtPunch > 0) {
+          const driftMinutes = Math.round(Math.abs(punchDateObj.getTime() - deviceEpochAtPunch) / 60000);
+          if (driftMinutes > 5) {
+            clockDriftNote = ` • ⚠️ کاتی مۆبایل ${driftMinutes} خولەک جیاواز بوو`;
+          }
+        }
+      }
+
+      const { dateStr, timeStr } = getBaghdadDateTime(punchDateObj);
+      if (isOfflineSync) {
+        const offlineTag = `📡 تۆمارکراو بە ئۆفڵاین (کاتی ڕاستەقینە: ${timeStr}${clockDriftNote})`;
+        attachedNote = attachedNote ? `${attachedNote} — ${offlineTag}` : offlineTag;
+      }
       const activeShift = await getShiftForDate(dateStr);
       const [shiftStartH, shiftStartM] = activeShift.checkInTime.split(':').map(Number);
       const [shiftEndH, shiftEndM] = activeShift.checkOutTime.split(':').map(Number);
@@ -1466,7 +1498,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       }
 
       const rowId = existingRecord?.id || `${existingRecord?.user_id || userId}-${dateStr}`;
-      const nowIso = new Date().toISOString();
+      const nowIso = (punchDateObj || new Date()).toISOString();
 
       let upsertPayload: any = {
         id: rowId,

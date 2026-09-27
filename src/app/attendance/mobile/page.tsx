@@ -108,6 +108,126 @@ const OVERTIME_CHIPS = [
 ];
 
 // =========================================================================
+// ⏱️ TAMPER-PROOF TRUE TIME ENGINE & OFFLINE ATTENDANCE QUEUE
+// =========================================================================
+const OFFLINE_QUEUE_KEY = 'ashley_offline_attendance_queue_v1';
+const TRUSTED_TIME_ANCHOR_KEY = 'ashley_trusted_time_anchor_v1';
+const CURRENT_TAB_SESSION_ID = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+interface OfflinePunchItem {
+  id: string;
+  userId: string;
+  userName: string;
+  deviceToken: string;
+  event: 'ENTER' | 'EXIT';
+  lat: number;
+  lng: number;
+  distance: number;
+  regionName: string;
+  note: string | null;
+  masterBypass: boolean;
+  trustedPunchEpochMs: number;
+  trustedTimeStr: string;
+  trustedDateStr: string;
+  perfAtPunch: number;
+  deviceEpochAtPunch: number;
+  accumulatedElapsedSec: number;
+  sessionId: string;
+}
+
+let IN_MEMORY_TIME_ANCHOR: {
+  serverEpochMs: number;
+  perfNowMs: number;
+  deviceEpochMs: number;
+} | null = null;
+
+function anchorServerTime(serverEpochMs?: number | null, dateHeader?: string | null) {
+  try {
+    let validMs = typeof serverEpochMs === 'number' && serverEpochMs > 1700000000000 ? serverEpochMs : NaN;
+    if (isNaN(validMs) && dateHeader) {
+      const parsed = Date.parse(dateHeader);
+      if (!isNaN(parsed) && parsed > 1700000000000) validMs = parsed;
+    }
+    if (isNaN(validMs)) return;
+
+    const nowDevice = Date.now();
+    const nowPerf = typeof performance !== 'undefined' ? performance.now() : 0;
+    IN_MEMORY_TIME_ANCHOR = {
+      serverEpochMs: validMs,
+      perfNowMs: nowPerf,
+      deviceEpochMs: nowDevice,
+    };
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        TRUSTED_TIME_ANCHOR_KEY,
+        JSON.stringify({
+          serverEpochMs: validMs,
+          deviceEpochMs: nowDevice,
+          clockOffsetMs: validMs - nowDevice,
+        })
+      );
+    }
+  } catch {}
+}
+
+function getTrustedBaghdadNow(): {
+  epochMs: number;
+  dateStr: string;
+  timeStr: string;
+  timeWithSecStr: string;
+  clockDriftMinutes: number;
+} {
+  let trustedMs = Date.now();
+
+  try {
+    if (IN_MEMORY_TIME_ANCHOR && typeof performance !== 'undefined') {
+      // Hardware monotonic clock: 100% immune to manual phone clock changes during session
+      const elapsedPerf = Math.max(0, performance.now() - IN_MEMORY_TIME_ANCHOR.perfNowMs);
+      trustedMs = Math.round(IN_MEMORY_TIME_ANCHOR.serverEpochMs + elapsedPerf);
+    } else if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem(TRUSTED_TIME_ANCHOR_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed?.clockOffsetMs === 'number') {
+          trustedMs = Date.now() + parsed.clockOffsetMs;
+        }
+      }
+    }
+  } catch {}
+
+  const d = new Date(trustedMs);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Baghdad',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(d);
+
+  const getPart = (type: string) => parts.find(p => p.type === type)?.value || '00';
+  let hh = getPart('hour');
+  if (hh === '24') hh = '00';
+  const mm = getPart('minute');
+  const ss = getPart('second');
+  const dateStr = `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
+  const timeStr = `${hh}:${mm}`;
+  const timeWithSecStr = `${hh}:${mm}:${ss}`;
+  const clockDriftMinutes = Math.round(Math.abs(trustedMs - Date.now()) / 60000);
+
+  return {
+    epochMs: trustedMs,
+    dateStr,
+    timeStr,
+    timeWithSecStr,
+    clockDriftMinutes,
+  };
+}
+
+// =========================================================================
 // 🎵 CUSTOM WEB AUDIO SYNTHESIZER
 // =========================================================================
 
@@ -332,12 +452,71 @@ export default function MobileAttendanceOneTap() {
   const [logoutPin, setLogoutPin] = useState('');
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
-  // 1. Clock Tick
+  // 📡 Offline Mode & Sync Queue States
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [offlineQueue, setOfflineQueue] = useState<OfflinePunchItem[]>([]);
+  const [isSyncingOffline, setIsSyncingOffline] = useState<boolean>(false);
+  const isSyncingRef = useRef<boolean>(false);
+
+  // Register Scoped Service Worker for Check-In Page Offline Support
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsOnline(navigator.onLine);
+      try {
+        const storedQueue = localStorage.getItem(OFFLINE_QUEUE_KEY);
+        if (storedQueue) {
+          const parsed = JSON.parse(storedQueue);
+          if (Array.isArray(parsed)) setOfflineQueue(parsed);
+        }
+      } catch {}
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      }
+
+      const handleOnline = () => setIsOnline(true);
+      const handleOffline = () => setIsOnline(false);
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+      return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      };
+    }
+  }, []);
+
+  // 1. Tamper-Proof Clock Tick + Offline Elapsed Time Counter
   useEffect(() => {
     const tick = () => {
-      const now = new Date();
-      setCurrentTimeStr(format(now, 'HH:mm:ss'));
-      setCurrentDateStr(format(now, 'yyyy-MM-dd'));
+      const trusted = getTrustedBaghdadNow();
+      setCurrentTimeStr(trusted.timeWithSecStr);
+      setCurrentDateStr(trusted.dateStr);
+
+      // Increment elapsed seconds for any queued offline punches
+      try {
+        const rawQueue = localStorage.getItem(OFFLINE_QUEUE_KEY);
+        if (rawQueue) {
+          const list: OfflinePunchItem[] = JSON.parse(rawQueue);
+          if (Array.isArray(list) && list.length > 0) {
+            const updated = list.map((item) => {
+              if (item.sessionId === CURRENT_TAB_SESSION_ID && typeof performance !== 'undefined' && performance.now() >= item.perfAtPunch) {
+                return {
+                  ...item,
+                  accumulatedElapsedSec: Math.max(
+                    item.accumulatedElapsedSec || 0,
+                    Math.round((performance.now() - item.perfAtPunch) / 1000)
+                  ),
+                };
+              }
+              return {
+                ...item,
+                accumulatedElapsedSec: (item.accumulatedElapsedSec || 0) + 1,
+              };
+            });
+            localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(updated));
+          }
+        }
+      } catch {}
     };
     tick();
     const interval = setInterval(tick, 1000);
@@ -384,10 +563,23 @@ export default function MobileAttendanceOneTap() {
     }
   };
 
-  // 1.5. Fetch dynamic company locations configured by Admin
+  // 1.5. Fetch dynamic company locations configured by Admin (with Offline Cache)
   useEffect(() => {
+    try {
+      const cachedLocs = localStorage.getItem('ashley_cached_locations_v1');
+      if (cachedLocs) {
+        const parsed = JSON.parse(cachedLocs);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCompanyLocations(parsed);
+        }
+      }
+    } catch {}
+
     fetch('/api/attendance/location')
-      .then(res => res.json())
+      .then(res => {
+        anchorServerTime(null, res.headers.get('Date'));
+        return res.json();
+      })
       .then(data => {
         const rawList = Array.isArray(data) ? data : (data?.locations || []);
         if (Array.isArray(rawList) && rawList.length > 0) {
@@ -399,6 +591,9 @@ export default function MobileAttendanceOneTap() {
             radiusMeters: parseFloat(loc.radius) || parseFloat(loc.radiusMeters) || 400,
           }));
           setCompanyLocations(mapped);
+          try {
+            localStorage.setItem('ashley_cached_locations_v1', JSON.stringify(mapped));
+          } catch {}
         }
       })
       .catch(() => {});
@@ -414,11 +609,21 @@ export default function MobileAttendanceOneTap() {
           setEmployeeProfile(parsed);
         }
       }
+      const cachedEmps = localStorage.getItem('ashley_cached_employees_v1');
+      if (cachedEmps) {
+        const parsedEmps = JSON.parse(cachedEmps);
+        if (Array.isArray(parsedEmps) && parsedEmps.length > 0) {
+          setAllEmployees(parsedEmps);
+        }
+      }
     } catch {}
 
     // Fetch live employees list
     fetch(`/api/attendance/employees?_t=${Date.now()}`, { cache: 'no-store' })
-      .then(res => res.json())
+      .then(res => {
+        anchorServerTime(null, res.headers.get('Date'));
+        return res.json();
+      })
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
           const valid = data.filter((e: any) => e.name && e.name !== 'Admin');
@@ -428,6 +633,9 @@ export default function MobileAttendanceOneTap() {
             pin: e.pin || e.password || OFFICIAL_PIN_MAP[e.id] || (e.id === 'emp-02' ? '1002' : '1001'),
           }));
           setAllEmployees(mapped);
+          try {
+            localStorage.setItem('ashley_cached_employees_v1', JSON.stringify(mapped));
+          } catch {}
         }
       })
       .catch(() => {});
@@ -549,31 +757,65 @@ export default function MobileAttendanceOneTap() {
     requestSingleGpsPosition().catch(() => {});
   }, [requestSingleGpsPosition]);
 
-  // 4. Fetch Live Today Shift Status from Server
+  // 4. Fetch Live Today Shift Status from Server (Preserving Pending Offline Punches)
   const fetchTodayShift = useCallback(async () => {
     if (!employeeProfile?.id) return;
-    const todayIso = format(new Date(), 'yyyy-MM-dd');
+    const todayIso = getTrustedBaghdadNow().dateStr;
     const storageKey = `ashley_shift_state_${todayIso}_${employeeProfile.id}`;
+
+    // Helper to overlay any unsynced offline punches for today
+    const applyOfflineOverlay = (baseShift: {
+      checkInTime: string | null;
+      checkOutTime: string | null;
+      status: string | null;
+      warehouseName: string | null;
+    }) => {
+      try {
+        const rawQ = localStorage.getItem(OFFLINE_QUEUE_KEY);
+        if (rawQ) {
+          const q: OfflinePunchItem[] = JSON.parse(rawQ);
+          if (Array.isArray(q)) {
+            const myToday = q.filter(x => x.userId === employeeProfile.id && x.trustedDateStr === todayIso);
+            const pendingIn = myToday.find(x => x.event === 'ENTER');
+            const pendingOut = myToday.find(x => x.event === 'EXIT');
+            return {
+              checkInTime: baseShift.checkInTime || pendingIn?.trustedTimeStr || null,
+              checkOutTime: baseShift.checkOutTime || pendingOut?.trustedTimeStr || null,
+              status: baseShift.status || (pendingIn ? 'Present' : null),
+              warehouseName: baseShift.warehouseName || pendingIn?.regionName || matchedLocationName,
+            };
+          }
+        }
+      } catch {}
+      return baseShift;
+    };
 
     try {
       const res = await fetch(`/api/attendance/today?userId=${employeeProfile.id}&userName=${encodeURIComponent(employeeProfile.name)}`);
+      anchorServerTime(null, res.headers.get('Date'));
       const data = await res.json();
       if (data) {
-        setLiveTodayShift({
+        anchorServerTime(data.serverEpochMs, null);
+        const merged = applyOfflineOverlay({
           checkInTime: data.checkInTime || null,
           checkOutTime: data.checkOutTime || null,
           status: data.status || (data.checkInTime ? 'Present' : null),
           warehouseName: data.warehouseName || matchedLocationName,
         });
-        if (data.checkInTime) {
-          localStorage.setItem(storageKey, JSON.stringify(data));
+        setLiveTodayShift(merged);
+        if (merged.checkInTime) {
+          localStorage.setItem(storageKey, JSON.stringify(merged));
         }
       }
     } catch {
       const cached = localStorage.getItem(storageKey);
       if (cached) {
-        try { setLiveTodayShift(JSON.parse(cached)); } catch {}
+        try {
+          setLiveTodayShift(applyOfflineOverlay(JSON.parse(cached)));
+          return;
+        } catch {}
       }
+      setLiveTodayShift(prev => applyOfflineOverlay(prev));
     }
   }, [employeeProfile, matchedLocationName]);
 
@@ -582,9 +824,10 @@ export default function MobileAttendanceOneTap() {
     if (!employeeProfile?.id) return;
     setLoadingLogs(true);
     try {
-      const todayIso = format(new Date(), 'yyyy-MM-dd');
+      const todayIso = getTrustedBaghdadNow().dateStr;
       const currentMonth = todayIso.slice(0, 7);
       const res = await fetch(`/api/attendance/logs?t=${Date.now()}`);
+      anchorServerTime(null, res.headers.get('Date'));
       const data = await res.json();
       if (Array.isArray(data)) {
         const empLogs = data.filter((l: any) => {
@@ -630,8 +873,9 @@ export default function MobileAttendanceOneTap() {
         const [outH, outM] = liveTodayShift.checkOutTime.split(':').map(Number);
         outTotal = outH * 60 + outM;
       } else {
-        const now = new Date();
-        outTotal = now.getHours() * 60 + now.getMinutes();
+        const trustedTime = getTrustedBaghdadNow().timeStr;
+        const [nowH, nowM] = trustedTime.split(':').map(Number);
+        outTotal = nowH * 60 + nowM;
       }
 
       if (outTotal <= inTotal) {
@@ -1143,7 +1387,124 @@ export default function MobileAttendanceOneTap() {
   };
 
   // =========================================================================
-  // ⚡ 1-TAP ATTENDANCE PUNCH (Single-Shot GPS Driven)
+  // 🔄 AUTOMATIC OFFLINE QUEUE SYNC ENGINE (WHEN INTERNET RETURNS)
+  // =========================================================================
+  const syncOfflineAttendanceQueue = useCallback(async () => {
+    if (typeof window === 'undefined' || !navigator.onLine || isSyncingRef.current) return;
+
+    let queue: OfflinePunchItem[] = [];
+    try {
+      const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) queue = parsed;
+      }
+    } catch {}
+
+    if (queue.length === 0) {
+      setOfflineQueue([]);
+      return;
+    }
+
+    isSyncingRef.current = true;
+    setIsSyncingOffline(true);
+
+    const remaining: OfflinePunchItem[] = [...queue];
+    let anySynced = false;
+    let lastSyncedTime = '';
+
+    try {
+      for (const item of queue) {
+        if (!navigator.onLine) break;
+
+        const isSameSession =
+          item.sessionId === CURRENT_TAB_SESSION_ID &&
+          typeof performance !== 'undefined' &&
+          performance.now() >= item.perfAtPunch;
+        const elapsedByPerf = isSameSession ? Math.round(performance.now() - item.perfAtPunch) : 0;
+        const elapsedByCounter = (item.accumulatedElapsedSec || 0) * 1000;
+        const elapsedByTrustedClock = Math.max(0, getTrustedBaghdadNow().epochMs - item.trustedPunchEpochMs);
+        const finalElapsedMs = isSameSession
+          ? elapsedByPerf
+          : Math.max(elapsedByCounter, elapsedByTrustedClock);
+
+        try {
+          const res = await fetch('/api/attendance/autonomous-event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: item.userId,
+              userName: item.userName,
+              deviceToken: item.deviceToken,
+              event: item.event,
+              lat: item.lat,
+              lng: item.lng,
+              distance: item.distance,
+              regionName: item.regionName,
+              note: item.note,
+              masterBypass: item.masterBypass,
+              isOfflineSync: true,
+              elapsedMs: finalElapsedMs,
+              deviceEpochAtPunch: item.deviceEpochAtPunch,
+            }),
+          });
+
+          anchorServerTime(null, res.headers.get('Date'));
+          const data = await res.json().catch(() => ({}));
+
+          if (res.ok || res.status === 400) {
+            // Remove from queue on success or if already recorded today
+            const idx = remaining.findIndex(x => x.id === item.id);
+            if (idx !== -1) remaining.splice(idx, 1);
+            localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(remaining));
+            setOfflineQueue([...remaining]);
+
+            if (res.ok) {
+              anySynced = true;
+              lastSyncedTime = data.time || item.trustedTimeStr;
+            }
+          }
+        } catch {
+          // Network interrupted during sync; keep in queue for next online event
+          break;
+        }
+      }
+
+      if (anySynced) {
+        setFeedbackToast(`☁️ داتای کاتی ئۆفڵاین بە سەرکەوتوویی نێردرا بۆ سیستەم (کاتژمێری ڕاستەقینە: ${lastSyncedTime})`);
+        setTimeout(() => setFeedbackToast(null), 6000);
+        await fetchTodayShift();
+        await fetchMonthlyHistory();
+      }
+    } finally {
+      isSyncingRef.current = false;
+      setIsSyncingOffline(false);
+    }
+  }, [fetchTodayShift, fetchMonthlyHistory]);
+
+  // Trigger automatic sync when internet reconnects or while online with queued items
+  useEffect(() => {
+    if (isOnline && offlineQueue.length > 0) {
+      syncOfflineAttendanceQueue();
+    }
+    const onOnlineSync = () => {
+      setIsOnline(true);
+      syncOfflineAttendanceQueue();
+    };
+    window.addEventListener('online', onOnlineSync);
+    const retryInterval = setInterval(() => {
+      if (navigator.onLine) {
+        syncOfflineAttendanceQueue();
+      }
+    }, 8000);
+    return () => {
+      window.removeEventListener('online', onOnlineSync);
+      clearInterval(retryInterval);
+    };
+  }, [isOnline, offlineQueue.length, syncOfflineAttendanceQueue]);
+
+  // =========================================================================
+  // ⚡ 1-TAP ATTENDANCE PUNCH (Single-Shot GPS Driven + Offline Capable)
   // =========================================================================
   const handleOneTapAttendance = async (
     action: 'ENTER' | 'EXIT', 
@@ -1153,35 +1514,115 @@ export default function MobileAttendanceOneTap() {
     if (!employeeProfile?.id) return;
 
     setTriggerLoading(true);
-    const todayIso = format(new Date(), 'yyyy-MM-dd');
-    const nowTime = format(new Date(), 'HH:mm');
+    const trustedNow = getTrustedBaghdadNow();
+    const todayIso = trustedNow.dateStr;
+    const nowTime = trustedNow.timeStr;
 
-    try {
-      let devToken = localStorage.getItem(`ashley_device_token_${employeeProfile.id}`) || localStorage.getItem('ashley_device_token');
-      if (!devToken) {
-        devToken = `dev-phone-${employeeProfile.id}-${Math.random().toString(36).substring(2, 8)}`;
-        localStorage.setItem('ashley_device_token', devToken);
-        localStorage.setItem(`ashley_device_token_${employeeProfile.id}`, devToken);
+    let devToken = localStorage.getItem(`ashley_device_token_${employeeProfile.id}`) || localStorage.getItem('ashley_device_token');
+    if (!devToken) {
+      devToken = `dev-phone-${employeeProfile.id}-${Math.random().toString(36).substring(2, 8)}`;
+      localStorage.setItem('ashley_device_token', devToken);
+      localStorage.setItem(`ashley_device_token_${employeeProfile.id}`, devToken);
+    }
+
+    const defaultLoc = companyLocations[0] || COMPANY_LOCATIONS[0];
+    const punchLat = freshGeo?.lat || currentLat || defaultLoc.lat;
+    const punchLng = freshGeo?.lng || currentLng || defaultLoc.lng;
+    const punchDist = freshGeo?.minDistance ?? distanceMeters;
+    const punchRegion = freshGeo?.matchedName || matchedLocationName;
+
+    // Helper: Save punch locally when offline and queue for automatic server sync
+    const saveOfflinePunchAndNotify = () => {
+      const offlineItem: OfflinePunchItem = {
+        id: `off_${employeeProfile.id}_${todayIso}_${action}_${Date.now()}`,
+        userId: employeeProfile.id,
+        userName: employeeProfile.name,
+        deviceToken: devToken!,
+        event: action,
+        lat: punchLat,
+        lng: punchLng,
+        distance: punchDist,
+        regionName: punchRegion,
+        note: reasonNote || null,
+        masterBypass: masterBypass,
+        trustedPunchEpochMs: trustedNow.epochMs,
+        trustedTimeStr: nowTime,
+        trustedDateStr: todayIso,
+        perfAtPunch: typeof performance !== 'undefined' ? performance.now() : 0,
+        deviceEpochAtPunch: Date.now(),
+        accumulatedElapsedSec: 0,
+        sessionId: CURRENT_TAB_SESSION_ID,
+      };
+
+      try {
+        const rawQ = localStorage.getItem(OFFLINE_QUEUE_KEY);
+        const existingQ: OfflinePunchItem[] = rawQ ? JSON.parse(rawQ) : [];
+        const filteredQ = (Array.isArray(existingQ) ? existingQ : []).filter(
+          x => !(x.userId === employeeProfile.id && x.trustedDateStr === todayIso && x.event === action)
+        );
+        const updatedQ = [...filteredQ, offlineItem];
+        localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(updatedQ));
+        setOfflineQueue(updatedQ);
+      } catch {}
+
+      if (action === 'ENTER') {
+        const updatedShift = {
+          checkInTime: nowTime,
+          checkOutTime: null,
+          status: 'Present',
+          warehouseName: punchRegion,
+        };
+        setLiveTodayShift(updatedShift);
+        localStorage.setItem(`ashley_shift_state_${todayIso}_${employeeProfile.id}`, JSON.stringify(updatedShift));
+        setFeedbackToast(`📡 هاتنت بە ئۆفڵاین لە کاتژمێر (${nowTime}) هەڵگیرا • هەر کە خەت هاتەوە خۆکارانە دەنێردرێت بۆ سیستەم.`);
+        playCheckInMusic();
+      } else {
+        const updatedShift = {
+          checkInTime: liveTodayShift.checkInTime || '08:00',
+          checkOutTime: nowTime,
+          status: 'Present',
+          warehouseName: punchRegion,
+        };
+        setLiveTodayShift(updatedShift);
+        localStorage.setItem(`ashley_shift_state_${todayIso}_${employeeProfile.id}`, JSON.stringify(updatedShift));
+        setFeedbackToast(`📡 ڕۆیشتنت بە ئۆفڵاین لە کاتژمێر (${nowTime}) هەڵگیرا • هەر کە خەت هاتەوە خۆکارانە دەنێردرێت بۆ سیستەم.`);
+        playCheckOutMusic();
       }
 
-      const defaultLoc = companyLocations[0] || COMPANY_LOCATIONS[0];
+      setTimeout(() => setFeedbackToast(null), 7000);
+    };
+
+    // If device is offline right now, immediately record offline without waiting
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      saveOfflinePunchAndNotify();
+      setTriggerLoading(false);
+      return;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
       const res = await fetch('/api/attendance/autonomous-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           userId: employeeProfile.id,
           userName: employeeProfile.name,
           deviceToken: devToken,
           event: action,
-          lat: freshGeo?.lat || currentLat || defaultLoc.lat,
-          lng: freshGeo?.lng || currentLng || defaultLoc.lng,
-          distance: freshGeo?.minDistance ?? distanceMeters,
-          regionName: freshGeo?.matchedName || matchedLocationName,
+          lat: punchLat,
+          lng: punchLng,
+          distance: punchDist,
+          regionName: punchRegion,
           note: reasonNote || null,
-          timestamp: new Date().toISOString(),
+          timestamp: new Date(trustedNow.epochMs).toISOString(),
           masterBypass: masterBypass,
         }),
       });
+      clearTimeout(timeoutId);
+      anchorServerTime(null, res.headers.get('Date'));
 
       const data = await res.json();
       if (!res.ok) {
@@ -1196,7 +1637,7 @@ export default function MobileAttendanceOneTap() {
           checkInTime: assignedTime,
           checkOutTime: null,
           status: 'Present',
-          warehouseName: data.location || freshGeo?.matchedName || matchedLocationName,
+          warehouseName: data.location || punchRegion,
         };
         setLiveTodayShift(updatedShift);
         localStorage.setItem(`ashley_shift_state_${todayIso}_${employeeProfile.id}`, JSON.stringify(updatedShift));
@@ -1207,7 +1648,7 @@ export default function MobileAttendanceOneTap() {
           checkInTime: liveTodayShift.checkInTime || '08:00',
           checkOutTime: assignedTime,
           status: 'Present',
-          warehouseName: data.location || freshGeo?.matchedName || matchedLocationName,
+          warehouseName: data.location || punchRegion,
         };
         setLiveTodayShift(updatedShift);
         localStorage.setItem(`ashley_shift_state_${todayIso}_${employeeProfile.id}`, JSON.stringify(updatedShift));
@@ -1218,8 +1659,9 @@ export default function MobileAttendanceOneTap() {
       setTimeout(() => setFeedbackToast(null), 6000);
       await fetchTodayShift();
       await fetchMonthlyHistory();
-    } catch (err: any) {
-      alert('هەڵە لە پەیوەندی: ' + err.message);
+    } catch {
+      // Network failed or timed out -> seamlessly record offline & queue for auto-sync!
+      saveOfflinePunchAndNotify();
     } finally {
       setTriggerLoading(false);
     }
@@ -1237,7 +1679,7 @@ export default function MobileAttendanceOneTap() {
         return;
       }
 
-      const currentHm = format(new Date(), 'HH:mm');
+      const currentHm = getTrustedBaghdadNow().timeStr;
       if (currentHm > '08:15') {
         setPendingAction('ENTER');
         setReasonType('LATE_IN');
@@ -1268,7 +1710,7 @@ export default function MobileAttendanceOneTap() {
         return;
       }
 
-      const currentHm = format(new Date(), 'HH:mm');
+      const currentHm = getTrustedBaghdadNow().timeStr;
       if (currentHm < '16:45') {
         setPendingAction('EXIT');
         setReasonType('EARLY_OUT');
@@ -1837,7 +2279,47 @@ export default function MobileAttendanceOneTap() {
 
       <main className="p-4 space-y-4 flex-1">
 
-        {/* 🕒 LIVE REAL-TIME CLOCK & DATE (Clean Light Theme) */}
+        {/* 📡 OFFLINE MODE & AUTO-SYNC QUEUE BANNER */}
+        {(!isOnline || offlineQueue.length > 0 || isSyncingOffline) && (
+          <div className={`p-3 rounded-2xl border text-xs flex items-center justify-between gap-2 shadow-xs transition-all ${
+            !isOnline
+              ? 'bg-amber-50 border-amber-300 text-amber-900'
+              : 'bg-blue-50 border-blue-300 text-blue-900'
+          }`}>
+            <div className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                !isOnline ? 'bg-amber-500 animate-ping' : 'bg-blue-600 animate-spin'
+              }`} />
+              <div className="leading-snug">
+                {!isOnline ? (
+                  <p className="font-black">
+                    📡 دۆخی ئۆفڵاین چالاکە • چێک-ئین و چێک-ئاوت بەردەستە
+                  </p>
+                ) : (
+                  <p className="font-black">
+                    🔄 ناردنی خۆکاری داتای ئۆفڵاین بۆ سیستەم...
+                  </p>
+                )}
+                {offlineQueue.length > 0 && (
+                  <p className="text-[10px] opacity-85 font-bold mt-0.5">
+                    ⏳ {offlineQueue.length} تۆماری هاتن/ڕۆیشتن هەڵگیراوە و بە کاتی ڕاستەقینە دەگاتە سیستەم
+                  </p>
+                )}
+              </div>
+            </div>
+            {isOnline && offlineQueue.length > 0 && !isSyncingOffline && (
+              <button
+                type="button"
+                onClick={syncOfflineAttendanceQueue}
+                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black shrink-0 cursor-pointer"
+              >
+                ناردن
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 🕒 LIVE REAL-TIME CLOCK & DATE (Tamper-Proof True Time) */}
         <div className="text-center p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
           <p className="text-[11px] font-mono text-slate-500 font-bold mb-1">
             📅 {currentDateStr || '2026-09-07'}
