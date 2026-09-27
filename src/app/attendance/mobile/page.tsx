@@ -797,30 +797,14 @@ export default function MobileAttendanceOneTap() {
     requestSingleGpsPosition().catch(() => {});
   }, [requestSingleGpsPosition]);
 
-  // 4. Fetch Live Today Shift Status from Server (Preserving & Reconciling Pending Offline Punches)
+  // 4. Fetch Live Today Shift Status from Server (Resets to 0 if Admin deletes on server; preserves unsent Offline Queue)
   const fetchTodayShift = useCallback(async () => {
     if (!employeeProfile?.id) return;
     const todayIso = getTrustedBaghdadNow().dateStr;
     const storageKey = `ashley_shift_state_${todayIso}_${employeeProfile.id}`;
 
-    let localCachedShift: {
-      checkInTime?: string | null;
-      checkOutTime?: string | null;
-      status?: string | null;
-      warehouseName?: string | null;
-    } | null = null;
-    try {
-      const rawCached = localStorage.getItem(storageKey);
-      if (rawCached) localCachedShift = JSON.parse(rawCached);
-    } catch {}
-
-    // Helper to overlay any unsynced offline punches for today
-    const applyOfflineOverlay = (baseShift: {
-      checkInTime: string | null;
-      checkOutTime: string | null;
-      status: string | null;
-      warehouseName: string | null;
-    }) => {
+    // Read unsent offline queue items for today (items not yet delivered to server)
+    const getUnsentQueueForToday = () => {
       let pendingIn: OfflinePunchItem | undefined;
       let pendingOut: OfflinePunchItem | undefined;
       try {
@@ -834,15 +818,7 @@ export default function MobileAttendanceOneTap() {
           }
         }
       } catch {}
-
-      const finalIn = baseShift.checkInTime || pendingIn?.trustedTimeStr || localCachedShift?.checkInTime || null;
-      const finalOut = baseShift.checkOutTime || pendingOut?.trustedTimeStr || localCachedShift?.checkOutTime || null;
-      return {
-        checkInTime: finalIn,
-        checkOutTime: finalOut,
-        status: baseShift.status || (finalIn ? 'Present' : null),
-        warehouseName: baseShift.warehouseName || pendingIn?.regionName || localCachedShift?.warehouseName || matchedLocationName,
-      };
+      return { pendingIn, pendingOut };
     };
 
     try {
@@ -851,72 +827,47 @@ export default function MobileAttendanceOneTap() {
       const data = await res.json();
       if (data) {
         anchorServerTime(data.serverEpochMs, null);
-        const merged = applyOfflineOverlay({
-          checkInTime: data.checkInTime || null,
-          checkOutTime: data.checkOutTime || null,
-          status: data.status || (data.checkInTime ? 'Present' : null),
-          warehouseName: data.warehouseName || matchedLocationName,
-        });
+        const { pendingIn, pendingOut } = getUnsentQueueForToday();
+
+        // Server is authoritative when online (unless an unsent offline punch is still in queue)
+        const finalIn = data.checkInTime || pendingIn?.trustedTimeStr || null;
+        const finalOut = data.checkOutTime || pendingOut?.trustedTimeStr || null;
+
+        const merged = {
+          checkInTime: finalIn,
+          checkOutTime: finalOut,
+          status: data.status || (finalIn ? 'Present' : null),
+          warehouseName: data.warehouseName || pendingIn?.regionName || matchedLocationName,
+        };
+
         setLiveTodayShift(merged);
+
         if (merged.checkInTime) {
           localStorage.setItem(storageKey, JSON.stringify(merged));
-        }
-
-        // Self-healing reconciliation: if local phone has a Check-In/Out today that the server does not have yet
-        const defaultLoc = companyLocations[0] || COMPANY_LOCATIONS[0];
-        const devToken = localStorage.getItem(`ashley_device_token_${employeeProfile.id}`) || localStorage.getItem('ashley_device_token') || `dev-phone-${employeeProfile.id}`;
-        if (!data.checkInTime && merged.checkInTime && navigator.onLine && !isSyncingRef.current) {
-          fetch('/api/attendance/autonomous-event', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: employeeProfile.id,
-              userName: employeeProfile.name,
-              deviceToken: devToken,
-              event: 'ENTER',
-              lat: currentLat || defaultLoc.lat,
-              lng: currentLng || defaultLoc.lng,
-              regionName: merged.warehouseName || defaultLoc.name,
-              note: '📡 هاوکاتکردنی خۆکاری داتای ئۆفڵاین',
-              isOfflineSync: true,
-              reconciledTimeStr: merged.checkInTime,
-              masterBypass: true,
-            }),
-          }).catch(() => {});
-        }
-        if (!data.checkOutTime && merged.checkOutTime && navigator.onLine && !isSyncingRef.current) {
-          fetch('/api/attendance/autonomous-event', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: employeeProfile.id,
-              userName: employeeProfile.name,
-              deviceToken: devToken,
-              event: 'EXIT',
-              lat: currentLat || defaultLoc.lat,
-              lng: currentLng || defaultLoc.lng,
-              regionName: merged.warehouseName || defaultLoc.name,
-              note: '📡 هاوکاتکردنی خۆکاری داتای ئۆفڵاین',
-              isOfflineSync: true,
-              reconciledTimeStr: merged.checkOutTime,
-              masterBypass: true,
-            }),
-          }).catch(() => {});
+        } else {
+          // Admin deleted/reset today's attendance on server -> reset mobile cache to zero!
+          localStorage.removeItem(storageKey);
         }
       }
     } catch {
-      if (localCachedShift) {
-        setLiveTodayShift(applyOfflineOverlay({
-          checkInTime: localCachedShift.checkInTime || null,
-          checkOutTime: localCachedShift.checkOutTime || null,
-          status: localCachedShift.status || null,
-          warehouseName: localCachedShift.warehouseName || matchedLocationName,
-        }));
-        return;
-      }
-      setLiveTodayShift(prev => applyOfflineOverlay(prev));
+      // Device is offline: fallback to localStorage cache + unsent offline queue
+      const { pendingIn, pendingOut } = getUnsentQueueForToday();
+      let localCachedShift: any = null;
+      try {
+        const rawCached = localStorage.getItem(storageKey);
+        if (rawCached) localCachedShift = JSON.parse(rawCached);
+      } catch {}
+
+      const finalIn = pendingIn?.trustedTimeStr || localCachedShift?.checkInTime || null;
+      const finalOut = pendingOut?.trustedTimeStr || localCachedShift?.checkOutTime || null;
+      setLiveTodayShift({
+        checkInTime: finalIn,
+        checkOutTime: finalOut,
+        status: localCachedShift?.status || (finalIn ? 'Present' : null),
+        warehouseName: pendingIn?.regionName || localCachedShift?.warehouseName || matchedLocationName,
+      });
     }
-  }, [employeeProfile, matchedLocationName, companyLocations, currentLat, currentLng]);
+  }, [employeeProfile, matchedLocationName]);
 
   // 5. Fetch monthly attendance history
   const fetchMonthlyHistory = useCallback(async () => {
