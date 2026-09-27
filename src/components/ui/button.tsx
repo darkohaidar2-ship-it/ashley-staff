@@ -31,8 +31,6 @@ const buttonVariants = cva(
   }
 )
 
-import { Button as CarbonButton } from '@carbon/react'
-
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
@@ -40,30 +38,18 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, children, ...props }, ref) => {
-    let kind: any = "primary";
-    if (variant === "destructive") kind = "danger";
-    else if (variant === "outline") kind = "tertiary";
-    else if (variant === "secondary") kind = "secondary";
-    else if (variant === "ghost") kind = "ghost";
-
-    let carbonSize: any = "md";
-    if (size === "sm") carbonSize = "sm";
-    else if (size === "lg") carbonSize = "lg";
-
+  ({ className, variant, size, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button"
     return (
-      <CarbonButton
-        kind={kind}
-        size={carbonSize}
-        className={className}
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
-        {...props as any}
-      >
-        {children}
-      </CarbonButton>
+        {...props}
+      />
     )
   }
 )
 Button.displayName = "Button"
 
 export { Button, buttonVariants }
+
