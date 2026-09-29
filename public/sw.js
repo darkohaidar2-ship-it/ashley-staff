@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ashley-checkin-offline-v5';
+const CACHE_NAME = 'ashley-checkin-offline-v6';
 
 const PRECACHE_URLS = [
   '/',

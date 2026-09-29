@@ -294,24 +294,27 @@ export function resolveEmployeeDayAttendance(
     const outN = r.check_out_note || r.checkOutNote || r.checkout_note || r.check_out_edit_note;
     const rawN = r.note || r.notes || r.reason || r.employeeNote || r.employee_note || r.edit_note || r.editNote || '';
 
-    let cleanN = typeof rawN === 'string' ? rawN.trim() : '';
+    let cleanN = typeof rawN === 'string' ? rawN.replace(/[🛡️📡⚠️🌴🟢🔴🟡🟣⏱️🏁📝]\s*/gu, '').trim() : '';
     if (cleanN.includes('): ')) {
       cleanN = cleanN.split('): ')[1]?.trim() || cleanN;
     } else if (cleanN.startsWith('لەڕێگەی مۆبایل') || cleanN === 'مۆبایل') {
       cleanN = '';
     }
 
-    if (inN) liveCheckInNote = inN;
+    if (inN) liveCheckInNote = String(inN).replace(/[🛡️📡⚠️🌴🟢🔴🟡🟣⏱️🏁📝]\s*/gu, '').trim();
     else if (isEnterLog && cleanN) liveCheckInNote = cleanN;
 
-    if (outN) liveCheckOutNote = outN;
+    if (outN) liveCheckOutNote = String(outN).replace(/[🛡️📡⚠️🌴🟢🔴🟡🟣⏱️🏁📝]\s*/gu, '').trim();
     else if (isExitLog && cleanN) liveCheckOutNote = cleanN;
 
     if (cleanN) liveNote = cleanN;
   }
   if (!liveCheckInNote && liveNote) liveCheckInNote = liveNote;
 
-  // 1. 🛡️ CHECK ADMIN MANUAL OVERRIDE
+  const stripNoteEmojis = (val?: any): string =>
+    typeof val === 'string' ? val.replace(/[🛡️📡⚠️🌴🟢🔴🟡🟣⏱️🏁📝]\s*/gu, '').trim() : '';
+
+  // 1. CHECK ADMIN MANUAL OVERRIDE
   let override = 
     overridesMap[`${emp.id}_${dateStr}`] || 
     overridesMap[`${empId}_${dateStr}`] || 
@@ -422,11 +425,11 @@ export function resolveEmployeeDayAttendance(
       const ovNoteText = `${override.adminNote || ''} ${override.note || ''} ${liveNote || ''}`;
       const hasOvClockTime = Boolean(override.checkInTime && String(override.checkInTime).includes(':'));
       const normalizedOvStatus: UnifiedAttendanceDayInfo['status'] =
-        (rawOvStatus === 'Absent' || rawOvStatus === 'غیاب' || (!hasOvClockTime && ovNoteText.includes('🛡️ غیاب')))
+        (rawOvStatus === 'Absent' || rawOvStatus === 'غیاب' || (!hasOvClockTime && (ovNoteText.includes('🛡️ غیاب') || ovNoteText.includes('غیاب لەلایەن ئەدمین'))))
           ? 'Absent'
-          : (rawOvStatus === 'Holiday' || rawOvStatus === 'پشوو' || (!hasOvClockTime && ovNoteText.includes('🛡️ پشوو')))
+          : (rawOvStatus === 'Holiday' || rawOvStatus === 'پشوو' || (!hasOvClockTime && (ovNoteText.includes('🛡️ پشوو') || ovNoteText.includes('پشوو لەلایەن ئەدمین'))))
           ? 'Holiday'
-          : (rawOvStatus === 'Leave' || rawOvStatus === 'مۆڵەت' || (!hasOvClockTime && ovNoteText.includes('🛡️ مۆڵەت')))
+          : (rawOvStatus === 'Leave' || rawOvStatus === 'مۆڵەت' || (!hasOvClockTime && (ovNoteText.includes('🛡️ مۆڵەت') || ovNoteText.includes('مۆڵەت لەلایەن ئەدمین'))))
           ? 'Leave'
           : 'Present';
 
@@ -508,12 +511,12 @@ export function resolveEmployeeDayAttendance(
         checkOutTime: cOut,
         rawCheckIn: effectiveStatus === 'Present' ? ((override.rawCheckIn && String(override.rawCheckIn).includes(':')) ? override.rawCheckIn : cIn) : '',
         rawCheckOut: effectiveStatus === 'Present' ? ((override.rawCheckOut && String(override.rawCheckOut).includes(':')) ? override.rawCheckOut : cOut) : '',
-        checkInNote: override.checkInNote || override.note || liveCheckInNote || '',
-        checkOutNote: override.checkOutNote || liveCheckOutNote || '',
-        note: override.note || override.checkInNote || liveNote || '',
-        adminNote: override.adminNote || '',
-        adminCheckInNote: override.adminCheckInNote || override.adminNote || '',
-        adminCheckOutNote: override.adminCheckOutNote || '',
+        checkInNote: stripNoteEmojis(override.checkInNote || override.note || liveCheckInNote || ''),
+        checkOutNote: stripNoteEmojis(override.checkOutNote || liveCheckOutNote || ''),
+        note: stripNoteEmojis(override.note || override.checkInNote || liveNote || ''),
+        adminNote: stripNoteEmojis(override.adminNote || ''),
+        adminCheckInNote: stripNoteEmojis(override.adminCheckInNote || override.adminNote || ''),
+        adminCheckOutNote: stripNoteEmojis(override.adminCheckOutNote || ''),
         adminDecision,
         adminCheckInDecision: effectiveStatus === 'Present' ? (override.adminCheckInDecision || (isCheckInWaived ? 'waived' : null)) : null,
         adminCheckOutDecision: effectiveStatus === 'Present' ? (override.adminCheckOutDecision || (isCheckOutWaived ? 'waived' : null)) : null,
@@ -623,7 +626,7 @@ export function resolveEmployeeDayAttendance(
       rStatus === 'Absent' || rStatus === 'غیاب' ||
       rLogType === 'Absent' || rLogType === 'غیاب' ||
       rTimeStr === 'غیاب' || rTimeStr === 'Absent' || rTimeStr.endsWith(' غیاب') ||
-      (!hasValidClockTime && rNoteStr.includes('🛡️ غیاب'))
+      (!hasValidClockTime && (rNoteStr.includes('🛡️ غیاب') || rNoteStr.includes('غیاب لەلایەن ئەدمین')))
     ) {
       explicitNonWorkingStatus = 'Absent';
       checkInTime = '';
@@ -632,7 +635,7 @@ export function resolveEmployeeDayAttendance(
       rStatus === 'Holiday' || rStatus === 'پشوو' ||
       rLogType === 'Holiday' || rLogType === 'پشوو' ||
       rTimeStr === 'پشوو' || rTimeStr === 'Holiday' || rTimeStr.endsWith(' پشوو') ||
-      (!hasValidClockTime && rNoteStr.includes('🛡️ پشوو'))
+      (!hasValidClockTime && (rNoteStr.includes('🛡️ پشوو') || rNoteStr.includes('پشوو لەلایەن ئەدمین')))
     ) {
       explicitNonWorkingStatus = 'Holiday';
       checkInTime = '';
@@ -641,7 +644,7 @@ export function resolveEmployeeDayAttendance(
       rStatus === 'Leave' || rStatus === 'مۆڵەت' ||
       rLogType === 'Leave' || rLogType === 'مۆڵەت' ||
       rTimeStr === 'مۆڵەت' || rTimeStr === 'Leave' || rTimeStr.endsWith(' مۆڵەت') ||
-      (!hasValidClockTime && rNoteStr.includes('🛡️ مۆڵەت'))
+      (!hasValidClockTime && (rNoteStr.includes('🛡️ مۆڵەت') || rNoteStr.includes('مۆڵەت لەلایەن ئەدمین')))
     ) {
       explicitNonWorkingStatus = 'Leave';
       checkInTime = '';
@@ -670,17 +673,17 @@ export function resolveEmployeeDayAttendance(
     const outN = r.check_out_note || r.checkOutNote || r.checkout_note;
     const genN = r.note || r.notes || r.reason || r.employeeNote || r.employee_note;
     
-    if (inN) checkInNote = inN;
-    if (outN) checkOutNote = outN;
-    if (genN) note = genN;
+    if (inN) checkInNote = stripNoteEmojis(inN);
+    if (outN) checkOutNote = stripNoteEmojis(outN);
+    if (genN) note = stripNoteEmojis(genN);
 
     const admInN = r.adminCheckInNote || r.admin_check_in_note;
     const admOutN = r.adminCheckOutNote || r.admin_check_out_note;
     const admN = r.adminNote || r.admin_note || r.editNote || r.edit_note;
 
-    if (admInN) adminCheckInNote = admInN;
-    if (admOutN) adminCheckOutNote = admOutN;
-    if (admN) adminNote = admN;
+    if (admInN) adminCheckInNote = stripNoteEmojis(admInN);
+    if (admOutN) adminCheckOutNote = stripNoteEmojis(admOutN);
+    if (admN) adminNote = stripNoteEmojis(admN);
 
     if (r.adminCheckInDecision) adminCheckInDecision = r.adminCheckInDecision as 'waived' | 'penalized';
     if (r.adminCheckOutDecision) adminCheckOutDecision = r.adminCheckOutDecision as 'waived' | 'penalized';
@@ -753,12 +756,12 @@ export function resolveEmployeeDayAttendance(
     checkOutTime,
     rawCheckIn,
     rawCheckOut,
-    checkInNote,
-    checkOutNote,
-    note,
-    adminNote,
-    adminCheckInNote,
-    adminCheckOutNote,
+    checkInNote: stripNoteEmojis(checkInNote),
+    checkOutNote: stripNoteEmojis(checkOutNote),
+    note: stripNoteEmojis(note),
+    adminNote: stripNoteEmojis(adminNote),
+    adminCheckInNote: stripNoteEmojis(adminCheckInNote),
+    adminCheckOutNote: stripNoteEmojis(adminCheckOutNote),
     historyLogs,
     adminDecision: adminDecision || (resolvedWaived ? 'waived' : null),
     adminCheckInDecision: adminCheckInDecision || (resolvedCheckInWaived ? 'waived' : null),

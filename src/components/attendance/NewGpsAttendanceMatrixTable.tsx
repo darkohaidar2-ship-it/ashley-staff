@@ -1642,7 +1642,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       )}
                     </div>
                     <div className={`${tableFitMode === 'fit' ? 'text-[7.5px]' : 'text-[8px]'} font-bold leading-none mt-0.5`}>
-                      {d.isToday ? '⚡' : isFriday ? '🌴' : theme.shortName}
+                      {theme.shortName}
                     </div>
                   </th>
                 );
@@ -1788,7 +1788,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     // 1. Holiday / پشوو
                     if (info.status === 'Holiday' || info.status === 'پشوو') {
                       badgeColor = 'text-teal-700 dark:text-teal-400 font-bold';
-                      badgeText = '🌴';
+                      badgeText = 'پشوو';
                     }
                     // 2. Present / Check-in
                     else if (isPresent) {
@@ -2701,7 +2701,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
                 title="دانانی هەموو خانە دیاریکراوەکان وەک پشوو"
               >
-                <span>🌴 پشوو</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-300" />
+                <span>پشوو</span>
               </button>
 
               {/* Absent (غیاب) */}

@@ -2991,7 +2991,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
               log_date: date,
               log_time_str: statusLabelKu,
               location_address: 'کۆمپانیای سەرەکی ئاشڵی',
-              edit_note: combinedAdminNote || empNote || `🛡️ ${statusLabelKu} لەلایەن ئەدمین`,
+              edit_note: combinedAdminNote || empNote || `${statusLabelKu} لەلایەن ئەدمین`,
               created_at: nowIso,
             });
           } else {
@@ -3004,7 +3004,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 log_date: date,
                 log_time_str: finalCheckInValue,
                 location_address: 'کۆمپانیای سەرەکی ئاشڵی',
-                edit_note: combinedAdminNote || empNote || '🛡️ پەسەندکراو لەلایەن ئەدمین',
+                edit_note: combinedAdminNote || empNote || 'پەسەندکراو لەلایەن ئەدمین',
                 created_at: nowIso,
               });
             }
@@ -3017,7 +3017,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 log_date: date,
                 log_time_str: finalCheckOutValue,
                 location_address: 'کۆمپانیای سەرەکی ئاشڵی',
-                edit_note: adminCheckOutNote || checkOutNote || combinedAdminNote || '🛡️ پەسەندکراو لەلایەن ئەدمین',
+                edit_note: adminCheckOutNote || checkOutNote || combinedAdminNote || 'پەسەندکراو لەلایەن ئەدمین',
                 created_at: nowIso,
               });
             }

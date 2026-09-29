@@ -943,13 +943,13 @@ export default function MobileAttendanceOneTap() {
             if (hasClock) return item;
             const act = String(item.action || item.log_type || item.type || '');
             const nt = `${item.adminNote || ''} ${item.note || ''} ${item.edit_note || ''}`;
-            if (item.status === 'Leave' || item.status === 'مۆڵەت' || act === 'Leave' || act === 'مۆڵەت' || nt.includes('🛡️ مۆڵەت')) {
+            if (item.status === 'Leave' || item.status === 'مۆڵەت' || act === 'Leave' || act === 'مۆڵەت' || nt.includes('🛡️ مۆڵەت') || nt.includes('مۆڵەت لەلایەن ئەدمین')) {
               return { ...item, status: 'Leave', checkInTime: '', checkOutTime: '' };
             }
-            if (item.status === 'Holiday' || item.status === 'پشوو' || act === 'Holiday' || act === 'پشوو' || nt.includes('🛡️ پشوو')) {
+            if (item.status === 'Holiday' || item.status === 'پشوو' || act === 'Holiday' || act === 'پشوو' || nt.includes('🛡️ پشوو') || nt.includes('پشوو لەلایەن ئەدمین')) {
               return { ...item, status: 'Holiday', checkInTime: '', checkOutTime: '' };
             }
-            if (item.status === 'Absent' || item.status === 'غیاب' || act === 'Absent' || act === 'غیاب' || nt.includes('🛡️ غیاب')) {
+            if (item.status === 'Absent' || item.status === 'غیاب' || act === 'Absent' || act === 'غیاب' || nt.includes('🛡️ غیاب') || nt.includes('غیاب لەلایەن ئەدمین')) {
               return { ...item, status: 'Absent', checkInTime: '', checkOutTime: '' };
             }
             return item;
@@ -2702,7 +2702,9 @@ export default function MobileAttendanceOneTap() {
               return (
                 <div className="p-3.5 rounded-2xl bg-rose-50 border-2 border-rose-300 flex items-center justify-between text-xs shadow-xs">
                   <div className="flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-black text-sm">⚠️</span>
+                    <span className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-black text-sm">
+                      <AlertCircle className="w-4 h-4" />
+                    </span>
                     <div>
                       <span className="text-[10px] text-rose-700 font-bold block">دۆخی ئەمڕۆ لە سیستەم</span>
                       <span className="text-sm font-black text-rose-900">غیاب (ئامادەنەبوو)</span>
@@ -2716,7 +2718,9 @@ export default function MobileAttendanceOneTap() {
               return (
                 <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 flex items-center justify-between text-xs shadow-xs">
                   <div className="flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-black text-sm">📋</span>
+                    <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-black text-sm">
+                      <Calendar className="w-4 h-4" />
+                    </span>
                     <div>
                       <span className="text-[10px] text-amber-700 font-bold block">دۆخی ئەمڕۆ لە سیستەم</span>
                       <span className="text-sm font-black text-amber-900">مۆڵەتی فەرمی</span>
@@ -2730,7 +2734,9 @@ export default function MobileAttendanceOneTap() {
               return (
                 <div className="p-3.5 rounded-2xl bg-teal-50 border-2 border-teal-300 flex items-center justify-between text-xs shadow-xs">
                   <div className="flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center font-black text-sm">🌴</span>
+                    <span className="w-8 h-8 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center font-black text-sm">
+                      <Calendar className="w-4 h-4" />
+                    </span>
                     <div>
                       <span className="text-[10px] text-teal-700 font-bold block">دۆخی ئەمڕۆ لە سیستەم</span>
                       <span className="text-sm font-black text-teal-900">پشووی فەرمی</span>
@@ -2954,8 +2960,8 @@ export default function MobileAttendanceOneTap() {
                 <tbody className="divide-y divide-slate-200 font-mono">
                   {employeeMonthSheet.map((day) => {
                     const dayNoteText = `${day.adminNote || ''} ${day.note || ''}`;
-                    const isLeaveDay = day.status === 'Leave' || day.status === 'مۆڵەت' || (!day.checkInTime && dayNoteText.includes('🛡️ مۆڵەت'));
-                    const isHolidayDay = day.status === 'Holiday' || day.status === 'پشوو' || (!day.checkInTime && dayNoteText.includes('🛡️ پشوو'));
+                    const isLeaveDay = day.status === 'Leave' || day.status === 'مۆڵەت' || (!day.checkInTime && (dayNoteText.includes('🛡️ مۆڵەت') || dayNoteText.includes('مۆڵەت لەلایەن ئەدمین')));
+                    const isHolidayDay = day.status === 'Holiday' || day.status === 'پشوو' || (!day.checkInTime && (dayNoteText.includes('🛡️ پشوو') || dayNoteText.includes('پشوو لەلایەن ئەدمین')));
                     const isAbsentDay = !isLeaveDay && !isHolidayDay && (day.status === 'Absent' || day.status === 'غیاب');
                     const isPresentDay = day.status === 'Present';
 
@@ -3027,7 +3033,7 @@ export default function MobileAttendanceOneTap() {
                           ) : isLeaveDay ? (
                             <span className="text-amber-700 font-sans text-[10px]">مۆڵەت</span>
                           ) : isHolidayDay ? (
-                            <span className="text-teal-700 font-sans text-[10px]">🌴 پشوو</span>
+                            <span className="text-teal-700 font-sans text-[10px]">پشوو</span>
                           ) : (
                             <span className="text-slate-300">—</span>
                           )}
@@ -3047,7 +3053,7 @@ export default function MobileAttendanceOneTap() {
                           ) : isLeaveDay ? (
                             <span className="text-amber-700 font-sans text-[10px]">مۆڵەت</span>
                           ) : isHolidayDay ? (
-                            <span className="text-teal-700 font-sans text-[10px]">🌴 پشوو</span>
+                            <span className="text-teal-700 font-sans text-[10px]">پشوو</span>
                           ) : (
                             <span className="text-slate-300">—</span>
                           )}
@@ -3089,7 +3095,7 @@ export default function MobileAttendanceOneTap() {
                               </span>
                             ) : isHolidayDay ? (
                               <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-teal-100 text-teal-800 border border-teal-300">
-                                🌴 پشوو
+                                پشوو
                               </span>
                             ) : (
                               <span className="text-slate-300 font-mono">—</span>
@@ -3139,7 +3145,7 @@ export default function MobileAttendanceOneTap() {
                 )}
                 {(selectedDayDetail.status === 'Holiday' || selectedDayDetail.status === 'پشوو') && (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-teal-100 text-teal-800 border border-teal-300">
-                    🌴 پشوو
+                    پشوو
                   </span>
                 )}
                 <button
@@ -3163,7 +3169,7 @@ export default function MobileAttendanceOneTap() {
                     : selectedDayDetail.status === 'Leave' || selectedDayDetail.status === 'مۆڵەت'
                     ? 'مۆڵەت'
                     : selectedDayDetail.status === 'Holiday' || selectedDayDetail.status === 'پشوو'
-                    ? '🌴 پشوو'
+                    ? 'پشوو'
                     : '—'}
                 </span>
               </div>
@@ -3177,7 +3183,7 @@ export default function MobileAttendanceOneTap() {
                     : selectedDayDetail.status === 'Leave' || selectedDayDetail.status === 'مۆڵەت'
                     ? 'مۆڵەت'
                     : selectedDayDetail.status === 'Holiday' || selectedDayDetail.status === 'پشوو'
-                    ? '🌴 پشوو'
+                    ? 'پشوو'
                     : '—'}
                 </span>
               </div>
@@ -3207,7 +3213,7 @@ export default function MobileAttendanceOneTap() {
             {(selectedDayDetail.adminNote || selectedDayDetail.note) && (
               <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
                 <span className="text-[10px] font-black text-slate-600 block">تێبینی تۆمارکراو:</span>
-                <p className="text-xs font-bold text-slate-800 leading-relaxed">{selectedDayDetail.adminNote || selectedDayDetail.note}</p>
+                <p className="text-xs font-bold text-slate-800 leading-relaxed">{String(selectedDayDetail.adminNote || selectedDayDetail.note || '').replace(/[🛡️📡⚠️🌴🟢🔴🟡🟣⏱️🏁📝]\s*/gu, '').trim()}</p>
               </div>
             )}
 
