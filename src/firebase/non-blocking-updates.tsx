@@ -1,6 +1,7 @@
 
 'use client';
     
+import { logger } from '@/lib/logger';
 import {
   setDoc,
   addDoc,
@@ -14,7 +15,7 @@ import { toast } from '@/hooks/use-toast';
 
 export function setDocumentNonBlocking(docRef: DocumentReference, data: any, options: SetOptions) {
   return setDoc(docRef, data, options).catch(error => {
-    console.error("Firestore Error (setDoc):", error);
+    logger.error("Firestore Error (setDoc):", error);
     toast({
       variant: "destructive",
       title: "Error Saving Data",
@@ -27,7 +28,7 @@ export function setDocumentNonBlocking(docRef: DocumentReference, data: any, opt
 export function addDocumentNonBlocking(colRef: CollectionReference, data: any) {
   return addDoc(colRef, data)
     .catch(error => {
-      console.error("Firestore Error (addDoc):", error);
+      logger.error("Firestore Error (addDoc):", error);
       toast({
         variant: "destructive",
         title: "Error Adding Data",
@@ -40,7 +41,7 @@ export function addDocumentNonBlocking(colRef: CollectionReference, data: any) {
 export function updateDocumentNonBlocking(docRef: DocumentReference, data: any) {
   return updateDoc(docRef, data)
     .catch(error => {
-      console.error("Firestore Error (updateDoc):", error);
+      logger.error("Firestore Error (updateDoc):", error);
       toast({
         variant: "destructive",
         title: "Error Updating Data",
@@ -53,7 +54,7 @@ export function updateDocumentNonBlocking(docRef: DocumentReference, data: any) 
 export function deleteDocumentNonBlocking(docRef: DocumentReference) {
   return deleteDoc(docRef)
     .catch(error => {
-      console.error("Firestore Error (deleteDoc):", error);
+      logger.error("Firestore Error (deleteDoc):", error);
       toast({
         variant: "destructive",
         title: "Error Deleting Data",

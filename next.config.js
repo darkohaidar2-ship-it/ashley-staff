@@ -2,6 +2,9 @@
 
 const nextConfig = {
   /* Other config options */
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
   typescript: {
     ignoreBuildErrors: true,
   },

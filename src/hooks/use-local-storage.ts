@@ -1,5 +1,6 @@
 
 "use client"
+import { logger } from '@/lib/logger';
 import { useState, useEffect, useCallback } from 'react';
 
 // NOTE: This implementation is now a simple useState-based hook.
@@ -25,12 +26,12 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((val
 // These functions are no longer relevant in a Firestore-backed setup but are kept to avoid breaking imports.
 // They will not perform any operations.
 export const getAllDataForExport = async (): Promise<Record<string, any>> => {
-    console.warn("getAllDataForExport is not implemented for Firestore backend.");
+    logger.warn("getAllDataForExport is not implemented for Firestore backend.");
     return {};
 };
 
 export const importData = async (data: Record<string, any>) => {
-    console.warn("importData is not implemented for Firestore backend.");
+    logger.warn("importData is not implemented for Firestore backend.");
 };
 
 

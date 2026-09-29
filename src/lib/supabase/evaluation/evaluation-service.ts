@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { fetchSupabaseJson, saveSupabaseJson } from '@/lib/supabase/client';
 import type { MarketingFeedback, EvaluationQuestion } from '@/lib/types';
 import { initialData } from '@/context/initial-data';
@@ -17,7 +18,7 @@ export async function fetchMarketingFeedbacks(): Promise<MarketingFeedback[]> {
     }
     return [];
   } catch (err) {
-    console.error('[EvaluationService] Error fetching marketing feedbacks:', err);
+    logger.error('[EvaluationService] Error fetching marketing feedbacks:', err);
     return initialData.marketingFeedbacks || [];
   }
 }
@@ -42,7 +43,7 @@ export async function fetchEvaluationQuestions(): Promise<EvaluationQuestion[]> 
     }
     return [];
   } catch (err) {
-    console.error('[EvaluationService] Error fetching evaluation questions:', err);
+    logger.error('[EvaluationService] Error fetching evaluation questions:', err);
     return initialData.evaluationQuestions || [];
   }
 }

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { fetchSupabaseJson, saveSupabaseJson, supabase } from '@/lib/supabase/client';
 import type { Role, ActivityLog, ExpenseReport, User } from '@/lib/types';
 import { initialData } from '@/context/initial-data';
@@ -19,7 +20,7 @@ export async function fetchRoles(): Promise<Role[]> {
     }
     return [];
   } catch (err) {
-    console.error('[SystemService] Error fetching roles:', err);
+    logger.error('[SystemService] Error fetching roles:', err);
     return initialData.roles || [];
   }
 }
@@ -44,7 +45,7 @@ export async function fetchActivityLogs(): Promise<ActivityLog[]> {
     }
     return [];
   } catch (err) {
-    console.error('[SystemService] Error fetching activity logs:', err);
+    logger.error('[SystemService] Error fetching activity logs:', err);
     return initialData.activityLogs || [];
   }
 }
@@ -69,7 +70,7 @@ export async function fetchExpenseReports(): Promise<ExpenseReport[]> {
     }
     return [];
   } catch (err) {
-    console.error('[SystemService] Error fetching expense reports:', err);
+    logger.error('[SystemService] Error fetching expense reports:', err);
     return initialData.expenseReports || [];
   }
 }
@@ -94,7 +95,7 @@ export async function fetchUsersList(): Promise<User[]> {
     }
     return [];
   } catch (err) {
-    console.error('[SystemService] Error fetching users list:', err);
+    logger.error('[SystemService] Error fetching users list:', err);
     return initialData.users || [];
   }
 }
@@ -116,7 +117,7 @@ export async function saveUsersList(records: User[]): Promise<boolean> {
     }));
     await supabase.from('users').upsert(validRows);
   } catch (e) {
-    console.warn('[SystemService] Non-critical: users table sync notice:', e);
+    logger.warn('[SystemService] Non-critical: users table sync notice:', e);
   }
 
   return saved;

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 ﻿import { fetchSupabaseJson, saveSupabaseJson } from '@/lib/supabase/client';
 import type { Overtime } from '@/lib/types';
 import { initialData } from '@/context/initial-data';
@@ -18,7 +19,7 @@ export async function fetchOvertime(): Promise<Overtime[]> {
     }
     return [];
   } catch (err) {
-    console.error('[OvertimeService] Error fetching overtime:', err);
+    logger.error('[OvertimeService] Error fetching overtime:', err);
     return initialData.overtime || [];
   }
 }
@@ -37,7 +38,7 @@ export async function addOvertimeRecord(record: Overtime): Promise<boolean> {
     const updated = [record, ...current.filter(r => r.id !== record.id)];
     return await saveOvertime(updated);
   } catch (err) {
-    console.error('[OvertimeService] Error adding overtime:', err);
+    logger.error('[OvertimeService] Error adding overtime:', err);
     return false;
   }
 }
@@ -48,7 +49,7 @@ export async function deleteOvertimeRecord(id: string): Promise<boolean> {
     const updated = current.filter(r => r.id !== id);
     return await saveOvertime(updated);
   } catch (err) {
-    console.error('[OvertimeService] Error deleting overtime:', err);
+    logger.error('[OvertimeService] Error deleting overtime:', err);
     return false;
   }
 }

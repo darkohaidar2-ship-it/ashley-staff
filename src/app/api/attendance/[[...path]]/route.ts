@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, supabaseUrl, supabaseKey } from '@/lib/supabase';
 import crypto from 'crypto';
@@ -104,7 +105,7 @@ async function uploadSelfieToStorage(userId: string, date: string, type: string,
       });
 
     if (error) {
-      console.error('Error uploading to Supabase Storage:', error);
+      logger.error('Error uploading to Supabase Storage:', error);
       throw error;
     }
 
@@ -114,7 +115,7 @@ async function uploadSelfieToStorage(userId: string, date: string, type: string,
 
     return publicUrlData.publicUrl;
   } catch (err: any) {
-    console.error('Failed to upload selfie:', err);
+    logger.error('Failed to upload selfie:', err);
     return null;
   }
 }
@@ -137,7 +138,7 @@ async function getAddressFromCoords(lat: number, lng: number) {
     }
     return data.display_name || `${lat}, ${lng}`;
   } catch (err) {
-    console.error('Reverse geocoding error:', err);
+    logger.error('Reverse geocoding error:', err);
     return `${lat}, ${lng}`;
   }
 }
@@ -151,14 +152,14 @@ async function getShiftOverridesFromStore(): Promise<Record<string, { checkInTim
       data.forEach(o => { res[o.date] = { checkInTime: o.check_in_time, checkOutTime: o.check_out_time }; });
       return res;
     }
-  } catch {}
+  } catch (err) { logger.warn(err); }
   
   try {
     const { data: wRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_shift_overrides').maybeSingle();
     if (wRow?.qr_code) {
       return JSON.parse(wRow.qr_code);
     }
-  } catch {}
+  } catch (err) { logger.warn(err); }
   return {};
 }
 
@@ -170,7 +171,7 @@ async function saveShiftOverridesToStore(overrides: Record<string, { checkInTime
       qr_code: JSON.stringify(overrides)
     });
   } catch (err) {
-    console.warn('Error saving shift overrides:', err);
+    logger.warn('Error saving shift overrides:', err);
   }
 }
 
@@ -181,14 +182,14 @@ async function getAttendanceSettingsFromStore<T>(key: string, fallback: T): Prom
     if (!error && data?.settings) {
       return data.settings as T;
     }
-  } catch {}
+  } catch (err) { logger.warn(err); }
   
   try {
     const { data: wRow } = await supabase.from('warehouses').select('qr_code').eq('id', `ashley_setting_${key}`).maybeSingle();
     if (wRow?.qr_code) {
       return JSON.parse(wRow.qr_code) as T;
     }
-  } catch {}
+  } catch (err) { logger.warn(err); }
   return fallback;
 }
 
@@ -199,7 +200,7 @@ async function saveAttendanceSettingsToStore<T>(key: string, value: T) {
       settings: value,
       updated_at: new Date().toISOString()
     });
-  } catch {}
+  } catch (err) { logger.warn(err); }
 
   try {
     await supabase.from('warehouses').upsert({
@@ -208,7 +209,7 @@ async function saveAttendanceSettingsToStore<T>(key: string, value: T) {
       qr_code: JSON.stringify(value)
     });
   } catch (err) {
-    console.warn('Error saving setting to warehouses:', err);
+    logger.warn('Error saving setting to warehouses:', err);
   }
 }
 
@@ -240,7 +241,7 @@ async function getShiftForDate(dateStr: string): Promise<{ checkInTime: string; 
 
     return { checkInTime: "08:00", checkOutTime: "17:00", graceMinutes: 15 };
   } catch (err) {
-    console.error('Error getting shift:', err);
+    logger.error('Error getting shift:', err);
     return { checkInTime: "08:00", checkOutTime: "17:00", graceMinutes: 15 };
   }
 }
@@ -290,17 +291,17 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
         let sbEmployees: any[] = [];
         if (empRowRes.data?.qr_code) {
-          try { sbEmployees = JSON.parse(empRowRes.data.qr_code); } catch {}
+          try { sbEmployees = JSON.parse(empRowRes.data.qr_code); } catch (err) { logger.warn(err); }
         }
 
         let facesMap: Record<string, any> = {};
         if (faceRowRes.data?.qr_code) {
-          try { facesMap = JSON.parse(faceRowRes.data.qr_code); } catch {}
+          try { facesMap = JSON.parse(faceRowRes.data.qr_code); } catch (err) { logger.warn(err); }
         }
 
         let devicesMap: Record<string, any> = {};
         if (devRowRes.data?.qr_code) {
-          try { devicesMap = JSON.parse(devRowRes.data.qr_code); } catch {}
+          try { devicesMap = JSON.parse(devRowRes.data.qr_code); } catch (err) { logger.warn(err); }
         }
 
         // Merge Supabase employees with fallback
@@ -357,7 +358,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }
         });
       } catch (err) {
-        console.warn('Supabase fetch employees fallback:', err);
+        logger.warn('Supabase fetch employees fallback:', err);
         return NextResponse.json(baseFallback);
       }
     }
@@ -368,7 +369,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     if (pathStr === 'check-device' && (method === 'POST' || method === 'GET')) {
       let body: any = {};
       if (method === 'POST') {
-        try { body = await req.json(); } catch {}
+        try { body = await req.json(); } catch (err) { logger.warn(err); }
       }
       const url = new URL(req.url);
       const deviceToken = body.deviceToken || url.searchParams.get('deviceToken');
@@ -390,7 +391,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
         let registry: Record<string, any> = {};
         if (regRow?.qr_code) {
-          try { registry = JSON.parse(regRow.qr_code); } catch {}
+          try { registry = JSON.parse(regRow.qr_code); } catch (err) { logger.warn(err); }
         }
 
         for (const [uId, info] of Object.entries<any>(registry)) {
@@ -434,7 +435,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }
         }
       } catch (err) {
-        console.warn('check-device error:', err);
+        logger.warn('check-device error:', err);
       }
 
       return NextResponse.json({ bound: false, lockedEmployee: null }, { headers: noCacheHeaders });
@@ -484,7 +485,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .eq('id', userId)
           .maybeSingle();
         user = dbUser;
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       const validPin = user?.pin || user?.password || DEFAULT_EMPLOYEE_PINS[userId] || '1234';
       const cleanInputPin = String(pin).trim();
@@ -504,7 +505,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
         let registry: Record<string, any> = {};
         if (regRow?.qr_code) {
-          try { registry = JSON.parse(regRow.qr_code); } catch {}
+          try { registry = JSON.parse(regRow.qr_code); } catch (err) { logger.warn(err); }
         }
 
         // RULE: Is this device already bound to a DIFFERENT employee account?
@@ -546,14 +547,14 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             .from('users')
             .update({ device_token: deviceToken })
             .eq('id', userId);
-        } catch {}
+        } catch (err) { logger.warn(err); }
 
         return NextResponse.json({
           success: true,
           user: { id: userId, name: empName, role: user?.role || 'Employee' }
         });
       } catch (e: any) {
-        console.warn('Device register update err:', e);
+        logger.warn('Device register update err:', e);
         return NextResponse.json({ error: e.message || 'هەڵە لە تۆمارکردن' }, { status: 500 });
       }
     }
@@ -592,7 +593,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             return NextResponse.json({ locations: [validLocs[0], missingBranch] }, { headers: noCacheHeaders });
           }
         }
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       return NextResponse.json({ locations: GLOBAL_SAVED_LOCATIONS }, { headers: noCacheHeaders });
     }
@@ -628,7 +629,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         if (setRow?.qr_code) {
           try {
             manualOverridesMap = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
 
         const cleanId = userId.toString().trim();
@@ -795,7 +796,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           standardShiftMinutes
         }, { headers: noCacheHeaders });
       } catch (err) {
-        console.warn('Get today attendance error:', err);
+        logger.warn('Get today attendance error:', err);
       }
 
       return NextResponse.json({
@@ -873,7 +874,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           });
         }
       } catch (err) {
-        console.warn('Save locations error:', err);
+        logger.warn('Save locations error:', err);
       }
       return NextResponse.json({ success: true, locations: GLOBAL_SAVED_LOCATIONS });
     }
@@ -917,7 +918,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
         let registry: Record<string, any> = {};
         if (regRow?.qr_code) {
-          try { registry = JSON.parse(regRow.qr_code); } catch {}
+          try { registry = JSON.parse(regRow.qr_code); } catch (err) { logger.warn(err); }
         }
 
         const cleanId = userId.replace('emp-', '');
@@ -937,7 +938,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           userId: boundInfo.userId || userId
         }, { headers: noCacheHeaders });
       } catch (err) {
-        console.warn('device-status error:', err);
+        logger.warn('device-status error:', err);
         return NextResponse.json({ bound: false }, { headers: noCacheHeaders });
       }
     }
@@ -1059,7 +1060,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         await supabase
           .from('shift_overrides')
           .upsert({ date, check_in_time: checkInTime, check_out_time: checkOutTime });
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       const currentOverrides = await getShiftOverridesFromStore();
       currentOverrides[date] = { checkInTime, checkOutTime };
@@ -1080,7 +1081,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .from('shift_overrides')
           .delete()
           .eq('date', date);
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       const currentOverrides = await getShiftOverridesFromStore();
       delete currentOverrides[date];
@@ -1156,7 +1157,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         if (selfie) {
           try {
             selfieUrl = await uploadSelfieToStorage(userId, dateStr, 'in', selfie);
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
 
         const activeShift = await getShiftForDate(dateStr);
@@ -1209,7 +1210,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         if (selfie) {
           try {
             selfieUrl = await uploadSelfieToStorage(userId, dateStr, 'out', selfie);
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
 
         const activeShift = await getShiftForDate(dateStr);
@@ -1298,7 +1299,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
         let registry: Record<string, any> = {};
         if (regRow?.qr_code) {
-          try { registry = JSON.parse(regRow.qr_code); } catch {}
+          try { registry = JSON.parse(regRow.qr_code); } catch (err) { logger.warn(err); }
         }
 
         if (deviceToken && !isKiosk) {
@@ -1331,7 +1332,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }
         }
       } catch (devErr) {
-        console.warn('Device registry check warning:', devErr);
+        logger.warn('Device registry check warning:', devErr);
       }
 
       // 2. Geofence Distance Validation across ALL branches (DB + Global Saved Locations)
@@ -1607,10 +1608,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       try {
         const { error: attUpsertErr } = await supabase.from('attendance').upsert(upsertPayload);
         if (attUpsertErr) {
-          console.error('Attendance upsert error:', attUpsertErr);
+          logger.error('Attendance upsert error:', attUpsertErr);
         }
       } catch (upErr) {
-        console.error('Attendance upsert exception:', upErr);
+        logger.error('Attendance upsert exception:', upErr);
       }
 
       // Insert log entry to attendance_logs
@@ -1630,7 +1631,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             : `لەڕێگەی مۆبایل (${isCheckIn ? 'هاتن' : 'ڕۆیشتن'})`
         });
       } catch (logErr) {
-        console.warn('Auto log insert error:', logErr);
+        logger.warn('Auto log insert error:', logErr);
       }
 
       // Clear any previous deletion tombstone in ashley_manual_attendance_records for today so the new punch is authoritative
@@ -1664,7 +1665,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             });
           }
         }
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       CACHED_ADMIN_REPORT = null;
 
@@ -1752,7 +1753,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             created_at: new Date().toISOString()
           });
         } catch (logErr) {
-          console.warn('attendance_logs excursion note insert:', logErr);
+          logger.warn('attendance_logs excursion note insert:', logErr);
         }
 
         // Also append note to attendance table edit_note for audit visibility
@@ -1772,7 +1773,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
         return NextResponse.json({ success: true, item: newItem, message: 'تێبینی دەرچوون بە سەرکەوتوویی تۆمارکرا' });
       } catch (err: any) {
-        console.warn('Excursion note save error:', err);
+        logger.warn('Excursion note save error:', err);
         return NextResponse.json({ error: err.message }, { status: 500 });
       }
     }
@@ -1929,7 +1930,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             notes: JSON.stringify({ excursionId, date: dateStr, decision }),
             created_at: new Date().toISOString()
           });
-        } catch {}
+        } catch (err) { logger.warn(err); }
 
         return NextResponse.json({ success: true, decision, message: 'بڕیاری ئەدمین بە سەرکەوتوویی پاشەکەوت کرا' });
       } catch (err: any) {
@@ -1951,7 +1952,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           if (setRow?.qr_code) {
             manualOverridesMap = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
           }
-        } catch {}
+        } catch (err) { logger.warn(err); }
 
         const getManualOverride = (empId: string, logDate: string, empName?: string) => {
           if (!empId || !logDate) return null;
@@ -2124,13 +2125,13 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             });
           }
         } catch (logsErr) {
-          console.warn('attendance_logs fetch warning:', logsErr);
+          logger.warn('attendance_logs fetch warning:', logsErr);
         }
 
         const formatted = Array.from(uniqueMap.values());
         return NextResponse.json(formatted, { headers: noCacheHeaders });
       } catch (err) {
-        console.warn('Error fetching attendance logs:', err);
+        logger.warn('Error fetching attendance logs:', err);
         return NextResponse.json([], { headers: noCacheHeaders });
       }
     }
@@ -2220,7 +2221,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           if (setRow?.qr_code) {
             currentSettings = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
           }
-        } catch {}
+        } catch (err) { logger.warn(err); }
 
         let deleteCount = 0;
         let upsertCount = 0;
@@ -2311,7 +2312,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
               await Promise.all([...attDeletes, ...logDeletes]);
             } catch (delErr) {
-              console.warn('Error executing Supabase deletion queries:', delErr);
+              logger.warn('Error executing Supabase deletion queries:', delErr);
             }
           }));
         }
@@ -2434,7 +2435,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 note: combinedAdminNote || empNote || ''
               });
             }
-          } catch {}
+          } catch (err) { logger.warn(err); }
 
           const overridePayload = {
             userId: cleanEmpId,
@@ -2500,7 +2501,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 created_at: new Date().toISOString()
               });
             }
-          } catch {}
+          } catch (err) { logger.warn(err); }
 
           lastUpsertData = upsertData;
           upsertCount++;
@@ -2517,7 +2518,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             radius: 0
           });
         } catch (settErr) {
-          console.warn('warehouses backup error:', settErr);
+          logger.warn('warehouses backup error:', settErr);
         }
 
         // Invalidate admin report cache so next fetch gets latest saved records immediately
@@ -2590,7 +2591,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       try {
         await supabase.from('users').update({ device_token: null }).eq('id', userId);
       } catch (err) {
-        console.warn('reset-device users table:', err);
+        logger.warn('reset-device users table:', err);
       }
 
       // 2. Clear in warehouses table (ashley_device_bindings)
@@ -2619,7 +2620,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           });
         }
       } catch (err) {
-        console.error('Error clearing ashley_device_bindings:', err);
+        logger.error('Error clearing ashley_device_bindings:', err);
       }
 
       // 3. Clear device IP and token in ashley_face_registry
@@ -2646,7 +2647,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }
         }
       } catch (err) {
-        console.error('Error updating face registry on reset-device:', err);
+        logger.error('Error updating face registry on reset-device:', err);
       }
 
       return NextResponse.json({ success: true, message: 'مۆبایلەکە بە سەرکەوتوویی لە ئەکاونتەکە جیاکرایەوە و سفرکرایەوە' });
@@ -2663,7 +2664,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       try {
         await supabase.from('users').update({ face_descriptor: null }).eq('id', userId);
       } catch (err) {
-        console.warn('reset-face users table:', err);
+        logger.warn('reset-face users table:', err);
       }
 
       // 2. Clear in warehouses table (ashley_face_registry)
@@ -2687,7 +2688,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           });
         }
       } catch (err) {
-        console.error('Error clearing ashley_face_registry:', err);
+        logger.error('Error clearing ashley_face_registry:', err);
       }
 
       return NextResponse.json({ success: true, message: 'دەموچاوەکە بە سەرکەوتوویی لە ئەکاونتەکە سڕایەوە و سفرکرایەوە' });
@@ -2702,7 +2703,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
       try {
         await supabase.from('users').update({ device_token: null, face_descriptor: null }).eq('id', userId);
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       try {
         const { data: regRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_device_bindings').maybeSingle();
@@ -2721,7 +2722,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             radius: 0,
           });
         }
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       try {
         const { data: faceRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_face_registry').maybeSingle();
@@ -2737,7 +2738,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             radius: 0,
           });
         }
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       return NextResponse.json({ success: true, message: 'هەردوو مۆبایل و دەموچاو بە سەرکەوتوویی سفرکرانەوە' });
     }
@@ -2758,19 +2759,19 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       try {
         const { data: dRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_device_bindings').maybeSingle();
         if (dRow?.qr_code) deviceRegistry = JSON.parse(dRow.qr_code);
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       let faceRegistry: Record<string, any> = {};
       try {
         const { data: fRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_face_registry').maybeSingle();
         if (fRow?.qr_code) faceRegistry = JSON.parse(fRow.qr_code);
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       let dbUsers: any[] = [];
       try {
         const { data: uRows } = await supabase.from('users').select('*').neq('role', 'admin');
         if (uRows && uRows.length > 0) dbUsers = uRows;
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       const allEmpList = baseEmployees.map(baseEmp => {
         const dbU = dbUsers.find(u => u.id === baseEmp.id);
@@ -2860,7 +2861,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           try { 
             deviceRegistry = typeof dRowRes.data.qr_code === 'string' ? JSON.parse(dRowRes.data.qr_code) : dRowRes.data.qr_code;
             CACHED_DEVICE_REGISTRY = { data: deviceRegistry, timestamp: nowMs };
-          } catch {}
+          } catch (err) { logger.warn(err); }
         } else if (CACHED_DEVICE_REGISTRY) {
           deviceRegistry = CACHED_DEVICE_REGISTRY.data;
         }
@@ -2869,7 +2870,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           try { 
             faceRegistry = typeof fRowRes.data.qr_code === 'string' ? JSON.parse(fRowRes.data.qr_code) : fRowRes.data.qr_code;
             CACHED_FACE_REGISTRY = { data: faceRegistry, timestamp: nowMs };
-          } catch {}
+          } catch (err) { logger.warn(err); }
         } else if (CACHED_FACE_REGISTRY) {
           faceRegistry = CACHED_FACE_REGISTRY.data;
         }
@@ -2881,7 +2882,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           try {
             const parsed = typeof setRowRes.data.qr_code === 'string' ? JSON.parse(setRowRes.data.qr_code) : setRowRes.data.qr_code;
             Object.assign(manualOverridesMap, parsed);
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
 
         allUsers = baseEmployees.map(baseEmp => {
@@ -2983,7 +2984,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           };
         }
       } catch (err) {
-        console.warn('Error fetching attendance in admin/report:', err);
+        logger.warn('Error fetching attendance in admin/report:', err);
       }
 
       // Add any standalone manual overrides that might not exist in the attendance table
@@ -3091,7 +3092,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
       const { error } = await supabase.from('users').update({ biometric_credential_id: credentialId }).eq('id', userId);
       if (error) {
-        console.warn('Note: biometric_credential_id update in users table:', error.message);
+        logger.warn('Note: biometric_credential_id update in users table:', error.message);
       }
       return NextResponse.json({ success: true, credentialId });
     }
@@ -3173,10 +3174,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         CACHED_FACE_REGISTRY = null;
 
         if (upsertErr) {
-          console.error('Supabase face upsert error:', upsertErr);
+          logger.error('Supabase face upsert error:', upsertErr);
         }
       } catch (err: any) {
-        console.error('Error saving to resilient face registry:', err);
+        logger.error('Error saving to resilient face registry:', err);
       }
 
       // 2. Secondary backup update to users table
@@ -3187,7 +3188,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .update({ face_descriptor: descriptorJson })
           .eq('id', userId);
       } catch (updErr: any) {
-        console.warn('Note: users table update ignored:', updErr.message);
+        logger.warn('Note: users table update ignored:', updErr.message);
       }
 
       return NextResponse.json({
@@ -3216,7 +3217,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         if (regRow?.qr_code) {
           try {
             registry = JSON.parse(regRow.qr_code);
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
 
         if (registry[userId]) {
@@ -3237,7 +3238,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           });
         }
       } catch (err: any) {
-        console.error('Error deleting from face registry:', err);
+        logger.error('Error deleting from face registry:', err);
       }
 
       // Clear from users table
@@ -3246,7 +3247,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           .from('users')
           .update({ face_descriptor: null })
           .eq('id', userId);
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       return NextResponse.json({
         success: true,
@@ -3292,7 +3293,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }
         }
       } catch (err) {
-        console.warn('Registry read fallback:', err);
+        logger.warn('Registry read fallback:', err);
       }
 
       // Fallback to emp-02 if offline or unregistered key
@@ -3344,7 +3345,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           registeredMap = JSON.parse(regRow.qr_code);
         }
       } catch (err) {
-        console.warn('Error reading central face registry:', err);
+        logger.warn('Error reading central face registry:', err);
       }
 
       // Always ensure emp-02 (Darko) is recognized in registeredMap
@@ -3399,7 +3400,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           registeredMap = JSON.parse(regRow.qr_code);
         }
       } catch (err) {
-        console.warn('Error reading central device bindings:', err);
+        logger.warn('Error reading central device bindings:', err);
       }
 
       const activeBoundIds: string[] = ['emp-02', '02'];
@@ -3492,7 +3493,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       });
 
       if (upsertErr) {
-        console.error('Error upserting location:', upsertErr);
+        logger.error('Error upserting location:', upsertErr);
         return NextResponse.json({ error: upsertErr.message }, { status: 500 });
       }
 
@@ -3532,7 +3533,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           );
         }
       } catch (dbErr) {
-        console.warn('DB user fetch warning:', dbErr);
+        logger.warn('DB user fetch warning:', dbErr);
       }
 
       // Check Rate Limiting / Lockout
@@ -3642,7 +3643,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         });
 
       if (updateErr) {
-        console.error('Error updating admin credentials:', updateErr);
+        logger.error('Error updating admin credentials:', updateErr);
         return NextResponse.json({ error: updateErr.message }, { status: 500 });
       }
 
@@ -3705,7 +3706,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             const uploaded = await uploadSelfieToStorage(cleanEmpId, 'profile', 'avatar', incomingPhoto);
             if (uploaded) finalPhotoUrl = uploaded;
           } catch (storageErr) {
-            console.warn('Storage upload failed, retaining base64 dataUrl:', storageErr);
+            logger.warn('Storage upload failed, retaining base64 dataUrl:', storageErr);
           }
         }
 
@@ -3726,7 +3727,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           const { data: wRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_employees').maybeSingle();
           let empList: any[] = [];
           if (wRow?.qr_code) {
-            try { empList = JSON.parse(wRow.qr_code); } catch {}
+            try { empList = JSON.parse(wRow.qr_code); } catch (err) { logger.warn(err); }
           }
           if (!Array.isArray(empList) || empList.length === 0) {
             empList = [...ASHLEY_OFFICIAL_EMPLOYEES];
@@ -3772,7 +3773,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             radius: 0,
           });
         } catch (wErr) {
-          console.warn('Failed to sync ashley_employees directory:', wErr);
+          logger.warn('Failed to sync ashley_employees directory:', wErr);
         }
 
         // 3. Update in users table safely
@@ -3783,7 +3784,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           if (pin && pin.length >= 4) userUpdate.pin = pin;
           if (name) userUpdate.name = name;
           await supabase.from('users').update(userUpdate).or(`id.eq.${cleanEmpId},id.eq.${rawNum},id.eq.emp-${rawNum}`);
-        } catch {}
+        } catch (err) { logger.warn(err); }
 
         return NextResponse.json({ success: true, photoUrl: finalPhotoUrl, message: 'پڕۆفایل و وێنە بە سەرکەوتوویی لە سوپابەیس نوێکرانەوە' });
       } catch (err: any) {
@@ -3954,10 +3955,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       try {
         const { error: attErr } = await supabase.from('attendance').upsert(upsertPayload);
         if (attErr) {
-          console.error('Error upserting to attendance table:', attErr);
+          logger.error('Error upserting to attendance table:', attErr);
         }
       } catch (attEx: any) {
-        console.error('Exception upserting to attendance:', attEx);
+        logger.error('Exception upserting to attendance:', attEx);
       }
 
       // 3. Also try inserting into `attendance_logs` table if it exists
@@ -3974,7 +3975,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           created_at: new Date().toISOString()
         });
       } catch (logEx) {
-        console.warn('attendance_logs table insert skipped:', logEx);
+        logger.warn('attendance_logs table insert skipped:', logEx);
       }
 
       return NextResponse.json({ 
@@ -4016,7 +4017,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             name: 'MANUAL_ATTENDANCE_OVERRIDES',
             qr_code: JSON.stringify({})
           }, { onConflict: 'id' });
-        } catch {}
+        } catch (err) { logger.warn(err); }
         return NextResponse.json({ success: true, message: 'هەموو تۆمارەکان بە ڕێگەپێدانی ئەدمین سڕانەوە' });
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
@@ -4089,7 +4090,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 }, { onConflict: 'id' });
               }
             }
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
 
         // 3. Composite ID handling
@@ -4174,7 +4175,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                  qr_code: JSON.stringify(currentRecords)
                }, { onConflict: 'id' });
              }
-           } catch {}
+           } catch (err) { logger.warn(err); }
         }
         return NextResponse.json({ success: true });
       } catch (err: any) {
@@ -4203,7 +4204,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     return NextResponse.json({ error: 'Not Found' }, { status: 404 });
 
   } catch (err: any) {
-    console.error('API Route Error:', err);
+    logger.error('API Route Error:', err);
     return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
   }
 }

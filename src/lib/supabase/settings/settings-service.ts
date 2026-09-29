@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { supabase, fetchSupabaseJson, saveSupabaseJson } from '@/lib/supabase/client';
 import { initialSettings } from '@/context/initial-data';
 import type { AppSettings } from '@/lib/types';
@@ -13,7 +14,7 @@ export async function fetchAppSettings(): Promise<Partial<AppSettings> | null> {
     if (!data) return null;
     return data;
   } catch (err) {
-    console.error('[SettingsService] Error fetching global settings:', err);
+    logger.error('[SettingsService] Error fetching global settings:', err);
     return null;
   }
 }
@@ -31,7 +32,7 @@ export async function saveAppSettings(settings: AppSettings): Promise<boolean> {
       sanitizedSettings
     );
   } catch (err) {
-    console.error('[SettingsService] Error saving global settings:', err);
+    logger.error('[SettingsService] Error saving global settings:', err);
     return false;
   }
 }

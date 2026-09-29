@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Camera, CheckCircle2, Clock, RefreshCw, 
@@ -84,7 +85,7 @@ export default function FaceKioskPage() {
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.25);
       }
-    } catch {}
+    } catch (err) { logger.warn(err); }
   }, []);
 
   // Kurdish voice announcement
@@ -97,7 +98,7 @@ export default function FaceKioskPage() {
         utterance.lang = 'ckb';
         window.speechSynthesis.speak(utterance);
       }
-    } catch {}
+    } catch (err) { logger.warn(err); }
   }, []);
 
   // Fetch all registered faces from Supabase
@@ -120,7 +121,7 @@ export default function FaceKioskPage() {
         setRegisteredFaces(list);
       }
     } catch (err) {
-      console.error('Failed to load registered faces:', err);
+      logger.error('Failed to load registered faces:', err);
     } finally {
       setIsLoadingFaces(false);
     }
@@ -157,7 +158,7 @@ export default function FaceKioskPage() {
         setIsCameraActive(true);
       }
     } catch (err) {
-      console.error('Camera access error in Kiosk:', err);
+      logger.error('Camera access error in Kiosk:', err);
       setIsCameraActive(false);
       setStatusText('تکایە ڕێگە بە بەکارهێنانی کامێرا بدە لە برۆوسەرەکەتدا');
     }
@@ -246,7 +247,7 @@ export default function FaceKioskPage() {
         isProcessingRef.current = false;
       }, 4000);
     } catch (err: any) {
-      console.error('Error logging kiosk attendance:', err);
+      logger.error('Error logging kiosk attendance:', err);
       setStatusText(`⚠️ هەڵە لە پەیوەندی بە سێرڤەر: ${err.message || ''}`);
       playChime(false);
       setTimeout(() => {
@@ -303,7 +304,7 @@ export default function FaceKioskPage() {
           setStatusText('⚠️ دەموچاو نەناسرا! تکایە لە ئەدمینەوە ڕوخسارت تۆمار بکە');
         }
       } catch (err) {
-        console.warn('Scan frame error:', err);
+        logger.warn('Scan frame error:', err);
       }
     }, 600);
 

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 /**
  * Ashley Universal PDF & CSV Export Utility & Pure 24-Hour Military Time Engine
  * Generates pixel-perfect, full-width multi-page PDF documents, 31-page daily breakdowns, and Excel-compatible CSVs with UTF-8 BOM.
@@ -222,9 +223,7 @@ export function exportToPDF(options: ExportReportOptions) {
       if (stored) {
         activeSettings = JSON.parse(stored);
       }
-    } catch {
-      // fallback
-    }
+    } catch (err) { logger.warn(err); }
   }
 
   const motherCompany = activeSettings?.motherCompanyName || 'کۆمپانیای گروپی دیوان';
@@ -973,9 +972,7 @@ export function exportMonthlyMultiPageDailyPDF(options: MonthDailyReportOptions)
       if (stored) {
         activeSettings = JSON.parse(stored);
       }
-    } catch {
-      // fallback
-    }
+    } catch (err) { logger.warn(err); }
   }
 
   const motherCompany = activeSettings?.motherCompanyName || 'کۆمپانیای گروپی دیوان';

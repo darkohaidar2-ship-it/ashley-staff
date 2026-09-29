@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
 import type { Employee } from '@/lib/types';
 import { useAppContext } from '@/context/app-provider';
@@ -375,9 +376,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       try {
         const stored = localStorage.getItem('ashley_archived_vouchers_ledger_v3');
         if (stored) return JSON.parse(stored);
-      } catch {
-        // fallback
-      }
+      } catch (err) { logger.warn(err); }
     }
     return [];
   });
@@ -401,7 +400,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         setCategories(cloudCats as any);
         try {
           localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(cloudCats));
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
     });
 
@@ -410,7 +409,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         setPresetReasons(cloudReasons);
         try {
           localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(cloudReasons));
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
     });
 
@@ -419,7 +418,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         setArchivedVouchers(cloudVouchers);
         try {
           localStorage.setItem('ashley_archived_vouchers_ledger_v3', JSON.stringify(cloudVouchers));
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
     });
   }, []);
@@ -439,12 +438,12 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       try {
         localStorage.setItem('ashley_archived_vouchers_ledger_v3', JSON.stringify(updated));
       } catch (err) {
-        console.error('Failed to save vouchers to localStorage:', err);
+        logger.error('Failed to save vouchers to localStorage:', err);
       }
     }
     // 🌟 Realtime Supabase Cloud Sync
     saveArchivedVouchers(updated).catch(err => {
-      console.error('Failed to sync vouchers to Supabase cloud:', err);
+      logger.error('Failed to sync vouchers to Supabase cloud:', err);
     });
   };
 
@@ -575,7 +574,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
           };
         }
       } catch (err) {
-        console.error('Error loading field history:', err);
+        logger.error('Error loading field history:', err);
       }
     }
     return initial;
@@ -635,7 +634,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       try {
         const stored = localStorage.getItem('ashley_custom_expense_categories_v2');
         if (stored) return JSON.parse(stored);
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
     return DEFAULT_EXPENSE_CATEGORIES;
   });
@@ -645,7 +644,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       try {
         const stored = localStorage.getItem('ashley_custom_preset_reasons_v2');
         if (stored) return JSON.parse(stored);
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
     return DEFAULT_PRESET_EXPENSE_REASONS;
   });
@@ -676,19 +675,19 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     setCategories(updated);
     try {
       localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
-    } catch {}
+    } catch (err) { logger.warn(err); }
     // 🌟 Supabase Cloud Sync
     saveCustomExpenseCategories(updated as any).catch(err => {
-      console.error('Failed to sync categories to Supabase:', err);
+      logger.error('Failed to sync categories to Supabase:', err);
     });
 
     setPresetReasons(prev => {
       const next = { ...prev, [newKey]: [] };
       try {
         localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(next));
-      } catch {}
+      } catch (err) { logger.warn(err); }
       saveCustomPresetReasons(next).catch(err => {
-        console.error('Failed to sync preset reasons to Supabase:', err);
+        logger.error('Failed to sync preset reasons to Supabase:', err);
       });
       return next;
     });
@@ -706,9 +705,9 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     setCategories(updated);
     try {
       localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
-    } catch {}
+    } catch (err) { logger.warn(err); }
     saveCustomExpenseCategories(updated as any).catch(err => {
-      console.error('Failed to sync updated categories to Supabase:', err);
+      logger.error('Failed to sync updated categories to Supabase:', err);
     });
     logAudit('update', 'category', `دەستکاریکردنی ناوی پۆلێن بۆ «${trimmed}»`);
     setEditingCategoryKey(null);
@@ -726,9 +725,9 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     setCategories(updated);
     try {
       localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
-    } catch {}
+    } catch (err) { logger.warn(err); }
     saveCustomExpenseCategories(updated as any).catch(err => {
-      console.error('Failed to sync deleted category to Supabase:', err);
+      logger.error('Failed to sync deleted category to Supabase:', err);
     });
     logAudit('delete', 'category', `سڕینەوەی پۆلێنی «${cat?.label || key}»`);
     if (expenseType === key) {
@@ -754,9 +753,9 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     setPresetReasons(updatedMap);
     try {
       localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
-    } catch {}
+    } catch (err) { logger.warn(err); }
     saveCustomPresetReasons(updatedMap).catch(err => {
-      console.error('Failed to sync preset reasons to Supabase:', err);
+      logger.error('Failed to sync preset reasons to Supabase:', err);
     });
     logAudit('create', 'preset_reason', `زیادکردنی تێبینی «${trimmed}» بۆ پۆلێنی ${catKey}`);
     setNewReasonText('');
@@ -771,9 +770,9 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     setPresetReasons(updatedMap);
     try {
       localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
-    } catch {}
+    } catch (err) { logger.warn(err); }
     saveCustomPresetReasons(updatedMap).catch(err => {
-      console.error('Failed to sync edited preset reason to Supabase:', err);
+      logger.error('Failed to sync edited preset reason to Supabase:', err);
     });
     logAudit('update', 'preset_reason', `دەستکاریکردنی تێبینی بۆ «${trimmed}» لە پۆلێنی ${catKey}`);
     setEditingReasonIndex(null);
@@ -789,9 +788,9 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     setPresetReasons(updatedMap);
     try {
       localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
-    } catch {}
+    } catch (err) { logger.warn(err); }
     saveCustomPresetReasons(updatedMap).catch(err => {
-      console.error('Failed to sync deleted preset reason to Supabase:', err);
+      logger.error('Failed to sync deleted preset reason to Supabase:', err);
     });
     logAudit('delete', 'preset_reason', `سڕینەوەی تێبینی «${targetText}» لە پۆلێنی ${catKey}`);
   };
@@ -803,7 +802,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     try {
       localStorage.removeItem('ashley_custom_expense_categories_v2');
       localStorage.removeItem('ashley_custom_preset_reasons_v2');
-    } catch {}
+    } catch (err) { logger.warn(err); }
     saveCustomExpenseCategories(DEFAULT_EXPENSE_CATEGORIES as any).catch(() => {});
     saveCustomPresetReasons(DEFAULT_PRESET_EXPENSE_REASONS).catch(() => {});
     logAudit('update', 'category', 'گەڕاندنەوەی پۆلێن و تێبینییەکان بۆ ڕێکخستنی بنەڕەتی');
@@ -950,9 +949,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       const [year, month] = selectedMonth.split('-').map(Number);
       const prev = subMonths(new Date(year, month - 1, 1), 1);
       setSelectedMonth(format(prev, 'yyyy-MM'));
-    } catch {
-      // fallback
-    }
+    } catch (err) { logger.warn(err); }
   };
 
   const handleNextMonth = () => {
@@ -960,9 +957,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       const [year, month] = selectedMonth.split('-').map(Number);
       const next = addMonths(new Date(year, month - 1, 1), 1);
       setSelectedMonth(format(next, 'yyyy-MM'));
-    } catch {
-      // fallback
-    }
+    } catch (err) { logger.warn(err); }
   };
 
   const handleCurrentMonth = () => {
@@ -1917,7 +1912,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         };
         try {
           localStorage.setItem(FIELD_HISTORY_KEY, JSON.stringify(next));
-        } catch {}
+        } catch (err) { logger.warn(err); }
         return next;
       });
     };

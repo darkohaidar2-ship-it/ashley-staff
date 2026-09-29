@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   MapPin, 
@@ -169,7 +170,7 @@ function anchorServerTime(serverEpochMs?: number | null, dateHeader?: string | n
         })
       );
     }
-  } catch {}
+  } catch (err) { logger.warn(err); }
 }
 
 function getTrustedBaghdadNow(): {
@@ -195,7 +196,7 @@ function getTrustedBaghdadNow(): {
         }
       }
     }
-  } catch {}
+  } catch (err) { logger.warn(err); }
 
   const d = new Date(trustedMs);
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -255,7 +256,7 @@ function playWelcomeMusic() {
       osc.start(ctx.currentTime + t);
       osc.stop(ctx.currentTime + t + d);
     });
-  } catch {}
+  } catch (err) { logger.warn(err); }
 }
 
 // Step confirmation tone (during multi-angle capture)
@@ -273,7 +274,7 @@ function playAngleCaptureChime() {
     gain.connect(ctx.destination);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.25);
-  } catch {}
+  } catch (err) { logger.warn(err); }
 }
 
 // 2. Check-In Chime
@@ -297,7 +298,7 @@ function playCheckInMusic() {
       osc.start(ctx.currentTime + t);
       osc.stop(ctx.currentTime + t + d);
     });
-  } catch {}
+  } catch (err) { logger.warn(err); }
 }
 
 // 3. Check-Out Chime
@@ -321,7 +322,7 @@ function playCheckOutMusic() {
       osc.start(ctx.currentTime + t);
       osc.stop(ctx.currentTime + t + d);
     });
-  } catch {}
+  } catch (err) { logger.warn(err); }
 }
 
 // 4. Reject Sound
@@ -340,7 +341,7 @@ function playRejectSound() {
       osc.start(ctx.currentTime + t);
       osc.stop(ctx.currentTime + t + 0.14);
     });
-  } catch {}
+  } catch (err) { logger.warn(err); }
 }
 
 export default function MobileAttendanceOneTap() {
@@ -483,7 +484,7 @@ export default function MobileAttendanceOneTap() {
           const parsed = JSON.parse(storedQueue);
           if (Array.isArray(parsed)) setOfflineQueue(parsed);
         }
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
@@ -524,7 +525,7 @@ export default function MobileAttendanceOneTap() {
           setIsStandalonePwa(true);
         }
         return;
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
     setShowPwaInstallModal(true);
   };
@@ -560,7 +561,7 @@ export default function MobileAttendanceOneTap() {
             localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(updated));
           }
         }
-      } catch {}
+      } catch (err) { logger.warn(err); }
     };
     tick();
     const interval = setInterval(tick, 1000);
@@ -586,7 +587,7 @@ export default function MobileAttendanceOneTap() {
         } else {
           setIsDesktop(false);
         }
-      } catch {}
+      } catch (err) { logger.warn(err); }
     };
 
     checkDevice();
@@ -617,7 +618,7 @@ export default function MobileAttendanceOneTap() {
           setCompanyLocations(parsed);
         }
       }
-    } catch {}
+    } catch (err) { logger.warn(err); }
 
     fetch('/api/attendance/location')
       .then(res => {
@@ -637,7 +638,7 @@ export default function MobileAttendanceOneTap() {
           setCompanyLocations(mapped);
           try {
             localStorage.setItem('ashley_cached_locations_v1', JSON.stringify(mapped));
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
       })
       .catch(() => {});
@@ -663,7 +664,7 @@ export default function MobileAttendanceOneTap() {
           setAllEmployees(parsedEmps.map((e: any) => ({ ...e, role: translateRoleToKurdish(e.role) })));
         }
       }
-    } catch {}
+    } catch (err) { logger.warn(err); }
 
     // Fetch live employees list
     fetch(`/api/attendance/employees?_t=${Date.now()}`, { cache: 'no-store' })
@@ -683,7 +684,7 @@ export default function MobileAttendanceOneTap() {
           setAllEmployees(mapped);
           try {
             localStorage.setItem('ashley_cached_employees_v1', JSON.stringify(mapped));
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
       })
       .catch(() => {});
@@ -708,7 +709,7 @@ export default function MobileAttendanceOneTap() {
           setAllEmployees(mapped);
         }
       }
-    } catch {}
+    } catch (err) { logger.warn(err); }
     finally {
       setIsRefreshingEmployees(false);
     }
@@ -826,7 +827,7 @@ export default function MobileAttendanceOneTap() {
             pendingOut = myToday.find(x => x.event === 'EXIT');
           }
         }
-      } catch {}
+      } catch (err) { logger.warn(err); }
       return { pendingIn, pendingOut };
     };
 
@@ -865,7 +866,7 @@ export default function MobileAttendanceOneTap() {
       try {
         const rawCached = localStorage.getItem(storageKey);
         if (rawCached) localCachedShift = JSON.parse(rawCached);
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       const finalIn = pendingIn?.trustedTimeStr || localCachedShift?.checkInTime || null;
       const finalOut = pendingOut?.trustedTimeStr || localCachedShift?.checkOutTime || null;
@@ -911,7 +912,7 @@ export default function MobileAttendanceOneTap() {
         setMonthlyLogs(empLogs);
         try {
           localStorage.setItem(historyCacheKey, JSON.stringify(empLogs));
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
 
       if (reportData && typeof reportData.overrides === 'object' && reportData.overrides !== null) {
@@ -924,7 +925,7 @@ export default function MobileAttendanceOneTap() {
         setEmpOverridesMap(myOverrides);
         try {
           localStorage.setItem(overridesCacheKey, JSON.stringify(myOverrides));
-        } catch {}
+        } catch (err) { logger.warn(err); }
       } else {
         setEmpOverridesMap({});
       }
@@ -958,7 +959,7 @@ export default function MobileAttendanceOneTap() {
           : [];
         setMonthlyLogs([...myQueued, ...cachedList]);
         setEmpOverridesMap(cachedOv);
-      } catch {}
+      } catch (err) { logger.warn(err); }
     } finally {
       setLoadingLogs(false);
     }
@@ -1146,7 +1147,7 @@ export default function MobileAttendanceOneTap() {
         setProfilePin('');
       }
     } catch (e) {
-      console.warn('Failed to load profile details:', e);
+      logger.warn('Failed to load profile details:', e);
     }
   }, [employeeProfile, selectedEmpId]);
 
@@ -1404,7 +1405,7 @@ export default function MobileAttendanceOneTap() {
               stageHoldFrames = 0;
             }
           } catch (err: any) {
-            console.warn('Enrollment tick err:', err);
+            logger.warn('Enrollment tick err:', err);
           } finally {
             isProcessing = false;
           }
@@ -1478,7 +1479,7 @@ export default function MobileAttendanceOneTap() {
             }
           }
         } catch (err: any) {
-          console.warn('Verification tick error:', err);
+          logger.warn('Verification tick error:', err);
         } finally {
           isProcessing = false;
         }
@@ -1534,7 +1535,7 @@ export default function MobileAttendanceOneTap() {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) queue = parsed;
       }
-    } catch {}
+    } catch (err) { logger.warn(err); }
 
     if (queue.length === 0) {
       setOfflineQueue([]);
@@ -1711,7 +1712,7 @@ export default function MobileAttendanceOneTap() {
         const updatedQ = [...filteredQ, offlineItem];
         localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(updatedQ));
         setOfflineQueue(updatedQ);
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       if (action === 'ENTER') {
         const updatedShift = {

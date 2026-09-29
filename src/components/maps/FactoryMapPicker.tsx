@@ -2,14 +2,9 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Plus, Trash2, MapPin, Check, Search, Navigation, Building2, Warehouse, Compass, X, AlertCircle } from 'lucide-react';
+import { DEFAULT_COMPANY_LOCATIONS, type CompanyGeoLocation } from '@/lib/geo-constants';
 
-export interface CompanyLocation {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-  radiusMeters: number;
-}
+export type CompanyLocation = CompanyGeoLocation;
 
 interface FactoryMapPickerProps {
   initialLocations?: CompanyLocation[];
@@ -22,22 +17,7 @@ interface FactoryMapPickerProps {
   onClose: () => void;
 }
 
-const DEFAULT_TWO_BRANCHES: CompanyLocation[] = [
-  {
-    id: 'ashley-base-main',
-    name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)',
-    lat: 35.5571,
-    lng: 45.4352,
-    radiusMeters: 100,
-  },
-  {
-    id: 'huana-warehouse-main',
-    name: 'کۆگای سەرەکی هوانە (Huana Warehouse)',
-    lat: 35.6012,
-    lng: 45.3850,
-    radiusMeters: 120,
-  },
-];
+const DEFAULT_TWO_BRANCHES: CompanyLocation[] = DEFAULT_COMPANY_LOCATIONS;
 
 export function FactoryMapPicker({
   initialLocations,
@@ -231,7 +211,7 @@ export function FactoryMapPicker({
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
-    // Check if user typed coordinates like "35.5571, 45.4352"
+    // Check if user typed coordinates
     const coordMatch = searchQuery.match(/(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)/);
     if (coordMatch) {
       const lat = parseFloat(coordMatch[1]);
@@ -301,8 +281,7 @@ export function FactoryMapPicker({
               <Compass className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-base font-black">دیاریکردنی لۆکەیشنی فەرمیی دەوام (GPS)</h2>
-              <p className="text-xs text-slate-300 font-bold">هەڵبژاردنی شوێنی دەقیقی (کۆمپانیای ئاشڵی و کۆگای هوانە)</p>
+              <h2 className="text-base font-black">دیاریکردنی شوێنی فەرمی دەوام</h2>
             </div>
           </div>
 
@@ -338,7 +317,7 @@ export function FactoryMapPicker({
                   <div className="text-right">
                     <div className="font-black text-xs text-slate-900">{loc.name}</div>
                     <div className="text-[11px] text-slate-500 font-mono mt-0.5">
-                      Lat: {loc.lat.toFixed(4)}, Lng: {loc.lng.toFixed(4)}
+                      {loc.lat.toFixed(4)} , {loc.lng.toFixed(4)}
                     </div>
                   </div>
                 </div>
@@ -349,10 +328,10 @@ export function FactoryMapPicker({
                       ? isAshley ? 'bg-orange-500 text-white' : 'bg-purple-600 text-white'
                       : 'bg-slate-200 text-slate-600'
                   }`}>
-                    {isSelected ? 'دەستنیشانکراوە 🎯' : 'کلیک بکە بۆ گۆڕین'}
+                    {isSelected ? 'دەستنیشانکراوە 🎯' : 'گۆڕین'}
                   </span>
                   <div className="text-[10px] font-bold text-slate-500">
-                    سنوور: {loc.radiusMeters}م
+                    سنوور: {loc.radiusMeters} م
                   </div>
                 </div>
               </div>

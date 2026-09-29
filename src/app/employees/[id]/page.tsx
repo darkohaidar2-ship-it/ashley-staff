@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -138,7 +139,7 @@ function EmployeeDetailPage() {
         const data = await res.json();
         setHasFace(Boolean(data.registered || data.hasFaceRegistered || data.hasFace || employeeId === 'emp-02'));
       }
-    } catch {}
+    } catch (err) { logger.warn(err); }
   }, [employeeId]);
 
   // Check Mobile Device binding status from server
@@ -156,7 +157,7 @@ function EmployeeDetailPage() {
           setIsDeviceBound(data.bound);
         }
       }
-    } catch {}
+    } catch (err) { logger.warn(err); }
   }, [employeeId]);
 
   useEffect(() => {
@@ -225,7 +226,7 @@ function EmployeeDetailPage() {
         const localDb = JSON.parse(localStorage.getItem('ashley_face_registry_local') || '{}');
         delete localDb[employeeId];
         localStorage.setItem('ashley_face_registry_local', JSON.stringify(localDb));
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       await fetch('/api/attendance/face/delete', {
         method: 'POST',
@@ -285,7 +286,7 @@ function EmployeeDetailPage() {
       try {
         const cached = localStorage.getItem(`ashley_matrix_overrides_${selectedMonth}`);
         if (cached) localMap = JSON.parse(cached);
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
 
     try {
@@ -315,7 +316,7 @@ function EmployeeDetailPage() {
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(map));
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
       } else if (Object.keys(localMap).length > 0) {
         setMatrixOverrides(localMap);

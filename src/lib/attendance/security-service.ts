@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -11,7 +12,7 @@ export async function getSecurityStatus(supabase: SupabaseClient) {
       .order('name');
 
     if (uErr) {
-      console.warn('Security status fetch users error:', uErr);
+      logger.warn('Security status fetch users error:', uErr);
     }
 
     // Also get central device bindings registry
@@ -23,7 +24,7 @@ export async function getSecurityStatus(supabase: SupabaseClient) {
 
     let devRegistry: Record<string, any> = {};
     if (devRow?.qr_code) {
-      try { devRegistry = JSON.parse(devRow.qr_code); } catch {}
+      try { devRegistry = JSON.parse(devRow.qr_code); } catch (err) { logger.warn(err); }
     }
 
     // Also get central face registry
@@ -35,7 +36,7 @@ export async function getSecurityStatus(supabase: SupabaseClient) {
 
     let faceRegistry: Record<string, any> = {};
     if (faceRow?.qr_code) {
-      try { faceRegistry = JSON.parse(faceRow.qr_code); } catch {}
+      try { faceRegistry = JSON.parse(faceRow.qr_code); } catch (err) { logger.warn(err); }
     }
 
     const mergedUsers = (users || []).map(u => {
@@ -56,7 +57,7 @@ export async function getSecurityStatus(supabase: SupabaseClient) {
 
     return { success: true, users: mergedUsers };
   } catch (err: any) {
-    console.warn('getSecurityStatus error:', err);
+    logger.warn('getSecurityStatus error:', err);
     return { success: false, error: err.message || 'هەڵە لە وەرگرتنی دۆخی ئاسایش' };
   }
 }
@@ -83,7 +84,7 @@ export async function resetUserDevice(supabase: SupabaseClient, userId: string) 
 
     let registry: Record<string, any> = {};
     if (regRow?.qr_code) {
-      try { registry = JSON.parse(regRow.qr_code); } catch {}
+      try { registry = JSON.parse(regRow.qr_code); } catch (err) { logger.warn(err); }
     }
 
     if (registry[userId]) {
@@ -100,7 +101,7 @@ export async function resetUserDevice(supabase: SupabaseClient, userId: string) 
 
     return { success: true, message: 'مۆبایلەکە بە سەرکەوتوویی لە ئەدمینەوە هەڵوەشێنرایەوە' };
   } catch (err: any) {
-    console.warn('resetUserDevice error:', err);
+    logger.warn('resetUserDevice error:', err);
     return { success: false, error: err.message };
   }
 }
@@ -129,7 +130,7 @@ export async function resetUserFace(supabase: SupabaseClient, userId: string) {
 
     let registry: Record<string, any> = {};
     if (regRow?.qr_code) {
-      try { registry = JSON.parse(regRow.qr_code); } catch {}
+      try { registry = JSON.parse(regRow.qr_code); } catch (err) { logger.warn(err); }
     }
 
     if (registry[userId]) {
@@ -146,7 +147,7 @@ export async function resetUserFace(supabase: SupabaseClient, userId: string) {
 
     return { success: true, message: 'ڕوخساری کارمەند بە سەرکەوتوویی سفر کرایەوە' };
   } catch (err: any) {
-    console.warn('resetUserFace error:', err);
+    logger.warn('resetUserFace error:', err);
     return { success: false, error: err.message };
   }
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { useState, useMemo } from 'react';
 import { 
   ShieldCheck, 
@@ -162,7 +163,7 @@ export function AuditLogModal({
                 let formattedDate = log.timestamp;
                 try {
                   formattedDate = format(new Date(log.timestamp), 'yyyy-MM-dd • hh:mm a');
-                } catch {}
+                } catch (err) { logger.warn(err); }
 
                 return (
                   <div key={log.id} className="p-3 flex items-start justify-between gap-3 hover:bg-slate-50/80 dark:hover:bg-white/5 transition-colors">

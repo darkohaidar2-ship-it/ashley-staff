@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import { useState, useEffect } from 'react';
 import {
   onSnapshot,
@@ -66,7 +67,7 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       (e: FirestoreError) => {
-        console.error("Firestore Error (useCollection):", e);
+        logger.error("Firestore Error (useCollection):", e);
         toast({
           variant: "destructive",
           title: "Error Reading Data",

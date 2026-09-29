@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, RefreshCw, CheckCircle2, SwitchCamera, X } from 'lucide-react';
 import { extractFaceDescriptor, loadFaceModels } from '@/lib/face-recognition';
@@ -55,7 +56,7 @@ export function AdminFaceEnrollModal({
       if (localDb[employee.id]) {
         setAlreadyRegistered(true);
       }
-    } catch {}
+    } catch (err) { logger.warn(err); }
 
     fetch(`/api/attendance/face/status?userId=${employee.id}&_t=${Date.now()}`)
       .then((res) => res.json())
@@ -88,7 +89,7 @@ export function AdminFaceEnrollModal({
           audio: false,
         });
       } catch (err) {
-        console.warn('High-res camera fallback in enroll modal:', err);
+        logger.warn('High-res camera fallback in enroll modal:', err);
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: mode },
@@ -108,7 +109,7 @@ export function AdminFaceEnrollModal({
         videoRef.current.play().catch(() => {});
       }
     } catch (err: any) {
-      console.error('Camera open error:', err);
+      logger.error('Camera open error:', err);
       setStatusMessage('هەڵە لە کردنەوەی کامێرا: ' + (err.message || 'تکایە لە Safari ڕێگە بدە'));
       setIsSuccess(false);
     }
@@ -148,7 +149,7 @@ export function AdminFaceEnrollModal({
           descriptor,
         };
         localStorage.setItem('ashley_face_registry_local', JSON.stringify(localDb));
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       // 2. Save 128-D vector descriptor to Supabase
       const res = await fetch('/api/attendance/face/register', {
@@ -178,7 +179,7 @@ export function AdminFaceEnrollModal({
         onCloseRef.current();
       }, 1200);
     } catch (err: any) {
-      console.error('Face registration error:', err);
+      logger.error('Face registration error:', err);
       setIsSuccess(false);
       setStatusMessage('هەڵە لە تۆمارکردن: ' + (err.message || 'شکستی هێڵ'));
       isEnrollingRef.current = false;
@@ -235,7 +236,7 @@ export function AdminFaceEnrollModal({
           }
         }
       } catch (err) {
-        console.error('Detection frame error:', err);
+        logger.error('Detection frame error:', err);
       } finally {
         isDetecting = false;
       }

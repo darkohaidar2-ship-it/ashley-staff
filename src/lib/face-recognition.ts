@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 // AI Face Recognition Engine for Ashley ERP (Pure Client-Side Dynamic Import)
 
 let faceapiModule: any = null;
@@ -35,7 +36,7 @@ export async function loadFaceModels(): Promise<boolean> {
       modelsLoaded = true;
       return true;
     } catch (err) {
-      console.warn('Face-api models primary CDN warning, trying fallback:', err);
+      logger.warn('Face-api models primary CDN warning, trying fallback:', err);
       try {
         const faceapi = await getFaceApi();
         if (!faceapi) return false;
@@ -47,7 +48,7 @@ export async function loadFaceModels(): Promise<boolean> {
         modelsLoaded = true;
         return true;
       } catch (fallbackErr) {
-        console.error('Fatal error loading face models:', fallbackErr);
+        logger.error('Fatal error loading face models:', fallbackErr);
         return false;
       }
     }

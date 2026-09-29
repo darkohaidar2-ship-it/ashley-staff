@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { fetchSupabaseJson, saveSupabaseJson } from '@/lib/supabase/client';
 import type { Transfer, ItemForTransfer, OrderRequest } from '@/lib/types';
 import { initialData } from '@/context/initial-data';
@@ -18,7 +19,7 @@ export async function fetchTransfers(): Promise<Transfer[]> {
     }
     return [];
   } catch (err) {
-    console.error('[TransfersService] Error fetching transfers:', err);
+    logger.error('[TransfersService] Error fetching transfers:', err);
     return initialData.transfers || [];
   }
 }
@@ -43,7 +44,7 @@ export async function fetchTransferItems(): Promise<ItemForTransfer[]> {
     }
     return [];
   } catch (err) {
-    console.error('[TransfersService] Error fetching transfer items:', err);
+    logger.error('[TransfersService] Error fetching transfer items:', err);
     return initialData.transferItems || [];
   }
 }
@@ -68,7 +69,7 @@ export async function fetchOrderRequests(): Promise<OrderRequest[]> {
     }
     return [];
   } catch (err) {
-    console.error('[TransfersService] Error fetching order requests:', err);
+    logger.error('[TransfersService] Error fetching order requests:', err);
     return initialData.orderRequests || [];
   }
 }

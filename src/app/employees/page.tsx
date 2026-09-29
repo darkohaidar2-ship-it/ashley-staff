@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import withAuth from '@/hooks/withAuth';
 import { Button } from '@/components/ui/button';
@@ -167,7 +168,7 @@ function EmployeesPage() {
     try {
       const localDb = JSON.parse(localStorage.getItem('ashley_face_registry_local') || '{}');
       Object.keys(localDb).forEach(id => faceSet.add(id.toLowerCase()));
-    } catch {}
+    } catch (err) { logger.warn(err); }
 
     try {
       const res = await fetch(`/api/attendance/face/list?_t=${Date.now()}`, { cache: 'no-store' });
@@ -177,7 +178,7 @@ function EmployeesPage() {
           data.faceIds.forEach((id: string) => faceSet.add(id.toLowerCase()));
         }
       }
-    } catch {}
+    } catch (err) { logger.warn(err); }
 
     setRegisteredFaces(faceSet);
   }, []);
@@ -200,7 +201,7 @@ function EmployeesPage() {
           });
         }
       }
-    } catch {}
+    } catch (err) { logger.warn(err); }
 
     setRegisteredDevices(devSet);
   }, []);
@@ -220,7 +221,7 @@ function EmployeesPage() {
       try {
         const cached = localStorage.getItem(`ashley_matrix_overrides_${currentMonthStr}`);
         if (cached) localMap = JSON.parse(cached);
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
 
     try {
@@ -250,7 +251,7 @@ function EmployeesPage() {
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem(`ashley_matrix_overrides_${currentMonthStr}`, JSON.stringify(map));
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
       } else if (Object.keys(localMap).length > 0) {
         setMatrixOverrides(localMap);

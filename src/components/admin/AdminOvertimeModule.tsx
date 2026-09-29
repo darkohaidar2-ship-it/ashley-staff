@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Employee } from '@/lib/types';
 import { useAppContext } from '@/context/app-provider';
@@ -48,7 +49,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       try {
         const stored = localStorage.getItem('ashley_admin_notes_2026-08');
         if (stored) return JSON.parse(stored);
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
     return {};
   });
@@ -75,7 +76,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         } else {
           setAdminNotes({});
         }
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
 
     // Cloud fetch from Supabase
@@ -88,7 +89,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
           if (typeof window !== 'undefined') {
             try {
               localStorage.setItem(`ashley_admin_notes_${selectedMonth}`, JSON.stringify(merged));
-            } catch {}
+            } catch (err) { logger.warn(err); }
           }
           return merged;
         });
@@ -106,7 +107,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       try {
         const cached = localStorage.getItem(`ashley_matrix_overrides_${selectedMonth}`);
         if (cached) return JSON.parse(cached);
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
     return {};
   });
@@ -118,7 +119,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         try {
           const cached = localStorage.getItem(`ashley_matrix_overrides_${selectedMonth}`);
           if (cached) localMap = JSON.parse(cached);
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
 
       const res = await fetch(`/api/attendance/admin/report?t=${Date.now()}`, { cache: 'no-store' });
@@ -191,12 +192,12 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(map));
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
       } else if (Object.keys(localMap).length > 0) {
         setMatrixOverrides(localMap);
       }
-    } catch {}
+    } catch (err) { logger.warn(err); }
   }, [selectedMonth]);
 
   useEffect(() => {
@@ -208,7 +209,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
           if (cached) {
             setMatrixOverrides(JSON.parse(cached));
           }
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
     };
     window.addEventListener('ashley_attendance_updated', handleUpdate);
@@ -237,7 +238,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(nextMap));
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
 
       try {
@@ -253,7 +254,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
             }]
           })
         });
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('ashley_attendance_updated'));
@@ -272,7 +273,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         })
       });
     } catch (err) {
-      console.warn('Could not sync note to cloud:', err);
+      logger.warn('Could not sync note to cloud:', err);
     }
   };
 
@@ -291,7 +292,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
           const localList = JSON.parse(rawLocal);
           if (Array.isArray(localList)) list = [...list, ...localList];
         }
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
     return list;
   }, [attendanceLogs]);

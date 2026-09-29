@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { AttendanceRecord, Employee } from '@/lib/types';
 import { 
@@ -153,7 +154,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         const curMonth = format(new Date(), 'yyyy-MM');
         const cached = localStorage.getItem(`ashley_matrix_overrides_${curMonth}`);
         if (cached) return JSON.parse(cached);
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
     return {};
   });
@@ -241,7 +242,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         try {
           const cached = localStorage.getItem(`ashley_matrix_overrides_${selectedMonth}`);
           if (cached) localMap = JSON.parse(cached);
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
 
       const res = await fetch(`/api/attendance/admin/report?t=${Date.now()}`, { cache: 'no-store' });
@@ -309,7 +310,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(map));
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
       } else if (Object.keys(localMap).length > 0) {
         setManualStatusMap(prev => ({ ...prev, ...localMap }));
@@ -319,7 +320,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         try {
           const cached = localStorage.getItem(`ashley_matrix_overrides_${selectedMonth}`);
           if (cached) setManualStatusMap(prev => ({ ...prev, ...JSON.parse(cached) }));
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
     } finally {
       setIsRecordsLoaded(true);
@@ -610,7 +611,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         try {
           localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(next));
           window.dispatchEvent(new Event('ashley_attendance_updated'));
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
       return next;
     });
@@ -632,12 +633,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               });
               localStorage.setItem(storageKey, JSON.stringify(filtered));
             }
-          } catch {}
+          } catch (err) { logger.warn(err); }
         };
         purgeLocal('ashley_live_checkins');
         purgeLocal('ashley_local_attendanceLogs');
         purgeLocal('ashley_sb_attendanceLogs');
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
 
     // Close modal and clear selection immediately (0ms UI feedback)
@@ -662,9 +663,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ records: recordsPayload })
-      }).catch(err => console.error('Batch save error:', err));
+      }).catch(err => logger.error('Batch save error:', err));
     } catch (err) {
-      console.error('Batch save error:', err);
+      logger.error('Batch save error:', err);
     } finally {
       setIsApplyingBatch(false);
     }
@@ -770,7 +771,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(next));
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
         return next;
       });
@@ -808,9 +809,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           isCheckInWaived,
           isCheckOutWaived,
         })
-      }).catch(e => console.error('Error saving modal attendance edit:', e));
+      }).catch(e => logger.error('Error saving modal attendance edit:', e));
     } catch (e) {
-      console.error('Error saving modal attendance edit:', e);
+      logger.error('Error saving modal attendance edit:', e);
     } finally {
       setIsSavingModal(false);
     }
@@ -858,7 +859,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(next));
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
       return next;
     });
@@ -883,7 +884,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               });
               localStorage.setItem(storageKey, JSON.stringify(filtered));
             }
-          } catch {}
+          } catch (err) { logger.warn(err); }
         };
 
         purgeLogs('ashley_live_checkins');
@@ -894,7 +895,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           detail: { empId, dateStr: dayItem.dateStr, name: empName }
         }));
         window.dispatchEvent(new Event('ashley_attendance_updated'));
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
 
     // 4. Persistent server sync in background (non-blocking)
@@ -908,7 +909,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         action: 'delete',
         status: 'empty'
       })
-    }).catch(e => console.error('Error deleting record:', e));
+    }).catch(e => logger.error('Error deleting record:', e));
   };
 
 

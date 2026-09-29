@@ -1,19 +1,24 @@
 import { createClient } from '@supabase/supabase-js';
+import { logger } from '@/lib/logger';
 
-export const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ylttlgklfdyhmqwblaex.supabase.co';
-export const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_4isRbaASi-6q45nw5_LxbQ_5dRrAwWt';
+export const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+export const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10,
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseKey || 'placeholder-anon-key',
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
     },
-  },
-});
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
+      },
+    },
+  }
+);
 
 /**
  * Generic helper to fetch JSON state stored in Supabase warehouses table
@@ -31,7 +36,7 @@ export async function fetchSupabaseJson<T>(key: string, fallback: T): Promise<T>
     }
     return JSON.parse(data.qr_code) as T;
   } catch (err) {
-    console.warn(`[Supabase] Error reading ${key}:`, err);
+    logger.warn(`[Supabase] Error reading ${key}:`, err);
     return fallback;
   }
 }
@@ -51,12 +56,12 @@ export async function saveSupabaseJson<T>(key: string, name: string, payload: T)
       });
 
     if (error) {
-      console.error(`[Supabase] Error writing ${key}:`, error);
+      logger.error(`[Supabase] Error writing ${key}:`, error);
       return false;
     }
     return true;
   } catch (err) {
-    console.error(`[Supabase] Exception saving ${key}:`, err);
+    logger.error(`[Supabase] Exception saving ${key}:`, err);
     return false;
   }
 }

@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { MapPin, Navigation, X, Building2, Compass, AlertCircle, Warehouse } from 'lucide-react';
 import { getDistanceMeters, type GeofenceRegion } from '@/lib/background-geofence';
+import { DEFAULT_COMPANY_LOCATIONS, ASHLEY_BASE_LOCATION } from '@/lib/geo-constants';
 
 interface MobileAttendanceMapModalProps {
   isOpen: boolean;
@@ -29,10 +30,7 @@ export function MobileAttendanceMapModal({
   );
 
   // Fallback to default two branches if list is empty
-  const activeCompanyLocations = validLocations.length > 0 ? validLocations : [
-    { id: 'ashley-base-main', name: 'کۆمپانیای سەرەکی ئاشڵی (Ashley Base)', lat: 35.5571, lng: 45.4352, radiusMeters: 100 },
-    { id: 'huana-warehouse-main', name: 'کۆگای سەرەکی هوانە (Huana Warehouse)', lat: 35.6012, lng: 45.3850, radiusMeters: 120 }
-  ];
+  const activeCompanyLocations = validLocations.length > 0 ? validLocations : DEFAULT_COMPANY_LOCATIONS;
 
   // Compute distances to each location
   const locationsWithDistance = activeCompanyLocations.map(loc => {
@@ -93,7 +91,7 @@ export function MobileAttendanceMapModal({
         mapInstanceRef.current.remove();
       }
 
-      const primaryLoc = activeCompanyLocations[0] || { lat: 35.5571, lng: 45.4352 };
+      const primaryLoc = activeCompanyLocations[0] || ASHLEY_BASE_LOCATION;
 
       const map = L.map(mapContainerRef.current, {
         center: [primaryLoc.lat, primaryLoc.lng],

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase/client';
 import type { AttendanceRecord } from '@/lib/types';
 
@@ -10,7 +11,7 @@ export async function fetchAttendanceLogs(): Promise<AttendanceRecord[]> {
       .limit(500);
 
     if (error) {
-      console.error('[AttendanceService] Error fetching attendance_logs:', error);
+      logger.error('[AttendanceService] Error fetching attendance_logs:', error);
       return [];
     }
 
@@ -34,7 +35,7 @@ export async function fetchAttendanceLogs(): Promise<AttendanceRecord[]> {
       status: 'present',
     })) as unknown as AttendanceRecord[];
   } catch (err) {
-    console.error('[AttendanceService] Exception fetching attendance logs:', err);
+    logger.error('[AttendanceService] Exception fetching attendance logs:', err);
     return [];
   }
 }
@@ -48,12 +49,12 @@ export async function fetchDailyAttendance(): Promise<any[]> {
       .limit(500);
 
     if (error) {
-      console.error('[AttendanceService] Error fetching attendance records:', error);
+      logger.error('[AttendanceService] Error fetching attendance records:', error);
       return [];
     }
     return data || [];
   } catch (err) {
-    console.error('[AttendanceService] Exception fetching attendance records:', err);
+    logger.error('[AttendanceService] Exception fetching attendance records:', err);
     return [];
   }
 }
@@ -66,12 +67,12 @@ export async function fetchLocations(): Promise<any[]> {
       .not('lat', 'is', null);
 
     if (error) {
-      console.error('[AttendanceService] Error fetching warehouse locations:', error);
+      logger.error('[AttendanceService] Error fetching warehouse locations:', error);
       return [];
     }
     return data || [];
   } catch (err) {
-    console.error('[AttendanceService] Exception fetching warehouse locations:', err);
+    logger.error('[AttendanceService] Exception fetching warehouse locations:', err);
     return [];
   }
 }

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { SupabaseClient } from '@supabase/supabase-js';
 
 export interface EmployeeProfileData {
@@ -28,14 +29,14 @@ export async function getEmployeeProfile(supabase: SupabaseClient, userId: strin
       .eq('id', 'ashley_employee_profiles')
       .maybeSingle();
     if (pRow?.qr_code) profilesMap = JSON.parse(pRow.qr_code);
-  } catch {}
+  } catch (err) { logger.warn(err); }
 
   const customProfile = profilesMap[userId] || {};
   let dbUser: any = null;
   try {
     const { data: u } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
     if (u) dbUser = u;
-  } catch {}
+  } catch (err) { logger.warn(err); }
 
   return {
     success: true,
@@ -70,7 +71,7 @@ export async function updateEmployeeProfile(supabase: SupabaseClient, payload: E
     
     let profilesMap: Record<string, any> = {};
     if (pRow?.qr_code) {
-      try { profilesMap = JSON.parse(pRow.qr_code); } catch {}
+      try { profilesMap = JSON.parse(pRow.qr_code); } catch (err) { logger.warn(err); }
     }
 
     profilesMap[userId] = {
@@ -104,7 +105,7 @@ export async function updateEmployeeProfile(supabase: SupabaseClient, payload: E
 
     return { success: true, message: 'زانیارییەکان بە سەرکەوتوویی نوێکرانەوە' };
   } catch (err: any) {
-    console.warn('Update profile error:', err);
+    logger.warn('Update profile error:', err);
     return { success: false, error: err.message || 'هەڵەیەک ڕوویدا لە نوێکردنەوە' };
   }
 }

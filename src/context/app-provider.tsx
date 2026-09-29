@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { createContext, useContext, ReactNode, useMemo, useEffect, useState, useCallback } from 'react';
 import { 
     supabase, 
@@ -148,7 +149,7 @@ function useSupabaseCollection<T extends { id?: string }>(
                 try {
                     const parsed = JSON.parse(cached);
                     if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-                } catch {}
+                } catch (err) { logger.warn(err); }
             }
         }
         return initialFallback;
@@ -171,7 +172,7 @@ function useSupabaseCollection<T extends { id?: string }>(
                 }
             })
             .catch((err) => {
-                console.warn(`[Supabase] Error loading ${key}:`, err);
+                logger.warn(`[Supabase] Error loading ${key}:`, err);
             })
             .finally(() => {
                 if (mounted) setIsLoading(false);
@@ -215,7 +216,7 @@ function useSupabaseCollection<T extends { id?: string }>(
 
             // Asynchronously save to Supabase
             saveFn(next).catch((err) => {
-                console.error(`[Supabase] Error saving ${key}:`, err);
+                logger.error(`[Supabase] Error saving ${key}:`, err);
             });
 
             return next;
@@ -235,7 +236,7 @@ function useSimpleLocalState<T>(key: string, initialFallback: T[]) {
             if (cached) {
                 try {
                     return JSON.parse(cached);
-                } catch {}
+                } catch (err) { logger.warn(err); }
             }
         }
         return initialFallback;
@@ -300,7 +301,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (cached) {
                 try {
                     return JSON.parse(cached);
-                } catch {}
+                } catch (err) { logger.warn(err); }
             }
         }
         return (initialData as any).attendanceLogs || [];
@@ -421,7 +422,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         localStorage.removeItem(k);
                     }
                 });
-            } catch {}
+            } catch (err) { logger.warn(err); }
         }
 
         let isFetching = false;
@@ -440,7 +441,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         }
                     }
                 })
-                .catch((err) => console.warn('[Attendance] Realtime sync notice:', err))
+                .catch((err) => logger.warn('[Attendance] Realtime sync notice:', err))
                 .finally(() => {
                     isFetching = false;
                 });
@@ -513,7 +514,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                             });
                         }
                     } catch (e) {
-                        console.warn('[Realtime] Parse error for warehouse record:', row.id, e);
+                        logger.warn('[Realtime] Parse error for warehouse record:', row.id, e);
                     }
                 }
             )
@@ -683,7 +684,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (cached) {
                 try {
                     return { ...initialSettings, ...JSON.parse(cached) };
-                } catch {}
+                } catch (err) { logger.warn(err); }
             }
             return initialSettings;
         }
@@ -729,7 +730,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
             // Realtime sync to Supabase Cloud
             saveAppSettings(newSettings).catch((err) => {
-                console.error('[Supabase] Failed to sync settings to cloud:', err);
+                logger.error('[Supabase] Failed to sync settings to cloud:', err);
             });
             if (newSettings.salarySettings) {
                 saveSalarySettings(newSettings.salarySettings).catch(() => {});

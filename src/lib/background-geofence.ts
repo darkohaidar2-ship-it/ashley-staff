@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 /**
  * Autonomous Background Geofencing Attendance Engine
  * Ashley ERP - 2027
@@ -58,13 +59,13 @@ export async function sendLocalNotification(title: string, body: string) {
           dir: 'rtl',
           lang: 'ku',
         });
-      } catch {}
+      } catch (err) { logger.warn(err); }
     } else if (Notification.permission !== 'denied') {
       const perm = await Notification.requestPermission();
       if (perm === 'granted') {
         try {
           new Notification(title, { body, icon: '/icon.png', dir: 'rtl' });
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
     }
   }
@@ -262,7 +263,7 @@ class AutonomousGeofenceManager {
       const queue = JSON.parse(localStorage.getItem('ashley_offline_geofence_queue') || '[]');
       queue.push(payload);
       localStorage.setItem('ashley_offline_geofence_queue', JSON.stringify(queue));
-    } catch {}
+    } catch (err) { logger.warn(err); }
   }
 
   private async flushOfflineQueue() {
@@ -284,7 +285,7 @@ class AutonomousGeofenceManager {
         }
       }
       localStorage.setItem('ashley_offline_geofence_queue', JSON.stringify(remaining));
-    } catch {}
+    } catch (err) { logger.warn(err); }
   }
 }
 

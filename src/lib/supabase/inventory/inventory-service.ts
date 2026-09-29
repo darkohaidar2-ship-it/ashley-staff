@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { fetchSupabaseJson, saveSupabaseJson } from '@/lib/supabase/client';
 import type { Item, ExcelFile, StorageLocation, ItemCategory, WarehouseMap, SoldItemsList } from '@/lib/types';
 import { initialData } from '@/context/initial-data';
@@ -21,7 +22,7 @@ export async function fetchItems(): Promise<Item[]> {
     }
     return [];
   } catch (err) {
-    console.error('[InventoryService] Error fetching items:', err);
+    logger.error('[InventoryService] Error fetching items:', err);
     return initialData.items || [];
   }
 }
@@ -46,7 +47,7 @@ export async function fetchExcelFiles(): Promise<ExcelFile[]> {
     }
     return [];
   } catch (err) {
-    console.error('[InventoryService] Error fetching excel files:', err);
+    logger.error('[InventoryService] Error fetching excel files:', err);
     return initialData.excelFiles || [];
   }
 }
@@ -71,7 +72,7 @@ export async function fetchStorageLocations(): Promise<StorageLocation[]> {
     }
     return [];
   } catch (err) {
-    console.error('[InventoryService] Error fetching locations:', err);
+    logger.error('[InventoryService] Error fetching locations:', err);
     return initialData.locations || [];
   }
 }
@@ -96,7 +97,7 @@ export async function fetchItemCategories(): Promise<ItemCategory[]> {
     }
     return [];
   } catch (err) {
-    console.error('[InventoryService] Error fetching categories:', err);
+    logger.error('[InventoryService] Error fetching categories:', err);
     return initialData.itemCategories || [];
   }
 }
@@ -121,7 +122,7 @@ export async function fetchWarehouseMaps(): Promise<WarehouseMap[]> {
     }
     return [];
   } catch (err) {
-    console.error('[InventoryService] Error fetching warehouse maps:', err);
+    logger.error('[InventoryService] Error fetching warehouse maps:', err);
     return initialData.warehouseMaps || [];
   }
 }
@@ -146,7 +147,7 @@ export async function fetchSoldItemsLists(): Promise<SoldItemsList[]> {
     }
     return [];
   } catch (err) {
-    console.error('[InventoryService] Error fetching sold items:', err);
+    logger.error('[InventoryService] Error fetching sold items:', err);
     return initialData.soldItemsLists || [];
   }
 }

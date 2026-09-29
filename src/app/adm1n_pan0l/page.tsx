@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminDashboardWorkspace } from '@/components/admin/AdminDashboardWorkspace';
@@ -43,7 +44,7 @@ export default function HiddenAdminPanelPortal() {
           if (parsed && (parsed.token || parsed.username || parsed.id)) {
             setSessionUser(parsed);
           }
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
     }
   }, []);
@@ -133,7 +134,7 @@ export default function HiddenAdminPanelPortal() {
 
       try {
         await login(username.trim(), password.trim());
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       setSessionUser(loggedUser);
     } catch {

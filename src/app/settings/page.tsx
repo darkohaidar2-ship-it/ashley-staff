@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { 
@@ -211,7 +212,7 @@ function SettingsPage() {
           body: JSON.stringify(shiftData)
         });
       } catch (err) {
-        console.warn('Shift sync warning:', err);
+        logger.warn('Shift sync warning:', err);
       }
 
       setIsSaved(true);

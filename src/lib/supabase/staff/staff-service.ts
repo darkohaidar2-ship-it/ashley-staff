@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { supabase, fetchSupabaseJson, saveSupabaseJson } from '@/lib/supabase/client';
 import type { Employee } from '@/lib/types';
 import { initialData } from '@/context/initial-data';
@@ -52,7 +53,7 @@ export async function fetchEmployees(): Promise<Employee[]> {
 
     return [];
   } catch (err) {
-    console.error('[StaffService] Error fetching employees:', err);
+    logger.error('[StaffService] Error fetching employees:', err);
     return initialData.employees || [];
   }
 }
@@ -78,7 +79,7 @@ export async function updateEmployee(updated: Partial<Employee> & { id: string }
     }
     return await saveEmployees(newList);
   } catch (err) {
-    console.error('[StaffService] Error updating employee:', err);
+    logger.error('[StaffService] Error updating employee:', err);
     return false;
   }
 }

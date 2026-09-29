@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
@@ -87,14 +88,14 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
         } else {
           // No user is signed in, so sign them in anonymously as a "guest".
           signInAnonymously(auth).catch((error) => {
-            console.error("Anonymous sign-in failed", error);
+            logger.error("Anonymous sign-in failed", error);
             setUserAuthState({ user: null, isUserLoading: false, userError: error });
           });
           // The onAuthStateChanged listener will be called again once anonymous sign-in completes.
         }
       },
       (error) => { // Auth listener error
-        console.error("FirebaseProvider: onAuthStateChanged error:", error);
+        logger.error("FirebaseProvider: onAuthStateChanged error:", error);
         setUserAuthState({ user: null, isUserLoading: false, userError: error });
       }
     );

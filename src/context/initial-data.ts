@@ -1,6 +1,35 @@
-import { Employee, User, Role, AppSettings, AllPdfSettings, PdfSettings, ThemeColors, BranchColors, AnswerOption } from '@/lib/types';
+import {
+    Employee,
+    User,
+    Role,
+    AppSettings,
+    AllPdfSettings,
+    PdfSettings,
+    ThemeColors,
+    BranchColors,
+    AnswerOption,
+    WarehouseMap,
+    AttendanceRecord,
+    ExcelFile,
+    Item,
+    StorageLocation,
+    Expense,
+    ExpenseReport,
+    Overtime,
+    Bonus,
+    CashWithdrawal,
+    ItemCategory,
+    Transfer,
+    ItemForTransfer,
+    OrderRequest,
+    MarketingFeedback,
+    EvaluationQuestion,
+    SoldItemsList,
+    ActivityLog,
+} from '@/lib/types';
 import { adminPermissions, adminAssistantPermissions, viewerPermissions, employeePermissions, financeManagerPermissions, inventoryManagerPermissions, hrManagerPermissions } from '@/lib/permissions';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
+import { DEFAULT_FACTORY_LOCATION } from '@/lib/geo-constants';
 import en from '@/locales/en.json';
 import ku from '@/locales/ku.json';
 
@@ -190,16 +219,35 @@ export const initialSettings: AppSettings = {
     language: 'en',
     globalTextSize: 14,
     branchTextSize: 9,
-    factoryLocation: {
-      name: 'کارگەی سەرەکی ئاشڵی (Ashley Factory)',
-      lat: 35.5571,
-      lng: 45.4352,
-      radiusMeters: 500,
-    },
+    factoryLocation: DEFAULT_FACTORY_LOCATION,
 };
 
 
-export const initialData: any = {
+export interface InitialAppData {
+    warehouseMaps: WarehouseMap[];
+    employees: Employee[];
+    attendanceLogs: AttendanceRecord[];
+    excelFiles: ExcelFile[];
+    items: Item[];
+    locations: StorageLocation[];
+    expenses: Expense[];
+    expenseReports: ExpenseReport[];
+    overtime: Overtime[];
+    bonuses: Bonus[];
+    withdrawals: CashWithdrawal[];
+    itemCategories: ItemCategory[];
+    transfers: Transfer[];
+    transferItems: ItemForTransfer[];
+    orderRequests: OrderRequest[];
+    marketingFeedbacks: MarketingFeedback[];
+    evaluationQuestions: EvaluationQuestion[];
+    users: User[];
+    roles: Role[];
+    soldItemsLists: SoldItemsList[];
+    activityLogs: ActivityLog[];
+}
+
+export const initialData: InitialAppData = {
     warehouseMaps: [
         {
             id: 'wm-1',

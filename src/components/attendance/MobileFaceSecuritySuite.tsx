@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Smartphone, ScanFace, RefreshCw, 
@@ -49,7 +50,7 @@ export default function MobileFaceSecuritySuite() {
         setEmployees(data.employees || []);
       }
     } catch (e: any) {
-      console.error('Failed to load security status:', e);
+      logger.error('Failed to load security status:', e);
     } finally {
       if (!silent) setLoading(false);
     }

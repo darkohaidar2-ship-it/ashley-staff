@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { 
@@ -143,7 +144,7 @@ export function AdminDailyAttendanceTable({
       try {
         const cached = localStorage.getItem(`ashley_matrix_overrides_${activeMonth}`);
         if (cached) return JSON.parse(cached);
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
     return {};
   });
@@ -155,7 +156,7 @@ export function AdminDailyAttendanceTable({
         try {
           const cached = localStorage.getItem(`ashley_matrix_overrides_${activeMonth}`);
           if (cached) localMap = JSON.parse(cached);
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
 
       const res = await fetch(`/api/attendance/admin/report?t=${Date.now()}`, { cache: 'no-store' });
@@ -225,12 +226,12 @@ export function AdminDailyAttendanceTable({
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem(`ashley_matrix_overrides_${activeMonth}`, JSON.stringify(map));
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
       } else if (Object.keys(localMap).length > 0) {
         setMatrixOverrides(localMap);
       }
-    } catch {}
+    } catch (err) { logger.warn(err); }
   }, [activeMonth]);
 
   useEffect(() => {
@@ -245,7 +246,7 @@ export function AdminDailyAttendanceTable({
           if (cached) {
             setMatrixOverrides(JSON.parse(cached));
           }
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
       setLocalOverridesVersion(v => v + 1);
       fetchDailyExcursions(selectedDate);
@@ -274,7 +275,7 @@ export function AdminDailyAttendanceTable({
           const localList = JSON.parse(rawLocal);
           if (Array.isArray(localList)) list = [...list, ...localList];
         }
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
     return list;
   }, [attendanceLogs, localOverridesVersion]);
@@ -483,7 +484,7 @@ export function AdminDailyAttendanceTable({
           delete storedAdminNotes[key];
         }
         localStorage.setItem(`ashley_admin_notes_${selectedMonth}`, JSON.stringify(storedAdminNotes));
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
 
     // Sync to matrix overrides & cloud
@@ -497,7 +498,7 @@ export function AdminDailyAttendanceTable({
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(nextMap));
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
 
     try {
@@ -512,7 +513,7 @@ export function AdminDailyAttendanceTable({
           }]
         })
       });
-    } catch {}
+    } catch (err) { logger.warn(err); }
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('ashley_attendance_updated'));
@@ -558,7 +559,7 @@ export function AdminDailyAttendanceTable({
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem(`ashley_matrix_overrides_${activeMonth}`, JSON.stringify(next));
-          } catch {}
+          } catch (err) { logger.warn(err); }
         }
         return next;
       });
@@ -583,7 +584,7 @@ export function AdminDailyAttendanceTable({
                 });
                 localStorage.setItem(storageKey, JSON.stringify(filtered));
               }
-            } catch {}
+            } catch (err) { logger.warn(err); }
           };
 
           purgeLogs('ashley_live_checkins');
@@ -594,7 +595,7 @@ export function AdminDailyAttendanceTable({
             detail: { empId: cleanEmpId, dateStr: selectedDate, name: cleanName }
           }));
           window.dispatchEvent(new Event('ashley_attendance_updated'));
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
 
       setLocalOverridesVersion(v => v + 1);
@@ -612,7 +613,7 @@ export function AdminDailyAttendanceTable({
             status: 'empty'
           }]
         })
-      }).catch(err => console.error('Error deleting daily attendance row:', err));
+      }).catch(err => logger.error('Error deleting daily attendance row:', err));
     }
   };
 
@@ -643,7 +644,7 @@ export function AdminDailyAttendanceTable({
           storedAdminNotes[adminNoteKey] = combinedNote;
           localStorage.setItem(`ashley_admin_notes_${activeMonth}`, JSON.stringify(storedAdminNotes));
         }
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
     if (onUpdateAdminNote && combinedNote) {
       onUpdateAdminNote(adminNoteKey, combinedNote);
@@ -655,7 +656,7 @@ export function AdminDailyAttendanceTable({
         const delMap = JSON.parse(localStorage.getItem(`ashley_deleted_attendance_${activeMonth}`) || '{}');
         delete delMap[adminNoteKey];
         localStorage.setItem(`ashley_deleted_attendance_${activeMonth}`, JSON.stringify(delMap));
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
 
     // 3. Update ashley_matrix_overrides_${activeMonth} INSTANTLY
@@ -691,7 +692,7 @@ export function AdminDailyAttendanceTable({
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(`ashley_matrix_overrides_${activeMonth}`, JSON.stringify(nextOverrides));
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
 
     // Close modal IMMEDIATELY (0ms instant response)
@@ -720,7 +721,7 @@ export function AdminDailyAttendanceTable({
         }]
       })
     }).catch(err => {
-      console.warn('Background sync warning:', err);
+      logger.warn('Background sync warning:', err);
     });
   };
 
@@ -735,7 +736,7 @@ export function AdminDailyAttendanceTable({
         body: JSON.stringify({ wipeAll: true })
       });
     } catch (e) {
-      console.warn('Wipe server attendance error:', e);
+      logger.warn('Wipe server attendance error:', e);
     }
 
     if (typeof window !== 'undefined') {
@@ -759,7 +760,7 @@ export function AdminDailyAttendanceTable({
             localStorage.removeItem(k);
           }
         });
-      } catch {}
+      } catch (err) { logger.warn(err); }
       window.dispatchEvent(new Event('ashley_attendance_updated'));
     }
     alert('✅ سەرجەم داتاکانی ئامادەبوون و تۆمارەکان بە سەرکەوتوویی سڕانەوە.');

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { fetchSupabaseJson, saveSupabaseJson } from '@/lib/supabase/client';
 import type { Expense, Bonus, CashWithdrawal, SalarySettings } from '@/lib/types';
 import { initialData, initialSettings } from '@/context/initial-data';
@@ -21,7 +22,7 @@ export async function fetchExpenses(): Promise<Expense[]> {
     }
     return [];
   } catch (err) {
-    console.error('[ExpensesService] Error fetching expenses:', err);
+    logger.error('[ExpensesService] Error fetching expenses:', err);
     return initialData.expenses || [];
   }
 }
@@ -48,7 +49,7 @@ export async function fetchBonuses(): Promise<Bonus[]> {
     }
     return [];
   } catch (err) {
-    console.error('[ExpensesService] Error fetching bonuses:', err);
+    logger.error('[ExpensesService] Error fetching bonuses:', err);
     return initialData.bonuses || [];
   }
 }
@@ -75,7 +76,7 @@ export async function fetchWithdrawals(): Promise<CashWithdrawal[]> {
     }
     return [];
   } catch (err) {
-    console.error('[ExpensesService] Error fetching withdrawals:', err);
+    logger.error('[ExpensesService] Error fetching withdrawals:', err);
     return initialData.withdrawals || [];
   }
 }
@@ -94,7 +95,7 @@ export async function fetchSalarySettings(): Promise<SalarySettings> {
     const fallback = initialSettings.salarySettings || { overtimeRate: 5000, bonusRate: 5000 };
     return await fetchSupabaseJson<SalarySettings>(SALARY_SETTINGS_KEY, fallback);
   } catch (err) {
-    console.error('[ExpensesService] Error fetching salary settings:', err);
+    logger.error('[ExpensesService] Error fetching salary settings:', err);
     return initialSettings.salarySettings || { overtimeRate: 5000, bonusRate: 5000 };
   }
 }
@@ -122,7 +123,7 @@ export async function fetchCustomExpenseCategories(): Promise<CustomExpenseCateg
   try {
     return await fetchSupabaseJson<CustomExpenseCategory[] | null>(CUSTOM_EXPENSE_CATEGORIES_KEY, null);
   } catch (err) {
-    console.error('[ExpensesService] Error fetching custom categories from Supabase:', err);
+    logger.error('[ExpensesService] Error fetching custom categories from Supabase:', err);
     return null;
   }
 }
@@ -135,7 +136,7 @@ export async function saveCustomExpenseCategories(categories: CustomExpenseCateg
       categories
     );
   } catch (err) {
-    console.error('[ExpensesService] Error saving custom categories to Supabase:', err);
+    logger.error('[ExpensesService] Error saving custom categories to Supabase:', err);
     return false;
   }
 }
@@ -144,7 +145,7 @@ export async function fetchCustomPresetReasons(): Promise<Record<string, string[
   try {
     return await fetchSupabaseJson<Record<string, string[]> | null>(CUSTOM_PRESET_REASONS_KEY, null);
   } catch (err) {
-    console.error('[ExpensesService] Error fetching custom preset reasons from Supabase:', err);
+    logger.error('[ExpensesService] Error fetching custom preset reasons from Supabase:', err);
     return null;
   }
 }
@@ -157,7 +158,7 @@ export async function saveCustomPresetReasons(reasonsMap: Record<string, string[
       reasonsMap
     );
   } catch (err) {
-    console.error('[ExpensesService] Error saving custom preset reasons to Supabase:', err);
+    logger.error('[ExpensesService] Error saving custom preset reasons to Supabase:', err);
     return false;
   }
 }
@@ -166,7 +167,7 @@ export async function fetchArchivedVouchers(): Promise<any[] | null> {
   try {
     return await fetchSupabaseJson<any[] | null>(ARCHIVED_VOUCHERS_LEDGER_KEY, null);
   } catch (err) {
-    console.error('[ExpensesService] Error fetching archived vouchers from Supabase:', err);
+    logger.error('[ExpensesService] Error fetching archived vouchers from Supabase:', err);
     return null;
   }
 }
@@ -179,7 +180,7 @@ export async function saveArchivedVouchers(vouchers: any[]): Promise<boolean> {
       vouchers
     );
   } catch (err) {
-    console.error('[ExpensesService] Error saving archived vouchers to Supabase:', err);
+    logger.error('[ExpensesService] Error saving archived vouchers to Supabase:', err);
     return false;
   }
 }

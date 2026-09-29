@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -75,7 +76,7 @@ export function AdminDashboardWorkspace() {
             setAuthChecked(true);
             return;
           }
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
 
       setAuthChecked(false);
@@ -137,7 +138,7 @@ export function AdminDashboardWorkspace() {
         }
       }
     } catch (err) {
-      console.error('Error fetching global company location in admin:', err);
+      logger.error('Error fetching global company location in admin:', err);
     }
   }, []);
 
@@ -156,7 +157,7 @@ export function AdminDashboardWorkspace() {
         if (localIds.length > 0) {
           setRegisteredFaceIds((prev) => Array.from(new Set([...prev, ...localIds])));
         }
-      } catch {}
+      } catch (err) { logger.warn(err); }
 
       const res = await fetch(`/api/attendance/face/all?_t=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
@@ -167,7 +168,7 @@ export function AdminDashboardWorkspace() {
         }
       }
     } catch (err) {
-      console.error('Error fetching registered faces in admin:', err);
+      logger.error('Error fetching registered faces in admin:', err);
     }
   }, []);
 
@@ -184,7 +185,7 @@ export function AdminDashboardWorkspace() {
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem('ashley_admin_notes_2026-08', JSON.stringify(updated));
-        } catch {}
+        } catch (err) { logger.warn(err); }
       }
       return updated;
     });
@@ -227,7 +228,7 @@ export function AdminDashboardWorkspace() {
         const localDb = JSON.parse(localStorage.getItem('ashley_face_registry_local') || '{}');
         delete localDb[empId];
         localStorage.setItem('ashley_face_registry_local', JSON.stringify(localDb));
-      } catch {}
+      } catch (err) { logger.warn(err); }
       alert('دەموچاوی کارمەند بە سەرکەوتوویی سڕایەوە.');
     } catch {
       alert('سڕینەوەی دەموچاو سەرکەوتوو نەبوو.');
@@ -243,7 +244,7 @@ export function AdminDashboardWorkspace() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wipeAll: true })
       });
-    } catch {}
+    } catch (err) { logger.warn(err); }
 
     if (typeof window !== 'undefined') {
       try {
@@ -262,7 +263,7 @@ export function AdminDashboardWorkspace() {
             localStorage.removeItem(k);
           }
         });
-      } catch {}
+      } catch (err) { logger.warn(err); }
     }
 
     setAttendanceLogs([]);

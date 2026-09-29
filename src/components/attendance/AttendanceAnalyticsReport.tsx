@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import React, { useState, useMemo, useEffect } from 'react';
 import type { AttendanceRecord, Employee } from '@/lib/types';
 import { 
@@ -53,7 +54,7 @@ export function AttendanceAnalyticsReport({
     try {
       const saved = localStorage.getItem(`ashley_leaves_${selectedMonth}`);
       if (saved) return JSON.parse(saved);
-    } catch {}
+    } catch (err) { logger.warn(err); }
     return {};
   });
 
@@ -62,7 +63,7 @@ export function AttendanceAnalyticsReport({
     try {
       const saved = localStorage.getItem(`ashley_holidays_${selectedMonth}`);
       if (saved) return JSON.parse(saved);
-    } catch {}
+    } catch (err) { logger.warn(err); }
     return {};
   });
 
@@ -91,7 +92,7 @@ export function AttendanceAnalyticsReport({
         if (savedLeaves) setEmployeeLeaves(JSON.parse(savedLeaves));
         const savedHolidays = localStorage.getItem(`ashley_holidays_${selectedMonth}`);
         if (savedHolidays) setCompanyHolidays(JSON.parse(savedHolidays));
-      } catch {}
+      } catch (err) { logger.warn(err); }
     };
 
     loadSaved();
@@ -120,7 +121,7 @@ export function AttendanceAnalyticsReport({
           note: tempNoteText.trim(),
         }),
       });
-    } catch {}
+    } catch (err) { logger.warn(err); }
 
     setEditingNoteKey(null);
     setSavingNote(false);

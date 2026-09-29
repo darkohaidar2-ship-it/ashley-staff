@@ -1,5 +1,6 @@
 'use client';
     
+import { logger } from '@/lib/logger';
 import { useState, useEffect } from 'react';
 import {
   DocumentReference,
@@ -69,7 +70,7 @@ export function useDoc<T = any>(
         setIsLoading(false);
       },
       (e: FirestoreError) => {
-        console.error("Firestore Error (useDoc):", e);
+        logger.error("Firestore Error (useDoc):", e);
         toast({
           variant: "destructive",
           title: "Error Reading Document",
