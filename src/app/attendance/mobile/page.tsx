@@ -487,7 +487,12 @@ export default function MobileAttendanceOneTap() {
       } catch (err) { logger.warn(err); }
 
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+        navigator.serviceWorker
+          .register('/sw.js', { scope: '/' })
+          .then((reg) => {
+            reg.update().catch(() => {});
+          })
+          .catch(() => {});
       }
 
       const handleBeforeInstallPrompt = (e: Event) => {
@@ -839,9 +844,21 @@ export default function MobileAttendanceOneTap() {
         anchorServerTime(data.serverEpochMs, null);
         const { pendingIn, pendingOut } = getUnsentQueueForToday();
 
+        const isNonWorkingStatus =
+          data.status === 'Absent' ||
+          data.status === 'غیاب' ||
+          data.status === 'Holiday' ||
+          data.status === 'پشوو' ||
+          data.status === 'Leave' ||
+          data.status === 'مۆڵەت';
+
         // Server is authoritative when online (unless an unsent offline punch is still in queue)
-        const finalIn = data.checkInTime || pendingIn?.trustedTimeStr || null;
-        const finalOut = data.checkOutTime || pendingOut?.trustedTimeStr || null;
+        const finalIn = (isNonWorkingStatus && !pendingIn)
+          ? null
+          : (data.checkInTime || pendingIn?.trustedTimeStr || null);
+        const finalOut = (isNonWorkingStatus && !pendingOut)
+          ? null
+          : (data.checkOutTime || pendingOut?.trustedTimeStr || null);
 
         const merged = {
           checkInTime: finalIn,
@@ -852,7 +869,7 @@ export default function MobileAttendanceOneTap() {
 
         setLiveTodayShift(merged);
 
-        if (merged.checkInTime) {
+        if (merged.checkInTime || merged.status) {
           localStorage.setItem(storageKey, JSON.stringify(merged));
         } else {
           // Admin deleted/reset today's attendance on server -> reset mobile cache to zero!
@@ -879,121 +896,207 @@ export default function MobileAttendanceOneTap() {
     }
   }, [employeeProfile, matchedLocationName]);
 
-  // 5. Fetch monthly attendance history & Admin SSOT Sheet Overrides (Server-Authoritative when online, Cached + Outbox when offline)
-  const fetchMonthlyHistory = useCallback(async () => {
+  // 5. Cache-First LocalStorage Hydration (0ms) + Lightweight Delta Sync (`GET /api/attendance/employee-sync`)
+  const mergeSameBrowserLocalOverrides = useCallback((baseOverrides: Record<string, any>) => {
+    if (!employeeProfile?.id) return baseOverrides;
+    const merged: Record<string, any> = { ...baseOverrides };
+    try {
+      const localMonthRaw = localStorage.getItem(`ashley_matrix_overrides_${selectedSheetMonth}`);
+      const localGlobalRaw = localStorage.getItem('ashley_global_manual_overrides');
+      const mergeLocalSource = (rawStr: string | null) => {
+        if (!rawStr) return;
+        const parsedLocal = JSON.parse(rawStr);
+        if (!parsedLocal || typeof parsedLocal !== 'object') return;
+        for (const [lk, lv] of Object.entries<any>(parsedLocal)) {
+          if (!lv || typeof lv !== 'object') continue;
+          const existing = merged[lk];
+          if (!existing) {
+            merged[lk] = lv;
+          } else {
+            const localTs = new Date(lv.updatedAt || lv.deletedAt || 0).getTime();
+            const serverTs = new Date(existing.updatedAt || existing.deletedAt || 0).getTime();
+            if (!isNaN(localTs) && (isNaN(serverTs) || localTs >= serverTs)) {
+              merged[lk] = lv;
+            }
+          }
+        }
+      };
+      mergeLocalSource(localGlobalRaw);
+      mergeLocalSource(localMonthRaw);
+    } catch (err) { logger.warn(err); }
+    return merged;
+  }, [employeeProfile, selectedSheetMonth]);
+
+  const hydrateMonthlyFromLocalStorage = useCallback(() => {
+    if (!employeeProfile?.id) return false;
+    const historyCacheKey = `ashley_monthly_logs_${employeeProfile.id}_${selectedSheetMonth}`;
+    const overridesCacheKey = `ashley_emp_overrides_${employeeProfile.id}_${selectedSheetMonth}`;
+    let hasCachedData = false;
+    try {
+      const cachedRaw = localStorage.getItem(historyCacheKey);
+      const cachedOvRaw = localStorage.getItem(overridesCacheKey);
+      const rawCachedList: any[] = cachedRaw ? JSON.parse(cachedRaw) : [];
+      const cachedList: any[] = Array.isArray(rawCachedList)
+        ? rawCachedList.map((item: any) => {
+            if (!item || typeof item !== 'object') return item;
+            const hasClock = Boolean(item.checkInTime && String(item.checkInTime).includes(':'));
+            if (hasClock) return item;
+            const act = String(item.action || item.log_type || item.type || '');
+            const nt = `${item.adminNote || ''} ${item.note || ''} ${item.edit_note || ''}`;
+            if (item.status === 'Leave' || item.status === 'مۆڵەت' || act === 'Leave' || act === 'مۆڵەت' || nt.includes('🛡️ مۆڵەت')) {
+              return { ...item, status: 'Leave', checkInTime: '', checkOutTime: '' };
+            }
+            if (item.status === 'Holiday' || item.status === 'پشوو' || act === 'Holiday' || act === 'پشوو' || nt.includes('🛡️ پشوو')) {
+              return { ...item, status: 'Holiday', checkInTime: '', checkOutTime: '' };
+            }
+            if (item.status === 'Absent' || item.status === 'غیاب' || act === 'Absent' || act === 'غیاب' || nt.includes('🛡️ غیاب')) {
+              return { ...item, status: 'Absent', checkInTime: '', checkOutTime: '' };
+            }
+            return item;
+          })
+        : [];
+      const cachedOv: Record<string, any> = cachedOvRaw ? JSON.parse(cachedOvRaw) : {};
+
+      const rawQ = localStorage.getItem(OFFLINE_QUEUE_KEY);
+      const qList: OfflinePunchItem[] = rawQ ? JSON.parse(rawQ) : [];
+      const myQueued = Array.isArray(qList)
+        ? qList
+            .filter(x => x.userId === employeeProfile.id && x.trustedDateStr.startsWith(selectedSheetMonth))
+            .map(x => ({
+              id: x.id,
+              employeeId: x.userId,
+              employeeName: x.userName,
+              type: x.event === 'EXIT' ? 'دەرچوون' : 'هاتن',
+              action: x.event === 'EXIT' ? 'Check Out' : 'Check In',
+              date: x.trustedDateStr,
+              time: `${x.trustedDateStr} ${x.trustedTimeStr}`,
+              checkInTime: x.event === 'ENTER' ? x.trustedTimeStr : undefined,
+              checkOutTime: x.event === 'EXIT' ? x.trustedTimeStr : undefined,
+              warehouseName: x.regionName,
+              note: x.note,
+              status: 'Present',
+            }))
+        : [];
+
+      const finalOverrides = mergeSameBrowserLocalOverrides(cachedOv);
+      if (cachedRaw || cachedOvRaw || Object.keys(finalOverrides).length > 0) {
+        setMonthlyLogs([...myQueued, ...cachedList]);
+        setEmpOverridesMap(finalOverrides);
+        hasCachedData = true;
+      }
+    } catch (err) { logger.warn(err); }
+    return hasCachedData;
+  }, [employeeProfile, selectedSheetMonth, mergeSameBrowserLocalOverrides]);
+
+  const fetchMonthlyHistory = useCallback(async (forceFull = false) => {
     if (!employeeProfile?.id) return;
     const historyCacheKey = `ashley_monthly_logs_${employeeProfile.id}_${selectedSheetMonth}`;
     const overridesCacheKey = `ashley_emp_overrides_${employeeProfile.id}_${selectedSheetMonth}`;
-    setLoadingLogs(true);
+    const versionCacheKey = `ashley_sync_version_v2_${employeeProfile.id}_${selectedSheetMonth}`;
+
+    const hadLocalCache = hydrateMonthlyFromLocalStorage();
+    if (!hadLocalCache) {
+      setLoadingLogs(true);
+    }
+
     try {
-      const [logsRes, reportRes] = await Promise.all([
-        fetch(`/api/attendance/logs?t=${Date.now()}`, { cache: 'no-store' }),
-        fetch(`/api/attendance/admin/report?month=${selectedSheetMonth}&_t=${Date.now()}`, { cache: 'no-store' }),
-      ]);
-      anchorServerTime(null, logsRes.headers.get('Date'));
-      const [logsData, reportData] = await Promise.all([
-        logsRes.json().catch(() => []),
-        reportRes.json().catch(() => ({})),
-      ]);
+      const clientVersion = forceFull ? '' : (localStorage.getItem(versionCacheKey) || '');
+      const syncUrl = `/api/attendance/employee-sync?userId=${encodeURIComponent(employeeProfile.id)}&userName=${encodeURIComponent(employeeProfile.name || '')}&month=${encodeURIComponent(selectedSheetMonth)}&clientVersion=${encodeURIComponent(clientVersion)}&_t=${Date.now()}`;
+      const syncRes = await fetch(syncUrl, { cache: 'no-store' });
+      anchorServerTime(null, syncRes.headers.get('Date'));
 
-      const cleanTarget = employeeProfile.id.toLowerCase().replace(/^emp-0*/i, '') || employeeProfile.id.toLowerCase().replace('emp-', '');
-      const paddedTarget = `emp-${cleanTarget.padStart(2, '0')}`;
-      const targetName = (employeeProfile.name || '').trim().toLowerCase();
+      if (syncRes.ok) {
+        const syncData = await syncRes.json();
+        anchorServerTime(syncData?.serverEpochMs, null);
 
-      if (Array.isArray(logsData)) {
-        const empLogs = logsData.filter((l: any) => {
-          const lDate = l.date || (l.time ? l.time.split(' ')[0] : '');
-          if (!lDate.startsWith(selectedSheetMonth)) return false;
-          const rawId = (l.employeeId || l.userId || '').toString().toLowerCase();
-          const cleanLId = rawId.replace(/^emp-0*/i, '') || rawId.replace('emp-', '');
-          const lName = (l.employeeName || l.userName || l.name || '').toString().trim().toLowerCase();
-          return rawId === employeeProfile.id.toLowerCase() || cleanLId === cleanTarget || (lName && targetName && lName === targetName);
-        });
-        setMonthlyLogs(empLogs);
-        try {
-          localStorage.setItem(historyCacheKey, JSON.stringify(empLogs));
-        } catch (err) { logger.warn(err); }
-      }
+        // If server version matches localStorage version, no changes occurred on server!
+        if (syncData && syncData.hasChanges === false && hadLocalCache) {
+          setLoadingLogs(false);
+          return;
+        }
 
-      if (reportData && typeof reportData.overrides === 'object' && reportData.overrides !== null) {
-        const allOverrides = reportData.overrides;
-        const myOverrides = {
-          ...(allOverrides[cleanTarget] || {}),
-          ...(allOverrides[paddedTarget] || {}),
-          ...(allOverrides[employeeProfile.id] || {}),
-        };
-        setEmpOverridesMap(myOverrides);
-        try {
-          localStorage.setItem(overridesCacheKey, JSON.stringify(myOverrides));
-        } catch (err) { logger.warn(err); }
-      } else {
-        setEmpOverridesMap({});
+        if (syncData && syncData.hasChanges === true) {
+          const serverRecords: any[] = Array.isArray(syncData.records) ? syncData.records : [];
+          const serverOverrides: Record<string, any> = (syncData.overrides && typeof syncData.overrides === 'object') ? syncData.overrides : {};
+          const finalOverrides = mergeSameBrowserLocalOverrides(serverOverrides);
+
+          setMonthlyLogs(serverRecords);
+          setEmpOverridesMap(finalOverrides);
+
+          try {
+            localStorage.setItem(historyCacheKey, JSON.stringify(serverRecords));
+            localStorage.setItem(overridesCacheKey, JSON.stringify(finalOverrides));
+            if (syncData.version) {
+              localStorage.setItem(versionCacheKey, syncData.version);
+            }
+          } catch (err) { logger.warn(err); }
+
+          setLoadingLogs(false);
+          return;
+        }
       }
     } catch {
-      // Offline fallback: retain last synced monthly history + overrides + append any unsent offline punches
-      try {
-        const cachedRaw = localStorage.getItem(historyCacheKey);
-        const cachedList: any[] = cachedRaw ? JSON.parse(cachedRaw) : [];
-        const cachedOvRaw = localStorage.getItem(overridesCacheKey);
-        const cachedOv: Record<string, any> = cachedOvRaw ? JSON.parse(cachedOvRaw) : {};
-
-        const rawQ = localStorage.getItem(OFFLINE_QUEUE_KEY);
-        const qList: OfflinePunchItem[] = rawQ ? JSON.parse(rawQ) : [];
-        const myQueued = Array.isArray(qList)
-          ? qList
-              .filter(x => x.userId === employeeProfile.id && x.trustedDateStr.startsWith(selectedSheetMonth))
-              .map(x => ({
-                id: x.id,
-                employeeId: x.userId,
-                employeeName: x.userName,
-                type: x.event === 'EXIT' ? 'دەرچوون' : 'هاتن',
-                action: x.event === 'EXIT' ? 'Check Out' : 'Check In',
-                date: x.trustedDateStr,
-                time: `${x.trustedDateStr} ${x.trustedTimeStr}`,
-                checkInTime: x.event === 'ENTER' ? x.trustedTimeStr : undefined,
-                checkOutTime: x.event === 'EXIT' ? x.trustedTimeStr : undefined,
-                warehouseName: x.regionName,
-                note: x.note,
-                status: 'Present',
-              }))
-          : [];
-        setMonthlyLogs([...myQueued, ...cachedList]);
-        setEmpOverridesMap(cachedOv);
-      } catch (err) { logger.warn(err); }
+      // If offline or delta endpoint unreachable, hydrateMonthlyFromLocalStorage already populated state in 0ms
+      setLoadingLogs(false);
+      return;
     } finally {
       setLoadingLogs(false);
     }
-  }, [employeeProfile, selectedSheetMonth]);
+  }, [employeeProfile, selectedSheetMonth, hydrateMonthlyFromLocalStorage, mergeSameBrowserLocalOverrides]);
 
   useEffect(() => {
     if (employeeProfile?.id) {
+      // 1. Instant 0ms render from localStorage before network check
+      hydrateMonthlyFromLocalStorage();
+      // 2. Lightweight delta check with server
       fetchTodayShift();
-      fetchMonthlyHistory();
+      fetchMonthlyHistory(false);
 
       const onFocusOrVisible = () => {
         if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+          hydrateMonthlyFromLocalStorage();
           fetchTodayShift();
-          fetchMonthlyHistory();
+          fetchMonthlyHistory(false);
         }
       };
 
-      // Live foreground sync every 10s while app is open & online so Admin edits/deletions reflect immediately
+      const onStorageChange = (e: StorageEvent) => {
+        if (!e.key || e.key.startsWith('ashley_matrix_overrides_') || e.key === 'ashley_global_manual_overrides') {
+          hydrateMonthlyFromLocalStorage();
+          fetchTodayShift();
+          fetchMonthlyHistory(true);
+        }
+      };
+
+      const onCustomAttendanceUpdate = () => {
+        hydrateMonthlyFromLocalStorage();
+        fetchTodayShift();
+        fetchMonthlyHistory(true);
+      };
+
+      // Lightweight version check every 4s while app is open & online (~60 bytes when unchanged!)
       const liveSyncInterval = setInterval(() => {
         if (typeof document !== 'undefined' && document.visibilityState === 'visible' && navigator.onLine) {
           fetchTodayShift();
-          fetchMonthlyHistory();
+          fetchMonthlyHistory(false);
         }
-      }, 10000);
+      }, 4000);
 
       window.addEventListener('focus', onFocusOrVisible);
+      window.addEventListener('storage', onStorageChange);
+      window.addEventListener('ashley_attendance_updated', onCustomAttendanceUpdate);
+      window.addEventListener('ashley_attendance_deleted', onCustomAttendanceUpdate);
       document.addEventListener('visibilitychange', onFocusOrVisible);
       return () => {
         window.removeEventListener('focus', onFocusOrVisible);
-        document.removeEventListener('visibilitychange', onFocusOrVisible);
+        window.removeEventListener('storage', onStorageChange);
+        window.removeEventListener('ashley_attendance_updated', onCustomAttendanceUpdate);
+        window.removeEventListener('ashley_attendance_deleted', onCustomAttendanceUpdate);
+        document.addEventListener('visibilitychange', onFocusOrVisible);
         clearInterval(liveSyncInterval);
       };
     }
-  }, [employeeProfile, fetchTodayShift, fetchMonthlyHistory]);
+  }, [employeeProfile, hydrateMonthlyFromLocalStorage, fetchTodayShift, fetchMonthlyHistory]);
 
   // 6. Calculate worked minutes (deducting 12:00-13:00 lunch break)
   useEffect(() => {
@@ -1806,6 +1909,22 @@ export default function MobileAttendanceOneTap() {
         playCheckOutMusic();
       }
 
+      // Immediately clear any local deletion tombstone for today in empOverridesMap so 31-day table updates in 0ms
+      setEmpOverridesMap(prev => {
+        const next = { ...prev };
+        for (const k of Object.keys(next)) {
+          if (k.endsWith(`_${todayIso}`)) {
+            const v = next[k];
+            if (v?.status === 'empty' || v?.status === 'Empty' || v?.status === 'delete' || v?.action === 'delete' || action === 'ENTER') {
+              delete next[k];
+            } else if (action === 'EXIT' && v && typeof v === 'object') {
+              next[k] = { ...v, checkOutTime: assignedTime, rawCheckOut: assignedTime };
+            }
+          }
+        }
+        return next;
+      });
+
       setTimeout(() => setFeedbackToast(null), 6000);
       await fetchTodayShift();
       await fetchMonthlyHistory();
@@ -1910,7 +2029,7 @@ export default function MobileAttendanceOneTap() {
     if (!employeeProfile?.id) {
       return {
         employeeMonthSheet: [] as Array<UnifiedAttendanceDayInfo & { dateStr: string; dayNum: number; dayNameKu: string; isFriday: boolean; isToday: boolean; weekIdx: number }>,
-        sheetStats: { presentDays: 0, totalHours: 0, lateCount: 0, absentCount: 0, commitmentRate: 100 },
+        sheetStats: { presentDays: 0, totalHours: 0, lateCount: 0, absentCount: 0, leaveCount: 0, holidayCount: 0, commitmentRate: 100 },
       };
     }
 
@@ -1936,12 +2055,14 @@ export default function MobileAttendanceOneTap() {
     let totalHours = 0;
     let lateCount = 0;
     let absentCount = 0;
+    let leaveCount = 0;
+    let holidayCount = 0;
     let elapsedWorkdays = 0;
 
     const rows: Array<UnifiedAttendanceDayInfo & { dateStr: string; dayNum: number; dayNameKu: string; isFriday: boolean; isToday: boolean; weekIdx: number }> = [];
 
     const combinedLogs = [...monthlyLogs];
-    if (liveTodayShift && (liveTodayShift.checkInTime || liveTodayShift.checkOutTime)) {
+    if (liveTodayShift && (liveTodayShift.checkInTime || liveTodayShift.checkOutTime || liveTodayShift.status)) {
       combinedLogs.push({
         ...liveTodayShift,
         employeeId: employeeProfile.id,
@@ -1976,8 +2097,14 @@ export default function MobileAttendanceOneTap() {
       if (resolved.checkInStatus.isLate && !resolved.checkInStatus.isWaived) {
         lateCount++;
       }
-      if (resolved.status === 'Absent' || resolved.status === 'Leave' || resolved.status === 'غیاب' || resolved.status === 'مۆڵەت') {
+      if (resolved.status === 'Absent' || resolved.status === 'غیاب') {
         absentCount++;
+      }
+      if (resolved.status === 'Leave' || resolved.status === 'مۆڵەت') {
+        leaveCount++;
+      }
+      if (resolved.status === 'Holiday') {
+        holidayCount++;
       }
       if (!isFriday && !isFuture) {
         elapsedWorkdays++;
@@ -2004,6 +2131,8 @@ export default function MobileAttendanceOneTap() {
         totalHours: Number(totalHours.toFixed(1)),
         lateCount,
         absentCount,
+        leaveCount,
+        holidayCount,
         commitmentRate,
       },
     };
@@ -2565,7 +2694,55 @@ export default function MobileAttendanceOneTap() {
         {/* ============================================================ */}
         {/* 🚀 PURE VISUAL 1-TAP ATTENDANCE ACTION                       */}
         {/* ============================================================ */}
-        <div>
+        <div className="space-y-2.5">
+          {(() => {
+            const todayRow = employeeMonthSheet.find(r => r.isToday);
+            const effectiveTodayStatus = todayRow?.status || liveTodayShift.status;
+            if (!liveTodayShift.checkInTime && (effectiveTodayStatus === 'Absent' || effectiveTodayStatus === 'غیاب')) {
+              return (
+                <div className="p-3.5 rounded-2xl bg-rose-50 border-2 border-rose-300 flex items-center justify-between text-xs shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-black text-sm">⚠️</span>
+                    <div>
+                      <span className="text-[10px] text-rose-700 font-bold block">دۆخی ئەمڕۆ لە سیستەم</span>
+                      <span className="text-sm font-black text-rose-900">غیاب (ئامادەنەبوو)</span>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-600 text-white">غیاب</span>
+                </div>
+              );
+            }
+            if (!liveTodayShift.checkInTime && (effectiveTodayStatus === 'Leave' || effectiveTodayStatus === 'مۆڵەت')) {
+              return (
+                <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 flex items-center justify-between text-xs shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-black text-sm">📋</span>
+                    <div>
+                      <span className="text-[10px] text-amber-700 font-bold block">دۆخی ئەمڕۆ لە سیستەم</span>
+                      <span className="text-sm font-black text-amber-900">مۆڵەتی فەرمی</span>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-600 text-white">مۆڵەت</span>
+                </div>
+              );
+            }
+            if (!liveTodayShift.checkInTime && (effectiveTodayStatus === 'Holiday' || effectiveTodayStatus === 'پشوو')) {
+              return (
+                <div className="p-3.5 rounded-2xl bg-teal-50 border-2 border-teal-300 flex items-center justify-between text-xs shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-8 h-8 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center font-black text-sm">🌴</span>
+                    <div>
+                      <span className="text-[10px] text-teal-700 font-bold block">دۆخی ئەمڕۆ لە سیستەم</span>
+                      <span className="text-sm font-black text-teal-900">پشووی فەرمی</span>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-teal-600 text-white">پشوو</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           {!liveTodayShift.checkInTime ? (
             <button
               onClick={handleCheckInClick}
@@ -2733,8 +2910,8 @@ export default function MobileAttendanceOneTap() {
             </div>
           </div>
 
-          {/* 4 Visual Summary KPI Cards */}
-          <div className="grid grid-cols-4 gap-1.5 text-center">
+          {/* 6 Visual Summary KPI Cards (Present, Hours, Absent, Leave, Holiday, Late) */}
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center">
             <div className="p-2 rounded-2xl bg-emerald-50/80 border border-emerald-200">
               <span className="text-[9px] text-emerald-800 font-bold block">ئامادەبوون</span>
               <span className="text-sm font-black font-mono text-emerald-900">{sheetStats.presentDays}</span>
@@ -2743,13 +2920,21 @@ export default function MobileAttendanceOneTap() {
               <span className="text-[9px] text-blue-800 font-bold block">کاتژمێر</span>
               <span className="text-sm font-black font-mono text-blue-900">{sheetStats.totalHours} ک</span>
             </div>
+            <div className="p-2 rounded-2xl bg-rose-50/80 border border-rose-200">
+              <span className="text-[9px] text-rose-800 font-bold block">غیاب</span>
+              <span className="text-sm font-black font-mono text-rose-900">{sheetStats.absentCount}</span>
+            </div>
             <div className="p-2 rounded-2xl bg-amber-50/80 border border-amber-200">
-              <span className="text-[9px] text-amber-800 font-bold block">دواکەوتن</span>
-              <span className="text-sm font-black font-mono text-amber-900">{sheetStats.lateCount}</span>
+              <span className="text-[9px] text-amber-800 font-bold block">مۆڵەت</span>
+              <span className="text-sm font-black font-mono text-amber-900">{sheetStats.leaveCount}</span>
+            </div>
+            <div className="p-2 rounded-2xl bg-teal-50/80 border border-teal-200">
+              <span className="text-[9px] text-teal-800 font-bold block">پشوو</span>
+              <span className="text-sm font-black font-mono text-teal-900">{sheetStats.holidayCount}</span>
             </div>
             <div className="p-2 rounded-2xl bg-purple-50/80 border border-purple-200">
-              <span className="text-[9px] text-purple-800 font-bold block">پابەندبوون</span>
-              <span className="text-sm font-black font-mono text-purple-900">{sheetStats.commitmentRate}%</span>
+              <span className="text-[9px] text-purple-800 font-bold block">دواکەوتن</span>
+              <span className="text-sm font-black font-mono text-purple-900">{sheetStats.lateCount}</span>
             </div>
           </div>
 
@@ -2768,11 +2953,21 @@ export default function MobileAttendanceOneTap() {
                 </thead>
                 <tbody className="divide-y divide-slate-200 font-mono">
                   {employeeMonthSheet.map((day) => {
+                    const dayNoteText = `${day.adminNote || ''} ${day.note || ''}`;
+                    const isLeaveDay = day.status === 'Leave' || day.status === 'مۆڵەت' || (!day.checkInTime && dayNoteText.includes('🛡️ مۆڵەت'));
+                    const isHolidayDay = day.status === 'Holiday' || day.status === 'پشوو' || (!day.checkInTime && dayNoteText.includes('🛡️ پشوو'));
+                    const isAbsentDay = !isLeaveDay && !isHolidayDay && (day.status === 'Absent' || day.status === 'غیاب');
+                    const isPresentDay = day.status === 'Present';
+
                     const weekBg =
                       day.isToday
                         ? 'bg-emerald-50/90 ring-1 ring-inset ring-emerald-400'
-                        : day.isFriday
-                        ? 'bg-slate-100/80 text-slate-400'
+                        : isAbsentDay
+                        ? 'bg-rose-50/60'
+                        : isLeaveDay
+                        ? 'bg-amber-50/60'
+                        : isHolidayDay
+                        ? 'bg-teal-50/50'
                         : day.weekIdx % 2 === 0
                         ? 'bg-white'
                         : 'bg-slate-50/60';
@@ -2791,15 +2986,19 @@ export default function MobileAttendanceOneTap() {
                             <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-mono text-[11px] font-black ${
                               day.isToday
                                 ? 'bg-emerald-600 text-white'
-                                : day.isFriday
-                                ? 'bg-slate-200 text-slate-600'
+                                : isAbsentDay
+                                ? 'bg-rose-100 text-rose-800'
+                                : isLeaveDay
+                                ? 'bg-amber-100 text-amber-800'
+                                : isHolidayDay
+                                ? 'bg-teal-100 text-teal-800'
                                 : 'bg-slate-100 text-slate-800'
                             }`}>
                               {String(day.dayNum).padStart(2, '0')}
                             </span>
                             <div>
                               <span className={`text-[10px] font-black block leading-tight ${
-                                day.isFriday ? 'text-slate-500' : 'text-slate-800'
+                                isHolidayDay ? 'text-teal-800' : 'text-slate-800'
                               }`}>
                                 {day.dayNameKu}
                               </span>
@@ -2810,9 +3009,9 @@ export default function MobileAttendanceOneTap() {
                           </div>
                         </td>
 
-                        {/* Check-In Time + Late/Waiver Dot */}
+                        {/* Check-In Time or Status Label */}
                         <td className="py-2 px-1.5 text-center font-black">
-                          {day.checkInTime ? (
+                          {isPresentDay && day.checkInTime ? (
                             <div className="inline-flex items-center justify-center gap-1">
                               <span className={day.checkInStatus.isLate && !day.checkInStatus.isWaived ? 'text-amber-700' : 'text-emerald-700'}>
                                 {day.checkInTime}
@@ -2823,52 +3022,74 @@ export default function MobileAttendanceOneTap() {
                                 <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" title="دواکەوتن" />
                               ) : null}
                             </div>
+                          ) : isAbsentDay ? (
+                            <span className="text-rose-600 font-sans text-[10px]">غیاب</span>
+                          ) : isLeaveDay ? (
+                            <span className="text-amber-700 font-sans text-[10px]">مۆڵەت</span>
+                          ) : isHolidayDay ? (
+                            <span className="text-teal-700 font-sans text-[10px]">🌴 پشوو</span>
                           ) : (
                             <span className="text-slate-300">—</span>
                           )}
                         </td>
 
-                        {/* Check-Out Time + Early Waiver Dot */}
+                        {/* Check-Out Time or Status Label */}
                         <td className="py-2 px-1.5 text-center font-black">
-                          {day.checkOutTime ? (
+                          {isPresentDay && day.checkOutTime ? (
                             <div className="inline-flex items-center justify-center gap-1">
                               <span className="text-rose-700">{day.checkOutTime}</span>
                               {(day.checkOutStatus.isWaived || day.isCheckOutWaived) && (
                                 <span className="w-2 h-2 rounded-full bg-purple-600 inline-block" title="لێخۆشبوونی زوو دەرچوون" />
                               )}
                             </div>
+                          ) : isAbsentDay ? (
+                            <span className="text-rose-600 font-sans text-[10px]">غیاب</span>
+                          ) : isLeaveDay ? (
+                            <span className="text-amber-700 font-sans text-[10px]">مۆڵەت</span>
+                          ) : isHolidayDay ? (
+                            <span className="text-teal-700 font-sans text-[10px]">🌴 پشوو</span>
                           ) : (
                             <span className="text-slate-300">—</span>
                           )}
                         </td>
 
-                        {/* Worked Hours */}
+                        {/* Worked Hours or Status Label */}
                         <td className="py-2 px-1.5 text-center font-black text-slate-700">
-                          {day.status === 'Present' && day.workedHours > 0 ? hoursFormatted : '—'}
+                          {isPresentDay && day.workedHours > 0 ? (
+                            <span className="text-emerald-800">{hoursFormatted}</span>
+                          ) : isAbsentDay ? (
+                            <span className="text-rose-600">0 ک</span>
+                          ) : isLeaveDay ? (
+                            <span className="text-amber-700 font-sans text-[10px]">مۆڵەت</span>
+                          ) : isHolidayDay ? (
+                            <span className="text-teal-700 font-sans text-[10px]">پشوو</span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
                         </td>
 
                         {/* Status Badge & Note Indicator */}
                         <td className="py-2 px-2 text-center font-sans">
                           <div className="inline-flex items-center justify-center gap-1">
-                            {day.isWaived || day.checkInStatus.isWaived || day.checkOutStatus.isWaived ? (
+                            {isPresentDay && (day.isWaived || day.checkInStatus.isWaived || day.checkOutStatus.isWaived) ? (
                               <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-100 text-purple-800 border border-purple-300">
                                 لێخۆشبوو
                               </span>
-                            ) : day.status === 'Present' ? (
+                            ) : isPresentDay ? (
                               <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
                                 ئامادەبوو
                               </span>
-                            ) : day.status === 'Leave' || day.status === 'مۆڵەت' ? (
+                            ) : isLeaveDay ? (
                               <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300">
                                 مۆڵەت
                               </span>
-                            ) : day.status === 'Absent' || day.status === 'غیاب' ? (
+                            ) : isAbsentDay ? (
                               <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">
                                 غیاب
                               </span>
-                            ) : day.status === 'Holiday' || day.isFriday ? (
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-200 text-slate-600">
-                                پشوو
+                            ) : isHolidayDay ? (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-teal-100 text-teal-800 border border-teal-300">
+                                🌴 پشوو
                               </span>
                             ) : (
                               <span className="text-slate-300 font-mono">—</span>
@@ -2900,33 +3121,83 @@ export default function MobileAttendanceOneTap() {
                 </h4>
                 <span className="text-[10px] text-emerald-700 font-bold">وردەکاری تۆماری سیستەم</span>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedDayDetail(null)}
-                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                {selectedDayDetail.status === 'Present' && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    ئامادەبوو
+                  </span>
+                )}
+                {(selectedDayDetail.status === 'Absent' || selectedDayDetail.status === 'غیاب') && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">
+                    غیاب
+                  </span>
+                )}
+                {(selectedDayDetail.status === 'Leave' || selectedDayDetail.status === 'مۆڵەت') && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">
+                    مۆڵەت
+                  </span>
+                )}
+                {(selectedDayDetail.status === 'Holiday' || selectedDayDetail.status === 'پشوو') && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-teal-100 text-teal-800 border border-teal-300">
+                    🌴 پشوو
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedDayDetail(null)}
+                  className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-center p-3 bg-slate-50 rounded-2xl border border-slate-200 font-mono text-xs">
               <div>
                 <span className="text-[10px] text-slate-500 block font-sans font-bold">هاتن</span>
-                <span className="font-black text-emerald-700">{selectedDayDetail.checkInTime || '—'}</span>
+                <span className="font-black text-emerald-700">
+                  {selectedDayDetail.status === 'Present' && selectedDayDetail.checkInTime
+                    ? selectedDayDetail.checkInTime
+                    : selectedDayDetail.status === 'Absent' || selectedDayDetail.status === 'غیاب'
+                    ? 'غیاب'
+                    : selectedDayDetail.status === 'Leave' || selectedDayDetail.status === 'مۆڵەت'
+                    ? 'مۆڵەت'
+                    : selectedDayDetail.status === 'Holiday' || selectedDayDetail.status === 'پشوو'
+                    ? '🌴 پشوو'
+                    : '—'}
+                </span>
               </div>
               <div>
                 <span className="text-[10px] text-slate-500 block font-sans font-bold">دەرچوون</span>
-                <span className="font-black text-rose-700">{selectedDayDetail.checkOutTime || '—'}</span>
+                <span className="font-black text-rose-700">
+                  {selectedDayDetail.status === 'Present' && selectedDayDetail.checkOutTime
+                    ? selectedDayDetail.checkOutTime
+                    : selectedDayDetail.status === 'Absent' || selectedDayDetail.status === 'غیاب'
+                    ? 'غیاب'
+                    : selectedDayDetail.status === 'Leave' || selectedDayDetail.status === 'مۆڵەت'
+                    ? 'مۆڵەت'
+                    : selectedDayDetail.status === 'Holiday' || selectedDayDetail.status === 'پشوو'
+                    ? '🌴 پشوو'
+                    : '—'}
+                </span>
               </div>
               <div>
                 <span className="text-[10px] text-slate-500 block font-sans font-bold">کاتژمێر</span>
                 <span className="font-black text-blue-800">
-                  {selectedDayDetail.workedHours > 0 ? `${selectedDayDetail.workedHours} ک` : '—'}
+                  {selectedDayDetail.status === 'Present' && selectedDayDetail.workedHours > 0
+                    ? `${selectedDayDetail.workedHours} ک`
+                    : selectedDayDetail.status === 'Absent' || selectedDayDetail.status === 'غیاب'
+                    ? '0 ک'
+                    : selectedDayDetail.status === 'Leave' || selectedDayDetail.status === 'مۆڵەت'
+                    ? 'مۆڵەت'
+                    : selectedDayDetail.status === 'Holiday' || selectedDayDetail.status === 'پشوو'
+                    ? 'پشوو'
+                    : '—'}
                 </span>
               </div>
             </div>
 
-            {(selectedDayDetail.isWaived || selectedDayDetail.checkInStatus.isWaived || selectedDayDetail.checkOutStatus.isWaived) && (
+            {selectedDayDetail.status === 'Present' && (selectedDayDetail.isWaived || selectedDayDetail.checkInStatus.isWaived || selectedDayDetail.checkOutStatus.isWaived) && (
               <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs font-bold flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-purple-600 shrink-0" />
                 <span>لێخۆشبوونی فەرمی بەڕێوەبەری هەیە</span>

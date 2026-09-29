@@ -248,20 +248,50 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       const res = await fetch(`/api/attendance/admin/report?t=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        const map: Record<string, any> = { ...localMap };
+        const serverOverrides: Record<string, any> =
+          data.manualOverridesMap && typeof data.manualOverridesMap === 'object'
+            ? { ...data.manualOverridesMap }
+            : {};
+
+        const map: Record<string, any> = { ...serverOverrides };
+
+        // Preserve any optimistic local edit/delete that was triggered within the last 15 seconds (while POST is in-flight)
+        const nowMs = Date.now();
+        for (const [lk, lv] of Object.entries<any>(localMap)) {
+          const ts = lv?.updatedAt || lv?.deletedAt;
+          if (ts) {
+            const ageMs = nowMs - new Date(ts).getTime();
+            if (!isNaN(ageMs) && ageMs >= 0 && ageMs < 15000) {
+              map[lk] = lv;
+            }
+          }
+        }
+
         (data.attendance || []).forEach((r: any) => {
           const k = `${r.userId}_${r.date}`;
-          // 🛡️ Never resurrect a record that has been marked deleted/empty by admin
-          if (map[k]?.status === 'empty' || map[k]?.status === 'delete' || map[k]?.status === 'Empty') {
+          // 🛡️ Only skip if the authoritative server/in-flight map still marks this record deleted
+          if (map[k]?.status === 'empty' || map[k]?.status === 'delete' || map[k]?.status === 'deleted' || map[k]?.status === 'Empty') {
             return;
           }
-          if (r.status && r.status !== 'empty' && r.status !== 'delete' && r.status !== 'Empty') {
+          if (r.status && r.status !== 'empty' && r.status !== 'delete' && r.status !== 'deleted' && r.status !== 'Empty') {
             const existing = map[k] || {};
+            const existingTs = existing.updatedAt ? new Date(existing.updatedAt).getTime() : NaN;
+            const rowTs = r.updatedAt ? new Date(r.updatedAt).getTime() : NaN;
+            if (!isNaN(existingTs) && !isNaN(rowTs) && existingTs > rowTs) {
+              return;
+            }
 
-            const checkInTime = r.checkInTime || r.check_in_time || existing.checkInTime;
-            const checkOutTime = r.checkOutTime || r.check_out_time || existing.checkOutTime;
-            const rawCheckIn = r.rawCheckInTime || r.raw_check_in_time || r.rawCheckIn || existing.rawCheckIn || checkInTime;
-            const rawCheckOut = r.rawCheckOutTime || r.raw_check_out_time || r.rawCheckOut || existing.rawCheckOut || checkOutTime;
+            const effStatus =
+              r.status === 'غیاب' ? 'Absent' :
+              r.status === 'پشوو' ? 'Holiday' :
+              r.status === 'مۆڵەت' ? 'Leave' :
+              r.status;
+            const isNonWorking = effStatus === 'Absent' || effStatus === 'Holiday' || effStatus === 'Leave';
+
+            const checkInTime = isNonWorking ? undefined : ((r.checkInTime || r.check_in_time || existing.checkInTime) === 'مۆڵەت' ? undefined : (r.checkInTime || r.check_in_time || existing.checkInTime));
+            const checkOutTime = isNonWorking ? undefined : ((r.checkOutTime || r.check_out_time || existing.checkOutTime) === 'مۆڵەت' ? undefined : (r.checkOutTime || r.check_out_time || existing.checkOutTime));
+            const rawCheckIn = isNonWorking ? undefined : (r.rawCheckInTime || r.raw_check_in_time || r.rawCheckIn || existing.rawCheckIn || checkInTime);
+            const rawCheckOut = isNonWorking ? undefined : (r.rawCheckOutTime || r.raw_check_out_time || r.rawCheckOut || existing.rawCheckOut || checkOutTime);
             const rawNote = r.note || r.notes || r.reason || r.employeeNote || r.edit_note || r.editNote || existing.note;
             let cleanNote = rawNote;
             if (typeof cleanNote === 'string' && cleanNote.includes('): ')) {
@@ -276,15 +306,18 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             const historyLogs = (r.historyLogs && Array.isArray(r.historyLogs) && r.historyLogs.length > 0)
               ? r.historyLogs
               : (existing.historyLogs || []);
-            const adminDecision = r.adminDecision || existing.adminDecision || null;
-            const adminCheckInDecision = r.adminCheckInDecision || existing.adminCheckInDecision || null;
-            const adminCheckOutDecision = r.adminCheckOutDecision || existing.adminCheckOutDecision || null;
-            const isCheckInWaived = Boolean(r.isCheckInWaived ?? (adminCheckInDecision === 'waived') ?? existing.isCheckInWaived);
-            const isCheckOutWaived = Boolean(r.isCheckOutWaived ?? (adminCheckOutDecision === 'waived') ?? existing.isCheckOutWaived);
-            const isWaived = Boolean(r.isWaived ?? (adminDecision === 'waived') ?? (isCheckInWaived || isCheckOutWaived) ?? existing.isWaived);
+            const adminDecision = isNonWorking ? null : (r.adminDecision || existing.adminDecision || null);
+            const adminCheckInDecision = isNonWorking ? null : (r.adminCheckInDecision || existing.adminCheckInDecision || null);
+            const adminCheckOutDecision = isNonWorking ? null : (r.adminCheckOutDecision || existing.adminCheckOutDecision || null);
+            const isCheckInWaived = Boolean(!isNonWorking && (r.isCheckInWaived ?? (adminCheckInDecision === 'waived') ?? existing.isCheckInWaived));
+            const isCheckOutWaived = Boolean(!isNonWorking && (r.isCheckOutWaived ?? (adminCheckOutDecision === 'waived') ?? existing.isCheckOutWaived));
+            const isWaived = Boolean(!isNonWorking && (r.isWaived ?? (adminDecision === 'waived') ?? (isCheckInWaived || isCheckOutWaived) ?? existing.isWaived));
 
             map[k] = {
-              status: r.status,
+              userId: r.userId || existing.userId,
+              userName: r.userName || existing.userName,
+              date: r.date || existing.date,
+              status: effStatus,
               checkInTime,
               checkOutTime,
               rawCheckIn,
@@ -302,6 +335,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               isWaived,
               isCheckInWaived,
               isCheckOutWaived,
+              updatedAt: r.updatedAt || existing.updatedAt || null,
             };
           }
         });
@@ -310,6 +344,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(map));
+            localStorage.setItem('ashley_global_manual_overrides', JSON.stringify(map));
           } catch (err) { logger.warn(err); }
         }
       } else if (Object.keys(localMap).length > 0) {
@@ -560,7 +595,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
     setIsApplyingBatch(true);
 
-    // Optimistic instant UI update with authoritative tombstones
+    const nowIso = new Date().toISOString();
+
+    // Optimistic instant UI update with authoritative timestamps
     setManualStatusMap(prev => {
       const next = { ...prev };
       selectedList.forEach(item => {
@@ -582,7 +619,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           const tombstone = {
             status: 'empty',
             action: 'delete',
-            deletedAt: new Date().toISOString(),
+            deletedAt: nowIso,
+            updatedAt: nowIso,
             userId: empId,
             userName: empName,
             date: item.dateStr
@@ -592,15 +630,19 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           });
         } else {
           const overrideData = {
+            userId: empId,
+            userName: empName,
+            date: item.dateStr,
             status: targetStatus,
-            checkInTime: targetStatus === 'Present' ? targetIn : targetStatus === 'Leave' ? 'مۆڵەت' : undefined,
-            checkOutTime: targetStatus === 'Present' ? targetOut : targetStatus === 'Leave' ? 'مۆڵەت' : undefined,
-            rawCheckIn: targetIn,
-            rawCheckOut: targetOut,
+            checkInTime: targetStatus === 'Present' ? targetIn : undefined,
+            checkOutTime: targetStatus === 'Present' ? targetOut : undefined,
+            rawCheckIn: targetStatus === 'Present' ? targetIn : undefined,
+            rawCheckOut: targetStatus === 'Present' ? targetOut : undefined,
             adminNote: targetNote || undefined,
             adminCheckInNote: targetNote || undefined,
             isWaived: false,
             adminDecision: null,
+            updatedAt: nowIso,
           };
           allKeys.forEach(k => {
             next[k] = overrideData;
@@ -610,16 +652,26 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(next));
-          window.dispatchEvent(new Event('ashley_attendance_updated'));
+          localStorage.setItem('ashley_global_manual_overrides', JSON.stringify(next));
         } catch (err) { logger.warn(err); }
       }
       return next;
     });
 
-    // If batch delete: purge from local storage caches
-    if (targetStatus === 'Empty' && typeof window !== 'undefined') {
+    // If batch delete or non-working status (Absent/Holiday/Leave): purge stale live logs from local storage caches
+    if (targetStatus !== 'Present' && typeof window !== 'undefined') {
       try {
-        const purgeKeys = new Set(selectedList.map(s => `${s.empId}_${s.dateStr}`));
+        const purgeKeys = new Set<string>();
+        selectedList.forEach(s => {
+          const cleanEmp = (s.empId || '').toString().trim();
+          const rawNum = cleanEmp.replace(/^emp-0*/i, '') || cleanEmp.replace('emp-', '');
+          const rawNumPadded = rawNum.length === 1 ? `0${rawNum}` : rawNum;
+          purgeKeys.add(`${cleanEmp}_${s.dateStr}`);
+          purgeKeys.add(`${rawNum}_${s.dateStr}`);
+          purgeKeys.add(`${rawNumPadded}_${s.dateStr}`);
+          purgeKeys.add(`emp-${rawNum}_${s.dateStr}`);
+          purgeKeys.add(`emp-${rawNumPadded}_${s.dateStr}`);
+        });
         const purgeLocal = (storageKey: string) => {
           const raw = localStorage.getItem(storageKey);
           if (!raw) return;
@@ -645,7 +697,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     setSelectedCells({});
     setShowBatchModal(false);
 
-    // Persistent server & Supabase batch sync
+    // Persistent server & Supabase bulk sync
     try {
       const recordsPayload = selectedList.map(item => ({
         userId: item.empId,
@@ -659,11 +711,15 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         adminCheckInNote: targetNote || undefined,
       }));
 
-      void fetch('/api/attendance/admin/manual-record', {
+      await fetch('/api/attendance/admin/manual-record', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ records: recordsPayload })
-      }).catch(err => logger.error('Batch save error:', err));
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('ashley_attendance_updated'));
+      }
     } catch (err) {
       logger.error('Batch save error:', err);
     } finally {
@@ -712,10 +768,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     const isCheckOutChanged = modalStatus === 'Present' && modalCheckOut !== prevCheckOut;
     const isStatusChanged = modalStatus !== info.status;
     const isNoteAdded = Boolean(modalAdminCheckInNote || modalAdminCheckOutNote || modalAdminNote);
-    const isCheckInWaived = modalCheckInDecision === 'waived';
-    const isCheckOutWaived = modalCheckOutDecision === 'waived';
+    const isCheckInWaived = modalStatus === 'Present' && modalCheckInDecision === 'waived';
+    const isCheckOutWaived = modalStatus === 'Present' && modalCheckOutDecision === 'waived';
     const isWaived = isCheckInWaived || isCheckOutWaived;
-    const resolvedAdminDecision = modalCheckInDecision || modalCheckOutDecision || null;
+    const resolvedAdminDecision = modalStatus === 'Present' ? (modalCheckInDecision || modalCheckOutDecision || null) : null;
 
     const nowFormatted = format(new Date(), 'yyyy/MM/dd - hh:mm a');
     const existingLogs = Array.isArray(info.historyLogs) ? [...info.historyLogs] : [];
@@ -743,34 +799,58 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       });
     }
 
+    const empId = (emp.id || '').toString().trim();
+    const rawNum = empId.replace(/^emp-0*/i, '') || empId.replace('emp-', '');
+    const rawNumPadded = rawNum.length === 1 ? `0${rawNum}` : rawNum;
+    const empName = (emp.fullName3Part || emp.name || '').trim();
+
     const newRecord = {
+      userId: empId,
+      userName: empName,
+      date: dayItem.dateStr,
       status: modalStatus,
-      checkInTime: modalStatus === 'Present' ? modalCheckIn : modalStatus === 'Leave' ? 'مۆڵەت' : undefined,
-      checkOutTime: modalStatus === 'Present' ? (modalCheckOut || undefined) : modalStatus === 'Leave' ? 'مۆڵەت' : undefined,
+      checkInTime: modalStatus === 'Present' ? modalCheckIn : undefined,
+      checkOutTime: modalStatus === 'Present' ? (modalCheckOut || undefined) : undefined,
       adminNote: combinedAdminNote,
       adminCheckInNote: modalAdminCheckInNote,
       adminCheckOutNote: modalAdminCheckOutNote,
       checkInNote: info.checkInNote || info.note,
       checkOutNote: info.checkOutNote,
       note: info.note || info.checkInNote,
-      rawCheckIn: info.rawCheckIn || info.checkInTime || '08:00',
-      rawCheckOut: info.rawCheckOut || info.checkOutTime || '',
+      rawCheckIn: modalStatus === 'Present' ? (info.rawCheckIn || info.checkInTime || modalCheckIn || '08:00') : undefined,
+      rawCheckOut: modalStatus === 'Present' ? (info.rawCheckOut || info.checkOutTime || modalCheckOut || '') : undefined,
       historyLogs: existingLogs,
       adminDecision: resolvedAdminDecision,
-      adminCheckInDecision: modalCheckInDecision,
-      adminCheckOutDecision: modalCheckOutDecision,
+      adminCheckInDecision: modalStatus === 'Present' ? modalCheckInDecision : null,
+      adminCheckOutDecision: modalStatus === 'Present' ? modalCheckOutDecision : null,
       isWaived,
       isCheckInWaived,
       isCheckOutWaived,
+      updatedAt: new Date().toISOString(),
     };
 
+    const allKeys = [
+      `${empId}_${dayItem.dateStr}`,
+      `${rawNum}_${dayItem.dateStr}`,
+      `${rawNumPadded}_${dayItem.dateStr}`,
+      `emp-${rawNum}_${dayItem.dateStr}`,
+      `emp-${rawNumPadded}_${dayItem.dateStr}`,
+    ];
+    if (empName) {
+      allKeys.push(`${empName.toLowerCase()}_${dayItem.dateStr}`);
+    }
+
     try {
-      // 1. Immediate UI update and persistent local store (0ms reaction)
+      // 1. Immediate UI update across all key variations and persistent local store (0ms reaction)
       setManualStatusMap(prev => {
-        const next = { ...prev, [key]: newRecord };
+        const next = { ...prev };
+        allKeys.forEach(k => {
+          next[k] = newRecord;
+        });
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(next));
+            localStorage.setItem('ashley_global_manual_overrides', JSON.stringify(next));
           } catch (err) { logger.warn(err); }
         }
         return next;
@@ -803,8 +883,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           checkOutNote: info.checkOutNote || undefined,
           historyLogs: existingLogs,
           adminDecision: resolvedAdminDecision,
-          adminCheckInDecision: modalCheckInDecision,
-          adminCheckOutDecision: modalCheckOutDecision,
+          adminCheckInDecision: modalStatus === 'Present' ? modalCheckInDecision : null,
+          adminCheckOutDecision: modalStatus === 'Present' ? modalCheckOutDecision : null,
           isWaived,
           isCheckInWaived,
           isCheckOutWaived,
@@ -842,6 +922,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       status: 'empty',
       action: 'delete',
       deletedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       userId: empId,
       userName: empName,
       date: dayItem.dateStr
@@ -859,6 +940,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem(`ashley_matrix_overrides_${selectedMonth}`, JSON.stringify(next));
+          localStorage.setItem('ashley_global_manual_overrides', JSON.stringify(next));
         } catch (err) { logger.warn(err); }
       }
       return next;
@@ -1685,7 +1767,15 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     const info = getGpsLogsForEmpAndDay(emp, d);
                     const isFriday = d.isFriday;
                     const theme = DAY_THEMES[d.dayOfWeek] || DAY_THEMES[6];
-                    const isPresent = info.status === 'Present' || Boolean(info.checkInTime);
+                    const isPresent =
+                      info.status === 'Present' ||
+                      (info.status !== 'Leave' &&
+                        info.status !== 'مۆڵەت' &&
+                        info.status !== 'Absent' &&
+                        info.status !== 'غیاب' &&
+                        info.status !== 'Holiday' &&
+                        info.status !== 'پشوو' &&
+                        Boolean(info.checkInTime));
                     const inTime = (info.checkInTime || '08:00').slice(0, 5);
                     const outTime = info.checkOutTime ? info.checkOutTime.slice(0, 5) : (d.isToday ? 'بەردەوام' : '-');
 
@@ -1695,8 +1785,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     let badgeColor = 'text-slate-300 dark:text-slate-600 font-normal';
                     let badgeText = '-';
 
-                    // 1. Friday Holiday
-                    if (info.status === 'Holiday' || isFriday) {
+                    // 1. Holiday / پشوو
+                    if (info.status === 'Holiday' || info.status === 'پشوو') {
                       badgeColor = 'text-teal-700 dark:text-teal-400 font-bold';
                       badgeText = '🌴';
                     }

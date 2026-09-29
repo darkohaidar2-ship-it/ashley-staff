@@ -204,7 +204,7 @@ export interface UnifiedAttendanceDayInfo {
   isFriday: boolean;
   isFuture: boolean;
   isToday: boolean;
-  status: 'Present' | 'Leave' | 'Absent' | 'Holiday' | 'Empty' | 'Loading' | 'مۆڵەت' | 'غیاب';
+  status: 'Present' | 'Leave' | 'Absent' | 'Holiday' | 'Empty' | 'Loading' | 'مۆڵەت' | 'غیاب' | 'پشوو';
   checkInTime: string;
   checkOutTime: string;
   rawCheckIn: string;
@@ -273,7 +273,9 @@ export function resolveEmployeeDayAttendance(
     return timeA.localeCompare(timeB);
   });
 
-  // Pre-calculate live notes from actual attendance logs for this employee & day
+  // Pre-calculate live times and notes from actual attendance logs for this employee & day
+  let liveCheckIn = '';
+  let liveCheckOut = '';
   let liveCheckInNote = '';
   let liveCheckOutNote = '';
   let liveNote = '';
@@ -281,6 +283,12 @@ export function resolveEmployeeDayAttendance(
   for (const r of (sortedDayRecords as any[])) {
     const isEnterLog = r.log_type === 'Check In' || r.action === 'Check In' || r.type?.includes('In') || r.type?.includes('هاتن');
     const isExitLog = r.log_type === 'Check Out' || r.action === 'Check Out' || r.type?.includes('Out') || r.type?.includes('دەرچوون') || r.type?.includes('ڕۆیشتن');
+
+    const inCandidate = r.checkInTime || r.check_in_time || (r.checkIn ? (r.checkIn.includes(' ') ? r.checkIn.split(' ')[1]?.slice(0, 5) : r.checkIn.includes('T') ? r.checkIn.split('T')[1]?.slice(0, 5) : r.checkIn.slice(0, 5)) : '') || (isEnterLog ? (r.log_time_str || (r.time && r.time.includes(' ') ? r.time.split(' ')[1]?.slice(0, 5) : r.time?.slice(0, 5)) || '') : '');
+    const outCandidate = r.checkOutTime || r.check_out_time || (r.checkOut ? (r.checkOut.includes(' ') ? r.checkOut.split(' ')[1]?.slice(0, 5) : r.checkOut.includes('T') ? r.checkOut.split('T')[1]?.slice(0, 5) : r.checkOut.slice(0, 5)) : '') || (isExitLog ? (r.log_time_str || (r.time && r.time.includes(' ') ? r.time.split(' ')[1]?.slice(0, 5) : r.time?.slice(0, 5)) || '') : '');
+
+    if (inCandidate && inCandidate.includes(':')) liveCheckIn = inCandidate.slice(0, 5);
+    if (outCandidate && outCandidate.includes(':')) liveCheckOut = outCandidate.slice(0, 5);
 
     const inN = r.check_in_note || r.checkInNote || r.checkin_note || r.check_in_edit_note;
     const outN = r.check_out_note || r.checkOutNote || r.checkout_note || r.check_out_edit_note;
@@ -304,7 +312,7 @@ export function resolveEmployeeDayAttendance(
   if (!liveCheckInNote && liveNote) liveCheckInNote = liveNote;
 
   // 1. 🛡️ CHECK ADMIN MANUAL OVERRIDE
-  const override = 
+  let override = 
     overridesMap[`${emp.id}_${dateStr}`] || 
     overridesMap[`${empId}_${dateStr}`] || 
     overridesMap[`${empNumRaw}_${dateStr}`] || 
@@ -314,6 +322,25 @@ export function resolveEmployeeDayAttendance(
     (empAlt ? overridesMap[`${empAlt}_${dateStr}`] : null) ||
     (empName ? overridesMap[`${empName}_${dateStr}`] : null);
 
+  if (!override && overridesMap && typeof overridesMap === 'object') {
+    const suffix = `_${dateStr}`;
+    for (const [k, v] of Object.entries<any>(overridesMap)) {
+      if (!v || typeof v !== 'object') continue;
+      if (k.endsWith(suffix) || v.date === dateStr) {
+        const vId = (v.userId || '').toString().trim().toLowerCase();
+        const vRaw = vId.replace(/^emp-0*/i, '') || vId.replace('emp-', '');
+        const vName = (v.userName || '').toString().trim().toLowerCase();
+        if (
+          (vId && (vId === empId || vRaw === empNumRaw || vId === `emp-${empNumPadded}`)) ||
+          (empName && vName && (vName === empName || vName.includes(empName) || empName.includes(vName)))
+        ) {
+          override = v;
+          break;
+        }
+      }
+    }
+  }
+
   if (override) {
     const isOverrideEmpty = 
       override.status === 'empty' || 
@@ -322,19 +349,37 @@ export function resolveEmployeeDayAttendance(
       override.status === 'deleted' ||
       override.action === 'delete';
     
-    // If override is marked empty/deleted:
-    // Past days CAN NEVER be resurrected by old logs.
-    // Today can only be resurrected if an employee checked in strictly AFTER the admin deleted the record.
-    const hasSubsequentLiveCheckIn = isToday && sortedDayRecords.some(r => {
-      const inTime = r.checkInTime || r.check_in_time || r.checkIn;
-      if (!inTime) return false;
-      const logTs = r.created_at || r.createdAt || r.time;
-      const overrideTs = override.deletedAt || override.timestamp;
-      if (logTs && overrideTs) {
+    const overrideTs = override.deletedAt || override.updatedAt || override.timestamp;
+    const oTime = overrideTs ? new Date(overrideTs).getTime() : NaN;
+
+    // Latest Data Wins (کۆتا داتا = دروستترین داتا):
+    // If an employee recorded a live punch strictly AFTER the admin deleted or edited the record,
+    // the newer live punch takes precedence.
+    const hasSubsequentLiveCheckIn = sortedDayRecords.some(r => {
+      if (String(r.id || '').startsWith('manual-')) return false;
+      const inTime = r.checkInTime || r.check_in_time || r.checkIn || ((r.type === 'هاتن' || r.action === 'Check In' || r.log_type === 'Check In') ? (r.log_time_str || r.time) : '');
+      if (!inTime || !String(inTime).includes(':')) return false;
+      if (r.isLiveMobilePunch) return true;
+      const logTs = r.updatedAt || r.created_at || r.createdAt || r.timestamp;
+      if (logTs && !isNaN(oTime)) {
         const rTime = new Date(logTs).getTime();
-        const oTime = new Date(overrideTs).getTime();
-        if (!isNaN(rTime) && !isNaN(oTime)) {
-          return rTime > oTime;
+        if (!isNaN(rTime)) {
+          return rTime > oTime + 1000;
+        }
+      }
+      return false;
+    });
+
+    const hasSubsequentLiveCheckOut = sortedDayRecords.some(r => {
+      if (String(r.id || '').startsWith('manual-')) return false;
+      const outTime = r.checkOutTime || r.check_out_time || r.checkOut || ((r.type === 'دەرچوون' || r.action === 'Check Out' || r.log_type === 'Check Out') ? (r.log_time_str || r.time) : '');
+      if (!outTime || !String(outTime).includes(':')) return false;
+      if (r.isLiveMobilePunch) return true;
+      const logTs = r.updatedAt || r.created_at || r.createdAt || r.timestamp;
+      if (logTs && !isNaN(oTime)) {
+        const rTime = new Date(logTs).getTime();
+        if (!isNaN(rTime)) {
+          return rTime > oTime + 1000;
         }
       }
       return false;
@@ -373,45 +418,81 @@ export function resolveEmployeeDayAttendance(
     }
 
     if (!isOverrideEmpty) {
-      const cIn = (override.checkInTime || '').slice(0, 5);
-      const cOut = (override.checkOutTime || '').slice(0, 5);
-      const adminDecision = (override.adminDecision as 'waived' | 'penalized') || (override.isWaived ? 'waived' : null);
-      const isPenalized = adminDecision === 'penalized' || override.adminCheckInDecision === 'penalized' || override.adminCheckOutDecision === 'penalized';
+      const rawOvStatus = String(override.status || override.log_type || override.action || 'Present');
+      const ovNoteText = `${override.adminNote || ''} ${override.note || ''} ${liveNote || ''}`;
+      const hasOvClockTime = Boolean(override.checkInTime && String(override.checkInTime).includes(':'));
+      const normalizedOvStatus: UnifiedAttendanceDayInfo['status'] =
+        (rawOvStatus === 'Absent' || rawOvStatus === 'غیاب' || (!hasOvClockTime && ovNoteText.includes('🛡️ غیاب')))
+          ? 'Absent'
+          : (rawOvStatus === 'Holiday' || rawOvStatus === 'پشوو' || (!hasOvClockTime && ovNoteText.includes('🛡️ پشوو')))
+          ? 'Holiday'
+          : (rawOvStatus === 'Leave' || rawOvStatus === 'مۆڵەت' || (!hasOvClockTime && ovNoteText.includes('🛡️ مۆڵەت')))
+          ? 'Leave'
+          : 'Present';
 
-      // Decouple Check-In waiver from Check-Out waiver
-      const isCheckInWaived = Boolean(
+      const isNonWorkingOverride =
+        normalizedOvStatus === 'Absent' ||
+        normalizedOvStatus === 'Holiday' ||
+        normalizedOvStatus === 'Leave';
+
+      const effectiveStatus: UnifiedAttendanceDayInfo['status'] =
+        (isNonWorkingOverride && hasSubsequentLiveCheckIn) ? 'Present' : normalizedOvStatus;
+
+      const ovInClean = (override.checkInTime && String(override.checkInTime).includes(':')) ? String(override.checkInTime) : '';
+      const ovOutClean = (override.checkOutTime && String(override.checkOutTime).includes(':')) ? String(override.checkOutTime) : '';
+
+      const cIn = effectiveStatus === 'Present'
+        ? ((hasSubsequentLiveCheckIn && liveCheckIn) ? liveCheckIn : (ovInClean || liveCheckIn || '')).slice(0, 5)
+        : '';
+      const cOut = effectiveStatus === 'Present'
+        ? ((hasSubsequentLiveCheckOut && liveCheckOut) ? liveCheckOut : (ovOutClean || liveCheckOut || '')).slice(0, 5)
+        : '';
+
+      const adminDecision = effectiveStatus === 'Present'
+        ? ((override.adminDecision as 'waived' | 'penalized') || (override.isWaived ? 'waived' : null))
+        : null;
+      const isPenalized = effectiveStatus === 'Present' && (
+        adminDecision === 'penalized' ||
+        override.adminCheckInDecision === 'penalized' ||
+        override.adminCheckOutDecision === 'penalized'
+      );
+
+      // Decouple Check-In waiver from Check-Out waiver (only for Present status)
+      const isCheckInWaived = effectiveStatus === 'Present' && Boolean(
         override.checkInWaived ?? 
         override.isCheckInWaived ?? 
-        (override.adminCheckInDecision === 'waived') ?? 
-        (adminDecision === 'waived') ?? 
+        (override.adminCheckInDecision === 'waived' ? true : undefined) ?? 
+        (adminDecision === 'waived' ? true : undefined) ?? 
         override.isWaived
       );
-      const isCheckOutWaived = Boolean(
+      const isCheckOutWaived = effectiveStatus === 'Present' && Boolean(
         override.checkOutWaived ?? 
         override.isCheckOutWaived ?? 
-        (override.adminCheckOutDecision === 'waived') ?? 
-        (adminDecision === 'waived' && cOut && cOut < SHIFT_RULES.EARLY_THRESHOLD) ?? 
-        (override.isWaived && cOut && cOut < SHIFT_RULES.EARLY_THRESHOLD)
+        (override.adminCheckOutDecision === 'waived' ? true : undefined) ?? 
+        ((adminDecision === 'waived' && cOut && cOut < SHIFT_RULES.EARLY_THRESHOLD) ? true : undefined) ?? 
+        ((override.isWaived && cOut && cOut < SHIFT_RULES.EARLY_THRESHOLD) ? true : undefined)
       );
       const isWaived = isCheckInWaived || isCheckOutWaived;
 
       let workedHours = 0;
-      if (cIn && cOut && cIn.includes(':') && cOut.includes(':') && cOut !== 'بەردەوام') {
-        const [inH, inM] = cIn.split(':').map(Number);
-        const [outH, outM] = cOut.split(':').map(Number);
-        const inTotal = inH * 60 + (inM || 0);
-        const outTotal = outH * 60 + (outM || 0);
-        if (outTotal > inTotal) {
-          const gross = outTotal - inTotal;
-          const breakStart = 12 * 60;
-          const breakEnd = 13 * 60;
-          const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
-          workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
+      if (effectiveStatus === 'Present') {
+        if (cIn && cOut && cIn.includes(':') && cOut.includes(':') && cOut !== 'بەردەوام') {
+          const [inH, inM] = cIn.split(':').map(Number);
+          const [outH, outM] = cOut.split(':').map(Number);
+          const inTotal = inH * 60 + (inM || 0);
+          const outTotal = outH * 60 + (outM || 0);
+          if (outTotal > inTotal) {
+            const gross = outTotal - inTotal;
+            const breakStart = 12 * 60;
+            const breakEnd = 13 * 60;
+            const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
+            workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
+          }
+        } else if (cIn && (!cOut || cOut === 'بەردەوام') && isToday) {
+          workedHours = 0;
+        } else if (cIn && !cOut && !isToday) {
+          workedHours = 8;
         }
-      } else if (cIn && (!cOut || cOut === 'بەردەوام') && isToday) {
-        workedHours = 0;
-      } else if (cIn && !cOut && !isToday) {
-        workedHours = 8;
       }
 
       const checkInStatus = getCheckInStatus(cIn, isCheckInWaived, isPenalized);
@@ -422,11 +503,11 @@ export function resolveEmployeeDayAttendance(
         isFriday,
         isFuture,
         isToday,
-        status: (override.status as any) || 'Present',
+        status: effectiveStatus,
         checkInTime: cIn,
         checkOutTime: cOut,
-        rawCheckIn: override.rawCheckIn || cIn,
-        rawCheckOut: override.rawCheckOut || cOut,
+        rawCheckIn: effectiveStatus === 'Present' ? ((override.rawCheckIn && String(override.rawCheckIn).includes(':')) ? override.rawCheckIn : cIn) : '',
+        rawCheckOut: effectiveStatus === 'Present' ? ((override.rawCheckOut && String(override.rawCheckOut).includes(':')) ? override.rawCheckOut : cOut) : '',
         checkInNote: override.checkInNote || override.note || liveCheckInNote || '',
         checkOutNote: override.checkOutNote || liveCheckOutNote || '',
         note: override.note || override.checkInNote || liveNote || '',
@@ -434,12 +515,12 @@ export function resolveEmployeeDayAttendance(
         adminCheckInNote: override.adminCheckInNote || override.adminNote || '',
         adminCheckOutNote: override.adminCheckOutNote || '',
         adminDecision,
-        adminCheckInDecision: override.adminCheckInDecision || (isCheckInWaived ? 'waived' : null),
-        adminCheckOutDecision: override.adminCheckOutDecision || (isCheckOutWaived ? 'waived' : null),
+        adminCheckInDecision: effectiveStatus === 'Present' ? (override.adminCheckInDecision || (isCheckInWaived ? 'waived' : null)) : null,
+        adminCheckOutDecision: effectiveStatus === 'Present' ? (override.adminCheckOutDecision || (isCheckOutWaived ? 'waived' : null)) : null,
         isWaived,
         isCheckInWaived,
         isCheckOutWaived,
-        workedHours: override.status === 'Present' ? workedHours : 0,
+        workedHours,
         warehouseName: 'کۆمپانیای سەرەکی ئاشڵی',
         historyLogs: override.historyLogs || [],
         hasAdminOverride: true,
@@ -450,7 +531,7 @@ export function resolveEmployeeDayAttendance(
   }
 
   // 2. Friday Holiday
-  if (isFriday) {
+  if (isFriday && sortedDayRecords.length === 0) {
     return {
       hasRecord: false,
       isFriday: true,
@@ -478,8 +559,8 @@ export function resolveEmployeeDayAttendance(
     };
   }
 
-  // 3. Future Days
-  if (isFuture) {
+  // 3. Future Days (when no record exists)
+  if (isFuture && sortedDayRecords.length === 0) {
     return {
       hasRecord: false,
       isFriday: false,
@@ -507,7 +588,7 @@ export function resolveEmployeeDayAttendance(
     };
   }
 
-  // 4. Past or Today: Search actual GPS logs from server (sorted chronologically so latest wins - کۆتا داتا)
+  // 4. Past or Today (or Future with logs): Search actual GPS logs from server (sorted chronologically so latest wins - کۆتا داتا)
   let checkInTime = '';
   let checkOutTime = '';
   let rawCheckIn = '';
@@ -526,16 +607,64 @@ export function resolveEmployeeDayAttendance(
   let isCheckOutWaived = false;
   let warehouseName = 'کۆمپانیای سەرەکی ئاشڵی';
   let historyLogs: any[] = [];
+  let explicitNonWorkingStatus: 'Absent' | 'Holiday' | 'Leave' | null = null;
 
   for (const r of (sortedDayRecords as any[])) {
-    const inCandidate = r.checkInTime || r.check_in_time || (r.checkIn ? (r.checkIn.includes(' ') ? r.checkIn.split(' ')[1]?.slice(0, 5) : r.checkIn.includes('T') ? r.checkIn.split('T')[1]?.slice(0, 5) : r.checkIn.slice(0, 5)) : '');
-    const outCandidate = r.checkOutTime || r.check_out_time || (r.checkOut ? (r.checkOut.includes(' ') ? r.checkOut.split(' ')[1]?.slice(0, 5) : r.checkOut.includes('T') ? r.checkOut.split('T')[1]?.slice(0, 5) : r.checkOut.slice(0, 5)) : '');
+    const rStatus = String(r.status || '');
+    const rLogType = String(r.log_type || r.action || r.type || '');
+    const rTimeStr = String(r.log_time_str || r.checkInTime || r.time || '').trim();
+    const rNoteStr = `${r.adminNote || ''} ${r.admin_note || ''} ${r.editNote || ''} ${r.edit_note || ''} ${r.note || ''} ${r.notes || ''}`;
+    const hasValidClockTime = Boolean(
+      (r.checkInTime && String(r.checkInTime).includes(':')) ||
+      (r.check_in_time && String(r.check_in_time).includes(':')) ||
+      (r.log_time_str && String(r.log_time_str).includes(':'))
+    );
+    if (
+      rStatus === 'Absent' || rStatus === 'غیاب' ||
+      rLogType === 'Absent' || rLogType === 'غیاب' ||
+      rTimeStr === 'غیاب' || rTimeStr === 'Absent' || rTimeStr.endsWith(' غیاب') ||
+      (!hasValidClockTime && rNoteStr.includes('🛡️ غیاب'))
+    ) {
+      explicitNonWorkingStatus = 'Absent';
+      checkInTime = '';
+      checkOutTime = '';
+    } else if (
+      rStatus === 'Holiday' || rStatus === 'پشوو' ||
+      rLogType === 'Holiday' || rLogType === 'پشوو' ||
+      rTimeStr === 'پشوو' || rTimeStr === 'Holiday' || rTimeStr.endsWith(' پشوو') ||
+      (!hasValidClockTime && rNoteStr.includes('🛡️ پشوو'))
+    ) {
+      explicitNonWorkingStatus = 'Holiday';
+      checkInTime = '';
+      checkOutTime = '';
+    } else if (
+      rStatus === 'Leave' || rStatus === 'مۆڵەت' ||
+      rLogType === 'Leave' || rLogType === 'مۆڵەت' ||
+      rTimeStr === 'مۆڵەت' || rTimeStr === 'Leave' || rTimeStr.endsWith(' مۆڵەت') ||
+      (!hasValidClockTime && rNoteStr.includes('🛡️ مۆڵەت'))
+    ) {
+      explicitNonWorkingStatus = 'Leave';
+      checkInTime = '';
+      checkOutTime = '';
+    } else {
+      const inCandidate = r.checkInTime || r.check_in_time || (r.checkIn ? (r.checkIn.includes(' ') ? r.checkIn.split(' ')[1]?.slice(0, 5) : r.checkIn.includes('T') ? r.checkIn.split('T')[1]?.slice(0, 5) : r.checkIn.slice(0, 5)) : '');
+      const outCandidate = r.checkOutTime || r.check_out_time || (r.checkOut ? (r.checkOut.includes(' ') ? r.checkOut.split(' ')[1]?.slice(0, 5) : r.checkOut.includes('T') ? r.checkOut.split('T')[1]?.slice(0, 5) : r.checkOut.slice(0, 5)) : '');
 
-    // Latest candidates win (کۆتا داتا)
-    if (inCandidate) checkInTime = inCandidate.slice(0, 5);
-    if (outCandidate) checkOutTime = outCandidate.slice(0, 5);
-    if (r.rawCheckInTime || r.raw_check_in_time) rawCheckIn = (r.rawCheckInTime || r.raw_check_in_time).slice(0, 5);
-    if (r.rawCheckOutTime || r.raw_check_out_time) rawCheckOut = (r.rawCheckOutTime || r.raw_check_out_time).slice(0, 5);
+      // Latest candidates win (کۆتا داتا)
+      if (inCandidate && String(inCandidate).includes(':')) {
+        checkInTime = String(inCandidate).slice(0, 5);
+        explicitNonWorkingStatus = null;
+      }
+      if (outCandidate && String(outCandidate).includes(':')) {
+        checkOutTime = String(outCandidate).slice(0, 5);
+      }
+      if ((r.rawCheckInTime || r.raw_check_in_time) && String(r.rawCheckInTime || r.raw_check_in_time).includes(':')) {
+        rawCheckIn = String(r.rawCheckInTime || r.raw_check_in_time).slice(0, 5);
+      }
+      if ((r.rawCheckOutTime || r.raw_check_out_time) && String(r.rawCheckOutTime || r.raw_check_out_time).includes(':')) {
+        rawCheckOut = String(r.rawCheckOutTime || r.raw_check_out_time).slice(0, 5);
+      }
+    }
     
     const inN = r.check_in_note || r.checkInNote || r.checkin_note;
     const outN = r.check_out_note || r.checkOutNote || r.checkout_note;
@@ -571,15 +700,19 @@ export function resolveEmployeeDayAttendance(
   if (!rawCheckIn && checkInTime) rawCheckIn = checkInTime;
   if (!rawCheckOut && checkOutTime) rawCheckOut = checkOutTime;
 
-  const hasRecord = Boolean(checkInTime || checkOutTime);
+  const hasRecord = Boolean(checkInTime || checkOutTime || explicitNonWorkingStatus);
 
   // Determine working status
   let status: 'Present' | 'Leave' | 'Absent' | 'Holiday' | 'Empty' | 'Loading' | 'مۆڵەت' | 'غیاب' = 'Empty';
   if (isWaitingData) {
     status = 'Loading';
-  } else if (hasRecord || checkInTime) {
+  } else if (explicitNonWorkingStatus) {
+    status = explicitNonWorkingStatus;
+  } else if (checkInTime || checkOutTime) {
     status = 'Present';
-  } else if (!isFuture && !isFriday) {
+  } else if (isFriday) {
+    status = 'Holiday';
+  } else if (!isFuture) {
     status = 'Absent';
   }
 
