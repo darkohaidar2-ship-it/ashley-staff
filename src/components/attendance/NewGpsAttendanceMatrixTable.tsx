@@ -1063,6 +1063,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         'کۆی کاژێر',
         'درەنگکەوتن',
         'غیاب',
+        'مۆڵەت',
         'ڕێژەی دەوام'
       ];
 
@@ -1070,6 +1071,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         let presentCount = 0;
         let totalHours = 0;
         let absentCount = 0;
+        let leaveCount = 0;
         let lateCount = 0;
 
         const dayValues = daysArray.map(d => {
@@ -1082,9 +1084,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             if (inT > '08:15') lateCount++;
             return `هاتن: ${info.checkInTime || '08:00'} | ڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '-')}`;
           }
-          if (d.isFriday || info.status === 'Holiday') return 'پشوو (هەینی)';
-          if (info.status === 'Leave' || info.status === 'مۆڵەت') return 'مۆڵەت';
-          if (!d.isFuture) {
+          if (d.isFriday || info.status === 'Holiday' || info.status === 'پشوو') return 'پشوو';
+          if (info.status === 'Leave' || info.status === 'مۆڵەت') {
+            leaveCount++;
+            return 'مۆڵەت';
+          }
+          if (info.status === 'Absent' || info.status === 'غیاب') {
             absentCount++;
             return 'غیاب';
           }
@@ -1104,6 +1109,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           `${totalHours}h`,
           lateCount,
           absentCount,
+          leaveCount,
           `%${rate}`
         ];
       });
@@ -1170,7 +1176,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         let cellContent = '<span style="color: #cbd5e1; font-weight: 500;">-</span>';
         let cellBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
 
-        if (info.hasRecord || info.status === 'Present') {
+        if (info.status === 'Present' || (info.status !== 'Leave' && info.status !== 'مۆڵەت' && info.status !== 'Absent' && info.status !== 'غیاب' && info.status !== 'Holiday' && info.status !== 'پشوو' && Boolean(info.checkInTime))) {
           presentCount++;
           globalPresentDays++;
           const hrs = (info.workedHours !== undefined ? info.workedHours : 8);
@@ -1203,12 +1209,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           globalLeaveCount++;
           cellContent = `<span style="color: #b45309; font-weight: 800; font-size: ${isFullRange ? '6.5px' : '7.5px'};">مۆڵەت</span>`;
           cellBg = '#fffdf7';
-        } else if (info.status === 'Absent' || (!d.isFuture && !d.isFriday && !info.hasRecord && !info.status)) {
+        } else if (info.status === 'Absent' || info.status === 'غیاب') {
           absentCount++;
           globalAbsentCount++;
           cellContent = `<span style="color: #b91c1c; font-weight: 800; font-size: ${isFullRange ? '6.5px' : '7.5px'};">غیاب</span>`;
           cellBg = '#fefafa';
-        } else if (info.isFriday || info.status === 'Holiday') {
+        } else if (info.isFriday || info.status === 'Holiday' || info.status === 'پشوو') {
           cellContent = `<span style="color: #0f766e; font-weight: 800; font-size: ${isFullRange ? '6.5px' : '7.5px'};">پشوو</span>`;
           cellBg = '#f4fbf9';
         }
@@ -1672,6 +1678,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 <div>غیاب</div>
                 <div className="text-[8px] font-medium text-rose-700 dark:text-rose-400">ڕۆژ</div>
               </th>
+              <th className={`bg-amber-50/90 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300 font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 text-center ${
+                tableFitMode === 'fit' ? 'w-[32px] min-w-[32px] px-0.5 py-1 text-[9px]' : 'min-w-[60px] px-2 py-2'
+              }`}>
+                <div>مۆڵەت</div>
+                <div className="text-[8px] font-medium text-amber-700 dark:text-amber-400">ڕۆژ</div>
+              </th>
               <th className={`bg-slate-200 text-slate-900 font-black border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 text-center ${
                 tableFitMode === 'fit' ? 'w-[36px] min-w-[36px] px-0.5 py-1 text-[9px]' : 'min-w-[65px] px-2 py-2'
               }`}>
@@ -1694,7 +1706,15 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
               daysArray.forEach(d => {
                 const info = getGpsLogsForEmpAndDay(emp, d);
-                const isPresent = info.status === 'Present' || Boolean(info.checkInTime);
+                const isPresent =
+                  info.status === 'Present' ||
+                  (info.status !== 'Leave' &&
+                    info.status !== 'مۆڵەت' &&
+                    info.status !== 'Absent' &&
+                    info.status !== 'غیاب' &&
+                    info.status !== 'Holiday' &&
+                    info.status !== 'پشوو' &&
+                    Boolean(info.checkInTime));
                 if (isPresent) {
                   empPresentDays++;
                   empTotalHours += (info.workedHours !== undefined ? info.workedHours : 8);
@@ -1704,7 +1724,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   }
                 } else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
                   empLeaveDays++;
-                } else if (info.status === 'Absent' || (!d.isFuture && !d.isFriday && info.status !== 'Empty' && info.status !== 'Holiday')) {
+                } else if (info.status === 'Absent' || info.status === 'غیاب') {
                   empAbsentDays++;
                 }
               });
@@ -1888,32 +1908,32 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           tableFitMode === 'fit' ? 'p-0.5 min-w-[26px] sm:min-w-[32px]' : 'p-1 min-w-[54px]'
                         }`}
                       >
-                        {/* 🔵 Selected Cell Dot Indicator */}
+                        {/* Selected Cell Dot Indicator */}
                         {isCellSelected && (
-                          <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-[#007AFF] ring-1 ring-white shadow-xs z-30" />
+                          <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#007AFF] z-30" />
                         )}
 
-                        {/* 🔴 Red Dot Indicator for Late Check-in or Early Departure (Unexcused) */}
-                        {isLate && (
+                        {/* Red Micro-Dot Indicator for Unexcused Late Check-in */}
+                        {isLate && !(info.checkInStatus?.isWaived || info.checkOutStatus?.isWaived || isWaived) && (
                           <span 
-                            className="absolute top-0.5 left-0.5 w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-rose-500 shadow-xs z-10 animate-pulse" 
+                            className="absolute top-1 left-1 w-1 h-1 rounded-full bg-rose-500 z-10" 
                             title="سەرپێچی دەوام (بێ لێخۆشبوون)"
                           />
                         )}
 
-                        {/* 🟣 Purple Circle Indicator for Excused / Waived by Admin (بازنەی مۆر) */}
+                        {/* Purple Micro-Dot Indicator for Excused / Waived by Admin */}
                         {(info.checkInStatus?.isWaived || info.checkOutStatus?.isWaived || isWaived) && (
                           <span 
-                            className="absolute top-0.5 left-0.5 w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-purple-600 ring-2 ring-purple-300 dark:ring-purple-900 shadow-xs z-10" 
-                            title="لێخۆشبوو (بازنەی مۆر - لێخۆشبوونی ئەدمین)"
+                            className="absolute top-1 left-1 w-1.5 h-1.5 rounded-full bg-purple-600 z-10" 
+                            title="لێخۆشبوو (لێخۆشبوونی ئەدمین)"
                           />
                         )}
 
-                        {/* 📝 Note Indicator Dot (Employee Note / Overtime Note) */}
-                        {(info.checkInNote || info.checkOutNote || info.note) && (
+                        {/* Blue Micro-Dot Indicator for Real Note (Employee Note or Admin Note) */}
+                        {(info.checkInNote || info.checkOutNote || info.note || info.adminNote) && (
                           <span 
-                            className="absolute bottom-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 ring-1 ring-blue-200 dark:ring-blue-900 shadow-xs z-10" 
-                            title={`تێبینی کارمەند:\n${[info.checkInNote, info.checkOutNote].filter(Boolean).join('\n') || info.note}`}
+                            className="absolute bottom-1 right-1 w-1 h-1 rounded-full bg-blue-500 z-10" 
+                            title={`تێبینی:\n${[info.checkInNote, info.checkOutNote, info.adminNote].filter(Boolean).join('\n') || info.note}`}
                           />
                         )}
 
@@ -1990,6 +2010,19 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   </td>
                   <td className={`text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 bg-slate-50/40 dark:bg-white/[0.01] ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
                     {isWaitingData ? (
+                      <span className="inline-block w-6 h-4 bg-slate-200/80 dark:bg-slate-700/80 rounded-md animate-pulse" />
+                    ) : (
+                      <span className={`inline-block font-mono font-bold ${
+                        tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2 py-0.5 rounded-lg text-xs'
+                      } ${
+                        empLeaveDays > 0 ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/20' : 'text-slate-400 dark:text-slate-600'
+                      }`}>
+                        {empLeaveDays > 0 ? (tableFitMode === 'fit' ? empLeaveDays : `${empLeaveDays} ڕۆژ`) : '٠'}
+                      </span>
+                    )}
+                  </td>
+                  <td className={`text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 bg-slate-50/40 dark:bg-white/[0.01] ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
+                    {isWaitingData ? (
                       <span className="inline-block w-7 h-4 bg-slate-200/80 dark:bg-slate-700/80 rounded-md animate-pulse" />
                     ) : (
                       <span className={`inline-block font-mono font-bold ${
@@ -2010,482 +2043,272 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       </div>
 
       {/* ========================================================================= */}
-      {/* 🍏 ULTRA-CLEAN APPLE iOS STYLE DAY DETAILS, ADMIN EDIT & AUDIT HISTORY SHEET */}
+      {/* 🍏 CLEAN MINIMALIST DAY DETAILS & ADMIN EDIT MODAL */}
       {/* ========================================================================= */}
       {selectedDayModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-200 font-sans" dir="rtl">
-          <div className="bg-[#f2f2f7] dark:bg-[#1c1c1e] text-slate-900 dark:text-white rounded-[28px] border border-white/60 dark:border-white/10 shadow-2xl max-w-xl w-full p-0 overflow-hidden transition-all flex flex-col max-h-[92vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/45 backdrop-blur-xs animate-in fade-in duration-150 font-sans" dir="rtl" onClick={() => setSelectedDayModal(null)}>
+          <div className="bg-white dark:bg-[#1c1c1e] text-slate-900 dark:text-white rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-md w-full overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
             
-            {/* iOS Header */}
-            <div className="px-6 pt-5 pb-4 bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white font-bold flex items-center justify-center text-sm shadow-md shadow-indigo-500/20">
+            {/* 1. Clean Neutral Header */}
+            <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-[#242426]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-slate-900 dark:bg-slate-700 text-white font-bold flex items-center justify-center text-xs">
                   {(selectedDayModal.emp.name || '').slice(0, 2)}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-base text-slate-900 dark:text-white tracking-tight">
+                    <h3 className="font-bold text-sm text-slate-900 dark:text-white">
                       {selectedDayModal.emp.fullName3Part || selectedDayModal.emp.name}
                     </h3>
-                    <span className="text-[10px] font-semibold bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 rounded-full border border-slate-200/50 dark:border-white/5">
+                    <span className="text-[10px] font-medium bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-md">
                       {translateRoleToKurdish(selectedDayModal.emp.role)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                    <span className="font-mono text-[11px]">#{selectedDayModal.emp.id}</span>
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
+                    <span>{selectedDayModal.dayItem.dateStr}</span>
                     <span>•</span>
-                    <span className="font-mono text-indigo-600 dark:text-indigo-400 font-semibold">{selectedDayModal.dayItem.dateStr}</span>
+                    <span>#{selectedDayModal.emp.id}</span>
                   </div>
                 </div>
               </div>
 
-              {/* iOS Close Button */}
               <button 
+                type="button"
                 onClick={() => setSelectedDayModal(null)}
-                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-500 dark:text-slate-300 flex items-center justify-center cursor-pointer transition-all active:scale-90"
+                className="w-7 h-7 rounded-lg bg-slate-200/60 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 flex items-center justify-center cursor-pointer transition-colors"
                 title="داخستن"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* iOS Modal Body */}
-            <div className="p-5 sm:p-6 space-y-4 overflow-y-auto">
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 overflow-y-auto">
               
-              {/* ------------------------------------------------------------- */}
-              {/* 📱 بەشی ١: داتای تۆمارکراوی کارمەند (Employee Mobile Record) */}
-              {/* ------------------------------------------------------------- */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                    <Smartphone className="w-3.5 h-3.5 text-[#007AFF]" />
-                    <span>داتای تۆمارکراوی مۆبایلی کارمەند:</span>
+              {/* 2. Compact 1-Line Employee Mobile Record Strip */}
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#242426] border border-slate-200/80 dark:border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-slate-500" />
+                    <span>تۆماری مۆبایل:</span>
                   </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* داتای هاتنی مۆبایل */}
-                  <div className="bg-white dark:bg-[#2c2c2e] rounded-2xl p-3.5 border border-slate-200/70 dark:border-white/5 shadow-xs space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-600 dark:text-slate-300">کاتی هاتن (مۆبایل):</span>
-                      <span className="font-black font-mono text-emerald-600 dark:text-emerald-400 text-sm">
-                        {selectedDayModal.info.rawCheckIn || selectedDayModal.info.checkInTime || '08:00'}
-                      </span>
-                    </div>
-                    <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-white/5">
-                      <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 block">
-                        ( تێبینی هاتنی کارمەند ) :
-                      </span>
-                      <div className="p-2 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-[11px] font-medium">
-                        {selectedDayModal.info.checkInNote || selectedDayModal.info.note ? (
-                          <span className="text-indigo-950 dark:text-indigo-100 font-bold">
-                            {selectedDayModal.info.checkInNote || selectedDayModal.info.note}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 dark:text-slate-500 italic">تێبینی نەنوسراوە</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* داتای ڕۆیشتنی مۆبایل */}
-                  <div className="bg-white dark:bg-[#2c2c2e] rounded-2xl p-3.5 border border-slate-200/70 dark:border-white/5 shadow-xs space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-600 dark:text-slate-300">کاتی چوون (مۆبایل):</span>
-                      <span className="font-black font-mono text-blue-600 dark:text-blue-400 text-sm">
-                        {selectedDayModal.info.rawCheckOut || selectedDayModal.info.checkOutTime || (selectedDayModal.dayItem.isToday ? 'بەردەوام' : 'تۆمار نەکراوە')}
-                      </span>
-                    </div>
-                    <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-white/5">
-                      <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 block">
-                        ( تێبینی ڕۆیشتن / ئیزافەی کارمەند ) :
-                      </span>
-                      <div className="p-2 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-[11px] font-medium">
-                        {selectedDayModal.info.checkOutNote ? (
-                          <span className="text-indigo-950 dark:text-indigo-100 font-bold">
-                            {selectedDayModal.info.checkOutNote}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 dark:text-slate-500 italic">تێبینی نەنوسراوە</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ------------------------------------------------------------- */}
-              {/* 🛡️ بەشی ٢: دەستکاری و دەستنیشانکردنی ئەدمین (Admin Edit Section) */}
-              {/* ------------------------------------------------------------- */}
-              <div className="bg-white dark:bg-[#2c2c2e] rounded-2xl p-4 border border-slate-200/70 dark:border-white/5 shadow-xs space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/5">
-                  <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                    <span>دەستکاری و پەسەندکردنی ئەدمین:</span>
-                  </span>
-                </div>
-
-                {/* Status Selector */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 px-1 block">حاڵەتی ڕۆژەکە:</label>
-                  <div className="p-1 bg-slate-100 dark:bg-[#3a3a3c] rounded-2xl grid grid-cols-4 gap-1">
-                    {[
-                      { key: 'Present', label: 'ئامادەبوو', dot: 'bg-emerald-500' },
-                      { key: 'Leave', label: 'مۆڵەت', dot: 'bg-amber-500' },
-                      { key: 'Absent', label: 'غیاب', dot: 'bg-rose-500' },
-                      { key: 'Holiday', label: 'پشوو', dot: 'bg-blue-500' },
-                    ].map(s => {
-                      const isSelected = modalStatus === s.key;
-                      return (
-                        <button
-                          key={s.key}
-                          type="button"
-                          onClick={() => setModalStatus(s.key)}
-                          className={`py-1.5 px-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                            isSelected 
-                              ? 'bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white shadow-xs font-black' 
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium'
-                          }`}
-                        >
-                          <span className={`w-2 h-2 rounded-full ${s.dot}`} />
-                          <span>{s.label}</span>
-                        </button>
-                      );
-                    })}
+                  <div className="flex items-center gap-3 font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
+                    <span>هاتن: {selectedDayModal.info.rawCheckIn || selectedDayModal.info.checkInTime || '—'}</span>
+                    <span className="text-slate-300 dark:text-slate-700">|</span>
+                    <span>چوون: {selectedDayModal.info.rawCheckOut || selectedDayModal.info.checkOutTime || (selectedDayModal.dayItem.isToday ? 'بەردەوام' : '—')}</span>
                   </div>
                 </div>
 
-                {/* Time & Admin Notes Inputs */}
-                {modalStatus === 'Present' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                    {/* کاتی ئیدتکراوی هاتن + تێبینی ئەدمین */}
-                    <div className="space-y-2 bg-slate-50 dark:bg-[#1c1c1e] p-3 rounded-xl border border-slate-200/60 dark:border-white/5">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">کاتی دەستکاریکراوی هاتن:</label>
-                        <input 
-                          type="time" 
-                          value={modalCheckIn}
-                          onChange={(e) => setModalCheckIn(e.target.value)}
-                          className="text-xs font-bold font-mono bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white px-2.5 py-1 rounded-lg border border-slate-200 dark:border-white/10 outline-none focus:border-[#007AFF]"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-blue-700 dark:text-blue-400 block">
-                          ( تێبینی ئەدمین ) - هاتن:
-                        </label>
-                        <input
-                          type="text"
-                          value={modalAdminCheckInNote}
-                          onChange={(e) => setModalAdminCheckInNote(e.target.value)}
-                          placeholder="هۆکاری گۆڕانکاری بنووسە..."
-                          className="w-full text-xs bg-white dark:bg-[#2c2c2e] border border-slate-200 dark:border-white/10 p-2 rounded-xl outline-none focus:border-[#007AFF] text-slate-900 dark:text-white font-medium"
-                        />
-                      </div>
-                    </div>
-
-                    {/* کاتی ئیدتکراوی ڕۆیشتن + تێبینی ئەدمین */}
-                    <div className="space-y-2 bg-slate-50 dark:bg-[#1c1c1e] p-3 rounded-xl border border-slate-200/60 dark:border-white/5">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">کاتی دەستکاریکراوی ڕۆیشتن:</label>
-                        <input 
-                          type="time" 
-                          value={modalCheckOut}
-                          onChange={(e) => setModalCheckOut(e.target.value)}
-                          className="text-xs font-bold font-mono bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white px-2.5 py-1 rounded-lg border border-slate-200 dark:border-white/10 outline-none focus:border-[#007AFF]"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-blue-700 dark:text-blue-400 block">
-                          ( تێبینی ئەدمین ) - ڕۆیشتن:
-                        </label>
-                        <input
-                          type="text"
-                          value={modalAdminCheckOutNote}
-                          onChange={(e) => setModalAdminCheckOutNote(e.target.value)}
-                          placeholder="هۆکاری گۆڕانکاری بنووسە..."
-                          className="w-full text-xs bg-white dark:bg-[#2c2c2e] border border-slate-200 dark:border-white/10 p-2 rounded-xl outline-none focus:border-[#007AFF] text-slate-900 dark:text-white font-medium"
-                        />
-                      </div>
-                    </div>
+                {(selectedDayModal.info.checkInNote || selectedDayModal.info.checkOutNote || selectedDayModal.info.note) && (
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <span className="font-bold text-slate-500">تێبینی کارمەند: </span>
+                    <span className="font-medium">
+                      {[selectedDayModal.info.checkInNote || selectedDayModal.info.note, selectedDayModal.info.checkOutNote].filter(Boolean).join(' • ')}
+                    </span>
                   </div>
                 )}
+              </div>
 
-                {/* ⚖️ سەرپشکی و بڕیاری ئەدمین بۆ کاتی هاتن و ڕۆیشتن بە جیاکراوەیی */}
-                <div className="space-y-3 bg-slate-50 dark:bg-[#1c1c1e] p-3.5 rounded-xl border border-slate-200/60 dark:border-white/5">
-                  <div className="flex items-center justify-between pb-1 border-b border-slate-200/50 dark:border-white/5">
-                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <span>⚖️ بڕیاری سەرپشکی و لێخۆشبوونی ئەدمین:</span>
-                    </label>
-                  </div>
+              {/* 3. Clean Neutral Status Selector */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">دۆخی ڕۆژ:</label>
+                <div className="p-1 bg-slate-100 dark:bg-[#242426] rounded-xl grid grid-cols-4 gap-1 border border-slate-200/70 dark:border-slate-800">
+                  {[
+                    { key: 'Present', label: 'ئامادەبوو' },
+                    { key: 'Leave', label: 'مۆڵەت' },
+                    { key: 'Absent', label: 'غیاب' },
+                    { key: 'Holiday', label: 'پشوو' },
+                  ].map(s => {
+                    const isSelected = modalStatus === s.key;
+                    return (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => setModalStatus(s.key)}
+                        className={`py-2 px-1 rounded-lg text-xs transition-all cursor-pointer text-center ${
+                          isSelected 
+                            ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xs font-black' 
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold'
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-                  {/* ١. لێخۆشبوون لە درەنگ هاتن */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                      <span>• لێخۆشبوون لە درەنگ هاتن (بەیانی):</span>
-                      <span className="font-mono text-[10px] text-purple-600 dark:text-purple-400">کاتی هاتن: {modalCheckIn}</span>
+              {/* 4. Inline Time & Waiver Rows (Only when Present) */}
+              {modalStatus === 'Present' && (
+                <div className="space-y-2.5 pt-1">
+                  {/* Check-in Row */}
+                  <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 bg-white dark:bg-[#242426]">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 w-20">کاتی هاتن:</span>
+                      <input 
+                        type="time" 
+                        value={modalCheckIn}
+                        onChange={(e) => setModalCheckIn(e.target.value)}
+                        className="text-xs font-bold font-mono bg-slate-50 dark:bg-[#1c1c1e] text-slate-900 dark:text-white px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 outline-none focus:border-slate-900"
+                      />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+
+                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#1c1c1e] p-0.5 rounded-lg border border-slate-200/70 dark:border-slate-800">
                       <button
                         type="button"
                         onClick={() => {
-                          setModalCheckInDecision(prev => prev === 'waived' ? null : 'waived');
-                          setModalAdminDecision(prev => prev === 'waived' ? null : 'waived');
+                          const next = modalCheckInDecision === 'waived' ? null : 'waived';
+                          setModalCheckInDecision(next);
+                          setModalAdminDecision(next || modalCheckOutDecision || null);
                         }}
-                        className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                        className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${
                           modalCheckInDecision === 'waived'
-                            ? 'bg-purple-600 text-white border-purple-700 shadow-sm font-black ring-2 ring-purple-400'
-                            : 'bg-white dark:bg-[#2c2c2e] text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800/40 hover:bg-purple-50'
+                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                         }`}
                       >
-                        <span className="flex items-center gap-1.5 text-xs">
-                          <span>🟣</span>
-                          <span>لێخۆشبوون (بازنەی مۆر)</span>
-                        </span>
-                        <span className={`text-[9px] font-medium ${modalCheckInDecision === 'waived' ? 'text-purple-100' : 'text-slate-400'}`}>
-                          سزا نادرێت و بازنەی مۆر دەردەکەوێت
-                        </span>
+                        لێخۆشبوون
                       </button>
-
                       <button
                         type="button"
                         onClick={() => {
-                          setModalCheckInDecision(prev => prev === 'penalized' ? null : 'penalized');
-                          setModalAdminDecision(prev => prev === 'penalized' ? null : 'penalized');
+                          const next = modalCheckInDecision === 'penalized' ? null : 'penalized';
+                          setModalCheckInDecision(next);
+                          setModalAdminDecision(next || modalCheckOutDecision || null);
                         }}
-                        className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                        className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${
                           modalCheckInDecision === 'penalized'
-                            ? 'bg-rose-600 text-white border-rose-700 shadow-sm font-black ring-2 ring-rose-400'
-                            : 'bg-white dark:bg-[#2c2c2e] text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-800/40 hover:bg-rose-50'
+                            ? 'bg-rose-600 text-white'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                         }`}
                       >
-                        <span className="flex items-center gap-1.5 text-xs">
-                          <span>🔴</span>
-                          <span>حسابکردن (سزا)</span>
-                        </span>
-                        <span className={`text-[9px] font-medium ${modalCheckInDecision === 'penalized' ? 'text-rose-100' : 'text-slate-400'}`}>
-                          وەک سەرپێچی دەوام حساب دەکرێت
-                        </span>
+                        سزا
                       </button>
                     </div>
                   </div>
 
-                  {/* ٢. لێخۆشبوون لە زوو ڕۆیشتن */}
-                  <div className="space-y-1.5 pt-1.5 border-t border-slate-200/50 dark:border-white/5">
-                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                      <span>• لێخۆشبوون لە زوو ڕۆیشتن (چوونەوە):</span>
-                      <span className="font-mono text-[10px] text-purple-600 dark:text-purple-400">کاتی ڕۆیشتن: {modalCheckOut || 'بەردەوام'}</span>
+                  {/* Check-out Row */}
+                  <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 bg-white dark:bg-[#242426]">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 w-20">کاتی چوون:</span>
+                      <input 
+                        type="time" 
+                        value={modalCheckOut}
+                        onChange={(e) => setModalCheckOut(e.target.value)}
+                        className="text-xs font-bold font-mono bg-slate-50 dark:bg-[#1c1c1e] text-slate-900 dark:text-white px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 outline-none focus:border-slate-900"
+                      />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+
+                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#1c1c1e] p-0.5 rounded-lg border border-slate-200/70 dark:border-slate-800">
                       <button
                         type="button"
                         onClick={() => {
-                          setModalCheckOutDecision(prev => prev === 'waived' ? null : 'waived');
-                          setModalAdminDecision(prev => prev === 'waived' ? null : 'waived');
+                          const next = modalCheckOutDecision === 'waived' ? null : 'waived';
+                          setModalCheckOutDecision(next);
+                          setModalAdminDecision(modalCheckInDecision || next || null);
                         }}
-                        className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                        className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${
                           modalCheckOutDecision === 'waived'
-                            ? 'bg-purple-600 text-white border-purple-700 shadow-sm font-black ring-2 ring-purple-400'
-                            : 'bg-white dark:bg-[#2c2c2e] text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800/40 hover:bg-purple-50'
+                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                         }`}
                       >
-                        <span className="flex items-center gap-1.5 text-xs">
-                          <span>🟣</span>
-                          <span>لێخۆشبوون (بازنەی مۆر)</span>
-                        </span>
-                        <span className={`text-[9px] font-medium ${modalCheckOutDecision === 'waived' ? 'text-purple-100' : 'text-slate-400'}`}>
-                          سزا نادرێت و بازنەی مۆر دەردەکەوێت
-                        </span>
+                        لێخۆشبوون
                       </button>
-
                       <button
                         type="button"
                         onClick={() => {
-                          setModalCheckOutDecision(prev => prev === 'penalized' ? null : 'penalized');
-                          setModalAdminDecision(prev => prev === 'penalized' ? null : 'penalized');
+                          const next = modalCheckOutDecision === 'penalized' ? null : 'penalized';
+                          setModalCheckOutDecision(next);
+                          setModalAdminDecision(modalCheckInDecision || next || null);
                         }}
-                        className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                        className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${
                           modalCheckOutDecision === 'penalized'
-                            ? 'bg-rose-600 text-white border-rose-700 shadow-sm font-black ring-2 ring-rose-400'
-                            : 'bg-white dark:bg-[#2c2c2e] text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-800/40 hover:bg-rose-50'
+                            ? 'bg-rose-600 text-white'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                         }`}
                       >
-                        <span className="flex items-center gap-1.5 text-xs">
-                          <span>🔴</span>
-                          <span>حسابکردن (سزا)</span>
-                        </span>
-                        <span className={`text-[9px] font-medium ${modalCheckOutDecision === 'penalized' ? 'text-rose-100' : 'text-slate-400'}`}>
-                          وەک سەرپێچی دەوام حساب دەکرێت
-                        </span>
+                        سزا
                       </button>
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* 5. Single Clean Admin Note Input (Available for all statuses) */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">
+                  تێبینی ئەدمین:
+                </label>
+                <input
+                  type="text"
+                  value={modalAdminCheckInNote}
+                  onChange={(e) => {
+                    setModalAdminCheckInNote(e.target.value);
+                    setModalAdminNote(e.target.value);
+                  }}
+                  placeholder="تێبینی یان هۆکاری گۆڕانکاری بنووسە..."
+                  className="w-full text-xs bg-slate-50 dark:bg-[#242426] border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl outline-none focus:bg-white focus:border-slate-900 text-slate-900 dark:text-white font-medium"
+                />
               </div>
 
-              {/* ------------------------------------------------------------- */}
-              {/* 📜 بەشی ٣: تۆماری تەواوی مێژووی گۆڕانکارییەکان */}
-              {/* ------------------------------------------------------------- */}
-              <div className="bg-white dark:bg-[#2c2c2e] rounded-2xl p-4 border border-slate-200/70 dark:border-white/5 shadow-xs space-y-2.5">
-                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-white/5">
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-amber-500" />
-                    <span>مێژووی دەستکاری و گۆڕانکارییەکان:</span>
-                  </span>
-                </div>
-
-                <div className="space-y-2 text-xs">
-                  {/* تێبینی یان گۆڕانکاری کاتی هاتن و چوون لەلایەن ئەدمینەوە */}
-                  {(
-                    Boolean(selectedDayModal.info.adminNote) || 
-                    Boolean(selectedDayModal.info.adminCheckInNote) || 
-                    Boolean(selectedDayModal.info.adminCheckOutNote) || 
-                    (Boolean(selectedDayModal.info.checkInTime) && Boolean(selectedDayModal.info.rawCheckIn) && selectedDayModal.info.checkInTime !== selectedDayModal.info.rawCheckIn) ||
-                    (Boolean(selectedDayModal.info.checkOutTime) && Boolean(selectedDayModal.info.rawCheckOut) && selectedDayModal.info.checkOutTime !== selectedDayModal.info.rawCheckOut) ||
-                    (Array.isArray(selectedDayModal.info.historyLogs) && selectedDayModal.info.historyLogs.length > 0)
-                  ) ? (
-                    <div className="space-y-2.5">
-                      {/* 🔄 ١. ڕیزبەندی گۆڕانکاری کاتی هاتن لەلایەن ئەدمین */}
-                      {selectedDayModal.info.checkInTime && selectedDayModal.info.rawCheckIn && selectedDayModal.info.checkInTime !== selectedDayModal.info.rawCheckIn && (
-                        <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-950 dark:text-emerald-200 flex flex-col gap-1.5 shadow-2xs">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold flex items-center gap-1.5 text-xs text-emerald-900 dark:text-emerald-300">
-                              <span>🔄 گۆڕانکاری کاتی هاتن لەلایەن ئەدمینەوە:</span>
-                            </span>
-                            <span className="font-mono text-xs font-bold">
-                              <span className="line-through text-slate-400 dark:text-slate-500 ml-1.5">{selectedDayModal.info.rawCheckIn}</span>
-                              <span className="text-slate-400">➡️</span>
-                              <span className="text-emerald-600 dark:text-emerald-400 font-black mr-1.5 text-sm">{selectedDayModal.info.checkInTime}</span>
-                            </span>
-                          </div>
-                          {selectedDayModal.info.adminCheckInNote && (
-                            <div className="text-[11px] font-medium text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20">
-                              <span className="font-bold">تێبینی هاتنی ئەدمین: </span>
-                              <span>{selectedDayModal.info.adminCheckInNote}</span>
-                            </div>
+              {/* 6. Collapsible Edit History (Only rendered if history exists) */}
+              {Array.isArray(selectedDayModal.info.historyLogs) && selectedDayModal.info.historyLogs.length > 0 && (
+                <details className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-[#242426] overflow-hidden">
+                  <summary className="px-3.5 py-2.5 text-[11px] font-bold text-slate-600 dark:text-slate-300 cursor-pointer flex items-center justify-between select-none list-none">
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      <span>مێژووی دەستکارییەکان ({selectedDayModal.info.historyLogs.length})</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 group-open:rotate-180 transition-transform">▼</span>
+                  </summary>
+                  <div className="p-3 pt-1 space-y-2 border-t border-slate-200/60 dark:border-slate-800 max-h-40 overflow-y-auto">
+                    {selectedDayModal.info.historyLogs.map((log: any, idx: number) => (
+                      <div key={log.id || idx} className="p-2.5 rounded-lg bg-white dark:bg-[#1c1c1e] border border-slate-200/70 dark:border-slate-800 text-[11px] space-y-1">
+                        <div className="flex items-center justify-between text-slate-500">
+                          <span className="font-bold text-slate-700 dark:text-slate-300">{log.adminName || 'ئەدمین'}</span>
+                          <span className="font-mono text-[10px]">{log.formattedDate || log.time}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] text-slate-700 dark:text-slate-300">
+                          {log.checkInFrom && log.checkInTo && (
+                            <span>هاتن: {log.checkInFrom} ← {log.checkInTo}</span>
+                          )}
+                          {log.checkOutFrom && log.checkOutTo && (
+                            <span>چوون: {log.checkOutFrom} ← {log.checkOutTo}</span>
+                          )}
+                          {log.statusFrom && log.statusTo && (
+                            <span className="font-sans">دۆخ: {log.statusFrom} ← {log.statusTo}</span>
                           )}
                         </div>
-                      )}
-
-                      {/* 🔄 ٢. ڕیزبەندی گۆڕانکاری کاتی چوون لەلایەن ئەدمین */}
-                      {selectedDayModal.info.checkOutTime && selectedDayModal.info.rawCheckOut && selectedDayModal.info.checkOutTime !== selectedDayModal.info.rawCheckOut && (
-                        <div className="p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-950 dark:text-blue-200 flex flex-col gap-1.5 shadow-2xs">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold flex items-center gap-1.5 text-xs text-blue-900 dark:text-blue-300">
-                              <span>🔄 گۆڕانکاری کاتی چوون لەلایەن ئەدمینەوە:</span>
-                            </span>
-                            <span className="font-mono text-xs font-bold">
-                              <span className="line-through text-slate-400 dark:text-slate-500 ml-1.5">{selectedDayModal.info.rawCheckOut}</span>
-                              <span className="text-slate-400">➡️</span>
-                              <span className="text-blue-600 dark:text-blue-400 font-black mr-1.5 text-sm">{selectedDayModal.info.checkOutTime}</span>
-                            </span>
+                        {(log.adminNote || log.adminCheckInNote) && (
+                          <div className="text-[10px] text-slate-600 dark:text-slate-400">
+                            تێبینی: {log.adminNote || log.adminCheckInNote}
                           </div>
-                          {selectedDayModal.info.adminCheckOutNote && (
-                            <div className="text-[11px] font-medium text-blue-800 dark:text-blue-300 bg-blue-500/10 p-2 rounded-xl border border-blue-500/20">
-                              <span className="font-bold">تێبینی چوونى ئەدمین: </span>
-                              <span>{selectedDayModal.info.adminCheckOutNote}</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* 📜 ٣. مێژووی تەواوی گۆڕانکارییە پێشووەکان */}
-                      {Array.isArray(selectedDayModal.info.historyLogs) && selectedDayModal.info.historyLogs.length > 0 && (
-                        <div className="space-y-2 pt-1 border-t border-slate-200/60 dark:border-white/5">
-                          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block px-1">
-                            مێژووی دەستکارییەکان:
-                          </span>
-                          {selectedDayModal.info.historyLogs.map((log: any, idx: number) => (
-                            <div key={log.id || idx} className="p-3 rounded-2xl bg-slate-50 dark:bg-[#1c1c1e] border border-slate-200/70 dark:border-white/5 space-y-1.5 shadow-2xs">
-                              <div className="flex items-center justify-between text-[11px] pb-1 border-b border-slate-200/50 dark:border-white/5">
-                                <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                                  <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                                  <span>دەستکاری لەلایەن: {log.adminName || 'ئەدمین'}</span>
-                                </span>
-                                <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500">{log.formattedDate || log.time}</span>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                                {log.checkInFrom && log.checkInTo && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/40 font-mono text-xs font-bold">
-                                    <span>هاتن:</span>
-                                    <span className="line-through opacity-70">{log.checkInFrom}</span>
-                                    <span>➡️</span>
-                                    <span className="font-black">{log.checkInTo}</span>
-                                  </span>
-                                )}
-                                {log.checkOutFrom && log.checkOutTo && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-200/50 dark:border-blue-800/40 font-mono text-xs font-bold">
-                                    <span>چوون:</span>
-                                    <span className="line-through opacity-70">{log.checkOutFrom}</span>
-                                    <span>➡️</span>
-                                    <span className="font-black">{log.checkOutTo}</span>
-                                  </span>
-                                )}
-                                {log.statusFrom && log.statusTo && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200/50 text-[11px] font-bold">
-                                    <span>حاڵەت: {log.statusFrom} ➡️ {log.statusTo}</span>
-                                  </span>
-                                )}
-                              </div>
-                              {(log.adminCheckInNote || log.adminCheckOutNote || log.adminNote) && (
-                                <div className="text-[11px] text-slate-600 dark:text-slate-400 bg-white/60 dark:bg-black/20 p-2 rounded-xl space-y-0.5 border border-slate-100 dark:border-white/5">
-                                  {log.adminCheckInNote && <div>• تێبینی هاتنی ئەدمین: <span className="font-semibold text-slate-800 dark:text-slate-200">{log.adminCheckInNote}</span></div>}
-                                  {log.adminCheckOutNote && <div>• تێبینی چوونى ئەدمین: <span className="font-semibold text-slate-800 dark:text-slate-200">{log.adminCheckOutNote}</span></div>}
-                                  {log.adminNote && !log.adminCheckInNote && !log.adminCheckOutNote && <div>• تێبینی ئەدمین: <span className="font-semibold text-slate-800 dark:text-slate-200">{log.adminNote}</span></div>}
-                                </div>
-                              )}
-                              {log.decisionLabel && (
-                                <div className={`text-[11px] font-bold p-2 rounded-xl border ${
-                                  log.adminDecision === 'waived'
-                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
-                                    : 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300'
-                                }`}>
-                                  <span>• بڕیاری ئەدمین: </span>
-                                  <span>{log.decisionLabel}</span>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* نووسراوی تێبینیەکانی دیکەی ئەدمین */}
-                      {selectedDayModal.info.adminNote && 
-                       !selectedDayModal.info.adminNote.includes(selectedDayModal.info.adminCheckInNote || '___') && 
-                       !selectedDayModal.info.adminNote.includes(selectedDayModal.info.adminCheckOutNote || '___') && (
-                        <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#1c1c1e] border border-slate-200/60 dark:border-white/5 flex items-start gap-2">
-                          <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-                          <span className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
-                            {selectedDayModal.info.adminNote}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#1c1c1e] border border-slate-100 dark:border-white/5 text-center text-slate-400 dark:text-slate-500 text-[11px] italic">
-                      تا ئێستا هیچ دەستکارییەکی پێشوو لەلایەن ئەدمینەوە ئەنجام نەدراوە.
-                    </div>
-                  )}
-                </div>
-              </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
 
             </div>
 
-            {/* iOS Bottom Action Bar */}
-            <div className="px-6 py-4 bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between shrink-0">
+            {/* Clean Bottom Action Bar */}
+            <div className="px-5 py-3.5 bg-slate-50/80 dark:bg-[#242426] border-t border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
               <button
                 type="button"
                 onClick={handleDeleteDayRecord}
-                className="px-3 py-2 rounded-full text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                className="px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>سڕینەوەی تۆمار</span>
+                <span>سڕینەوە</span>
               </button>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setSelectedDayModal(null)}
-                  className="px-4 py-2 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer active:scale-95"
+                  className="px-4 py-2 rounded-xl bg-slate-200/70 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold transition-colors cursor-pointer"
                 >
                   داخستن
                 </button>
@@ -2493,7 +2316,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   type="button"
                   onClick={handleSaveModal}
                   disabled={isSavingModal}
-                  className="px-6 py-2 rounded-full bg-[#007AFF] hover:bg-[#0062cc] active:bg-[#0051a8] text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   <span>{isSavingModal ? 'پاشەکەوت دەکرێت...' : 'پاشەکەوتکردن'}</span>

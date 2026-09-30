@@ -3023,9 +3023,9 @@ export default function MobileAttendanceOneTap() {
                                 {day.checkInTime}
                               </span>
                               {day.checkInStatus.isWaived || day.isCheckInWaived ? (
-                                <span className="w-2 h-2 rounded-full bg-purple-600 inline-block" title="لێخۆشبوونی دواکەوتن" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-purple-600 inline-block" title="لێخۆشبوونی دواکەوتن" />
                               ) : day.checkInStatus.isLate ? (
-                                <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" title="دواکەوتن" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" title="دواکەوتن" />
                               ) : null}
                             </div>
                           ) : isAbsentDay ? (
@@ -3045,7 +3045,7 @@ export default function MobileAttendanceOneTap() {
                             <div className="inline-flex items-center justify-center gap-1">
                               <span className="text-rose-700">{day.checkOutTime}</span>
                               {(day.checkOutStatus.isWaived || day.isCheckOutWaived) && (
-                                <span className="w-2 h-2 rounded-full bg-purple-600 inline-block" title="لێخۆشبوونی زوو دەرچوون" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-purple-600 inline-block" title="لێخۆشبوونی زوو دەرچوون" />
                               )}
                             </div>
                           ) : isAbsentDay ? (
@@ -3101,7 +3101,7 @@ export default function MobileAttendanceOneTap() {
                               <span className="text-slate-300 font-mono">—</span>
                             )}
                             {(day.note || day.adminNote) && (
-                              <span className="w-2 h-2 rounded-full bg-blue-500 inline-block shrink-0" title={day.adminNote || day.note} />
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block shrink-0" title={day.adminNote || day.note} />
                             )}
                           </div>
                         </td>
@@ -3210,12 +3210,35 @@ export default function MobileAttendanceOneTap() {
               </div>
             )}
 
-            {(selectedDayDetail.adminNote || selectedDayDetail.note) && (
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
-                <span className="text-[10px] font-black text-slate-600 block">تێبینی تۆمارکراو:</span>
-                <p className="text-xs font-bold text-slate-800 leading-relaxed">{String(selectedDayDetail.adminNote || selectedDayDetail.note || '').replace(/[🛡️📡⚠️🌴🟢🔴🟡🟣⏱️🏁📝]\s*/gu, '').trim()}</p>
-              </div>
-            )}
+            {(() => {
+              const cleanStr = (s?: any) => String(s || '').replace(/[🛡️📡⚠️🌴🟢🔴🟡🟣⏱️🏁📝]\s*/gu, '').trim();
+              const empInNote = cleanStr(selectedDayDetail.checkInNote || selectedDayDetail.note);
+              const empOutNote = cleanStr(selectedDayDetail.checkOutNote);
+              const admNote = cleanStr(selectedDayDetail.adminNote || selectedDayDetail.adminCheckInNote || selectedDayDetail.adminCheckOutNote);
+              const hasSeparateEmpNote = (empInNote && empInNote !== admNote) || (empOutNote && empOutNote !== admNote);
+
+              return (
+                <div className="space-y-2">
+                  {hasSeparateEmpNote && (
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                      <span className="text-[10px] font-black text-slate-600 block">تێبینی کارمەند:</span>
+                      {empInNote && empInNote !== admNote && (
+                        <p className="text-xs font-bold text-slate-800 leading-relaxed">{empInNote}</p>
+                      )}
+                      {empOutNote && empOutNote !== empInNote && empOutNote !== admNote && (
+                        <p className="text-xs font-bold text-slate-800 leading-relaxed">{empOutNote}</p>
+                      )}
+                    </div>
+                  )}
+                  {admNote && (
+                    <div className="p-3 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-1">
+                      <span className="text-[10px] font-black text-blue-700 block">تێبینی ئەدمین:</span>
+                      <p className="text-xs font-bold text-slate-900 leading-relaxed">{admNote}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             <button
               type="button"

@@ -311,8 +311,19 @@ export function resolveEmployeeDayAttendance(
   }
   if (!liveCheckInNote && liveNote) liveCheckInNote = liveNote;
 
-  const stripNoteEmojis = (val?: any): string =>
-    typeof val === 'string' ? val.replace(/[🛡️📡⚠️🌴🟢🔴🟡🟣⏱️🏁📝]\s*/gu, '').trim() : '';
+  const stripNoteEmojis = (val?: any): string => {
+    if (typeof val !== 'string') return '';
+    const cleaned = val.replace(/[🛡️📡⚠️🌴🟢🔴🟡🟣⏱️🏁📝]\s*/gu, '').trim();
+    if (
+      cleaned === 'پەسەندکراو لەلایەن ئەدمین' ||
+      cleaned === 'غیاب لەلایەن ئەدمین' ||
+      cleaned === 'پشوو لەلایەن ئەدمین' ||
+      cleaned === 'مۆڵەت لەلایەن ئەدمین'
+    ) {
+      return '';
+    }
+    return cleaned;
+  };
 
   // 1. CHECK ADMIN MANUAL OVERRIDE
   let override = 
