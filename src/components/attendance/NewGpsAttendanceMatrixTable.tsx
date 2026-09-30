@@ -693,8 +693,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       } catch (err) { logger.warn(err); }
     }
 
-    // Close modal and clear selection immediately (0ms UI feedback)
+    // Close modal, clear selection, and exit multi-select mode immediately (0ms UI feedback)
     setSelectedCells({});
+    setIsMultiSelectMode(false);
     setShowBatchModal(false);
 
     // Persistent server & Supabase bulk sync
@@ -1193,12 +1194,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           if (isLate) globalLateCount++;
           
           cellContent = `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;">
-              <span style="font-weight: 800; font-size: ${isFullRange ? '7px' : '8px'}; color: ${inPrintColor}; font-family: monospace; white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 1px;">
-                ${isCellWaived ? '<span style="display:inline-block; width:4px; height:4px; border-radius:50%; background-color:#9333ea; margin-left:1px;" title="لێخۆشبوو (بازنەی مۆر)"></span>' : ''}
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.0;">
+              <span style="font-weight: 800; font-size: ${isFullRange ? '6.5px' : '7.5px'}; color: ${inPrintColor}; font-family: monospace; white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 1px;">
+                ${isCellWaived ? '<span style="display:inline-block; width:3.5px; height:3.5px; border-radius:50%; background-color:#9333ea; margin-left:1px;"></span>' : ''}
                 <span>${inT}</span>
               </span>
-              <span style="font-weight: 700; font-size: ${isFullRange ? '6px' : '7px'}; color: ${outPrintColor}; font-family: monospace; white-space: nowrap;">
+              <span style="font-weight: 700; font-size: ${isFullRange ? '5.5px' : '6.5px'}; color: ${outPrintColor}; font-family: monospace; white-space: nowrap;">
                 ${outT}
               </span>
             </div>
@@ -1207,39 +1208,39 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         } else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
           leaveCount++;
           globalLeaveCount++;
-          cellContent = `<span style="color: #b45309; font-weight: 800; font-size: ${isFullRange ? '6.5px' : '7.5px'};">مۆڵەت</span>`;
+          cellContent = `<span style="color: #b45309; font-weight: 800; font-size: ${isFullRange ? '6px' : '7px'};">مۆڵەت</span>`;
           cellBg = '#fffdf7';
         } else if (info.status === 'Absent' || info.status === 'غیاب') {
           absentCount++;
           globalAbsentCount++;
-          cellContent = `<span style="color: #b91c1c; font-weight: 800; font-size: ${isFullRange ? '6.5px' : '7.5px'};">غیاب</span>`;
+          cellContent = `<span style="color: #b91c1c; font-weight: 800; font-size: ${isFullRange ? '6px' : '7px'};">غیاب</span>`;
           cellBg = '#fefafa';
         } else if (info.isFriday || info.status === 'Holiday' || info.status === 'پشوو') {
-          cellContent = `<span style="color: #0f766e; font-weight: 800; font-size: ${isFullRange ? '6.5px' : '7.5px'};">پشوو</span>`;
+          cellContent = `<span style="color: #0f766e; font-weight: 800; font-size: ${isFullRange ? '6px' : '7px'};">پشوو</span>`;
           cellBg = '#f4fbf9';
         }
 
-        return `<td style="border: 0.5px solid #cbd5e1; padding: ${isFullRange ? '1.5px 0.5px' : '3px 2px'}; text-align: center; background-color: ${cellBg};">${cellContent}</td>`;
+        return `<td style="border: 0.5px solid #cbd5e1; padding: ${isFullRange ? '1px 0.5px' : '2px 1px'}; text-align: center; background-color: ${cellBg};">${cellContent}</td>`;
       }).join('');
 
       return `
         <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#fcfcfd'}; page-break-inside: avoid;">
-          <td style="border: 0.5px solid #cbd5e1; padding: ${isFullRange ? '3px 4px' : '6px 8px'}; font-weight: 800; text-align: right; white-space: nowrap; width: ${isFullRange ? '105px' : '135px'};">
-            <div style="color: #0f172a; font-weight: 800; font-size: ${isFullRange ? '8px' : '9.5px'}; overflow: hidden; text-overflow: ellipsis;">${idx + 1}. ${emp.fullName3Part || emp.name}</div>
-            <div style="font-size: ${isFullRange ? '6.5px' : '8px'}; color: #64748b; font-family: monospace; font-weight: 500; margin-top: 0.5px;">${translateRoleToKurdish(emp.role)} <span style="opacity: 0.6;">(${emp.id})</span></div>
+          <td style="border: 0.5px solid #cbd5e1; padding: ${isFullRange ? '1.5px 3px' : '3px 5px'}; font-weight: 800; text-align: right; white-space: nowrap; width: ${isFullRange ? '98px' : '125px'}; line-height: 1.05;">
+            <div style="color: #0f172a; font-weight: 800; font-size: ${isFullRange ? '7.5px' : '8.5px'}; overflow: hidden; text-overflow: ellipsis;">${idx + 1}. ${emp.fullName3Part || emp.name}</div>
+            <div style="font-size: ${isFullRange ? '6px' : '7px'}; color: #64748b; font-family: monospace; font-weight: 500;">${translateRoleToKurdish(emp.role)}</div>
           </td>
           ${dayCells}
-          <td style="border: 0.5px solid #cbd5e1; padding: 2px; text-align: center; width: ${isFullRange ? '30px' : '45px'};">
-            <span style="display: inline-block; background: rgba(16, 185, 129, 0.12); color: #047857; border: 0.5px solid rgba(16, 185, 129, 0.3); border-radius: 4px; padding: 1px 2px; font-weight: 800; font-family: monospace; font-size: ${isFullRange ? '7px' : '8.5px'};">${presentCount}</span>
+          <td style="border: 0.5px solid #cbd5e1; padding: 1px; text-align: center; width: ${isFullRange ? '26px' : '38px'};">
+            <span style="display: inline-block; background: rgba(16, 185, 129, 0.12); color: #047857; border: 0.5px solid rgba(16, 185, 129, 0.3); border-radius: 3px; padding: 0.5px 2px; font-weight: 800; font-family: monospace; font-size: ${isFullRange ? '6.5px' : '7.5px'};">${presentCount}</span>
           </td>
-          <td style="border: 0.5px solid #cbd5e1; padding: 2px; text-align: center; width: ${isFullRange ? '30px' : '45px'};">
-            <span style="display: inline-block; background: rgba(0, 122, 255, 0.10); color: #007AFF; border: 0.5px solid rgba(0, 122, 255, 0.25); border-radius: 4px; padding: 1px 2px; font-weight: 800; font-family: monospace; font-size: ${isFullRange ? '7px' : '8.5px'};">${totalWorkedHours} ک</span>
+          <td style="border: 0.5px solid #cbd5e1; padding: 1px; text-align: center; width: ${isFullRange ? '26px' : '38px'};">
+            <span style="display: inline-block; background: rgba(0, 122, 255, 0.10); color: #007AFF; border: 0.5px solid rgba(0, 122, 255, 0.25); border-radius: 3px; padding: 0.5px 2px; font-weight: 800; font-family: monospace; font-size: ${isFullRange ? '6.5px' : '7.5px'};">${totalWorkedHours}ک</span>
           </td>
-          <td style="border: 0.5px solid #cbd5e1; padding: 2px; text-align: center; width: ${isFullRange ? '26px' : '38px'};">
-            <span style="display: inline-block; ${absentCount > 0 ? 'background: rgba(239, 68, 68, 0.12); color: #b91c1c; border: 0.5px solid rgba(239, 68, 68, 0.3);' : 'color: #94a3b8;'} border-radius: 4px; padding: 1px 2px; font-weight: 800; font-family: monospace; font-size: ${isFullRange ? '7px' : '8.5px'};">${absentCount > 0 ? absentCount : '-'}</span>
+          <td style="border: 0.5px solid #cbd5e1; padding: 1px; text-align: center; width: ${isFullRange ? '22px' : '32px'};">
+            <span style="display: inline-block; ${absentCount > 0 ? 'background: rgba(239, 68, 68, 0.12); color: #b91c1c; border: 0.5px solid rgba(239, 68, 68, 0.3);' : 'color: #94a3b8;'} border-radius: 3px; padding: 0.5px 2px; font-weight: 800; font-family: monospace; font-size: ${isFullRange ? '6.5px' : '7.5px'};">${absentCount > 0 ? absentCount : '-'}</span>
           </td>
-          <td style="border: 0.5px solid #cbd5e1; padding: 2px; text-align: center; width: ${isFullRange ? '26px' : '38px'};">
-            <span style="display: inline-block; ${leaveCount > 0 ? 'background: rgba(245, 158, 11, 0.12); color: #b45309; border: 0.5px solid rgba(245, 158, 11, 0.3);' : 'color: #94a3b8;'} border-radius: 4px; padding: 1px 2px; font-weight: 800; font-family: monospace; font-size: ${isFullRange ? '7px' : '8.5px'};">${leaveCount > 0 ? leaveCount : '-'}</span>
+          <td style="border: 0.5px solid #cbd5e1; padding: 1px; text-align: center; width: ${isFullRange ? '22px' : '32px'};">
+            <span style="display: inline-block; ${leaveCount > 0 ? 'background: rgba(245, 158, 11, 0.12); color: #b45309; border: 0.5px solid rgba(245, 158, 11, 0.3);' : 'color: #94a3b8;'} border-radius: 3px; padding: 0.5px 2px; font-weight: 800; font-family: monospace; font-size: ${isFullRange ? '6.5px' : '7.5px'};">${leaveCount > 0 ? leaveCount : '-'}</span>
           </td>
         </tr>
       `;
@@ -1249,9 +1250,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     const overallRate = Math.min(100, Math.round((globalPresentDays / totalWorkingSlots) * 100));
 
     const headersHtml = printDays.map(d => `
-      <th style="border: 0.5px solid #cbd5e1; padding: 2px 1px; text-align: center; background-color: ${d.isFriday ? 'rgba(16, 185, 129, 0.12)' : '#f8fafc'}; color: ${d.isFriday ? '#047857' : '#334155'};">
-        <div style="font-weight: 800; font-family: monospace; font-size: ${isFullRange ? '7.5px' : '9px'};">${d.dayNum}</div>
-        <div style="font-size: ${isFullRange ? '6px' : '7px'}; font-weight: 700; color: ${d.isFriday ? '#059669' : '#64748b'};">${d.isFriday ? 'هەینی' : ''}</div>
+      <th style="border: 0.5px solid #cbd5e1; padding: 1.5px 0.5px; text-align: center; background-color: ${d.isFriday ? 'rgba(16, 185, 129, 0.12)' : '#f8fafc'}; color: ${d.isFriday ? '#047857' : '#334155'}; line-height: 1.05;">
+        <div style="font-weight: 800; font-family: monospace; font-size: ${isFullRange ? '7px' : '8.5px'};">${d.dayNum}</div>
+        <div style="font-size: ${isFullRange ? '5.5px' : '6.5px'}; font-weight: 700; color: ${d.isFriday ? '#059669' : '#64748b'};">${d.isFriday ? 'هەینی' : ''}</div>
       </th>
     `).join('');
 
@@ -1280,13 +1281,13 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           
           @page {
             size: A4 landscape;
-            margin: 4mm 4mm 4mm 4mm;
+            margin: 3mm 4mm 3mm 4mm;
           }
           * { box-sizing: border-box; }
           html, body {
             font-family: 'NRT', 'Vazirmatn', -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
             margin: 0;
-            padding: 6px;
+            padding: 2px;
             color: #1c1c1e;
             background-color: #ffffff;
             direction: rtl;
@@ -1296,12 +1297,15 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           #print-wrapper {
             width: 100%;
             margin: 0 auto;
+            page-break-after: avoid;
+            page-break-before: avoid;
+            break-inside: avoid;
           }
           table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 4px;
-            font-size: ${isFullRange ? '7px' : '8.5px'};
+            margin-top: 2px;
+            font-size: ${isFullRange ? '6.5px' : '8px'};
             table-layout: fixed;
             border: 1px solid #cbd5e1;
           }
@@ -1317,9 +1321,13 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               padding: 0 !important; 
               margin: 0 !important; 
               background: #ffffff !important;
+              max-height: 100% !important;
+              overflow: hidden !important;
             }
             #print-wrapper {
               width: 100% !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
             }
             table {
               width: 100% !important;
@@ -1330,89 +1338,72 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       </head>
       <body>
         <div id="print-wrapper">
-          <!-- 1. هێدەری فەرمی: ڕاست (دیوان)، ناوەڕاست (تەنها تایتڵی فەرمی)، چەپ (ئاشڵی و لۆگۆ) -->
-          <div style="border-bottom: 2.5px solid ${primaryColor}; padding-bottom: 8px; margin-bottom: 7px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+          <!-- 1. هێدەری فەرمی کۆمپاک و ڕێک بۆ یەک پەڕە -->
+          <div style="border-bottom: 2px solid ${primaryColor}; padding-bottom: 4px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
             <!-- Right: Diwan Logo, Name & Subtitle -->
-            <div style="display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-start;">
-              <img src="${diwanLogo}" alt="Diwan Logo" style="height: 44px; max-width: 130px; object-fit: contain;" onerror="this.style.display='none'" />
+            <div style="display: flex; align-items: center; gap: 6px; flex: 1; justify-content: flex-start;">
+              <img src="${diwanLogo}" alt="Diwan Logo" style="height: 32px; max-width: 100px; object-fit: contain;" onerror="this.style.display='none'" />
               <div style="text-align: right;">
-                <div style="margin: 0; font-size: 13px; font-weight: 900; color: ${primaryColor}; line-height: 1.2;">
+                <div style="margin: 0; font-size: 11.5px; font-weight: 900; color: ${primaryColor}; line-height: 1.15;">
                   ${motherCompany}
                 </div>
-                <div style="font-size: 8.5px; font-weight: 800; color: ${accentColor}; margin-top: 1px;">
+                <div style="font-size: 7.5px; font-weight: 800; color: ${accentColor};">
                   ${motherCompanySubtitle}
                 </div>
               </div>
             </div>
 
-            <!-- Center: Clean Subject Title (هیچ دەقێک لەژێر ئەم تایتڵە نانووسرێت) -->
-            <div style="text-align: center; flex: 1.6; padding: 0 6px;">
-              <h1 style="margin: 0; font-size: 15.5px; font-weight: 900; color: ${titleColor}; line-height: 1.2; letter-spacing: -0.2px;">
-                ${docTitle}
+            <!-- Center: Clean Subject Title -->
+            <div style="text-align: center; flex: 1.6; padding: 0 4px;">
+              <h1 style="margin: 0; font-size: 13.5px; font-weight: 900; color: ${titleColor}; line-height: 1.15; letter-spacing: -0.2px;">
+                ${docTitle} — مانگی ${selectedMonth}
               </h1>
             </div>
 
             <!-- Left: Ashley Name, Subtitle & Logo -->
-            <div style="display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-end;">
+            <div style="display: flex; align-items: center; gap: 6px; flex: 1; justify-content: flex-end;">
               <div style="text-align: left;">
-                <div style="font-size: 12px; font-weight: 900; color: ${primaryColor}; line-height: 1.2;">
+                <div style="font-size: 10.5px; font-weight: 900; color: ${primaryColor}; line-height: 1.15;">
                   ${brandName}
                 </div>
-                <div style="font-size: 8.5px; font-weight: 800; color: ${accentColor}; margin-top: 1px;">
-                  ${brandSubtitle || slogan}
-                </div>
-                <div style="font-size: 7.5px; font-family: monospace; color: #64748b; margin-top: 1px;">
-                  ${todayStr}
+                <div style="font-size: 7px; font-family: monospace; color: #64748b;">
+                  ${todayStr} • ASH-DGP-${selectedMonth}
                 </div>
               </div>
-              <img src="${reportLogo}" alt="Ashley Logo" style="height: 40px; max-width: 120px; object-fit: contain;" onerror="this.style.display='none'" />
+              <img src="${reportLogo}" alt="Ashley Logo" style="height: 30px; max-width: 95px; object-fit: contain;" onerror="this.style.display='none'" />
             </div>
           </div>
 
-          <!-- 2. کورتەی گشتی دەوام (Executive KPI Cards Strip) -->
-          <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 6px; page-break-inside: avoid;">
-            <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 6px; text-align: center; background: #ffffff; border-top: 2.5px solid #007AFF;">
-              <div style="font-size: 7.5px; font-weight: 700; color: #64748b;">کۆی گشتی کارمەندان</div>
-              <div style="font-size: 11px; font-weight: 900; color: #007AFF; font-family: monospace;">${printEmployees.length} کەس</div>
+          <!-- 2. کورتەی گشتی دەوام و ڕوونکردنەوەی خشتە لە یەک شریتی باریکدا بۆ پاشەکەوتکردنی جێگە -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px; padding: 3px 8px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 7.5px; font-weight: 700; color: #334155;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span>کارمەندان: <strong style="color:#007AFF; font-family:monospace;">${printEmployees.length}</strong></span>
+              <span>•</span>
+              <span>کۆی کاژێر: <strong style="color:#059669; font-family:monospace;">${globalWorkedHours} ک</strong></span>
+              <span>•</span>
+              <span>دواکەوتن: <strong style="color:#d97706; font-family:monospace;">${globalLateCount} جار</strong></span>
+              <span>•</span>
+              <span>غیاب: <strong style="color:#b91c1c; font-family:monospace;">${globalAbsentCount} ڕۆژ</strong></span>
+              <span>•</span>
+              <span>مۆڵەت: <strong style="color:#b45309; font-family:monospace;">${globalLeaveCount} ڕۆژ</strong></span>
+              <span>•</span>
+              <span>پابەندبوون: <strong style="color:#0f172a; font-family:monospace;">%${overallRate}</strong></span>
             </div>
-            <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 6px; text-align: center; background: #ffffff; border-top: 2.5px solid #059669;">
-              <div style="font-size: 7.5px; font-weight: 700; color: #64748b;">کۆی کاژێرەکانی دەوام</div>
-              <div style="font-size: 11px; font-weight: 900; color: #059669; font-family: monospace;">${globalWorkedHours} ک</div>
-            </div>
-            <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 6px; text-align: center; background: #ffffff; border-top: 2.5px solid #d97706;">
-              <div style="font-size: 7.5px; font-weight: 700; color: #64748b;">حاڵەتەکانی دواکەوتن</div>
-              <div style="font-size: 11px; font-weight: 900; color: #d97706; font-family: monospace;">${globalLateCount} جار</div>
-            </div>
-            <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 6px; text-align: center; background: #ffffff; border-top: 2.5px solid #b91c1c;">
-              <div style="font-size: 7.5px; font-weight: 700; color: #64748b;">کۆی ڕۆژانی غیاب</div>
-              <div style="font-size: 11px; font-weight: 900; color: #b91c1c; font-family: monospace;">${globalAbsentCount} ڕۆژ</div>
-            </div>
-            <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 6px; text-align: center; background: #ffffff; border-top: 2.5px solid #0f172a;">
-              <div style="font-size: 7.5px; font-weight: 700; color: #64748b;">تێکڕای پابەندبوون</div>
-              <div style="font-size: 11px; font-weight: 900; color: #0f172a; font-family: monospace;">%${overallRate}</div>
+            <div style="font-size: 7px; color: #475569;">
+              <span>دەوام: 08:00 - 17:00 • <span style="color:#9333ea; font-weight:800;">مۆر: لێخۆشبوو</span> • <span style="color:#dc2626; font-weight:800;">سوور: دواکەوتوو</span> • <span style="color:#0f172a; font-weight:800;">ڕەش: ئاسایی</span></span>
             </div>
           </div>
 
-          <!-- 3. ڕوونکردنەوەی خشتەکە لەسەر خشتەکە (Table Explanation Strip) -->
-          <div style="margin-bottom: 5px; padding: 4px 8px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; font-size: 8px; font-weight: 700; color: #334155; page-break-inside: avoid;">
-            <div>
-              <span>📋 <strong>ڕوونکردنەوەی خشتە:</strong> تۆماری دەوامی فەرمی ۳۱ ڕۆژەیی کارمەندان بۆ مانگی <strong>${selectedMonth}</strong> • دەوامی فەرمی: 08:00 هاتن - 17:00 دەرچوون • <strong>ڕێبەری ڕەنگەکان:</strong> <span style="color:#059669; font-weight:800;">سەوز: لێخۆشبوو</span> • <span style="color:#dc2626; font-weight:800;">سوور: سەرپێچی بێ لێخۆشبوون</span> • <span style="color:#0f172a; font-weight:800;">ڕەش: لە کاتی خۆی</span></span>
-            </div>
-            <div style="font-family: monospace; color: #64748b; font-size: 7.5px;">
-              <span>بەرواری دەرچوون: ${todayStr} • کۆدی بەڵگەنامە: ASH-DGP-${selectedMonth}</span>
-            </div>
-          </div>
-
-          <!-- 4. خشتەی ۳۱ ڕۆژەیی ئامادەبوون (Attendance 31-Day Table) -->
+          <!-- 3. خشتەی ۳۱ ڕۆژەیی ئامادەبوون -->
           <table>
             <thead>
               <tr style="background-color: #f1f5f9;">
-                <th style="border: 0.5px solid #cbd5e1; padding: 4px; text-align: right; font-size: 9px; width: ${isFullRange ? '105px' : '135px'}; color: #1e293b; font-weight: 800;">ناوی کارمەند</th>
+                <th style="border: 0.5px solid #cbd5e1; padding: 2px 3px; text-align: right; font-size: 8px; width: ${isFullRange ? '98px' : '125px'}; color: #1e293b; font-weight: 800;">ناوی کارمەند</th>
                 ${headersHtml}
-                <th style="border: 0.5px solid #cbd5e1; padding: 2px; text-align: center; font-size: 8px; width: ${isFullRange ? '30px' : '45px'}; background-color: rgba(16, 185, 129, 0.12); color: #065f46; font-weight: 800;">ئامادە</th>
-                <th style="border: 0.5px solid #cbd5e1; padding: 2px; text-align: center; font-size: 8px; width: ${isFullRange ? '30px' : '45px'}; background-color: rgba(0, 122, 255, 0.10); color: #007AFF; font-weight: 800;">کاژێر</th>
-                <th style="border: 0.5px solid #cbd5e1; padding: 2px; text-align: center; font-size: 8px; width: ${isFullRange ? '26px' : '38px'}; background-color: rgba(239, 68, 68, 0.10); color: #b91c1c; font-weight: 800;">غیاب</th>
-                <th style="border: 0.5px solid #cbd5e1; padding: 2px; text-align: center; font-size: 8px; width: ${isFullRange ? '26px' : '38px'}; background-color: rgba(245, 158, 11, 0.10); color: #92400e; font-weight: 800;">مۆڵەت</th>
+                <th style="border: 0.5px solid #cbd5e1; padding: 1.5px; text-align: center; font-size: 7px; width: ${isFullRange ? '26px' : '38px'}; background-color: rgba(16, 185, 129, 0.12); color: #065f46; font-weight: 800;">ئامادە</th>
+                <th style="border: 0.5px solid #cbd5e1; padding: 1.5px; text-align: center; font-size: 7px; width: ${isFullRange ? '26px' : '38px'}; background-color: rgba(0, 122, 255, 0.10); color: #007AFF; font-weight: 800;">کاژێر</th>
+                <th style="border: 0.5px solid #cbd5e1; padding: 1.5px; text-align: center; font-size: 7px; width: ${isFullRange ? '22px' : '32px'}; background-color: rgba(239, 68, 68, 0.10); color: #b91c1c; font-weight: 800;">غیاب</th>
+                <th style="border: 0.5px solid #cbd5e1; padding: 1.5px; text-align: center; font-size: 7px; width: ${isFullRange ? '22px' : '32px'}; background-color: rgba(245, 158, 11, 0.10); color: #92400e; font-weight: 800;">مۆڵەت</th>
               </tr>
             </thead>
             <tbody>
@@ -1420,54 +1411,41 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             </tbody>
           </table>
 
-          <!-- 5. واژووەکان لە خوارەوە بەپێی ئەرکەکان (Signatures without pre-printed names or seals) -->
-          <div style="margin-top: 18px; display: flex; justify-content: space-between; gap: 14px; text-align: right; page-break-inside: avoid; break-inside: avoid; direction: rtl;">
+          <!-- 4. واژووەکان بە شێوازی کۆمپاک لە خوارەوە -->
+          <div style="margin-top: 6px; display: flex; justify-content: space-between; gap: 10px; text-align: right; page-break-inside: avoid; break-inside: avoid; direction: rtl;">
             <!-- Right: سەرپەرشتیاری ئایتی -->
-            <div style="flex: 1; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
-              <div style="font-size: 9.5px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px;">
-                سەرپەرشتیاری ئایتی
-              </div>
-              <div style="font-size: 8px; font-weight: 700; color: #475569; margin-bottom: 8px;">
-                ناو: ................................................................
-              </div>
-              <div style="font-size: 8px; font-weight: 700; color: #475569;">
-                واژوو: ..............................................................
-              </div>
+            <div style="flex: 1; background: #f8fafc; padding: 4px 10px; border-radius: 6px; border: 0.5px solid #cbd5e1; display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+              <div style="font-size: 8px; font-weight: 800; color: #0f172a; white-space: nowrap;">سەرپەرشتیاری ئایتی:</div>
+              <div style="font-size: 7.5px; font-weight: 700; color: #475569; white-space: nowrap;">ناو و واژوو: .............................................</div>
             </div>
 
             <!-- Center: بەڕێوەبەری ژمێریاری و کۆگا -->
-            <div style="flex: 1; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
-              <div style="font-size: 9.5px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px;">
-                بەڕێوەبەری ژمێریاری و کۆگا
-              </div>
-              <div style="font-size: 8px; font-weight: 700; color: #475569; margin-bottom: 8px;">
-                ناو: ................................................................
-              </div>
-              <div style="font-size: 8px; font-weight: 700; color: #475569;">
-                واژوو: ..............................................................
-              </div>
+            <div style="flex: 1; background: #f8fafc; padding: 4px 10px; border-radius: 6px; border: 0.5px solid #cbd5e1; display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+              <div style="font-size: 8px; font-weight: 800; color: #0f172a; white-space: nowrap;">بەڕێوەبەری ژمێریاری و کۆگا:</div>
+              <div style="font-size: 7.5px; font-weight: 700; color: #475569; white-space: nowrap;">ناو و واژوو: .............................................</div>
             </div>
 
             <!-- Left: بەڕێوەبەری گشتی -->
-            <div style="flex: 1; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
-              <div style="font-size: 9.5px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px;">
-                بەڕێوەبەری گشتی
-              </div>
-              <div style="font-size: 8px; font-weight: 700; color: #475569; margin-bottom: 8px;">
-                ناو: ................................................................
-              </div>
-              <div style="font-size: 8px; font-weight: 700; color: #475569;">
-                واژوو: ..............................................................
-              </div>
+            <div style="flex: 1; background: #f8fafc; padding: 4px 10px; border-radius: 6px; border: 0.5px solid #cbd5e1; display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+              <div style="font-size: 8px; font-weight: 800; color: #0f172a; white-space: nowrap;">بەڕێوەبەری گشتی:</div>
+              <div style="font-size: 7.5px; font-weight: 700; color: #475569; white-space: nowrap;">ناو و واژوو: .............................................</div>
             </div>
           </div>
         </div>
 
         <script>
           window.onload = function() {
+            try {
+              var wrapper = document.getElementById('print-wrapper');
+              var maxPageHeight = 740;
+              if (wrapper && wrapper.scrollHeight > maxPageHeight) {
+                var scale = Math.max(0.65, maxPageHeight / wrapper.scrollHeight);
+                wrapper.style.zoom = scale.toFixed(3);
+              }
+            } catch (e) {}
             setTimeout(function() {
               window.print();
-            }, 300);
+            }, 250);
           };
         </script>
       </body>
@@ -1522,14 +1500,17 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               />
             </div>
             
-            {/* 🎯 Icon-only Multi-Select Toggle Button */}
+            {/* 🎯 Multi-Select Toggle Button */}
             <button 
               type="button"
               onClick={() => {
-                setIsMultiSelectMode(prev => !prev);
-                if (isMultiSelectMode) setSelectedCells({});
+                setIsMultiSelectMode(prev => {
+                  const next = !prev;
+                  if (!next) setSelectedCells({});
+                  return next;
+                });
               }} 
-              className={`relative h-8 w-8 rounded-full flex items-center justify-center transition-all active:scale-90 cursor-pointer border shadow-2xs shrink-0 ${
+              className={`relative h-8 px-3 rounded-full flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 cursor-pointer border shadow-2xs shrink-0 ${
                 isMultiSelectMode 
                   ? 'bg-[#007AFF] text-white border-[#007AFF] shadow-sm ring-2 ring-blue-400/40' 
                   : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-[#007AFF] dark:text-blue-400 border-blue-200/60 dark:border-blue-800/40'
@@ -1537,9 +1518,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               title="دەستکاری فرە-ڕۆژ"
               aria-label="دەستکاری فرە-ڕۆژ"
             >
-              <CheckSquare className="w-4 h-4" />
+              <CheckSquare className="w-3.5 h-3.5" />
+              <span>دەستکاری فرە-ڕۆژ</span>
               {selectedCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-mono w-4 h-4 rounded-full flex items-center justify-center font-black">
+                <span className="bg-red-500 text-white text-[9px] font-mono px-1.5 py-0.2 rounded-full flex items-center justify-center font-black">
                   {selectedCount}
                 </span>
               )}
@@ -1621,9 +1603,15 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 return (
                   <th 
                     key={d.dateStr}
-                    onClick={() => toggleDayColumn(d.dayNum, d.dateStr)}
-                    title={`کرتە بکە بۆ دیاریکردنی هەموو کارمەندان لە ڕۆژی ${d.dayNum}`}
-                    className={`relative text-center font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 cursor-pointer transition-all hover:brightness-95 ${
+                    onClick={() => {
+                      if (isMultiSelectMode) {
+                        toggleDayColumn(d.dayNum, d.dateStr);
+                      }
+                    }}
+                    title={isMultiSelectMode ? `کرتە بکە بۆ دیاریکردنی هەموو کارمەندان لە ڕۆژی ${d.dayNum}` : `ڕۆژی ${d.dayNum} (${theme.name})`}
+                    className={`relative text-center font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 transition-all ${
+                      isMultiSelectMode ? 'cursor-pointer hover:brightness-95' : 'cursor-default'
+                    } ${
                       isColFullySelected 
                         ? 'bg-blue-200 dark:bg-blue-900 text-blue-950 dark:text-blue-100 ring-2 ring-[#007AFF] ring-inset shadow-xs' 
                         : isColPartiallySelected 
@@ -1846,17 +1834,16 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       <td 
                         key={d.dateStr}
                         onMouseDown={(e) => {
-                          if (e.button !== 0) return; // Left mouse button only
+                          if (!isMultiSelectMode || e.button !== 0) return; // Only work when Multi-Select Mode is ON
 
                           // If Shift is held and there is a previous anchor cell, instant range-select
                           if (e.shiftKey && lastFocusedCell) {
-                            setIsMultiSelectMode(true);
                             updateDragSelection(lastFocusedCell.r, lastFocusedCell.c, empIndex, dayIndex, selectedCells);
                             return;
                           }
 
                           const isShiftOrCtrl = e.shiftKey || e.ctrlKey || e.metaKey;
-                          const base = isShiftOrCtrl ? { ...selectedCells } : {};
+                          const base = isShiftOrCtrl ? { ...selectedCells } : { ...selectedCells };
 
                           dragSelectionRef.current = {
                             isDragging: true,
@@ -1868,11 +1855,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           setIsDraggingCells(true);
                         }}
                         onMouseEnter={() => {
-                          if (!dragSelectionRef.current.isDragging || !dragSelectionRef.current.start) return;
+                          if (!isMultiSelectMode || !dragSelectionRef.current.isDragging || !dragSelectionRef.current.start) return;
                           dragSelectionRef.current.hasMoved = true;
-                          if (!isMultiSelectMode) {
-                            setIsMultiSelectMode(true);
-                          }
                           updateDragSelection(
                             dragSelectionRef.current.start.r,
                             dragSelectionRef.current.start.c,
@@ -1881,13 +1865,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                             dragSelectionRef.current.baseSelected
                           );
                         }}
-                        onClick={(e) => {
+                        onClick={() => {
                           // If mouse was dragged across multiple cells, don't trigger normal click
                           if (dragSelectionRef.current.hasMoved) {
+                            dragSelectionRef.current.hasMoved = false;
                             return;
                           }
                           setLastFocusedCell({ r: empIndex, c: dayIndex });
-                          if (isMultiSelectMode || e.ctrlKey || e.metaKey || e.shiftKey) {
+                          if (isMultiSelectMode) {
                             toggleCellSelection(emp.id, emp.fullName3Part || emp.name, d.dateStr, d.dayNum);
                           } else {
                             handleCellClick(emp, d);
@@ -2468,7 +2453,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       {/* ========================================================================= */}
       {/* 🎯 FLOATING BATCH ACTION BAR (Apple iOS Liquid Glass Dock) */}
       {/* ========================================================================= */}
-      {selectedCount > 0 && (
+      {(isMultiSelectMode || selectedCount > 0) && (
         <aside 
           aria-label="کردارە خێراکانی دەستکاری فرە-ڕۆژ"
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-4xl w-[95%] sm:w-auto animate-in slide-in-from-bottom-5 duration-300 pointer-events-auto select-none font-sans"
@@ -2482,76 +2467,86 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#007AFF] opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#007AFF]"></span>
               </span>
-              <span className="font-black text-xs sm:text-sm text-blue-300 font-mono">
-                {selectedCount}
-              </span>
-              <span className="text-slate-300 font-bold hidden sm:inline">
-                {isDraggingCells ? 'خانە لە کاتی ڕاکێشاندان (ڕاکێشە)...' : 'خانە دیاریکراوە'}
-              </span>
+              {selectedCount > 0 ? (
+                <>
+                  <span className="font-black text-xs sm:text-sm text-blue-300 font-mono">
+                    {selectedCount}
+                  </span>
+                  <span className="text-slate-300 font-bold hidden sm:inline">
+                    {isDraggingCells ? 'خانە لە کاتی ڕاکێشاندان...' : 'خانە دیاریکراوە'}
+                  </span>
+                </>
+              ) : (
+                <span className="text-slate-200 font-bold">
+                  دۆخی دەستکاری فرە-ڕۆژ چالاکە — خانەکان لە خشتەکەدا دیاری بکە
+                </span>
+              )}
             </div>
 
-            {/* 2. Quick 1-Click Status Chips */}
-            <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
-              {/* Present (Default 08:00 - 17:00) */}
-              <button
-                type="button"
-                disabled={isApplyingBatch}
-                onClick={() => handleApplyBatchData('Present', '08:00', '17:00')}
-                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-                title="دانانی هەموو خانە دیاریکراوەکان وەک ئامادەبوو (08:00 تا 17:00)"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
-                <span>ئامادەبوو</span>
-              </button>
+            {/* 2. Quick 1-Click Status Chips (shown once at least 1 cell is selected) */}
+            {selectedCount > 0 && (
+              <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+                {/* Present (Default 08:00 - 17:00) */}
+                <button
+                  type="button"
+                  disabled={isApplyingBatch}
+                  onClick={() => handleApplyBatchData('Present', '08:00', '17:00')}
+                  className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                  title="دانانی هەموو خانە دیاریکراوەکان وەک ئامادەبوو (08:00 تا 17:00)"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
+                  <span>ئامادەبوو</span>
+                </button>
 
-              {/* Leave (مۆڵەت) */}
-              <button
-                type="button"
-                disabled={isApplyingBatch}
-                onClick={() => handleApplyBatchData('Leave')}
-                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-                title="دانانی هەموو خانە دیاریکراوەکان وەک مۆڵەت"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-300" />
-                <span>مۆڵەت</span>
-              </button>
+                {/* Leave (مۆڵەت) */}
+                <button
+                  type="button"
+                  disabled={isApplyingBatch}
+                  onClick={() => handleApplyBatchData('Leave')}
+                  className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                  title="دانانی هەموو خانە دیاریکراوەکان وەک مۆڵەت"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-300" />
+                  <span>مۆڵەت</span>
+                </button>
 
-              {/* Holiday (پشوو) */}
-              <button
-                type="button"
-                disabled={isApplyingBatch}
-                onClick={() => handleApplyBatchData('Holiday')}
-                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-                title="دانانی هەموو خانە دیاریکراوەکان وەک پشوو"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-300" />
-                <span>پشوو</span>
-              </button>
+                {/* Holiday (پشوو) */}
+                <button
+                  type="button"
+                  disabled={isApplyingBatch}
+                  onClick={() => handleApplyBatchData('Holiday')}
+                  className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                  title="دانانی هەموو خانە دیاریکراوەکان وەک پشوو"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-300" />
+                  <span>پشوو</span>
+                </button>
 
-              {/* Absent (غیاب) */}
-              <button
-                type="button"
-                disabled={isApplyingBatch}
-                onClick={() => handleApplyBatchData('Absent')}
-                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-                title="دانانی هەموو خانە دیاریکراوەکان وەک غیاب"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-300" />
-                <span>غیاب</span>
-              </button>
+                {/* Absent (غیاب) */}
+                <button
+                  type="button"
+                  disabled={isApplyingBatch}
+                  onClick={() => handleApplyBatchData('Absent')}
+                  className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                  title="دانانی هەموو خانە دیاریکراوەکان وەک غیاب"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-300" />
+                  <span>غیاب</span>
+                </button>
 
-              {/* Clear/Delete */}
-              <button
-                type="button"
-                disabled={isApplyingBatch}
-                onClick={() => handleApplyBatchData('Empty')}
-                className="px-2 sm:px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-slate-300 hover:text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-                title="سڕینەوەی داتای ئەم خانانە و بەتاڵکردنەوەیان"
-              >
-                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                <span className="hidden sm:inline">سڕینەوە</span>
-              </button>
-            </div>
+                {/* Clear/Delete */}
+                <button
+                  type="button"
+                  disabled={isApplyingBatch}
+                  onClick={() => handleApplyBatchData('Empty')}
+                  className="px-2 sm:px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-slate-300 hover:text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                  title="سڕینەوەی داتای ئەم خانانە و بەتاڵکردنەوەیان"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span className="hidden sm:inline">سڕینەوە</span>
+                </button>
+              </div>
+            )}
 
             {/* 3. Custom Time & Details Modal Opener */}
             <div className="flex items-center gap-1 sm:gap-1.5 border-r border-white/15 pr-2 sm:pr-3">
@@ -2575,12 +2570,15 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 <span>هەموو خشتە</span>
               </button>
 
-              {/* Cancel Selection */}
+              {/* Cancel Selection & Exit Multi-Select Mode */}
               <button
                 type="button"
-                onClick={clearAllSelection}
+                onClick={() => {
+                  clearAllSelection();
+                  setIsMultiSelectMode(false);
+                }}
                 className="p-1.5 rounded-xl bg-white/10 hover:bg-rose-600 active:scale-95 text-slate-300 hover:text-white transition-all cursor-pointer"
-                title="لابردنی دیاریکردن"
+                title="داخستنی دەستکاری فرە-ڕۆژ"
               >
                 <X className="w-4 h-4" />
               </button>
