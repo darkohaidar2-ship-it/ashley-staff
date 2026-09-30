@@ -47,7 +47,7 @@ import { AdminFaceEnrollModal } from '@/components/attendance/AdminFaceEnrollMod
 import { ReportWrapper } from '@/components/reports/ReportWrapper';
 import { formatTime24H } from '@/lib/export-utils';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
-import { resolveEmployeeDayAttendance, getCheckInStatus, getCheckOutStatus } from '@/lib/attendance-helpers';
+import { resolveEmployeeDayAttendance, getCheckInStatus, getCheckOutStatus, getSavedEmployeeShiftOverride } from '@/lib/attendance-helpers';
 import * as XLSX from 'xlsx';
 
 const ASHLEY_DEFAULT_EMPLOYEES = ASHLEY_OFFICIAL_EMPLOYEES;
@@ -100,6 +100,12 @@ function EmployeeDetailPage() {
   const [showFaceModal, setShowFaceModal] = useState(false);
   const [isDeletingFace, setIsDeletingFace] = useState(false);
 
+  // Smart Shift & Friday Work Settings State
+  const [empShiftType, setEmpShiftType] = useState<'auto' | 'morning' | 'evening' | 'custom'>('auto');
+  const [empCustomShiftStart, setEmpCustomShiftStart] = useState<string>('08:00');
+  const [empCustomShiftEnd, setEmpCustomShiftEnd] = useState<string>('17:00');
+  const [empWorksOnFriday, setEmpWorksOnFriday] = useState<boolean>(false);
+
   // Edit Mode for basic info
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
@@ -109,7 +115,7 @@ function EmployeeDetailPage() {
   const [editStartDate, setEditStartDate] = useState('');
   const [editPhotoUrl, setEditPhotoUrl] = useState('');
 
-  // Sync basic info for editing
+  // Sync basic info & shift configuration for editing
   useEffect(() => {
     if (selectedEmployee) {
       setEditName(selectedEmployee.name || '');
@@ -120,8 +126,38 @@ function EmployeeDetailPage() {
       setEditPhotoUrl(selectedEmployee.photoUrl || '');
       setEmpPin((selectedEmployee as any).password || (selectedEmployee as any).pin || '1234');
       setIsDeviceBound(employeeId === 'emp-02' ? true : Boolean((selectedEmployee as any)?.deviceBound));
+
+      const savedShift = getSavedEmployeeShiftOverride(employeeId);
+      setEmpShiftType((savedShift?.shiftType || selectedEmployee.shiftType || 'auto') as any);
+      setEmpCustomShiftStart(savedShift?.customShiftStart || selectedEmployee.customShiftStart || '08:00');
+      setEmpCustomShiftEnd(savedShift?.customShiftEnd || selectedEmployee.customShiftEnd || '17:00');
+      setEmpWorksOnFriday(Boolean(savedShift?.worksOnFriday ?? selectedEmployee.worksOnFriday ?? false));
     }
   }, [selectedEmployee, employeeId]);
+
+  // Save Employee Shift & Friday Work Settings
+  const handleSaveShiftSettings = () => {
+    if (!selectedEmployee) return;
+    const shiftPayload = {
+      shiftType: empShiftType,
+      customShiftStart: empCustomShiftStart || '08:00',
+      customShiftEnd: empCustomShiftEnd || '17:00',
+      worksOnFriday: empWorksOnFriday,
+    };
+    try {
+      const rawMap = localStorage.getItem('ashley_employee_shifts_map');
+      const parsedMap = rawMap ? JSON.parse(rawMap) : {};
+      parsedMap[selectedEmployee.id] = shiftPayload;
+      localStorage.setItem('ashley_employee_shifts_map', JSON.stringify(parsedMap));
+    } catch (err) { logger.warn(err); }
+
+    setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? { ...e, ...shiftPayload } as any : e));
+    window.dispatchEvent(new Event('ashley_attendance_updated'));
+    toast({
+      title: '✅ ڕێکخستنی شەفت پاشەکەوت کرا',
+      description: 'شێوازی شەفتی دەوام و ڕۆژانی هەینی بۆ ئەم کارمەندە نوێکرایەوە.'
+    });
+  };
 
   // Check Face ID status from server
   const checkFaceStatus = useCallback(async () => {
@@ -543,13 +579,13 @@ function EmployeeDetailPage() {
                     {d.isPresent ? `${d.workedHours || 8}h` : d.isFriday ? 'پشوو' : '-'}
                   </td>
                   <td className="border border-slate-300 p-1 text-center font-bold">
-                    {d.isFriday ? (
+                    {d.isHoliday ? (
                       <span className="text-teal-700">پشوو</span>
-                    ) : d.status === 'Leave' ? (
+                    ) : d.isLeave ? (
                       <span className="text-amber-700">مۆڵەت</span>
                     ) : d.isPresent ? (
                       <span className="text-emerald-700">ئامادە</span>
-                    ) : d.isFuture ? (
+                    ) : d.isFuture || d.isToday || d.status === 'Empty' ? (
                       <span className="text-slate-400">-</span>
                     ) : (
                       <span className="text-rose-700">غیاب</span>
@@ -933,6 +969,121 @@ function EmployeeDetailPage() {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* ⏰ SMART SHIFT & FRIDAY WORK CONFIGURATION CARD */}
+          <div className="bg-white border-2 border-slate-300 p-5 space-y-4 shadow-sm md:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3 border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 bg-indigo-100 text-indigo-700 flex items-center justify-center border border-indigo-300">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-slate-900">ڕێکخستنی شەفتی دەوام و ڕۆژانی هەینی (8-5 | 3-11 | کەستم)</h3>
+                  <p className="text-[11px] text-slate-500 font-bold">سیستەمی زیرەک خۆکارانە دەوامی بەیانیان (8-5) و ئێواران (3-11) دەناسێتەوە و غیاب تەنها دوای ١٢ی شەو هەژمار دەکات</p>
+                </div>
+              </div>
+              <span className="text-[10px] font-black px-2.5 py-0.5 border bg-indigo-50 text-indigo-900 border-indigo-300">
+                {empShiftType === 'auto'
+                  ? '✨ زیرەک (8-5 / 3-11)'
+                  : empShiftType === 'morning'
+                  ? '☀️ بەیانیان (8-5)'
+                  : empShiftType === 'evening'
+                  ? '🌙 ئێواران (3-11)'
+                  : `⚙️ کەستم (${empCustomShiftStart}-${empCustomShiftEnd})`}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs">
+              {[
+                {
+                  key: 'auto',
+                  title: '✨ شەفتی زیرەک (ئۆتۆماتیکی)',
+                  desc: 'پێش 12:30 = بەیانیان (8-5) • دوای 12:30 = ئێواران (3-11)',
+                },
+                {
+                  key: 'morning',
+                  title: '☀️ جێگیر: بەیانیان (8-5)',
+                  desc: 'هاتن 08:00 تا دەرچوون 17:00 (مۆڵەتی دواکەوتن تا 08:15)',
+                },
+                {
+                  key: 'evening',
+                  title: '🌙 جێگیر: ئێواران (3-11)',
+                  desc: 'هاتن 15:00 تا دەرچوون 23:00 (مۆڵەتی دواکەوتن تا 15:15)',
+                },
+                {
+                  key: 'custom',
+                  title: '⚙️ شەفتی تایبەت (کەستم)',
+                  desc: 'دیاریکردنی کاتی دەستپێک و کۆتایی تایبەت بۆ ئەم کارمەندە',
+                },
+              ].map((opt) => {
+                const active = empShiftType === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setEmpShiftType(opt.key as any)}
+                    className={`p-3 text-right border-2 transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                      active
+                        ? 'bg-indigo-50/90 border-indigo-600 text-indigo-950 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="font-black text-xs flex items-center justify-between">
+                      <span>{opt.title}</span>
+                      {active && <span className="w-2 h-2 rounded-full bg-indigo-600" />}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-bold leading-relaxed">{opt.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {empShiftType === 'custom' && (
+              <div className="p-3 bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700">کاتی دەستپێکی شەفت (هاتن):</label>
+                  <input
+                    type="time"
+                    value={empCustomShiftStart}
+                    onChange={(e) => setEmpCustomShiftStart(e.target.value)}
+                    className="w-full p-2 bg-white border border-slate-300 font-mono text-xs font-black outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700">کاتی کۆتایی شەفت (دەرچوون):</label>
+                  <input
+                    type="time"
+                    value={empCustomShiftEnd}
+                    onChange={(e) => setEmpCustomShiftEnd(e.target.value)}
+                    className="w-full p-2 bg-white border border-slate-300 font-mono text-xs font-black outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={empWorksOnFriday}
+                  onChange={(e) => setEmpWorksOnFriday(e.target.checked)}
+                  className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                />
+                <span className="text-xs font-black text-slate-800">
+                  📅 ڕۆژانی هەینی دەوام دەکات (ڕۆژی هەینی بۆ ئەم کارمەندە وەک ڕۆژی دەوام ئەژمار دەکرێت نەک پشوو)
+                </span>
+              </label>
+
+              <button
+                type="button"
+                onClick={handleSaveShiftSettings}
+                className="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 active:bg-indigo-900 text-white text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>پاشەکەوتکردنی ڕێکخستنی شەفت</span>
+              </button>
             </div>
           </div>
 

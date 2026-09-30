@@ -1030,8 +1030,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
         if (isPresent) {
           totalHours += (info.workedHours !== undefined ? info.workedHours : 8);
           totalPresentOpportunities++;
-          const inT = (info.checkInTime || '08:00').slice(0, 5);
-          if (inT > '08:15') totalLate++;
+          if (info.checkInStatus?.isLate && !info.checkInStatus?.isWaived) totalLate++;
         }
         if (!d.isFuture && !d.isFriday) {
           totalWorkableOpportunities++;
@@ -1081,8 +1080,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           if (isPresent) {
             presentCount++;
             totalHours += (info.workedHours !== undefined ? info.workedHours : 8);
-            const inT = (info.checkInTime || '08:00').slice(0, 5);
-            if (inT > '08:15') lateCount++;
+            if (info.checkInStatus?.isLate && !info.checkInStatus?.isWaived) lateCount++;
             return `هاتن: ${info.checkInTime || '08:00'} | ڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : '-')}`;
           }
           if (d.isFriday || info.status === 'Holiday' || info.status === 'پشوو') return 'پشوو';
@@ -1117,7 +1115,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
       const ws = XLSX.utils.aoa_to_sheet([
         [`کۆمپانیای ئاشڵی (Ashley Company) - خشتەی ئامادەبوونی ۳۱ ڕۆژەی کارمەندان مانگی ${selectedMonth}`],
-        [`بەرواری دەرکردنی ڕاپۆرت: ${todayStr} | شێفتی فەرمی: 08:00 بۆ 17:00 (پشووی نیوەڕۆ: 12:00 - 13:00)`],
+        [`بەرواری دەرکردنی ڕاپۆرت: ${todayStr} | شێفتی فەرمی: بەیانیان (08:00 - 17:00) | ئێواران (15:00 - 23:00)`],
         [],
         headerRow,
         ...dataRows
@@ -1185,12 +1183,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           globalWorkedHours += hrs;
           const inT = (info.checkInTime || '08:00').slice(0, 5);
           const outT = (info.checkOutTime || (d.isToday ? 'بەردەوام' : '-')).slice(0, 5);
-          const isCheckInWaived = Boolean(info.isCheckInWaived || info.checkInStatus?.isWaived || (info.isWaived && inT > '08:15') || info.adminCheckInDecision === 'waived');
+          const isCheckInWaived = Boolean(info.isCheckInWaived || info.checkInStatus?.isWaived || (info.isWaived && info.checkInStatus?.isLate) || info.adminCheckInDecision === 'waived');
           const isCheckOutWaived = Boolean(info.isCheckOutWaived || info.checkOutStatus?.isWaived || info.adminCheckOutDecision === 'waived');
           const isCellWaived = isCheckInWaived || isCheckOutWaived || info.isWaived;
-          const inPrintColor = info.checkInStatus?.printColor || (isCheckInWaived ? '#9333ea' : inT > '08:15' ? '#dc2626' : '#0f172a');
+          const inPrintColor = info.checkInStatus?.printColor || (isCheckInWaived ? '#9333ea' : info.checkInStatus?.isLate ? '#dc2626' : '#0f172a');
           const outPrintColor = info.checkOutStatus?.printColor || (isCheckOutWaived ? '#9333ea' : '#64748b');
-          const isLate = inT > '08:15' && !isCheckInWaived;
+          const isLate = Boolean(info.checkInStatus?.isLate) && !isCheckInWaived;
           if (isLate) globalLateCount++;
           
           cellContent = `
@@ -1706,8 +1704,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 if (isPresent) {
                   empPresentDays++;
                   empTotalHours += (info.workedHours !== undefined ? info.workedHours : 8);
-                  const inT = (info.checkInTime || '08:00').slice(0, 5);
-                  if (inT > '08:15') {
+                  if (info.checkInStatus?.isLate && !info.checkInStatus?.isWaived) {
                     empLateDays++;
                   }
                 } else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
@@ -1824,9 +1821,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       badgeText = '-';
                     }
 
-                    const isLateRaw = isPresent && inTime > '08:15';
-                    const isCheckInWaived = Boolean(info.isCheckInWaived || (info.isWaived && isLateRaw) || info.adminCheckInDecision === 'waived' || (info.adminDecision === 'waived' && isLateRaw));
-                    const isCheckOutWaived = Boolean(info.isCheckOutWaived || info.adminCheckOutDecision === 'waived');
+                    const isLateRaw = isPresent && Boolean(info.checkInStatus?.isLate);
+                    const isCheckInWaived = Boolean(info.isCheckInWaived || info.checkInStatus?.isWaived || (info.isWaived && isLateRaw) || info.adminCheckInDecision === 'waived' || (info.adminDecision === 'waived' && isLateRaw));
+                    const isCheckOutWaived = Boolean(info.isCheckOutWaived || info.checkOutStatus?.isWaived || info.adminCheckOutDecision === 'waived');
                     const isWaived = Boolean(isCheckInWaived || isCheckOutWaived || info.isWaived || info.adminDecision === 'waived');
                     const isLate = isLateRaw && !isCheckInWaived;
 
@@ -1878,7 +1875,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                             handleCellClick(emp, d);
                           }
                         }}
-                        title={`هاتن: ${info.checkInTime || '08:00'} (${info.checkInStatus?.label || ''})\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : 'تۆمار نەکراوە')} (${info.checkOutStatus?.label || ''})${info.checkInNote ? `\n📝 تێبینی هاتن: ${info.checkInNote}` : ''}${info.checkOutNote ? `\n⏱️ تێبینی ڕۆیشتن / ئیزافە: ${info.checkOutNote}` : ''}${info.note && info.note !== info.checkInNote && info.note !== info.checkOutNote ? `\n📝 تێبینی: ${info.note}` : ''}${info.adminNote ? `\n🛡️ تێبینی ئەدمین: ${info.adminNote}` : ''}`}
+                        title={`شێفت: ${info.shiftLabel || 'بەیانیان (8-5)'}\nهاتن: ${info.checkInTime || '08:00'} (${info.checkInStatus?.label || ''})\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : 'تۆمار نەکراوە')} (${info.checkOutStatus?.label || ''})${info.checkInNote ? `\nتێبینی هاتن: ${info.checkInNote}` : ''}${info.checkOutNote ? `\nتێبینی ڕۆیشتن / ئیزافە: ${info.checkOutNote}` : ''}${info.note && info.note !== info.checkInNote && info.note !== info.checkOutNote ? `\nتێبینی: ${info.note}` : ''}${info.adminNote ? `\nتێبینی ئەدمین: ${info.adminNote}` : ''}`}
                         className={`relative text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 select-none transition-all ${
                           isCellSelected 
                             ? 'ring-2 ring-[#007AFF] bg-blue-100 dark:bg-blue-900/90 font-black shadow-md z-20 scale-[1.03]' 
@@ -2075,7 +2072,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
                     <Smartphone className="w-3.5 h-3.5 text-slate-500" />
-                    <span>تۆماری مۆبایل:</span>
+                    <span>تۆماری مۆبایل ({selectedDayModal.info.shiftLabel || 'بەیانیان 8-5'}):</span>
                   </span>
                   <div className="flex items-center gap-3 font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
                     <span>هاتن: {selectedDayModal.info.rawCheckIn || selectedDayModal.info.checkInTime || '—'}</span>
@@ -2126,6 +2123,35 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               {/* 4. Inline Time & Waiver Rows (Only when Present) */}
               {modalStatus === 'Present' && (
                 <div className="space-y-2.5 pt-1">
+                  {/* Quick Shift Presets (8-5 vs 3-11) */}
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">شێفتی خێرا:</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => { setModalCheckIn('08:00'); setModalCheckOut('17:00'); }}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                          modalCheckIn === '08:00' && modalCheckOut === '17:00'
+                            ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200 dark:bg-[#242426] dark:text-slate-300 dark:border-slate-800'
+                        }`}
+                      >
+                        بەیانیان (8:00 - 5:00)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setModalCheckIn('15:00'); setModalCheckOut('23:00'); }}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                          modalCheckIn === '15:00' && modalCheckOut === '23:00'
+                            ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200 dark:bg-[#242426] dark:text-slate-300 dark:border-slate-800'
+                        }`}
+                      >
+                        ئێواران (3:00 - 11:00)
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Check-in Row */}
                   <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 bg-white dark:bg-[#242426]">
                     <div className="flex items-center gap-2">
@@ -2486,16 +2512,28 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             {/* 2. Quick 1-Click Status Chips (shown once at least 1 cell is selected) */}
             {selectedCount > 0 && (
               <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
-                {/* Present (Default 08:00 - 17:00) */}
+                {/* Present Morning Shift (08:00 - 17:00) */}
                 <button
                   type="button"
                   disabled={isApplyingBatch}
                   onClick={() => handleApplyBatchData('Present', '08:00', '17:00')}
                   className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-                  title="دانانی هەموو خانە دیاریکراوەکان وەک ئامادەبوو (08:00 تا 17:00)"
+                  title="دانانی خانەکان وەک ئامادەبووی شەفتی بەیانیان (8:00 تا 5:00)"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
-                  <span>ئامادەبوو</span>
+                  <span>بەیانیان (8-5)</span>
+                </button>
+
+                {/* Present Evening Shift (15:00 - 23:00) */}
+                <button
+                  type="button"
+                  disabled={isApplyingBatch}
+                  onClick={() => handleApplyBatchData('Present', '15:00', '23:00')}
+                  className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                  title="دانانی خانەکان وەک ئامادەبووی شەفتی ئێواران (3:00 تا 11:00)"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-300" />
+                  <span>ئێواران (3-11)</span>
                 </button>
 
                 {/* Leave (مۆڵەت) */}
@@ -2779,24 +2817,58 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
                 {/* Check-In / Check-Out Times if Present */}
                 {batchStatus === 'Present' && (
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">کاتی هاتن:</label>
-                      <input
-                        type="time"
-                        value={batchCheckIn}
-                        onChange={(e) => setBatchCheckIn(e.target.value)}
-                        className="w-full text-xs font-mono font-bold bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2.5 rounded-xl border border-slate-200/60 dark:border-white/5 outline-none focus:border-[#007AFF]"
-                      />
+                  <div className="space-y-2.5 pt-1">
+                    {/* Quick 1-Click Shift Presets (8-5 Morning | 3-11 Evening) */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBatchCheckIn('08:00');
+                          setBatchCheckOut('17:00');
+                        }}
+                        className={`flex-1 py-1.5 px-2.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          batchCheckIn === '08:00' && batchCheckOut === '17:00'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+                            : 'bg-slate-100 dark:bg-[#1c1c1e] text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-white/5 hover:bg-slate-200/70'
+                        }`}
+                      >
+                        <span>☀️ شەفتی بەیانیان (8:00 - 5:00)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBatchCheckIn('15:00');
+                          setBatchCheckOut('23:00');
+                        }}
+                        className={`flex-1 py-1.5 px-2.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          batchCheckIn === '15:00' && batchCheckOut === '23:00'
+                            ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700'
+                            : 'bg-slate-100 dark:bg-[#1c1c1e] text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-white/5 hover:bg-slate-200/70'
+                        }`}
+                      >
+                        <span>🌙 شەفتی ئێواران (3:00 - 11:00)</span>
+                      </button>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">کاتی چوون:</label>
-                      <input
-                        type="time"
-                        value={batchCheckOut}
-                        onChange={(e) => setBatchCheckOut(e.target.value)}
-                        className="w-full text-xs font-mono font-bold bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2.5 rounded-xl border border-slate-200/60 dark:border-white/5 outline-none focus:border-[#007AFF]"
-                      />
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">کاتی هاتن:</label>
+                        <input
+                          type="time"
+                          value={batchCheckIn}
+                          onChange={(e) => setBatchCheckIn(e.target.value)}
+                          className="w-full text-xs font-mono font-bold bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2.5 rounded-xl border border-slate-200/60 dark:border-white/5 outline-none focus:border-[#007AFF]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">کاتی چوون:</label>
+                        <input
+                          type="time"
+                          value={batchCheckOut}
+                          onChange={(e) => setBatchCheckOut(e.target.value)}
+                          className="w-full text-xs font-mono font-bold bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2.5 rounded-xl border border-slate-200/60 dark:border-white/5 outline-none focus:border-[#007AFF]"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}

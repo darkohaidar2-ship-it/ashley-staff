@@ -64,6 +64,10 @@ export type Employee = {
   password?: string;
   isActive?: boolean;
   status?: 'active' | 'resigned' | 'suspended';
+  shiftType?: 'auto' | 'morning' | 'evening' | 'custom' | null;
+  customShiftStart?: string | null;
+  customShiftEnd?: string | null;
+  worksOnFriday?: boolean | null;
 };
 
 

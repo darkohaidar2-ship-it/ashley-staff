@@ -35,7 +35,7 @@ import {
 import { format, getDaysInMonth, getDay } from 'date-fns';
 import { getDistanceMeters, sendLocalNotification, type GeofenceRegion } from '@/lib/background-geofence';
 import { extractFaceDescriptor, loadFaceModels, matchFaceDescriptors } from '@/lib/face-recognition';
-import { resolveEmployeeDayAttendance, translateRoleToKurdish, type UnifiedAttendanceDayInfo } from '@/lib/attendance-helpers';
+import { resolveEmployeeDayAttendance, resolveShiftRulesForDay, translateRoleToKurdish, type UnifiedAttendanceDayInfo } from '@/lib/attendance-helpers';
 
 // Default Employees Fallback with Official PINs
 const ASHLEY_DEFAULT_EMPLOYEES = [
@@ -1948,7 +1948,8 @@ export default function MobileAttendanceOneTap() {
       }
 
       const currentHm = getTrustedBaghdadNow().timeStr;
-      if (currentHm > '08:15') {
+      const shiftRules = resolveShiftRulesForDay(currentHm, employeeProfile);
+      if (currentHm > shiftRules.graceTime) {
         setPendingAction('ENTER');
         setReasonType('LATE_IN');
         setSelectedChip(LATE_IN_CHIPS[0]);
@@ -1977,7 +1978,8 @@ export default function MobileAttendanceOneTap() {
       }
 
       const currentHm = getTrustedBaghdadNow().timeStr;
-      if (currentHm < '16:45') {
+      const shiftRules = resolveShiftRulesForDay(liveTodayShift.checkInTime || currentHm, employeeProfile);
+      if (currentHm < shiftRules.earlyThreshold) {
         setPendingAction('EXIT');
         setReasonType('EARLY_OUT');
         setSelectedChip(EARLY_OUT_CHIPS[0]);
@@ -1985,7 +1987,7 @@ export default function MobileAttendanceOneTap() {
         setShowReasonModal(true);
         setTriggerLoading(false);
         return;
-      } else if (currentHm > '17:15') {
+      } else if (currentHm > shiftRules.overtimeThreshold) {
         setPendingAction('EXIT');
         setReasonType('OVERTIME_OUT');
         setSelectedChip(OVERTIME_CHIPS[0]);

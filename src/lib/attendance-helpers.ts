@@ -22,7 +22,113 @@ export const SHIFT_RULES = {
   GRACE_TIME: '08:15',
   END_TIME: '17:00',
   EARLY_THRESHOLD: '16:55',
+  EVENING_START_TIME: '15:00',
+  EVENING_GRACE_TIME: '15:15',
+  EVENING_END_TIME: '23:00',
+  EVENING_EARLY_THRESHOLD: '22:55',
 } as const;
+
+export interface ShiftRuleConfig {
+  shiftType: 'morning' | 'evening' | 'custom';
+  shiftLabel: string;
+  startTime: string;
+  graceTime: string;
+  endTime: string;
+  earlyThreshold: string;
+  overtimeThreshold: string;
+  hasLunchBreak: boolean;
+  worksOnFriday: boolean;
+}
+
+function addMinutesToTimeStr(hm: string, deltaMinutes: number): string {
+  const parts = (hm || '08:00').slice(0, 5).split(':').map(Number);
+  const h = isNaN(parts[0]) ? 8 : parts[0];
+  const m = isNaN(parts[1]) ? 0 : parts[1];
+  const total = ((h * 60 + m + deltaMinutes) % 1440 + 1440) % 1440;
+  const outH = Math.floor(total / 60);
+  const outM = total % 60;
+  return `${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}`;
+}
+
+export function getSavedEmployeeShiftOverride(empId?: string | null): {
+  shiftType?: 'auto' | 'morning' | 'evening' | 'custom';
+  customShiftStart?: string;
+  customShiftEnd?: string;
+  worksOnFriday?: boolean;
+} | null {
+  if (!empId || typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem('ashley_employee_shifts_map');
+    if (!raw) return null;
+    const map = JSON.parse(raw);
+    const cleanId = String(empId).trim();
+    const rawNum = cleanId.replace(/^emp-0*/i, '') || cleanId.replace('emp-', '');
+    return map[cleanId] || map[`emp-${rawNum}`] || map[`emp-0${rawNum}`] || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 🧠 Smart Shift Detection Engine:
+ * - If employee is on 'auto' (default):
+ *   - Check-in before 12:30 -> Morning Shift (08:00 - 17:00, Grace 08:15)
+ *   - Check-in at or after 12:30 -> Evening Shift (15:00 - 23:00, Grace 15:15)
+ * - Also supports fixed 'morning' (8-5), 'evening' (3-11), or 'custom' shifts per employee.
+ */
+export function resolveShiftRulesForDay(
+  inTime?: string | null,
+  emp?: { id?: string; shiftType?: string | null; customShiftStart?: string | null; customShiftEnd?: string | null; worksOnFriday?: boolean | null; [key: string]: any } | null
+): ShiftRuleConfig {
+  const localCfg = getSavedEmployeeShiftOverride(emp?.id);
+  const configuredMode = (localCfg?.shiftType || emp?.shiftType || 'auto') as 'auto' | 'morning' | 'evening' | 'custom';
+  const worksOnFriday = Boolean(localCfg?.worksOnFriday ?? emp?.worksOnFriday ?? false);
+
+  if (configuredMode === 'custom') {
+    const startTime = (localCfg?.customShiftStart || emp?.customShiftStart || '08:00').slice(0, 5);
+    const endTime = (localCfg?.customShiftEnd || emp?.customShiftEnd || '17:00').slice(0, 5);
+    return {
+      shiftType: 'custom',
+      shiftLabel: `تایبەت (${startTime}-${endTime})`,
+      startTime,
+      graceTime: addMinutesToTimeStr(startTime, 15),
+      endTime,
+      earlyThreshold: addMinutesToTimeStr(endTime, -5),
+      overtimeThreshold: addMinutesToTimeStr(endTime, 15),
+      hasLunchBreak: false,
+      worksOnFriday,
+    };
+  }
+
+  const cleanIn = (inTime || '').slice(0, 5);
+  const isEveningByClock = cleanIn.includes(':') && cleanIn >= '12:30';
+
+  if (configuredMode === 'evening' || (configuredMode === 'auto' && isEveningByClock)) {
+    return {
+      shiftType: 'evening',
+      shiftLabel: 'ئێواران (3-11)',
+      startTime: '15:00',
+      graceTime: '15:15',
+      endTime: '23:00',
+      earlyThreshold: '22:55',
+      overtimeThreshold: '23:15',
+      hasLunchBreak: false,
+      worksOnFriday,
+    };
+  }
+
+  return {
+    shiftType: 'morning',
+    shiftLabel: 'بەیانیان (8-5)',
+    startTime: '08:00',
+    graceTime: '08:15',
+    endTime: '17:00',
+    earlyThreshold: '16:55',
+    overtimeThreshold: '17:15',
+    hasLunchBreak: true,
+    worksOnFriday,
+  };
+}
 
 export function translateRoleToKurdish(role?: string | null): string {
   if (!role) return 'کارمەند';
@@ -66,7 +172,8 @@ export interface CheckOutStatusResult {
 export function getCheckInStatus(
   inTime: string | null | undefined,
   isWaived: boolean = false,
-  isPenalized: boolean = false
+  isPenalized: boolean = false,
+  graceTime?: string
 ): CheckInStatusResult {
   const time = (inTime || '').slice(0, 5);
   if (!time || !time.includes(':')) {
@@ -80,7 +187,9 @@ export function getCheckInStatus(
     };
   }
 
-  const isLate = time > SHIFT_RULES.GRACE_TIME;
+  // Auto-detect grace time if not explicitly passed: >= 12:30 is Evening Shift (15:15), otherwise Morning Shift (08:15)
+  const effectiveGrace = graceTime || (time >= '12:30' ? SHIFT_RULES.EVENING_GRACE_TIME : SHIFT_RULES.GRACE_TIME);
+  const isLate = time > effectiveGrace;
 
   if (!isLate) {
     return {
@@ -120,11 +229,17 @@ export function getCheckOutStatus(
   outTime: string | null | undefined,
   isWaived: boolean = false,
   isPenalized: boolean = false,
-  isToday: boolean = false
+  isToday: boolean = false,
+  earlyThreshold?: string,
+  overtimeThreshold?: string,
+  endTime?: string
 ): CheckOutStatusResult {
   const time = (outTime || '').slice(0, 5);
+  const targetEnd = endTime || SHIFT_RULES.END_TIME;
+  const targetEarly = earlyThreshold || SHIFT_RULES.EARLY_THRESHOLD;
+  const targetOvertime = overtimeThreshold || '17:15';
 
-  if (!time || time === 'بەردەوام' || (isToday && (!time || time === '17:00'))) {
+  if (!time || time === 'بەردەوام' || (isToday && (!time || time === targetEnd))) {
     return {
       isEarly: false,
       isOvertime: false,
@@ -136,8 +251,8 @@ export function getCheckOutStatus(
     };
   }
 
-  const isEarly = time < SHIFT_RULES.EARLY_THRESHOLD;
-  const isOvertime = time > '17:15';
+  const isEarly = time < targetEarly;
+  const isOvertime = time > targetOvertime;
 
   if (isEarly) {
     const excused = isWaived && !isPenalized;
@@ -227,6 +342,8 @@ export interface UnifiedAttendanceDayInfo {
   hasAdminOverride: boolean;
   checkInStatus: CheckInStatusResult;
   checkOutStatus: CheckOutStatusResult;
+  shiftType?: 'morning' | 'evening' | 'custom';
+  shiftLabel?: string;
 }
 
 /**
@@ -462,6 +579,8 @@ export function resolveEmployeeDayAttendance(
         ? ((hasSubsequentLiveCheckOut && liveCheckOut) ? liveCheckOut : (ovOutClean || liveCheckOut || '')).slice(0, 5)
         : '';
 
+      const shiftRules = resolveShiftRulesForDay(cIn, emp);
+
       const adminDecision = effectiveStatus === 'Present'
         ? ((override.adminDecision as 'waived' | 'penalized') || (override.isWaived ? 'waived' : null))
         : null;
@@ -483,8 +602,8 @@ export function resolveEmployeeDayAttendance(
         override.checkOutWaived ?? 
         override.isCheckOutWaived ?? 
         (override.adminCheckOutDecision === 'waived' ? true : undefined) ?? 
-        ((adminDecision === 'waived' && cOut && cOut < SHIFT_RULES.EARLY_THRESHOLD) ? true : undefined) ?? 
-        ((override.isWaived && cOut && cOut < SHIFT_RULES.EARLY_THRESHOLD) ? true : undefined)
+        ((adminDecision === 'waived' && cOut && cOut < shiftRules.earlyThreshold) ? true : undefined) ?? 
+        ((override.isWaived && cOut && cOut < shiftRules.earlyThreshold) ? true : undefined)
       );
       const isWaived = isCheckInWaived || isCheckOutWaived;
 
@@ -494,12 +613,16 @@ export function resolveEmployeeDayAttendance(
           const [inH, inM] = cIn.split(':').map(Number);
           const [outH, outM] = cOut.split(':').map(Number);
           const inTotal = inH * 60 + (inM || 0);
-          const outTotal = outH * 60 + (outM || 0);
+          let outTotal = outH * 60 + (outM || 0);
+          if (outTotal < inTotal) outTotal += 1440;
           if (outTotal > inTotal) {
             const gross = outTotal - inTotal;
-            const breakStart = 12 * 60;
-            const breakEnd = 13 * 60;
-            const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
+            let overlap = 0;
+            if (shiftRules.hasLunchBreak) {
+              const breakStart = 12 * 60;
+              const breakEnd = 13 * 60;
+              overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
+            }
             workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
           }
         } else if (cIn && (!cOut || cOut === 'بەردەوام') && isToday) {
@@ -509,8 +632,8 @@ export function resolveEmployeeDayAttendance(
         }
       }
 
-      const checkInStatus = getCheckInStatus(cIn, isCheckInWaived, isPenalized);
-      const checkOutStatus = getCheckOutStatus(cOut, isCheckOutWaived, isPenalized, isToday);
+      const checkInStatus = getCheckInStatus(cIn, isCheckInWaived, isPenalized, shiftRules.graceTime);
+      const checkOutStatus = getCheckOutStatus(cOut, isCheckOutWaived, isPenalized, isToday, shiftRules.earlyThreshold, shiftRules.overtimeThreshold, shiftRules.endTime);
 
       return {
         hasRecord: true,
@@ -539,13 +662,17 @@ export function resolveEmployeeDayAttendance(
         historyLogs: override.historyLogs || [],
         hasAdminOverride: true,
         checkInStatus,
-        checkOutStatus
+        checkOutStatus,
+        shiftType: shiftRules.shiftType,
+        shiftLabel: shiftRules.shiftLabel,
       };
     }
   }
 
-  // 2. Friday Holiday
-  if (isFriday && sortedDayRecords.length === 0) {
+  const baseShiftRules = resolveShiftRulesForDay('', emp);
+
+  // 2. Friday Holiday (unless employee works on Fridays)
+  if (isFriday && !baseShiftRules.worksOnFriday && sortedDayRecords.length === 0) {
     return {
       hasRecord: false,
       isFriday: true,
@@ -569,7 +696,9 @@ export function resolveEmployeeDayAttendance(
       historyLogs: [],
       hasAdminOverride: false,
       checkInStatus: getCheckInStatus('', false),
-      checkOutStatus: getCheckOutStatus('', false, false, false)
+      checkOutStatus: getCheckOutStatus('', false, false, false),
+      shiftType: baseShiftRules.shiftType,
+      shiftLabel: baseShiftRules.shiftLabel,
     };
   }
 
@@ -598,7 +727,9 @@ export function resolveEmployeeDayAttendance(
       historyLogs: [],
       hasAdminOverride: false,
       checkInStatus: getCheckInStatus('', false),
-      checkOutStatus: getCheckOutStatus('', false, false, false)
+      checkOutStatus: getCheckOutStatus('', false, false, false),
+      shiftType: baseShiftRules.shiftType,
+      shiftLabel: baseShiftRules.shiftLabel,
     };
   }
 
@@ -714,9 +845,16 @@ export function resolveEmployeeDayAttendance(
   if (!rawCheckIn && checkInTime) rawCheckIn = checkInTime;
   if (!rawCheckOut && checkOutTime) rawCheckOut = checkOutTime;
 
+  const shiftRules = resolveShiftRulesForDay(checkInTime, emp);
   const hasRecord = Boolean(checkInTime || checkOutTime || explicitNonWorkingStatus);
+  const empStart = (emp.startDate || emp.employmentStartDate || '').slice(0, 10);
+  const isBeforeHire = Boolean(empStart && empStart.length === 10 && dateStr < empStart);
 
-  // Determine working status
+  // Determine working status:
+  // 🌙 Midnight 00:00 Rule:
+  // - While isToday is true (before 12:00 midnight), an employee who hasn't checked in yet remains 'Empty' ('-')
+  //   because they may be on the 3:00-11:00 evening shift.
+  // - Once 12:00 midnight passes (!isToday && !isFuture), if there is no check-in/holiday/leave, it automatically becomes 'Absent' ('غیاب').
   let status: 'Present' | 'Leave' | 'Absent' | 'Holiday' | 'Empty' | 'Loading' | 'مۆڵەت' | 'غیاب' = 'Empty';
   if (isWaitingData) {
     status = 'Loading';
@@ -724,9 +862,11 @@ export function resolveEmployeeDayAttendance(
     status = explicitNonWorkingStatus;
   } else if (checkInTime || checkOutTime) {
     status = 'Present';
-  } else if (isFriday) {
+  } else if (isFriday && !shiftRules.worksOnFriday) {
     status = 'Holiday';
-  } else if (!isFuture) {
+  } else if (isToday || isFuture || isBeforeHire) {
+    status = 'Empty';
+  } else {
     status = 'Absent';
   }
 
@@ -735,12 +875,16 @@ export function resolveEmployeeDayAttendance(
     const [inH, inM] = checkInTime.split(':').map(Number);
     const [outH, outM] = checkOutTime.split(':').map(Number);
     const inTotal = inH * 60 + (inM || 0);
-    const outTotal = outH * 60 + (outM || 0);
+    let outTotal = outH * 60 + (outM || 0);
+    if (outTotal < inTotal) outTotal += 1440;
     if (outTotal > inTotal) {
       const gross = outTotal - inTotal;
-      const breakStart = 12 * 60;
-      const breakEnd = 13 * 60;
-      const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
+      let overlap = 0;
+      if (shiftRules.hasLunchBreak) {
+        const breakStart = 12 * 60;
+        const breakEnd = 13 * 60;
+        overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
+      }
       workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
     }
   } else if (hasRecord && isToday && (!checkOutTime || checkOutTime === 'بەردەوام')) {
@@ -750,12 +894,12 @@ export function resolveEmployeeDayAttendance(
   }
 
   const isPenalized = adminDecision === 'penalized' || adminCheckInDecision === 'penalized' || adminCheckOutDecision === 'penalized';
-  const resolvedCheckInWaived = Boolean(isCheckInWaived || adminCheckInDecision === 'waived' || (adminDecision === 'waived' && checkInTime > SHIFT_RULES.GRACE_TIME) || (isWaived && checkInTime > SHIFT_RULES.GRACE_TIME));
-  const resolvedCheckOutWaived = Boolean(isCheckOutWaived || adminCheckOutDecision === 'waived' || (adminDecision === 'waived' && checkOutTime && checkOutTime < SHIFT_RULES.EARLY_THRESHOLD) || (isWaived && checkOutTime && checkOutTime < SHIFT_RULES.EARLY_THRESHOLD));
+  const resolvedCheckInWaived = Boolean(isCheckInWaived || adminCheckInDecision === 'waived' || (adminDecision === 'waived' && checkInTime > shiftRules.graceTime) || (isWaived && checkInTime > shiftRules.graceTime));
+  const resolvedCheckOutWaived = Boolean(isCheckOutWaived || adminCheckOutDecision === 'waived' || (adminDecision === 'waived' && checkOutTime && checkOutTime < shiftRules.earlyThreshold) || (isWaived && checkOutTime && checkOutTime < shiftRules.earlyThreshold));
   const resolvedWaived = resolvedCheckInWaived || resolvedCheckOutWaived || isWaived || adminDecision === 'waived';
 
-  const checkInStatus = getCheckInStatus(checkInTime, resolvedCheckInWaived, isPenalized);
-  const checkOutStatus = getCheckOutStatus(checkOutTime, resolvedCheckOutWaived, isPenalized, isToday);
+  const checkInStatus = getCheckInStatus(checkInTime, resolvedCheckInWaived, isPenalized, shiftRules.graceTime);
+  const checkOutStatus = getCheckOutStatus(checkOutTime, resolvedCheckOutWaived, isPenalized, isToday, shiftRules.earlyThreshold, shiftRules.overtimeThreshold, shiftRules.endTime);
 
   return {
     hasRecord,
@@ -784,6 +928,8 @@ export function resolveEmployeeDayAttendance(
     workedHours,
     hasAdminOverride: false,
     checkInStatus,
-    checkOutStatus
+    checkOutStatus,
+    shiftType: shiftRules.shiftType,
+    shiftLabel: shiftRules.shiftLabel,
   };
 }
