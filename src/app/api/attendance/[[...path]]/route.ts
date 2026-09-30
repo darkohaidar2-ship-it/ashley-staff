@@ -1108,12 +1108,37 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           }
         }
 
-        // Apply authoritative empOverrides on top of byDateMap
+        // Apply authoritative empOverrides on top of byDateMap (only if override is newer than or equal to live punch)
         const seenOverrideDates = new Set<string>();
-        for (const [, ov] of Object.entries<any>(empOverrides)) {
-          if (!ov || !ov.date || seenOverrideDates.has(ov.date)) continue;
-          seenOverrideDates.add(ov.date);
+        for (const [ovKey, ov] of Object.entries<any>(empOverrides)) {
+          if (!ov || !ov.date) continue;
           const d = ov.date;
+          const existingRec = byDateMap.get(d);
+          const ovTs = new Date(ov.deletedAt || ov.updatedAt || 0).getTime();
+          const recTs = new Date(existingRec?.created_at || 0).getTime();
+
+          // If there is a live mobile punch strictly newer than the admin override/delete, keep the live punch!
+          if (existingRec && !isNaN(recTs) && recTs > 0 && !isNaN(ovTs) && recTs > ovTs + 1000) {
+            empOverrides[ovKey] = {
+              userId: cleanId,
+              userName: existingRec.userName || userName,
+              date: d,
+              status: 'Present',
+              checkInTime: existingRec.checkInTime || null,
+              checkOutTime: existingRec.checkOutTime || null,
+              rawCheckIn: existingRec.rawCheckInTime || existingRec.checkInTime || null,
+              rawCheckOut: existingRec.rawCheckOutTime || existingRec.checkOutTime || null,
+              note: existingRec.note || null,
+              checkInNote: existingRec.checkInNote || existingRec.note || null,
+              checkOutNote: existingRec.checkOutNote || null,
+              updatedAt: existingRec.created_at,
+            };
+            continue;
+          }
+
+          if (seenOverrideDates.has(d)) continue;
+          seenOverrideDates.add(d);
+
           const isDel =
             ov.status === 'empty' ||
             ov.status === 'Empty' ||
@@ -1124,7 +1149,6 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             byDateMap.delete(d);
             continue;
           }
-          const existingRec = byDateMap.get(d);
           const rawSt = ov.status || existingRec?.status || 'Present';
           const normSt =
             rawSt === 'غیاب' ? 'Absent' :
@@ -2063,63 +2087,81 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         logger.warn('Auto log insert error:', logErr);
       }
 
-      // Clear any previous deletion tombstone in ashley_manual_attendance_records for today (or update checkOutTime if Admin had an override) so the new punch is authoritative
+      // Write authoritative mobile punch into ashley_manual_attendance_records and GLOBAL_MANUAL_OVERRIDES_CACHE so any previous deletion tombstone is immediately replaced
       try {
         const { data: setRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_manual_attendance_records').maybeSingle();
+        let currentSettings: Record<string, any> = {};
         if (setRow?.qr_code) {
-          const currentSettings = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
-          const allKeyVars = new Set([
-            `${cleanId}_${dateStr}`,
-            `${rawNum}_${dateStr}`,
-            `${paddedNum}_${dateStr}`,
-            `emp-${rawNum}_${dateStr}`,
-            `emp-${paddedNum}_${dateStr}`,
-            `${targetNameLower}_${dateStr}`,
-          ]);
-          let changed = false;
-          for (const [k, val] of Object.entries<any>(currentSettings)) {
-            const valUserId = (val?.userId || '').toString().trim().toLowerCase();
-            const valName = (val?.userName || '').toString().trim().toLowerCase();
-            const isMatchingKey = allKeyVars.has(k) || (
-              val?.date === dateStr && (
-                idCandidates.some(c => c.toLowerCase() === valUserId) ||
-                Boolean(targetNameLower && valName && (valName === targetNameLower || valName.includes(targetNameLower) || targetNameLower.includes(valName)))
-              )
-            );
-            if (!isMatchingKey) continue;
-
-            const isDel =
-              val?.status === 'empty' ||
-              val?.status === 'Empty' ||
-              val?.status === 'delete' ||
-              val?.status === 'deleted' ||
-              val?.action === 'delete';
-
-            if (isCheckIn || isDel) {
-              delete currentSettings[k];
-              changed = true;
-            } else if (!isCheckIn && val && typeof val === 'object') {
-              currentSettings[k] = {
-                ...val,
-                checkOutTime: timeStr,
-                rawCheckOut: timeStr,
-                checkOutNote: attachedNote || val.checkOutNote || null,
-                updatedAt: nowIso,
-              };
-              changed = true;
-            }
-          }
-          if (changed) {
-            await supabase.from('warehouses').upsert({
-              id: 'ashley_manual_attendance_records',
-              name: 'Ashley Manual Attendance Overrides Store',
-              qr_code: JSON.stringify(currentSettings),
-              lat: 0,
-              lng: 0,
-              radius: 0,
-            });
-          }
+          currentSettings = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
         }
+        currentSettings = mergeManualOverridesWithMemory(currentSettings);
+
+        const allKeyVars = [
+          `${cleanId}_${dateStr}`,
+          `${rawNum}_${dateStr}`,
+          `${paddedNum}_${dateStr}`,
+          `emp-${rawNum}_${dateStr}`,
+          `emp-${paddedNum}_${dateStr}`,
+        ];
+        if (targetNameLower) {
+          allKeyVars.push(`${targetNameLower}_${dateStr}`);
+        }
+
+        const existingOv = currentSettings[`${cleanId}_${dateStr}`] || currentSettings[`emp-${paddedNum}_${dateStr}`] || {};
+        const isExistingDel =
+          existingOv?.status === 'empty' ||
+          existingOv?.status === 'Empty' ||
+          existingOv?.status === 'delete' ||
+          existingOv?.status === 'deleted' ||
+          existingOv?.action === 'delete';
+
+        const finalInStr = isCheckIn
+          ? (existingRecord?.check_in_time || timeStr)
+          : (existingRecord?.check_in_time || upsertPayload.check_in_time || (!isExistingDel ? existingOv?.checkInTime : null) || '08:00');
+        const finalOutStr = isCheckIn
+          ? null
+          : timeStr;
+        const finalInNote = isCheckIn
+          ? (attachedNote || existingRecord?.check_in_edit_note || null)
+          : (existingRecord?.check_in_edit_note || (!isExistingDel ? existingOv?.checkInNote : null) || null);
+        const finalOutNote = isCheckIn
+          ? null
+          : (attachedNote || existingRecord?.check_out_edit_note || (!isExistingDel ? existingOv?.checkOutNote : null) || null);
+
+        const liveOverridePayload = {
+          userId: cleanId.startsWith('emp-') ? cleanId : `emp-${paddedNum || cleanId}`,
+          userName: matchedName,
+          date: dateStr,
+          status: 'Present',
+          checkInTime: finalInStr,
+          checkOutTime: finalOutStr,
+          rawCheckIn: finalInStr,
+          rawCheckOut: finalOutStr,
+          note: finalInNote || finalOutNote || null,
+          checkInNote: finalInNote,
+          checkOutNote: finalOutNote,
+          adminNote: !isExistingDel ? (existingOv?.adminNote || null) : null,
+          adminCheckInNote: !isExistingDel ? (existingOv?.adminCheckInNote || null) : null,
+          adminCheckOutNote: !isExistingDel ? (existingOv?.adminCheckOutNote || null) : null,
+          historyLogs: !isExistingDel ? (existingOv?.historyLogs || []) : [],
+          adminDecision: !isExistingDel ? (existingOv?.adminDecision || null) : null,
+          isWaived: Boolean(!isExistingDel && existingOv?.isWaived),
+          updatedAt: nowIso,
+        };
+
+        allKeyVars.forEach(k => {
+          currentSettings[k] = liveOverridePayload;
+        });
+
+        GLOBAL_MANUAL_OVERRIDES_CACHE = { ...currentSettings };
+        await supabase.from('warehouses').upsert({
+          id: 'ashley_manual_attendance_records',
+          name: 'Ashley Manual Attendance Overrides Store',
+          qr_code: JSON.stringify(currentSettings),
+          lat: 0,
+          lng: 0,
+          radius: 0,
+        });
       } catch (err) { logger.warn(err); }
 
       CACHED_ADMIN_REPORT = null;
@@ -2347,24 +2389,32 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         } catch (err) { logger.warn(err); }
         manualOverridesMap = mergeManualOverridesWithMemory(manualOverridesMap);
 
-        const getManualOverride = (empId: string, logDate: string, empName?: string) => {
+        const getManualOverride = (empId: string, logDate: string, empName?: string, rowTimestamp?: string | null) => {
           if (!empId || !logDate) return null;
           const clean = empId.toString().replace(/^emp-0*/i, '') || empId.toString().replace('emp-', '');
           const cleanPadded = clean.length === 1 ? `0${clean}` : clean;
           const nameClean = (empName || '').toString().trim().toLowerCase();
-          return (
+          const ov =
             manualOverridesMap[`${empId}_${logDate}`] ||
             manualOverridesMap[`${clean}_${logDate}`] ||
             manualOverridesMap[`${cleanPadded}_${logDate}`] ||
             manualOverridesMap[`emp-${clean}_${logDate}`] ||
             manualOverridesMap[`emp-${cleanPadded}_${logDate}`] ||
             (nameClean ? manualOverridesMap[`${nameClean}_${logDate}`] : null) ||
-            null
-          );
+            null;
+
+          if (ov && rowTimestamp) {
+            const rMs = new Date(rowTimestamp).getTime();
+            const oMs = new Date(ov.deletedAt || ov.updatedAt || 0).getTime();
+            if (!isNaN(rMs) && rMs > 0 && !isNaN(oMs) && rMs > oMs + 1000) {
+              return null;
+            }
+          }
+          return ov;
         };
 
-        const isDeletedTombstone = (empId: string, logDate: string, empName?: string) => {
-          const ov = getManualOverride(empId, logDate, empName);
+        const isDeletedTombstone = (empId: string, logDate: string, empName?: string, rowTimestamp?: string | null) => {
+          const ov = getManualOverride(empId, logDate, empName, rowTimestamp);
           return Boolean(ov && (ov.status === 'empty' || ov.status === 'Empty' || ov.status === 'delete' || ov.status === 'deleted' || ov.action === 'delete'));
         };
 
@@ -2379,8 +2429,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
         if (attendance && attendance.length > 0) {
           attendance.forEach(r => {
-            if (isDeletedTombstone(r.user_id, r.date, r.user_name)) return;
-            const ov = getManualOverride(r.user_id, r.date, r.user_name);
+            const rowTs = r.check_out || r.check_in || null;
+            if (isDeletedTombstone(r.user_id, r.date, r.user_name, rowTs)) return;
+            const ov = getManualOverride(r.user_id, r.date, r.user_name, rowTs);
             const effStatus = ov?.status || r.status || 'Present';
             const nonWorking = isNonWorkingStatus(effStatus);
             const rawInCandidate = ov?.checkInTime || r.adjusted_check_in_time || r.check_in_time || '';
@@ -2478,8 +2529,8 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           if (logsData && logsData.length > 0) {
             logsData.forEach(l => {
               if (l.log_type === 'Admin Edit') return;
-              if (isDeletedTombstone(l.employee_id, l.log_date, l.employee_name)) return;
-              const ov = getManualOverride(l.employee_id, l.log_date, l.employee_name);
+              if (isDeletedTombstone(l.employee_id, l.log_date, l.employee_name, l.created_at)) return;
+              const ov = getManualOverride(l.employee_id, l.log_date, l.employee_name, l.created_at);
               const cleanId = (l.employee_id || '').toString().replace(/^emp-0*/i, '') || l.employee_id;
 
               const lt = String(l.log_type || '');
@@ -3469,7 +3520,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           supabase.from('users').select('id, name, role, pin, hourly_rate, device_token').neq('role', 'admin'),
           supabase.from('warehouses').select('qr_code').eq('id', 'ashley_manual_attendance_records').maybeSingle(),
           supabase.from('attendance')
-            .select('id, user_id, user_name, date, check_in, check_in_time, check_out, check_out_time, raw_check_in_time, raw_check_out_time, note, notes, check_in_edit_note, check_out_edit_note, check_in_note, check_out_note, admin_note, admin_check_in_note, status, warehouse_name, late_minutes, early_out_minutes, overtime_minutes')
+            .select('*')
             .order('date', { ascending: false })
             .limit(600),
           supabase.from('warehouses').select('*').not('id', 'in', '("ashley_device_bindings","ashley_face_registry")'),
@@ -3578,6 +3629,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
 
         const attData = attRes?.data;
         if (attData) {
+          let overridesHealed = false;
           attendanceRecords = attData
             .filter((a: any) => {
               const uId = (a.user_id || '').toString();
@@ -3594,6 +3646,40 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 (uName ? manualOverridesMap[`${uName}_${a.date}`] : null);
 
               if (manualOverride) {
+                const rowTsMs = new Date(a.check_out || a.check_in || 0).getTime();
+                const ovTsMs = new Date(manualOverride.deletedAt || manualOverride.updatedAt || 0).getTime();
+                const isLivePunchNewer = !isNaN(rowTsMs) && rowTsMs > 0 && !isNaN(ovTsMs) && rowTsMs > ovTsMs + 1000;
+
+                if (isLivePunchNewer) {
+                  const liveOv = {
+                    userId: uId,
+                    userName: a.user_name || allUsers.find(u => u.id === a.user_id)?.name || 'کارمەند',
+                    date: a.date,
+                    status: 'Present',
+                    checkInTime: a.check_in_time || null,
+                    checkOutTime: a.check_out_time || null,
+                    rawCheckIn: a.check_in_time || null,
+                    rawCheckOut: a.check_out_time || null,
+                    note: a.check_in_edit_note || a.check_out_edit_note || null,
+                    checkInNote: a.check_in_edit_note || null,
+                    checkOutNote: a.check_out_edit_note || null,
+                    updatedAt: a.check_out || a.check_in,
+                  };
+                  [
+                    `${uId}_${a.date}`,
+                    `${rawNum}_${a.date}`,
+                    `${rawNumPadded}_${a.date}`,
+                    `emp-${rawNum}_${a.date}`,
+                    `emp-${rawNumPadded}_${a.date}`,
+                    ...(uName ? [`${uName}_${a.date}`] : []),
+                  ].forEach(k => {
+                    manualOverridesMap[k] = liveOv;
+                    GLOBAL_MANUAL_OVERRIDES_CACHE[k] = liveOv;
+                  });
+                  overridesHealed = true;
+                  return true;
+                }
+
                 const isDel = manualOverride.status === 'empty' || manualOverride.status === 'Empty' || manualOverride.status === 'delete' || manualOverride.status === 'deleted' || manualOverride.action === 'delete';
                 if (isDel) return false;
               }
@@ -3605,7 +3691,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
               const rawNumPadded = rawNum.length === 1 ? `0${rawNum}` : rawNum;
               const uName = (a.user_name || '').toString().toLowerCase();
 
-              const manualOverride =
+              const rawManualOverride =
                 manualOverridesMap[`${uId}_${a.date}`] ||
                 manualOverridesMap[`${rawNum}_${a.date}`] ||
                 manualOverridesMap[`${rawNumPadded}_${a.date}`] ||
@@ -3613,11 +3699,17 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                 manualOverridesMap[`emp-${rawNumPadded}_${a.date}`] ||
                 (uName ? manualOverridesMap[`${uName}_${a.date}`] : null);
 
+              const rowTsMs = new Date(a.check_out || a.check_in || 0).getTime();
+              const ovTsMs = new Date(rawManualOverride?.deletedAt || rawManualOverride?.updatedAt || 0).getTime();
+              const isLivePunchNewer = Boolean(rawManualOverride && !isNaN(rowTsMs) && rowTsMs > 0 && !isNaN(ovTsMs) && rowTsMs > ovTsMs + 1000);
+              const manualOverride = isLivePunchNewer ? null : rawManualOverride;
+
               const rawEffStatus = manualOverride?.status || a.status || 'Present';
               const effStatus =
                 rawEffStatus === 'غیاب' ? 'Absent' :
                 rawEffStatus === 'پشوو' ? 'Holiday' :
                 rawEffStatus === 'مۆڵەت' ? 'Leave' :
+                rawEffStatus === 'Late' ? 'Present' :
                 rawEffStatus;
               const isNonWorking = effStatus === 'Absent' || effStatus === 'Holiday' || effStatus === 'Leave';
 
@@ -3661,6 +3753,14 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
               updatedAt: manualOverride?.updatedAt || a.check_out || a.check_in || null,
             };
           });
+          if (overridesHealed) {
+            await supabase.from('warehouses').upsert({
+              id: 'ashley_manual_attendance_records',
+              name: 'Manual Attendance Overrides',
+              location: JSON.stringify(manualOverridesMap),
+              manager: 'System',
+            }, { onConflict: 'id' });
+          }
         }
         if (whDataRes?.data) physicalWarehouses = whDataRes.data;
         if (hDataRes?.data) holidaysList = hDataRes.data;
