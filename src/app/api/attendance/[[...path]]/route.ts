@@ -3756,10 +3756,12 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           if (overridesHealed) {
             await supabase.from('warehouses').upsert({
               id: 'ashley_manual_attendance_records',
-              name: 'Manual Attendance Overrides',
-              location: JSON.stringify(manualOverridesMap),
-              manager: 'System',
-            }, { onConflict: 'id' });
+              name: 'Ashley Manual Attendance Overrides Store',
+              qr_code: JSON.stringify(manualOverridesMap),
+              lat: 0,
+              lng: 0,
+              radius: 0,
+            });
           }
         }
         if (whDataRes?.data) physicalWarehouses = whDataRes.data;
