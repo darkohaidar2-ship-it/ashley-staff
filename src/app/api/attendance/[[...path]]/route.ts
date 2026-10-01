@@ -1815,10 +1815,22 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         const offlineTag = `📡 تۆمارکراو بە ئۆفڵاین (کاتی ڕاستەقینە: ${timeStr}${clockDriftNote})`;
         attachedNote = attachedNote ? `${attachedNote} — ${offlineTag}` : offlineTag;
       }
+      // Smart Shift Detection: Morning 8-5 (default) vs Evening 3-11 (14:00 onwards)
+      const [nowH, nowM] = timeStr.split(':').map(Number);
+      const punchMinutes = (nowH || 0) * 60 + (nowM || 0);
+      const isEveningShift = punchMinutes >= 14 * 60; // 14:00 (2:00 PM) onwards is Evening Shift (15:00 - 23:00)
+
       const activeShift = await getShiftForDate(dateStr);
-      const [shiftStartH, shiftStartM] = activeShift.checkInTime.split(':').map(Number);
-      const [shiftEndH, shiftEndM] = activeShift.checkOutTime.split(':').map(Number);
+      let [shiftStartH, shiftStartM] = activeShift.checkInTime.split(':').map(Number);
+      let [shiftEndH, shiftEndM] = activeShift.checkOutTime.split(':').map(Number);
       const shiftGraceMinutes = activeShift.graceMinutes ?? 15;
+
+      if (isEveningShift && shiftStartH === 8) {
+        shiftStartH = 15;
+        shiftStartM = 0;
+        shiftEndH = 23;
+        shiftEndM = 0;
+      }
 
       const standardStartMinutes = shiftStartH * 60 + shiftStartM;
       const allowedLateThreshold = standardStartMinutes + shiftGraceMinutes;
@@ -2908,7 +2920,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           if (isWorkingStatus && checkInTime && checkInTime.includes(':')) {
             const [inH, inM] = checkInTime.split(':').map(Number);
             const inTotal = (inH || 0) * 60 + (inM || 0);
-            const shiftStartTotal = 8 * 60;
+            const isEvening = inTotal >= 14 * 60;
+            const shiftStartTotal = isEvening ? (15 * 60) : (8 * 60);
+            const shiftEndTotal = isEvening ? (23 * 60) : (17 * 60);
             const lateThreshold = shiftStartTotal + 15;
             if (!isWaivedFinal && inTotal > lateThreshold) {
               lateMinutes = inTotal - shiftStartTotal;
@@ -2917,12 +2931,11 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
             if (checkOutTime && checkOutTime.includes(':')) {
               const [outH, outM] = checkOutTime.split(':').map(Number);
               const outTotal = (outH || 0) * 60 + (outM || 0);
-              const shiftEndTotal = 17 * 60;
               if (outTotal > inTotal) {
                 const gross = outTotal - inTotal;
                 const breakStart = 12 * 60;
                 const breakEnd = 13 * 60;
-                const overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
+                const overlap = isEvening ? 0 : Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
                 totalHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
               }
               if (outTotal < shiftEndTotal - 15) {
@@ -3674,7 +3687,9 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
                     ...(uName ? [`${uName}_${a.date}`] : []),
                   ].forEach(k => {
                     manualOverridesMap[k] = liveOv;
-                    GLOBAL_MANUAL_OVERRIDES_CACHE[k] = liveOv;
+                    if (GLOBAL_MANUAL_OVERRIDES_CACHE) {
+                      GLOBAL_MANUAL_OVERRIDES_CACHE[k] = liveOv;
+                    }
                   });
                   overridesHealed = true;
                   return true;

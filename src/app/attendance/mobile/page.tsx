@@ -1879,6 +1879,21 @@ export default function MobileAttendanceOneTap() {
 
       const data = await res.json();
       if (!res.ok) {
+        const errMsg = String(data.error || '');
+        if (errMsg.includes('هۆکار') || errMsg.includes('تێبینی') || errMsg.includes('درەنگ') || errMsg.includes('زوو') || errMsg.includes('زیادە')) {
+          setPendingAction(action);
+          if (action === 'ENTER') {
+            setReasonType('LATE_IN');
+            setSelectedChip(LATE_IN_CHIPS[0]);
+          } else {
+            setReasonType(errMsg.includes('زیادە') ? 'OVERTIME_OUT' : 'EARLY_OUT');
+            setSelectedChip(errMsg.includes('زیادە') ? OVERTIME_CHIPS[0] : EARLY_OUT_CHIPS[0]);
+          }
+          setCustomReason('');
+          setShowReasonModal(true);
+          return;
+        }
+
         alert(`⚠️ ${data.error || 'نەتوانرا ئامادەبوون تۆمار بکرێت'}`);
         return;
       }
@@ -3266,9 +3281,21 @@ export default function MobileAttendanceOneTap() {
                 <Clock className="w-5 h-5" />
               </div>
               <h4 className="text-sm font-black text-slate-900">
-                {reasonType === 'LATE_IN' && 'هۆکاری دواکەوتن (دوای 08:15)'}
-                {reasonType === 'EARLY_OUT' && 'هۆکاری زوو دەرچوون (پێش 16:45)'}
-                {reasonType === 'OVERTIME_OUT' && 'هۆکاری کاتی زیادە (دوای 17:15)'}
+                {reasonType === 'LATE_IN' && (() => {
+                  const currentHm = getTrustedBaghdadNow().timeStr;
+                  const r = resolveShiftRulesForDay(currentHm, employeeProfile);
+                  return `هۆکاری دواکەوتن (دوای ${r.graceTime})`;
+                })()}
+                {reasonType === 'EARLY_OUT' && (() => {
+                  const currentHm = getTrustedBaghdadNow().timeStr;
+                  const r = resolveShiftRulesForDay(liveTodayShift.checkInTime || currentHm, employeeProfile);
+                  return `هۆکاری زوو دەرچوون (پێش ${r.earlyThreshold})`;
+                })()}
+                {reasonType === 'OVERTIME_OUT' && (() => {
+                  const currentHm = getTrustedBaghdadNow().timeStr;
+                  const r = resolveShiftRulesForDay(liveTodayShift.checkInTime || currentHm, employeeProfile);
+                  return `هۆکاری کاتی زیادە (دوای ${r.overtimeThreshold})`;
+                })()}
               </h4>
             </div>
 

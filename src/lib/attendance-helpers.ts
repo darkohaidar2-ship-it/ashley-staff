@@ -101,7 +101,7 @@ export function resolveShiftRulesForDay(
   }
 
   const cleanIn = (inTime || '').slice(0, 5);
-  const isEveningByClock = cleanIn.includes(':') && cleanIn >= '12:30';
+  const isEveningByClock = cleanIn.includes(':') && cleanIn >= '14:00';
 
   if (configuredMode === 'evening' || (configuredMode === 'auto' && isEveningByClock)) {
     return {
