@@ -1,10 +1,11 @@
-const CACHE_NAME = 'ashley-checkin-offline-v18';
+const CACHE_NAME = 'ashley-checkin-offline-v19';
 
 const PRECACHE_URLS = [
   '/',
   '/attendance/mobile',
   '/manifest.json',
   '/ashley-logo.png',
+  '/ashley-logo.svg',
   '/icon-192.png',
   '/icon-512.png',
   '/leaflet/leaflet.js',
