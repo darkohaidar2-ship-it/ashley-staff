@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ashley-checkin-offline-v14';
+const CACHE_NAME = 'ashley-checkin-offline-v15';
 
 const PRECACHE_URLS = [
   '/',
@@ -6,7 +6,9 @@ const PRECACHE_URLS = [
   '/manifest.json',
   '/ashley-logo.png',
   '/icon-192.png',
-  '/icon-512.png'
+  '/icon-512.png',
+  '/leaflet/leaflet.js',
+  '/leaflet/leaflet.css'
 ];
 
 self.addEventListener('install', (event) => {

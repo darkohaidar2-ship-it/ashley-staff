@@ -37,6 +37,7 @@ import { format, getDaysInMonth, getDay } from 'date-fns';
 import { getDistanceMeters, sendLocalNotification, type GeofenceRegion } from '@/lib/background-geofence';
 import { extractFaceDescriptor, loadFaceModels, matchFaceDescriptors } from '@/lib/face-recognition';
 import { resolveEmployeeDayAttendance, resolveShiftRulesForDay, translateRoleToKurdish, type UnifiedAttendanceDayInfo } from '@/lib/attendance-helpers';
+import { MobileAttendanceMapModal } from '@/components/maps/MobileAttendanceMapModal';
 
 // Default Employees Fallback with Official PINs
 const ASHLEY_DEFAULT_EMPLOYEES = [
@@ -446,6 +447,7 @@ export default function MobileAttendanceOneTap() {
   const [selectedChip, setSelectedChip] = useState<string>('');
   const [customReason, setCustomReason] = useState<string>('');
   const [showLocationHelpModal, setShowLocationHelpModal] = useState(false);
+  const [showMapModal, setShowMapModal] = useState(false);
 
   // Monthly Attendance Records & Real System Sheet States
   const [monthlyLogs, setMonthlyLogs] = useState<any[]>([]);
@@ -2863,7 +2865,11 @@ export default function MobileAttendanceOneTap() {
             </div>
           </div>
 
-          <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs flex items-center justify-between gap-1.5">
+          <div 
+            onClick={() => setShowMapModal(true)}
+            className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs flex items-center justify-between gap-1.5 cursor-pointer hover:bg-slate-50 transition-colors"
+            title="کلیک بکە بۆ بینینی لەسەر نەخشە"
+          >
             <div className="flex items-center gap-2 min-w-0">
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
                 gpsState === 'acquiring' 
@@ -2890,7 +2896,10 @@ export default function MobileAttendanceOneTap() {
 
             <button
               type="button"
-              onClick={() => requestSingleGpsPosition().catch(() => {})}
+              onClick={(e) => {
+                e.stopPropagation();
+                requestSingleGpsPosition().catch(() => {});
+              }}
               disabled={gpsState === 'acquiring' || triggerLoading}
               className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 border border-slate-200 cursor-pointer shrink-0"
               title="نوێکردنەوەی شوێن"
@@ -2899,6 +2908,28 @@ export default function MobileAttendanceOneTap() {
             </button>
           </div>
         </div>
+
+        {/* 🗺️ DEDICATED MAP VIEWER BUTTON */}
+        <button
+          type="button"
+          onClick={() => setShowMapModal(true)}
+          className="w-full p-2.5 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 text-slate-800 rounded-2xl flex items-center justify-between shadow-2xs cursor-pointer active:scale-98 transition-all"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Compass className="w-5 h-5" />
+            </div>
+            <div className="text-right">
+              <span className="text-xs font-black text-slate-900 block">بینینی نەخشەی کارگە و شوێنی من 🗺️</span>
+              <span className="text-[10px] text-blue-700 font-bold block">
+                تەواوی لقەکان (ئاشڵی و هوانە) • بە ئۆفلاینیش کار دەکات
+              </span>
+            </div>
+          </div>
+          <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-blue-600 text-white shadow-2xs">
+            کردنەوەی نەخشە
+          </span>
+        </button>
 
         {/* 🔔 FEEDBACK TOAST */}
         {feedbackToast && (
@@ -3770,6 +3801,21 @@ export default function MobileAttendanceOneTap() {
           </div>
         </div>
       )}
+
+      {/* 🗺️ INTERACTIVE OFFLINE-READY ATTENDANCE MAP VIEWER MODAL */}
+      <MobileAttendanceMapModal
+        isOpen={showMapModal}
+        onClose={() => setShowMapModal(false)}
+        companyLocations={companyLocations}
+        currentLat={currentLat}
+        currentLng={currentLng}
+        distanceMeters={distanceMeters}
+        isInsideGeofence={isInsideGeofence}
+        onRefreshGps={requestSingleGpsPosition}
+        onCheckInClick={handleCheckInClick}
+        onCheckOutClick={handleCheckOutClick}
+        isCheckedIn={!!liveTodayShift.checkInTime}
+      />
 
       {/* 🔒 UNBIND / LOGOUT MODAL */}
       {showLogoutModal && (
