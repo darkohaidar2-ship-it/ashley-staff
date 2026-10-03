@@ -33,6 +33,9 @@ import {
   Layers,
   SlidersHorizontal,
   CalendarRange,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   MousePointerClick
 } from 'lucide-react';
 import { getDaysInMonth, format, getDay } from 'date-fns';
@@ -226,6 +229,57 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       return { dayNum, dateStr, isFriday, isFuture, isToday, dayOfWeek };
     });
   }, [totalDays, year, month, selectedMonth, todayStr]);
+
+  // 🔀 View Mode: Weekly (default, ultra-fast for iPad & touch) vs Monthly (all 31 days)
+  const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>('weekly');
+  const [selectedWeekIdx, setSelectedWeekIdx] = useState<number>(0);
+
+  // Group month days into 7-day calendar segments (Week 1, Week 2, Week 3, Week 4, Week 5)
+  const weeksList = useMemo(() => {
+    const list: Array<{
+      index: number;
+      label: string;
+      shortLabel: string;
+      startDay: number;
+      endDay: number;
+      days: typeof daysArray;
+      hasToday: boolean;
+    }> = [];
+    const chunkSize = 7;
+    for (let i = 0; i < totalDays; i += chunkSize) {
+      const chunkDays = daysArray.slice(i, i + chunkSize);
+      const startDay = chunkDays[0]?.dayNum || (i + 1);
+      const endDay = chunkDays[chunkDays.length - 1]?.dayNum || Math.min(i + chunkSize, totalDays);
+      const weekIdx = Math.floor(i / chunkSize);
+      const hasToday = chunkDays.some(d => d.isToday);
+      list.push({
+        index: weekIdx,
+        label: `هەفتەی ${weekIdx + 1} (${startDay} - ${endDay})`,
+        shortLabel: `هەفتەی ${weekIdx + 1}`,
+        startDay,
+        endDay,
+        days: chunkDays,
+        hasToday,
+      });
+    }
+    return list;
+  }, [daysArray, totalDays]);
+
+  // Auto-select week that contains Today (ئەمڕۆ) or reset to 0 when month changes
+  useEffect(() => {
+    const todayIdx = weeksList.findIndex(w => w.hasToday);
+    if (todayIdx !== -1) {
+      setSelectedWeekIdx(todayIdx);
+    } else {
+      setSelectedWeekIdx(0);
+    }
+  }, [selectedMonth, weeksList]);
+
+  // Days currently visible in the table (7 days in weekly mode, up to 31 days in monthly mode)
+  const displayedDays = useMemo(() => {
+    if (viewMode === 'monthly') return daysArray;
+    return weeksList[selectedWeekIdx]?.days || daysArray.slice(0, 7);
+  }, [viewMode, daysArray, weeksList, selectedWeekIdx]);
 
   // Adjust printEndDay & rangeEndDay if month days change
   useEffect(() => {
@@ -440,7 +494,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       if (!targetEmp) continue;
       const empName = targetEmp.fullName3Part || targetEmp.name;
       for (let c = minC; c <= maxC; c++) {
-        const targetDay = daysArray[c];
+        const targetDay = displayedDays[c];
         if (!targetDay) continue;
         const key = `${targetEmp.id}_${targetDay.dateStr}`;
         next[key] = {
@@ -452,7 +506,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       }
     }
     setSelectedCells(next);
-  }, [activeEmployees, daysArray]);
+  }, [activeEmployees, displayedDays]);
 
   // Global mouseup listener so dragging ends cleanly even if released outside the table
   useEffect(() => {
@@ -499,12 +553,12 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     });
   }, [activeEmployees]);
 
-  // 3. Select / Deselect entire Employee Row (all days of month)
+  // 3. Select / Deselect entire Employee Row (all visible days)
   const toggleEmployeeRow = useCallback((empId: string, empName: string) => {
     setSelectedCells(prev => {
       const next = { ...prev };
-      const allSelected = daysArray.length > 0 && daysArray.every(d => Boolean(next[`${empId}_${d.dateStr}`]));
-      daysArray.forEach(d => {
+      const allSelected = displayedDays.length > 0 && displayedDays.every(d => Boolean(next[`${empId}_${d.dateStr}`]));
+      displayedDays.forEach(d => {
         const k = `${empId}_${d.dateStr}`;
         if (allSelected) {
           delete next[k];
@@ -514,13 +568,13 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       });
       return next;
     });
-  }, [daysArray]);
+  }, [displayedDays]);
 
-  // 4. Select Entire Matrix (All employees, all days)
+  // 4. Select Entire Matrix (All employees, all visible days)
   const selectAllMatrix = useCallback(() => {
     const next: Record<string, { empId: string; empName: string; dateStr: string; dayNum: number }> = {};
     activeEmployees.forEach(emp => {
-      daysArray.forEach(d => {
+      displayedDays.forEach(d => {
         next[`${emp.id}_${d.dateStr}`] = {
           empId: emp.id,
           empName: emp.fullName3Part || emp.name,
@@ -530,7 +584,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       });
     });
     setSelectedCells(next);
-  }, [activeEmployees, daysArray]);
+  }, [activeEmployees, displayedDays]);
 
   // 5. Clear All Selection
   const clearAllSelection = useCallback(() => {
@@ -1469,7 +1523,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white">
-                  خشتەی مانگانەی ئامادەبوونی کارمەندان
+                  {viewMode === 'weekly' ? 'خشتەی هەفتانەی ئامادەبوونی کارمەندان' : 'خشتەی مانگانەی ئامادەبوونی کارمەندان'}
                 </h2>
                 {isWaitingData && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 animate-pulse">
@@ -1483,6 +1537,35 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
           {/* Icon-Only Action Controls & Search */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* 🔀 Segmented View Switcher: Weekly (Default) vs Monthly */}
+            <div className="flex items-center bg-slate-100 dark:bg-white/10 p-0.5 rounded-full border border-slate-200/80 dark:border-white/10 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setViewMode('weekly')}
+                className={`h-7 px-3 rounded-full flex items-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'weekly'
+                    ? 'bg-[#007AFF] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+                }`}
+                title="نیشاندانی هەفتانە (خێرا بۆ ئایپاد)"
+              >
+                <CalendarDays className="w-3.5 h-3.5" />
+                <span>هەفتانە</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('monthly')}
+                className={`h-7 px-3 rounded-full flex items-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'monthly'
+                    ? 'bg-[#007AFF] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+                }`}
+                title="نیشاندانی تەواوی مانگ (٣١ ڕۆژ)"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>مانگانە ({totalDays})</span>
+              </button>
+            </div>
             {/* 📅 Icon-only Month Calendar Picker */}
             <div 
               className="relative h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white flex items-center justify-center transition-all active:scale-90 border border-slate-200/80 dark:border-white/10 cursor-pointer shadow-2xs shrink-0" 
@@ -1568,6 +1651,69 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             </div>
           </div>
         </div>
+
+        {/* 📅 Weekly Navigation Bar (Visible only when Weekly View is active) */}
+        {viewMode === 'weekly' && (
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t border-slate-100 dark:border-white/5">
+            {/* Prev / Next Week Controls */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={selectedWeekIdx === 0}
+                onClick={() => setSelectedWeekIdx(prev => Math.max(0, prev - 1))}
+                className="h-8 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 disabled:opacity-30 disabled:pointer-events-none text-slate-700 dark:text-white flex items-center gap-1 text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95"
+                title="هەفتەی پێشوو"
+              >
+                <ChevronRight className="w-4 h-4" />
+                <span>هەفتەی پێشوو</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={selectedWeekIdx >= weeksList.length - 1}
+                onClick={() => setSelectedWeekIdx(prev => Math.min(weeksList.length - 1, prev + 1))}
+                className="h-8 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 disabled:opacity-30 disabled:pointer-events-none text-slate-700 dark:text-white flex items-center gap-1 text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95"
+                title="هەفتەی داهاتوو"
+              >
+                <span>هەفتەی داهاتوو</span>
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Quick Week Pill Tabs: Week 1, Week 2, Week 3, Week 4, Week 5 */}
+            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 max-w-full">
+              {weeksList.map((w) => {
+                const isSelected = w.index === selectedWeekIdx;
+                return (
+                  <button
+                    key={w.index}
+                    type="button"
+                    onClick={() => setSelectedWeekIdx(w.index)}
+                    className={`h-8 px-3 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
+                      isSelected
+                        ? 'bg-[#007AFF] text-white shadow-xs ring-2 ring-blue-400/40'
+                        : 'bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200'
+                    }`}
+                  >
+                    <span>{w.shortLabel}</span>
+                    <span className={`text-[10px] font-mono px-1 rounded ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-200/70 dark:bg-white/10 text-slate-600 dark:text-slate-300'}`}>
+                      {w.startDay}-{w.endDay}
+                    </span>
+                    {w.hasToday && (
+                      <span className="w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-200 dark:ring-amber-900 animate-pulse" title="ئەمڕۆ لەم هەفتەیەیە" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Active Week Range Text Badge */}
+            <div className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5 bg-slate-50 dark:bg-white/5 px-3 py-1.5 rounded-lg border border-slate-200/60 dark:border-white/5">
+              <span className="w-2 h-2 rounded-full bg-[#007AFF]" />
+              <span>{weeksList[selectedWeekIdx]?.label}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 🍏 Apple iOS Clean Matrix Table Card with Crisp Grid Borders & Fluid Viewport Height */}
@@ -1592,7 +1738,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   )}
                 </div>
               </th>
-              {daysArray.map((d) => {
+              {displayedDays.map((d) => {
                 const isFriday = d.isFriday;
                 const theme = DAY_THEMES[d.dayOfWeek] || DAY_THEMES[6];
                 const isColFullySelected = activeEmployees.length > 0 && activeEmployees.every(emp => Boolean(selectedCells[`${emp.id}_${d.dateStr}`]));
@@ -1624,16 +1770,20 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         ? 'ring-2 ring-amber-400 ring-inset' 
                         : ''
                     } ${
-                      tableFitMode === 'fit' ? 'p-0.5 min-w-[26px] sm:min-w-[32px]' : 'p-1 min-w-[54px] sm:min-w-[60px]'
+                      viewMode === 'weekly'
+                        ? 'p-2 min-w-[70px] sm:min-w-[90px]'
+                        : tableFitMode === 'fit'
+                        ? 'p-0.5 min-w-[26px] sm:min-w-[32px]'
+                        : 'p-1 min-w-[54px] sm:min-w-[60px]'
                     }`}
                   >
                     <div className="flex items-center justify-center gap-0.5 leading-tight">
-                      <span className={`${tableFitMode === 'fit' ? 'text-[10px]' : 'text-[11px]'} font-mono`}>{d.dayNum}</span>
+                      <span className={`${viewMode === 'weekly' ? 'text-xs sm:text-sm' : tableFitMode === 'fit' ? 'text-[10px]' : 'text-[11px]'} font-mono`}>{d.dayNum}</span>
                       {isColFullySelected && (
                         <span className="w-1.5 h-1.5 rounded-full bg-[#007AFF]" />
                       )}
                     </div>
-                    <div className={`${tableFitMode === 'fit' ? 'text-[7.5px]' : 'text-[8px]'} font-bold leading-none mt-0.5`}>
+                    <div className={`${viewMode === 'weekly' ? 'text-[10px] sm:text-[11px]' : tableFitMode === 'fit' ? 'text-[7.5px]' : 'text-[8px]'} font-bold leading-none mt-0.5`}>
                       {theme.shortName}
                     </div>
                   </th>
@@ -1644,7 +1794,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 tableFitMode === 'fit' ? 'w-[40px] min-w-[40px] px-0.5 py-1 text-[9px]' : 'min-w-[76px] px-2.5 py-2'
               }`}>
                 <div>ئامادەبوو</div>
-                <div className="text-[8px] font-medium text-emerald-700 dark:text-emerald-400">ڕۆژ</div>
+                <div className="text-[8px] font-medium text-emerald-700 dark:text-emerald-400">
+                  {viewMode === 'weekly' ? 'هەفتە' : 'ڕۆژ'}
+                </div>
               </th>
               <th className={`bg-blue-50/90 dark:bg-blue-950/40 text-blue-900 dark:text-blue-300 font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 text-center ${
                 tableFitMode === 'fit' ? 'w-[40px] min-w-[40px] px-0.5 py-1 text-[9px]' : 'min-w-[76px] px-2.5 py-2'
@@ -1683,14 +1835,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               const isDarko = emp.id === 'emp-02' || (emp.fullName3Part || emp.name || '').includes('دارکۆ');
               const isManager = emp.role === 'Manager' || isDarko;
 
-              // Calculate monthly attendance stats for this employee:
+              // Calculate attendance stats for this employee (weekly in weekly mode, monthly in monthly mode):
               let empPresentDays = 0;
               let empTotalHours = 0;
               let empAbsentDays = 0;
               let empLeaveDays = 0;
               let empLateDays = 0;
 
-              daysArray.forEach(d => {
+              displayedDays.forEach(d => {
                 const info = getGpsLogsForEmpAndDay(emp, d);
                 const isPresent =
                   info.status === 'Present' ||
@@ -1714,7 +1866,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 }
               });
 
-              const workableDays = Math.max(1, daysArray.filter(d => !d.isFuture && !d.isFriday).length);
+              const workableDays = Math.max(1, displayedDays.filter(d => !d.isFuture && !d.isFriday).length);
               const attendanceRate = Math.min(100, Math.round((empPresentDays / workableDays) * 100));
 
               return (
@@ -1733,13 +1885,13 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                             toggleEmployeeRow(emp.id, emp.fullName3Part || emp.name);
                           }}
                           className={`p-1 rounded-md transition-colors shrink-0 ${
-                            daysArray.length > 0 && daysArray.every(d => Boolean(selectedCells[`${emp.id}_${d.dateStr}`]))
+                            displayedDays.length > 0 && displayedDays.every(d => Boolean(selectedCells[`${emp.id}_${d.dateStr}`]))
                               ? 'bg-[#007AFF] text-white shadow-xs'
                               : 'text-slate-300 hover:text-[#007AFF] dark:text-slate-600 dark:hover:text-blue-400'
                           }`}
-                          title="دیاریکردنی هەموو ڕۆژەکانی ئەم کارمەندە لەم مانگەدا"
+                          title={viewMode === 'weekly' ? "دیاریکردنی هەموو ڕۆژەکانی ئەم کارمەندە لەم هەفتەیەدا" : "دیاریکردنی هەموو ڕۆژەکانی ئەم کارمەندە لەم مانگەدا"}
                         >
-                          {daysArray.length > 0 && daysArray.every(d => Boolean(selectedCells[`${emp.id}_${d.dateStr}`])) ? (
+                          {displayedDays.length > 0 && displayedDays.every(d => Boolean(selectedCells[`${emp.id}_${d.dateStr}`])) ? (
                             <CheckSquare className="w-3.5 h-3.5" />
                           ) : (
                             <Square className="w-3.5 h-3.5" />
@@ -1768,7 +1920,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       </Link>
                     </div>
                   </td>
-                  {daysArray.map((d, dayIndex) => {
+                  {displayedDays.map((d, dayIndex) => {
                     const info = getGpsLogsForEmpAndDay(emp, d);
                     const isFriday = d.isFriday;
                     const theme = DAY_THEMES[d.dayOfWeek] || DAY_THEMES[6];
@@ -1887,7 +2039,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         } ${
                           d.isToday ? 'ring-1 ring-amber-400 ring-inset bg-amber-100/50 dark:bg-amber-950/40' : ''
                         } ${
-                          tableFitMode === 'fit' ? 'p-0.5 min-w-[26px] sm:min-w-[32px]' : 'p-1 min-w-[54px]'
+                          viewMode === 'weekly'
+                            ? 'p-2 min-w-[70px] sm:min-w-[90px]'
+                            : tableFitMode === 'fit'
+                            ? 'p-0.5 min-w-[26px] sm:min-w-[32px]'
+                            : 'p-1 min-w-[54px]'
                         }`}
                       >
                         {/* Selected Cell Dot Indicator */}
@@ -1920,20 +2076,20 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         )}
 
                         {isPresent ? (
-                          <div className={`w-full flex flex-col items-center justify-center ${tableFitMode === 'fit' ? 'py-0.5' : 'py-1'} leading-none select-none`}>
-                            <span className={`font-mono font-extrabold ${tableFitMode === 'fit' ? 'text-[9.5px]' : 'text-xs'} ${info.checkInStatus?.colorCls || 'text-slate-900 dark:text-slate-100'} leading-tight tracking-tight`}>
+                          <div className={`w-full flex flex-col items-center justify-center ${viewMode === 'weekly' ? 'py-1.5' : tableFitMode === 'fit' ? 'py-0.5' : 'py-1'} leading-none select-none`}>
+                            <span className={`font-mono font-extrabold ${viewMode === 'weekly' ? 'text-xs sm:text-sm' : tableFitMode === 'fit' ? 'text-[9.5px]' : 'text-xs'} ${info.checkInStatus?.colorCls || 'text-slate-900 dark:text-slate-100'} leading-tight tracking-tight`}>
                               {inTime}
                             </span>
-                            <span className={`font-mono font-semibold ${tableFitMode === 'fit' ? 'text-[8px] mt-0.5' : 'text-[10px] mt-1'} ${info.checkOutStatus?.colorCls || 'text-slate-500 dark:text-slate-400'} leading-tight tracking-tight`}>
+                            <span className={`font-mono font-semibold ${viewMode === 'weekly' ? 'text-[11px] mt-1' : tableFitMode === 'fit' ? 'text-[8px] mt-0.5' : 'text-[10px] mt-1'} ${info.checkOutStatus?.colorCls || 'text-slate-500 dark:text-slate-400'} leading-tight tracking-tight`}>
                               {outTime === 'بەردەوام' ? (tableFitMode === 'fit' ? '••' : 'بەردەوام') : outTime}
                             </span>
                           </div>
                         ) : info.status === 'Loading' ? (
-                          <div className={`w-full ${tableFitMode === 'fit' ? 'py-1' : 'py-2'} flex items-center justify-center`}>
+                          <div className={`w-full ${viewMode === 'weekly' ? 'py-2' : tableFitMode === 'fit' ? 'py-1' : 'py-2'} flex items-center justify-center`}>
                             <span className="inline-block w-3.5 h-1.5 bg-slate-200/90 dark:bg-slate-700/90 rounded-full animate-pulse" />
                           </div>
                         ) : (
-                          <div className={`w-full ${tableFitMode === 'fit' ? 'py-1 text-[8.5px]' : 'py-2 text-[10px]'} font-bold flex items-center justify-center ${badgeColor}`}>
+                          <div className={`w-full ${viewMode === 'weekly' ? 'py-2 text-xs' : tableFitMode === 'fit' ? 'py-1 text-[8.5px]' : 'py-2 text-[10px]'} font-bold flex items-center justify-center ${badgeColor}`}>
                             {badgeText}
                           </div>
                         )}
