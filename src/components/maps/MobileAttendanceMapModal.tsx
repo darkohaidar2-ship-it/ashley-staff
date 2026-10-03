@@ -151,7 +151,7 @@ export function MobileAttendanceMapModal({
         zoomControl: false,
       });
 
-      L.control.zoom({ position: 'bottomright' }).addTo(map);
+      L.control.zoom({ position: 'topright' }).addTo(map);
 
       // OpenStreetMap Tiles (Works online, gracefully shows styled radar grid when offline)
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -251,6 +251,15 @@ export function MobileAttendanceMapModal({
           `)
           .openPopup();
 
+        // Accuracy/Presence ring around user
+        L.circle([currentLat, currentLng], {
+          color: userColor,
+          fillColor: userColor,
+          fillOpacity: 0.15,
+          weight: 1.5,
+          radius: 35,
+        }).addTo(map);
+
         allLatLngs.push([currentLat, currentLng]);
 
         const bounds = L.latLngBounds(allLatLngs);
@@ -286,6 +295,13 @@ export function MobileAttendanceMapModal({
       setIsRefreshing(false);
     }
   }, [onRefreshGps]);
+
+  // 🚀 Automatically request GPS location as soon as map modal opens
+  useEffect(() => {
+    if (isOpen) {
+      handleTriggerRefresh();
+    }
+  }, [isOpen, handleTriggerRefresh]);
 
   if (!isOpen) return null;
 
@@ -393,11 +409,39 @@ export function MobileAttendanceMapModal({
                 type="button"
                 onClick={handleTriggerRefresh}
                 disabled={isRefreshing}
-                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg border border-blue-400/40 flex items-center gap-1.5 cursor-pointer backdrop-blur-md transition-all"
+                className="px-3 py-2 bg-slate-900/90 hover:bg-slate-800 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg border border-slate-700 flex items-center gap-1.5 cursor-pointer backdrop-blur-md transition-all"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                <span>{isRefreshing ? 'پشکنین...' : 'نوێکردنەوەی شوێنم'}</span>
+                <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span>{isRefreshing ? 'پشکنین...' : 'نوێکردنەوەی شوێن'}</span>
               </button>
+            </div>
+          )}
+
+          {/* 🎯 Floating Google Maps Style "Locate Me" Icon Button */}
+          {onRefreshGps && (
+            <div className="absolute bottom-24 right-3.5 z-20 flex flex-col items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (currentLat && currentLng && mapInstanceRef.current) {
+                    mapInstanceRef.current.flyTo([currentLat, currentLng], 16, { duration: 1.2 });
+                  }
+                  handleTriggerRefresh();
+                }}
+                disabled={isRefreshing}
+                className="w-12 h-12 rounded-2xl bg-white hover:bg-slate-100 active:scale-90 text-blue-600 shadow-2xl border-2 border-slate-200/90 flex items-center justify-center cursor-pointer transition-all duration-200 group"
+                title="دیاریکردنی شوێنی ئێستام"
+                aria-label="دیاریکردنی شوێنی ئێستام"
+              >
+                {isRefreshing ? (
+                  <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
+                ) : (
+                  <Navigation className="w-5 h-5 fill-blue-600 text-blue-600 transition-transform group-hover:scale-110" />
+                )}
+              </button>
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-slate-900/85 text-white border border-slate-700 shadow-sm pointer-events-none">
+                شوێنم 📍
+              </span>
             </div>
           )}
 

@@ -842,7 +842,7 @@ export default function MobileAttendanceOneTap() {
           },
           {
             enableHighAccuracy: false,
-            timeout: 7000,
+            timeout: 20000,
             maximumAge: 60000,
           }
         );
@@ -853,22 +853,17 @@ export default function MobileAttendanceOneTap() {
         onHighAccuracyError,
         { 
           enableHighAccuracy: true, 
-          timeout: 6000, 
-          maximumAge: 10000 
+          timeout: 25000, 
+          maximumAge: 30000 
         }
       );
     });
   }, [companyLocations]);
 
-  // 🛰️ Silent background GPS Geofence Check on App Launch ONLY IF already granted by user
+  // 🛰️ Automatic GPS Location Request on App Launch
   useEffect(() => {
-    if (typeof navigator !== 'undefined' && 'permissions' in navigator) {
-      navigator.permissions.query({ name: 'geolocation' as PermissionName }).then((result) => {
-        if (result.state === 'granted') {
-          requestSingleGpsPosition().catch(() => {});
-        }
-      }).catch(() => {});
-    }
+    // Automatically trigger/request GPS check as soon as mobile attendance page opens
+    requestSingleGpsPosition().catch(() => {});
   }, [requestSingleGpsPosition]);
 
   // 4. Fetch Live Today Shift Status from Server (Resets to 0 if Admin deletes on server; preserves unsent Offline Queue)
@@ -2886,7 +2881,7 @@ export default function MobileAttendanceOneTap() {
                     : gpsState === 'ready'
                     ? isInsideGeofence ? 'لە ناو کارگە' : `${distanceMeters ?? 0} م دوور`
                     : gpsState === 'error'
-                    ? 'پێویستی بە مۆڵەتە'
+                    ? (gpsErrorMessage?.includes('ڕێگری') ? 'دەسەڵاتی شوێن بکەرەوە' : 'پشکنینی شوێن سەرکەوتوو نەبوو')
                     : 'ئامادەیە بۆ تۆمارکردن'}
                 </p>
                 <p className="text-[9px] text-slate-500 font-bold truncate">
