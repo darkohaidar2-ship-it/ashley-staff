@@ -31,7 +31,10 @@ import {
   Compass,
   Smartphone,
   Laptop,
-  ShieldAlert
+  ShieldAlert,
+  Shield,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { format, getDaysInMonth, getDay } from 'date-fns';
 import { getDistanceMeters, sendLocalNotification, type GeofenceRegion } from '@/lib/background-geofence';
@@ -449,8 +452,8 @@ export default function MobileAttendanceOneTap() {
   const [showLocationHelpModal, setShowLocationHelpModal] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
 
-  // 📱 Mobile Dashboard Tab Navigation ('today' | 'sheet')
-  const [mobileTab, setMobileTab] = useState<'today' | 'sheet'>('today');
+  // 📱 Mobile Dashboard Unified Sheet Expansion State
+  const [isFullSheetExpanded, setIsFullSheetExpanded] = useState<boolean>(false);
 
   // 🔐 Mobile Login Stepper: 'SELECT_EMP' -> 'ENTER_PIN'
   const [loginStep, setLoginStep] = useState<'SELECT_EMP' | 'ENTER_PIN'>('SELECT_EMP');
@@ -2619,25 +2622,37 @@ export default function MobileAttendanceOneTap() {
     }
 
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 text-slate-900 flex flex-col items-center justify-center p-4 dir-rtl select-none" dir="rtl">
-        <div className="w-full max-w-sm bg-white/95 backdrop-blur-xl border border-slate-200/90 p-5 sm:p-6 rounded-3xl shadow-[0_16px_50px_rgba(0,0,0,0.08)] space-y-4 animate-fade-slide-up">
+      <div className="min-h-screen cyber-grid-bg text-slate-100 flex flex-col items-center justify-center p-4 dir-rtl select-none relative overflow-hidden" dir="rtl">
+        {/* Ambient Cyber Neon Orbs */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-1/4 left-1/3 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="w-full max-w-sm cyber-glass border border-slate-700/60 p-5 sm:p-6 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.6)] space-y-4 animate-fade-slide-up relative overflow-hidden ring-1 ring-white/10">
           
+          {/* Top illuminated cyber scanline */}
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent opacity-80" />
+
           {/* 🌟 Floating Branded Header */}
           <div className="text-center space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[10px] font-mono text-emerald-400 font-bold shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>[CYBER-SHIELD // BIO-ID v2.7]</span>
+            </div>
+
             <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-2xl bg-emerald-500/15 blur-lg animate-pulse" />
-              <div className="relative w-16 h-16 rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-white p-2.5 flex items-center justify-center animate-float-gentle">
+              <div className="absolute inset-0 rounded-2xl bg-emerald-500/20 blur-xl animate-pulse" />
+              <div className="relative w-16 h-16 rounded-2xl overflow-hidden border border-slate-700 shadow-md bg-slate-900/90 p-2.5 flex items-center justify-center animate-float-gentle ring-1 ring-emerald-500/30">
                 <img src="/ashley-logo.png" alt="لۆگۆی ئاشڵی" className="w-full h-full object-contain" />
               </div>
             </div>
             <div>
-              <h1 className="text-lg font-black text-slate-900 tracking-tight">سیستەمی دەوامی ئاشڵی</h1>
-              <p className="text-[11px] text-slate-500 font-bold">تۆمارکردنی ئامادەبوونی کارمەندان</p>
+              <h1 className="text-lg font-black text-white tracking-tight">دەروازەی ئەمنی دەوامی ئاشڵی</h1>
+              <p className="text-[11px] text-slate-400 font-bold">تۆماری سەلمێنراوی دەوامی کارمەندان</p>
             </div>
           </div>
 
           {/* 📍 Clean 2-Step Progress Indicator */}
-          <div className="flex items-center justify-center gap-2 pb-1 border-b border-slate-100">
+          <div className="flex items-center justify-center gap-2 pb-1 border-b border-slate-800">
             <button
               type="button"
               onClick={() => {
@@ -2646,18 +2661,18 @@ export default function MobileAttendanceOneTap() {
               }}
               className={`flex items-center gap-1.5 text-xs font-black px-3 py-1 rounded-full transition-all cursor-pointer ${
                 loginStep === 'SELECT_EMP'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-emerald-50 text-emerald-800'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 border border-emerald-400/40'
+                  : 'bg-slate-800/80 text-emerald-400 border border-slate-700'
               }`}
             >
               <span>١. هەڵبژاردنی ناو</span>
               {selectedEmpId && <CheckCircle2 className="w-3 h-3 text-emerald-300" />}
             </button>
-            <div className="w-4 h-0.5 bg-slate-200" />
+            <div className="w-4 h-0.5 bg-slate-800" />
             <div className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full transition-all ${
               loginStep === 'ENTER_PIN'
-                ? 'bg-emerald-600 text-white shadow-xs font-black'
-                : 'bg-slate-100 text-slate-400'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 border border-emerald-400/40 font-black'
+                : 'bg-slate-800/50 text-slate-500 border border-slate-800'
             }`}>
               <KeyRound className="w-3 h-3" />
               <span>٢. کۆدی نهێنی</span>
@@ -2670,10 +2685,10 @@ export default function MobileAttendanceOneTap() {
           {loginStep === 'SELECT_EMP' && (
             <div className="space-y-3 animate-fade-slide-up">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-800">
-                  ناوی خۆت هەڵبژێرە:
+                <span className="text-xs font-black text-slate-300">
+                  ناوی خۆت دیاری بکە:
                 </span>
-                <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-mono font-bold text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded-full">
                   {filteredEmployees.length} کارمەند
                 </span>
               </div>
@@ -2687,14 +2702,14 @@ export default function MobileAttendanceOneTap() {
                     onChange={(e) => setSearchEmployeeQuery(e.target.value)}
                     placeholder="گەڕان بەپێی ناو..."
                     autoFocus
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold pr-8 pl-8 py-2.5 rounded-2xl focus:border-emerald-600 focus:bg-white focus:outline-none transition-all shadow-inner"
+                    className="w-full bg-slate-950/80 border border-slate-700 text-white placeholder-slate-500 text-xs font-bold pr-8 pl-8 py-2.5 rounded-2xl focus:border-cyan-400 focus:bg-slate-900 focus:outline-none transition-all shadow-inner"
                   />
                   <Search className="w-4 h-4 text-slate-400 absolute right-2.5 top-3" />
                   {searchEmployeeQuery && (
                     <button
                       type="button"
                       onClick={() => setSearchEmployeeQuery('')}
-                      className="absolute left-2.5 top-2.5 p-0.5 text-slate-400 hover:text-slate-600"
+                      className="absolute left-2.5 top-2.5 p-0.5 text-slate-400 hover:text-white"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -2704,16 +2719,16 @@ export default function MobileAttendanceOneTap() {
                   type="button"
                   onClick={loadLiveEmployees}
                   title="نوێکردنەوەی لیست"
-                  className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl border border-slate-200 cursor-pointer active:scale-95 transition-all"
+                  className="p-2.5 bg-slate-850 hover:bg-slate-800 text-slate-300 rounded-2xl border border-slate-700 cursor-pointer active:scale-95 transition-all"
                 >
-                  <RefreshCw className={`w-4 h-4 ${isRefreshingEmployees ? 'animate-spin text-emerald-600' : ''}`} />
+                  <RefreshCw className={`w-4 h-4 ${isRefreshingEmployees ? 'animate-spin text-emerald-400' : ''}`} />
                 </button>
               </div>
 
               {/* Spacious & Touch-Friendly Employee Cards List */}
-              <div className="border border-slate-200/90 rounded-2xl bg-white p-1.5 max-h-64 overflow-y-auto space-y-1.5 shadow-inner scrollbar-thin">
+              <div className="border border-slate-800 rounded-2xl bg-slate-950/80 p-1.5 max-h-64 overflow-y-auto space-y-1.5 shadow-inner scrollbar-thin">
                 {filteredEmployees.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-slate-400 font-bold">
+                  <div className="p-6 text-center text-xs text-slate-500 font-bold">
                     هیچ کارمەندێک بەم ناوە نەدۆزرایەوە
                   </div>
                 ) : (
@@ -2733,33 +2748,33 @@ export default function MobileAttendanceOneTap() {
                         }}
                         className={`w-full text-right p-3 rounded-2xl border transition-all flex items-center justify-between cursor-pointer select-none active:scale-98 ${
                           isSelected
-                            ? 'bg-emerald-50 border-emerald-500 shadow-xs ring-1 ring-emerald-500'
-                            : 'bg-white border-slate-100 hover:border-emerald-300 hover:bg-slate-50 shadow-2xs'
+                            ? 'bg-emerald-950/80 border-emerald-500 shadow-md ring-1 ring-emerald-400'
+                            : 'bg-slate-900/80 border-slate-800 hover:border-emerald-500/50 hover:bg-slate-850'
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 shadow-2xs ${
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
                             isSelected 
-                              ? 'bg-emerald-600 text-white' 
+                              ? 'bg-emerald-600 text-white shadow-xs' 
                               : isManager 
-                              ? 'bg-amber-100 text-amber-900 border border-amber-200' 
-                              : 'bg-slate-100 text-slate-700 border border-slate-200'
+                              ? 'bg-amber-950/80 text-amber-300 border border-amber-700/60' 
+                              : 'bg-slate-800 text-slate-300 border border-slate-700'
                           }`}>
                             {emp.name.charAt(0)}
                           </div>
                           <div>
-                            <span className="text-xs font-black text-slate-900 block leading-tight">
+                            <span className="text-xs font-black text-white block leading-tight">
                               {emp.name}
                             </span>
-                            <span className="text-[10px] text-slate-500 font-bold">
+                            <span className="text-[10px] text-slate-400 font-bold">
                               {roleKu}
                             </span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1 text-slate-400">
-                          <span className="text-[10px] font-black text-emerald-600">هەڵبژاردن</span>
-                          <ChevronLeft className="w-4 h-4 text-emerald-600" />
+                        <div className="flex items-center gap-1 text-slate-500">
+                          <span className="text-[10px] font-mono font-black text-emerald-400">ID: #{emp.id.replace('emp-', '')}</span>
+                          <ChevronLeft className="w-4 h-4 text-emerald-400" />
                         </div>
                       </div>
                     );
@@ -2775,16 +2790,16 @@ export default function MobileAttendanceOneTap() {
           {loginStep === 'ENTER_PIN' && selectedEmp && (
             <div className="space-y-4 animate-fade-slide-up">
               {/* Selected Employee Summary Banner with Instant Change Button */}
-              <div className="p-2.5 bg-emerald-50/80 border border-emerald-200 rounded-2xl flex items-center justify-between shadow-2xs">
+              <div className="p-2.5 bg-slate-950/90 border border-emerald-500/30 rounded-2xl flex items-center justify-between shadow-2xs">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-xs shadow-xs">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white flex items-center justify-center font-black text-xs shadow-xs">
                     {selectedEmp.name.charAt(0)}
                   </div>
                   <div>
-                    <span className="text-xs font-black text-slate-900 block leading-tight">
+                    <span className="text-xs font-black text-white block leading-tight">
                       {selectedEmp.name}
                     </span>
-                    <span className="text-[10px] text-emerald-700 font-bold">
+                    <span className="text-[10px] text-emerald-400 font-bold">
                       {translateRoleToKurdish(selectedEmp.role)}
                     </span>
                   </div>
@@ -2797,7 +2812,7 @@ export default function MobileAttendanceOneTap() {
                     setAuthError(null);
                     setPinInput('');
                   }}
-                  className="px-2.5 py-1 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-black cursor-pointer shadow-2xs transition-all active:scale-95"
+                  className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[10px] font-black cursor-pointer transition-all active:scale-95"
                 >
                   گۆڕین ↺
                 </button>
@@ -2805,7 +2820,7 @@ export default function MobileAttendanceOneTap() {
 
               {/* 4 Glowing PIN Boxes */}
               <div className="space-y-1.5 text-center">
-                <label className="text-xs font-black text-slate-800 block">
+                <label className="text-xs font-black text-slate-300 block">
                   کۆدی نهێنی بنووسە (٤ ژمارە)
                 </label>
 
@@ -2817,8 +2832,8 @@ export default function MobileAttendanceOneTap() {
                         key={idx}
                         className={`w-12 h-14 rounded-2xl border-2 flex items-center justify-center text-lg font-black font-mono transition-all duration-200 ${
                           hasVal
-                            ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-md ring-2 ring-emerald-500/20 scale-105'
-                            : 'bg-slate-50 border-slate-200 text-slate-300'
+                            ? 'bg-emerald-950/90 border-emerald-400 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.5)] scale-105'
+                            : 'bg-slate-950/90 border-slate-800 text-slate-700'
                         }`}
                       >
                         {hasVal ? '●' : ''}
@@ -2830,7 +2845,7 @@ export default function MobileAttendanceOneTap() {
 
               {/* Error Message Toast */}
               {authError && (
-                <div className="p-2.5 rounded-2xl bg-rose-50 border border-rose-300 text-rose-800 text-xs font-bold text-center animate-shake-error">
+                <div className="p-2.5 rounded-2xl bg-rose-950/80 border border-rose-500/50 text-rose-300 text-xs font-bold text-center animate-shake-error">
                   {authError}
                 </div>
               )}
@@ -2850,7 +2865,7 @@ export default function MobileAttendanceOneTap() {
                         handleStep1PinSubmit(undefined, next);
                       }
                     }}
-                    className="h-12 rounded-2xl bg-slate-50 hover:bg-emerald-50 active:bg-emerald-100 active:scale-90 text-slate-900 border border-slate-200/90 text-base font-black font-mono shadow-xs transition-all cursor-pointer flex items-center justify-center"
+                    className="h-12 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 active:bg-emerald-600 active:scale-95 text-white border border-slate-700/70 text-base font-black font-mono shadow-xs transition-all cursor-pointer flex items-center justify-center"
                   >
                     {digit}
                   </button>
@@ -2862,7 +2877,7 @@ export default function MobileAttendanceOneTap() {
                     setPinInput(prev => prev.slice(0, -1));
                     setAuthError(null);
                   }}
-                  className="h-12 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-90 text-slate-600 border border-slate-200 text-xs font-black transition-all cursor-pointer flex items-center justify-center"
+                  className="h-12 rounded-2xl bg-slate-850 hover:bg-slate-800 active:scale-95 text-slate-400 border border-slate-800 text-xs font-black transition-all cursor-pointer flex items-center justify-center"
                   title="سڕینەوە"
                 >
                   ⌫ سڕینەوە
@@ -2879,7 +2894,7 @@ export default function MobileAttendanceOneTap() {
                       handleStep1PinSubmit(undefined, next);
                     }
                   }}
-                  className="h-12 rounded-2xl bg-slate-50 hover:bg-emerald-50 active:bg-emerald-100 active:scale-90 text-slate-900 border border-slate-200/90 text-base font-black font-mono shadow-xs transition-all cursor-pointer flex items-center justify-center"
+                  className="h-12 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 active:bg-emerald-600 active:scale-95 text-white border border-slate-700/70 text-base font-black font-mono shadow-xs transition-all cursor-pointer flex items-center justify-center"
                 >
                   0
                 </button>
@@ -2888,7 +2903,7 @@ export default function MobileAttendanceOneTap() {
                   type="button"
                   onClick={() => handleStep1PinSubmit()}
                   disabled={authLoading || pinInput.length < 4}
-                  className="h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-90 disabled:opacity-40 text-white font-black text-xs shadow-md shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center"
+                  className="h-12 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 disabled:opacity-40 text-white font-black text-xs shadow-lg shadow-emerald-600/30 border border-emerald-400/40 transition-all cursor-pointer flex items-center justify-center"
                 >
                   {authLoading ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
@@ -2928,16 +2943,16 @@ export default function MobileAttendanceOneTap() {
   const isCheckedIn = Boolean(liveTodayShift.checkInTime && !liveTodayShift.checkOutTime);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col max-w-md mx-auto dir-rtl select-none pb-28" dir="rtl">
+    <div className="min-h-screen cyber-grid-bg text-slate-100 flex flex-col max-w-md mx-auto dir-rtl select-none pb-12 relative overflow-x-hidden" dir="rtl">
       
-      {/* 🌟 TOP MODERN LIGHT HEADER */}
-      <header className="p-3 bg-white border-b border-slate-200 flex items-center justify-between sticky top-0 z-50 shadow-xs">
+      {/* 🌟 TOP CYBER-SHIELD HEADER */}
+      <header className="p-3 bg-slate-900/90 backdrop-blur-xl border-b border-slate-800 flex items-center justify-between sticky top-0 z-40 shadow-xl">
         <div 
           onClick={handleOpenProfileModal}
           className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity"
           title="پڕۆفایلی کارمەند"
         >
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center justify-center font-black text-emerald-800 text-xs shadow-xs overflow-hidden">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-950/80 border border-emerald-500/40 flex items-center justify-center font-black text-emerald-400 text-xs shadow-[0_0_12px_rgba(16,185,129,0.25)] overflow-hidden">
             {profilePhoto ? (
               <img src={profilePhoto} alt={employeeProfile.name} className="w-full h-full object-cover" />
             ) : (
@@ -2945,11 +2960,11 @@ export default function MobileAttendanceOneTap() {
             )}
           </div>
           <div>
-            <h2 className="text-xs font-black text-slate-900 leading-tight flex items-center gap-1">
+            <h2 className="text-xs font-black text-white leading-tight flex items-center gap-1">
               <span>{employeeProfile.name}</span>
-              <Sparkles className="w-3 h-3 text-amber-500" />
+              <Sparkles className="w-3 h-3 text-emerald-400" />
             </h2>
-            <p className="text-[10px] text-emerald-700 font-bold">{translateRoleToKurdish(employeeProfile.role)}</p>
+            <p className="text-[10px] text-emerald-400 font-mono font-bold">{translateRoleToKurdish(employeeProfile.role)}</p>
           </div>
         </div>
 
@@ -2958,19 +2973,19 @@ export default function MobileAttendanceOneTap() {
             <button
               type="button"
               onClick={handleInstallPwaClick}
-              className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] flex items-center gap-1 font-black cursor-pointer transition-colors shadow-2xs"
+              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-emerald-400 border border-emerald-500/30 text-[10px] flex items-center gap-1 font-black cursor-pointer transition-colors shadow-2xs"
               title="دابەزاندنی بەرنامە"
             >
-              <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
               <span>دابەزاندن</span>
             </button>
           )}
           <button 
             onClick={() => setShowLogoutModal(true)}
-            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[10px] flex items-center gap-1 font-bold cursor-pointer transition-colors"
+            className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-rose-400 border border-rose-500/30 text-[10px] flex items-center gap-1 font-bold cursor-pointer transition-colors"
             title="دەرچوون"
           >
-            <LogOut className="w-3.5 h-3.5 text-rose-600" />
+            <LogOut className="w-3.5 h-3.5 text-rose-400" />
             <span>دەرچوون</span>
           </button>
         </div>
@@ -2980,21 +2995,21 @@ export default function MobileAttendanceOneTap() {
 
         {/* 📡 OFFLINE MODE & AUTO-SYNC QUEUE BANNER */}
         {(!isOnline || offlineQueue.length > 0 || isSyncingOffline) && (
-          <div className={`p-2.5 rounded-2xl border text-xs flex items-center justify-between gap-2 shadow-xs transition-all ${
+          <div className={`p-3 rounded-2xl border text-xs flex items-center justify-between gap-2 shadow-lg transition-all ${
             !isOnline
-              ? 'bg-amber-50 border-amber-300 text-amber-900'
-              : 'bg-blue-50 border-blue-300 text-blue-900'
+              ? 'bg-amber-950/80 border-amber-500/50 text-amber-200'
+              : 'bg-cyan-950/80 border-cyan-500/50 text-cyan-200'
           }`}>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                !isOnline ? 'bg-amber-500 animate-ping' : 'bg-blue-600 animate-spin'
+                !isOnline ? 'bg-amber-400 animate-ping' : 'bg-cyan-400 animate-spin'
               }`} />
               <div className="leading-snug">
                 <p className="font-black text-[11px]">
-                  {!isOnline ? '📡 دۆخی ئۆفڵاین چالاکە' : '🔄 هاوکاتکردنی داتا لەگەڵ سیستەم...'}
+                  {!isOnline ? '📡 دۆخی ئۆفڵاین چالاکە (Cyber Cache)' : '🔄 هاوکاتکردنی داتا لەگەڵ سیستەم...'}
                 </p>
                 {offlineQueue.length > 0 && (
-                  <p className="text-[10px] opacity-85 font-bold">
+                  <p className="text-[10px] opacity-85 font-mono font-bold">
                     ⏳ {offlineQueue.length} تۆمار لە چاوەڕوانی ناردندایە
                   </p>
                 )}
@@ -3004,63 +3019,73 @@ export default function MobileAttendanceOneTap() {
               <button
                 type="button"
                 onClick={syncOfflineAttendanceQueue}
-                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black shrink-0 cursor-pointer"
+                className="px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-[10px] font-black shrink-0 cursor-pointer shadow-[0_0_12px_rgba(6,182,212,0.4)]"
               >
-                ناردن
+                ناردن ئێستا
               </button>
             )}
           </div>
         )}
 
-        {/* ============================================================ */}
-        {/* 📱 TAB 1: 🕒 تۆمارکردنی ئەمڕۆ (Today's Punch & Status)       */}
-        {/* ============================================================ */}
-        {mobileTab === 'today' && (
-          <div className="space-y-3.5 animate-fade-slide-up">
-            {/* 🕒 COMPACT VISUAL CLOCK + GPS STATUS BAR */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col items-center justify-center">
-                <span className="text-[10px] font-mono text-slate-500 font-bold">{currentDateStr || '2026-09-07'}</span>
-                <div className="text-xl font-black font-mono tracking-wider text-slate-900 flex items-center gap-1 mt-0.5">
-                  <Clock className="w-4 h-4 text-emerald-600 animate-pulse" />
-                  <span>{currentTimeStr || '08:00:00'}</span>
-                </div>
-              </div>
+        {/* 🕒 CYBER TELEMETRY: CLOCK + GPS SATELLITE RADAR */}
+        <div className="grid grid-cols-2 gap-2.5">
+          <div className="p-3 cyber-glass rounded-3xl shadow-lg border border-slate-800/80 flex flex-col items-center justify-center relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-cyan-500/5 pointer-events-none" />
+            <span className="text-[10px] font-mono text-slate-400 font-bold tracking-wider">{currentDateStr || '2026-09-07'}</span>
+            <div className="text-xl font-black font-mono tracking-widest text-emerald-400 flex items-center gap-1.5 mt-0.5 drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]">
+              <Clock className="w-4 h-4 text-emerald-400 animate-pulse" />
+              <span>{currentTimeStr || '08:00:00'}</span>
+            </div>
+            <div className="mt-1 flex items-center gap-1 text-[9px] font-mono text-slate-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+              <span>BAGHDAD TIME (SSOT)</span>
+            </div>
+          </div>
 
-              <div 
-                onClick={() => setShowMapModal(true)}
-                className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs flex items-center justify-between gap-1.5 cursor-pointer hover:bg-slate-50 transition-colors relative overflow-hidden"
-                title="کلیک بکە بۆ بینینی لەسەر نەخشە"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className={`relative w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                    gpsState === 'acquiring' 
-                      ? 'bg-amber-100 text-amber-700' 
-                      : gpsState === 'ready' 
-                      ? isInsideGeofence ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                      : 'bg-blue-50 text-blue-600'
-                  }`}>
-                    {/* 🛰️ Pulsing Radar Ring Motion Graphic */}
-                    {gpsState === 'acquiring' && (
-                      <span className="absolute inset-0 rounded-xl bg-amber-400 opacity-60 animate-pulse-radar pointer-events-none" />
-                    )}
-                    {gpsState === 'ready' && isInsideGeofence && (
-                      <span className="absolute inset-0 rounded-xl bg-emerald-400 opacity-60 animate-pulse-radar pointer-events-none" />
-                    )}
-                    {gpsState === 'acquiring' ? <RefreshCw className="w-4 h-4 animate-spin relative z-10" /> : <MapPin className="w-4 h-4 relative z-10" />}
-                  </div>
-                <p className="text-[11px] font-black text-slate-800 truncate">
-                  {gpsState === 'acquiring'
-                    ? 'پشکنینی شوێن...'
-                    : gpsState === 'ready'
-                    ? isInsideGeofence ? 'لە ناو کارگە' : `${distanceMeters ?? 0} م دوور`
-                    : gpsState === 'error'
-                    ? (gpsErrorMessage?.includes('ڕێگری') ? 'دەسەڵاتی شوێن بکەرەوە' : 'پشکنینی شوێن سەرکەوتوو نەبوو')
-                    : 'ئامادەیە بۆ تۆمارکردن'}
+          <div 
+            onClick={() => setShowMapModal(true)}
+            className="p-3 cyber-glass rounded-3xl shadow-lg border border-slate-800/80 flex items-center justify-between gap-1.5 cursor-pointer hover:border-cyan-500/40 transition-all relative overflow-hidden group active:scale-98"
+            title="کلیک بکە بۆ بینینی لەسەر نەخشە"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`relative w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 border transition-all ${
+                gpsState === 'acquiring' 
+                  ? 'bg-amber-950/80 border-amber-500/50 text-amber-400' 
+                  : gpsState === 'ready' 
+                  ? isInsideGeofence 
+                    ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.3)]' 
+                    : 'bg-rose-950/80 border-rose-500/50 text-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.3)]'
+                  : 'bg-cyan-950/80 border-cyan-500/50 text-cyan-400'
+              }`}>
+                {/* 🛰️ Pulsing Radar Ring Motion Graphic */}
+                {gpsState === 'acquiring' && (
+                  <span className="absolute inset-0 rounded-2xl bg-amber-400/30 animate-ping pointer-events-none" />
+                )}
+                {gpsState === 'ready' && isInsideGeofence && (
+                  <span className="absolute inset-0 rounded-2xl bg-emerald-400/20 animate-pulse pointer-events-none" />
+                )}
+                {gpsState === 'acquiring' ? (
+                  <RefreshCw className="w-4 h-4 animate-spin relative z-10" />
+                ) : (
+                  <MapPin className="w-4 h-4 relative z-10" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-black text-white truncate flex items-center gap-1">
+                  <span>
+                    {gpsState === 'acquiring'
+                      ? 'پشکنینی شوێن...'
+                      : gpsState === 'ready'
+                      ? isInsideGeofence ? 'لە ناو کارگە' : `${distanceMeters ?? 0} م دوور`
+                      : gpsState === 'error'
+                      ? (gpsErrorMessage?.includes('ڕێگری') ? 'دەسەڵاتی شوێن' : 'پشکنین سەرکەوتوو نەبوو')
+                      : 'شوێنی کارگە'}
+                  </span>
                 </p>
-                <p className="text-[9px] text-slate-500 font-bold truncate">
-                  {gpsErrorMessage || (gpsState === 'idle' ? 'دەست لە دوگمەی خوارەوە بدە' : matchedLocationName)}
+                <p className="text-[9px] text-slate-400 font-bold truncate">
+                  {gpsErrorMessage || (gpsState === 'idle' ? 'دەست لە قەڵغان بدە' : matchedLocationName)}
                 </p>
+              </div>
             </div>
 
             <button
@@ -3070,157 +3095,166 @@ export default function MobileAttendanceOneTap() {
                 requestSingleGpsPosition().catch(() => {});
               }}
               disabled={gpsState === 'acquiring' || triggerLoading}
-              className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 border border-slate-200 cursor-pointer shrink-0"
+              className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 active:scale-90 text-cyan-400 border border-slate-700/80 cursor-pointer shrink-0 transition-transform"
               title="نوێکردنەوەی شوێن"
             >
-              <Compass className={`w-4 h-4 text-blue-600 ${gpsState === 'acquiring' ? 'animate-spin' : ''}`} />
+              <Compass className={`w-4 h-4 ${gpsState === 'acquiring' ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
 
-        {/* 🗺️ DEDICATED MAP VIEWER BUTTON */}
+        {/* 🗺️ MAP RADAR MINI BANNER */}
         <button
           type="button"
           onClick={() => setShowMapModal(true)}
-          className="w-full p-2.5 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 text-slate-800 rounded-2xl flex items-center justify-between shadow-2xs cursor-pointer active:scale-98 transition-all"
+          className="w-full p-2.5 cyber-glass rounded-2xl border border-slate-800 hover:border-cyan-500/40 text-slate-200 flex items-center justify-between shadow-md cursor-pointer active:scale-98 transition-all group"
         >
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-              <Compass className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-600 to-blue-600 text-white flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(6,182,212,0.3)]">
+              <Compass className="w-4 h-4 group-hover:rotate-45 transition-transform" />
             </div>
             <div className="text-right">
-              <span className="text-xs font-black text-slate-900 block">بینینی نەخشەی کارگە و شوێنی من 🗺️</span>
-              <span className="text-[10px] text-blue-700 font-bold block">
-                تەواوی لقەکان (ئاشڵی و هوانە) • بە ئۆفلاینیش کار دەکات
+              <span className="text-xs font-black text-white block">نەخشەی کارگە و ڕاداری شوێن 🗺️</span>
+              <span className="text-[10px] text-cyan-400 font-bold block">
+                تەواوی لقەکانی ئاشڵی و هوانە • بە ئۆفلاینیش کار دەکات
               </span>
             </div>
           </div>
-          <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-blue-600 text-white shadow-2xs">
+          <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 group-hover:bg-cyan-600 group-hover:text-white transition-all">
             کردنەوەی نەخشە
           </span>
         </button>
 
         {/* 🔔 FEEDBACK TOAST */}
         {feedbackToast && (
-          <div className="p-3 rounded-2xl bg-emerald-600 text-white font-black text-xs text-center shadow-md">
+          <div className="p-3 rounded-2xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 font-black text-xs text-center shadow-[0_0_20px_rgba(16,185,129,0.3)] animate-shake-error">
             {feedbackToast}
           </div>
         )}
 
         {/* ============================================================ */}
-        {/* 🚀 PURE VISUAL 1-TAP ATTENDANCE ACTION                       */}
+        {/* 🛡️ MORPHING CYBER-SHIELD HERO BUTTON                         */}
         {/* ============================================================ */}
-        <div className="space-y-2.5">
+        <div className="space-y-3">
+          {/* TODAY'S SYSTEM OVERRIDE / EXCEPTION STATUS (If Absent, Leave, or Holiday) */}
           {(() => {
             const todayRow = employeeMonthSheet.find(r => r.isToday);
             const effectiveTodayStatus = todayRow?.status || liveTodayShift.status;
             if (!liveTodayShift.checkInTime && (effectiveTodayStatus === 'Absent' || effectiveTodayStatus === 'غیاب')) {
               return (
-                <div className="p-3.5 rounded-2xl bg-rose-50 border-2 border-rose-300 flex items-center justify-between text-xs shadow-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-black text-sm">
+                <div className="p-3.5 rounded-3xl bg-rose-950/80 border border-rose-500/50 flex items-center justify-between text-xs shadow-lg cyber-shield-glow-locked">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-8 h-8 rounded-xl bg-rose-900/60 text-rose-400 flex items-center justify-center font-black text-sm">
                       <AlertCircle className="w-4 h-4" />
                     </span>
                     <div>
-                      <span className="text-[10px] text-rose-700 font-bold block">دۆخی ئەمڕۆ لە سیستەم</span>
-                      <span className="text-sm font-black text-rose-900">غیاب (ئامادەنەبوو)</span>
+                      <span className="text-[10px] text-rose-400 font-bold block">دۆخی ئەمڕۆ لە سیستەم</span>
+                      <span className="text-sm font-black text-white">غیاب (ئامادەنەبوو)</span>
                     </div>
                   </div>
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-600 text-white">غیاب</span>
+                  <span className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-rose-600 text-white shadow-sm">غیاب</span>
                 </div>
               );
             }
             if (!liveTodayShift.checkInTime && (effectiveTodayStatus === 'Leave' || effectiveTodayStatus === 'مۆڵەت')) {
               return (
-                <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 flex items-center justify-between text-xs shadow-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-black text-sm">
+                <div className="p-3.5 rounded-3xl bg-amber-950/80 border border-amber-500/50 flex items-center justify-between text-xs shadow-lg">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-8 h-8 rounded-xl bg-amber-900/60 text-amber-400 flex items-center justify-center font-black text-sm">
                       <Calendar className="w-4 h-4" />
                     </span>
                     <div>
-                      <span className="text-[10px] text-amber-700 font-bold block">دۆخی ئەمڕۆ لە سیستەم</span>
-                      <span className="text-sm font-black text-amber-900">مۆڵەتی فەرمی</span>
+                      <span className="text-[10px] text-amber-400 font-bold block">دۆخی ئەمڕۆ لە سیستەم</span>
+                      <span className="text-sm font-black text-white">مۆڵەتی فەرمی</span>
                     </div>
                   </div>
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-600 text-white">مۆڵەت</span>
+                  <span className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-amber-600 text-white shadow-sm">مۆڵەت</span>
                 </div>
               );
             }
             if (!liveTodayShift.checkInTime && (effectiveTodayStatus === 'Holiday' || effectiveTodayStatus === 'پشوو')) {
               return (
-                <div className="p-3.5 rounded-2xl bg-teal-50 border-2 border-teal-300 flex items-center justify-between text-xs shadow-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center font-black text-sm">
+                <div className="p-3.5 rounded-3xl bg-teal-950/80 border border-teal-500/50 flex items-center justify-between text-xs shadow-lg">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-8 h-8 rounded-xl bg-teal-900/60 text-teal-400 flex items-center justify-center font-black text-sm">
                       <Calendar className="w-4 h-4" />
                     </span>
                     <div>
-                      <span className="text-[10px] text-teal-700 font-bold block">دۆخی ئەمڕۆ لە سیستەم</span>
-                      <span className="text-sm font-black text-teal-900">پشووی فەرمی</span>
+                      <span className="text-[10px] text-teal-400 font-bold block">دۆخی ئەمڕۆ لە سیستەم</span>
+                      <span className="text-sm font-black text-white">پشووی فەرمی</span>
                     </div>
                   </div>
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-teal-600 text-white">پشوو</span>
+                  <span className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-teal-600 text-white shadow-sm">پشوو</span>
                 </div>
               );
             }
             return null;
           })()}
 
+          {/* DYNAMIC SHIELD STATES */}
           {!liveTodayShift.checkInTime ? (
+            /* STATE 1: CHECK-IN MORPHING SHIELD */
             <button
               onClick={handleCheckInClick}
               disabled={triggerLoading}
-              className={`w-full p-5 rounded-3xl shadow-md transition-all flex items-center justify-between gap-3 border-2 ${
+              className={`w-full p-5 rounded-3xl shadow-xl transition-all flex items-center justify-between gap-3 border relative overflow-hidden group select-none ${
                 triggerLoading
-                  ? 'bg-slate-200 text-slate-500 border-slate-300 cursor-wait'
+                  ? 'bg-slate-900/90 text-slate-400 border-slate-700 cursor-wait'
                   : gpsState === 'acquiring'
-                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 active:scale-98 text-white border-amber-400 cursor-pointer'
+                  ? 'bg-gradient-to-r from-amber-950/90 via-slate-900/90 to-amber-900/90 active:scale-98 text-white border-amber-500/50 cursor-pointer shadow-[0_0_25px_rgba(245,158,11,0.25)]'
                   : gpsState === 'error'
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-98 text-white border-blue-500 cursor-pointer'
+                  ? 'bg-gradient-to-r from-blue-950/90 via-slate-900/90 to-indigo-950/90 active:scale-98 text-white border-blue-500/50 cursor-pointer shadow-[0_0_25px_rgba(59,130,246,0.25)]'
                   : gpsState === 'ready' && !isInsideGeofence
-                  ? 'cursor-pointer bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-700 border-slate-300'
-                  : 'cursor-pointer bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-98 text-white border-emerald-500'
+                  ? 'cyber-glass cyber-shield-glow-locked hover:border-rose-400 active:scale-98 text-white border-rose-500/50 cursor-pointer'
+                  : 'bg-gradient-to-r from-emerald-950/95 via-slate-900/90 to-teal-950/95 border-emerald-400/60 cyber-shield-glow-emerald active:scale-98 text-white cursor-pointer'
               }`}
             >
-              <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+              {/* Laser Scan Sweep Animation Line (Active when inside geofence) */}
+              {gpsState === 'ready' && isInsideGeofence && !triggerLoading && (
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-400/15 to-transparent pointer-events-none animate-cyber-scan" />
+              )}
+
+              <div className="flex items-center gap-3.5 relative z-10">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all ${
                   triggerLoading
-                    ? 'bg-white/20 text-slate-600'
+                    ? 'bg-slate-800 text-slate-400 border-slate-700'
                     : gpsState === 'acquiring'
-                    ? 'bg-white/20 text-white'
+                    ? 'bg-amber-900/60 text-amber-300 border-amber-500/40'
                     : gpsState === 'error'
-                    ? 'bg-white/20 text-white'
+                    ? 'bg-blue-900/60 text-blue-300 border-blue-500/40'
                     : gpsState === 'ready' && !isInsideGeofence
-                    ? 'bg-slate-200 text-amber-600'
-                    : 'bg-white/20 text-white'
+                    ? 'bg-rose-950/80 text-rose-400 border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+                    : 'bg-emerald-900/60 text-emerald-400 border-emerald-400/50 shadow-[0_0_20px_rgba(16,185,129,0.4)] group-hover:scale-105'
                 }`}>
                   {triggerLoading ? (
-                    <RefreshCw className="w-6 h-6 animate-spin" />
+                    <RefreshCw className="w-7 h-7 animate-spin" />
                   ) : gpsState === 'acquiring' ? (
-                    <RefreshCw className="w-6 h-6 animate-spin" />
+                    <RefreshCw className="w-7 h-7 animate-spin text-amber-400" />
                   ) : gpsState === 'error' ? (
-                    <Compass className="w-6 h-6" />
+                    <Compass className="w-7 h-7 text-blue-400" />
                   ) : gpsState === 'ready' && !isInsideGeofence ? (
-                    <Lock className="w-6 h-6" />
+                    <ShieldAlert className="w-7 h-7 text-rose-400 animate-pulse" />
                   ) : (
-                    <CheckCircle2 className="w-7 h-7" />
+                    <ShieldCheck className="w-8 h-8 text-emerald-400 group-hover:rotate-6 transition-transform" />
                   )}
                 </div>
+
                 <div className="text-right">
-                  <span className="text-base font-black block">
+                  <span className="text-base font-black block tracking-tight">
                     {triggerLoading
-                      ? 'تۆمارکردن...'
+                      ? 'خەریکی تۆمارکردنە...'
                       : gpsState === 'acquiring'
                       ? 'خەریکی پشکنینی GPS...'
                       : gpsState === 'error'
                       ? 'کلیک بکە بۆ دیاریکردنی شوێن 📍'
                       : gpsState === 'ready' && !isInsideGeofence
                       ? 'قوفڵکراوە (لە دەرەوەی کارگە)'
-                      : 'تۆمارکردنی هاتن'}
+                      : 'تۆمارکردنی هاتن // INITIALIZE'}
                   </span>
-                  <span className={`text-[11px] font-bold ${
+                  <span className={`text-[11px] font-bold block ${
                     gpsState === 'ready' && !isInsideGeofence
-                      ? 'text-amber-700'
-                      : 'text-emerald-100'
+                      ? 'text-rose-300'
+                      : 'text-emerald-300/90'
                   }`}>
                     {triggerLoading
                       ? 'چاوەڕێبە پەیوەندی دەکرێت...'
@@ -3231,87 +3265,112 @@ export default function MobileAttendanceOneTap() {
                       : gpsState === 'ready' && isInsideGeofence
                       ? `لە ناو کارگەیت (${distanceMeters ?? 0} م) • دەوامی فەرمی 08:00`
                       : gpsState === 'ready' && !isInsideGeofence
-                      ? `دووری: ${distanceMeters ?? 0} مەتر • کلیک بکە بۆ دووبارەکردنەوە`
+                      ? `دووری: ${distanceMeters ?? 0} مەتر • دەست لێبدە بۆ دووبارەکردنەوە`
                       : 'دەست لێبدە بۆ پشکنینی شوێن و تۆمارکردن'}
                   </span>
                 </div>
               </div>
-              <span className="text-xs font-mono font-black px-2.5 py-1 rounded-xl bg-black/15">
-                08:00
-              </span>
+
+              <div className="relative z-10 flex flex-col items-end">
+                <span className={`text-xs font-mono font-black px-2.5 py-1 rounded-xl border ${
+                  gpsState === 'ready' && !isInsideGeofence
+                    ? 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+                    : 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                }`}>
+                  08:00
+                </span>
+                {gpsState === 'ready' && !isInsideGeofence && (
+                  <span className="text-[9px] font-mono text-rose-400 mt-1 font-bold">LOCKED</span>
+                )}
+                {gpsState === 'ready' && isInsideGeofence && (
+                  <span className="text-[9px] font-mono text-emerald-400 mt-1 font-bold">ARMED</span>
+                )}
+              </div>
             </button>
           ) : isCheckedIn ? (
-            <div className="space-y-2.5">
-              <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center justify-between text-xs">
-                <div>
-                  <span className="text-[10px] text-emerald-800 block font-bold">هاتنی ئەمڕۆ</span>
-                  <span className="font-mono text-sm font-black text-emerald-900">
-                    🟢 {liveTodayShift.checkInTime}
-                  </span>
+            /* STATE 2: ACTIVE SHIFT & CHECK-OUT MORPHING SHIELD */
+            <div className="space-y-3">
+              {/* Active Shift Telemetry Pill */}
+              <div className="p-3 cyber-glass border border-emerald-500/40 rounded-2xl flex items-center justify-between text-xs shadow-lg">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-bold">هاتنی ئەمڕۆ</span>
+                    <span className="font-mono text-sm font-black text-emerald-400">
+                      🟢 {liveTodayShift.checkInTime}
+                    </span>
+                  </div>
                 </div>
                 <div className="text-left font-mono">
-                  <span className="text-[10px] text-slate-600 block font-bold">کاتی کارکردن</span>
-                  <span className="text-xs font-black text-amber-800">
+                  <span className="text-[10px] text-slate-400 block font-bold">کاتی کارکردن</span>
+                  <span className="text-sm font-black text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]">
                     ⏱️ {formattedWorkedHours}
                   </span>
                 </div>
               </div>
 
+              {/* Check-Out Departure Shield Button */}
               <button
                 onClick={handleCheckOutClick}
                 disabled={triggerLoading}
-                className={`w-full p-5 rounded-3xl shadow-md transition-all flex items-center justify-between gap-3 border-2 ${
+                className={`w-full p-5 rounded-3xl shadow-xl transition-all flex items-center justify-between gap-3 border relative overflow-hidden group select-none ${
                   triggerLoading
-                    ? 'bg-slate-200 text-slate-500 border-slate-300 cursor-wait'
+                    ? 'bg-slate-900/90 text-slate-400 border-slate-700 cursor-wait'
                     : gpsState === 'acquiring'
-                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 active:scale-98 text-white border-amber-400 cursor-pointer'
+                    ? 'bg-gradient-to-r from-amber-950/90 via-slate-900/90 to-amber-900/90 active:scale-98 text-white border-amber-500/50 cursor-pointer shadow-[0_0_25px_rgba(245,158,11,0.25)]'
                     : gpsState === 'error'
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-98 text-white border-blue-500 cursor-pointer'
+                    ? 'bg-gradient-to-r from-blue-950/90 via-slate-900/90 to-indigo-950/90 active:scale-98 text-white border-blue-500/50 cursor-pointer shadow-[0_0_25px_rgba(59,130,246,0.25)]'
                     : gpsState === 'ready' && !isInsideGeofence
-                    ? 'cursor-pointer bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-700 border-slate-300'
-                    : 'cursor-pointer bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 active:scale-98 text-white border-rose-500'
+                    ? 'cyber-glass cyber-shield-glow-locked hover:border-rose-400 active:scale-98 text-white border-rose-500/50 cursor-pointer'
+                    : 'bg-gradient-to-r from-rose-950/95 via-slate-900/90 to-red-950/95 border-rose-500/60 cyber-shield-glow-rose active:scale-98 text-white cursor-pointer'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                {/* Laser Scan Sweep Animation Line */}
+                {!triggerLoading && (
+                  <div className="absolute inset-0 bg-gradient-to-b from-transparent via-rose-500/15 to-transparent pointer-events-none animate-cyber-scan" />
+                )}
+
+                <div className="flex items-center gap-3.5 relative z-10">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all ${
                     triggerLoading
-                      ? 'bg-white/20 text-slate-600'
+                      ? 'bg-slate-800 text-slate-400 border-slate-700'
                       : gpsState === 'acquiring'
-                      ? 'bg-white/20 text-white'
+                      ? 'bg-amber-900/60 text-amber-300 border-amber-500/40'
                       : gpsState === 'error'
-                      ? 'bg-white/20 text-white'
+                      ? 'bg-blue-900/60 text-blue-300 border-blue-500/40'
                       : gpsState === 'ready' && !isInsideGeofence
-                      ? 'bg-slate-200 text-amber-600'
-                      : 'bg-white/20 text-white'
+                      ? 'bg-rose-950/80 text-rose-400 border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+                      : 'bg-rose-900/60 text-rose-400 border-rose-500/50 shadow-[0_0_20px_rgba(244,63,94,0.4)] group-hover:scale-105'
                   }`}>
                     {triggerLoading ? (
-                      <RefreshCw className="w-6 h-6 animate-spin" />
+                      <RefreshCw className="w-7 h-7 animate-spin" />
                     ) : gpsState === 'acquiring' ? (
-                      <RefreshCw className="w-6 h-6 animate-spin" />
+                      <RefreshCw className="w-7 h-7 animate-spin text-amber-400" />
                     ) : gpsState === 'error' ? (
-                      <Compass className="w-6 h-6" />
+                      <Compass className="w-7 h-7 text-blue-400" />
                     ) : gpsState === 'ready' && !isInsideGeofence ? (
-                      <Lock className="w-6 h-6" />
+                      <ShieldAlert className="w-7 h-7 text-rose-400 animate-pulse" />
                     ) : (
-                      <DoorOpen className="w-7 h-7" />
+                      <DoorOpen className="w-8 h-8 text-rose-400 group-hover:rotate-6 transition-transform" />
                     )}
                   </div>
+
                   <div className="text-right">
-                    <span className="text-base font-black block">
+                    <span className="text-base font-black block tracking-tight">
                       {triggerLoading
-                        ? 'تۆمارکردن...'
+                        ? 'خەریکی تۆمارکردنە...'
                         : gpsState === 'acquiring'
                         ? 'خەریکی پشکنینی GPS...'
                         : gpsState === 'error'
                         ? 'کلیک بکە بۆ دیاریکردنی شوێن 📍'
                         : gpsState === 'ready' && !isInsideGeofence
                         ? 'قوفڵکراوە (لە دەرەوەی کارگە)'
-                        : 'تۆمارکردنی دەرچوون'}
+                        : 'تۆمارکردنی دەرچوون // COMPLETE'}
                     </span>
-                    <span className={`text-[11px] font-bold ${
+                    <span className={`text-[11px] font-bold block ${
                       gpsState === 'ready' && !isInsideGeofence
-                        ? 'text-amber-700'
-                        : 'text-rose-100'
+                        ? 'text-rose-300'
+                        : 'text-rose-200/90'
                     }`}>
                       {triggerLoading
                         ? 'چاوەڕێبە پەیوەندی دەکرێت...'
@@ -3322,413 +3381,242 @@ export default function MobileAttendanceOneTap() {
                         : gpsState === 'ready' && isInsideGeofence
                         ? `لە ناو کارگەیت (${distanceMeters ?? 0} م) • کۆتایی دەوام 17:00`
                         : gpsState === 'ready' && !isInsideGeofence
-                        ? `دووری: ${distanceMeters ?? 0} مەتر • کلیک بکە بۆ دووبارەکردنەوە`
+                        ? `دووری: ${distanceMeters ?? 0} مەتر • دەست لێبدە بۆ دووبارەکردنەوە`
                         : 'دەست لێبدە بۆ تۆمارکردنی دەرچوون'}
                     </span>
                   </div>
                 </div>
-                <span className="text-xs font-mono font-black px-2.5 py-1 rounded-xl bg-black/15">
-                  17:00
-                </span>
+
+                <div className="relative z-10 flex flex-col items-end">
+                  <span className="text-xs font-mono font-black px-2.5 py-1 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300">
+                    17:00
+                  </span>
+                  <span className="text-[9px] font-mono text-rose-400 mt-1 font-bold">DEPARTURE</span>
+                </div>
               </button>
             </div>
           ) : (
-            <div className="p-4 bg-white border-2 border-emerald-200 rounded-3xl space-y-2.5 shadow-xs">
+            /* STATE 3: SHIFT PROTOCOL COMPLETE */
+            <div className="p-4 cyber-glass border border-emerald-500/50 rounded-3xl space-y-3 shadow-xl cyber-shield-glow-emerald">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-2xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-400 flex items-center justify-center shadow-[0_0_12px_rgba(16,185,129,0.3)]">
                     <CheckCircle2 className="w-5 h-5" />
                   </div>
-                  <span className="text-xs font-black text-slate-900">دەوامی ئەمڕۆ تەواو بووە 🎉</span>
+                  <div>
+                    <span className="text-xs font-black text-white block">دەوامی ئەمڕۆ بە سەرکەوتوویی تەواو بوو 🎉</span>
+                    <span className="text-[10px] text-emerald-400 font-mono font-bold">SHIFT PROTOCOL COMPLETE</span>
+                  </div>
                 </div>
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                  تۆمارکراو
+                <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-mono">
+                  VERIFIED
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 text-center p-2.5 bg-slate-50 rounded-2xl font-mono text-xs border border-slate-200">
+              <div className="grid grid-cols-3 gap-2 text-center p-3 bg-slate-900/90 rounded-2xl font-mono text-xs border border-slate-800">
                 <div>
-                  <span className="text-[10px] text-slate-500 block font-sans font-bold">هاتن</span>
-                  <span className="text-emerald-700 font-black">{liveTodayShift.checkInTime}</span>
+                  <span className="text-[10px] text-slate-400 block font-sans font-bold">هاتن</span>
+                  <span className="text-emerald-400 font-black">{liveTodayShift.checkInTime}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 block font-sans font-bold">دەرچوون</span>
-                  <span className="text-rose-700 font-black">{liveTodayShift.checkOutTime}</span>
+                  <span className="text-[10px] text-slate-400 block font-sans font-bold">دەرچوون</span>
+                  <span className="text-rose-400 font-black">{liveTodayShift.checkOutTime}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 block font-sans font-bold">کاتژمێر</span>
-                  <span className="text-amber-800 font-black">{formattedWorkedHours}</span>
+                  <span className="text-[10px] text-slate-400 block font-sans font-bold">کاتژمێر</span>
+                  <span className="text-amber-400 font-black">{formattedWorkedHours}</span>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* 📊 Quick link to Sheet */}
-        <button
-            type="button"
-            onClick={() => setMobileTab('sheet')}
-            className="w-full p-3.5 bg-white hover:bg-slate-50 active:scale-98 border border-slate-200/90 rounded-2xl shadow-2xs flex items-center justify-between transition-all cursor-pointer group"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-black group-hover:scale-105 transition-transform">
-                <CalendarDays className="w-5 h-5" />
-              </div>
-              <div className="text-right">
-                <span className="text-xs font-black text-slate-900 block">بینینی خشتەی ئامادەبوونی مانگ 📊</span>
-                <span className="text-[10px] text-slate-500 font-bold block">
-                  کۆی کاتژمێرەکان، ئامادەبوون، مۆڵەت و غیاب
-                </span>
-              </div>
-            </div>
-            <ChevronLeft className="w-4 h-4 text-slate-400 group-hover:text-purple-600 transition-colors" />
-          </button>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* 📱 TAB 2: 📊 خشتەی مانگانە و هەفتانە (Attendance Sheet)        */}
-      {/* ============================================================ */}
-      {mobileTab === 'sheet' && (
-        <div className="space-y-3.5 animate-fade-slide-up">
-          {/* Quick Return to Today Punch Banner */}
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setMobileTab('today')}
-              className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-black flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
-            >
-              <ArrowRight className="w-3.5 h-3.5 rotate-180" />
-              <span>گەڕانەوە بۆ تۆمارکردنی ئەمڕۆ</span>
-            </button>
-
-            <span className="text-[10px] font-black text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
-              تۆماری فەرمی (SSOT)
-            </span>
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-3xl p-3.5 shadow-xs space-y-3">
-          {/* Sheet Header & Month Picker & View Switcher */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              <div className="w-7 h-7 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
-                {sheetViewMode === 'weekly' ? <CalendarDays className="w-4 h-4" /> : <Calendar className="w-4 h-4" />}
+        {/* ============================================================ */}
+        {/* 🛡️ UNIFIED SECURITY CARD (کارتی یەکگرتووی ئەمنی)              */}
+        {/* ============================================================ */}
+        <div className="cyber-glass rounded-3xl p-4 border border-slate-800 space-y-3.5 shadow-2xl relative overflow-hidden">
+          
+          {/* Card Header & Status */}
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-950/80 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.25)]">
+                <Shield className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-xs font-black text-slate-900">
-                  {sheetViewMode === 'weekly' ? 'خشتەی هەفتانەی ئامادەبوون' : 'خشتەی مانگانەی ئامادەبوون'}
+                <h3 className="text-xs font-black text-white flex items-center gap-1.5">
+                  <span>کارتی ئامادەبوونی ئەمنی</span>
+                  <span className="text-[9px] font-mono text-cyan-400 font-normal">[SSOT LOG]</span>
                 </h3>
-                <span className="text-[9px] text-emerald-700 font-bold block">
-                  {sheetViewMode === 'weekly' ? `${weeksList[selectedSheetWeekIdx]?.label || ''}` : 'تەواوی ٣١ ڕۆژەکە'}
+                <span className="text-[9px] text-slate-400 font-bold block">
+                  تۆماری فەرمی سیستەم • مانگی {selectedSheetMonth}
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5">
-              {/* 🔀 Segmented View Switcher: Weekly (Default) vs Monthly */}
-              <div className="flex items-center bg-slate-100 p-0.5 rounded-full border border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setSheetViewMode('weekly')}
-                  className={`h-6 px-2.5 rounded-full flex items-center gap-1 text-[10px] font-bold transition-all cursor-pointer ${
-                    sheetViewMode === 'weekly'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="نیشاندانی هەفتانە (خێرا)"
-                >
-                  <CalendarDays className="w-3 h-3" />
-                  <span>هەفتانە</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSheetViewMode('monthly')}
-                  className={`h-6 px-2.5 rounded-full flex items-center gap-1 text-[10px] font-bold transition-all cursor-pointer ${
-                    sheetViewMode === 'monthly'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="نیشاندانی تەواوی مانگ"
-                >
-                  <Calendar className="w-3 h-3" />
-                  <span>مانگانە</span>
-                </button>
-              </div>
+            <button
+              type="button"
+              onClick={() => {
+                fetchTodayShift();
+                fetchMonthlyHistory();
+              }}
+              className="p-1.5 rounded-xl bg-slate-850 hover:bg-slate-800 active:scale-90 text-cyan-400 border border-slate-700/80 cursor-pointer transition-transform"
+              title="نوێکردنەوەی داتا"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingLogs ? 'animate-spin text-emerald-400' : ''}`} />
+            </button>
+          </div>
 
-              <input
-                type="month"
-                value={selectedSheetMonth}
-                onChange={(e) => {
-                  if (e.target.value) setSelectedSheetMonth(e.target.value);
-                }}
-                dir="ltr"
-                className="bg-slate-100 border border-slate-200 text-slate-800 text-[11px] font-mono font-black px-2 py-1 rounded-xl focus:outline-none focus:border-emerald-500"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  fetchTodayShift();
-                  fetchMonthlyHistory();
-                }}
-                className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 cursor-pointer active:scale-95"
-                title="نوێکردنەوە"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${loadingLogs ? 'animate-spin text-emerald-600' : ''}`} />
-              </button>
+          {/* 4 Cyber KPI Metrics Pills */}
+          <div className="grid grid-cols-4 gap-1.5 text-center">
+            <div className="p-2 rounded-2xl bg-cyan-950/40 border border-cyan-500/30">
+              <span className="text-[9px] text-cyan-400 font-bold block">کاتی دەوام</span>
+              <span className="text-xs font-black font-mono text-white mt-0.5 block">{displayedSheetStats.totalHours} ک</span>
+            </div>
+            <div className="p-2 rounded-2xl bg-emerald-950/40 border border-emerald-500/30">
+              <span className="text-[9px] text-emerald-400 font-bold block">ئامادەبوون</span>
+              <span className="text-xs font-black font-mono text-white mt-0.5 block">{displayedSheetStats.presentDays}</span>
+            </div>
+            <div className="p-2 rounded-2xl bg-amber-950/40 border border-amber-500/30">
+              <span className="text-[9px] text-amber-400 font-bold block">مۆڵەت</span>
+              <span className="text-xs font-black font-mono text-white mt-0.5 block">{displayedSheetStats.leaveCount}</span>
+            </div>
+            <div className="p-2 rounded-2xl bg-rose-950/40 border border-rose-500/30">
+              <span className="text-[9px] text-rose-400 font-bold block">غیاب</span>
+              <span className="text-xs font-black font-mono text-white mt-0.5 block">{displayedSheetStats.absentCount}</span>
             </div>
           </div>
 
-          {/* 📅 Mobile Weekly Navigation Bar (Visible only when Weekly View is active) */}
-          {sheetViewMode === 'weekly' && (
-            <div className="space-y-1.5 pt-1.5 border-t border-slate-100">
-              <div className="flex items-center justify-between gap-1">
-                <button
-                  type="button"
-                  disabled={selectedSheetWeekIdx === 0}
-                  onClick={() => setSelectedSheetWeekIdx(prev => Math.max(0, prev - 1))}
-                  className="h-7 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:pointer-events-none text-slate-700 flex items-center gap-1 text-[10px] font-bold transition-all cursor-pointer active:scale-95"
-                  title="هەفتەی پێشوو"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                  <span>هەفتەی پێشوو</span>
-                </button>
-
-                <div className="text-[11px] font-black text-slate-800 flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span>{weeksList[selectedSheetWeekIdx]?.label || 'هەفتە'}</span>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={selectedSheetWeekIdx >= weeksList.length - 1}
-                  onClick={() => setSelectedSheetWeekIdx(prev => Math.min(weeksList.length - 1, prev + 1))}
-                  className="h-7 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:pointer-events-none text-slate-700 flex items-center gap-1 text-[10px] font-bold transition-all cursor-pointer active:scale-95"
-                  title="هەفتەی داهاتوو"
-                >
-                  <span>هەفتەی داهاتوو</span>
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Quick Week Pill Tabs */}
-              <div className="flex items-center gap-1 overflow-x-auto py-0.5 justify-center">
-                {weeksList.map((w) => {
-                  const isSelected = w.index === selectedSheetWeekIdx;
-                  return (
-                    <button
-                      key={w.index}
-                      type="button"
-                      onClick={() => setSelectedSheetWeekIdx(w.index)}
-                      className={`h-7 px-2.5 rounded-full text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
-                        isSelected
-                          ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-400'
-                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      <span>{w.shortLabel}</span>
-                      <span className={`text-[9px] font-mono px-1 rounded ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-600'}`}>
-                        {w.startDay}-{w.endDay}
-                      </span>
-                      {w.hasToday && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 ring-1 ring-amber-200 animate-pulse" title="ئەمڕۆ لەم هەفتەیەیە" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 6 Visual Summary KPI Cards (Present, Hours, Absent, Leave, Holiday, Late) */}
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center">
-            <div className="p-2 rounded-2xl bg-emerald-50/80 border border-emerald-200">
-              <span className="text-[9px] text-emerald-800 font-bold block">
-                {sheetViewMode === 'weekly' ? 'ئامادەبوون (هەفتە)' : 'ئامادەبوون'}
+          {/* 🗓️ RECENT 7-DAY ACTIVITY TABLE */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] px-1">
+              <span className="font-black text-slate-300 flex items-center gap-1">
+                <CalendarDays className="w-3.5 h-3.5 text-emerald-400" />
+                <span>چالاکیی ٧ ڕۆژی ڕابردوو</span>
               </span>
-              <span className="text-sm font-black font-mono text-emerald-900">{displayedSheetStats.presentDays}</span>
+              <span className="text-[9px] font-mono text-slate-400">RECENT 7 DAYS</span>
             </div>
-            <div className="p-2 rounded-2xl bg-blue-50/80 border border-blue-200">
-              <span className="text-[9px] text-blue-800 font-bold block">کاتژمێر</span>
-              <span className="text-sm font-black font-mono text-blue-900">{displayedSheetStats.totalHours} ک</span>
-            </div>
-            <div className="p-2 rounded-2xl bg-rose-50/80 border border-rose-200">
-              <span className="text-[9px] text-rose-800 font-bold block">غیاب</span>
-              <span className="text-sm font-black font-mono text-rose-900">{displayedSheetStats.absentCount}</span>
-            </div>
-            <div className="p-2 rounded-2xl bg-amber-50/80 border border-amber-200">
-              <span className="text-[9px] text-amber-800 font-bold block">مۆڵەت</span>
-              <span className="text-sm font-black font-mono text-amber-900">{displayedSheetStats.leaveCount}</span>
-            </div>
-            <div className="p-2 rounded-2xl bg-teal-50/80 border border-teal-200">
-              <span className="text-[9px] text-teal-800 font-bold block">پشوو</span>
-              <span className="text-sm font-black font-mono text-teal-900">{displayedSheetStats.holidayCount}</span>
-            </div>
-            <div className="p-2 rounded-2xl bg-purple-50/80 border border-purple-200">
-              <span className="text-[9px] text-purple-800 font-bold block">دواکەوتن</span>
-              <span className="text-sm font-black font-mono text-purple-900">{displayedSheetStats.lateCount}</span>
-            </div>
-          </div>
 
-          {/* Full 31-Day / 7-Day System Table */}
-          <div className="border border-slate-200 rounded-2xl overflow-hidden">
-            <div className="max-h-[420px] overflow-y-auto scrollbar-thin">
+            <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-950/70">
               <table className="w-full text-right text-[11px]">
-                <thead className="bg-slate-800 text-white text-[10px] font-black sticky top-0 z-10">
+                <thead className="bg-slate-900/90 text-slate-400 text-[10px] font-black border-b border-slate-800">
                   <tr>
                     <th className="py-2 px-2.5">ڕۆژ</th>
-                    <th className="py-2 px-1.5 text-center">هاتن</th>
-                    <th className="py-2 px-1.5 text-center">دەرچوون</th>
-                    <th className="py-2 px-1.5 text-center">کاتژمێر</th>
+                    <th className="py-2 px-1 text-center">هاتن</th>
+                    <th className="py-2 px-1 text-center">دەرچوون</th>
+                    <th className="py-2 px-1 text-center">کاتژمێر</th>
                     <th className="py-2 px-2 text-center">دۆخ</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200 font-mono">
-                  {displayedSheetDays.map((day) => {
+                <tbody className="divide-y divide-slate-800/80 font-mono">
+                  {displayedSheetDays.slice(0, 7).map((day) => {
                     const dayNoteText = `${day.adminNote || ''} ${day.note || ''}`;
                     const isLeaveDay = day.status === 'Leave' || day.status === 'مۆڵەت' || (!day.checkInTime && (dayNoteText.includes('🛡️ مۆڵەت') || dayNoteText.includes('مۆڵەت لەلایەن ئەدمین')));
                     const isHolidayDay = day.status === 'Holiday' || day.status === 'پشوو' || (!day.checkInTime && (dayNoteText.includes('🛡️ پشوو') || dayNoteText.includes('پشوو لەلایەن ئەدمین')));
                     const isAbsentDay = !isLeaveDay && !isHolidayDay && (day.status === 'Absent' || day.status === 'غیاب');
                     const isPresentDay = day.status === 'Present';
-
-                    const weekBg =
-                      day.isToday
-                        ? 'bg-emerald-50/90 ring-1 ring-inset ring-emerald-400'
-                        : isAbsentDay
-                        ? 'bg-rose-50/60'
-                        : isLeaveDay
-                        ? 'bg-amber-50/60'
-                        : isHolidayDay
-                        ? 'bg-teal-50/50'
-                        : day.weekIdx % 2 === 0
-                        ? 'bg-white'
-                        : 'bg-slate-50/60';
-
                     const hoursFormatted = day.workedHours > 0 ? `${day.workedHours} ک` : '—';
 
                     return (
                       <tr
                         key={day.dateStr}
                         onClick={() => setSelectedDayDetail(day)}
-                        className={`${weekBg} hover:bg-emerald-50/60 transition-colors cursor-pointer`}
+                        className={`hover:bg-slate-850/80 transition-colors cursor-pointer ${
+                          day.isToday ? 'bg-emerald-950/30' : ''
+                        }`}
                       >
                         {/* Day Number & Kurdish Weekday */}
                         <td className="py-2 px-2.5 font-sans">
                           <div className="flex items-center gap-1.5">
-                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-mono text-[11px] font-black ${
+                            <span className={`w-5 h-5 rounded-lg flex items-center justify-center font-mono text-[10px] font-black ${
                               day.isToday
-                                ? 'bg-emerald-600 text-white'
+                                ? 'bg-emerald-500 text-slate-950 font-black'
                                 : isAbsentDay
-                                ? 'bg-rose-100 text-rose-800'
+                                ? 'bg-rose-950 text-rose-400 border border-rose-500/30'
                                 : isLeaveDay
-                                ? 'bg-amber-100 text-amber-800'
+                                ? 'bg-amber-950 text-amber-400 border border-amber-500/30'
                                 : isHolidayDay
-                                ? 'bg-teal-100 text-teal-800'
-                                : 'bg-slate-100 text-slate-800'
+                                ? 'bg-teal-950 text-teal-400 border border-teal-500/30'
+                                : 'bg-slate-800 text-slate-300'
                             }`}>
                               {String(day.dayNum).padStart(2, '0')}
                             </span>
                             <div>
-                              <span className={`text-[10px] font-black block leading-tight ${
-                                isHolidayDay ? 'text-teal-800' : 'text-slate-800'
-                              }`}>
+                              <span className="text-[10px] font-bold text-slate-200 block leading-tight">
                                 {day.dayNameKu}
                               </span>
                               {day.isToday && (
-                                <span className="text-[8px] text-emerald-700 font-black">ئەمڕۆ</span>
+                                <span className="text-[8px] text-emerald-400 font-black">ئەمڕۆ</span>
                               )}
                             </div>
                           </div>
                         </td>
 
-                        {/* Check-In Time or Status Label */}
-                        <td className="py-2 px-1.5 text-center font-black">
+                        {/* Check-In Time */}
+                        <td className="py-2 px-1 text-center font-black">
                           {isPresentDay && day.checkInTime ? (
-                            <div className="inline-flex items-center justify-center gap-1">
-                              <span className={day.checkInStatus.isLate && !day.checkInStatus.isWaived ? 'text-amber-700' : 'text-emerald-700'}>
-                                {day.checkInTime}
-                              </span>
-                              {day.checkInStatus.isWaived || day.isCheckInWaived ? (
-                                <span className="w-1.5 h-1.5 rounded-full bg-purple-600 inline-block" title="لێخۆشبوونی دواکەوتن" />
-                              ) : day.checkInStatus.isLate ? (
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" title="دواکەوتن" />
-                              ) : null}
-                            </div>
+                            <span className={day.checkInStatus.isLate && !day.checkInStatus.isWaived ? 'text-amber-400' : 'text-emerald-400'}>
+                              {day.checkInTime}
+                            </span>
                           ) : isAbsentDay ? (
-                            <span className="text-rose-600 font-sans text-[10px]">غیاب</span>
+                            <span className="text-rose-400 font-sans text-[10px]">غیاب</span>
                           ) : isLeaveDay ? (
-                            <span className="text-amber-700 font-sans text-[10px]">مۆڵەت</span>
+                            <span className="text-amber-400 font-sans text-[10px]">مۆڵەت</span>
                           ) : isHolidayDay ? (
-                            <span className="text-teal-700 font-sans text-[10px]">پشوو</span>
+                            <span className="text-teal-400 font-sans text-[10px]">پشوو</span>
                           ) : (
-                            <span className="text-slate-300">—</span>
+                            <span className="text-slate-600">—</span>
                           )}
                         </td>
 
-                        {/* Check-Out Time or Status Label */}
-                        <td className="py-2 px-1.5 text-center font-black">
+                        {/* Check-Out Time */}
+                        <td className="py-2 px-1 text-center font-black">
                           {isPresentDay && day.checkOutTime ? (
-                            <div className="inline-flex items-center justify-center gap-1">
-                              <span className="text-rose-700">{day.checkOutTime}</span>
-                              {(day.checkOutStatus.isWaived || day.isCheckOutWaived) && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-purple-600 inline-block" title="لێخۆشبوونی زوو دەرچوون" />
-                              )}
-                            </div>
+                            <span className="text-rose-400">{day.checkOutTime}</span>
                           ) : isAbsentDay ? (
-                            <span className="text-rose-600 font-sans text-[10px]">غیاب</span>
+                            <span className="text-rose-400 font-sans text-[10px]">غیاب</span>
                           ) : isLeaveDay ? (
-                            <span className="text-amber-700 font-sans text-[10px]">مۆڵەت</span>
+                            <span className="text-amber-400 font-sans text-[10px]">مۆڵەت</span>
                           ) : isHolidayDay ? (
-                            <span className="text-teal-700 font-sans text-[10px]">پشوو</span>
+                            <span className="text-teal-400 font-sans text-[10px]">پشوو</span>
                           ) : (
-                            <span className="text-slate-300">—</span>
+                            <span className="text-slate-600">—</span>
                           )}
                         </td>
 
-                        {/* Worked Hours or Status Label */}
-                        <td className="py-2 px-1.5 text-center font-black text-slate-700">
+                        {/* Worked Hours */}
+                        <td className="py-2 px-1 text-center font-black text-slate-300">
                           {isPresentDay && day.workedHours > 0 ? (
-                            <span className="text-emerald-800">{hoursFormatted}</span>
-                          ) : isAbsentDay ? (
-                            <span className="text-rose-600">0 ک</span>
-                          ) : isLeaveDay ? (
-                            <span className="text-amber-700 font-sans text-[10px]">مۆڵەت</span>
-                          ) : isHolidayDay ? (
-                            <span className="text-teal-700 font-sans text-[10px]">پشوو</span>
+                            <span className="text-emerald-400">{hoursFormatted}</span>
                           ) : (
-                            <span className="text-slate-300">—</span>
+                            <span className="text-slate-600">—</span>
                           )}
                         </td>
 
-                        {/* Status Badge & Note Indicator */}
+                        {/* Status Badge */}
                         <td className="py-2 px-2 text-center font-sans">
-                          <div className="inline-flex items-center justify-center gap-1">
-                            {isPresentDay && (day.isWaived || day.checkInStatus.isWaived || day.checkOutStatus.isWaived) ? (
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-100 text-purple-800 border border-purple-300">
-                                لێخۆشبوو
-                              </span>
-                            ) : isPresentDay ? (
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                ئامادەبوو
-                              </span>
-                            ) : isLeaveDay ? (
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300">
-                                مۆڵەت
-                              </span>
-                            ) : isAbsentDay ? (
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">
-                                غیاب
-                              </span>
-                            ) : isHolidayDay ? (
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-teal-100 text-teal-800 border border-teal-300">
-                                پشوو
-                              </span>
-                            ) : (
-                              <span className="text-slate-300 font-mono">—</span>
-                            )}
-                            {(day.note || day.adminNote) && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block shrink-0" title={day.adminNote || day.note} />
-                            )}
-                          </div>
+                          {isPresentDay && (day.isWaived || day.checkInStatus.isWaived || day.checkOutStatus.isWaived) ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-950/80 text-purple-300 border border-purple-500/40">
+                              لێخۆشبوو
+                            </span>
+                          ) : isPresentDay ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-950/80 text-emerald-300 border border-emerald-500/40">
+                              ئامادەبوو
+                            </span>
+                          ) : isLeaveDay ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-950/80 text-amber-300 border border-amber-500/40">
+                              مۆڵەت
+                            </span>
+                          ) : isAbsentDay ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-950/80 text-rose-300 border border-rose-500/40">
+                              غیاب
+                            </span>
+                          ) : isHolidayDay ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-teal-950/80 text-teal-300 border border-teal-500/40">
+                              پشوو
+                            </span>
+                          ) : (
+                            <span className="text-slate-600 font-mono">—</span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -3737,102 +3625,309 @@ export default function MobileAttendanceOneTap() {
               </table>
             </div>
           </div>
+
+          {/* 🔽 EXPANDABLE FULL 31-DAY ATTENDANCE SHEET */}
+          <div className="pt-2 border-t border-slate-800/80">
+            <button
+              type="button"
+              onClick={() => setIsFullSheetExpanded(!isFullSheetExpanded)}
+              className="w-full py-2.5 px-3 rounded-2xl bg-slate-850 hover:bg-slate-800 active:scale-98 border border-slate-700/80 text-slate-200 text-xs font-black flex items-center justify-between transition-all cursor-pointer group"
+            >
+              <div className="flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
+                <span>
+                  {isFullSheetExpanded ? 'داخستنی خشتەی تەواوی مانگ 🔼' : 'کردنەوەی تەواوی خشتەی ٣١ ڕۆژ 📊'}
+                </span>
+              </div>
+              {isFullSheetExpanded ? (
+                <ChevronUp className="w-4 h-4 text-cyan-400" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-cyan-400" />
+              )}
+            </button>
+
+            {/* EXPANDED FULL SHEET CONTAINER */}
+            {isFullSheetExpanded && (
+              <div className="mt-3 space-y-3 animate-fade-slide-up">
+                
+                {/* Controls: Mode Switcher + Month Picker */}
+                <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-900/90 p-2.5 rounded-2xl border border-slate-800">
+                  <div className="flex items-center bg-slate-800 p-0.5 rounded-full border border-slate-700/80">
+                    <button
+                      type="button"
+                      onClick={() => setSheetViewMode('weekly')}
+                      className={`h-6 px-2.5 rounded-full flex items-center gap-1 text-[10px] font-bold transition-all cursor-pointer ${
+                        sheetViewMode === 'weekly'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <CalendarDays className="w-3 h-3" />
+                      <span>هەفتانە</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSheetViewMode('monthly')}
+                      className={`h-6 px-2.5 rounded-full flex items-center gap-1 text-[10px] font-bold transition-all cursor-pointer ${
+                        sheetViewMode === 'monthly'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Calendar className="w-3 h-3" />
+                      <span>مانگانە</span>
+                    </button>
+                  </div>
+
+                  <input
+                    type="month"
+                    value={selectedSheetMonth}
+                    onChange={(e) => {
+                      if (e.target.value) setSelectedSheetMonth(e.target.value);
+                    }}
+                    dir="ltr"
+                    className="bg-slate-800 border border-slate-700 text-white text-[11px] font-mono font-black px-2 py-1 rounded-xl focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+
+                {/* Weekly Navigator (when in weekly mode) */}
+                {sheetViewMode === 'weekly' && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <button
+                        type="button"
+                        disabled={selectedSheetWeekIdx === 0}
+                        onClick={() => setSelectedSheetWeekIdx(prev => Math.max(0, prev - 1))}
+                        className="h-7 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none text-slate-300 flex items-center gap-1 text-[10px] font-bold transition-all cursor-pointer"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                        <span>هەفتەی پێشوو</span>
+                      </button>
+
+                      <div className="text-[11px] font-black text-white flex items-center gap-1 bg-slate-900 px-2 py-1 rounded-md border border-slate-800">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                        <span>{weeksList[selectedSheetWeekIdx]?.label || 'هەفتە'}</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={selectedSheetWeekIdx >= weeksList.length - 1}
+                        onClick={() => setSelectedSheetWeekIdx(prev => Math.min(weeksList.length - 1, prev + 1))}
+                        className="h-7 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none text-slate-300 flex items-center gap-1 text-[10px] font-bold transition-all cursor-pointer"
+                      >
+                        <span>هەفتەی داهاتوو</span>
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Week Pills */}
+                    <div className="flex items-center gap-1 overflow-x-auto py-0.5 justify-center">
+                      {weeksList.map((w) => {
+                        const isSelected = w.index === selectedSheetWeekIdx;
+                        return (
+                          <button
+                            key={w.index}
+                            type="button"
+                            onClick={() => setSelectedSheetWeekIdx(w.index)}
+                            className={`h-7 px-2.5 rounded-full text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
+                              isSelected
+                                ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-400'
+                                : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                            }`}
+                          >
+                            <span>{w.shortLabel}</span>
+                            <span className={`text-[9px] font-mono px-1 rounded ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                              {w.startDay}-{w.endDay}
+                            </span>
+                            {w.hasToday && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" title="ئەمڕۆ لەم هەفتەیەیە" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Full Days Table */}
+                <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-950/80">
+                  <div className="max-h-[380px] overflow-y-auto scrollbar-thin">
+                    <table className="w-full text-right text-[11px]">
+                      <thead className="bg-slate-900 text-slate-400 text-[10px] font-black sticky top-0 z-10 border-b border-slate-800">
+                        <tr>
+                          <th className="py-2 px-2.5">ڕۆژ</th>
+                          <th className="py-2 px-1 text-center">هاتن</th>
+                          <th className="py-2 px-1 text-center">دەرچوون</th>
+                          <th className="py-2 px-1 text-center">کاتژمێر</th>
+                          <th className="py-2 px-2 text-center">دۆخ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/80 font-mono">
+                        {displayedSheetDays.map((day) => {
+                          const dayNoteText = `${day.adminNote || ''} ${day.note || ''}`;
+                          const isLeaveDay = day.status === 'Leave' || day.status === 'مۆڵەت' || (!day.checkInTime && (dayNoteText.includes('🛡️ مۆڵەت') || dayNoteText.includes('مۆڵەت لەلایەن ئەدمین')));
+                          const isHolidayDay = day.status === 'Holiday' || day.status === 'پشوو' || (!day.checkInTime && (dayNoteText.includes('🛡️ پشوو') || dayNoteText.includes('پشوو لەلایەن ئەدمین')));
+                          const isAbsentDay = !isLeaveDay && !isHolidayDay && (day.status === 'Absent' || day.status === 'غیاب');
+                          const isPresentDay = day.status === 'Present';
+                          const hoursFormatted = day.workedHours > 0 ? `${day.workedHours} ک` : '—';
+
+                          return (
+                            <tr
+                              key={day.dateStr}
+                              onClick={() => setSelectedDayDetail(day)}
+                              className={`hover:bg-slate-850/80 transition-colors cursor-pointer ${
+                                day.isToday ? 'bg-emerald-950/40 ring-1 ring-inset ring-emerald-500/40' : ''
+                              }`}
+                            >
+                              <td className="py-2 px-2.5 font-sans">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`w-5 h-5 rounded-lg flex items-center justify-center font-mono text-[10px] font-black ${
+                                    day.isToday
+                                      ? 'bg-emerald-500 text-slate-950'
+                                      : isAbsentDay
+                                      ? 'bg-rose-950 text-rose-400 border border-rose-500/30'
+                                      : isLeaveDay
+                                      ? 'bg-amber-950 text-amber-400 border border-amber-500/30'
+                                      : isHolidayDay
+                                      ? 'bg-teal-950 text-teal-400 border border-teal-500/30'
+                                      : 'bg-slate-800 text-slate-300'
+                                  }`}>
+                                    {String(day.dayNum).padStart(2, '0')}
+                                  </span>
+                                  <div>
+                                    <span className="text-[10px] font-bold text-slate-200 block leading-tight">
+                                      {day.dayNameKu}
+                                    </span>
+                                    {day.isToday && (
+                                      <span className="text-[8px] text-emerald-400 font-black">ئەمڕۆ</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="py-2 px-1 text-center font-black">
+                                {isPresentDay && day.checkInTime ? (
+                                  <span className={day.checkInStatus.isLate && !day.checkInStatus.isWaived ? 'text-amber-400' : 'text-emerald-400'}>
+                                    {day.checkInTime}
+                                  </span>
+                                ) : isAbsentDay ? (
+                                  <span className="text-rose-400 font-sans text-[10px]">غیاب</span>
+                                ) : isLeaveDay ? (
+                                  <span className="text-amber-400 font-sans text-[10px]">مۆڵەت</span>
+                                ) : isHolidayDay ? (
+                                  <span className="text-teal-400 font-sans text-[10px]">پشوو</span>
+                                ) : (
+                                  <span className="text-slate-600">—</span>
+                                )}
+                              </td>
+
+                              <td className="py-2 px-1 text-center font-black">
+                                {isPresentDay && day.checkOutTime ? (
+                                  <span className="text-rose-400">{day.checkOutTime}</span>
+                                ) : isAbsentDay ? (
+                                  <span className="text-rose-400 font-sans text-[10px]">غیاب</span>
+                                ) : isLeaveDay ? (
+                                  <span className="text-amber-400 font-sans text-[10px]">مۆڵەت</span>
+                                ) : isHolidayDay ? (
+                                  <span className="text-teal-400 font-sans text-[10px]">پشوو</span>
+                                ) : (
+                                  <span className="text-slate-600">—</span>
+                                )}
+                              </td>
+
+                              <td className="py-2 px-1 text-center font-black text-slate-300">
+                                {isPresentDay && day.workedHours > 0 ? (
+                                  <span className="text-emerald-400">{hoursFormatted}</span>
+                                ) : (
+                                  <span className="text-slate-600">—</span>
+                                )}
+                              </td>
+
+                              <td className="py-2 px-2 text-center font-sans">
+                                {isPresentDay && (day.isWaived || day.checkInStatus.isWaived || day.checkOutStatus.isWaived) ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-950/80 text-purple-300 border border-purple-500/40">
+                                    لێخۆشبوو
+                                  </span>
+                                ) : isPresentDay ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-950/80 text-emerald-300 border border-emerald-500/40">
+                                    ئامادەبوو
+                                  </span>
+                                ) : isLeaveDay ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-950/80 text-amber-300 border border-amber-500/40">
+                                    مۆڵەت
+                                  </span>
+                                ) : isAbsentDay ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-950/80 text-rose-300 border border-rose-500/40">
+                                    غیاب
+                                  </span>
+                                ) : isHolidayDay ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-teal-950/80 text-teal-300 border border-teal-500/40">
+                                    پشوو
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-600 font-mono">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-      )}
-
-      {/* 📱 MODERN FLOATING BOTTOM NAVIGATION BAR (Motion Graphics) */}
-      <nav className="fixed bottom-3 left-4 right-4 max-w-sm mx-auto bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-[0_12px_40px_rgba(0,0,0,0.14)] rounded-3xl p-1.5 flex items-center justify-around z-40 transition-all">
-        <button
-          type="button"
-          onClick={() => {
-            setMobileTab('today');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          className={`flex-1 py-2 px-3 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition-all duration-300 cursor-pointer ${
-            mobileTab === 'today'
-              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 scale-102 font-black'
-              : 'text-slate-500 hover:text-slate-900 font-bold active:scale-95'
-          }`}
-        >
-          <Clock className={`w-4 h-4 ${mobileTab === 'today' ? 'animate-pulse' : ''}`} />
-          <span className="text-[11px] leading-tight">تۆمارکردن</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setMobileTab('sheet');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          className={`flex-1 py-2 px-3 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition-all duration-300 cursor-pointer ${
-            mobileTab === 'sheet'
-              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 scale-102 font-black'
-              : 'text-slate-500 hover:text-slate-900 font-bold active:scale-95'
-          }`}
-        >
-          <CalendarDays className="w-4 h-4" />
-          <span className="text-[11px] leading-tight">خشتەی دەوام</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setShowMapModal(true)}
-          className="flex-1 py-2 px-3 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-slate-500 hover:text-blue-600 font-bold transition-all cursor-pointer active:scale-95 group"
-        >
-          <Compass className="w-4 h-4 text-blue-600 group-hover:rotate-45 transition-transform" />
-          <span className="text-[11px] leading-tight text-blue-700">نەخشە 🗺️</span>
-        </button>
-      </nav>
 
     </main>
 
       {/* 🔍 DAY DETAIL MODAL (READ-ONLY SYSTEM RECORD VIEW FOR EMPLOYEE) */}
       {selectedDayDetail && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4" onClick={() => setSelectedDayDetail(null)}>
-          <div className="bg-white border border-slate-200 p-5 rounded-3xl max-w-sm w-full space-y-4 text-right shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4" onClick={() => setSelectedDayDetail(null)}>
+          <div className="cyber-glass border border-slate-700/80 p-5 rounded-3xl max-w-sm w-full space-y-4 text-right shadow-2xl relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
-                <h4 className="text-sm font-black text-slate-900">
+                <h4 className="text-sm font-black text-white">
                   ڕۆژی {selectedDayDetail.dayNameKu} ({selectedDayDetail.dateStr})
                 </h4>
-                <span className="text-[10px] text-emerald-700 font-bold">وردەکاری تۆماری سیستەم</span>
+                <span className="text-[10px] text-cyan-400 font-bold">وردەکاری تۆماری سیستەم</span>
               </div>
               <div className="flex items-center gap-1.5">
                 {selectedDayDetail.status === 'Present' && (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-950/80 text-emerald-300 border border-emerald-500/40">
                     ئامادەبوو
                   </span>
                 )}
                 {(selectedDayDetail.status === 'Absent' || selectedDayDetail.status === 'غیاب') && (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-950/80 text-rose-300 border border-rose-500/40">
                     غیاب
                   </span>
                 )}
                 {(selectedDayDetail.status === 'Leave' || selectedDayDetail.status === 'مۆڵەت') && (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-950/80 text-amber-300 border border-amber-500/40">
                     مۆڵەت
                   </span>
                 )}
                 {(selectedDayDetail.status === 'Holiday' || selectedDayDetail.status === 'پشوو') && (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-teal-100 text-teal-800 border border-teal-300">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-teal-950/80 text-teal-300 border border-teal-500/40">
                     پشوو
                   </span>
                 )}
                 <button
                   type="button"
                   onClick={() => setSelectedDayDetail(null)}
-                  className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer"
+                  className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 text-center p-3 bg-slate-50 rounded-2xl border border-slate-200 font-mono text-xs">
+            <div className="grid grid-cols-3 gap-2 text-center p-3 bg-slate-900/90 rounded-2xl border border-slate-800 font-mono text-xs">
               <div>
-                <span className="text-[10px] text-slate-500 block font-sans font-bold">هاتن</span>
-                <span className="font-black text-emerald-700">
+                <span className="text-[10px] text-slate-400 block font-sans font-bold">هاتن</span>
+                <span className="font-black text-emerald-400">
                   {selectedDayDetail.status === 'Present' && selectedDayDetail.checkInTime
                     ? selectedDayDetail.checkInTime
                     : selectedDayDetail.status === 'Absent' || selectedDayDetail.status === 'غیاب'
@@ -3845,8 +3940,8 @@ export default function MobileAttendanceOneTap() {
                 </span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-500 block font-sans font-bold">دەرچوون</span>
-                <span className="font-black text-rose-700">
+                <span className="text-[10px] text-slate-400 block font-sans font-bold">دەرچوون</span>
+                <span className="font-black text-rose-400">
                   {selectedDayDetail.status === 'Present' && selectedDayDetail.checkOutTime
                     ? selectedDayDetail.checkOutTime
                     : selectedDayDetail.status === 'Absent' || selectedDayDetail.status === 'غیاب'
@@ -3859,8 +3954,8 @@ export default function MobileAttendanceOneTap() {
                 </span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-500 block font-sans font-bold">کاتژمێر</span>
-                <span className="font-black text-blue-800">
+                <span className="text-[10px] text-slate-400 block font-sans font-bold">کاتژمێر</span>
+                <span className="font-black text-cyan-400">
                   {selectedDayDetail.status === 'Present' && selectedDayDetail.workedHours > 0
                     ? `${selectedDayDetail.workedHours} ک`
                     : selectedDayDetail.status === 'Absent' || selectedDayDetail.status === 'غیاب'
@@ -3875,8 +3970,8 @@ export default function MobileAttendanceOneTap() {
             </div>
 
             {selectedDayDetail.status === 'Present' && (selectedDayDetail.isWaived || selectedDayDetail.checkInStatus.isWaived || selectedDayDetail.checkOutStatus.isWaived) && (
-              <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs font-bold flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-600 shrink-0" />
+              <div className="p-2.5 rounded-xl bg-purple-950/80 border border-purple-500/40 text-purple-300 text-xs font-bold flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-400 shrink-0" />
                 <span>لێخۆشبوونی فەرمی بەڕێوەبەری هەیە</span>
               </div>
             )}
@@ -3891,20 +3986,20 @@ export default function MobileAttendanceOneTap() {
               return (
                 <div className="space-y-2">
                   {hasSeparateEmpNote && (
-                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
-                      <span className="text-[10px] font-black text-slate-600 block">تێبینی کارمەند:</span>
+                    <div className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-1">
+                      <span className="text-[10px] font-black text-slate-400 block">تێبینی کارمەند:</span>
                       {empInNote && empInNote !== admNote && (
-                        <p className="text-xs font-bold text-slate-800 leading-relaxed">{empInNote}</p>
+                        <p className="text-xs font-bold text-slate-200 leading-relaxed">{empInNote}</p>
                       )}
                       {empOutNote && empOutNote !== empInNote && empOutNote !== admNote && (
-                        <p className="text-xs font-bold text-slate-800 leading-relaxed">{empOutNote}</p>
+                        <p className="text-xs font-bold text-slate-200 leading-relaxed">{empOutNote}</p>
                       )}
                     </div>
                   )}
                   {admNote && (
-                    <div className="p-3 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-1">
-                      <span className="text-[10px] font-black text-blue-700 block">تێبینی ئەدمین:</span>
-                      <p className="text-xs font-bold text-slate-900 leading-relaxed">{admNote}</p>
+                    <div className="p-3 rounded-2xl bg-blue-950/50 border border-blue-500/30 space-y-1">
+                      <span className="text-[10px] font-black text-cyan-400 block">تێبینی ئەدمین:</span>
+                      <p className="text-xs font-bold text-slate-200 leading-relaxed">{admNote}</p>
                     </div>
                   )}
                 </div>
@@ -3914,7 +4009,7 @@ export default function MobileAttendanceOneTap() {
             <button
               type="button"
               onClick={() => setSelectedDayDetail(null)}
-              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs cursor-pointer"
+              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-black text-xs cursor-pointer border border-slate-700 transition-colors"
             >
               داخستن
             </button>
