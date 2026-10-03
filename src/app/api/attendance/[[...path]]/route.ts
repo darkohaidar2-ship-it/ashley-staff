@@ -3998,6 +3998,67 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         if (upsertErr) {
           logger.error('Supabase face upsert error:', upsertErr);
         }
+
+        // 1.5. 📱 Central Hardware Device Binding Enforcement (1 Phone = 1 Employee)
+        if (deviceToken) {
+          try {
+            const { data: devRow } = await supabase
+              .from('warehouses')
+              .select('qr_code')
+              .eq('id', 'ashley_device_bindings')
+              .maybeSingle();
+
+            let deviceBindings: Record<string, any> = {};
+            if (devRow?.qr_code) {
+              try { deviceBindings = JSON.parse(devRow.qr_code); } catch {}
+            }
+
+            const normUserId = userId.startsWith('emp-') ? userId : `emp-${userId.padStart(2, '0')}`;
+            const isDarko = normUserId === 'emp-02' || (userName && userName.includes('دارکۆ'));
+
+            // Check if this device is already bound to ANOTHER employee
+            if (!isDarko) {
+              const conflictEntry = Object.entries(deviceBindings).find(([eId, info]: [string, any]) => {
+                const normEId = eId.startsWith('emp-') ? eId : `emp-${eId.padStart(2, '0')}`;
+                return normEId !== normUserId && info?.deviceToken === deviceToken && !info?.unbound;
+              });
+
+              if (conflictEntry) {
+                const boundOtherUser = conflictEntry[1]?.name || conflictEntry[0];
+                return NextResponse.json({
+                  error: `ئەم مۆبایلە پێشتر بۆ کارمەند (${boundOtherUser}) بەستراوەتەوە! ناتوانرێت زیاد لە یەک ئەکاونت لەسەر یەک مۆبایل بکرێتەوە.`,
+                  deviceConflict: true
+                }, { status: 403 });
+              }
+            }
+
+            // Register hardware binding centrally
+            deviceBindings[normUserId] = {
+              userId: normUserId,
+              name: userName || 'کارمەند',
+              deviceToken,
+              ip: clientIp,
+              boundAt: new Date().toISOString(),
+              unbound: false
+            };
+
+            // Also mirror alias
+            const rawNumId = normUserId.replace('emp-', '');
+            deviceBindings[rawNumId] = { ...deviceBindings[normUserId], userId: rawNumId };
+
+            await supabase.from('warehouses').upsert({
+              id: 'ashley_device_bindings',
+              name: 'Ashley Device & Hardware Registry',
+              qr_code: JSON.stringify(deviceBindings),
+              lat: 0,
+              lng: 0,
+              radius: 0
+            });
+            CACHED_DEVICE_REGISTRY = null;
+          } catch (dErr) {
+            logger.error('Error recording device binding in face/register:', dErr);
+          }
+        }
       } catch (err: any) {
         logger.error('Error saving to resilient face registry:', err);
       }
@@ -4007,7 +4068,10 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         const descriptorJson = JSON.stringify(descriptor);
         await supabase
           .from('users')
-          .update({ face_descriptor: descriptorJson })
+          .update({ 
+            face_descriptor: descriptorJson,
+            ...(deviceToken ? { device_token: deviceToken } : {})
+          })
           .eq('id', userId);
       } catch (updErr: any) {
         logger.warn('Note: users table update ignored:', updErr.message);

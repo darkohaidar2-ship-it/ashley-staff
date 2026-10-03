@@ -9,6 +9,7 @@ import {
   ShieldCheck, 
   Lock, 
   Calendar, 
+  CalendarDays, 
   RefreshCw, 
   KeyRound, 
   DoorOpen, 
@@ -1185,10 +1186,53 @@ export default function MobileAttendanceOneTap() {
       return;
     }
 
-    // Step 1 Passed! Advance to Step 2 (Face Scan)
+    // Step 1 Passed! Advance to Step 2 (Face Scan & Device Hardware Check)
     setAuthLoading(true);
 
     try {
+      // 📱 Hardware Device Binding Verification (Strict 1 Phone = 1 Employee)
+      let devToken = localStorage.getItem('ashley_device_token');
+      if (!devToken) {
+        devToken = 'dev-' + Math.random().toString(36).substring(2, 10);
+        localStorage.setItem('ashley_device_token', devToken);
+      }
+
+      if (!isDarko) {
+        try {
+          const devRes = await fetch(`/api/attendance/devices/all?_t=${Date.now()}`, { cache: 'no-store' });
+          const devData = await devRes.json().catch(() => ({}));
+          if (devData?.bindings) {
+            const bindings = devData.bindings as Record<string, any>;
+            const normEmpId = emp.id.startsWith('emp-') ? emp.id : `emp-${emp.id.padStart(2, '0')}`;
+
+            // Check A: Is this phone already registered to ANOTHER employee?
+            const otherBound = Object.entries(bindings).find(([bId, info]: [string, any]) => {
+              const normBId = bId.startsWith('emp-') ? bId : `emp-${bId.padStart(2, '0')}`;
+              return normBId !== normEmpId && info?.deviceToken === devToken && !info?.unbound;
+            });
+
+            if (otherBound) {
+              const otherName = otherBound[1]?.name || otherBound[0];
+              setAuthError(`⛔ ئەم مۆبایلە تایبەتە بە (${otherName})! ناتوانرێت بە ناوی (${emp.name}) لێرە دەوام بکرێت.`);
+              playRejectSound();
+              setAuthLoading(false);
+              return;
+            }
+
+            // Check B: Does THIS employee already have a different phone bound?
+            const empBinding = bindings[normEmpId] || bindings[emp.id] || bindings[emp.id.replace('emp-', '')];
+            if (empBinding && empBinding.deviceToken && empBinding.deviceToken !== devToken && !empBinding.unbound) {
+              setAuthError(`⛔ هەژماری (${emp.name}) بەستراوەتەوە بە مۆبایلێکی تر. ناتوانرێت لەم مۆبایلە دەوام تۆماربکرێت هەتا بەڕێوەبەر لە سیستەم (Reset Device) نەکات.`);
+              playRejectSound();
+              setAuthLoading(false);
+              return;
+            }
+          }
+        } catch (devCheckErr) {
+          logger.warn('Device check network fallback:', devCheckErr);
+        }
+      }
+
       const res = await fetch(`/api/attendance/face/status?userId=${emp.id}&_t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       const isFaceRegistered = Boolean(data?.hasFaceRegistered || data?.registered || data?.hasFace || isDarko);
@@ -2155,6 +2199,97 @@ export default function MobileAttendanceOneTap() {
     };
   }, [employeeProfile, selectedSheetMonth, currentDateStr, empOverridesMap, monthlyLogs, liveTodayShift]);
 
+  // 🔀 Mobile View Mode: Weekly (default, ultra-fast for mobile) vs Monthly (all 31 days)
+  const [sheetViewMode, setSheetViewMode] = useState<'weekly' | 'monthly'>('weekly');
+  const [selectedSheetWeekIdx, setSelectedSheetWeekIdx] = useState<number>(0);
+
+  // Group month days into 7-day calendar segments (Week 1, Week 2, Week 3, Week 4, Week 5)
+  const weeksList = useMemo(() => {
+    const list: Array<{
+      index: number;
+      label: string;
+      shortLabel: string;
+      startDay: number;
+      endDay: number;
+      days: typeof employeeMonthSheet;
+      hasToday: boolean;
+    }> = [];
+    const chunkSize = 7;
+    for (let i = 0; i < employeeMonthSheet.length; i += chunkSize) {
+      const chunkDays = employeeMonthSheet.slice(i, i + chunkSize);
+      const startDay = chunkDays[0]?.dayNum || (i + 1);
+      const endDay = chunkDays[chunkDays.length - 1]?.dayNum || Math.min(i + chunkSize, employeeMonthSheet.length);
+      const weekIdx = Math.floor(i / chunkSize);
+      const hasToday = chunkDays.some(d => d.isToday);
+      list.push({
+        index: weekIdx,
+        label: `هەفتەی ${weekIdx + 1} (${startDay} - ${endDay})`,
+        shortLabel: `هەفتەی ${weekIdx + 1}`,
+        startDay,
+        endDay,
+        days: chunkDays,
+        hasToday,
+      });
+    }
+    return list;
+  }, [employeeMonthSheet]);
+
+  // Auto-select week that contains Today (ئەمڕۆ) or reset to 0 when month changes
+  useEffect(() => {
+    const todayIdx = weeksList.findIndex(w => w.hasToday);
+    if (todayIdx !== -1) {
+      setSelectedSheetWeekIdx(todayIdx);
+    } else {
+      setSelectedSheetWeekIdx(0);
+    }
+  }, [selectedSheetMonth, weeksList]);
+
+  // Days currently visible in the table (7 days in weekly mode, up to 31 days in monthly mode)
+  const displayedSheetDays = useMemo(() => {
+    if (sheetViewMode === 'monthly') return employeeMonthSheet;
+    return weeksList[selectedSheetWeekIdx]?.days || employeeMonthSheet.slice(0, 7);
+  }, [sheetViewMode, employeeMonthSheet, weeksList, selectedSheetWeekIdx]);
+
+  // Dynamic KPI Stats (calculated over visible days in weekly mode, full month in monthly mode)
+  const displayedSheetStats = useMemo(() => {
+    if (sheetViewMode === 'monthly') return sheetStats;
+    let presentDays = 0;
+    let totalHours = 0;
+    let lateCount = 0;
+    let absentCount = 0;
+    let leaveCount = 0;
+    let holidayCount = 0;
+
+    displayedSheetDays.forEach(day => {
+      const dayNoteText = `${day.adminNote || ''} ${day.note || ''}`;
+      const isLeaveDay = day.status === 'Leave' || day.status === 'مۆڵەت' || (!day.checkInTime && (dayNoteText.includes('🛡️ مۆڵەت') || dayNoteText.includes('مۆڵەت لەلایەن ئەدمین')));
+      const isHolidayDay = day.status === 'Holiday' || day.status === 'پشوو' || (!day.checkInTime && (dayNoteText.includes('🛡️ پشوو') || dayNoteText.includes('پشوو لەلایەن ئەدمین')));
+      const isAbsentDay = !isLeaveDay && !isHolidayDay && (day.status === 'Absent' || day.status === 'غیاب');
+      const isPresentDay = day.status === 'Present';
+
+      if (isPresentDay) {
+        presentDays++;
+        totalHours += day.workedHours || 0;
+      }
+      if (day.checkInStatus?.isLate && !day.checkInStatus?.isWaived) {
+        lateCount++;
+      }
+      if (isAbsentDay) absentCount++;
+      if (isLeaveDay) leaveCount++;
+      if (isHolidayDay) holidayCount++;
+    });
+
+    return {
+      presentDays,
+      totalHours: Number(totalHours.toFixed(1)),
+      lateCount,
+      absentCount,
+      leaveCount,
+      holidayCount,
+      commitmentRate: sheetStats.commitmentRate,
+    };
+  }, [sheetViewMode, sheetStats, displayedSheetDays]);
+
   // =========================================================================
   // VIEW 0: DESKTOP PC BLOCKER SCREEN
   // =========================================================================
@@ -2897,19 +3032,53 @@ export default function MobileAttendanceOneTap() {
         {/* 📊 REAL 31-DAY SYSTEM MONTHLY ATTENDANCE SHEET (SSOT)        */}
         {/* ============================================================ */}
         <div className="bg-white border border-slate-200 rounded-3xl p-3.5 shadow-xs space-y-3">
-          {/* Sheet Header & Month Picker */}
-          <div className="flex items-center justify-between gap-2">
+          {/* Sheet Header & Month Picker & View Switcher */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
               <div className="w-7 h-7 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
-                <Calendar className="w-4 h-4" />
+                {sheetViewMode === 'weekly' ? <CalendarDays className="w-4 h-4" /> : <Calendar className="w-4 h-4" />}
               </div>
               <div>
-                <h3 className="text-xs font-black text-slate-900">خشتەی فەرمی ئامادەبوون</h3>
-                <span className="text-[9px] text-emerald-700 font-bold block">هاوکاتکراو لەگەڵ سیستەم</span>
+                <h3 className="text-xs font-black text-slate-900">
+                  {sheetViewMode === 'weekly' ? 'خشتەی هەفتانەی ئامادەبوون' : 'خشتەی مانگانەی ئامادەبوون'}
+                </h3>
+                <span className="text-[9px] text-emerald-700 font-bold block">
+                  {sheetViewMode === 'weekly' ? `${weeksList[selectedSheetWeekIdx]?.label || ''}` : 'تەواوی ٣١ ڕۆژەکە'}
+                </span>
               </div>
             </div>
 
             <div className="flex items-center gap-1.5">
+              {/* 🔀 Segmented View Switcher: Weekly (Default) vs Monthly */}
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-full border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setSheetViewMode('weekly')}
+                  className={`h-6 px-2.5 rounded-full flex items-center gap-1 text-[10px] font-bold transition-all cursor-pointer ${
+                    sheetViewMode === 'weekly'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="نیشاندانی هەفتانە (خێرا)"
+                >
+                  <CalendarDays className="w-3 h-3" />
+                  <span>هەفتانە</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSheetViewMode('monthly')}
+                  className={`h-6 px-2.5 rounded-full flex items-center gap-1 text-[10px] font-bold transition-all cursor-pointer ${
+                    sheetViewMode === 'monthly'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="نیشاندانی تەواوی مانگ"
+                >
+                  <Calendar className="w-3 h-3" />
+                  <span>مانگانە</span>
+                </button>
+              </div>
+
               <input
                 type="month"
                 value={selectedSheetMonth}
@@ -2933,35 +3102,98 @@ export default function MobileAttendanceOneTap() {
             </div>
           </div>
 
+          {/* 📅 Mobile Weekly Navigation Bar (Visible only when Weekly View is active) */}
+          {sheetViewMode === 'weekly' && (
+            <div className="space-y-1.5 pt-1.5 border-t border-slate-100">
+              <div className="flex items-center justify-between gap-1">
+                <button
+                  type="button"
+                  disabled={selectedSheetWeekIdx === 0}
+                  onClick={() => setSelectedSheetWeekIdx(prev => Math.max(0, prev - 1))}
+                  className="h-7 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:pointer-events-none text-slate-700 flex items-center gap-1 text-[10px] font-bold transition-all cursor-pointer active:scale-95"
+                  title="هەفتەی پێشوو"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                  <span>هەفتەی پێشوو</span>
+                </button>
+
+                <div className="text-[11px] font-black text-slate-800 flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span>{weeksList[selectedSheetWeekIdx]?.label || 'هەفتە'}</span>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={selectedSheetWeekIdx >= weeksList.length - 1}
+                  onClick={() => setSelectedSheetWeekIdx(prev => Math.min(weeksList.length - 1, prev + 1))}
+                  className="h-7 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:pointer-events-none text-slate-700 flex items-center gap-1 text-[10px] font-bold transition-all cursor-pointer active:scale-95"
+                  title="هەفتەی داهاتوو"
+                >
+                  <span>هەفتەی داهاتوو</span>
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Quick Week Pill Tabs */}
+              <div className="flex items-center gap-1 overflow-x-auto py-0.5 justify-center">
+                {weeksList.map((w) => {
+                  const isSelected = w.index === selectedSheetWeekIdx;
+                  return (
+                    <button
+                      key={w.index}
+                      type="button"
+                      onClick={() => setSelectedSheetWeekIdx(w.index)}
+                      className={`h-7 px-2.5 rounded-full text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
+                        isSelected
+                          ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-400'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      <span>{w.shortLabel}</span>
+                      <span className={`text-[9px] font-mono px-1 rounded ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-600'}`}>
+                        {w.startDay}-{w.endDay}
+                      </span>
+                      {w.hasToday && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 ring-1 ring-amber-200 animate-pulse" title="ئەمڕۆ لەم هەفتەیەیە" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* 6 Visual Summary KPI Cards (Present, Hours, Absent, Leave, Holiday, Late) */}
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center">
             <div className="p-2 rounded-2xl bg-emerald-50/80 border border-emerald-200">
-              <span className="text-[9px] text-emerald-800 font-bold block">ئامادەبوون</span>
-              <span className="text-sm font-black font-mono text-emerald-900">{sheetStats.presentDays}</span>
+              <span className="text-[9px] text-emerald-800 font-bold block">
+                {sheetViewMode === 'weekly' ? 'ئامادەبوون (هەفتە)' : 'ئامادەبوون'}
+              </span>
+              <span className="text-sm font-black font-mono text-emerald-900">{displayedSheetStats.presentDays}</span>
             </div>
             <div className="p-2 rounded-2xl bg-blue-50/80 border border-blue-200">
               <span className="text-[9px] text-blue-800 font-bold block">کاتژمێر</span>
-              <span className="text-sm font-black font-mono text-blue-900">{sheetStats.totalHours} ک</span>
+              <span className="text-sm font-black font-mono text-blue-900">{displayedSheetStats.totalHours} ک</span>
             </div>
             <div className="p-2 rounded-2xl bg-rose-50/80 border border-rose-200">
               <span className="text-[9px] text-rose-800 font-bold block">غیاب</span>
-              <span className="text-sm font-black font-mono text-rose-900">{sheetStats.absentCount}</span>
+              <span className="text-sm font-black font-mono text-rose-900">{displayedSheetStats.absentCount}</span>
             </div>
             <div className="p-2 rounded-2xl bg-amber-50/80 border border-amber-200">
               <span className="text-[9px] text-amber-800 font-bold block">مۆڵەت</span>
-              <span className="text-sm font-black font-mono text-amber-900">{sheetStats.leaveCount}</span>
+              <span className="text-sm font-black font-mono text-amber-900">{displayedSheetStats.leaveCount}</span>
             </div>
             <div className="p-2 rounded-2xl bg-teal-50/80 border border-teal-200">
               <span className="text-[9px] text-teal-800 font-bold block">پشوو</span>
-              <span className="text-sm font-black font-mono text-teal-900">{sheetStats.holidayCount}</span>
+              <span className="text-sm font-black font-mono text-teal-900">{displayedSheetStats.holidayCount}</span>
             </div>
             <div className="p-2 rounded-2xl bg-purple-50/80 border border-purple-200">
               <span className="text-[9px] text-purple-800 font-bold block">دواکەوتن</span>
-              <span className="text-sm font-black font-mono text-purple-900">{sheetStats.lateCount}</span>
+              <span className="text-sm font-black font-mono text-purple-900">{displayedSheetStats.lateCount}</span>
             </div>
           </div>
 
-          {/* Full 31-Day System Table */}
+          {/* Full 31-Day / 7-Day System Table */}
           <div className="border border-slate-200 rounded-2xl overflow-hidden">
             <div className="max-h-[420px] overflow-y-auto scrollbar-thin">
               <table className="w-full text-right text-[11px]">
@@ -2975,7 +3207,7 @@ export default function MobileAttendanceOneTap() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 font-mono">
-                  {employeeMonthSheet.map((day) => {
+                  {displayedSheetDays.map((day) => {
                     const dayNoteText = `${day.adminNote || ''} ${day.note || ''}`;
                     const isLeaveDay = day.status === 'Leave' || day.status === 'مۆڵەت' || (!day.checkInTime && (dayNoteText.includes('🛡️ مۆڵەت') || dayNoteText.includes('مۆڵەت لەلایەن ئەدمین')));
                     const isHolidayDay = day.status === 'Holiday' || day.status === 'پشوو' || (!day.checkInTime && (dayNoteText.includes('🛡️ پشوو') || dayNoteText.includes('پشوو لەلایەن ئەدمین')));

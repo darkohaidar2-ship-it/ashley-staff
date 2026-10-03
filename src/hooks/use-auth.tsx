@@ -28,17 +28,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      // Clear persistent storage to prevent eternal logins
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('ashley_admin_session');
-        const storedUser = sessionStorage.getItem('ashley_admin_session');
+        const storedUser = localStorage.getItem('ashley_admin_session') || sessionStorage.getItem('ashley_admin_session');
         if (storedUser) {
           const parsedUser = JSON.parse(storedUser);
-          // Check if session token exists
-          if (parsedUser && parsedUser.token) {
+          // Check if session token exists and is within 30 days
+          const isExpired = parsedUser.loginTime && (Date.now() - parsedUser.loginTime > 30 * 24 * 60 * 60 * 1000);
+          if (parsedUser && parsedUser.token && !isExpired) {
             setCurrentUser(parsedUser);
+            // Ensure both storages are synchronized
+            localStorage.setItem('ashley_admin_session', JSON.stringify(parsedUser));
+            sessionStorage.setItem('ashley_admin_session', JSON.stringify(parsedUser));
           } else {
             setCurrentUser(null);
+            localStorage.removeItem('ashley_admin_session');
             sessionStorage.removeItem('ashley_admin_session');
           }
         } else {
@@ -78,8 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setCurrentUser(loggedUser);
     if (typeof window !== 'undefined') {
+      localStorage.setItem('ashley_admin_session', JSON.stringify(loggedUser));
       sessionStorage.setItem('ashley_admin_session', JSON.stringify(loggedUser));
-      localStorage.removeItem('ashley_admin_session');
     }
     return { success: true };
   }, []);
@@ -87,8 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async (): Promise<void> => {
     setCurrentUser(null);
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('ashley_admin_session');
       localStorage.removeItem('ashley_admin_session');
+      sessionStorage.removeItem('ashley_admin_session');
     }
   }, []);
 
