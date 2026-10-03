@@ -2622,52 +2622,53 @@ export default function MobileAttendanceOneTap() {
     }
 
     return (
-      <div className="min-h-screen light-mesh-bg text-slate-900 flex flex-col items-center justify-center p-4 dir-rtl select-none relative overflow-hidden" dir="rtl">
+      <div className="min-h-screen ashley-mesh-bg text-[#3D3935] flex flex-col items-center justify-center p-4 dir-rtl select-none relative overflow-hidden" dir="rtl">
         
-        {/* 🌟 AMBIENT ASHLEY WATERMARK LOGO WITH CONTINUOUS GLASS SHIMMER (LOOPING LIGHT BEAM) */}
+        {/* 🌟 AMBIENT ASHLEY OFFICIAL WATERMARK WITH CONTINUOUS GLASS SHIMMER */}
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden flex items-center justify-center select-none">
-          <div className="absolute top-1/4 -right-24 w-80 h-80 rounded-full bg-emerald-400/10 blur-3xl pointer-events-none animate-pulse" />
-          <div className="absolute bottom-1/4 -left-24 w-80 h-80 rounded-full bg-cyan-400/10 blur-3xl pointer-events-none animate-pulse" style={{ animationDelay: '2.5s' }} />
+          <div className="absolute top-1/4 -right-24 w-80 h-80 rounded-full bg-[#F88D2A]/15 blur-3xl pointer-events-none animate-pulse" />
+          <div className="absolute bottom-1/4 -left-24 w-80 h-80 rounded-full bg-[#EA7600]/12 blur-3xl pointer-events-none animate-pulse" style={{ animationDelay: '2.5s' }} />
 
           <div className="relative w-80 sm:w-96 max-w-[85vw] flex items-center justify-center animate-logo-float">
             <img 
               src="/ashley-logo.svg" 
               alt="Ashley Logo Watermark" 
-              className="w-full h-auto object-contain opacity-15 filter blur-[0.4px] select-none" 
+              className="w-full h-auto object-contain opacity-20 filter drop-shadow-[0_10px_30px_rgba(248,141,42,0.15)] select-none" 
             />
             {/* ✨ Looping Glass Reflection Beam Sweep */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              <div className="absolute top-0 bottom-0 w-44 bg-gradient-to-r from-transparent via-white/90 to-transparent pointer-events-none animate-glass-sheen shadow-[0_0_35px_rgba(255,255,255,0.95)]" />
+              <div className="absolute top-0 bottom-0 w-44 bg-gradient-to-r from-transparent via-white/95 to-transparent pointer-events-none animate-glass-sheen shadow-[0_0_35px_rgba(255,255,255,0.98)]" />
             </div>
           </div>
         </div>
 
-        <div className="w-full max-w-sm light-glass border border-slate-200/90 p-5 sm:p-6 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.06)] space-y-4 animate-fade-slide-up relative overflow-hidden z-10">
+        {/* 🌟 ASHLEY LUXURY GLASS CARD */}
+        <div className="w-full max-w-sm ashley-glass border border-orange-200/90 p-5 sm:p-6 rounded-3xl shadow-[0_20px_50px_rgba(61,57,53,0.08)] space-y-4 animate-fade-slide-up relative overflow-hidden z-10">
           
-          {/* Top illuminated emerald scanline */}
-          <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-90" />
+          {/* Top illuminated Ashley Orange signature line */}
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-[#F88D2A] to-transparent opacity-95" />
 
-          {/* 🌟 Floating Branded Header */}
+          {/* 🌟 Floating Ashley Brand Header */}
           <div className="text-center space-y-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-300 text-[10px] font-mono text-emerald-800 font-bold shadow-xs">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>[ASHLEY BIOMETRIC // ID v2.8]</span>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 border border-orange-200/90 text-[10px] font-mono text-orange-800 font-bold shadow-xs">
+              <Sparkles className="w-3.5 h-3.5 text-[#F88D2A]" />
+              <span>[ASHLEY FURNITURE // OFFICIAL PORTAL]</span>
             </div>
 
             <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-2xl bg-emerald-500/15 blur-xl animate-pulse" />
-              <div className="relative w-16 h-16 rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-white p-2.5 flex items-center justify-center animate-float-gentle ring-1 ring-emerald-500/20">
+              <div className="absolute inset-0 rounded-2xl bg-[#F88D2A]/20 blur-xl animate-pulse" />
+              <div className="relative w-16 h-16 rounded-2xl overflow-hidden border border-orange-200 shadow-md bg-white p-2 flex items-center justify-center animate-float-gentle ring-2 ring-orange-500/20">
                 <img src="/ashley-logo.png" alt="لۆگۆی ئاشڵی" className="w-full h-full object-contain" />
               </div>
             </div>
             <div>
-              <h1 className="text-lg font-black text-slate-900 tracking-tight">دەروازەی ئەمنی دەوامی ئاشڵی</h1>
-              <p className="text-[11px] text-slate-500 font-bold">تۆماری سەلمێنراوی دەوامی کارمەندان</p>
+              <h1 className="text-lg font-black text-[#3D3935] tracking-tight">دەروازەی دەوامی ئاشڵی مۆبیلیات</h1>
+              <p className="text-[11px] text-stone-500 font-bold">Ashley Furniture Industries • تۆماری فەرمی</p>
             </div>
           </div>
 
-          {/* 📍 Clean 2-Step Progress Indicator */}
-          <div className="flex items-center justify-center gap-2 pb-1 border-b border-slate-200/80">
+          {/* 📍 Clean 2-Step Progress Indicator (Ashley Palette) */}
+          <div className="flex items-center justify-center gap-2 pb-1 border-b border-orange-100">
             <button
               type="button"
               onClick={() => {
@@ -2676,18 +2677,18 @@ export default function MobileAttendanceOneTap() {
               }}
               className={`flex items-center gap-1.5 text-xs font-black px-3 py-1 rounded-full transition-all cursor-pointer ${
                 loginStep === 'SELECT_EMP'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/25 border border-emerald-500/40'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                  ? 'ashley-btn-gradient text-white shadow-md border border-orange-400/40'
+                  : 'bg-stone-100 hover:bg-stone-200 text-[#3D3935] border border-stone-200'
               }`}
             >
               <span>١. هەڵبژاردنی ناو</span>
-              {selectedEmpId && <CheckCircle2 className="w-3 h-3 text-emerald-300" />}
+              {selectedEmpId && <CheckCircle2 className="w-3 h-3 text-white" />}
             </button>
-            <div className="w-4 h-0.5 bg-slate-300" />
+            <div className="w-4 h-0.5 bg-orange-200" />
             <div className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full transition-all ${
               loginStep === 'ENTER_PIN'
-                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/25 border border-emerald-500/40 font-black'
-                : 'bg-slate-100 text-slate-400 border border-slate-200'
+                ? 'ashley-btn-gradient text-white shadow-md border border-orange-400/40 font-black'
+                : 'bg-stone-100 text-stone-400 border border-stone-200'
             }`}>
               <KeyRound className="w-3 h-3" />
               <span>٢. کۆدی نهێنی</span>
@@ -2700,15 +2701,15 @@ export default function MobileAttendanceOneTap() {
           {loginStep === 'SELECT_EMP' && (
             <div className="space-y-3 animate-fade-slide-up">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-700">
+                <span className="text-xs font-black text-[#3D3935]">
                   ناوی خۆت دیاری بکە:
                 </span>
-                <span className="text-[10px] font-mono font-bold text-cyan-800 bg-cyan-50 border border-cyan-200 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-mono font-bold text-orange-900 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
                   {filteredEmployees.length} کارمەند
                 </span>
               </div>
 
-              {/* Instant Search Bar */}
+              {/* Instant Search Bar with Ashley Accent */}
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <input
@@ -2717,14 +2718,14 @@ export default function MobileAttendanceOneTap() {
                     onChange={(e) => setSearchEmployeeQuery(e.target.value)}
                     placeholder="گەڕان بەپێی ناو..."
                     autoFocus
-                    className="w-full bg-white border border-slate-200 text-slate-900 placeholder-slate-400 text-xs font-bold pr-8 pl-8 py-2.5 rounded-2xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-all shadow-xs"
+                    className="w-full bg-white border border-stone-200 text-[#3D3935] placeholder-stone-400 text-xs font-bold pr-8 pl-8 py-2.5 rounded-2xl focus:border-[#F88D2A] focus:ring-1 focus:ring-[#F88D2A] focus:outline-none transition-all shadow-xs"
                   />
-                  <Search className="w-4 h-4 text-slate-400 absolute right-2.5 top-3" />
+                  <Search className="w-4 h-4 text-stone-400 absolute right-2.5 top-3" />
                   {searchEmployeeQuery && (
                     <button
                       type="button"
                       onClick={() => setSearchEmployeeQuery('')}
-                      className="absolute left-2.5 top-2.5 p-0.5 text-slate-400 hover:text-slate-600"
+                      className="absolute left-2.5 top-2.5 p-0.5 text-stone-400 hover:text-stone-700"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -2734,16 +2735,16 @@ export default function MobileAttendanceOneTap() {
                   type="button"
                   onClick={loadLiveEmployees}
                   title="نوێکردنەوەی لیست"
-                  className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl border border-slate-200 cursor-pointer active:scale-95 transition-all"
+                  className="p-2.5 bg-stone-100 hover:bg-stone-200 text-[#3D3935] rounded-2xl border border-stone-200 cursor-pointer active:scale-95 transition-all"
                 >
-                  <RefreshCw className={`w-4 h-4 ${isRefreshingEmployees ? 'animate-spin text-emerald-600' : ''}`} />
+                  <RefreshCw className={`w-4 h-4 ${isRefreshingEmployees ? 'animate-spin text-[#F88D2A]' : ''}`} />
                 </button>
               </div>
 
               {/* Spacious & Touch-Friendly Employee Cards List */}
-              <div className="border border-slate-200/90 rounded-2xl bg-slate-50/70 p-1.5 max-h-64 overflow-y-auto space-y-1.5 shadow-inner scrollbar-thin">
+              <div className="border border-orange-100 rounded-2xl bg-[#FAF8F5]/80 p-1.5 max-h-64 overflow-y-auto space-y-1.5 shadow-inner scrollbar-thin">
                 {filteredEmployees.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-slate-500 font-bold">
+                  <div className="p-6 text-center text-xs text-stone-500 font-bold">
                     هیچ کارمەندێک بەم ناوە نەدۆزرایەوە
                   </div>
                 ) : (
@@ -2763,33 +2764,33 @@ export default function MobileAttendanceOneTap() {
                         }}
                         className={`w-full text-right p-3 rounded-2xl border transition-all flex items-center justify-between cursor-pointer select-none active:scale-98 ${
                           isSelected
-                            ? 'bg-emerald-50 border-emerald-500 shadow-sm ring-1 ring-emerald-400'
-                            : 'bg-white/90 border-slate-200/90 hover:border-emerald-400 hover:bg-emerald-50/50 shadow-2xs'
+                            ? 'bg-orange-50/90 border-[#F88D2A] shadow-sm ring-1 ring-[#F88D2A]/60'
+                            : 'bg-white/95 border-stone-200/80 hover:border-orange-400 hover:bg-orange-50/40 shadow-2xs'
                         }`}
                       >
                         <div className="flex items-center gap-3">
                           <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
                             isSelected 
-                              ? 'bg-emerald-600 text-white shadow-xs' 
+                              ? 'bg-gradient-to-br from-[#F88D2A] to-[#EA7600] text-white shadow-xs' 
                               : isManager 
-                              ? 'bg-amber-100 text-amber-800 border border-amber-300' 
-                              : 'bg-slate-100 text-slate-800 border border-slate-200'
+                              ? 'bg-orange-100 text-orange-900 border border-orange-300' 
+                              : 'bg-stone-100 text-[#3D3935] border border-stone-200'
                           }`}>
                             {emp.name.charAt(0)}
                           </div>
                           <div>
-                            <span className="text-xs font-black text-slate-900 block leading-tight">
+                            <span className="text-xs font-black text-[#3D3935] block leading-tight">
                               {emp.name}
                             </span>
-                            <span className="text-[10px] text-slate-500 font-bold">
+                            <span className="text-[10px] text-stone-500 font-bold">
                               {roleKu}
                             </span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1 text-slate-400">
-                          <span className="text-[10px] font-mono font-black text-emerald-700">ID: #{emp.id.replace('emp-', '')}</span>
-                          <ChevronLeft className="w-4 h-4 text-emerald-600" />
+                        <div className="flex items-center gap-1 text-stone-400">
+                          <span className="text-[10px] font-mono font-black text-[#EA7600]">ID: #{emp.id.replace('emp-', '')}</span>
+                          <ChevronLeft className="w-4 h-4 text-[#F88D2A]" />
                         </div>
                       </div>
                     );
@@ -2800,21 +2801,21 @@ export default function MobileAttendanceOneTap() {
           )}
 
           {/* ======================================================== */}
-          {/* 🔢 STEP 2: LUXURY PIN CODE KEYPAD (Mobile Focused)       */}
+          {/* 🔢 STEP 2: LUXURY PIN CODE KEYPAD (Ashley Palette)       */}
           {/* ======================================================== */}
           {loginStep === 'ENTER_PIN' && selectedEmp && (
             <div className="space-y-4 animate-fade-slide-up">
               {/* Selected Employee Summary Banner with Instant Change Button */}
-              <div className="p-2.5 bg-emerald-50/80 border border-emerald-300 rounded-2xl flex items-center justify-between shadow-2xs">
+              <div className="p-2.5 bg-orange-50/90 border border-orange-200 rounded-2xl flex items-center justify-between shadow-2xs">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white flex items-center justify-center font-black text-xs shadow-xs">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#F88D2A] to-[#EA7600] text-white flex items-center justify-center font-black text-xs shadow-xs">
                     {selectedEmp.name.charAt(0)}
                   </div>
                   <div>
-                    <span className="text-xs font-black text-slate-900 block leading-tight">
+                    <span className="text-xs font-black text-[#3D3935] block leading-tight">
                       {selectedEmp.name}
                     </span>
-                    <span className="text-[10px] text-emerald-700 font-bold">
+                    <span className="text-[10px] text-[#EA7600] font-bold">
                       {translateRoleToKurdish(selectedEmp.role)}
                     </span>
                   </div>
@@ -2827,15 +2828,15 @@ export default function MobileAttendanceOneTap() {
                     setAuthError(null);
                     setPinInput('');
                   }}
-                  className="px-2.5 py-1 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-black cursor-pointer transition-all active:scale-95 shadow-2xs"
+                  className="px-2.5 py-1 rounded-xl bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 text-[10px] font-black cursor-pointer transition-all active:scale-95 shadow-2xs"
                 >
                   گۆڕین ↺
                 </button>
               </div>
 
-              {/* 4 Glowing PIN Boxes */}
+              {/* 4 Glowing Ashley Orange PIN Boxes */}
               <div className="space-y-1.5 text-center">
-                <label className="text-xs font-black text-slate-700 block">
+                <label className="text-xs font-black text-[#3D3935] block">
                   کۆدی نهێنی بنووسە (٤ ژمارە)
                 </label>
 
@@ -2847,8 +2848,8 @@ export default function MobileAttendanceOneTap() {
                         key={idx}
                         className={`w-12 h-14 rounded-2xl border-2 flex items-center justify-center text-lg font-black font-mono transition-all duration-200 ${
                           hasVal
-                            ? 'bg-emerald-50 border-emerald-500 text-emerald-800 shadow-[0_0_15px_rgba(16,185,129,0.3)] scale-105'
-                            : 'bg-white border-slate-300 text-slate-400'
+                            ? 'bg-orange-50 border-[#F88D2A] text-[#3D3935] shadow-[0_0_18px_rgba(248,141,42,0.4)] scale-105'
+                            : 'bg-white border-stone-300 text-stone-400'
                         }`}
                       >
                         {hasVal ? '●' : ''}
@@ -2865,7 +2866,7 @@ export default function MobileAttendanceOneTap() {
                 </div>
               )}
 
-              {/* Modern Touch Number Pad */}
+              {/* Modern Touch Number Pad with Ashley Tactile Keys */}
               <div className="grid grid-cols-3 gap-2 pt-1 max-w-[260px] mx-auto">
                 {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
                   <button
@@ -2880,7 +2881,7 @@ export default function MobileAttendanceOneTap() {
                         handleStep1PinSubmit(undefined, next);
                       }
                     }}
-                    className="h-12 rounded-2xl bg-white hover:bg-slate-50 active:bg-emerald-100 active:scale-95 text-slate-900 border border-slate-200/90 text-base font-black font-mono shadow-xs transition-all cursor-pointer flex items-center justify-center"
+                    className="h-12 rounded-2xl bg-white hover:bg-orange-50 active:bg-orange-100 active:scale-95 text-[#3D3935] border border-stone-200/90 text-base font-black font-mono shadow-xs transition-all cursor-pointer flex items-center justify-center"
                   >
                     {digit}
                   </button>
@@ -2892,7 +2893,7 @@ export default function MobileAttendanceOneTap() {
                     setPinInput(prev => prev.slice(0, -1));
                     setAuthError(null);
                   }}
-                  className="h-12 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 border border-slate-200 text-xs font-black transition-all cursor-pointer flex items-center justify-center"
+                  className="h-12 rounded-2xl bg-stone-100 hover:bg-stone-200 active:scale-95 text-stone-700 border border-stone-200 text-xs font-black transition-all cursor-pointer flex items-center justify-center"
                   title="سڕینەوە"
                 >
                   ⌫ سڕینەوە
@@ -2909,7 +2910,7 @@ export default function MobileAttendanceOneTap() {
                       handleStep1PinSubmit(undefined, next);
                     }
                   }}
-                  className="h-12 rounded-2xl bg-white hover:bg-slate-50 active:bg-emerald-100 active:scale-95 text-slate-900 border border-slate-200/90 text-base font-black font-mono shadow-xs transition-all cursor-pointer flex items-center justify-center"
+                  className="h-12 rounded-2xl bg-white hover:bg-orange-50 active:bg-orange-100 active:scale-95 text-[#3D3935] border border-stone-200/90 text-base font-black font-mono shadow-xs transition-all cursor-pointer flex items-center justify-center"
                 >
                   0
                 </button>
@@ -2918,7 +2919,7 @@ export default function MobileAttendanceOneTap() {
                   type="button"
                   onClick={() => handleStep1PinSubmit()}
                   disabled={authLoading || pinInput.length < 4}
-                  className="h-12 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 disabled:opacity-40 text-white font-black text-xs shadow-md shadow-emerald-600/30 border border-emerald-400/40 transition-all cursor-pointer flex items-center justify-center"
+                  className="h-12 rounded-2xl ashley-btn-gradient active:scale-95 disabled:opacity-40 text-white font-black text-xs shadow-md shadow-orange-500/30 border border-orange-400/40 transition-all cursor-pointer flex items-center justify-center"
                 >
                   {authLoading ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
