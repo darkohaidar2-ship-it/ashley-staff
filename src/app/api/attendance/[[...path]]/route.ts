@@ -4335,7 +4335,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           name: wh.name || 'لقی کۆمپانیا',
           lat: parseFloat(wh.lat),
           lng: parseFloat(wh.lng),
-          radiusMeters: parseInt(wh.radius) || 50,
+          radiusMeters: Math.max(400, parseInt(wh.radius) || 400),
         }));
 
       const primary = locations.find((l: any) => l.id === 'main-company-location') || locations[0] || {
@@ -4366,7 +4366,7 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       const locationId = id || `loc-${Date.now().toString().slice(-6)}`;
       const parsedLat = parseFloat(lat);
       const parsedLng = parseFloat(lng);
-      const parsedRadius = parseInt(radiusMeters) || 50;
+      const parsedRadius = Math.max(400, parseInt(radiusMeters) || 400);
       const parsedName = name || 'لقی کۆمپانیا';
 
       const { error: upsertErr } = await supabase.from('warehouses').upsert({

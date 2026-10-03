@@ -417,7 +417,7 @@ export default function MobileAttendanceOneTap() {
   // GPS Geofence State (default false until verified)
   const [currentLat, setCurrentLat] = useState<number | null>(null);
   const [currentLng, setCurrentLng] = useState<number | null>(null);
-  const [distanceMeters, setDistanceMeters] = useState<number>(0);
+  const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const [isInsideGeofence, setIsInsideGeofence] = useState<boolean>(false);
   const [matchedLocationName, setMatchedLocationName] = useState<string>('کۆمپانیای سەرەکی ئاشڵی');
 
@@ -617,11 +617,15 @@ export default function MobileAttendanceOneTap() {
   // 1.5. Fetch dynamic company locations configured by Admin (with Offline Cache)
   useEffect(() => {
     try {
-      const cachedLocs = localStorage.getItem('ashley_cached_locations_v1');
+      const cachedLocs = localStorage.getItem('ashley_cached_locations_v2');
       if (cachedLocs) {
         const parsed = JSON.parse(cachedLocs);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setCompanyLocations(parsed);
+          const sanitized = parsed.map((loc: any) => ({
+            ...loc,
+            radiusMeters: Math.max(400, loc.radiusMeters || 400),
+          }));
+          setCompanyLocations(sanitized);
         }
       }
     } catch (err) { logger.warn(err); }
@@ -639,11 +643,11 @@ export default function MobileAttendanceOneTap() {
             name: String(loc.name || 'کۆمپانیای سەرەکی ئاشڵی').replace(/\s*\([^)]*[A-Za-z][^)]*\)/g, ''),
             lat: parseFloat(loc.lat),
             lng: parseFloat(loc.lng),
-            radiusMeters: parseFloat(loc.radius) || parseFloat(loc.radiusMeters) || 400,
+            radiusMeters: Math.max(400, parseFloat(loc.radius) || parseFloat(loc.radiusMeters) || 400),
           }));
           setCompanyLocations(mapped);
           try {
-            localStorage.setItem('ashley_cached_locations_v1', JSON.stringify(mapped));
+            localStorage.setItem('ashley_cached_locations_v2', JSON.stringify(mapped));
           } catch (err) { logger.warn(err); }
         }
       })
@@ -721,7 +725,7 @@ export default function MobileAttendanceOneTap() {
     }
   }, []);
 
-  // 3. 🎯 Pure On-Demand GPS Geolocation Tracking
+  // 3. 🎯 Pure On-Demand GPS Geolocation Tracking with Two-Tier Fallback & Drift Tolerance
   const [gpsState, setGpsState] = useState<'idle' | 'acquiring' | 'ready' | 'error'>('idle');
   const [gpsErrorMessage, setGpsErrorMessage] = useState<string | null>(null);
 
@@ -746,63 +750,103 @@ export default function MobileAttendanceOneTap() {
         return reject(err);
       }
 
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          setCurrentLat(lat);
-          setCurrentLng(lng);
+      let hasResolved = false;
 
-          let minDistance = Infinity;
-          let insideAny = false;
-          let matchedName = activeLocations[0]?.name || 'کۆمپانیای سەرەکی ئاشڵی';
+      // Helper function to process position once obtained
+      const processPosition = (pos: GeolocationPosition) => {
+        if (hasResolved) return;
+        hasResolved = true;
 
-          for (const loc of activeLocations) {
-            if (!loc.lat || !loc.lng) continue;
-            const dist = getDistanceMeters(lat, lng, loc.lat, loc.lng);
-            if (dist < minDistance) {
-              minDistance = dist;
-              matchedName = loc.name;
-            }
-            if (dist <= (loc.radiusMeters || 400)) {
-              insideAny = true;
-              matchedName = loc.name;
-              break;
-            }
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setCurrentLat(lat);
+        setCurrentLng(lng);
+
+        let minDistance = Infinity;
+        let insideAny = false;
+        let matchedName = activeLocations[0]?.name || 'کۆمپانیای سەرەکی ئاشڵی';
+
+        // Indoor & drift buffer: account for mobile GPS accuracy radius (up to 80m)
+        const accuracyTolerance = Math.min(Math.round(pos.coords.accuracy || 0), 80);
+
+        for (const loc of activeLocations) {
+          if (!loc.lat || !loc.lng) continue;
+          const dist = getDistanceMeters(lat, lng, loc.lat, loc.lng);
+          if (dist < minDistance) {
+            minDistance = dist;
+            matchedName = loc.name;
           }
+          const allowedRadius = Math.max(400, loc.radiusMeters || 400);
+          // If within radius, or if accuracy circle overlaps the warehouse radius
+          if (dist <= allowedRadius || (dist - accuracyTolerance) <= allowedRadius) {
+            insideAny = true;
+            matchedName = loc.name;
+            break;
+          }
+        }
 
-          const roundedDist = Math.round(minDistance);
-          setDistanceMeters(roundedDist);
-          setIsInsideGeofence(insideAny);
-          setMatchedLocationName(matchedName);
-          setGpsState('ready');
+        const roundedDist = Math.round(minDistance);
+        setDistanceMeters(roundedDist);
+        setIsInsideGeofence(insideAny);
+        setMatchedLocationName(matchedName);
+        setGpsState('ready');
 
-          resolve({
-            lat,
-            lng,
-            minDistance: roundedDist,
-            insideAny,
-            matchedName,
-          });
-        },
-        (err) => {
+        resolve({
+          lat,
+          lng,
+          minDistance: roundedDist,
+          insideAny,
+          matchedName,
+        });
+      };
+
+      const onHighAccuracyError = (highErr: GeolocationPositionError) => {
+        if (hasResolved) return;
+
+        // If permission was denied by user (code 1), do not fallback, reject immediately
+        if (highErr.code === 1) {
+          hasResolved = true;
           setGpsState('error');
           setIsInsideGeofence(false);
-          let msg = 'نەتوانرا شوێنی جوگرافی وەربگیرێت.';
-          if (err.code === 1) {
-            msg = '⚠️ تکایە دەسەڵاتی شوێن لە مۆبایلەکەتدا چالاک بکە.';
-          } else if (err.code === 2) {
-            msg = '⚠️ دیاریکردنی شوێن لە مۆبایلەکەتدا ناچالاکە.';
-          } else if (err.code === 3) {
-            msg = '⚠️ کاتی وەرگرتنی شوێن بەسەرچوو. دووبارە تاقی بکەرەوە.';
-          }
+          const msg = '⚠️ تکایە دەسەڵاتی شوێن (Location) لە مۆبایلەکەتدا چالاک بکە.';
           setGpsErrorMessage(msg);
-          reject(new Error(msg));
-        },
+          return reject(new Error(msg));
+        }
+
+        // Otherwise (timeout code 3, or position unavailable code 2 indoors), fallback to network/WiFi fix
+        navigator.geolocation.getCurrentPosition(
+          processPosition,
+          (lowErr) => {
+            if (hasResolved) return;
+            hasResolved = true;
+            setGpsState('error');
+            setIsInsideGeofence(false);
+            let msg = '⚠️ نەتوانرا شوێنی جوگرافی دیاری بکرێت.';
+            if (lowErr.code === 1) {
+              msg = '⚠️ تکایە دەسەڵاتی شوێن (Location) لە مۆبایلەکەتدا چالاک بکە.';
+            } else if (lowErr.code === 2) {
+              msg = '⚠️ دیاریکردنی شوێن لە مۆبایلەکەتدا ناچالاکە.';
+            } else if (lowErr.code === 3) {
+              msg = '⚠️ کاتی وەرگرتنی شوێن بەسەرچوو. کلیک بکە بۆ دووبارەکردنەوە.';
+            }
+            setGpsErrorMessage(msg);
+            reject(new Error(msg));
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: 7000,
+            maximumAge: 60000,
+          }
+        );
+      };
+
+      navigator.geolocation.getCurrentPosition(
+        processPosition,
+        onHighAccuracyError,
         { 
           enableHighAccuracy: true, 
-          timeout: 12000, 
-          maximumAge: 0 // Fresh single-shot fix, never cached, immediate shut off
+          timeout: 6000, 
+          maximumAge: 10000 
         }
       );
     });
@@ -1824,7 +1868,7 @@ export default function MobileAttendanceOneTap() {
     const defaultLoc = companyLocations[0] || COMPANY_LOCATIONS[0];
     const punchLat = freshGeo?.lat || currentLat || defaultLoc.lat;
     const punchLng = freshGeo?.lng || currentLng || defaultLoc.lng;
-    const punchDist = freshGeo?.minDistance ?? distanceMeters;
+    const punchDist = freshGeo?.minDistance ?? (distanceMeters ?? 0);
     const punchRegion = freshGeo?.matchedName || matchedLocationName;
 
     // Helper: Save punch locally when offline and queue for automatic server sync
@@ -2803,23 +2847,23 @@ export default function MobileAttendanceOneTap() {
             <div className="flex items-center gap-2 min-w-0">
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
                 gpsState === 'acquiring' 
-                  ? 'bg-amber-100 text-amber-700 animate-spin' 
+                  ? 'bg-amber-100 text-amber-700' 
                   : gpsState === 'ready' 
                   ? isInsideGeofence ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
                   : 'bg-blue-50 text-blue-600'
               }`}>
-                {gpsState === 'acquiring' ? <RefreshCw className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
+                {gpsState === 'acquiring' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] font-black text-slate-800 truncate">
                   {gpsState === 'acquiring'
                     ? 'پشکنینی شوێن...'
                     : gpsState === 'ready'
-                    ? isInsideGeofence ? 'لە ناو کارگە' : `${distanceMeters} م دوور`
+                    ? isInsideGeofence ? 'لە ناو کارگە' : `${distanceMeters ?? 0} م دوور`
                     : 'دیاریکردنی شوێن'}
                 </p>
                 <p className="text-[9px] text-slate-500 font-bold truncate">
-                  {matchedLocationName}
+                  {gpsErrorMessage || matchedLocationName}
                 </p>
               </div>
             </div>
@@ -2829,9 +2873,9 @@ export default function MobileAttendanceOneTap() {
               onClick={() => requestSingleGpsPosition().catch(() => {})}
               disabled={gpsState === 'acquiring' || triggerLoading}
               className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 border border-slate-200 cursor-pointer shrink-0"
-              title="پشکنینی شوێن"
+              title="نوێکردنەوەی شوێن"
             >
-              <Compass className="w-4 h-4 text-blue-600" />
+              <Compass className={`w-4 h-4 text-blue-600 ${gpsState === 'acquiring' ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
@@ -2904,35 +2948,69 @@ export default function MobileAttendanceOneTap() {
           {!liveTodayShift.checkInTime ? (
             <button
               onClick={handleCheckInClick}
-              disabled={!isInsideGeofence || triggerLoading}
+              disabled={triggerLoading}
               className={`w-full p-5 rounded-3xl shadow-md transition-all flex items-center justify-between gap-3 border-2 ${
-                !isInsideGeofence
-                  ? 'bg-slate-100 text-slate-500 border-slate-300 cursor-not-allowed'
-                  : 'cursor-pointer bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-98 text-white border-emerald-500'
+                triggerLoading
+                  ? 'bg-slate-200 text-slate-500 border-slate-300 cursor-wait'
+                  : gpsState === 'acquiring'
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 active:scale-98 text-white border-amber-400 cursor-pointer'
+                  : gpsState === 'error'
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-98 text-white border-blue-500 cursor-pointer'
+                  : isInsideGeofence
+                  ? 'cursor-pointer bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-98 text-white border-emerald-500'
+                  : 'cursor-pointer bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-700 border-slate-300'
               }`}
             >
               <div className="flex items-center gap-3">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
-                  !isInsideGeofence ? 'bg-slate-200 text-amber-600' : 'bg-white/20 text-white'
+                  triggerLoading
+                    ? 'bg-white/20 text-slate-600'
+                    : gpsState === 'acquiring'
+                    ? 'bg-white/20 text-white'
+                    : gpsState === 'error'
+                    ? 'bg-white/20 text-white'
+                    : isInsideGeofence
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-200 text-amber-600'
                 }`}>
                   {triggerLoading ? (
                     <RefreshCw className="w-6 h-6 animate-spin" />
-                  ) : !isInsideGeofence ? (
-                    <Lock className="w-6 h-6" />
-                  ) : (
+                  ) : gpsState === 'acquiring' ? (
+                    <RefreshCw className="w-6 h-6 animate-spin" />
+                  ) : gpsState === 'error' ? (
+                    <Compass className="w-6 h-6" />
+                  ) : isInsideGeofence ? (
                     <CheckCircle2 className="w-7 h-7" />
+                  ) : (
+                    <Lock className="w-6 h-6" />
                   )}
                 </div>
                 <div className="text-right">
                   <span className="text-base font-black block">
                     {triggerLoading
                       ? 'تۆمارکردن...'
-                      : !isInsideGeofence
-                      ? 'قوفڵکراوە (لە دەرەوەی کارگە)'
-                      : 'تۆمارکردنی هاتن'}
+                      : gpsState === 'acquiring'
+                      ? 'خەریکی پشکنینی GPS...'
+                      : gpsState === 'error'
+                      ? 'کلیک بکە بۆ دیاریکردنی شوێن 📍'
+                      : isInsideGeofence
+                      ? 'تۆمارکردنی هاتن'
+                      : 'قوفڵکراوە (لە دەرەوەی کارگە)'}
                   </span>
-                  <span className={`text-[11px] font-bold ${!isInsideGeofence ? 'text-amber-700' : 'text-emerald-100'}`}>
-                    {!isInsideGeofence ? `دووری: ${distanceMeters} مەتر` : 'دەوامی فەرمی 08:00'}
+                  <span className={`text-[11px] font-bold ${
+                    triggerLoading || gpsState === 'acquiring' || gpsState === 'error' || isInsideGeofence
+                      ? 'text-emerald-100'
+                      : 'text-amber-700'
+                  }`}>
+                    {triggerLoading
+                      ? 'چاوەڕێبە پەیوەندی دەکرێت...'
+                      : gpsState === 'acquiring'
+                      ? 'چاوەڕێبە یان کلیک بکە بۆ خێراکردن'
+                      : gpsState === 'error'
+                      ? (gpsErrorMessage || 'تکایە دەسەڵاتی شوێن چالاک بکە')
+                      : isInsideGeofence
+                      ? `لە ناو کارگەیت (${distanceMeters ?? 0} م) • دەوامی فەرمی 08:00`
+                      : `دووری: ${distanceMeters ?? 0} مەتر • کلیک بکە بۆ دووبارەکردنەوە`}
                   </span>
                 </div>
               </div>
@@ -2959,35 +3037,69 @@ export default function MobileAttendanceOneTap() {
 
               <button
                 onClick={handleCheckOutClick}
-                disabled={!isInsideGeofence || triggerLoading}
+                disabled={triggerLoading}
                 className={`w-full p-5 rounded-3xl shadow-md transition-all flex items-center justify-between gap-3 border-2 ${
-                  !isInsideGeofence
-                    ? 'bg-slate-100 text-slate-500 border-slate-300 cursor-not-allowed'
-                    : 'cursor-pointer bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 active:scale-98 text-white border-rose-500'
+                  triggerLoading
+                    ? 'bg-slate-200 text-slate-500 border-slate-300 cursor-wait'
+                    : gpsState === 'acquiring'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 active:scale-98 text-white border-amber-400 cursor-pointer'
+                    : gpsState === 'error'
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-98 text-white border-blue-500 cursor-pointer'
+                    : isInsideGeofence
+                    ? 'cursor-pointer bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 active:scale-98 text-white border-rose-500'
+                    : 'cursor-pointer bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-700 border-slate-300'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
-                    !isInsideGeofence ? 'bg-slate-200 text-amber-600' : 'bg-white/20 text-white'
+                    triggerLoading
+                      ? 'bg-white/20 text-slate-600'
+                      : gpsState === 'acquiring'
+                      ? 'bg-white/20 text-white'
+                      : gpsState === 'error'
+                      ? 'bg-white/20 text-white'
+                      : isInsideGeofence
+                      ? 'bg-white/20 text-white'
+                      : 'bg-slate-200 text-amber-600'
                   }`}>
                     {triggerLoading ? (
                       <RefreshCw className="w-6 h-6 animate-spin" />
-                    ) : !isInsideGeofence ? (
-                      <Lock className="w-6 h-6" />
-                    ) : (
+                    ) : gpsState === 'acquiring' ? (
+                      <RefreshCw className="w-6 h-6 animate-spin" />
+                    ) : gpsState === 'error' ? (
+                      <Compass className="w-6 h-6" />
+                    ) : isInsideGeofence ? (
                       <DoorOpen className="w-7 h-7" />
+                    ) : (
+                      <Lock className="w-6 h-6" />
                     )}
                   </div>
                   <div className="text-right">
                     <span className="text-base font-black block">
                       {triggerLoading
                         ? 'تۆمارکردن...'
-                        : !isInsideGeofence
-                        ? 'قوفڵکراوە (لە دەرەوەی کارگە)'
-                        : 'تۆمارکردنی دەرچوون'}
+                        : gpsState === 'acquiring'
+                        ? 'خەریکی پشکنینی GPS...'
+                        : gpsState === 'error'
+                        ? 'کلیک بکە بۆ دیاریکردنی شوێن 📍'
+                        : isInsideGeofence
+                        ? 'تۆمارکردنی دەرچوون'
+                        : 'قوفڵکراوە (لە دەرەوەی کارگە)'}
                     </span>
-                    <span className={`text-[11px] font-bold ${!isInsideGeofence ? 'text-amber-700' : 'text-rose-100'}`}>
-                      {!isInsideGeofence ? `دووری: ${distanceMeters} مەتر` : 'کۆتایی دەوام 17:00'}
+                    <span className={`text-[11px] font-bold ${
+                      triggerLoading || gpsState === 'acquiring' || gpsState === 'error' || isInsideGeofence
+                        ? 'text-rose-100'
+                        : 'text-amber-700'
+                    }`}>
+                      {triggerLoading
+                        ? 'چاوەڕێبە پەیوەندی دەکرێت...'
+                        : gpsState === 'acquiring'
+                        ? 'چاوەڕێبە یان کلیک بکە بۆ خێراکردن'
+                        : gpsState === 'error'
+                        ? (gpsErrorMessage || 'تکایە دەسەڵاتی شوێن چالاک بکە')
+                        : isInsideGeofence
+                        ? `لە ناو کارگەیت (${distanceMeters ?? 0} م) • کۆتایی دەوام 17:00`
+                        : `دووری: ${distanceMeters ?? 0} مەتر • کلیک بکە بۆ دووبارەکردنەوە`}
                     </span>
                   </div>
                 </div>
