@@ -3,7 +3,19 @@
 import { logger } from '@/lib/logger';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { AdminDashboardWorkspace } from '@/components/admin/AdminDashboardWorkspace';
+import dynamic from 'next/dynamic';
+const AdminDashboardWorkspace = dynamic(
+  () => import('@/components/admin/AdminDashboardWorkspace').then((mod) => mod.AdminDashboardWorkspace),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div className="w-12 h-12 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mb-4" />
+        <p className="text-slate-400 text-sm font-medium">چاوەڕوانبن، کۆنتڕۆڵ پانێڵ لۆد دەکرێت...</p>
+      </div>
+    )
+  }
+);
 import { useAuth } from '@/hooks/use-auth';
 import { 
   Lock, 

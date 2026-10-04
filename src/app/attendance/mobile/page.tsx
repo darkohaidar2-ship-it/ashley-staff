@@ -41,6 +41,10 @@ import { getDistanceMeters, sendLocalNotification, type GeofenceRegion } from '@
 import { extractFaceDescriptor, loadFaceModels, matchFaceDescriptors } from '@/lib/face-recognition';
 import { resolveEmployeeDayAttendance, resolveShiftRulesForDay, translateRoleToKurdish, type UnifiedAttendanceDayInfo } from '@/lib/attendance-helpers';
 import { MobileAttendanceMapModal } from '@/components/maps/MobileAttendanceMapModal';
+import { MobileDayDetailModal } from '@/components/attendance/MobileDayDetailModal';
+import { MobileLocationHelpModal } from '@/components/attendance/MobileLocationHelpModal';
+import { MobilePwaInstallModal } from '@/components/attendance/MobilePwaInstallModal';
+import { MobileLogoutModal } from '@/components/attendance/MobileLogoutModal';
 
 // Default Employees Fallback with Official PINs
 const ASHLEY_DEFAULT_EMPLOYEES = [
@@ -3913,139 +3917,10 @@ export default function MobileAttendanceOneTap() {
     </main>
 
       {/* 🔍 DAY DETAIL MODAL (READ-ONLY SYSTEM RECORD VIEW FOR EMPLOYEE) */}
-      {selectedDayDetail && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4" onClick={() => setSelectedDayDetail(null)}>
-          <div className="bg-white border border-slate-200 p-5 rounded-3xl max-w-sm w-full space-y-4 text-right shadow-2xl relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h4 className="text-sm font-black text-slate-900">
-                  ڕۆژی {selectedDayDetail.dayNameKu} ({selectedDayDetail.dateStr})
-                </h4>
-                <span className="text-[10px] text-emerald-700 font-bold">وردەکاری تۆماری سیستەم</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {selectedDayDetail.status === 'Present' && (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                    ئامادەبوو
-                  </span>
-                )}
-                {(selectedDayDetail.status === 'Absent' || selectedDayDetail.status === 'غیاب') && (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">
-                    غیاب
-                  </span>
-                )}
-                {(selectedDayDetail.status === 'Leave' || selectedDayDetail.status === 'مۆڵەت') && (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">
-                    مۆڵەت
-                  </span>
-                )}
-                {(selectedDayDetail.status === 'Holiday' || selectedDayDetail.status === 'پشوو') && (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-teal-100 text-teal-800 border border-teal-300">
-                    پشوو
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setSelectedDayDetail(null)}
-                  className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 text-center p-3 bg-slate-50 rounded-2xl border border-slate-200 font-mono text-xs">
-              <div>
-                <span className="text-[10px] text-slate-500 block font-sans font-bold">هاتن</span>
-                <span className="font-black text-emerald-700">
-                  {selectedDayDetail.status === 'Present' && selectedDayDetail.checkInTime
-                    ? selectedDayDetail.checkInTime
-                    : selectedDayDetail.status === 'Absent' || selectedDayDetail.status === 'غیاب'
-                    ? 'غیاب'
-                    : selectedDayDetail.status === 'Leave' || selectedDayDetail.status === 'مۆڵەت'
-                    ? 'مۆڵەت'
-                    : selectedDayDetail.status === 'Holiday' || selectedDayDetail.status === 'پشوو'
-                    ? 'پشوو'
-                    : '—'}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-500 block font-sans font-bold">دەرچوون</span>
-                <span className="font-black text-rose-700">
-                  {selectedDayDetail.status === 'Present' && selectedDayDetail.checkOutTime
-                    ? selectedDayDetail.checkOutTime
-                    : selectedDayDetail.status === 'Absent' || selectedDayDetail.status === 'غیاب'
-                    ? 'غیاب'
-                    : selectedDayDetail.status === 'Leave' || selectedDayDetail.status === 'مۆڵەت'
-                    ? 'مۆڵەت'
-                    : selectedDayDetail.status === 'Holiday' || selectedDayDetail.status === 'پشوو'
-                    ? 'پشوو'
-                    : '—'}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-500 block font-sans font-bold">کاتژمێر</span>
-                <span className="font-black text-blue-800">
-                  {selectedDayDetail.status === 'Present' && selectedDayDetail.workedHours > 0
-                    ? `${selectedDayDetail.workedHours} ک`
-                    : selectedDayDetail.status === 'Absent' || selectedDayDetail.status === 'غیاب'
-                    ? '0 ک'
-                    : selectedDayDetail.status === 'Leave' || selectedDayDetail.status === 'مۆڵەت'
-                    ? 'مۆڵەت'
-                    : selectedDayDetail.status === 'Holiday' || selectedDayDetail.status === 'پشوو'
-                    ? 'پشوو'
-                    : '—'}
-                </span>
-              </div>
-            </div>
-
-            {selectedDayDetail.status === 'Present' && (selectedDayDetail.isWaived || selectedDayDetail.checkInStatus.isWaived || selectedDayDetail.checkOutStatus.isWaived) && (
-              <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs font-bold flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-600 shrink-0" />
-                <span>لێخۆشبوونی فەرمی بەڕێوەبەری هەیە</span>
-              </div>
-            )}
-
-            {(() => {
-              const cleanStr = (s?: any) => String(s || '').replace(/[🛡️📡⚠️🌴🟢🔴🟡🟣⏱️🏁📝]\s*/gu, '').trim();
-              const empInNote = cleanStr(selectedDayDetail.checkInNote || selectedDayDetail.note);
-              const empOutNote = cleanStr(selectedDayDetail.checkOutNote);
-              const admNote = cleanStr(selectedDayDetail.adminNote || selectedDayDetail.adminCheckInNote || selectedDayDetail.adminCheckOutNote);
-              const hasSeparateEmpNote = (empInNote && empInNote !== admNote) || (empOutNote && empOutNote !== admNote);
-
-              return (
-                <div className="space-y-2">
-                  {hasSeparateEmpNote && (
-                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
-                      <span className="text-[10px] font-black text-slate-600 block">تێبینی کارمەند:</span>
-                      {empInNote && empInNote !== admNote && (
-                        <p className="text-xs font-bold text-slate-800 leading-relaxed">{empInNote}</p>
-                      )}
-                      {empOutNote && empOutNote !== empInNote && empOutNote !== admNote && (
-                        <p className="text-xs font-bold text-slate-800 leading-relaxed">{empOutNote}</p>
-                      )}
-                    </div>
-                  )}
-                  {admNote && (
-                    <div className="p-3 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-1">
-                      <span className="text-[10px] font-black text-blue-700 block">تێبینی ئەدمین:</span>
-                      <p className="text-xs font-bold text-slate-900 leading-relaxed">{admNote}</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            <button
-              type="button"
-              onClick={() => setSelectedDayDetail(null)}
-              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs cursor-pointer shadow-xs"
-            >
-              داخستن
-            </button>
-          </div>
-        </div>
-      )}
+      <MobileDayDetailModal
+        selectedDayDetail={selectedDayDetail}
+        onClose={() => setSelectedDayDetail(null)}
+      />
 
       {/* ⚠️ REASON MODAL (LATE / EARLY / OVERTIME) */}
       {showReasonModal && (
@@ -4127,60 +4002,11 @@ export default function MobileAttendanceOneTap() {
       )}
 
       {/* 📍 LOCATION PERMISSION HELP MODAL */}
-      {showLocationHelpModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 p-6 rounded-3xl max-w-sm w-full space-y-4 text-right shadow-2xl">
-            <div className="text-center space-y-2">
-              <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-700 mx-auto flex items-center justify-center shadow-xs">
-                <MapPin className="w-7 h-7" />
-              </div>
-              <h4 className="text-base font-black text-slate-900">
-                چۆنیەتی چالاککردنی دەسەڵاتی شوێن
-              </h4>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                ئەگەر لۆکەیشنی مۆبایلەکەت کراوەتەوە بەڵام ئەم پەیامە دێت، دەبێت وێبگەڕەکەت (Safari / Chrome) دەسەڵاتی پێ بدرێت:
-              </p>
-            </div>
-
-            <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs">
-              <div className="flex items-start gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-mono font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">1</span>
-                <div>
-                  <span className="font-bold text-slate-800 block">دەست بنێ لە ئایکۆنی لای ناونیشان:</span>
-                  <span className="text-slate-500 text-[11px]">لە بەشی سەرەوەی وێبگەڕ لە تەنیشت ناونیشانەکە دەست لەسەر ئایکۆنی <b>aA</b> یان <b>قوفڵ 🔒</b> دابگرە.</span>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-mono font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">2</span>
-                <div>
-                  <span className="font-bold text-slate-800 block">بچۆ ناو ڕێکخستنی ماڵپەڕ:</span>
-                  <span className="text-slate-500 text-[11px]">کلیک لەسەر <b>Website Settings</b> بکە.</span>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-mono font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">3</span>
-                <div>
-                  <span className="font-bold text-slate-800 block">دەسەڵاتی Location:</span>
-                  <span className="text-slate-500 text-[11px]">بیگۆڕە لە Deny بۆ <b>Allow (ڕێگەپێدان)</b> پاشان لاپەڕەکە نوێ بکەرەوە.</span>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setShowLocationHelpModal(false);
-                requestSingleGpsPosition().catch(() => {});
-              }}
-              className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-black text-xs cursor-pointer shadow-md transition-all"
-            >
-              تێگەیشتم • دووبارە تاقی بکەرەوە
-            </button>
-          </div>
-        </div>
-      )}
+      <MobileLocationHelpModal
+        isOpen={showLocationHelpModal}
+        onClose={() => setShowLocationHelpModal(false)}
+        onRetry={() => requestSingleGpsPosition().catch(() => {})}
+      />
 
       {/* 🗺️ INTERACTIVE OFFLINE-READY ATTENDANCE MAP VIEWER MODAL */}
       <MobileAttendanceMapModal
@@ -4198,44 +4024,14 @@ export default function MobileAttendanceOneTap() {
       />
 
       {/* 🔒 UNBIND / LOGOUT MODAL */}
-      {showLogoutModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 p-5 rounded-3xl max-w-xs w-full space-y-4 text-center shadow-2xl">
-            <div className="w-11 h-11 rounded-full bg-rose-100 text-rose-600 mx-auto flex items-center justify-center">
-              <Lock className="w-5 h-5" />
-            </div>
-            <h4 className="text-sm font-black text-slate-900">دەرچوون لە هەژمار</h4>
-
-            <form onSubmit={handleLogout} className="space-y-3">
-              <input
-                type="password"
-                value={logoutPin}
-                onChange={(e) => setLogoutPin(e.target.value)}
-                placeholder="کۆدی نهێنی"
-                autoFocus
-                className="w-full bg-white border-2 border-slate-300 text-slate-900 text-center font-mono text-base font-bold p-2.5 rounded-xl focus:border-rose-500 focus:outline-none"
-              />
-              {logoutError && <p className="text-xs text-rose-600 font-bold">{logoutError}</p>}
-
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs py-2.5 rounded-xl cursor-pointer"
-                >
-                  دەرچوون
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowLogoutModal(false); setLogoutError(null); }}
-                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2.5 rounded-xl border border-slate-200 cursor-pointer"
-                >
-                  داخستن
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <MobileLogoutModal
+        isOpen={showLogoutModal}
+        logoutPin={logoutPin}
+        logoutError={logoutError}
+        onPinChange={setLogoutPin}
+        onSubmit={handleLogout}
+        onClose={() => { setShowLogoutModal(false); setLogoutError(null); }}
+      />
 
       {/* 👤 EMPLOYEE SELF-SERVICE PROFILE MODAL */}
       {showProfileModal && (
@@ -4379,51 +4175,10 @@ export default function MobileAttendanceOneTap() {
       )}
 
       {/* 📲 PWA INSTALL MODAL */}
-      {showPwaInstallModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                  <Smartphone className="w-4 h-4" />
-                </div>
-                <h3 className="text-sm font-black text-slate-900">
-                  دابەزاندنی بەرنامە لەسەر مۆبایل
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowPwaInstallModal(false)}
-                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-2.5 text-xs text-slate-700 leading-relaxed">
-              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-1">
-                <p className="font-black text-emerald-900">🤖 مۆبایلی ئەندرۆید:</p>
-                <p>١. لە سەرەوەی وێبگەڕەکە پەنجە بنێ بە سێ خاڵەکە <strong>(⋮)</strong>.</p>
-                <p>٢. دوگمەی <strong>دابەزاندنی بەرنامە</strong> یان <strong>زیادکردن بۆ شاشەی سەرەکی</strong> دابگرە.</p>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-blue-50 border border-blue-200 space-y-1">
-                <p className="font-black text-blue-900">🍏 مۆبایلی ئایفۆن:</p>
-                <p>١. لە خوارەوەی شاشەکە دوگمەی هاوبەشکردن <strong>(⬆️)</strong> دابگرە.</p>
-                <p>٢. دوگمەی <strong>زیادکردن بۆ شاشەی سەرەکی</strong> هەڵبژێرە.</p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowPwaInstallModal(false)}
-              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs cursor-pointer"
-            >
-              تێگەیشتم
-            </button>
-          </div>
-        </div>
-      )}
+      <MobilePwaInstallModal
+        isOpen={showPwaInstallModal}
+        onClose={() => setShowPwaInstallModal(false)}
+      />
 
     </div>
   );

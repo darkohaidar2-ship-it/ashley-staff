@@ -23,3 +23,33 @@ export const WAREHOUSE_COLORS = {
     lightHex: '#fff7ed' // Extremely light version for backgrounds
   }
 } as const;
+
+export const safeStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      if (typeof window === 'undefined') return null;
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): boolean => {
+    try {
+      if (typeof window === 'undefined') return false;
+      localStorage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  removeItem: (key: string): boolean => {
+    try {
+      if (typeof window === 'undefined') return false;
+      localStorage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+};
+

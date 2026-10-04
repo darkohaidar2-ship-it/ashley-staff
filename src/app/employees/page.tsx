@@ -45,12 +45,15 @@ import { useAppContext } from '@/context/app-provider';
 import type { Employee } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTranslation } from '@/hooks/use-translation';
+import dynamic from 'next/dynamic';
 import { EmployeeDashboardPrintView } from '@/components/employees/EmployeeDashboardPrintView';
-import { AdminFaceEnrollModal } from '@/components/attendance/AdminFaceEnrollModal';
+const AdminFaceEnrollModal = dynamic(
+  () => import('@/components/attendance/AdminFaceEnrollModal').then((mod) => mod.AdminFaceEnrollModal),
+  { ssr: false }
+);
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import { resolveEmployeeDayAttendance } from '@/lib/attendance-helpers';
 import { useRouter } from 'next/navigation';
-import * as XLSX from 'xlsx';
 
 const employeeRoles = [
   'super_manager', 
@@ -391,11 +394,13 @@ function EmployeesPage() {
     window.print();
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (filteredEmployees.length === 0) { 
       toast({ title: t('no_data_to_export'), description: t('no_employees_to_export_desc') }); 
       return; 
     }
+
+    const XLSX = await import('xlsx');
 
     const dataToExport = filteredEmployees.map(emp => {
       const isBound = Boolean((emp as any).deviceBound || emp.id === 'emp-02' || registeredDevices.has(emp.id.toLowerCase()) || registeredDevices.has(emp.id.toLowerCase().replace('emp-', '')));
