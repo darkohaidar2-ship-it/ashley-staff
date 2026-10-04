@@ -6,10 +6,12 @@ import {
   getTelegramBindings, 
   saveTelegramBinding, 
   recordAttendance, 
+  getAllEmployees,
+  getTodayAttendanceSummary,
+  resetTodayAttendance,
   getBaghdadNow, 
   getDistanceMeters 
 } from '@/lib/telegram/telegram-service';
-import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import { DEFAULT_COMPANY_LOCATIONS } from '@/lib/geo-constants';
 import { supabase } from '@/lib/supabase/client';
 import { logger } from '@/lib/logger';
@@ -38,145 +40,127 @@ export async function POST(req: NextRequest) {
 
     const bindings = await getTelegramBindings();
     const currentBinding = bindings[String(chatId)];
+    const allEmployees = await getAllEmployees();
 
     // -------------------------------------------------------------
-    // 1. COMMAND: /start or Account Setup
+    // 1. COMMAND: /start
     // -------------------------------------------------------------
-    if (text === '/start' || text === '🔄 نوێکردنەوە یان گۆڕینی هەژمار') {
+    if (text === '/start') {
       if (currentBinding) {
         await sendTelegramMessage(
           chatId,
           `سڵاو بەڕێز <b>${currentBinding.employeeName}</b> ✨\nبەخێربێیت بۆ سیستەمی فەرمی دەوامی ئاشڵی 🏢\n\nتکایە لە دوگمەکانی خوارەوە هەڵبژێرە:`,
           getMainReplyKeyboard()
         );
-      } else {
-        // Not bound yet: Prompt to select employee
-        const empButtons = ASHLEY_OFFICIAL_EMPLOYEES.map(emp => ([
-          { text: `👤 ${emp.name} (${emp.employeeId})` }
-        ]));
-
-        await sendTelegramMessage(
-          chatId,
-          `بەخێربێیت بۆ <b>بۆتی فەرمی دەوامی کۆمپانیای ئاشڵی</b> 🏢\n\nتکایە <b>ناوی خۆت</b> لە لیستەکەی خوارەوە هەڵبژێرە بۆ بەستنەوەی ئەم تەلەگرامە بە هەژمارەکەت:`,
-          {
-            keyboard: empButtons,
-            resize_keyboard: true,
-            one_time_keyboard: true,
-          }
-        );
-      }
-      return NextResponse.json({ ok: true });
-    }
-
-    // -------------------------------------------------------------
-    // 2. BINDING EMPLOYEE ACCOUNT
-    // -------------------------------------------------------------
-    if (!currentBinding) {
-      // Find matching employee by name or ID
-      const matchedEmp = ASHLEY_OFFICIAL_EMPLOYEES.find(emp => {
-        return text.includes(emp.name) || text.includes(emp.employeeId) || text === emp.id;
-      });
-
-      if (matchedEmp) {
-        await saveTelegramBinding(chatId, matchedEmp.id, matchedEmp.name);
-        await sendTelegramMessage(
-          chatId,
-          `✅ <b>پیرۆزە! هەژمارەکەت بەستراوەتەوە.</b>\n\n👤 ناوی کارمەند: <b>${matchedEmp.name}</b>\n🆔 کۆدی کارمەند: <b>${matchedEmp.employeeId}</b>\n\nئێستا دەتوانیت ڕۆژانە بە دوگمەکانی خوارەوە دەوام بکەیت:`,
-          getMainReplyKeyboard()
-        );
-      } else {
-        await sendTelegramMessage(
-          chatId,
-          `تکایە ناوی خۆت لە دوگمەکانی خوارەوە هەڵبژێرە، یان ژمارەی کارمەندی خۆت بنووسە (وەک: 01، 02، 03...):`
-        );
-      }
-      return NextResponse.json({ ok: true });
-    }
-
-    // -------------------------------------------------------------
-    // 3. ACTION: CHECK-IN BUTTON CLICKED
-    // -------------------------------------------------------------
-    if (text === '🟢 تۆمارکردنی هاتن') {
-      const { dateStr } = getBaghdadNow();
-      const { data: todayRec } = await supabase
-        .from('attendance')
-        .select('check_in_time, check_out_time')
-        .eq('user_id', currentBinding.employeeId)
-        .eq('date', dateStr)
-        .maybeSingle();
-
-      if (todayRec?.check_in_time) {
-        await sendTelegramMessage(
-          chatId,
-          `⚠️ بەڕێز <b>${currentBinding.employeeName}</b>، تۆ پێشتر ئەمڕۆ لە کاتژمێر <b>${todayRec.check_in_time}</b> دەوامی هاتنت تۆمار کردووە!\n\nڕۆژانە تەنها یەک جار هاتن تۆمار دەکرێت. ئەگەر کاتی تەواوبوونی دەوامتە، تکایە دوگمەی [🔴 تۆمارکردنی دەرچوون] دابگرە.`,
-          getMainReplyKeyboard()
-        );
         return NextResponse.json({ ok: true });
       }
 
-      PENDING_INTENTS[String(chatId)] = 'check_in';
+      // If not bound: Show employee list to bind
+      const empButtons: any[][] = [];
+      for (let i = 0; i < allEmployees.length; i += 2) {
+        const row = [{ text: `👤 ${allEmployees[i].name}` }];
+        if (i + 1 < allEmployees.length) {
+          row.push({ text: `👤 ${allEmployees[i + 1].name}` });
+        }
+        empButtons.push(row);
+      }
+
       await sendTelegramMessage(
         chatId,
-        `📍 بۆ تۆمارکردنی <b>دەوامی هاتن</b>، تکایە دوگمەی خوارەوە دابگرە بۆ ناردنی شوێنەکەت:\n\n<i>(تێبینی: پێویستە لۆکەیشنی مۆبایلەکەت کراوە بێت)</i>`,
-        getLocationRequestKeyboard()
+        `بەخێربێیت بۆ <b>بۆتی فەرمی دەوامی کۆمپانیای ئاشڵی</b> 🏢\n\nتکایە <b>ناوی خۆت</b> لە لیستەکەی خوارەوە هەڵبژێرە بۆ بەستنەوەی ئەم تەلەگرامە بە هەژمارەکەت:`,
+        {
+          keyboard: empButtons,
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        }
       );
       return NextResponse.json({ ok: true });
     }
 
     // -------------------------------------------------------------
-    // 4. ACTION: CHECK-OUT BUTTON CLICKED
+    // 2. COMMAND: CHANGE ACCOUNT / SHOW EMPLOYEES LIST
     // -------------------------------------------------------------
-    if (text === '🔴 تۆمارکردنی دەرچوون') {
-      const { dateStr } = getBaghdadNow();
-      const { data: todayRec } = await supabase
-        .from('attendance')
-        .select('check_in_time, check_out_time')
-        .eq('user_id', currentBinding.employeeId)
-        .eq('date', dateStr)
-        .maybeSingle();
-
-      if (!todayRec?.check_in_time) {
-        await sendTelegramMessage(
-          chatId,
-          `⚠️ تۆ هێشتا ئەمڕۆ دەوامی هاتنت تۆمار نەکردووە!\n\nسەرەتا دەبێت دەوامی [🟢 تۆمارکردنی هاتن] ئەنجام بدەیت.`,
-          getMainReplyKeyboard()
-        );
-        return NextResponse.json({ ok: true });
+    if (
+      text === '🔄 گۆڕینی هەژمار / لیست' || 
+      text === '🔄 نوێکردنەوە یان گۆڕینی هەژمار' || 
+      text === '/change' || 
+      text === '/register' ||
+      text === '/employees'
+    ) {
+      const empButtons: any[][] = [];
+      for (let i = 0; i < allEmployees.length; i += 2) {
+        const row = [{ text: `👤 ${allEmployees[i].name}` }];
+        if (i + 1 < allEmployees.length) {
+          row.push({ text: `👤 ${allEmployees[i + 1].name}` });
+        }
+        empButtons.push(row);
       }
+      empButtons.push([{ text: '❌ هەڵوەشاندنەوە' }]);
 
-      if (todayRec?.check_out_time) {
-        await sendTelegramMessage(
-          chatId,
-          `⚠️ بەڕێز <b>${currentBinding.employeeName}</b>، تۆ پێشتر ئەمڕۆ لە کاتژمێر <b>${todayRec.check_out_time}</b> دەوامی دەرچوونت تۆمار کردووە!\n\nڕۆژانە تەنها یەک جار دەرچوون تۆمار دەکرێت.`,
-          getMainReplyKeyboard()
-        );
-        return NextResponse.json({ ok: true });
-      }
+      const currentStatus = currentBinding 
+        ? `\n<i>(هەژماری ئێستات: <b>${currentBinding.employeeName}</b>)</i>\n`
+        : '';
 
-      PENDING_INTENTS[String(chatId)] = 'check_out';
       await sendTelegramMessage(
         chatId,
-        `📍 بۆ تۆمارکردنی <b>دەوامی دەرچوون</b>، تکایە دوگمەی خوارەوە دابگرە بۆ ناردنی شوێنەکەت:`,
-        getLocationRequestKeyboard()
+        `👥 <b>لیستی کارمەندانی تۆمارکراوی سیستەم:</b>${currentStatus}\nتکایە ناوی کارمەند لە دوگمەکانی خوارەوە هەڵبژێرە بۆ بەستنەوە:`,
+        {
+          keyboard: empButtons,
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        }
       );
       return NextResponse.json({ ok: true });
     }
 
     // -------------------------------------------------------------
-    // 5. ACTION: CANCEL
+    // 3. EMPLOYEE SELECTION (BINDING ACCOUNT)
     // -------------------------------------------------------------
-    if (text === '❌ هەڵوەشاندنەوە') {
-      delete PENDING_INTENTS[String(chatId)];
+    const cleanText = text.replace(/^👤\s*/, '').trim();
+    const matchedEmp = allEmployees.find(emp => {
+      const cleanEmpName = emp.name.trim().toLowerCase();
+      const input = cleanText.toLowerCase();
+      return (
+        input === cleanEmpName ||
+        input.includes(cleanEmpName) ||
+        cleanEmpName.includes(input) ||
+        (emp.employeeId && input === emp.employeeId.toLowerCase()) ||
+        input === emp.id.toLowerCase()
+      );
+    });
+
+    if (matchedEmp && (text.startsWith('👤') || !currentBinding)) {
+      await saveTelegramBinding(chatId, matchedEmp.id, matchedEmp.name);
       await sendTelegramMessage(
         chatId,
-        `کردارەکە هەڵوەشێندرایەوە. دەتوانیت لە خوارەوە هەڵبژێریت:`,
+        `✅ <b>پیرۆزە! هەژمارەکەت بەستراوەتەوە.</b>\n\n👤 ناوی کارمەند: <b>${matchedEmp.name}</b>\n🆔 کۆدی کارمەند: <b>${matchedEmp.employeeId}</b>\n\nئێستا دەتوانیت لە ڕێگەی دوگمەکانی خوارەوە دەوام تۆمار بکەیت:`,
         getMainReplyKeyboard()
       );
       return NextResponse.json({ ok: true });
     }
 
+    // If still not bound, prompt to select
+    if (!currentBinding) {
+      await sendTelegramMessage(
+        chatId,
+        `تکایە سەرەتا ناوی خۆت لە دوگمەکانی خوارەوە هەڵبژێرە، یان بنووسە /start بۆ بینینی لیستەکە:`
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    const isManager = currentBinding.employeeId === 'emp-02' || currentBinding.employeeName.includes('دارکۆ');
+
     // -------------------------------------------------------------
-    // 6. ACTION: TODAY'S ATTENDANCE STATUS
+    // 4. ACTION: TODAY'S ATTENDANCE SUMMARY LIST
+    // -------------------------------------------------------------
+    if (text === '📋 لیستی ئامادەبووانی ئەمڕۆ' || text === '/list' || text === '/today') {
+      const summary = await getTodayAttendanceSummary();
+      await sendTelegramMessage(chatId, summary, getMainReplyKeyboard());
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 5. ACTION: TODAY'S ATTENDANCE STATUS (FOR ME)
     // -------------------------------------------------------------
     if (text === '📊 دۆخی دەوامی ئەمڕۆم') {
       const { dateStr } = getBaghdadNow();
@@ -194,8 +178,8 @@ export async function POST(req: NextRequest) {
           getMainReplyKeyboard()
         );
       } else {
-        const inStr = record.check_in_time ? `🟢 هاتن: ${record.check_in_time}` : '⚪ هاتن: تۆمار نەکراوە';
-        const outStr = record.check_out_time ? `🔴 دەرچوون: ${record.check_out_time}` : '⚪ دەرچوون: تۆمار نەکراوە';
+        const inStr = record.check_in_time ? `🟢 هاتن: <b>${record.check_in_time}</b>` : '⚪ هاتن: تۆمار نەکراوە';
+        const outStr = record.check_out_time ? `🔴 دەرچوون: <b>${record.check_out_time}</b>` : '⚪ دەرچوون: تۆمار نەکراوە';
         const locStr = record.warehouse_name || record.check_in_address || 'کۆمپانیا';
 
         await sendTelegramMessage(
@@ -208,23 +192,134 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------
-    // 7. ACTION: COMPANY LOCATIONS INFO
+    // 6. ACTION: RESET TODAY ATTENDANCE (MANAGER / TEST COMMAND)
     // -------------------------------------------------------------
-    if (text === 'ℹ️ شوێنەکانی دەوام') {
-      const locList = DEFAULT_COMPANY_LOCATIONS.map(
-        l => `• <b>${l.name}</b> (مەودای ڕێگەپێدراو: ${l.radiusMeters} مەتر)`
-      ).join('\n');
-
+    if (text === '/reset_today' || text === '/delete_today') {
+      const { dateStr } = getBaghdadNow();
+      await resetTodayAttendance(currentBinding.employeeId, currentBinding.employeeName);
       await sendTelegramMessage(
         chatId,
-        `🏢 <b>شوێنە دیاریکراوەکانی دەوامی ئاشڵی:</b>\n\n${locList}\n\nدەتوانیت لەم شوێنانە دەوام تۆمار بکەیت کاتێک لە شوێنەکە ئامادە دەبیت.`,
+        `🗑️ <b>تۆماری دەوامی ئەمڕۆت (${dateStr}) بە سەرکەوتوویی پاککرایەوە!</b>\nئێستا دەتوانیت سەرلەنوێ تاقی بکەیتەوە.`,
         getMainReplyKeyboard()
       );
       return NextResponse.json({ ok: true });
     }
 
     // -------------------------------------------------------------
-    // DIRECT COMMANDS (FOR QUICK TESTING OR MANAGER BYPASS)
+    // 7. ACTION: CHECK-IN BUTTON CLICKED
+    // -------------------------------------------------------------
+    if (text === '🟢 تۆمارکردنی هاتن') {
+      const { dateStr } = getBaghdadNow();
+      const { data: todayRec } = await supabase
+        .from('attendance')
+        .select('check_in_time, check_out_time')
+        .eq('user_id', currentBinding.employeeId)
+        .eq('date', dateStr)
+        .maybeSingle();
+
+      if (todayRec?.check_in_time) {
+        const managerHint = isManager 
+          ? `\n\n<i>(وەک بەڕێوەبەر بۆ تاقیکردنەوە دەتوانیت بنووسیت <b>/in</b> بۆ نوێکردنەوە یان <b>/reset_today</b> بۆ سڕینەوە)</i>`
+          : '';
+        await sendTelegramMessage(
+          chatId,
+          `⚠️ بەڕێز <b>${currentBinding.employeeName}</b>، تۆ پێشتر ئەمڕۆ لە کاتژمێر <b>${todayRec.check_in_time}</b> دەوامی هاتنت تۆمار کردووە!\n\nڕۆژانە تەنها یەک جار هاتن تۆمار دەکرێت. ئەگەر کاتی تەواوبوونی دەوامتە، تکایە دوگمەی [🔴 تۆمارکردنی دەرچوون] دابگرە.${managerHint}`,
+          getMainReplyKeyboard()
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      PENDING_INTENTS[String(chatId)] = 'check_in';
+      await sendTelegramMessage(
+        chatId,
+        `📍 بۆ تۆمارکردنی <b>دەوامی هاتن</b>:\n\n• دەتوانیت دوگمەی <b>[📍 ناردنی لۆکەیشن]</b> دابگریت.\n• یان ئەگەر لە کۆمپیوتەریت یاخود لۆکەیشنت کار ناکات، دوگمەی <b>[⚡ تۆمارکردنی خێرا]</b> دابگرە:`,
+        getLocationRequestKeyboard()
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 8. ACTION: CHECK-OUT BUTTON CLICKED
+    // -------------------------------------------------------------
+    if (text === '🔴 تۆمارکردنی دەرچوون') {
+      const { dateStr } = getBaghdadNow();
+      const { data: todayRec } = await supabase
+        .from('attendance')
+        .select('check_in_time, check_out_time')
+        .eq('user_id', currentBinding.employeeId)
+        .eq('date', dateStr)
+        .maybeSingle();
+
+      if (!todayRec?.check_in_time && !isManager) {
+        await sendTelegramMessage(
+          chatId,
+          `⚠️ تۆ هێشتا ئەمڕۆ دەوامی هاتنت تۆمار نەکردووە!\n\nسەرەتا دەبێت دەوامی [🟢 تۆمارکردنی هاتن] ئەنجام بدەیت.`,
+          getMainReplyKeyboard()
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      if (todayRec?.check_out_time) {
+        const managerHint = isManager 
+          ? `\n\n<i>(وەک بەڕێوەبەر بۆ تاقیکردنەوە دەتوانیت بنووسیت <b>/out</b> بۆ نوێکردنەوە یان <b>/reset_today</b> بۆ سڕینەوە)</i>`
+          : '';
+        await sendTelegramMessage(
+          chatId,
+          `⚠️ بەڕێز <b>${currentBinding.employeeName}</b>، تۆ پێشتر ئەمڕۆ لە کاتژمێر <b>${todayRec.check_out_time}</b> دەوامی دەرچوونت تۆمار کردووە!\n\nڕۆژانە تەنها یەک جار دەرچوون تۆمار دەکرێت.${managerHint}`,
+          getMainReplyKeyboard()
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      PENDING_INTENTS[String(chatId)] = 'check_out';
+      await sendTelegramMessage(
+        chatId,
+        `📍 بۆ تۆمارکردنی <b>دەوامی دەرچوون</b>:\n\n• دەتوانیت دوگمەی <b>[📍 ناردنی لۆکەیشن]</b> دابگریت.\n• یان ئەگەر لە کۆمپیوتەریت، دوگمەی <b>[⚡ تۆمارکردنی خێرا]</b> دابگرە:`,
+        getLocationRequestKeyboard()
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 9. ACTION: QUICK ATTENDANCE (NO GPS REQUIRED)
+    // -------------------------------------------------------------
+    if (text === '⚡ تۆمارکردنی خێرا (بەبێ GPS)') {
+      const { dateStr } = getBaghdadNow();
+      const { data: todayRec } = await supabase
+        .from('attendance')
+        .select('check_in_time, check_out_time')
+        .eq('user_id', currentBinding.employeeId)
+        .eq('date', dateStr)
+        .maybeSingle();
+
+      let intent = PENDING_INTENTS[String(chatId)];
+      if (!intent) {
+        intent = (!todayRec?.check_in_time) ? 'check_in' : 'check_out';
+      }
+      delete PENDING_INTENTS[String(chatId)];
+
+      const result = await recordAttendance(
+        currentBinding.employeeId,
+        currentBinding.employeeName,
+        intent,
+        'کۆمپانیای سەرەکی ئاشڵی (خێرا)'
+      );
+
+      if (result.success) {
+        const typeLabel = intent === 'check_in' ? '🟢 دەوامی هاتن' : '🔴 دەوامی دەرچوون';
+        await sendTelegramMessage(
+          chatId,
+          `✅ <b>${typeLabel} بە سەرکەوتوویی تۆمارکرا!</b>\n\n👤 کارمەند: <b>${currentBinding.employeeName}</b>\n⏱ کاتژمێر: <b>${result.timeStr}</b> (${result.dateStr})\n🏢 شێواز: <b>تۆمارکردنی خێرا</b>\n\nلە سیستەمی سەرەکی و خشتەکان دانرا! ✨`,
+          getMainReplyKeyboard()
+        );
+      } else {
+        await sendTelegramMessage(chatId, `❌ هەڵە لە تۆمارکردن: ${result.error}`, getMainReplyKeyboard());
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 10. DIRECT COMMANDS (/in and /out)
     // -------------------------------------------------------------
     if (text === '/in' || text === '/checkin') {
       const result = await recordAttendance(
@@ -236,7 +331,7 @@ export async function POST(req: NextRequest) {
       if (result.success) {
         await sendTelegramMessage(
           chatId,
-          `✅ <b>🟢 دەوامی هاتن بە سەرکەوتوویی تۆمارکرا!</b>\n\n👤 کارمەند: <b>${currentBinding.employeeName}</b>\n🏢 شوێن: <b>کۆمپانیای سەرەکی ئاشڵی</b>\n⏱ کاتژمێر: <b>${result.timeStr}</b> (${result.dateStr})\n\nتۆمارەکەت لە سیستەمی سەرەکی دادەنرا! ✨`,
+          `✅ <b>🟢 دەوامی هاتن بە سەرکەوتوویی تۆمارکرا!</b>\n\n👤 کارمەند: <b>${currentBinding.employeeName}</b>\n⏱ کاتژمێر: <b>${result.timeStr}</b> (${result.dateStr})\n🏢 شوێن: <b>کۆمپانیای سەرەکی ئاشڵی</b>\n\nتۆمارەکەت لە خشتەی سەرەکی دانرا! ✨`,
           getMainReplyKeyboard()
         );
       } else {
@@ -255,7 +350,7 @@ export async function POST(req: NextRequest) {
       if (result.success) {
         await sendTelegramMessage(
           chatId,
-          `✅ <b>🔴 دەوامی دەرچوون بە سەرکەوتوویی تۆمارکرا!</b>\n\n👤 کارمەند: <b>${currentBinding.employeeName}</b>\n🏢 شوێن: <b>کۆمپانیای سەرەکی ئاشڵی</b>\n⏱ کاتژمێر: <b>${result.timeStr}</b> (${result.dateStr})\n\nتۆمارەکەت لە سیستەمی سەرەکی دادەنرا! ✨`,
+          `✅ <b>🔴 دەوامی دەرچوون بە سەرکەوتوویی تۆمارکرا!</b>\n\n👤 کارمەند: <b>${currentBinding.employeeName}</b>\n⏱ کاتژمێر: <b>${result.timeStr}</b> (${result.dateStr})\n🏢 شوێن: <b>کۆمپانیای سەرەکی ئاشڵی</b>\n\nتۆمارەکەت لە خشتەی سەرەکی دانرا! ✨`,
           getMainReplyKeyboard()
         );
       } else {
@@ -265,13 +360,41 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------
-    // 8. GPS LOCATION RECEIVED (ATTENDANCE PROCESSING)
+    // 11. ACTION: CANCEL
+    // -------------------------------------------------------------
+    if (text === '❌ هەڵوەشاندنەوە') {
+      delete PENDING_INTENTS[String(chatId)];
+      await sendTelegramMessage(
+        chatId,
+        `کردارەکە هەڵوەشێندرایەوە. دەتوانیت لە خوارەوە هەڵبژێریت:`,
+        getMainReplyKeyboard()
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 12. ACTION: COMPANY LOCATIONS INFO
+    // -------------------------------------------------------------
+    if (text === 'ℹ️ شوێنەکانی دەوام') {
+      const locList = DEFAULT_COMPANY_LOCATIONS.map(
+        l => `• <b>${l.name}</b> (مەودای ڕێگەپێدراو: ${l.radiusMeters} مەتر)`
+      ).join('\n');
+
+      await sendTelegramMessage(
+        chatId,
+        `🏢 <b>شوێنە دیاریکراوەکانی دەوامی ئاشڵی:</b>\n\n${locList}\n\nدەتوانیت لەم شوێنانە دەوام تۆمار بکەیت کاتێک لە شوێنەکە ئامادە دەبیت.`,
+        getMainReplyKeyboard()
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 13. GPS LOCATION RECEIVED (ATTENDANCE PROCESSING)
     // -------------------------------------------------------------
     if (location && typeof location.latitude === 'number' && typeof location.longitude === 'number') {
       const userLat = location.latitude;
       const userLng = location.longitude;
 
-      // Find distances to allowed locations
       let closestLoc = DEFAULT_COMPANY_LOCATIONS[0];
       let minDistance = getDistanceMeters(userLat, userLng, closestLoc.lat, closestLoc.lng);
 
@@ -283,12 +406,9 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      const isManager = currentBinding.employeeId === 'emp-02' || currentBinding.employeeName.includes('دارکۆ');
       const isInsideGeofence = minDistance <= closestLoc.radiusMeters;
 
-      // Check geofence radius (Managers have testing / override permission)
       if (isInsideGeofence || isManager) {
-        // Determine log type: check_in or check_out
         const { dateStr } = getBaghdadNow();
         const { data: todayRec } = await supabase
           .from('attendance')
@@ -301,11 +421,9 @@ export async function POST(req: NextRequest) {
         if (!intent) {
           intent = (todayRec && todayRec.check_in_time && !todayRec.check_out_time) ? 'check_out' : 'check_in';
         }
-
-        // Clean up intent
         delete PENDING_INTENTS[String(chatId)];
 
-        if (intent === 'check_in' && todayRec?.check_in_time) {
+        if (intent === 'check_in' && todayRec?.check_in_time && !isManager) {
           await sendTelegramMessage(
             chatId,
             `⚠️ بەڕێز <b>${currentBinding.employeeName}</b>، تۆ پێشتر ئەمڕۆ لە کاتژمێر <b>${todayRec.check_in_time}</b> دەوامی هاتنت تۆمار کردووە!\n\nڕۆژانە تەنها یەک جار هاتن تۆمار دەکرێت.`,
@@ -314,7 +432,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ ok: true });
         }
 
-        if (intent === 'check_out' && todayRec?.check_out_time) {
+        if (intent === 'check_out' && todayRec?.check_out_time && !isManager) {
           await sendTelegramMessage(
             chatId,
             `⚠️ بەڕێز <b>${currentBinding.employeeName}</b>، تۆ پێشتر ئەمڕۆ لە کاتژمێر <b>${todayRec.check_out_time}</b> دەوامی دەرچوونت تۆمار کردووە!\n\nڕۆژانە تەنها یەک جار دەرچوون تۆمار دەکرێت.`,
@@ -362,10 +480,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // -------------------------------------------------------------
+    // 14. HELP COMMAND
+    // -------------------------------------------------------------
+    if (text === '/help') {
+      await sendTelegramMessage(
+        chatId,
+        `ℹ️ <b>ڕێبەری فەرمانی بۆتی دەوامی ئاشڵی:</b>\n\n` +
+        `• <b>🟢 تۆمارکردنی هاتن</b>: ناردنی لۆکەیشن و تۆمارکردنی کاتی هاتن\n` +
+        `• <b>🔴 تۆمارکردنی دەرچوون</b>: تۆمارکردنی کاتی تەواوبوونی دەوام\n` +
+        `• <b>📊 دۆخی دەوامی ئەمڕۆم</b>: پیشاندانی کاتی هاتن و دەرچوونی ئەمڕۆت\n` +
+        `• <b>📋 لیستی ئامادەبووانی ئەمڕۆ</b>: پیشاندانی هەموو کارمەندانی ئامادەبوو\n` +
+        `• <b>🔄 گۆڕینی هەژمار / لیست</b>: گۆڕینی کارمەند و بەستنەوەی سەرلەنوێ\n` +
+        `• <b>/in</b>: تۆمارکردنی خێرای هاتن\n` +
+        `• <b>/out</b>: تۆمارکردنی خێرای دەرچوون\n` +
+        `• <b>/reset_today</b>: پاککردنەوەی دەوامی ئەمڕۆ (بۆ بەڕێوەبەر)`,
+        getMainReplyKeyboard()
+      );
+      return NextResponse.json({ ok: true });
+    }
+
     // Default fallback
     await sendTelegramMessage(
       chatId,
-      `تکایە دوگمەیەکی خوارەوە هەڵبژێرە بۆ دەوامکردن:`,
+      `سڵاو بەڕێز <b>${currentBinding.employeeName}</b>، تکایە دوگمەیەکی خوارەوە هەڵبژێرە:`,
       getMainReplyKeyboard()
     );
 

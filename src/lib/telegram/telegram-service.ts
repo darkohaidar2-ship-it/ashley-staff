@@ -80,10 +80,11 @@ export function getMainReplyKeyboard() {
       ],
       [
         { text: '📊 دۆخی دەوامی ئەمڕۆم' },
-        { text: 'ℹ️ شوێنەکانی دەوام' },
+        { text: '📋 لیستی ئامادەبووانی ئەمڕۆ' },
       ],
       [
-        { text: '🔄 نوێکردنەوە یان گۆڕینی هەژمار' },
+        { text: 'ℹ️ شوێنەکانی دەوام' },
+        { text: '🔄 گۆڕینی هەژمار / لیست' },
       ],
     ],
     resize_keyboard: true,
@@ -101,12 +102,159 @@ export function getLocationRequestKeyboard() {
         },
       ],
       [
+        { text: '⚡ تۆمارکردنی خێرا (بەبێ GPS)' },
         { text: '❌ هەڵوەشاندنەوە' },
       ],
     ],
     resize_keyboard: true,
     one_time_keyboard: true,
   };
+}
+
+// Fetch all employees from Supabase ashley_employees
+export async function getAllEmployees(): Promise<Array<{ id: string; employeeId: string; name: string; role?: string }>> {
+  try {
+    const { data } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_employees')
+      .maybeSingle();
+
+    if (data?.qr_code) {
+      const parsed = JSON.parse(data.qr_code);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((e: any) => ({
+          id: e.id,
+          employeeId: e.employeeId || e.id.replace('emp-', ''),
+          name: e.fullName3Part || e.kurdishName || e.name,
+          role: e.role || 'کارمەند',
+        }));
+      }
+    }
+  } catch (err) {
+    logger.warn('[TelegramService] Error reading dynamic employees:', err);
+  }
+
+  return ASHLEY_OFFICIAL_EMPLOYEES.map(e => ({
+    id: e.id,
+    employeeId: e.employeeId || e.id.replace('emp-', ''),
+    name: e.name,
+    role: e.role || 'کارمەند',
+  }));
+}
+
+// Get full summary of today's attendance for the company
+export async function getTodayAttendanceSummary(): Promise<string> {
+  const { dateStr } = getBaghdadNow();
+
+  try {
+    const { data: attList } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('date', dateStr)
+      .order('check_in_time', { ascending: true });
+
+    let manualMap: Record<string, any> = {};
+    try {
+      const { data: setRow } = await supabase
+        .from('warehouses')
+        .select('qr_code')
+        .eq('id', 'ashley_manual_attendance_records')
+        .maybeSingle();
+      if (setRow?.qr_code) {
+        manualMap = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+      }
+    } catch (err) { logger.warn(err); }
+
+    const allEmps = await getAllEmployees();
+
+    let inCount = 0;
+    let outCount = 0;
+    const rows: string[] = [];
+
+    for (const emp of allEmps) {
+      const cleanId = emp.id.replace(/^emp-0*/i, '') || emp.id.replace('emp-', '');
+      const cleanPadded = cleanId.length === 1 ? `0${cleanId}` : cleanId;
+      const ov = manualMap[`${emp.id}_${dateStr}`] || manualMap[`${cleanPadded}_${dateStr}`] || manualMap[`${emp.name}_${dateStr}`];
+      const rec = (attList || []).find(a => a.user_id === emp.id || a.user_id === `emp-${cleanPadded}` || a.user_name === emp.name);
+
+      const isDeleted = ov?.status === 'empty' || ov?.action === 'delete';
+      if (isDeleted) continue;
+
+      const inTime = ov?.checkInTime || rec?.check_in_time;
+      const outTime = ov?.checkOutTime || rec?.check_out_time;
+
+      if (inTime) inCount++;
+      if (outTime) outCount++;
+
+      if (inTime || outTime) {
+        const inLabel = inTime ? `🟢 هاتن: <b>${inTime}</b>` : `⚪ هاتن: --:--`;
+        const outLabel = outTime ? `🔴 دەرچوون: <b>${outTime}</b>` : `⚪ دەرچوون: --:--`;
+        const loc = rec?.warehouse_name || 'کۆمپانیا';
+        rows.push(`👤 <b>${emp.name}</b> (${emp.employeeId})\n   ${inLabel} | ${outLabel}\n   🏢 ${loc}`);
+      }
+    }
+
+    let text = `📋 <b>لیستی ئامادەبووانی دەوامی ئەمڕۆ (${dateStr}):</b>\n\n`;
+    text += `📊 کۆی گشتی هاتوو: <b>${inCount}</b> کارمەند\n`;
+    text += `📊 کۆی گشتی دەرچوو: <b>${outCount}</b> کارمەند\n\n`;
+
+    if (rows.length === 0) {
+      text += `<i>تا ئێستا هیچ دەوامێک بۆ ئەمڕۆ تۆمار نەکراوە.</i>\n\n`;
+    } else {
+      text += rows.join('\n\n') + '\n\n';
+    }
+
+    text += `🏢 سیستەمی بەڕێوەبردنی دەوامی ئاشڵی`;
+    return text;
+  } catch (err: any) {
+    logger.error('[TelegramService] Error generating summary:', err);
+    return `❌ هەڵە ڕوویدا لە هێنانی لیست: ${err.message}`;
+  }
+}
+
+// Reset today's attendance (for testing or manager correction)
+export async function resetTodayAttendance(employeeId: string, employeeName?: string): Promise<boolean> {
+  const { dateStr } = getBaghdadNow();
+  try {
+    await supabase.from('attendance').delete().eq('user_id', employeeId).eq('date', dateStr);
+    await supabase.from('attendance_logs').delete().eq('employee_id', employeeId).eq('log_date', dateStr);
+
+    const { data: setRow } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_manual_attendance_records')
+      .maybeSingle();
+
+    if (setRow?.qr_code) {
+      let currentOverrides = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+      const cleanId = employeeId.toString().replace(/^emp-0*/i, '') || employeeId.replace('emp-', '');
+      const cleanPadded = cleanId.length === 1 ? `0${cleanId}` : cleanId;
+      const keysToClear = [
+        `${cleanId}_${dateStr}`,
+        `${cleanPadded}_${dateStr}`,
+        `emp-${cleanId}_${dateStr}`,
+        `emp-${cleanPadded}_${dateStr}`,
+        `${employeeId}_${dateStr}`,
+      ];
+      if (employeeName) {
+        keysToClear.push(`${employeeName}_${dateStr}`);
+        keysToClear.push(`${employeeName.trim().toLowerCase()}_${dateStr}`);
+      }
+      for (const k of keysToClear) {
+        delete currentOverrides[k];
+      }
+      await supabase.from('warehouses').upsert({
+        id: 'ashley_manual_attendance_records',
+        name: 'MANUAL_ATTENDANCE_OVERRIDES',
+        qr_code: JSON.stringify(currentOverrides),
+      }, { onConflict: 'id' });
+    }
+    return true;
+  } catch (err) {
+    logger.error('[TelegramService] Error resetting today attendance:', err);
+    return false;
+  }
 }
 
 // Telegram Bindings (Mapping telegram_chat_id -> employee)
@@ -242,6 +390,10 @@ export async function recordAttendance(
         `emp-${cleanPadded}_${dateStr}`,
         `${employeeId}_${dateStr}`,
       ];
+      if (employeeName) {
+        allKeyVars.push(`${employeeName}_${dateStr}`);
+        allKeyVars.push(`${employeeName.trim().toLowerCase()}_${dateStr}`);
+      }
 
       const existingOv = currentOverrides[`${employeeId}_${dateStr}`] || currentOverrides[`${cleanPadded}_${dateStr}`] || {};
       const finalIn = logType === 'check_in' ? timeStr : (existing?.check_in_time || existingOv?.checkInTime || '08:00');
