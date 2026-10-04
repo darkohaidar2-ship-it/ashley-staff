@@ -160,19 +160,24 @@ export async function recordAttendance(
 
   try {
     const formattedLogType = logType === 'check_in' ? 'Check In' : 'Check Out';
+    const nowIso = new Date().toISOString();
+    const logId = `telegram-${employeeId}-${dateStr}-${logType === 'check_in' ? 'in' : 'out'}-${Date.now()}`;
+    const rowId = `${employeeId}-${dateStr}`;
 
-    // 1. Insert into attendance_logs
+    // 1. Insert into attendance_logs (with unique id and timestamptz created_at)
     await supabase.from('attendance_logs').insert({
+      id: logId,
       employee_id: employeeId,
       employee_name: employeeName,
       log_type: formattedLogType,
       log_date: dateStr,
       log_time_str: timeStr,
       location_address: `${locationName} (تەلەگرام)`,
-      created_at: new Date().toISOString(),
+      created_at: nowIso,
+      edit_note: 'لەڕێگەی تەلەگرام',
     });
 
-    // 2. Check if row exists in attendance for today
+    // 2. Fetch existing attendance row for today
     const { data: existing } = await supabase
       .from('attendance')
       .select('*')
@@ -181,56 +186,94 @@ export async function recordAttendance(
       .maybeSingle();
 
     if (logType === 'check_in') {
-      if (existing) {
-        await supabase
-          .from('attendance')
-          .update({
-            check_in: timeStr,
-            check_in_time: timeStr,
-            check_in_address: locationName,
-            status: 'Present',
-            warehouse_name: locationName,
-          })
-          .eq('id', existing.id);
-      } else {
-        await supabase
-          .from('attendance')
-          .insert({
-            user_id: employeeId,
-            user_name: employeeName,
-            date: dateStr,
-            status: 'Present',
-            check_in: timeStr,
-            check_in_time: timeStr,
-            check_in_address: locationName,
-            warehouse_name: locationName,
-          });
-      }
+      await supabase
+        .from('attendance')
+        .upsert({
+          id: existing?.id || rowId,
+          user_id: employeeId,
+          user_name: employeeName,
+          date: dateStr,
+          status: 'Present',
+          check_in: existing?.check_in || nowIso,
+          check_in_time: existing?.check_in_time || timeStr,
+          check_in_address: `${locationName} (تەلەگرام)`,
+          check_out: existing?.check_out || null,
+          check_out_time: existing?.check_out_time || null,
+          warehouse_name: locationName,
+        });
     } else {
       // check_out
-      if (existing) {
-        await supabase
-          .from('attendance')
-          .update({
-            check_out: timeStr,
-            check_out_time: timeStr,
-            check_out_address: locationName,
-          })
-          .eq('id', existing.id);
-      } else {
-        await supabase
-          .from('attendance')
-          .insert({
-            user_id: employeeId,
-            user_name: employeeName,
-            date: dateStr,
-            status: 'Present',
-            check_out: timeStr,
-            check_out_time: timeStr,
-            check_out_address: locationName,
-            warehouse_name: locationName,
-          });
+      await supabase
+        .from('attendance')
+        .upsert({
+          id: existing?.id || rowId,
+          user_id: employeeId,
+          user_name: employeeName,
+          date: dateStr,
+          status: 'Present',
+          check_in: existing?.check_in || nowIso,
+          check_in_time: existing?.check_in_time || '08:00',
+          check_out: nowIso,
+          check_out_time: timeStr,
+          check_out_address: `${locationName} (تەلەگرام)`,
+          warehouse_name: locationName,
+        });
+    }
+
+    // 3. Sync authoritative mobile & admin overrides store (ashley_manual_attendance_records)
+    try {
+      const { data: setRow } = await supabase
+        .from('warehouses')
+        .select('qr_code')
+        .eq('id', 'ashley_manual_attendance_records')
+        .maybeSingle();
+
+      let currentOverrides: Record<string, any> = {};
+      if (setRow?.qr_code) {
+        currentOverrides = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
       }
+
+      const cleanId = employeeId.toString().replace(/^emp-0*/i, '') || employeeId.replace('emp-', '');
+      const cleanPadded = cleanId.length === 1 ? `0${cleanId}` : cleanId;
+      const allKeyVars = [
+        `${cleanId}_${dateStr}`,
+        `${cleanPadded}_${dateStr}`,
+        `emp-${cleanId}_${dateStr}`,
+        `emp-${cleanPadded}_${dateStr}`,
+        `${employeeId}_${dateStr}`,
+      ];
+
+      const existingOv = currentOverrides[`${employeeId}_${dateStr}`] || currentOverrides[`${cleanPadded}_${dateStr}`] || {};
+      const finalIn = logType === 'check_in' ? timeStr : (existing?.check_in_time || existingOv?.checkInTime || '08:00');
+      const finalOut = logType === 'check_out' ? timeStr : (existing?.check_out_time || existingOv?.checkOutTime || null);
+
+      const liveOverride = {
+        userId: employeeId,
+        userName: employeeName,
+        date: dateStr,
+        status: 'Present',
+        checkInTime: finalIn,
+        checkOutTime: finalOut,
+        rawCheckIn: finalIn,
+        rawCheckOut: finalOut,
+        note: 'لەڕێگەی تەلەگرام',
+        adminNote: '',
+        warehouseName: locationName,
+        updatedAt: nowIso,
+        action: 'update',
+      };
+
+      for (const k of allKeyVars) {
+        currentOverrides[k] = liveOverride;
+      }
+
+      await supabase.from('warehouses').upsert({
+        id: 'ashley_manual_attendance_records',
+        name: 'MANUAL_ATTENDANCE_OVERRIDES',
+        qr_code: JSON.stringify(currentOverrides),
+      }, { onConflict: 'id' });
+    } catch (whErr) {
+      logger.warn('[TelegramService] Error syncing to manual overrides:', whErr);
     }
 
     return { success: true, dateStr, timeStr };
