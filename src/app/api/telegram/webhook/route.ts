@@ -97,6 +97,23 @@ export async function POST(req: NextRequest) {
     // 3. ACTION: CHECK-IN BUTTON CLICKED
     // -------------------------------------------------------------
     if (text === '🟢 تۆمارکردنی هاتن') {
+      const { dateStr } = getBaghdadNow();
+      const { data: todayRec } = await supabase
+        .from('attendance')
+        .select('check_in_time, check_out_time')
+        .eq('user_id', currentBinding.employeeId)
+        .eq('date', dateStr)
+        .maybeSingle();
+
+      if (todayRec?.check_in_time) {
+        await sendTelegramMessage(
+          chatId,
+          `⚠️ بەڕێز <b>${currentBinding.employeeName}</b>، تۆ پێشتر ئەمڕۆ لە کاتژمێر <b>${todayRec.check_in_time}</b> دەوامی هاتنت تۆمار کردووە!\n\nڕۆژانە تەنها یەک جار هاتن تۆمار دەکرێت. ئەگەر کاتی تەواوبوونی دەوامتە، تکایە دوگمەی [🔴 تۆمارکردنی دەرچوون] دابگرە.`,
+          getMainReplyKeyboard()
+        );
+        return NextResponse.json({ ok: true });
+      }
+
       PENDING_INTENTS[String(chatId)] = 'check_in';
       await sendTelegramMessage(
         chatId,
@@ -110,6 +127,32 @@ export async function POST(req: NextRequest) {
     // 4. ACTION: CHECK-OUT BUTTON CLICKED
     // -------------------------------------------------------------
     if (text === '🔴 تۆمارکردنی دەرچوون') {
+      const { dateStr } = getBaghdadNow();
+      const { data: todayRec } = await supabase
+        .from('attendance')
+        .select('check_in_time, check_out_time')
+        .eq('user_id', currentBinding.employeeId)
+        .eq('date', dateStr)
+        .maybeSingle();
+
+      if (!todayRec?.check_in_time) {
+        await sendTelegramMessage(
+          chatId,
+          `⚠️ تۆ هێشتا ئەمڕۆ دەوامی هاتنت تۆمار نەکردووە!\n\nسەرەتا دەبێت دەوامی [🟢 تۆمارکردنی هاتن] ئەنجام بدەیت.`,
+          getMainReplyKeyboard()
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      if (todayRec?.check_out_time) {
+        await sendTelegramMessage(
+          chatId,
+          `⚠️ بەڕێز <b>${currentBinding.employeeName}</b>، تۆ پێشتر ئەمڕۆ لە کاتژمێر <b>${todayRec.check_out_time}</b> دەوامی دەرچوونت تۆمار کردووە!\n\nڕۆژانە تەنها یەک جار دەرچوون تۆمار دەکرێت.`,
+          getMainReplyKeyboard()
+        );
+        return NextResponse.json({ ok: true });
+      }
+
       PENDING_INTENTS[String(chatId)] = 'check_out';
       await sendTelegramMessage(
         chatId,
@@ -202,22 +245,39 @@ export async function POST(req: NextRequest) {
       // Check geofence radius
       if (minDistance <= closestLoc.radiusMeters) {
         // Determine log type: check_in or check_out
+        const { dateStr } = getBaghdadNow();
+        const { data: todayRec } = await supabase
+          .from('attendance')
+          .select('check_in_time, check_out_time')
+          .eq('user_id', currentBinding.employeeId)
+          .eq('date', dateStr)
+          .maybeSingle();
+
         let intent = PENDING_INTENTS[String(chatId)];
         if (!intent) {
-          // Check if already checked in today
-          const { dateStr } = getBaghdadNow();
-          const { data: todayRec } = await supabase
-            .from('attendance')
-            .select('check_in_time, check_out_time')
-            .eq('user_id', currentBinding.employeeId)
-            .eq('date', dateStr)
-            .maybeSingle();
-
           intent = (todayRec && todayRec.check_in_time && !todayRec.check_out_time) ? 'check_out' : 'check_in';
         }
 
         // Clean up intent
         delete PENDING_INTENTS[String(chatId)];
+
+        if (intent === 'check_in' && todayRec?.check_in_time) {
+          await sendTelegramMessage(
+            chatId,
+            `⚠️ بەڕێز <b>${currentBinding.employeeName}</b>، تۆ پێشتر ئەمڕۆ لە کاتژمێر <b>${todayRec.check_in_time}</b> دەوامی هاتنت تۆمار کردووە!\n\nڕۆژانە تەنها یەک جار هاتن تۆمار دەکرێت.`,
+            getMainReplyKeyboard()
+          );
+          return NextResponse.json({ ok: true });
+        }
+
+        if (intent === 'check_out' && todayRec?.check_out_time) {
+          await sendTelegramMessage(
+            chatId,
+            `⚠️ بەڕێز <b>${currentBinding.employeeName}</b>، تۆ پێشتر ئەمڕۆ لە کاتژمێر <b>${todayRec.check_out_time}</b> دەوامی دەرچوونت تۆمار کردووە!\n\nڕۆژانە تەنها یەک جار دەرچوون تۆمار دەکرێت.`,
+            getMainReplyKeyboard()
+          );
+          return NextResponse.json({ ok: true });
+        }
 
         const result = await recordAttendance(
           currentBinding.employeeId,

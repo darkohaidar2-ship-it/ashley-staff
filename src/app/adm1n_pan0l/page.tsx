@@ -143,6 +143,9 @@ export default function HiddenAdminPanelPortal() {
 
       sessionStorage.setItem('ashley_admin_session', JSON.stringify(loggedUser));
       localStorage.setItem('ashley_admin_session', JSON.stringify(loggedUser));
+      if (typeof document !== 'undefined') {
+        document.cookie = 'ashley_admin_session=active; path=/; max-age=86400; SameSite=Lax';
+      }
 
       try {
         await login(username.trim(), password.trim());
@@ -165,6 +168,9 @@ export default function HiddenAdminPanelPortal() {
         };
         sessionStorage.setItem('ashley_admin_session', JSON.stringify(fallbackUser));
         localStorage.setItem('ashley_admin_session', JSON.stringify(fallbackUser));
+        if (typeof document !== 'undefined') {
+          document.cookie = 'ashley_admin_session=active; path=/; max-age=86400; SameSite=Lax';
+        }
         setSessionUser(fallbackUser);
       } else {
         setError('⚠️ وشەی تێپەڕ یان ناوی بەکارهێنەر هەڵەیە!');

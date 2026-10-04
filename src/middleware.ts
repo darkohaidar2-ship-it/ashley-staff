@@ -3,7 +3,6 @@ import type { NextRequest } from 'next/server';
 
 // Routes that require admin authentication
 const PROTECTED_ROUTES = [
-  '/adm1n_pan0l',
   '/employees',
   '/settings',
   '/overtime',
@@ -14,6 +13,7 @@ const PROTECTED_ROUTES = [
 // Routes that are always public
 const PUBLIC_ROUTES = [
   '/',
+  '/adm1n_pan0l',
   '/attendance/mobile',
   '/attendance/checkin',
   '/gps',
