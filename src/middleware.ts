@@ -1,25 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Routes that require admin authentication
-const PROTECTED_ROUTES = [
-  '/employees',
-  '/settings',
-  '/overtime',
-  '/ashley-expenses',
-  '/account',
-];
 
-// Routes that are always public
-const PUBLIC_ROUTES = [
-  '/',
-  '/adm1n_pan0l',
-  '/attendance/mobile',
-  '/attendance/checkin',
-  '/gps',
-  '/admin',
-  '/login',
-];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -29,25 +11,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check if the route is protected
-  const isProtected = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
-
-  if (!isProtected) {
-    return NextResponse.next();
-  }
-
-  // Check for admin session cookie
-  const adminSession = request.cookies.get('ashley_admin_session')?.value;
-
-  if (!adminSession) {
-    // Redirect unauthenticated users to home page
-    const url = request.nextUrl.clone();
-    url.pathname = '/';
-    url.searchParams.set('auth_required', 'true');
-    return NextResponse.redirect(url);
-  }
-
-  return NextResponse.next();
+  // Pass-through with security headers
+  const response = NextResponse.next();
+  response.headers.set('X-Frame-Options', 'SAMEORIGIN');
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  return response;
 }
 
 export const config = {

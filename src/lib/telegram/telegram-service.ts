@@ -159,11 +159,13 @@ export async function recordAttendance(
   const { dateStr, timeStr } = getBaghdadNow();
 
   try {
+    const formattedLogType = logType === 'check_in' ? 'Check In' : 'Check Out';
+
     // 1. Insert into attendance_logs
     await supabase.from('attendance_logs').insert({
       employee_id: employeeId,
       employee_name: employeeName,
-      log_type: logType,
+      log_type: formattedLogType,
       log_date: dateStr,
       log_time_str: timeStr,
       location_address: `${locationName} (تەلەگرام)`,
@@ -183,9 +185,10 @@ export async function recordAttendance(
         await supabase
           .from('attendance')
           .update({
+            check_in: timeStr,
             check_in_time: timeStr,
             check_in_address: locationName,
-            status: 'present',
+            status: 'Present',
             warehouse_name: locationName,
           })
           .eq('id', existing.id);
@@ -196,7 +199,8 @@ export async function recordAttendance(
             user_id: employeeId,
             user_name: employeeName,
             date: dateStr,
-            status: 'present',
+            status: 'Present',
+            check_in: timeStr,
             check_in_time: timeStr,
             check_in_address: locationName,
             warehouse_name: locationName,
@@ -208,6 +212,7 @@ export async function recordAttendance(
         await supabase
           .from('attendance')
           .update({
+            check_out: timeStr,
             check_out_time: timeStr,
             check_out_address: locationName,
           })
@@ -219,7 +224,8 @@ export async function recordAttendance(
             user_id: employeeId,
             user_name: employeeName,
             date: dateStr,
-            status: 'present',
+            status: 'Present',
+            check_out: timeStr,
             check_out_time: timeStr,
             check_out_address: locationName,
             warehouse_name: locationName,

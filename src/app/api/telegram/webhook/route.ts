@@ -224,6 +224,47 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------
+    // DIRECT COMMANDS (FOR QUICK TESTING OR MANAGER BYPASS)
+    // -------------------------------------------------------------
+    if (text === '/in' || text === '/checkin') {
+      const result = await recordAttendance(
+        currentBinding.employeeId,
+        currentBinding.employeeName,
+        'check_in',
+        'کۆمپانیای سەرەکی ئاشڵی (تەلەگرام)'
+      );
+      if (result.success) {
+        await sendTelegramMessage(
+          chatId,
+          `✅ <b>🟢 دەوامی هاتن بە سەرکەوتوویی تۆمارکرا!</b>\n\n👤 کارمەند: <b>${currentBinding.employeeName}</b>\n🏢 شوێن: <b>کۆمپانیای سەرەکی ئاشڵی</b>\n⏱ کاتژمێر: <b>${result.timeStr}</b> (${result.dateStr})\n\nتۆمارەکەت لە سیستەمی سەرەکی دادەنرا! ✨`,
+          getMainReplyKeyboard()
+        );
+      } else {
+        await sendTelegramMessage(chatId, `❌ هەڵە لە تۆمارکردن: ${result.error}`, getMainReplyKeyboard());
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    if (text === '/out' || text === '/checkout') {
+      const result = await recordAttendance(
+        currentBinding.employeeId,
+        currentBinding.employeeName,
+        'check_out',
+        'کۆمپانیای سەرەکی ئاشڵی (تەلەگرام)'
+      );
+      if (result.success) {
+        await sendTelegramMessage(
+          chatId,
+          `✅ <b>🔴 دەوامی دەرچوون بە سەرکەوتوویی تۆمارکرا!</b>\n\n👤 کارمەند: <b>${currentBinding.employeeName}</b>\n🏢 شوێن: <b>کۆمپانیای سەرەکی ئاشڵی</b>\n⏱ کاتژمێر: <b>${result.timeStr}</b> (${result.dateStr})\n\nتۆمارەکەت لە سیستەمی سەرەکی دادەنرا! ✨`,
+          getMainReplyKeyboard()
+        );
+      } else {
+        await sendTelegramMessage(chatId, `❌ هەڵە لە تۆمارکردن: ${result.error}`, getMainReplyKeyboard());
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
     // 8. GPS LOCATION RECEIVED (ATTENDANCE PROCESSING)
     // -------------------------------------------------------------
     if (location && typeof location.latitude === 'number' && typeof location.longitude === 'number') {
@@ -242,8 +283,11 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Check geofence radius
-      if (minDistance <= closestLoc.radiusMeters) {
+      const isManager = currentBinding.employeeId === 'emp-02' || currentBinding.employeeName.includes('دارکۆ');
+      const isInsideGeofence = minDistance <= closestLoc.radiusMeters;
+
+      // Check geofence radius (Managers have testing / override permission)
+      if (isInsideGeofence || isManager) {
         // Determine log type: check_in or check_out
         const { dateStr } = getBaghdadNow();
         const { data: todayRec } = await supabase
@@ -279,18 +323,24 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ ok: true });
         }
 
+        const locName = isInsideGeofence ? closestLoc.name : `${closestLoc.name} (بەڕێوەبەر - دەرەوەی سنور)`;
+
         const result = await recordAttendance(
           currentBinding.employeeId,
           currentBinding.employeeName,
           intent,
-          closestLoc.name
+          locName
         );
 
         if (result.success) {
           const typeLabel = intent === 'check_in' ? '🟢 دەوامی هاتن' : '🔴 دەوامی دەرچوون';
+          const distanceNote = isInsideGeofence
+            ? `📍 مەودا لە سەنتەر: <b>${minDistance} مەتر</b>`
+            : `📍 مەودا لە سەنتەر: <b>${minDistance} مەتر (ڕێگەپێدراوی بەڕێوەبەر)</b>`;
+
           await sendTelegramMessage(
             chatId,
-            `✅ <b>${typeLabel} بە سەرکەوتوویی تۆمارکرا!</b>\n\n👤 کارمەند: <b>${currentBinding.employeeName}</b>\n🏢 شوێن: <b>${closestLoc.name}</b>\n📍 مەودا لە سەنتەر: <b>${minDistance} مەتر</b>\n⏱ کاتژمێر: <b>${result.timeStr}</b> (${result.dateStr})\n\nدەستت خۆش بێت و ڕۆژێکی پڕ لە سەرکەوتن! ✨`,
+            `✅ <b>${typeLabel} بە سەرکەوتوویی تۆمارکرا!</b>\n\n👤 کارمەند: <b>${currentBinding.employeeName}</b>\n🏢 شوێن: <b>${closestLoc.name}</b>\n${distanceNote}\n⏱ کاتژمێر: <b>${result.timeStr}</b> (${result.dateStr})\n\nدەستت خۆش بێت و لە سیستەم تۆمارکرا! ✨`,
             getMainReplyKeyboard()
           );
         } else {
