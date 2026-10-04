@@ -615,7 +615,7 @@ export default function MobileAttendanceOneTap() {
 
   const handleBypassSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (bypassPin.trim() === '12355321' || bypassPin.trim() === '1002') {
+    if (bypassPin.trim() === (process.env.NEXT_PUBLIC_ADMIN_BYPASS_PIN || '')) {
       sessionStorage.setItem('ashley_desktop_bypass', 'true');
       setMasterBypass(true);
       setShowBypassModal(false);
@@ -1241,8 +1241,7 @@ export default function MobileAttendanceOneTap() {
       activePin === String(officialPin).trim() ||
       (emp as any).pin === activePin ||
       (emp as any).password === activePin ||
-      activePin === '12355321' || // Master Admin PIN
-      (isDarko && (activePin === '1002' || activePin === '1001'));
+      activePin === (process.env.NEXT_PUBLIC_ADMIN_BYPASS_PIN || '__disabled__');
 
     if (!isPinMatch) {
       setAuthError('❌ کۆدی نهێنی هەڵەیە!');
@@ -1257,7 +1256,7 @@ export default function MobileAttendanceOneTap() {
       // 📱 Hardware Device Binding Verification (Strict 1 Phone = 1 Employee)
       let devToken = localStorage.getItem('ashley_device_token');
       if (!devToken) {
-        devToken = 'dev-' + Math.random().toString(36).substring(2, 10);
+        devToken = 'dev-' + crypto.randomUUID();
         localStorage.setItem('ashley_device_token', devToken);
       }
 

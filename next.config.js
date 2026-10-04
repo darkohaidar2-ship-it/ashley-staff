@@ -6,10 +6,10 @@ const nextConfig = {
     removeConsole: process.env.NODE_ENV === 'production',
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   images: {
     remotePatterns: [
