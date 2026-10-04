@@ -83,7 +83,10 @@ export function getMainReplyKeyboard() {
         { text: '📋 لیستی ئامادەبووانی ئەمڕۆ' },
       ],
       [
+        { text: '📅 دۆخی دەوامی ئەم مانگەم' },
         { text: 'ℹ️ شوێنەکانی دەوام' },
+      ],
+      [
         { text: '🔄 گۆڕینی هەژمار / لیست' },
       ],
     ],
@@ -275,10 +278,34 @@ export async function getTelegramBindings(): Promise<Record<string, { employeeId
   return {};
 }
 
-export async function saveTelegramBinding(telegramId: string | number, employeeId: string, employeeName: string) {
+// Save binding with 1-to-1 employee device lock
+export async function saveTelegramBinding(
+  telegramId: string | number, 
+  employeeId: string, 
+  employeeName: string,
+  force: boolean = false
+): Promise<{ success: boolean; error?: string; boundToTelegramId?: string }> {
   try {
     const current = await getTelegramBindings();
-    current[String(telegramId)] = {
+    const strTId = String(telegramId);
+
+    // 🔒 Security Check: Check if this employee is already bound to ANOTHER Telegram ID
+    for (const [existingTId, info] of Object.entries(current)) {
+      if (info.employeeId === employeeId && existingTId !== strTId) {
+        if (!force) {
+          return {
+            success: false,
+            error: 'ALREADY_BOUND_TO_ANOTHER',
+            boundToTelegramId: existingTId,
+          };
+        } else {
+          // If manager forces unbind of previous device
+          delete current[existingTId];
+        }
+      }
+    }
+
+    current[strTId] = {
       employeeId,
       employeeName,
       linkedAt: new Date().toISOString(),
@@ -290,10 +317,141 @@ export async function saveTelegramBinding(telegramId: string | number, employeeI
       qr_code: JSON.stringify(current),
     }, { onConflict: 'id' });
 
-    return true;
-  } catch (err) {
+    return { success: true };
+  } catch (err: any) {
     logger.error('[TelegramService] Error saving binding:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+// Unbind / Unlock employee Telegram account
+export async function unbindTelegramAccount(targetEmployeeIdOrChatId: string): Promise<boolean> {
+  try {
+    const current = await getTelegramBindings();
+    let changed = false;
+
+    for (const [chatId, info] of Object.entries(current)) {
+      if (info.employeeId === targetEmployeeIdOrChatId || chatId === targetEmployeeIdOrChatId) {
+        delete current[chatId];
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await supabase.from('warehouses').upsert({
+        id: 'ashley_telegram_bindings',
+        name: 'TELEGRAM_USER_BINDINGS',
+        qr_code: JSON.stringify(current),
+      }, { onConflict: 'id' });
+    }
+
+    return changed;
+  } catch (err) {
+    logger.error('[TelegramService] Error unbinding:', err);
     return false;
+  }
+}
+
+// Monthly Attendance Report for an employee
+export async function getMonthlyAttendanceReport(employeeId: string, employeeName: string, targetMonth?: string): Promise<string> {
+  const { dateStr } = getBaghdadNow();
+  const monthStr = targetMonth || dateStr.slice(0, 7);
+
+  try {
+    const { data: monthRecords } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('user_id', employeeId)
+      .ilike('date', `${monthStr}%`)
+      .order('date', { ascending: true });
+
+    let manualMap: Record<string, any> = {};
+    try {
+      const { data: setRow } = await supabase
+        .from('warehouses')
+        .select('qr_code')
+        .eq('id', 'ashley_manual_attendance_records')
+        .maybeSingle();
+      if (setRow?.qr_code) {
+        manualMap = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+      }
+    } catch (err) { logger.warn(err); }
+
+    const cleanId = employeeId.replace(/^emp-0*/i, '') || employeeId.replace('emp-', '');
+    const cleanPadded = cleanId.length === 1 ? `0${cleanId}` : cleanId;
+
+    let presentDays = 0;
+    let absentDays = 0;
+    let leaveDays = 0;
+    const dayRows: string[] = [];
+
+    const recordsMap = new Map<string, any>();
+    (monthRecords || []).forEach(r => recordsMap.set(r.date, r));
+
+    for (const [key, val] of Object.entries<any>(manualMap)) {
+      if (!key.includes(monthStr)) continue;
+      if (
+        key.startsWith(`${employeeId}_`) ||
+        key.startsWith(`${cleanId}_`) ||
+        key.startsWith(`${cleanPadded}_`) ||
+        key.startsWith(`emp-${cleanPadded}_`) ||
+        key.startsWith(`${employeeName}_`)
+      ) {
+        const d = val.date || key.split('_')[1];
+        if (d) {
+          recordsMap.set(d, { ...(recordsMap.get(d) || {}), ...val, date: d });
+        }
+      }
+    }
+
+    const sortedDates = Array.from(recordsMap.keys()).sort();
+
+    for (const d of sortedDates) {
+      const r = recordsMap.get(d);
+      const isDel = r?.status === 'empty' || r?.action === 'delete';
+      if (isDel) continue;
+
+      const st = r.status || 'Present';
+      const inT = r.checkInTime || r.check_in_time;
+      const outT = r.checkOutTime || r.check_out_time;
+
+      if (st === 'Absent' || st === 'غیاب') {
+        absentDays++;
+        dayRows.push(`❌ <b>${d.slice(5)}</b>: غیاب`);
+      } else if (st === 'Leave' || st === 'مۆڵەت') {
+        leaveDays++;
+        dayRows.push(`🏖️ <b>${d.slice(5)}</b>: مۆڵەت`);
+      } else if (st === 'Holiday' || st === 'پشوو') {
+        dayRows.push(`🌴 <b>${d.slice(5)}</b>: پشووی فەرمی`);
+      } else if (inT || outT) {
+        presentDays++;
+        const inStr = inT ? `🟢 ${inT}` : '⚪ --:--';
+        const outStr = outT ? `🔴 ${outT}` : '⚪ --:--';
+        dayRows.push(`📅 <b>${d.slice(5)}</b>: [${inStr} | ${outStr}]`);
+      }
+    }
+
+    let report = `📅 <b>ڕاپۆرتی دەوامی مانگانە (${monthStr}):</b>\n\n`;
+    report += `👤 کارمەند: <b>${employeeName}</b>\n`;
+    report += `🏢 بەشی: کۆمپانیای سەرەکی ئاشڵی\n\n`;
+    report += `📊 <b>ئاماری گشتی ئەم مانگە:</b>\n`;
+    report += `• کۆی ڕۆژانی ئامادەبوو: <b>${presentDays}</b> ڕۆژ\n`;
+    if (absentDays > 0) report += `• ڕۆژانی غیاب: <b>${absentDays}</b> ڕۆژ\n`;
+    if (leaveDays > 0) report += `• ڕۆژانی مۆڵەت: <b>${leaveDays}</b> ڕۆژ\n`;
+    report += `\n`;
+
+    if (dayRows.length > 0) {
+      report += `📋 <b>تۆماری ڕۆژەکان:</b>\n`;
+      report += dayRows.join('\n') + `\n\n`;
+    } else {
+      report += `<i>تا ئێستا هیچ تۆمارێکی دەوام بۆ ئەم مانگە تۆمار نەکراوە.</i>\n\n`;
+    }
+
+    report += `✨ سیستەمی بەڕێوەبردنی دەوامی ئاشڵی`;
+    return report;
+  } catch (err: any) {
+    logger.error('[TelegramService] Error getting monthly report:', err);
+    return `❌ هەڵە لە هێنانی ڕاپۆرتی مانگانە: ${err.message}`;
   }
 }
 
