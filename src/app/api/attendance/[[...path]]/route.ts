@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { getEmployeeProfile, updateEmployeeProfile } from '@/lib/attendance/profile-service';
 import { getSecurityStatus, resetUserDevice, resetUserFace } from '@/lib/attendance/security-service';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
+import { evaluateAndRecordAttendance } from '@/lib/attendance/punch-service';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -1501,6 +1502,19 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
       await saveShiftOverridesToStore(currentOverrides);
 
       return NextResponse.json({ success: true });
+    }
+
+    // ----------------------------------------
+    // POST /api/attendance/punch (Unified Decision Engine for WhatsApp/Telegram/Web)
+    // ----------------------------------------
+    if (pathStr === 'punch' && method === 'POST') {
+      try {
+        const body = await req.json();
+        const result = await evaluateAndRecordAttendance(body);
+        return NextResponse.json(result);
+      } catch (err: any) {
+        return NextResponse.json({ success: false, message: `هەڵە: ${err.message}` }, { status: 500 });
+      }
     }
 
     // ----------------------------------------
