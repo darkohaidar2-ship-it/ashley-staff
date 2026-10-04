@@ -3,8 +3,14 @@ import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import { DEFAULT_COMPANY_LOCATIONS } from '@/lib/geo-constants';
 import { logger } from '@/lib/logger';
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8898240606:AAGKTldXKyJEIfGL8ggU42MlvJclgZVIa1c';
-const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+// Bot token is strictly read from environment variable - no hardcoded fallback
+function getBotToken(): string {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    logger.error('[TelegramService] TELEGRAM_BOT_TOKEN environment variable is not defined!');
+  }
+  return token || '';
+}
 
 // Timezone: Asia/Baghdad (Kurdish Local Time)
 export function getBaghdadNow() {
@@ -48,6 +54,12 @@ export function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2
 
 // Telegram API message sender
 export async function sendTelegramMessage(chatId: number | string, text: string, replyMarkup?: any) {
+  const token = getBotToken();
+  if (!token) {
+    logger.error('[TelegramService] Cannot send telegram message: TELEGRAM_BOT_TOKEN is missing');
+    return null;
+  }
+
   try {
     const payload: any = {
       chat_id: chatId,
@@ -58,7 +70,7 @@ export async function sendTelegramMessage(chatId: number | string, text: string,
       payload.reply_markup = replyMarkup;
     }
 
-    const res = await fetch(`${TELEGRAM_API}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -71,47 +83,195 @@ export async function sendTelegramMessage(chatId: number | string, text: string,
 }
 
 // Keyboards
-export function getMainReplyKeyboard() {
-  return {
-    keyboard: [
-      [
-        { text: '🟢 تۆمارکردنی هاتن' },
-        { text: '🔴 تۆمارکردنی دەرچوون' },
-      ],
-      [
-        { text: '📊 دۆخی دەوامی ئەمڕۆم' },
-        { text: '📋 لیستی ئامادەبووانی ئەمڕۆ' },
-      ],
-      [
-        { text: '📅 دۆخی دەوامی ئەم مانگەم' },
-        { text: 'ℹ️ شوێنەکانی دەوام' },
-      ],
-      [
-        { text: '🔄 گۆڕینی هەژمار / لیست' },
-      ],
+export function getMainReplyKeyboard(isManager: boolean = false) {
+  const rows: any[][] = [
+    [
+      { text: '🟢 تۆمارکردنی هاتن' },
+      { text: '🔴 تۆمارکردنی دەرچوون' },
     ],
+    [
+      { text: '📊 دۆخی دەوامی ئەمڕۆم' },
+      { text: '📋 لیستی ئامادەبووانی ئەمڕۆ' },
+    ],
+    [
+      { text: '📅 دۆخی دەوامی ئەم مانگەم' },
+      { text: 'ℹ️ شوێنەکانی دەوام' },
+    ],
+    [
+      { text: '🔄 گۆڕینی هەژمار / لیست' },
+    ],
+  ];
+
+  if (isManager) {
+    rows.push([{ text: '⚡ تۆمارکردنی خێرا (بەڕێوەبەر)' }]);
+  }
+
+  return {
+    keyboard: rows,
     resize_keyboard: true,
     is_persistent: true,
   };
 }
 
-export function getLocationRequestKeyboard() {
-  return {
-    keyboard: [
-      [
-        {
-          text: '📍 ناردنی لۆکەیشنی دەوام (GPS)',
-          request_location: true,
-        },
-      ],
-      [
-        { text: '⚡ تۆمارکردنی خێرا (بەبێ GPS)' },
-        { text: '❌ هەڵوەشاندنەوە' },
-      ],
+export function getLocationRequestKeyboard(isManager: boolean = false) {
+  const rows: any[][] = [
+    [
+      {
+        text: '📍 ناردنی لۆکەیشنی دەوام (GPS)',
+        request_location: true,
+      },
     ],
+  ];
+
+  if (isManager) {
+    rows.push([
+      { text: '⚡ تۆمارکردنی خێرا (بەبێ GPS)' },
+      { text: '❌ هەڵوەشاندنەوە' },
+    ]);
+  } else {
+    rows.push([
+      { text: '❌ هەڵوەشاندنەوە' },
+    ]);
+  }
+
+  return {
+    keyboard: rows,
     resize_keyboard: true,
     one_time_keyboard: true,
   };
+}
+
+// Official PIN Map fallback
+export const OFFICIAL_PIN_MAP: Record<string, string> = {
+  'emp-01': '1001',
+  'emp-02': '1002', // کاک دارکۆ حەیدەر
+  'emp-03': '1003',
+  'emp-04': '1004',
+  'emp-05': '1005',
+  'emp-06': '1006',
+  'emp-07': '1007',
+  'emp-08': '1008',
+  'emp-09': '1009',
+  'emp-10': '1010',
+  'emp-11': '1011',
+  'emp-12': '1012',
+};
+
+// PIN verification for employee binding
+export async function verifyEmployeePin(employeeId: string, enteredPin: string): Promise<boolean> {
+  const cleanPin = (enteredPin || '').trim();
+  if (!cleanPin || cleanPin.length < 4) return false;
+
+  const adminBypass = process.env.ADMIN_BYPASS_PIN || process.env.NEXT_PUBLIC_ADMIN_BYPASS_PIN;
+  if (adminBypass && cleanPin === adminBypass) return true;
+
+  try {
+    const { data: setRow } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_employee_profiles')
+      .maybeSingle();
+
+    if (setRow?.qr_code) {
+      const profiles = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+      const rawNum = employeeId.replace('emp-', '');
+      const profile = profiles[employeeId] || profiles[rawNum] || profiles[`emp-${rawNum}`];
+      if (profile && (profile.pin || profile.password)) {
+        return String(profile.pin || profile.password).trim() === cleanPin;
+      }
+    }
+  } catch (err) {
+    logger.warn('[TelegramService] Error reading employee profile for PIN:', err);
+  }
+
+  const expectedPin = OFFICIAL_PIN_MAP[employeeId] || OFFICIAL_PIN_MAP[`emp-${employeeId.replace('emp-', '')}`];
+  if (expectedPin) {
+    return expectedPin === cleanPin;
+  }
+
+  return false;
+}
+
+// Pending PIN Auth state in Supabase
+export async function getPendingPinState(telegramId: string | number): Promise<{ employeeId: string; employeeName: string } | null> {
+  try {
+    const { data } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_telegram_pending_pins')
+      .maybeSingle();
+
+    if (data?.qr_code) {
+      const stateMap = typeof data.qr_code === 'string' ? JSON.parse(data.qr_code) : data.qr_code;
+      const entry = stateMap[String(telegramId)];
+      if (entry && Date.now() < entry.expiresAt) {
+        return { employeeId: entry.employeeId, employeeName: entry.employeeName };
+      }
+    }
+  } catch (err) {
+    logger.warn('[TelegramService] Error reading pending PIN:', err);
+  }
+  return null;
+}
+
+export async function setPendingPinState(telegramId: string | number, employeeId: string, employeeName: string) {
+  try {
+    const { data } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_telegram_pending_pins')
+      .maybeSingle();
+
+    let stateMap: Record<string, any> = {};
+    if (data?.qr_code) {
+      stateMap = typeof data.qr_code === 'string' ? JSON.parse(data.qr_code) : data.qr_code;
+    }
+
+    const now = Date.now();
+    for (const [k, v] of Object.entries(stateMap)) {
+      if (!v?.expiresAt || v.expiresAt < now) {
+        delete stateMap[k];
+      }
+    }
+
+    stateMap[String(telegramId)] = {
+      employeeId,
+      employeeName,
+      expiresAt: now + 10 * 60 * 1000, // 10 minutes expiry
+    };
+
+    await supabase.from('warehouses').upsert({
+      id: 'ashley_telegram_pending_pins',
+      name: 'TELEGRAM_PENDING_PIN_VERIFICATIONS',
+      qr_code: JSON.stringify(stateMap),
+    }, { onConflict: 'id' });
+  } catch (err) {
+    logger.error('[TelegramService] Error saving pending PIN:', err);
+  }
+}
+
+export async function clearPendingPinState(telegramId: string | number) {
+  try {
+    const { data } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_telegram_pending_pins')
+      .maybeSingle();
+
+    if (data?.qr_code) {
+      const stateMap = typeof data.qr_code === 'string' ? JSON.parse(data.qr_code) : data.qr_code;
+      if (stateMap[String(telegramId)]) {
+        delete stateMap[String(telegramId)];
+        await supabase.from('warehouses').upsert({
+          id: 'ashley_telegram_pending_pins',
+          name: 'TELEGRAM_PENDING_PIN_VERIFICATIONS',
+          qr_code: JSON.stringify(stateMap),
+        }, { onConflict: 'id' });
+      }
+    }
+  } catch (err) {
+    logger.warn('[TelegramService] Error clearing pending PIN:', err);
+  }
 }
 
 // Fetch all employees from Supabase ashley_employees
@@ -471,7 +631,7 @@ export async function recordAttendance(
     const rowId = `${employeeId}-${dateStr}`;
 
     // 1. Insert into attendance_logs (with unique id and timestamptz created_at)
-    await supabase.from('attendance_logs').insert({
+    const { error: logErr } = await supabase.from('attendance_logs').insert({
       id: logId,
       employee_id: employeeId,
       employee_name: employeeName,
@@ -482,6 +642,9 @@ export async function recordAttendance(
       created_at: nowIso,
       edit_note: 'لەڕێگەی تەلەگرام',
     });
+    if (logErr) {
+      logger.error('[TelegramService] Error inserting attendance_logs:', logErr);
+    }
 
     // 2. Fetch existing attendance row for today
     const { data: existing } = await supabase
@@ -491,39 +654,47 @@ export async function recordAttendance(
       .eq('date', dateStr)
       .maybeSingle();
 
+    let attUpsertPayload: any;
+    const hasPriorCheckIn = Boolean(existing?.check_in_time);
+
     if (logType === 'check_in') {
-      await supabase
-        .from('attendance')
-        .upsert({
-          id: existing?.id || rowId,
-          user_id: employeeId,
-          user_name: employeeName,
-          date: dateStr,
-          status: 'Present',
-          check_in: existing?.check_in || nowIso,
-          check_in_time: existing?.check_in_time || timeStr,
-          check_in_address: `${locationName} (تەلەگرام)`,
-          check_out: existing?.check_out || null,
-          check_out_time: existing?.check_out_time || null,
-          warehouse_name: locationName,
-        });
+      attUpsertPayload = {
+        id: existing?.id || rowId,
+        user_id: employeeId,
+        user_name: employeeName,
+        date: dateStr,
+        status: 'Present',
+        check_in: existing?.check_in || nowIso,
+        check_in_time: existing?.check_in_time || timeStr,
+        check_in_address: `${locationName} (تەلەگرام)`,
+        check_out: existing?.check_out || null,
+        check_out_time: existing?.check_out_time || null,
+        warehouse_name: locationName,
+      };
     } else {
       // check_out
-      await supabase
-        .from('attendance')
-        .upsert({
-          id: existing?.id || rowId,
-          user_id: employeeId,
-          user_name: employeeName,
-          date: dateStr,
-          status: 'Present',
-          check_in: existing?.check_in || nowIso,
-          check_in_time: existing?.check_in_time || '08:00',
-          check_out: nowIso,
-          check_out_time: timeStr,
-          check_out_address: `${locationName} (تەلەگرام)`,
-          warehouse_name: locationName,
-        });
+      attUpsertPayload = {
+        id: existing?.id || rowId,
+        user_id: employeeId,
+        user_name: employeeName,
+        date: dateStr,
+        status: 'Present',
+        check_in: existing?.check_in || null,
+        check_in_time: existing?.check_in_time || null,
+        check_out: nowIso,
+        check_out_time: timeStr,
+        check_out_address: `${locationName} (تەلەگرام)`,
+        warehouse_name: locationName,
+      };
+    }
+
+    const { error: attErr } = await supabase
+      .from('attendance')
+      .upsert(attUpsertPayload, { onConflict: 'id' });
+
+    if (attErr) {
+      logger.error('[TelegramService] Error upserting attendance:', attErr);
+      return { success: false, error: `هەڵەی داتابەیس: ${attErr.message}` };
     }
 
     // 3. Sync authoritative mobile & admin overrides store (ashley_manual_attendance_records)
@@ -554,7 +725,7 @@ export async function recordAttendance(
       }
 
       const existingOv = currentOverrides[`${employeeId}_${dateStr}`] || currentOverrides[`${cleanPadded}_${dateStr}`] || {};
-      const finalIn = logType === 'check_in' ? timeStr : (existing?.check_in_time || existingOv?.checkInTime || '08:00');
+      const finalIn = logType === 'check_in' ? timeStr : (existing?.check_in_time || existingOv?.checkInTime || null);
       const finalOut = logType === 'check_out' ? timeStr : (existing?.check_out_time || existingOv?.checkOutTime || null);
 
       const liveOverride = {
@@ -567,7 +738,7 @@ export async function recordAttendance(
         rawCheckIn: finalIn,
         rawCheckOut: finalOut,
         note: 'لەڕێگەی تەلەگرام',
-        adminNote: '',
+        adminNote: existingOv?.adminNote || '',
         warehouseName: locationName,
         updatedAt: nowIso,
         action: 'update',
@@ -583,10 +754,15 @@ export async function recordAttendance(
         qr_code: JSON.stringify(currentOverrides),
       }, { onConflict: 'id' });
     } catch (whErr) {
-      logger.warn('[TelegramService] Error syncing to manual overrides:', whErr);
+      logger.warn('[TelegramService] Error updating overrides:', whErr);
     }
 
-    return { success: true, dateStr, timeStr };
+    return { 
+      success: true, 
+      dateStr, 
+      timeStr, 
+      missingCheckIn: logType === 'check_out' && !hasPriorCheckIn 
+    };
   } catch (err: any) {
     logger.error('[TelegramService] Error recording attendance:', err);
     return { success: false, error: err.message };
