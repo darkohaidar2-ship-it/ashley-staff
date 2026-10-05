@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
       const bindings = await getTelegramBindings();
       const binding = bindings[cqFromId];
       const cqRole: UserRole = binding ? resolveEmployeeRole(binding.employeeId, binding.employeeName) : 'employee';
-      const isManager = cqRole === 'founder' || cqRole === 'warehouse_manager' || cqRole === 'general_manager';
+      const isManager = cqRole === 'founder' || cqRole === 'warehouse_manager' || cqRole === 'general_manager' || cqRole === 'transport_manager' || cqRole === 'administration';
 
       // -------------------------------------------------------------
       // CALENDAR & LEAVE WORKFLOW CALLBACKS
@@ -538,16 +538,16 @@ export async function POST(req: NextRequest) {
       }
 
       // F. ADMIN APPROVES LEAVE REQUEST
-      // F. APPROVE LEAVE REQUEST (کاک دارکۆ، کاک کامەران، یان بەڕێوەبەری گشتی)
+      // F. APPROVE LEAVE REQUEST (کاک دارکۆ، کاک کامەران، کاک هەڤاڵ، ئیدارە یان بەڕێوەبەری گشتی)
       if (data.startsWith('leave_app:')) {
-        const canApprove = cqRole === 'founder' || cqRole === 'warehouse_manager' || cqRole === 'general_manager';
+        const canApprove = cqRole === 'founder' || cqRole === 'warehouse_manager' || cqRole === 'general_manager' || cqRole === 'transport_manager' || cqRole === 'administration';
         if (!canApprove) {
           await answerCallbackQuery(cqId, '⛔ دەسەڵاتی پەسەندکردنی مۆڵەتت نییە.', true);
           return NextResponse.json({ ok: true });
         }
 
         const reqId = data.replace('leave_app:', '');
-        const approverName = binding?.employeeName || (cqRole === 'warehouse_manager' ? 'کاک کامەران' : 'بەڕێوەبەر');
+        const approverName = binding?.employeeName || (cqRole === 'warehouse_manager' ? 'کاک کامەران' : cqRole === 'transport_manager' ? 'کاک هەڤاڵ' : cqRole === 'administration' ? 'ئیدارە' : 'بەڕێوەبەر');
         const updated = await updateLeaveRequestStatus(reqId, 'approved', approverName);
 
         if (updated) {
@@ -572,13 +572,13 @@ export async function POST(req: NextRequest) {
 
       // G. REJECT LEAVE REQUEST
       if (data.startsWith('leave_rej:')) {
-        const canApprove = cqRole === 'founder' || cqRole === 'warehouse_manager' || cqRole === 'general_manager';
+        const canApprove = cqRole === 'founder' || cqRole === 'warehouse_manager' || cqRole === 'general_manager' || cqRole === 'transport_manager' || cqRole === 'administration';
         if (!canApprove) {
           await answerCallbackQuery(cqId, '⛔ تەنها بەڕێوەبەر دەسەڵاتی هەیە.', true);
           return NextResponse.json({ ok: true });
         }
         const reqId = data.replace('leave_rej:', '');
-        const approverName = binding?.employeeName || 'بەڕێوەبەر';
+        const approverName = binding?.employeeName || (cqRole === 'warehouse_manager' ? 'کاک کامەران' : cqRole === 'transport_manager' ? 'کاک هەڤاڵ' : cqRole === 'administration' ? 'ئیدارە' : 'بەڕێوەبەر');
         const updated = await updateLeaveRequestStatus(reqId, 'rejected', approverName);
         if (updated) {
           await answerCallbackQuery(cqId, '❌ ڕەتکرایەوە');
@@ -597,9 +597,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // H. SELECT EMPLOYEE TO MARK ABSENT (کاک کامەران یان کاک دارکۆ)
+      // H. SELECT EMPLOYEE TO MARK ABSENT (کاک کامەران، کاک هەڤاڵ، ئیدارە یان کاک دارکۆ)
       if (data.startsWith('mark_abs_emp:')) {
-        const canManage = cqRole === 'founder' || cqRole === 'warehouse_manager' || cqRole === 'general_manager';
+        const canManage = cqRole === 'founder' || cqRole === 'warehouse_manager' || cqRole === 'general_manager' || cqRole === 'transport_manager' || cqRole === 'administration';
         if (!canManage) {
           await answerCallbackQuery(cqId, '⛔ دەسەڵاتت نییە.', true);
           return NextResponse.json({ ok: true });
@@ -633,7 +633,7 @@ export async function POST(req: NextRequest) {
 
       // I. EXECUTE MARK ABSENT
       if (data.startsWith('mark_abs_date:')) {
-        const canManage = cqRole === 'founder' || cqRole === 'warehouse_manager' || cqRole === 'general_manager';
+        const canManage = cqRole === 'founder' || cqRole === 'warehouse_manager' || cqRole === 'general_manager' || cqRole === 'transport_manager' || cqRole === 'administration';
         if (!canManage) {
           await answerCallbackQuery(cqId, '⛔ دەسەڵاتت نییە.', true);
           return NextResponse.json({ ok: true });
@@ -653,7 +653,7 @@ export async function POST(req: NextRequest) {
         const allEmps = await getAllEmployees();
         const targetEmp = allEmps.find(e => e.id === targetEmpId || e.employeeId === targetEmpId);
         const name = targetEmp?.name || targetEmpId;
-        const approverName = binding?.employeeName || (cqRole === 'warehouse_manager' ? 'کاک کامەران' : 'بەڕێوەبەر');
+        const approverName = binding?.employeeName || (cqRole === 'warehouse_manager' ? 'کاک کامەران' : cqRole === 'transport_manager' ? 'کاک هەڤاڵ' : cqRole === 'administration' ? 'ئیدارە' : 'بەڕێوەبەر');
 
         await markEmployeeAbsent(targetEmpId, name, targetDate, approverName);
         await answerCallbackQuery(cqId, `✅ غیاب بۆ ${name} تۆمارکرا`);
@@ -669,7 +669,7 @@ export async function POST(req: NextRequest) {
 
       // J. SET COMPANY HOLIDAY
       if (data.startsWith('set_hol:')) {
-        const canManage = cqRole === 'founder' || cqRole === 'warehouse_manager' || cqRole === 'general_manager';
+        const canManage = cqRole === 'founder' || cqRole === 'warehouse_manager' || cqRole === 'general_manager' || cqRole === 'transport_manager' || cqRole === 'administration';
         if (!canManage) {
           await answerCallbackQuery(cqId, '⛔ دەسەڵاتت نییە.', true);
           return NextResponse.json({ ok: true });
@@ -683,7 +683,7 @@ export async function POST(req: NextRequest) {
           targetDate = d.toISOString().slice(0, 10);
         }
 
-        const approverName = binding?.employeeName || (cqRole === 'warehouse_manager' ? 'کاک کامەران' : 'بەڕێوەبەر');
+        const approverName = binding?.employeeName || (cqRole === 'warehouse_manager' ? 'کاک کامەران' : cqRole === 'administration' ? 'ئیدارە' : 'بەڕێوەبەر');
         await setCompanyHoliday(targetDate, 'پشووی فەرمی کۆمپانیا', approverName);
         await answerCallbackQuery(cqId, '🌴 پشووی فەرمی دیاریکرا');
         if (cqMsgId) {
@@ -790,7 +790,7 @@ export async function POST(req: NextRequest) {
     const currentBinding = bindings[fromId];
     const allEmployees = await getAllEmployees();
     const userRole: UserRole = currentBinding ? resolveEmployeeRole(currentBinding.employeeId, currentBinding.employeeName) : 'employee';
-    const isManager = userRole === 'founder' || userRole === 'warehouse_manager' || userRole === 'general_manager';
+    const isManager = userRole === 'founder' || userRole === 'warehouse_manager' || userRole === 'general_manager' || userRole === 'transport_manager' || userRole === 'administration';
 
     // -------------------------------------------------------------
     // HANDLE PHOTO SUBMISSION (BROADCAST ANNOUNCEMENT OR PROFILE)
@@ -1304,6 +1304,12 @@ export async function POST(req: NextRequest) {
     if (text === '📦 ئامادەبووانی کۆگا') {
       const summary = await getWarehouseAttendanceSummary();
       await sendTelegramMessage(chatId, summary, getMainReplyKeyboard(userRole));
+      return NextResponse.json({ ok: true });
+    }
+
+    if (text === '🚚 ستافی نقڵ و گواستنەوە') {
+      const summary = await getTodayAttendanceSummary();
+      await sendTelegramMessage(chatId, `🚚 <b>لیستی ئامادەبووانی ستافی نقڵ و گواستنەوە:</b>\n\n` + summary, getMainReplyKeyboard(userRole));
       return NextResponse.json({ ok: true });
     }
 

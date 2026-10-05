@@ -455,7 +455,97 @@ export function getRoleBasedReplyKeyboard(role: UserRole = 'employee') {
     };
   }
 
-  // 4. IT SUPPORT (بەشی ئایتی)
+  // 4. TRANSPORT MANAGER (کاک هەڤاڵ حبیب - نقڵ)
+  if (role === 'transport_manager') {
+    return {
+      keyboard: [
+        [
+          { text: '🟢 تۆمارکردنی هاتن' },
+          { text: '🔴 تۆمارکردنی دەرچوون' },
+        ],
+        [
+          { text: '📊 دۆخی دەوامی ئەمڕۆم' },
+          { text: '📅 دۆخی دەوامی ئەم مانگەم' },
+        ],
+        [
+          { text: '👤 پرۆفایلی من' },
+          { text: '🚚 ستافی نقڵ و گواستنەوە' },
+        ],
+        [
+          { text: '🏖️ داواکارییەکانی مۆڵەت' },
+          { text: '❌ تۆمارکردنی غیاب' },
+        ],
+        [
+          { text: '📢 ناردنی ئاگاداری گشتی' },
+          { text: 'ℹ️ شوێنەکانی دەوام' },
+        ],
+      ],
+      resize_keyboard: true,
+      is_persistent: true,
+    };
+  }
+
+  // 5. ADMINISTRATION (ئیدارە و سەرچاوە مرۆییەکان)
+  if (role === 'administration') {
+    return {
+      keyboard: [
+        [
+          { text: '🟢 تۆمارکردنی هاتن' },
+          { text: '🔴 تۆمارکردنی دەرچوون' },
+        ],
+        [
+          { text: '📊 دۆخی دەوامی ئەمڕۆم' },
+          { text: '📅 دۆخی دەوامی ئەم مانگەم' },
+        ],
+        [
+          { text: '👤 پرۆفایلی من' },
+          { text: '📋 لیستی گشتی دەوام' },
+        ],
+        [
+          { text: '🏖️ داواکارییەکانی مۆڵەت' },
+          { text: '❌ تۆمارکردنی غیاب' },
+        ],
+        [
+          { text: '🌴 دیاریکردنی پشوو' },
+          { text: '📢 ناردنی ئاگاداری گشتی' },
+        ],
+      ],
+      resize_keyboard: true,
+      is_persistent: true,
+    };
+  }
+
+  // 6. DEVELOPER (دیڤلۆپەر و پرۆگرامەر)
+  if (role === 'developer') {
+    return {
+      keyboard: [
+        [
+          { text: '🟢 تۆمارکردنی هاتن' },
+          { text: '🔴 تۆمارکردنی دەرچوون' },
+        ],
+        [
+          { text: '📊 دۆخی دەوامی ئەمڕۆم' },
+          { text: '📅 دۆخی دەوامی ئەم مانگەم' },
+        ],
+        [
+          { text: '👤 پرۆفایلی من' },
+          { text: '🔍 پشکنینی سیستەم' },
+        ],
+        [
+          { text: '📱 بەستنەوەی ئامێرەکان' },
+          { text: '🏖️ داواکردنی مۆڵەت' },
+        ],
+        [
+          { text: '📢 ناردنی ئاگاداری گشتی' },
+          { text: 'ℹ️ شوێنەکانی دەوام' },
+        ],
+      ],
+      resize_keyboard: true,
+      is_persistent: true,
+    };
+  }
+
+  // 7. IT SUPPORT (بەشی ئایتی)
   if (role === 'it_admin') {
     return {
       keyboard: [
@@ -481,7 +571,59 @@ export function getRoleBasedReplyKeyboard(role: UserRole = 'employee') {
     };
   }
 
-  // 5. SUPERVISOR (سەرپەرشتیاری بەش)
+  // 8. SALESPERSON (فرۆشیار و ستافی پێشانگا)
+  if (role === 'salesperson') {
+    return {
+      keyboard: [
+        [
+          { text: '🟢 تۆمارکردنی هاتن' },
+          { text: '🔴 تۆمارکردنی دەرچوون' },
+        ],
+        [
+          { text: '📊 دۆخی دەوامی ئەمڕۆم' },
+          { text: '📋 لیستی ئامادەبووانی ئەمڕۆ' },
+        ],
+        [
+          { text: '📅 دۆخی دەوامی ئەم مانگەم' },
+          { text: '👤 پرۆفایلی من' },
+        ],
+        [
+          { text: '🏖️ داواکردنی مۆڵەت' },
+          { text: 'ℹ️ شوێنەکانی دەوام' },
+        ],
+      ],
+      resize_keyboard: true,
+      is_persistent: true,
+    };
+  }
+
+  // 9. WAREHOUSE STAFF (ستافی کۆگا)
+  if (role === 'warehouse_staff') {
+    return {
+      keyboard: [
+        [
+          { text: '🟢 تۆمارکردنی هاتن' },
+          { text: '🔴 تۆمارکردنی دەرچوون' },
+        ],
+        [
+          { text: '📊 دۆخی دەوامی ئەمڕۆم' },
+          { text: '📦 ئامادەبووانی کۆگا' },
+        ],
+        [
+          { text: '📅 دۆخی دەوامی ئەم مانگەم' },
+          { text: '👤 پرۆفایلی من' },
+        ],
+        [
+          { text: '🏖️ داواکردنی مۆڵەت' },
+          { text: 'ℹ️ شوێنەکانی دەوام' },
+        ],
+      ],
+      resize_keyboard: true,
+      is_persistent: true,
+    };
+  }
+
+  // 10. SUPERVISOR (سەرپەرشتیاری بەش)
   if (role === 'supervisor') {
     return {
       keyboard: [

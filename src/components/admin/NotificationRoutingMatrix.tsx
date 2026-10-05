@@ -296,15 +296,19 @@ export default function NotificationRoutingMatrix() {
         emp.id.toLowerCase().includes(q) ||
         (emp.role && emp.role.toLowerCase().includes(q));
 
+      const role = employeeRoles[emp.id] || resolveEmployeeRole(emp.id, emp.name, employeeRoles);
       const matchesDept = 
         departmentFilter === 'all' ||
-        (departmentFilter === 'warehouse' && (emp.id === 'emp-06' || emp.id === 'emp-03' || emp.id === 'emp-04')) ||
-        (departmentFilter === 'admin' && (emp.id === 'emp-02' || emp.id === 'emp-13')) ||
-        (departmentFilter === 'it' && (emp.id === 'it-admin' || emp.name.includes('ئایتی')));
+        (departmentFilter === 'warehouse' && (role === 'warehouse_manager' || role === 'warehouse_staff' || emp.id === 'emp-06' || emp.id === 'emp-03')) ||
+        (departmentFilter === 'transport' && (role === 'transport_manager' || emp.id === 'emp-04' || emp.name.includes('هەڤاڵ') || emp.role?.toLowerCase().includes('transport'))) ||
+        (departmentFilter === 'admin' && (role === 'founder' || role === 'general_manager' || role === 'administration' || emp.id === 'emp-02' || emp.id === 'emp-13')) ||
+        (departmentFilter === 'sales' && (role === 'salesperson' || emp.role?.toLowerCase().includes('sales') || emp.role?.includes('فرۆشیار'))) ||
+        (departmentFilter === 'it' && (role === 'it_admin' || emp.id === 'it-admin' || emp.name.includes('ئایتی'))) ||
+        (departmentFilter === 'dev' && (role === 'developer' || emp.name.includes('دیڤلۆپەر') || emp.role?.toLowerCase().includes('developer')));
 
       return matchesSearch && matchesDept;
     });
-  }, [searchQuery, departmentFilter]);
+  }, [searchQuery, departmentFilter, employeeRoles]);
 
   // Simulator recipients calculation
   const simulatedRecipients = useMemo(() => {
@@ -323,7 +327,11 @@ export default function NotificationRoutingMatrix() {
         if (r.id === 'warehouse_manager') reason = 'بەرپرسی کۆگا - وەرگرتنی داواکاری مۆڵەت و خستنە خشتە';
         else if (r.id === 'founder') reason = 'ئەدمین و دامەزرێنەر - سەرپەرشتی گشتی و پەسەندکردن';
         else if (r.id === 'general_manager') reason = 'بەڕێوەبەری گشتی - ئاگاداری ڕاستەوخۆ';
+        else if (r.id === 'transport_manager') reason = 'بەڕێوەبەری نقڵ - سەرپەرشتی و پەسەندکردنی مۆڵەت و دەوامی نقڵ';
+        else if (r.id === 'administration') reason = 'ئیدارە و سەرچاوە مرۆییەکان - ئاگاداری فەرمی و پشوو و تۆمارەکان';
+        else if (r.id === 'developer') reason = 'دیڤلۆپەر - سەرپەرشتی تەکنیکی و سێرڤەر و کۆد';
         else if (r.id === 'it_admin') reason = 'بەشی ئایتی - بەستنەوەی ئامێر و سیستم';
+        else if (r.id === 'salesperson') reason = 'فرۆشیار - ئاگاداری بەیاننامە و ڕێنماییەکانی فرۆشتن';
 
         recipients.push({
           role: r.id,
@@ -683,8 +691,11 @@ export default function NotificationRoutingMatrix() {
                   >
                     <option value="all">هەمووان</option>
                     <option value="warehouse">کۆگا</option>
+                    <option value="transport">نقڵ</option>
                     <option value="admin">ئیدارە</option>
+                    <option value="sales">فرۆشتن</option>
                     <option value="it">ئایتی</option>
+                    <option value="dev">دیڤلۆپەر</option>
                   </select>
                 </div>
               </div>

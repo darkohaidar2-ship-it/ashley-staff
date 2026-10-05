@@ -4,9 +4,13 @@ import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 
 export type UserRole = 
   | 'founder'             // ئەدمین / خاوەن کار (کاک دارکۆ حەیدەر)
-  | 'it_admin'            // ئایتی
   | 'general_manager'     // بەڕێوەبەری گشتی (مامۆستا وەلید)
   | 'warehouse_manager'   // بەڕێوەبەری کۆگا (کاک کامەران عومەر)
+  | 'transport_manager'   // بەڕێوەبەری نقڵ (کاک هەڤاڵ حبیب)
+  | 'administration'      // ئیدارە و سەرچاوە مرۆییەکان (HR / Admin)
+  | 'developer'           // دیڤلۆپەر و گەشەپێدەر (Developer)
+  | 'it_admin'            // ئایتی و پشتگیری تەکنیکی
+  | 'salesperson'         // فرۆشیار و ستافی پێشانگا
   | 'warehouse_staff'     // ڕێکخستنی کۆگا
   | 'supervisor'          // سەرپەرشتیاری بەش
   | 'employee';           // کارمەندی ئاسایی
@@ -20,10 +24,15 @@ export interface RoleOption {
 
 export const ROLE_OPTIONS: RoleOption[] = [
   { id: 'founder', title: 'ئەدمین / خاوەن کار', badge: 'ئەدمین', color: '#007AFF' },
-  { id: 'it_admin', title: 'ئایتی و تەکنیکی', badge: 'ئایتی', color: '#5856D6' },
   { id: 'general_manager', title: 'بەڕێوەبەری گشتی', badge: 'بەڕێوەبەر', color: '#34C759' },
   { id: 'warehouse_manager', title: 'بەڕێوەبەری کۆگا', badge: 'کۆگا', color: '#AF52DE' },
-  { id: 'warehouse_staff', title: 'ڕێکخستنی کۆگا', badge: 'ڕێکخستن', color: '#FF9500' },
+  { id: 'transport_manager', title: 'بەڕێوەبەری نقڵ', badge: 'نقڵ', color: '#FF9500' },
+  { id: 'administration', title: 'ئیدارە', badge: 'ئیدارە', color: '#E11D48' },
+  { id: 'developer', title: 'دیڤلۆپەر', badge: 'دیڤلۆپەر', color: '#06B6D4' },
+  { id: 'it_admin', title: 'ئایتی و تەکنیکی', badge: 'ئایتی', color: '#5856D6' },
+  { id: 'salesperson', title: 'فرۆشیار', badge: 'فرۆشیار', color: '#10B981' },
+  { id: 'warehouse_staff', title: 'ڕێکخستنی کۆگا', badge: 'ڕێکخستن', color: '#F59E0B' },
+  { id: 'supervisor', title: 'سەرپەرشتیاری بەش', badge: 'سەرپەرشتیار', color: '#8B5CF6' },
   { id: 'employee', title: 'کارمەندی ئاسایی', badge: 'کارمەند', color: '#64748B' },
 ];
 
@@ -55,6 +64,13 @@ export const DESTINATION_ROLES: DestinationRoleDefinition[] = [
     color: '#007AFF',
   },
   {
+    id: 'general_manager',
+    title: 'بەڕێوەبەری گشتی',
+    name: 'مامۆستا وەلید',
+    description: 'پەسەندکردنی مۆڵەت و ناردنی ئاگاداری فەرمی گشتی بۆ هەمووان',
+    color: '#34C759',
+  },
+  {
     id: 'warehouse_manager',
     title: 'بەڕێوەبەری کۆگا (کاک کامەران)',
     name: 'کامەران عومەر ڕووئوف',
@@ -62,11 +78,25 @@ export const DESTINATION_ROLES: DestinationRoleDefinition[] = [
     color: '#AF52DE',
   },
   {
-    id: 'general_manager',
-    title: 'بەڕێوەبەری گشتی',
-    name: 'مامۆستا وەلید',
-    description: 'پەسەندکردنی مۆڵەت و ناردنی ئاگاداری فەرمی گشتی بۆ هەمووان',
-    color: '#34C759',
+    id: 'transport_manager',
+    title: 'بەڕێوەبەری نقڵ (کاک هەڤاڵ)',
+    name: 'هەڤاڵ حبیب حەمەڕەزا',
+    description: 'سەرپەرشتی گواستنەوە، نقڵی کەلوپەل و دەوامی کارمەندانی نقڵ',
+    color: '#FF9500',
+  },
+  {
+    id: 'administration',
+    title: 'ئیدارە و سەرچاوە مرۆییەکان',
+    name: 'بەشی ئیدارە و کارگێڕی',
+    description: 'ئاگاداری مۆڵەت، گرێبەست، بەڵگەنامە و بەیاننامەی فەرمی کارمەندان',
+    color: '#E11D48',
+  },
+  {
+    id: 'developer',
+    title: 'دیڤلۆپەر و پرۆگرامەر',
+    name: 'گەشەپێدەری سیستم و بۆت',
+    description: 'پشتگیری کۆد، هەڵەکانی سیستم، سێرڤەر و گەشەپێدانی تەلەگرام بۆت',
+    color: '#06B6D4',
   },
   {
     id: 'it_admin',
@@ -76,11 +106,18 @@ export const DESTINATION_ROLES: DestinationRoleDefinition[] = [
     color: '#5856D6',
   },
   {
+    id: 'salesperson',
+    title: 'بەشی فرۆشتن و پێشانگا',
+    name: 'فرۆشیارانی ئاشڵی',
+    description: 'ئاگاداری داواکاری موشتەری، کەلوپەلی نوێ و پەیوەندی پێشانگا',
+    color: '#10B981',
+  },
+  {
     id: 'warehouse_staff',
     title: 'ڕێکخستنی کۆگا',
     name: 'کارمەندانی کۆگا و بەشەکان',
     description: 'ئاگاداری ئەرکەکانی ناو کۆگا و هەماهەنگی ڕۆژانە',
-    color: '#FF9500',
+    color: '#F59E0B',
   },
   {
     id: 'employee',
@@ -179,6 +216,48 @@ export const WORKFLOW_ROLES: RoleDefinition[] = [
     scope: ['all_branches'],
   },
   {
+    id: 'transport_manager',
+    title: 'بەڕێوەبەری نقڵ',
+    name: 'هەڤاڵ حبیب حەمەڕەزا',
+    employeeId: 'emp-04',
+    color: '#FF9500', // Orange
+    allowedActions: [
+      'leave_approval', 
+      'mark_absence', 
+      'late_alerts', 
+      'transport_reports'
+    ],
+    scope: ['warehouse', 'showroom', 'all_branches'],
+  },
+  {
+    id: 'administration',
+    title: 'ئیدارە و کارگێڕی',
+    name: 'بەشی ئیدارە و سەرچاوە مرۆییەکان',
+    employeeId: 'admin-hr',
+    color: '#E11D48', // Crimson Red
+    allowedActions: [
+      'leave_approval', 
+      'broadcast_msg', 
+      'set_holiday', 
+      'mark_absence', 
+      'full_reports'
+    ],
+    scope: ['all_branches'],
+  },
+  {
+    id: 'developer',
+    title: 'دیڤلۆپەر و پرۆگرامەر',
+    name: 'گەشەپێدەری سیستم و بۆت',
+    employeeId: 'dev-team',
+    color: '#06B6D4', // Cyan
+    allowedActions: [
+      'device_management', 
+      'system_diagnostics', 
+      'broadcast_msg'
+    ],
+    scope: ['all_branches'],
+  },
+  {
     id: 'it_admin',
     title: 'بەشی ئایتی و پشتگیری تەکنیکی',
     name: 'ئایتی کۆمپانیای ئاشڵی',
@@ -191,11 +270,25 @@ export const WORKFLOW_ROLES: RoleDefinition[] = [
     scope: ['all_branches'],
   },
   {
+    id: 'salesperson',
+    title: 'فرۆشیار و ستافی پێشانگا',
+    name: 'فرۆشیارانی ئاشڵی',
+    employeeId: '*',
+    color: '#10B981', // Emerald
+    allowedActions: [
+      'self_checkin', 
+      'self_report', 
+      'request_leave', 
+      'view_profile'
+    ],
+    scope: ['showroom', 'local_branch'],
+  },
+  {
     id: 'warehouse_staff',
     title: 'ڕێکخستنی کۆگا',
     name: 'ستافی کۆگا و گواستنەوە',
     employeeId: 'emp-03',
-    color: '#FF9500', // Orange
+    color: '#F59E0B', // Amber
     allowedActions: [
       'team_attendance', 
       'late_alerts'
@@ -292,16 +385,25 @@ export function getDefaultEmployeeRoles(): Record<string, UserRole> {
   ASHLEY_OFFICIAL_EMPLOYEES.forEach((emp) => {
     const cleanId = emp.id.toLowerCase().trim();
     const name = emp.name.toLowerCase().trim();
+    const empRole = (emp.role || '').toLowerCase();
 
     if (cleanId === 'emp-02' || cleanId === '02' || name.includes('دارکۆ')) {
       roles[emp.id] = 'founder';
     } else if (cleanId === 'emp-06' || cleanId === '06' || name.includes('کامەران')) {
       roles[emp.id] = 'warehouse_manager';
+    } else if (cleanId === 'emp-04' || cleanId === '04' || name.includes('هەڤاڵ') || empRole.includes('transport') || name.includes('نقڵ')) {
+      roles[emp.id] = 'transport_manager';
     } else if (cleanId === 'emp-13' || cleanId === '13' || name.includes('وەلید')) {
       roles[emp.id] = 'general_manager';
+    } else if (name.includes('دیڤلۆپەر') || name.includes('developer') || empRole.includes('developer')) {
+      roles[emp.id] = 'developer';
+    } else if (name.includes('ئیدارە') || name.includes('admin') || empRole.includes('administration') || empRole.includes('hr')) {
+      roles[emp.id] = 'administration';
+    } else if (name.includes('فرۆشیار') || name.includes('sales') || empRole.includes('sales')) {
+      roles[emp.id] = 'salesperson';
     } else if (name.includes('ئایتی') || name.includes('it') || cleanId === 'it-admin') {
       roles[emp.id] = 'it_admin';
-    } else if (cleanId === 'emp-03' || cleanId === 'emp-04' || name.includes('شادیار') || name.includes('هەڤاڵ')) {
+    } else if (cleanId === 'emp-03' || name.includes('شادیار')) {
       roles[emp.id] = 'warehouse_staff';
     } else {
       roles[emp.id] = 'employee';
@@ -324,6 +426,12 @@ export function getDefaultConnections(): WireConnection[] {
     { id: 'emp-06__mark_absence', fromType: 'employee', fromId: 'emp-06', toType: 'task', toId: 'mark_absence' },
     { id: 'emp-06__set_holiday', fromType: 'employee', fromId: 'emp-06', toType: 'task', toId: 'set_holiday' },
     { id: 'emp-06__late_alerts', fromType: 'employee', fromId: 'emp-06', toType: 'task', toId: 'late_alerts' }
+  );
+
+  // Kak Heval (emp-04) Transport Manager connected to Transport & Leave tasks
+  connections.push(
+    { id: 'emp-04__leave_approval', fromType: 'employee', fromId: 'emp-04', toType: 'task', toId: 'leave_approval' },
+    { id: 'emp-04__late_alerts', fromType: 'employee', fromId: 'emp-04', toType: 'task', toId: 'late_alerts' }
   );
 
   // Kak Darko (emp-02) connected to all tasks
@@ -351,31 +459,41 @@ export function getDefaultConnections(): WireConnection[] {
 
   // 2. Tasks to Destination Roles
   connections.push(
-    // Leave approval routes to Warehouse Manager (Kak Kamaran) & Founder
+    // Leave approval routes to Warehouse Manager (Kak Kamaran), Transport Manager (Kak Heval), Administration & Founder
     { id: 'leave_approval__warehouse_manager', fromType: 'task', fromId: 'leave_approval', toType: 'role', toId: 'warehouse_manager' },
+    { id: 'leave_approval__transport_manager', fromType: 'task', fromId: 'leave_approval', toType: 'role', toId: 'transport_manager' },
+    { id: 'leave_approval__administration', fromType: 'task', fromId: 'leave_approval', toType: 'role', toId: 'administration' },
     { id: 'leave_approval__founder', fromType: 'task', fromId: 'leave_approval', toType: 'role', toId: 'founder' },
     { id: 'leave_approval__general_manager', fromType: 'task', fromId: 'leave_approval', toType: 'role', toId: 'general_manager' },
 
-    // Broadcast routes to General Manager and Founder
+    // Broadcast routes to General Manager, Administration, Developer, Salesperson, and Founder
     { id: 'broadcast_msg__founder', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'founder' },
     { id: 'broadcast_msg__general_manager', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'general_manager' },
+    { id: 'broadcast_msg__administration', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'administration' },
+    { id: 'broadcast_msg__developer', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'developer' },
+    { id: 'broadcast_msg__salesperson', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'salesperson' },
     { id: 'broadcast_msg__employee', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'employee' },
 
-    // Absence routes to Warehouse Manager and Founder
+    // Absence routes to Warehouse Manager, Administration and Founder
     { id: 'mark_absence__warehouse_manager', fromType: 'task', fromId: 'mark_absence', toType: 'role', toId: 'warehouse_manager' },
+    { id: 'mark_absence__transport_manager', fromType: 'task', fromId: 'mark_absence', toType: 'role', toId: 'transport_manager' },
+    { id: 'mark_absence__administration', fromType: 'task', fromId: 'mark_absence', toType: 'role', toId: 'administration' },
     { id: 'mark_absence__founder', fromType: 'task', fromId: 'mark_absence', toType: 'role', toId: 'founder' },
 
-    // Holiday routes to Warehouse Manager, General Manager, and Founder
+    // Holiday routes to Warehouse Manager, General Manager, Administration, and Founder
     { id: 'set_holiday__warehouse_manager', fromType: 'task', fromId: 'set_holiday', toType: 'role', toId: 'warehouse_manager' },
+    { id: 'set_holiday__administration', fromType: 'task', fromId: 'set_holiday', toType: 'role', toId: 'administration' },
     { id: 'set_holiday__founder', fromType: 'task', fromId: 'set_holiday', toType: 'role', toId: 'founder' },
     { id: 'set_holiday__general_manager', fromType: 'task', fromId: 'set_holiday', toType: 'role', toId: 'general_manager' },
 
-    // Late alerts route to Warehouse Manager and Founder
+    // Late alerts route to Warehouse Manager, Transport Manager and Founder
     { id: 'late_alerts__warehouse_manager', fromType: 'task', fromId: 'late_alerts', toType: 'role', toId: 'warehouse_manager' },
+    { id: 'late_alerts__transport_manager', fromType: 'task', fromId: 'late_alerts', toType: 'role', toId: 'transport_manager' },
     { id: 'late_alerts__founder', fromType: 'task', fromId: 'late_alerts', toType: 'role', toId: 'founder' },
 
-    // Device management routes to IT Admin and Founder
+    // Device management routes to IT Admin, Developer and Founder
     { id: 'device_management__it_admin', fromType: 'task', fromId: 'device_management', toType: 'role', toId: 'it_admin' },
+    { id: 'device_management__developer', fromType: 'task', fromId: 'device_management', toType: 'role', toId: 'developer' },
     { id: 'device_management__founder', fromType: 'task', fromId: 'device_management', toType: 'role', toId: 'founder' }
   );
 
@@ -474,7 +592,12 @@ export function resolveEmployeeRole(
     return 'warehouse_manager';
   }
 
-  // 4. General Manager (مامۆستا وەلید)
+  // 4. Transport Manager (کاک هەڤاڵ حبیب)
+  if (cleanId === 'emp-04' || cleanId === '04' || name.includes('هەڤاڵ') || name.includes('نقڵ')) {
+    return 'transport_manager';
+  }
+
+  // 5. General Manager (مامۆستا وەلید)
   if (
     cleanId === 'emp-13' || 
     cleanId === '13' || 
@@ -484,18 +607,28 @@ export function resolveEmployeeRole(
     return 'general_manager';
   }
 
-  // 5. IT Admin
+  // 6. Developer (دیڤلۆپەر)
+  if (name.includes('دیڤلۆپەر') || name.includes('developer') || cleanId.includes('dev')) {
+    return 'developer';
+  }
+
+  // 7. Administration (ئیدارە)
+  if (name.includes('ئیدارە') || name.includes('کارگێڕی') || name.includes('hr')) {
+    return 'administration';
+  }
+
+  // 8. Salesperson (فرۆشیار)
+  if (name.includes('فرۆشیار') || name.includes('sales')) {
+    return 'salesperson';
+  }
+
+  // 9. IT Admin
   if (name.includes('ئایتی') || name.includes('it') || cleanId === 'it-admin') {
     return 'it_admin';
   }
 
-  // 6. Warehouse Staff / Supervisor
-  if (
-    cleanId === 'emp-03' || 
-    cleanId === 'emp-04' || 
-    name.includes('شادیار') || 
-    name.includes('هەڤاڵ')
-  ) {
+  // 10. Warehouse Staff / Supervisor
+  if (cleanId === 'emp-03' || name.includes('شادیار')) {
     return 'warehouse_staff';
   }
 
