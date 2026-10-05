@@ -12,6 +12,7 @@ import {
   resetTodayAttendance,
   getBaghdadNow,
   verifyEmployeePin,
+  findEmployeeByPin,
   getPendingPinState,
   setPendingPinState,
   clearPendingPinState
@@ -48,7 +49,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // 🔒 2. Restrict to 1-to-1 private chat only
+    // 🔒 2. Anti-Fraud: STRICTLY BLOCK ALL FORWARDED MESSAGES
+    const isForwarded = Boolean(
+      message.forward_date ||
+      message.forward_origin ||
+      message.forward_from ||
+      message.forward_from_chat ||
+      message.forward_sender_name ||
+      (message as any).is_automatic_forward
+    );
+
+    if (isForwarded) {
+      logger.warn(`[Telegram Webhook] Blocked forwarded message from chatId ${chatId}, fromId ${message.from?.id}`);
+      await sendTelegramMessage(
+        chatId,
+        `⛔ <b>ناردنی نامەی دەستاودەست (Forward) قەدەغەیە!</b>\n\n🔒 بۆ پاراستنی دروستی دەوام و ڕێگری لە ساختەکاری، دەبێت هەر فەرمانێک، نامەیەک یان لۆکەیشنێک <b>ڕاستەوخۆ بە دەستی خۆت</b> لە ناو ئەم چاتەدا بنێریت.`
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    // 🔒 3. Restrict to 1-to-1 private chat only
     if (message.chat?.type && message.chat.type !== 'private') {
       return NextResponse.json({ ok: true });
     }
@@ -122,100 +142,60 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // If not bound: Show employee list to bind
-      const empButtons: any[][] = [];
-      for (let i = 0; i < allEmployees.length; i += 2) {
-        const row = [{ text: `👤 ${allEmployees[i].name}` }];
-        if (i + 1 < allEmployees.length) {
-          row.push({ text: `👤 ${allEmployees[i + 1].name}` });
-        }
-        empButtons.push(row);
-      }
-
+      // If not bound: Do NOT expose employee list publicly. Show their Telegram ID for Admin.
       await sendTelegramMessage(
         chatId,
-        `بەخێربێیت بۆ <b>بۆتی فەرمی دەوامی کۆمپانیای ئاشڵی</b> 🏢\n\nتکایە <b>ناوی خۆت</b> لە لیستەکەی خوارەوە هەڵبژێرە بۆ بەستنەوەی ئەم تەلەگرامە بە هەژمارەکەت:`,
-        {
-          keyboard: empButtons,
-          resize_keyboard: true,
-          one_time_keyboard: true,
-        }
+        `بەخێربێیت بۆ <b>بۆتی فەرمی دەوامی کۆمپانیای ئاشڵی</b> 🏢\n\n` +
+        `🔒 ئەم هەژمارەی تەلەگرامە هێشتا نەبەستراوەتەوە بە هیچ کارمەندێکەوە.\n\n` +
+        `🆔 <b>ئایدی تەلەگرامی تۆ (Telegram ID):</b>\n<code>${fromId}</code>\n\n` +
+        `📌 <b>ڕێنمایی بۆ بەستنەوە:</b>\n` +
+        `تکایە ئەم ژمارەی ئایدییەی سەرەوە (<code>${fromId}</code>) بنێرە بۆ بەڕێوەبەر (کاک دارکۆ) تا بە شێوەیەکی فەرمی و دەستی هەژمارەکەت پێوە ببەستێتەوە.\n\n` +
+        `🔐 <i>ئەگەر کۆدی تایبەتی نهێنی (PIN)ت لە بەڕێوەبەر وەرگرتووە، دەتوانیت ڕاستەوخۆ ٤ ژمارەکە لێرە بنووسیت بۆ بەستنەوە.</i>`,
+        { remove_keyboard: true }
       );
       return NextResponse.json({ ok: true });
     }
 
     // -------------------------------------------------------------
-    // 6. COMMAND: CHANGE ACCOUNT / SHOW EMPLOYEES LIST
+    // 6. COMMAND: CHANGE ACCOUNT / LIST PROTECTION (NO LOGOUT FOR EMPLOYEES)
     // -------------------------------------------------------------
     if (
       text === '🔄 گۆڕینی هەژمار / لیست' || 
       text === '🔄 نوێکردنەوە یان گۆڕینی هەژمار' || 
       text === '/change' || 
       text === '/register' ||
-      text === '/employees'
+      text === '/employees' ||
+      text === '/logout' ||
+      text === '/exit'
     ) {
-      const empButtons: any[][] = [];
-      for (let i = 0; i < allEmployees.length; i += 2) {
-        const row = [{ text: `👤 ${allEmployees[i].name}` }];
-        if (i + 1 < allEmployees.length) {
-          row.push({ text: `👤 ${allEmployees[i + 1].name}` });
-        }
-        empButtons.push(row);
-      }
-      empButtons.push([{ text: '❌ هەڵوەشاندنەوە' }]);
-
-      const currentStatus = currentBinding 
-        ? `\n<i>(هەژماری ئێستات: <b>${currentBinding.employeeName}</b>)</i>\n`
-        : '';
-
-      await sendTelegramMessage(
-        chatId,
-        `👥 <b>لیستی کارمەندانی تۆمارکراوی سیستەم:</b>${currentStatus}\nتکایە ناوی کارمەند لە دوگمەکانی خوارەوە هەڵبژێرە بۆ بەستنەوە:`,
-        {
-          keyboard: empButtons,
-          resize_keyboard: true,
-          one_time_keyboard: true,
-        }
-      );
-      return NextResponse.json({ ok: true });
-    }
-
-    // -------------------------------------------------------------
-    // 7. EMPLOYEE SELECTION (PROMPT FOR PIN)
-    // -------------------------------------------------------------
-    const cleanText = text.replace(/^👤\s*/, '').trim();
-    if (cleanText.length >= 2 && (!currentBinding || text.startsWith('👤'))) {
-      const matchedEmp = allEmployees.find(emp => {
-        const cleanEmpName = emp.name.trim().toLowerCase();
-        const input = cleanText.toLowerCase();
-        return (
-          input === cleanEmpName ||
-          input === `👤 ${cleanEmpName}` ||
-          (emp.employeeId && input === emp.employeeId.toLowerCase()) ||
-          input === emp.id.toLowerCase()
-        );
-      });
-
-      if (matchedEmp) {
-        // 🔒 Check if employee is already bound to another Telegram user
-        for (const [boundUid, info] of Object.entries(bindings)) {
-          if (info.employeeId === matchedEmp.id && boundUid !== fromId) {
-            await sendTelegramMessage(
-              chatId,
-              `⛔ <b>ئەم هەژمارە قوفڵ کراوە!</b>\n\nکارمەند <b>${matchedEmp.name}</b> پێشتر لەسەر مۆبایل و تەلەگرامێکی تر قوفڵ کراوە.\n\n🔒 بۆ پاراستنی دروستی دەوام، ڕێگە نادرێت دوو مۆبایل لەسەر یەک کارمەند دەوام بکەن.\nئەگەر مۆبایلت گۆڕیوە، پەیوەندی بە بەڕێوەبەر (کاک دارکۆ) بکە تا قوفڵی هەژمارەکەت بکاتەوە.`,
-              getMainReplyKeyboard(isManager)
-            );
-            return NextResponse.json({ ok: true });
-          }
-        }
-
-        // Set pending PIN state
-        await setPendingPinState(fromId, matchedEmp.id, matchedEmp.name);
+      if (currentBinding && !isManager) {
         await sendTelegramMessage(
           chatId,
-          `🔐 <b>سەلماندنی ناسنامە پێویستە:</b>\n\nتۆ ناوی <b>${matchedEmp.name}</b>ت هەڵبژارد.\nتکایە <b>کۆدی نهێنی (PIN)ی ٤ ژمارەیی</b> تایبەت بە خۆت بنووسە بۆ بەستنەوە:\n\n<i>(ئەگەر پەشیمان بوویتەوە بنووسە: ❌ هەڵوەشاندنەوە)</i>`,
+          `🔒 <b>لۆگ‌ئاوت و گۆڕینی هەژمار قوفڵ کراوە!</b>\n\n` +
+          `ئەم تەلەگرامە بە شێوەی هەمیشەیی بەستراوەتەوە بە ناوی: <b>${currentBinding.employeeName}</b>.\n` +
+          `ڕێگە نادرێت کارمەند لۆگ‌ئاوت بکات یان هەژمارەکەی بگۆڕێت.\n\n` +
+          `ئەگەر مۆبایلت گۆڕیوە یان کێشەیەک هەیە، تەنها بەڕێوەبەر (کاک دارکۆ) دەتوانێت لە سیستەمەوە قوفڵەکەت بکاتەوە.`,
+          getMainReplyKeyboard(isManager)
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      if (isManager) {
+        const empButtons: any[][] = [];
+        for (let i = 0; i < allEmployees.length; i += 2) {
+          const row = [{ text: `👤 ${allEmployees[i].name}` }];
+          if (i + 1 < allEmployees.length) {
+            row.push({ text: `👤 ${allEmployees[i + 1].name}` });
+          }
+          empButtons.push(row);
+        }
+        empButtons.push([{ text: '❌ هەڵوەشاندنەوە' }]);
+
+        await sendTelegramMessage(
+          chatId,
+          `👥 <b>لیستی کارمەندانی تۆمارکراوی سیستەم (تایبەت بە بەڕێوەبەر):</b>\nتکایە ناوی کارمەند هەڵبژێرە:`,
           {
-            keyboard: [[{ text: '❌ هەڵوەشاندنەوە' }]],
+            keyboard: empButtons,
             resize_keyboard: true,
             one_time_keyboard: true,
           }
@@ -224,11 +204,160 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // If still not bound, prompt to select
+    // -------------------------------------------------------------
+    // 7. DIRECT PIN VERIFICATION (FOR UNBOUND USERS WITHOUT PUBLIC LIST)
+    // -------------------------------------------------------------
+    if (!currentBinding && /^\d{4}$/.test(text)) {
+      const matchedEmp = await findEmployeeByPin(text);
+      if (matchedEmp) {
+        // Check if employee is already bound to another Telegram user
+        for (const [boundUid, info] of Object.entries(bindings)) {
+          if (info.employeeId === matchedEmp.id && boundUid !== fromId) {
+            await sendTelegramMessage(
+              chatId,
+              `⛔ <b>ئەم کارمەندە پێشتر قوفڵکراوە!</b>\n\nکارمەند <b>${matchedEmp.name}</b> پێشتر لەسەر مۆبایل و تەلەگرامێکی تر قوفڵ کراوە.\n\n🔒 بۆ پاراستنی دروستی دەوام، ڕێگە نادرێت دوو مۆبایل لەسەر یەک کارمەند دەوام بکەن.\nئەگەر مۆبایلت گۆڕیوە، تکایە پەیوەندی بە بەڕێوەبەر (کاک دارکۆ) بکە تا قوفڵی هەژمارەکەت بکاتەوە.`,
+              { remove_keyboard: true }
+            );
+            return NextResponse.json({ ok: true });
+          }
+        }
+
+        const saveRes = await saveTelegramBinding(fromId, matchedEmp.id, matchedEmp.name);
+        if (saveRes.success) {
+          const isMgr = matchedEmp.id === 'emp-02';
+          await sendTelegramMessage(
+            chatId,
+            `✅ <b>پیرۆزە! هەژمارەکەت بە سەرکەوتوویی بەستراوەتەوە.</b>\n\n` +
+            `👤 ناوی کارمەند: <b>${matchedEmp.name}</b>\n` +
+            `🆔 کۆدی کارمەند: <b>${matchedEmp.id}</b>\n` +
+            `🔒 <b>ئاسایش:</b> ئەم هەژمارە تەنها بۆ ئەم مۆبایل و ئەکاونتەی تەلەگرام قوفڵکرا.\n\n` +
+            `ئێستا دەتوانیت لە ڕێگەی دوگمەکانی خوارەوە کاتی دەوام تۆمار بکەیت:`,
+            getMainReplyKeyboard(isMgr)
+          );
+          return NextResponse.json({ ok: true });
+        }
+      } else {
+        await sendTelegramMessage(
+          chatId,
+          `❌ <b>کۆدی نهێنی (PIN) هەڵەیە!</b>\n\n` +
+          `ئەگەر کۆدەکەت بیرچووە، تکایە ئایدی تەلەگرامەکەت: <code>${fromId}</code> بنێرە بۆ بەڕێوەبەر تا بە دەستی هەژمارەکەت بۆ ببەستێتەوە.`,
+          { remove_keyboard: true }
+        );
+        return NextResponse.json({ ok: true });
+      }
+    }
+
+    // -------------------------------------------------------------
+    // 8. MANAGER COMMAND: /bind [telegram_id] [emp_id_or_name]
+    // -------------------------------------------------------------
+    if (text.startsWith('/bind')) {
+      if (!isManager) {
+        await sendTelegramMessage(
+          chatId, 
+          `⛔ بەستنەوەی دەستی تەنها بۆ بەڕێوەبەر (کاک دارکۆ) ڕێگەپێدراوە.`, 
+          getMainReplyKeyboard(isManager)
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      const parts = text.split(/\s+/);
+      const targetTelegramId = parts[1]?.trim();
+      const targetEmp = parts.slice(2).join(' ').trim();
+
+      if (!targetTelegramId || !targetEmp) {
+        await sendTelegramMessage(
+          chatId,
+          `ℹ️ <b>شێوازی بەستنەوەی دەستی لەلایەن بەڕێوەبەر:</b>\n\n` +
+          `<code>/bind [Telegram_ID] [کۆد یان ناوی کارمەند]</code>\n\n` +
+          `نموونە:\n` +
+          `• <code>/bind 123456789 emp-05</code>\n` +
+          `• <code>/bind 123456789 ئالان</code>`,
+          getMainReplyKeyboard(isManager)
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      const matchedEmp = allEmployees.find(emp => {
+        const cName = emp.name.toLowerCase();
+        const cTarget = targetEmp.toLowerCase();
+        return (
+          emp.id.toLowerCase() === cTarget ||
+          emp.employeeId.toLowerCase() === cTarget ||
+          cName.includes(cTarget) ||
+          cTarget.includes(cName)
+        );
+      });
+
+      if (!matchedEmp) {
+        await sendTelegramMessage(
+          chatId,
+          `❌ هیچ کارمەندێک نەدۆزرایەوە بە ناونیشانی: <b>${targetEmp}</b>`,
+          getMainReplyKeyboard(isManager)
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      const saveRes = await saveTelegramBinding(targetTelegramId, matchedEmp.id, matchedEmp.name, true);
+      if (saveRes.success) {
+        await sendTelegramMessage(
+          chatId,
+          `✅ <b>هەژمار بە سەرکەوتوویی بەستراوەتەوە!</b>\n\n👤 کارمەند: <b>${matchedEmp.name}</b> (${matchedEmp.id})\n🆔 تەلەگرام ئایدی: <code>${targetTelegramId}</code>`,
+          getMainReplyKeyboard(isManager)
+        );
+
+        // Notify the employee directly in their Telegram chat
+        await sendTelegramMessage(
+          targetTelegramId,
+          `🎉 <b>سڵاو بەڕێز ${matchedEmp.name}</b>\n\nهەژمارەکەت لەلایەن بەڕێوەبەرەوە بە سەرکەوتوویی بەستراوەتەوە بە سیستەمی دەوامی ئاشڵی 🏢\n\nئێستا دەتوانیت لە ڕێگەی دوگمەکانی خوارەوە کاتی هاتن و دەرچوون تۆمار بکەیت:`,
+          getMainReplyKeyboard(matchedEmp.id === 'emp-02')
+        );
+      } else {
+        await sendTelegramMessage(
+          chatId,
+          `❌ هەڵە لە بەستنەوە: ${saveRes.error}`,
+          getMainReplyKeyboard(isManager)
+        );
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 9. MANAGER COMMAND: /bindings (View all linked Telegram accounts)
+    // -------------------------------------------------------------
+    if (text === '/bindings' || text === '/telegram_users') {
+      if (!isManager) {
+        await sendTelegramMessage(chatId, `⛔ تەنها بەڕێوەبەر بۆی هەیە ئەم لیستە ببینێت.`, getMainReplyKeyboard(isManager));
+        return NextResponse.json({ ok: true });
+      }
+
+      let msg = `📱 <b>لیستی بەستنەوەی تەلەگرامی کارمەندان:</b>\n\n`;
+      let boundCount = 0;
+      for (const emp of allEmployees) {
+        const boundEntry = Object.entries(bindings).find(([_, info]) => info.employeeId === emp.id);
+        if (boundEntry) {
+          boundCount++;
+          msg += `✅ <b>${emp.name}</b> (${emp.employeeId})\n   🆔 تەلەگرام: <code>${boundEntry[0]}</code>\n\n`;
+        } else {
+          msg += `⚪ <b>${emp.name}</b> (${emp.employeeId}): <i>(نەبەستراوە)</i>\n\n`;
+        }
+      }
+      msg += `📊 کۆی بەستراوەکان: <b>${boundCount}</b> لە <b>${allEmployees.length}</b> کارمەند\n\n`;
+      msg += `💡 <i>بۆ بەستنەوە: <code>/bind [Telegram_ID] [کۆدی کارمەند]</code></i>\n`;
+      msg += `💡 <i>بۆ کردنەوە: <code>/unbind [کۆدی کارمەند]</code></i>`;
+
+      await sendTelegramMessage(chatId, msg, getMainReplyKeyboard(isManager));
+      return NextResponse.json({ ok: true });
+    }
+
+    // If still not bound, prompt to contact Admin
     if (!currentBinding) {
       await sendTelegramMessage(
         chatId,
-        `تکایە سەرەتا ناوی خۆت لە دوگمەکانی خوارەوە هەڵبژێرە، یان بنووسە /start بۆ بینینی لیستەکە:`
+        `🔒 ئەم هەژمارەی تەلەگرامە هێشتا نەبەستراوەتەوە بە هیچ کارمەندێکەوە.\n\n` +
+        `🆔 <b>ئایدی تەلەگرامی تۆ (Telegram ID):</b>\n<code>${fromId}</code>\n\n` +
+        `📌 تکایە ئەم ژمارەی ئایدییە بدە بە بەڕێوەبەر (کاک دارکۆ) تاوەکو بە شێوەی فەرمی و دەستی هەژمارەکەت پێوە ببەستێتەوە.\n\n` +
+        `🔐 <i>ئەگەر کۆدی تایبەتی (PIN)ت هەیە، دەتوانیت ٤ ژمارەکە بنووسیت.</i>`,
+        { remove_keyboard: true }
       );
       return NextResponse.json({ ok: true });
     }
@@ -482,14 +611,15 @@ export async function POST(req: NextRequest) {
         `• <b>📊 دۆخی دەوامی ئەمڕۆم</b>: پیشاندانی کاتی هاتن و دەرچوونی ئەمڕۆت\n` +
         `• <b>📅 دۆخی دەوامی ئەم مانگەم (/month)</b>: ڕاپۆرت و ئاماری دەوامی مانگانەت\n` +
         `• <b>📋 لیستی ئامادەبووانی ئەمڕۆ</b>: پیشاندانی هەموو کارمەندانی ئامادەبوو\n` +
-        `• <b>🔄 گۆڕینی هەژمار / لیست</b>: گۆڕینی کارمەند و بەستنەوەی سەرلەنوێ\n` +
         `• <b>/in</b>: تۆمارکردنی دەوامی هاتن\n` +
         `• <b>/out</b>: تۆمارکردنی دەوامی دەرچوون`;
 
       if (isManager) {
         helpText += `\n\n<b>🔧 فەرمانەکانی بەڕێوەبەر:</b>\n` +
-          `• <b>/reset_today</b>: پاککردنەوەی دەوامی ئەمڕۆی خۆت بۆ تاقیکردنەوە\n` +
-          `• <b>/unbind [کۆدی کارمەند]</b>: کردنەوەی قوفڵی هەژمار لەسەر تەلەگرام`;
+          `• <b>/bind [Telegram_ID] [کۆد یان ناو]</b>: بەستنەوەی دەستی هەژماری کارمەند\n` +
+          `• <b>/bindings</b>: پیشاندانی لیستی کارمەندە بەستراوەکان و نەبەستراوەکان\n` +
+          `• <b>/unbind [کۆدی کارمەند]</b>: کردنەوەی قوفڵی هەژمار لەسەر تەلەگرام\n` +
+          `• <b>/reset_today</b>: پاککردنەوەی دەوامی ئەمڕۆی خۆت بۆ تاقیکردنەوە`;
       }
 
       await sendTelegramMessage(chatId, helpText, getMainReplyKeyboard(isManager));

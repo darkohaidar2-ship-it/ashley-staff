@@ -1720,7 +1720,8 @@ export default function MobileAttendanceOneTap() {
     const currentEmp = allEmployees.find(e => e.id === employeeProfile?.id);
     const validPin = OFFICIAL_PIN_MAP[employeeProfile?.id || ''] || (currentEmp as any)?.pin || '1001';
     
-    if (logoutPin.trim() === '12355321' || logoutPin.trim() === validPin) {
+    const masterPin = process.env.NEXT_PUBLIC_ADMIN_BYPASS_PIN || '12355321';
+    if (logoutPin.trim() === masterPin) {
       localStorage.removeItem('ashley_bound_employee_profile');
       setEmployeeProfile(null);
       setAuthStep('PIN');
@@ -1731,7 +1732,7 @@ export default function MobileAttendanceOneTap() {
       setLogoutError(null);
       playCheckOutMusic();
     } else {
-      setLogoutError('پاسۆردی بەڕێوەبەر یان پینی کارمەند هەڵەیە');
+      setLogoutError('⛔ لۆگ‌ئاوت تەنها بە کۆدی تێپەڕبوونی تایبەتی بەڕێوەبەر (Master Admin) دەکرێت');
       playRejectSound();
     }
   };
@@ -3017,14 +3018,6 @@ export default function MobileAttendanceOneTap() {
               <span>دابەزاندن</span>
             </button>
           )}
-          <button 
-            onClick={() => setShowLogoutModal(true)}
-            className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] flex items-center gap-1 font-bold cursor-pointer transition-colors"
-            title="دەرچوون"
-          >
-            <LogOut className="w-3.5 h-3.5 text-rose-600" />
-            <span>دەرچوون</span>
-          </button>
         </div>
       </header>
 

@@ -97,9 +97,6 @@ export function getMainReplyKeyboard(isManager: boolean = false) {
       { text: '📅 دۆخی دەوامی ئەم مانگەم' },
       { text: 'ℹ️ شوێنەکانی دەوام' },
     ],
-    [
-      { text: '🔄 گۆڕینی هەژمار / لیست' },
-    ],
   ];
 
   if (isManager) {
@@ -190,6 +187,48 @@ export async function verifyEmployeePin(employeeId: string, enteredPin: string):
   }
 
   return false;
+}
+
+// Find employee directly by secret PIN (without exposing public employee list)
+export async function findEmployeeByPin(enteredPin: string): Promise<{ id: string; employeeId: string; name: string } | null> {
+  const cleanPin = (enteredPin || '').trim();
+  if (!cleanPin || cleanPin.length < 4) return null;
+
+  const allEmps = await getAllEmployees();
+
+  // 1. Check custom profiles in Supabase
+  try {
+    const { data: setRow } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_employee_profiles')
+      .maybeSingle();
+
+    if (setRow?.qr_code) {
+      const profiles = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+      for (const emp of allEmps) {
+        const rawNum = emp.id.replace('emp-', '');
+        const profile = profiles[emp.id] || profiles[rawNum] || profiles[`emp-${rawNum}`];
+        if (profile && (profile.pin || profile.password)) {
+          if (String(profile.pin || profile.password).trim() === cleanPin) {
+            return emp;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn('[TelegramService] Error searching employee profile for PIN:', err);
+  }
+
+  // 2. Check OFFICIAL_PIN_MAP fallback
+  for (const emp of allEmps) {
+    const expected = OFFICIAL_PIN_MAP[emp.id] || OFFICIAL_PIN_MAP[`emp-${emp.id.replace('emp-', '')}`];
+    if (expected && expected === cleanPin) {
+      return emp;
+    }
+  }
+
+  return null;
 }
 
 // Pending PIN Auth state in Supabase
