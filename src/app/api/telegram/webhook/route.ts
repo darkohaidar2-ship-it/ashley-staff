@@ -510,19 +510,29 @@ export async function POST(req: NextRequest) {
         const targetEmpId = parts[1];
         const fileId = parts[2];
         const photoUrl = await getTelegramFileUrl(fileId);
+        let finalPhoto = photoUrl || fileId;
         if (photoUrl) {
-          await approveEmployeePhoto(targetEmpId, photoUrl);
-          await answerCallbackQuery(cqId, '✅ وێنەکە پەسەندکرا');
-          if (cqMsgId) {
-            await editTelegramMessage(cqChatId, cqMsgId, `✅ وێنەی نوێ بۆ کارمەند (${targetEmpId}) بە سەرکەوتوویی پەسەندکرا.`);
-          }
-          const empEntry = Object.entries(bindings).find(([_, info]) => info.employeeId === targetEmpId);
-          if (empEntry) {
-            await sendTelegramMessage(
-              empEntry[0],
-              `🎉 <b>پیرۆزە!</b> وێنەی نوێی پرۆفایلەکەت لەلایەن بەڕێوەبەرەوە پەسەندکرا و لە سیستەمی فەرمیدا جێگیر کرا.`
-            );
-          }
+          try {
+            const imgRes = await fetch(photoUrl);
+            if (imgRes.ok) {
+              const arrayBuffer = await imgRes.arrayBuffer();
+              const base64 = Buffer.from(arrayBuffer).toString('base64');
+              finalPhoto = `data:image/jpeg;base64,${base64}`;
+            }
+          } catch (e) {}
+        }
+        await approveEmployeePhoto(targetEmpId, finalPhoto);
+        await updateEmployeeProfileField(targetEmpId, 'telegramFileId', fileId);
+        await answerCallbackQuery(cqId, '✅ وێنەکە پەسەندکرا');
+        if (cqMsgId) {
+          await editTelegramMessage(cqChatId, cqMsgId, `✅ وێنەی نوێ بۆ کارمەند (${targetEmpId}) بە سەرکەوتوویی پەسەندکرا.`);
+        }
+        const empEntry = Object.entries(bindings).find(([_, info]) => info.employeeId === targetEmpId);
+        if (empEntry) {
+          await sendTelegramMessage(
+            empEntry[0],
+            `🎉 <b>پیرۆزە!</b> وێنەی نوێی پرۆفایلەکەت لەلایەن بەڕێوەبەرەوە پەسەندکرا و لە سیستەمی فەرمیدا جێگیر کرا.`
+          );
         }
         return NextResponse.json({ ok: true });
       }
@@ -827,28 +837,39 @@ export async function POST(req: NextRequest) {
       const pendingProfileEdit = await getPendingProfileEdit(fromId);
       if ((pendingProfileEdit === 'photo' || PENDING_PHOTOS[fromId]) && currentBinding) {
         await clearPendingProfileEdit(fromId);
-        delete PENDING_PHOTOS[fromId];
         const largest = message.photo[message.photo.length - 1];
         const fileId = largest.file_id;
         const photoUrl = await getTelegramFileUrl(fileId);
 
+        let persistentPhotoUrl = photoUrl;
         if (photoUrl) {
-          await updateEmployeeProfileField(currentBinding.employeeId, 'photoUrl', photoUrl);
+          try {
+            const imgRes = await fetch(photoUrl);
+            if (imgRes.ok) {
+              const arrayBuffer = await imgRes.arrayBuffer();
+              const base64 = Buffer.from(arrayBuffer).toString('base64');
+              const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+              persistentPhotoUrl = `data:${contentType};base64,${base64}`;
+            }
+          } catch (imgErr) {
+            logger.warn('[Telegram Webhook] Failed to convert photo to base64:', imgErr);
+          }
         }
 
-        // 1. Send the updated photo first ("وێنەکەم بۆ بنێرەوە")
-        const updated = await getEmployeeProfileDetails(currentBinding.employeeId);
-        const photoToSend = updated.photoUrl || photoUrl || fileId;
-        if (photoToSend) {
-          await sendTelegramPhoto(
-            chatId,
-            photoToSend,
-            `✅ <b>وێنەی نوێی پرۆفایلەکەت بە سەرکەوتوویی نوێکرایەوە!</b>`
-          );
-        }
+        // Store permanent Data URL for web and persistent telegramFileId for Telegram API
+        await updateEmployeeProfileField(currentBinding.employeeId, 'photoUrl', persistentPhotoUrl || fileId);
+        await updateEmployeeProfileField(currentBinding.employeeId, 'telegramFileId', fileId);
+
+        // 1. Send the updated photo first using fileId directly (never expires on Telegram!)
+        await sendTelegramPhoto(
+          chatId,
+          fileId,
+          `✅ <b>وێنەی نوێی پرۆفایلەکەت بە سەرکەوتوویی نوێکرایەوە!</b>`
+        );
 
         // 2. Then send the updated information card ("انجا زانیاریەکان")
         // 3. Followed by options inline keyboard ("انجا ئختیارەکان")
+        const updated = await getEmployeeProfileDetails(currentBinding.employeeId);
         const cardMsg = formatProfileCard(updated);
         const kb = getProfileInlineKeyboard();
         await sendTelegramMessage(chatId, cardMsg, kb);
@@ -1342,12 +1363,22 @@ export async function POST(req: NextRequest) {
       const profile = await getEmployeeProfileDetails(currentBinding.employeeId);
 
       // Resolve photo:
-      let photoToSend = profile.photoUrl;
-      if (!photoToSend || photoToSend.includes('/employees/')) {
+      // Priority 1: telegramFileId (persistent Telegram native file_id, never expires)
+      // Priority 2: base64 Data URL (stored in photoUrl)
+      // Priority 3: live user Telegram profile photo via getUserTelegramProfilePhoto
+      let photoToSend = (profile as any).telegramFileId;
+
+      if (!photoToSend && profile.photoUrl && !profile.photoUrl.includes('api.telegram.org') && !profile.photoUrl.includes('/employees/')) {
+        photoToSend = profile.photoUrl;
+      }
+
+      // If photoToSend is missing or was an expired telegram URL:
+      if (!photoToSend || photoToSend.includes('api.telegram.org') || photoToSend.includes('/employees/')) {
         const tgPhoto = await getUserTelegramProfilePhoto(fromId);
         if (tgPhoto) {
           photoToSend = tgPhoto;
           profile.photoUrl = tgPhoto;
+          await updateEmployeeProfileField(currentBinding.employeeId, 'telegramFileId', tgPhoto);
           await updateEmployeeProfileField(currentBinding.employeeId, 'photoUrl', tgPhoto);
         } else {
           photoToSend = 'https://ashley-staff.vercel.app/logo.png';

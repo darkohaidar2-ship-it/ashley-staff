@@ -55,6 +55,140 @@ export interface DestinationRoleDefinition {
   color: string;
 }
 
+export interface AuthorityDefinition {
+  id: string; // 'founder', 'general_manager', 'warehouse_manager', 'transport_manager', 'administration', 'developer', 'it_admin'
+  title: string;
+  name: string;
+  employeeId?: string;
+  description: string;
+  badge: string;
+  color: string;
+}
+
+export const AUTHORITIES_LIST: AuthorityDefinition[] = [
+  {
+    id: 'founder',
+    title: 'ئەدمین و دامەزرێنەر',
+    name: 'کاک دارکۆ حەیدەر حسێن',
+    employeeId: 'emp-02',
+    description: 'دەسەڵاتی باڵا، پەسەندکردنی مۆڵەت و سەرپەرشتی تەواوی سیستم لە تەلەگرام',
+    badge: 'ئەدمین',
+    color: '#007AFF',
+  },
+  {
+    id: 'general_manager',
+    title: 'بەڕێوەبەری گشتی',
+    name: 'مامۆستا وەلید',
+    employeeId: 'emp-13',
+    description: 'پەسەندکردنی مۆڵەت و ناردنی ئاگاداری فەرمی گشتی بۆ هەمووان',
+    badge: 'بەڕێوەبەر',
+    color: '#34C759',
+  },
+  {
+    id: 'warehouse_manager',
+    title: 'بەڕێوەبەری کۆگا',
+    name: 'کاک کامەران عومەر ڕووئوف',
+    employeeId: 'emp-06',
+    description: 'وەرگرتن و پەسەندکردنی مۆڵەت، غیاب، و پشووی کۆگا لە تەلەگرام',
+    badge: 'کۆگا',
+    color: '#AF52DE',
+  },
+  {
+    id: 'transport_manager',
+    title: 'بەڕێوەبەری نقڵ',
+    name: 'کاک هەڤاڵ حبیب حەمەڕەزا',
+    employeeId: 'emp-04',
+    description: 'سەرپەرشتی گواستنەوە، نقڵی کەلوپەل و دەوامی کارمەندانی نقڵ',
+    badge: 'نقڵ',
+    color: '#FF9500',
+  },
+  {
+    id: 'administration',
+    title: 'ئیدارە و سەرچاوە مرۆییەکان',
+    name: 'بەشی ئیدارە و کارگێڕی (HR)',
+    employeeId: 'admin-hr',
+    description: 'ئاگاداری مۆڵەت، گرێبەست، بەڵگەنامە و بەیاننامەی فەرمی کارمەندان',
+    badge: 'ئیدارە',
+    color: '#E11D48',
+  },
+  {
+    id: 'developer',
+    title: 'دیڤلۆپەر و پرۆگرامەر',
+    name: 'گەشەپێدەری سیستم و بۆت',
+    employeeId: 'dev-team',
+    description: 'پشتگیری کۆد، هەڵەکانی سیستم، سێرڤەر و گەشەپێدانی تەلەگرام بۆت',
+    badge: 'دیڤلۆپەر',
+    color: '#06B6D4',
+  },
+  {
+    id: 'it_admin',
+    title: 'بەشی ئایتی و تەکنیکی',
+    name: 'پشتگیری تەکنیکی و سیستم',
+    employeeId: 'it-admin',
+    description: 'ئاگاداری مۆبایل و ئامێرەکان، بەستنەوەی تەلەگرام و ڕێگری تەزویر',
+    badge: 'ئایتی',
+    color: '#5856D6',
+  },
+];
+
+export interface RecipientDefinition {
+  id: string;
+  title: string;
+  name: string;
+  description: string;
+  badge: string;
+  color: string;
+  type: 'group' | 'employee';
+}
+
+export const RECIPIENTS_LIST: RecipientDefinition[] = [
+  {
+    id: 'all_employees',
+    title: 'سەرجەم کارمەندان',
+    name: 'هەموو ستافی ئاشڵی (تەلەگرام & نۆتیفیکەیشن)',
+    description: 'بۆ ئاگاداری گشتی، ڕاگەیاندنی پشوو و بەیاننامەکان',
+    badge: 'گشتی',
+    color: '#007AFF',
+    type: 'group',
+  },
+  {
+    id: 'warehouse_team',
+    title: 'ستافی کۆگا',
+    name: 'کارمەندانی کۆگای سەرەکی و کارگە',
+    description: 'ئاگاداری پەیوەندیدار بە کۆگا، داواکاری و ئەرکەکان',
+    badge: 'کۆگا',
+    color: '#AF52DE',
+    type: 'group',
+  },
+  {
+    id: 'transport_team',
+    title: 'ستافی نقڵ',
+    name: 'شۆفێران و تیمی گواستنەوەی کەلوپەل',
+    description: 'ئاگاداری گواستنەوە، بارکردن و خشتەی نقڵ',
+    badge: 'نقڵ',
+    color: '#FF9500',
+    type: 'group',
+  },
+  {
+    id: 'showroom_team',
+    title: 'ستافی پێشانگا',
+    name: 'فرۆشیاران و ستافی پێشانگای سەرەکی',
+    description: 'ئاگاداری فرۆشتن، نرخ و بەیاننامەکانی پێشانگا',
+    badge: 'فرۆشتن',
+    color: '#10B981',
+    type: 'group',
+  },
+  {
+    id: 'admin_team',
+    title: 'ستافی ئیدارە',
+    name: 'بەشی ئیدارە، ژمێریاری و سەرچاوە مرۆییەکان',
+    description: 'ئاگاداری مۆڵەت، گرێبەست، غیاب و دەوام',
+    badge: 'ئیدارە',
+    color: '#E11D48',
+    type: 'group',
+  },
+];
+
 export const DESTINATION_ROLES: DestinationRoleDefinition[] = [
   {
     id: 'founder',
@@ -153,9 +287,9 @@ export interface NotificationWorkflowRule {
 
 export interface WireConnection {
   id: string; // `${fromId}__${toId}`
-  fromType: 'employee' | 'task';
+  fromType: 'authority' | 'task' | 'employee';
   fromId: string;
-  toType: 'task' | 'role';
+  toType: 'task' | 'role' | 'recipient' | 'employee';
   toId: string;
   createdAt?: string;
 }
@@ -419,82 +553,68 @@ export function getDefaultEmployeeRoles(): Record<string, UserRole> {
 export function getDefaultConnections(): WireConnection[] {
   const connections: WireConnection[] = [];
 
-  // 1. Employees to Tasks
-  // Kak Kamaran (emp-06) connected to Warehouse tasks
-  connections.push(
-    { id: 'emp-06__leave_approval', fromType: 'employee', fromId: 'emp-06', toType: 'task', toId: 'leave_approval' },
-    { id: 'emp-06__mark_absence', fromType: 'employee', fromId: 'emp-06', toType: 'task', toId: 'mark_absence' },
-    { id: 'emp-06__set_holiday', fromType: 'employee', fromId: 'emp-06', toType: 'task', toId: 'set_holiday' },
-    { id: 'emp-06__late_alerts', fromType: 'employee', fromId: 'emp-06', toType: 'task', toId: 'late_alerts' }
-  );
-
-  // Kak Heval (emp-04) Transport Manager connected to Transport & Leave tasks
-  connections.push(
-    { id: 'emp-04__leave_approval', fromType: 'employee', fromId: 'emp-04', toType: 'task', toId: 'leave_approval' },
-    { id: 'emp-04__late_alerts', fromType: 'employee', fromId: 'emp-04', toType: 'task', toId: 'late_alerts' }
-  );
-
-  // Kak Darko (emp-02) connected to all tasks
+  // 1. Column 1 (Authorities) ➡️ Column 2 (Tasks)
+  // Kak Darko (founder) - full authority over all tasks
   WORKFLOW_ACTIONS.forEach((act) => {
     connections.push({
-      id: `emp-02__${act.id}`,
-      fromType: 'employee',
-      fromId: 'emp-02',
+      id: `founder__${act.id}`,
+      fromType: 'authority',
+      fromId: 'founder',
       toType: 'task',
       toId: act.id,
     });
   });
 
-  // General employees connected to leave request
-  const sampleEmps = ['emp-01', 'emp-03', 'emp-05', 'emp-07', 'emp-08'];
-  sampleEmps.forEach((eId) => {
-    connections.push({
-      id: `${eId}__leave_approval`,
-      fromType: 'employee',
-      fromId: eId,
-      toType: 'task',
-      toId: 'leave_approval',
-    });
-  });
-
-  // 2. Tasks to Destination Roles
+  // Mamosta Walid (general_manager)
   connections.push(
-    // Leave approval routes to Warehouse Manager (Kak Kamaran), Transport Manager (Kak Heval), Administration & Founder
-    { id: 'leave_approval__warehouse_manager', fromType: 'task', fromId: 'leave_approval', toType: 'role', toId: 'warehouse_manager' },
-    { id: 'leave_approval__transport_manager', fromType: 'task', fromId: 'leave_approval', toType: 'role', toId: 'transport_manager' },
-    { id: 'leave_approval__administration', fromType: 'task', fromId: 'leave_approval', toType: 'role', toId: 'administration' },
-    { id: 'leave_approval__founder', fromType: 'task', fromId: 'leave_approval', toType: 'role', toId: 'founder' },
-    { id: 'leave_approval__general_manager', fromType: 'task', fromId: 'leave_approval', toType: 'role', toId: 'general_manager' },
+    { id: 'general_manager__leave_approval', fromType: 'authority', fromId: 'general_manager', toType: 'task', toId: 'leave_approval' },
+    { id: 'general_manager__broadcast_msg', fromType: 'authority', fromId: 'general_manager', toType: 'task', toId: 'broadcast_msg' },
+    { id: 'general_manager__set_holiday', fromType: 'authority', fromId: 'general_manager', toType: 'task', toId: 'set_holiday' }
+  );
 
-    // Broadcast routes to General Manager, Administration, Developer, Salesperson, and Founder
-    { id: 'broadcast_msg__founder', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'founder' },
-    { id: 'broadcast_msg__general_manager', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'general_manager' },
-    { id: 'broadcast_msg__administration', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'administration' },
-    { id: 'broadcast_msg__developer', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'developer' },
-    { id: 'broadcast_msg__salesperson', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'salesperson' },
-    { id: 'broadcast_msg__employee', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'employee' },
+  // Kak Kamaran (warehouse_manager)
+  connections.push(
+    { id: 'warehouse_manager__leave_approval', fromType: 'authority', fromId: 'warehouse_manager', toType: 'task', toId: 'leave_approval' },
+    { id: 'warehouse_manager__mark_absence', fromType: 'authority', fromId: 'warehouse_manager', toType: 'task', toId: 'mark_absence' },
+    { id: 'warehouse_manager__set_holiday', fromType: 'authority', fromId: 'warehouse_manager', toType: 'task', toId: 'set_holiday' },
+    { id: 'warehouse_manager__late_alerts', fromType: 'authority', fromId: 'warehouse_manager', toType: 'task', toId: 'late_alerts' }
+  );
 
-    // Absence routes to Warehouse Manager, Administration and Founder
-    { id: 'mark_absence__warehouse_manager', fromType: 'task', fromId: 'mark_absence', toType: 'role', toId: 'warehouse_manager' },
-    { id: 'mark_absence__transport_manager', fromType: 'task', fromId: 'mark_absence', toType: 'role', toId: 'transport_manager' },
-    { id: 'mark_absence__administration', fromType: 'task', fromId: 'mark_absence', toType: 'role', toId: 'administration' },
-    { id: 'mark_absence__founder', fromType: 'task', fromId: 'mark_absence', toType: 'role', toId: 'founder' },
+  // Kak Heval (transport_manager)
+  connections.push(
+    { id: 'transport_manager__leave_approval', fromType: 'authority', fromId: 'transport_manager', toType: 'task', toId: 'leave_approval' },
+    { id: 'transport_manager__mark_absence', fromType: 'authority', fromId: 'transport_manager', toType: 'task', toId: 'mark_absence' },
+    { id: 'transport_manager__late_alerts', fromType: 'authority', fromId: 'transport_manager', toType: 'task', toId: 'late_alerts' }
+  );
 
-    // Holiday routes to Warehouse Manager, General Manager, Administration, and Founder
-    { id: 'set_holiday__warehouse_manager', fromType: 'task', fromId: 'set_holiday', toType: 'role', toId: 'warehouse_manager' },
-    { id: 'set_holiday__administration', fromType: 'task', fromId: 'set_holiday', toType: 'role', toId: 'administration' },
-    { id: 'set_holiday__founder', fromType: 'task', fromId: 'set_holiday', toType: 'role', toId: 'founder' },
-    { id: 'set_holiday__general_manager', fromType: 'task', fromId: 'set_holiday', toType: 'role', toId: 'general_manager' },
+  // Administration (administration)
+  connections.push(
+    { id: 'administration__leave_approval', fromType: 'authority', fromId: 'administration', toType: 'task', toId: 'leave_approval' },
+    { id: 'administration__broadcast_msg', fromType: 'authority', fromId: 'administration', toType: 'task', toId: 'broadcast_msg' },
+    { id: 'administration__mark_absence', fromType: 'authority', fromId: 'administration', toType: 'task', toId: 'mark_absence' },
+    { id: 'administration__set_holiday', fromType: 'authority', fromId: 'administration', toType: 'task', toId: 'set_holiday' }
+  );
 
-    // Late alerts route to Warehouse Manager, Transport Manager and Founder
-    { id: 'late_alerts__warehouse_manager', fromType: 'task', fromId: 'late_alerts', toType: 'role', toId: 'warehouse_manager' },
-    { id: 'late_alerts__transport_manager', fromType: 'task', fromId: 'late_alerts', toType: 'role', toId: 'transport_manager' },
-    { id: 'late_alerts__founder', fromType: 'task', fromId: 'late_alerts', toType: 'role', toId: 'founder' },
+  // Developer & IT
+  connections.push(
+    { id: 'developer__device_management', fromType: 'authority', fromId: 'developer', toType: 'task', toId: 'device_management' },
+    { id: 'developer__broadcast_msg', fromType: 'authority', fromId: 'developer', toType: 'task', toId: 'broadcast_msg' },
+    { id: 'it_admin__device_management', fromType: 'authority', fromId: 'it_admin', toType: 'task', toId: 'device_management' }
+  );
 
-    // Device management routes to IT Admin, Developer and Founder
-    { id: 'device_management__it_admin', fromType: 'task', fromId: 'device_management', toType: 'role', toId: 'it_admin' },
-    { id: 'device_management__developer', fromType: 'task', fromId: 'device_management', toType: 'role', toId: 'developer' },
-    { id: 'device_management__founder', fromType: 'task', fromId: 'device_management', toType: 'role', toId: 'founder' }
+  // 2. Column 2 (Tasks) ➡️ Column 3 (Recipients)
+  connections.push(
+    { id: 'leave_approval__admin_team', fromType: 'task', fromId: 'leave_approval', toType: 'recipient', toId: 'admin_team' },
+    { id: 'leave_approval__warehouse_team', fromType: 'task', fromId: 'leave_approval', toType: 'recipient', toId: 'warehouse_team' },
+    { id: 'leave_approval__transport_team', fromType: 'task', fromId: 'leave_approval', toType: 'recipient', toId: 'transport_team' },
+
+    { id: 'broadcast_msg__all_employees', fromType: 'task', fromId: 'broadcast_msg', toType: 'recipient', toId: 'all_employees' },
+    { id: 'set_holiday__all_employees', fromType: 'task', fromId: 'set_holiday', toType: 'recipient', toId: 'all_employees' },
+
+    { id: 'mark_absence__admin_team', fromType: 'task', fromId: 'mark_absence', toType: 'recipient', toId: 'admin_team' },
+    { id: 'late_alerts__admin_team', fromType: 'task', fromId: 'late_alerts', toType: 'recipient', toId: 'admin_team' },
+    { id: 'late_alerts__warehouse_team', fromType: 'task', fromId: 'late_alerts', toType: 'recipient', toId: 'warehouse_team' },
+    { id: 'device_management__admin_team', fromType: 'task', fromId: 'device_management', toType: 'recipient', toId: 'admin_team' }
   );
 
   return connections;
@@ -708,19 +828,14 @@ export async function hasActionPermission(
   // Founder always has permission
   if (role === 'founder') return true;
 
-  // Check manual task-to-role connections
-  const isRoleConnected = config.connections.some(
-    (c) => c.fromType === 'task' && c.fromId === actionId && c.toType === 'role' && c.toId === role
-  );
-  if (isRoleConnected) return true;
+  // Check if role or employeeId is connected to the action in either direction
+  const isConnected = config.connections.some((c) => {
+    const matchesAction = c.fromId === actionId || c.toId === actionId;
+    const matchesEntity = c.fromId === role || c.toId === role || c.fromId === employeeId || c.toId === employeeId;
+    return matchesAction && matchesEntity;
+  });
 
-  // Check direct employee-to-task connection
-  const isEmployeeConnected = config.connections.some(
-    (c) => c.fromType === 'employee' && c.fromId === employeeId && c.toType === 'task' && c.toId === actionId
-  );
-  if (isEmployeeConnected) return true;
-
-  return false;
+  return isConnected;
 }
 
 /**
@@ -732,35 +847,42 @@ export async function getActionRecipients(
 ): Promise<Array<{ chatId: string; employeeId: string; employeeName: string; role: UserRole }>> {
   const config = await fetchWorkflowConfiguration();
   
-  // Find all destination roles connected to this task
-  const targetRoles = new Set<string>();
-  config.connections
-    .filter((c) => c.fromType === 'task' && c.fromId === actionId && c.toType === 'role')
-    .forEach((c) => targetRoles.add(c.toId));
+  // Find all authorities, roles, recipient groups, or employee IDs connected to this task
+  const targetKeys = new Set<string>();
+  config.connections.forEach((c) => {
+    if (c.toId === actionId) targetKeys.add(c.fromId);
+    if (c.fromId === actionId) targetKeys.add(c.toId);
+  });
 
-  // Fallback defaults if no connections configured
-  if (targetRoles.size === 0) {
-    const actDef = WORKFLOW_ACTIONS.find((a) => a.id === actionId);
-    if (actDef) {
-      actDef.defaultRoles.forEach((r) => targetRoles.add(r));
-    }
-  }
-
-  // Founder always included
-  targetRoles.add('founder');
+  // Always include founder
+  targetKeys.add('founder');
+  targetKeys.add('emp-02');
 
   const recipients: Array<{ chatId: string; employeeId: string; employeeName: string; role: UserRole }> = [];
 
   for (const [chatId, info] of Object.entries(bindings)) {
     const role = resolveEmployeeRole(info.employeeId, info.employeeName, config.employeeRoles);
     
-    // Check if employee's role is in target roles or if employee is directly wired
-    const matchesRole = targetRoles.has(role);
-    const matchesDirect = config.connections.some(
-      (c) => c.fromType === 'employee' && c.fromId === info.employeeId && c.toType === 'task' && c.toId === actionId
-    );
+    const matchesDirect = targetKeys.has(role) || targetKeys.has(info.employeeId);
+    const matchesAllStaff = targetKeys.has('all_employees') || targetKeys.has('employee');
+    const matchesWarehouse = (targetKeys.has('warehouse_team') || targetKeys.has('warehouse_staff') || targetKeys.has('warehouse_manager')) && 
+      (role === 'warehouse_manager' || role === 'warehouse_staff' || info.employeeId === 'emp-06' || info.employeeId === 'emp-03');
+    const matchesTransport = (targetKeys.has('transport_team') || targetKeys.has('transport_manager')) && 
+      (role === 'transport_manager' || info.employeeId === 'emp-04');
+    const matchesShowroom = (targetKeys.has('showroom_team') || targetKeys.has('salesperson')) && 
+      (role === 'salesperson');
+    const matchesAdmin = (targetKeys.has('admin_team') || targetKeys.has('administration')) && 
+      (role === 'administration' || role === 'general_manager' || role === 'founder');
 
-    if (matchesRole || matchesDirect || role === 'founder') {
+    if (
+      matchesDirect || 
+      matchesAllStaff || 
+      matchesWarehouse || 
+      matchesTransport || 
+      matchesShowroom || 
+      matchesAdmin || 
+      role === 'founder'
+    ) {
       if (!recipients.some((rc) => rc.chatId === chatId)) {
         recipients.push({
           chatId,
