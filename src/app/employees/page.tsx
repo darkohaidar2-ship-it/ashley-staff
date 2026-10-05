@@ -34,6 +34,7 @@ import {
   KeyRound,
   TrendingUp,
   RefreshCw,
+  SlidersHorizontal,
   X
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -273,9 +274,25 @@ function EmployeesPage() {
     return () => window.removeEventListener('ashley_attendance_updated', handleSync);
   }, [loadMatrixOverrides]);
 
-  // Merge canonical authoritative defaults with live state
+  // Merge canonical authoritative defaults with live state covering all 21 employees
   const unifiedEmployees = useMemo(() => {
-    const list = employees && employees.length > 0 ? employees : ASHLEY_OFFICIAL_EMPLOYEES;
+    const map = new Map<string, Employee>();
+    
+    // 1. Populate all 21 official employees (Sales, Cashiers, Admin, Transport, Warehouse)
+    ASHLEY_OFFICIAL_EMPLOYEES.forEach((emp) => {
+      map.set(emp.id.toLowerCase(), emp as any);
+      if (emp.employeeId) map.set(emp.employeeId.toLowerCase(), emp as any);
+    });
+
+    // 2. Overlay live employees from context / database
+    (employees || []).forEach((emp) => {
+      const existing = map.get(emp.id.toLowerCase()) || (emp.employeeId ? map.get(emp.employeeId.toLowerCase()) : undefined);
+      map.set(emp.id.toLowerCase(), { ...(existing || {}), ...emp });
+    });
+
+    // 3. Unique list
+    const uniqueIds = Array.from(new Set(Array.from(map.values()).map(e => e.id)));
+    const list = uniqueIds.map(id => Array.from(map.values()).find(e => e.id === id)!);
     
     const sortEmployees = (a: Employee, b: Employee) => {
       if (a.employeeId === '01' || a.id === 'emp-01') return -1;
@@ -448,6 +465,49 @@ function EmployeesPage() {
           <AddEmployeeDialog open={isAddDialogOpen} onOpenChange={setAddDialogOpen} addEmployee={addEmployee} />
           
           <div className="space-y-4 w-full">
+            {/* 🧭 UNIFIED NAVIGATION HEADER (EMPLOYEES & NOTIFICATION MATRIX) */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 p-2.5 rounded-2xl shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold shrink-0">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-sm sm:text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                  سیستەمی بەڕێوەبردنی کارمەندان و پلەکان
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-mono">
+                    ٢١ تۆمارکراو
+                  </span>
+                </h1>
+                <p className="text-[11px] text-slate-400">
+                  تێکەڵکراو و هاوسەنگکراو لەگەڵ ماتریکسی ئاگادارییەکان، دەسەڵاتەکان و دەوامی تەلەگرام
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-white/5 rounded-xl w-full sm:w-auto overflow-x-auto">
+              <Link
+                href="/employees"
+                className="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-[#3a3a3c] text-blue-600 dark:text-blue-400 shadow-2xs flex items-center gap-1.5 shrink-0"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>سەرجەم کارمەندان (٢١)</span>
+              </Link>
+              <Link
+                href="/notifications-matrix"
+                className="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-1.5 shrink-0"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-purple-500" />
+                <span>ماتریکسی ئەرک و ئاگادارییەکان (٣ ستوون)</span>
+              </Link>
+              <Link
+                href="/notifications-matrix?tab=roles"
+                className="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-1.5 shrink-0"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                <span>پلە و دەسەڵاتەکان</span>
+              </Link>
+            </div>
+          </div>
 
           {/* 📊 EXECUTIVE METRICS STRIP (HIGH LEVEL STATS) */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

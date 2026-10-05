@@ -59,6 +59,7 @@ import {
 } from '@/lib/attendance/report-service';
 import { evaluateAndRecordAttendance } from '@/lib/attendance/punch-service';
 import { supabase } from '@/lib/supabase/client';
+import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -837,28 +838,14 @@ export async function POST(req: NextRequest) {
       const pendingProfileEdit = await getPendingProfileEdit(fromId);
       if ((pendingProfileEdit === 'photo' || PENDING_PHOTOS[fromId]) && currentBinding) {
         await clearPendingProfileEdit(fromId);
+        delete PENDING_PHOTOS[fromId];
         const largest = message.photo[message.photo.length - 1];
         const fileId = largest.file_id;
         const photoUrl = await getTelegramFileUrl(fileId);
 
-        let persistentPhotoUrl = photoUrl;
-        if (photoUrl) {
-          try {
-            const imgRes = await fetch(photoUrl);
-            if (imgRes.ok) {
-              const arrayBuffer = await imgRes.arrayBuffer();
-              const base64 = Buffer.from(arrayBuffer).toString('base64');
-              const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
-              persistentPhotoUrl = `data:${contentType};base64,${base64}`;
-            }
-          } catch (imgErr) {
-            logger.warn('[Telegram Webhook] Failed to convert photo to base64:', imgErr);
-          }
-        }
-
-        // Store permanent Data URL for web and persistent telegramFileId for Telegram API
-        await updateEmployeeProfileField(currentBinding.employeeId, 'photoUrl', persistentPhotoUrl || fileId);
+        // Store permanent telegramFileId for Telegram API and photoUrl
         await updateEmployeeProfileField(currentBinding.employeeId, 'telegramFileId', fileId);
+        await updateEmployeeProfileField(currentBinding.employeeId, 'photoUrl', photoUrl || fileId);
 
         // 1. Send the updated photo first using fileId directly (never expires on Telegram!)
         await sendTelegramPhoto(
@@ -1362,27 +1349,43 @@ export async function POST(req: NextRequest) {
     if (text === '👤 پرۆفایلی من' || text === '/profile') {
       const profile = await getEmployeeProfileDetails(currentBinding.employeeId);
 
-      // Resolve photo:
+      // Resolve photo with robust priority:
       // Priority 1: telegramFileId (persistent Telegram native file_id, never expires)
-      // Priority 2: base64 Data URL (stored in photoUrl)
-      // Priority 3: live user Telegram profile photo via getUserTelegramProfilePhoto
+      // Priority 2: profile.photoUrl (if already set)
+      // Priority 3: official employee avatar from ASHLEY_OFFICIAL_EMPLOYEES
+      // Priority 4: live user Telegram profile photo via getUserTelegramProfilePhoto
+      // Fallback ONLY: company logo
       let photoToSend = (profile as any).telegramFileId;
 
-      if (!photoToSend && profile.photoUrl && !profile.photoUrl.includes('api.telegram.org') && !profile.photoUrl.includes('/employees/')) {
+      if (!photoToSend && profile.photoUrl) {
         photoToSend = profile.photoUrl;
       }
 
-      // If photoToSend is missing or was an expired telegram URL:
-      if (!photoToSend || photoToSend.includes('api.telegram.org') || photoToSend.includes('/employees/')) {
+      if (!photoToSend) {
+        const offEmp = ASHLEY_OFFICIAL_EMPLOYEES.find(e => 
+          e.id === currentBinding.employeeId || 
+          e.employeeId === currentBinding.employeeId
+        );
+        if (offEmp?.photoUrl) {
+          photoToSend = offEmp.photoUrl;
+        }
+      }
+
+      if (!photoToSend) {
         const tgPhoto = await getUserTelegramProfilePhoto(fromId);
         if (tgPhoto) {
           photoToSend = tgPhoto;
-          profile.photoUrl = tgPhoto;
           await updateEmployeeProfileField(currentBinding.employeeId, 'telegramFileId', tgPhoto);
           await updateEmployeeProfileField(currentBinding.employeeId, 'photoUrl', tgPhoto);
-        } else {
-          photoToSend = 'https://ashley-staff.vercel.app/logo.png';
         }
+      }
+
+      if (!photoToSend) {
+        photoToSend = 'https://ashley-staff.vercel.app/logo.png';
+      }
+
+      if (typeof photoToSend === 'string' && photoToSend.startsWith('/')) {
+        photoToSend = `https://ashley-staff.vercel.app${photoToSend}`;
       }
 
       // 1. Send the Photo first ("وێنەکەم بۆ بنێرەوە")

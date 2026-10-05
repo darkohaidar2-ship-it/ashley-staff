@@ -50,7 +50,7 @@ export type Employee = {
   fullName3Part?: string | null;
   kurdishName?: string | null;
   employeeId?: string | null;
-  role?: 'Super Manager' | 'Manager' | 'IT' | 'Employee Supervisor' | 'Transport Supervisor' | 'Employee' | 'Marketing' | null;
+  role?: 'Super Manager' | 'Manager' | 'IT' | 'Employee Supervisor' | 'Transport Supervisor' | 'Employee' | 'Marketing' | string | null;
   employmentStartDate?: string | null;
   startDate?: string | null;
   resignedDate?: string | null;

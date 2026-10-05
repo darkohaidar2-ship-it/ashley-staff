@@ -447,17 +447,25 @@ export const WORKFLOW_ROLES: RoleDefinition[] = [
 
 export const WORKFLOW_ACTIONS: TaskActionDefinition[] = [
   {
-    id: 'leave_approval',
+    id: 'request_leave',
     title: 'داواکردنی مۆڵەت',
-    description: 'داواکاری مۆڵەت بە کالێندەر لە تەلەگرام و پەسەندکردن لەلایەن کاک کامەران یان بەڕێوەبەرایەتی',
+    description: 'پێشکەشکردنی داواکاری مۆڵەت لە ڕێگەی کالێندەر لە تەلەگرام یان مۆبایل ئەپ',
     iconName: 'Palmtree',
-    defaultRoles: ['founder', 'warehouse_manager', 'general_manager'],
+    defaultRoles: ['founder', 'general_manager', 'warehouse_manager', 'transport_manager', 'administration', 'developer', 'it_admin', 'salesperson', 'warehouse_staff', 'supervisor', 'employee'],
     color: '#007AFF',
   },
   {
+    id: 'leave_approval',
+    title: 'بینینی لیستی مۆڵەتەکان و پەسەندکردن',
+    description: 'بینینی داواکارییەکان، پەسەندکردن یان ڕەتکردنەوە لەلایەن بەرپرسی پەیوەندیدار',
+    iconName: 'CheckCircle2',
+    defaultRoles: ['founder', 'warehouse_manager', 'general_manager', 'transport_manager'],
+    color: '#34C759',
+  },
+  {
     id: 'broadcast_msg',
-    title: 'ئاگەدارکردنەوەی کارمەندانی تر',
-    description: 'ناردنی ئاگاداری، بەیاننامە و ڕاگەیاندنی فەرمی لە تەلەگرام بۆ ستاف',
+    title: 'ناردنی ئاگاداری گشتی',
+    description: 'ناردنی ئاگاداری، بەیاننامە و ڕاگەیاندنی فەرمی بە دەق یان وێنە بۆ کارمەندان',
     iconName: 'Megaphone',
     defaultRoles: ['founder', 'general_manager'],
     color: '#AF52DE',
@@ -476,7 +484,7 @@ export const WORKFLOW_ACTIONS: TaskActionDefinition[] = [
     description: 'دیاریکردنی پشووی کۆمپانیا لە تەلەگرام بەبێ هەژمارکردنی غیاب لە خشتە',
     iconName: 'CalendarOff',
     defaultRoles: ['founder', 'warehouse_manager', 'general_manager'],
-    color: '#34C759',
+    color: '#10B981',
   },
   {
     id: 'late_alerts',
@@ -824,18 +832,28 @@ export async function hasActionPermission(
 ): Promise<boolean> {
   const config = await fetchWorkflowConfiguration();
   const role = resolveEmployeeRole(employeeId, undefined, config.employeeRoles);
+  const rawNum = employeeId.replace('emp-', '');
 
-  // Founder always has permission
-  if (role === 'founder') return true;
-
-  // Check if role or employeeId is connected to the action in either direction
+  // Check if role or employeeId is connected to the action in Column 1 (c.toId === actionId or c.fromId === actionId)
   const isConnected = config.connections.some((c) => {
     const matchesAction = c.fromId === actionId || c.toId === actionId;
-    const matchesEntity = c.fromId === role || c.toId === role || c.fromId === employeeId || c.toId === employeeId;
+    const matchesEntity = 
+      c.fromId === role || c.toId === role || 
+      c.fromId === employeeId || c.toId === employeeId ||
+      c.fromId === rawNum || c.toId === rawNum ||
+      c.fromId === `emp-${rawNum}` || c.toId === `emp-${rawNum}`;
     return matchesAction && matchesEntity;
   });
 
-  return isConnected;
+  if (isConnected) return true;
+
+  // Founder has system access except when checking custom permissions
+  if (role === 'founder' && actionId !== 'request_leave') return true;
+
+  // Everyone can request leave by default
+  if (actionId === 'request_leave') return true;
+
+  return false;
 }
 
 /**
@@ -847,23 +865,38 @@ export async function getActionRecipients(
 ): Promise<Array<{ chatId: string; employeeId: string; employeeName: string; role: UserRole }>> {
   const config = await fetchWorkflowConfiguration();
   
-  // Find all authorities, roles, recipient groups, or employee IDs connected to this task
+  // Find all authorities, roles, recipient groups, or employee IDs connected to this task in Column 3
   const targetKeys = new Set<string>();
   config.connections.forEach((c) => {
-    if (c.toId === actionId) targetKeys.add(c.fromId);
     if (c.fromId === actionId) targetKeys.add(c.toId);
+    if (c.toId === actionId && ((c.toType as string) === 'recipient' || (c.fromType as string) === 'recipient')) targetKeys.add(c.fromId);
   });
 
-  // Always include founder
-  targetKeys.add('founder');
-  targetKeys.add('emp-02');
+  // If no connections in active config, check defaults
+  if (targetKeys.size === 0) {
+    const defaults = getDefaultConnections();
+    defaults.forEach((c) => {
+      if (c.fromId === actionId) targetKeys.add(c.toId);
+    });
+  }
+
+  // 🔕 If STILL empty, this action has NO recipients wired ("هەندێ ئەرکیش هەیە پێویست ناکا ئاگەداری بچی بۆ کارمەدنەکانی تر")
+  if (targetKeys.size === 0) {
+    return [];
+  }
 
   const recipients: Array<{ chatId: string; employeeId: string; employeeName: string; role: UserRole }> = [];
 
   for (const [chatId, info] of Object.entries(bindings)) {
     const role = resolveEmployeeRole(info.employeeId, info.employeeName, config.employeeRoles);
+    const rawNum = info.employeeId.replace('emp-', '');
     
-    const matchesDirect = targetKeys.has(role) || targetKeys.has(info.employeeId);
+    const matchesDirect = 
+      targetKeys.has(role) || 
+      targetKeys.has(info.employeeId) || 
+      targetKeys.has(rawNum) || 
+      targetKeys.has(`emp-${rawNum}`);
+
     const matchesAllStaff = targetKeys.has('all_employees') || targetKeys.has('employee');
     const matchesWarehouse = (targetKeys.has('warehouse_team') || targetKeys.has('warehouse_staff') || targetKeys.has('warehouse_manager')) && 
       (role === 'warehouse_manager' || role === 'warehouse_staff' || info.employeeId === 'emp-06' || info.employeeId === 'emp-03');
@@ -872,7 +905,7 @@ export async function getActionRecipients(
     const matchesShowroom = (targetKeys.has('showroom_team') || targetKeys.has('salesperson')) && 
       (role === 'salesperson');
     const matchesAdmin = (targetKeys.has('admin_team') || targetKeys.has('administration')) && 
-      (role === 'administration' || role === 'general_manager' || role === 'founder');
+      (role === 'administration' || role === 'general_manager' || role === 'founder' || info.employeeId === 'emp-02');
 
     if (
       matchesDirect || 
@@ -880,8 +913,7 @@ export async function getActionRecipients(
       matchesWarehouse || 
       matchesTransport || 
       matchesShowroom || 
-      matchesAdmin || 
-      role === 'founder'
+      matchesAdmin
     ) {
       if (!recipients.some((rc) => rc.chatId === chatId)) {
         recipients.push({
@@ -896,3 +928,4 @@ export async function getActionRecipients(
 
   return recipients;
 }
+

@@ -74,7 +74,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
 };
 
 interface ActiveDrawingWire {
-  fromType: 'authority' | 'task';
+  fromType: 'authority' | 'task' | 'employee';
   fromId: string;
   fromName: string;
   startX: number;
@@ -92,7 +92,7 @@ export default function NotificationRoutingMatrix() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   
   // Navigation tabs:
-  // 1. 'visual' -> 3-Column Wiring Matrix (دەسەڵاتەکان -> ئەرکەکان -> وەرگرانی ئاگاداری)
+  // 1. 'visual' -> 3-Column Wiring Matrix (کارمەندان -> ئەرکەکان -> وەرگرانی ئاگاداری)
   // 2. 'roles' -> Dedicated Employee Role Management (کارمەندان و پلەکانیان)
   // 3. 'simulator' -> Telegram Notification Simulator
   const [activeTab, setActiveTab] = useState<'visual' | 'roles' | 'simulator'>('visual');
@@ -105,6 +105,11 @@ export default function NotificationRoutingMatrix() {
   const [hoveredItem, setHoveredItem] = useState<{ type: 'authority' | 'task' | 'recipient' | 'employee'; id: string } | null>(null);
   const [selectedItem, setSelectedItem] = useState<{ type: 'authority' | 'task' | 'recipient' | 'employee'; id: string } | null>(null);
   const [hoveredWireId, setHoveredWireId] = useState<string | null>(null);
+
+  // Column 1 Mode & Filters: 'employees' (all 21 employees) vs 'authorities' (roles)
+  const [col1Mode, setCol1Mode] = useState<'employees' | 'authorities'>('employees');
+  const [col1Search, setCol1Search] = useState('');
+  const [col1Dept, setCol1Dept] = useState<'all' | 'sales' | 'warehouse' | 'transport' | 'admin' | 'management'>('all');
 
   // Column 3 Sub-mode: 'groups' vs 'individual' employees
   const [recipientMode, setRecipientMode] = useState<'groups' | 'individuals'>('groups');
@@ -126,6 +131,7 @@ export default function NotificationRoutingMatrix() {
   // Refs and Port Coordinates
   const containerRef = useRef<HTMLDivElement>(null);
   const [portCoords, setPortCoords] = useState<Record<string, { x: number; y: number }>>({});
+
 
   // 1. Load configuration from Supabase on mount
   useEffect(() => {
@@ -156,6 +162,12 @@ export default function NotificationRoutingMatrix() {
       }
     };
 
+    // Column 1 & 3: Individual Employees
+    ASHLEY_OFFICIAL_EMPLOYEES.forEach((emp) => {
+      measure(`port-emp-out-${emp.id}`);
+      measure(`port-emp-in-${emp.id}`);
+    });
+
     // Column 1: Authorities
     AUTHORITIES_LIST.forEach((auth) => {
       measure(`port-auth-out-${auth.id}`);
@@ -172,11 +184,6 @@ export default function NotificationRoutingMatrix() {
       measure(`port-rec-in-${rec.id}`);
     });
 
-    // Column 3: Individual Employees
-    ASHLEY_OFFICIAL_EMPLOYEES.forEach((emp) => {
-      measure(`port-emp-in-${emp.id}`);
-    });
-
     setPortCoords(newCoords);
   }, []);
 
@@ -189,7 +196,8 @@ export default function NotificationRoutingMatrix() {
       window.removeEventListener('resize', handleResize);
       clearTimeout(timer);
     };
-  }, [updatePortCoordinates, loading, activeTab, recipientMode, connections, isFullscreen]);
+  }, [updatePortCoordinates, loading, activeTab, recipientMode, connections, isFullscreen, col1Mode, col1Search, col1Dept]);
+
 
   // 3. Handle Role Assignment for Employees
   const handleRoleChange = (employeeId: string, newRole: UserRole) => {
@@ -236,7 +244,7 @@ export default function NotificationRoutingMatrix() {
 
   // 8. Start Drawing a Connection Wire
   const handleStartWire = (
-    fromType: 'authority' | 'task', 
+    fromType: 'authority' | 'task' | 'employee', 
     fromId: string, 
     fromName: string, 
     portId: string,
@@ -283,8 +291,8 @@ export default function NotificationRoutingMatrix() {
     e.stopPropagation();
     if (!drawingWire) return;
 
-    if (drawingWire.fromType === 'authority' && toType !== 'task') {
-      alert('⚠️ تکایە دەسەڵاتی بڕیاردەر لە ستوونی یەکەمەوە ببەستەوە بە یەکێک لە ئەرکەکانی ستوونی دووەم.');
+    if ((drawingWire.fromType === 'authority' || drawingWire.fromType === 'employee') && toType !== 'task') {
+      alert('⚠️ تکایە دەسەڵاتی کارمەند لە ستوونی یەکەمەوە ببەستەوە بە یەکێک لە ئەرکەکانی ستوونی دووەم.');
       setDrawingWire(null);
       return;
     }
@@ -296,6 +304,7 @@ export default function NotificationRoutingMatrix() {
     }
 
     const connId = `${drawingWire.fromId}__${toId}`;
+
     setConnections((prev) => {
       // Toggle if already exists
       if (prev.some((c) => c.id === connId)) {
@@ -324,6 +333,31 @@ export default function NotificationRoutingMatrix() {
     }
     setSelectedItem(null);
   };
+
+  // Filtered employees list for Column 1 (Who can see & execute task in Telegram/ERP)
+  const filteredCol1Employees = useMemo(() => {
+    return ASHLEY_OFFICIAL_EMPLOYEES.filter((emp) => {
+      const q = col1Search.toLowerCase().trim();
+      const matchesSearch = 
+        !q ||
+        emp.name.toLowerCase().includes(q) ||
+        emp.id.toLowerCase().includes(q) ||
+        (emp.role && emp.role.toLowerCase().includes(q)) ||
+        (emp.fullName3Part && emp.fullName3Part.toLowerCase().includes(q));
+
+      const role = employeeRoles[emp.id] || resolveEmployeeRole(emp.id, emp.name, employeeRoles);
+      const matchesDept = 
+        col1Dept === 'all' ||
+        (col1Dept === 'sales' && (role === 'salesperson' || emp.role?.includes('فرۆشیار') || emp.role?.toLowerCase().includes('sales'))) ||
+        (col1Dept === 'warehouse' && (role === 'warehouse_manager' || role === 'warehouse_staff' || emp.id === 'emp-06' || emp.id === 'emp-03')) ||
+        (col1Dept === 'transport' && (role === 'transport_manager' || emp.id === 'emp-04' || emp.name.includes('هەڤاڵ') || emp.role?.includes('نقڵ'))) ||
+        (col1Dept === 'admin' && (role === 'administration' || emp.name.includes('ئیدارە') || emp.name.includes('کاشێر') || emp.id === 'emp-7347' || emp.id === 'emp-4973')) ||
+        (col1Dept === 'management' && (role === 'founder' || role === 'general_manager' || emp.id === 'emp-02' || emp.id === 'fe2ad0d3-4d9d-48f8-8cbb-51dc705678e3'));
+
+      return matchesSearch && matchesDept;
+    });
+  }, [col1Search, col1Dept, employeeRoles]);
+
 
   // Filtered employees list for the dedicated roles tab
   const filteredEmployeesForRoles = useMemo(() => {
@@ -575,14 +609,16 @@ export default function NotificationRoutingMatrix() {
             {connections.map((conn) => {
               // 1. Determine fromPort
               let fromPortId = '';
-              if (conn.fromType === 'authority') {
+              if (conn.fromType === 'employee') {
+                fromPortId = `port-emp-out-${conn.fromId}`;
+              } else if (conn.fromType === 'authority') {
                 fromPortId = `port-auth-out-${conn.fromId}`;
               } else if (conn.fromType === 'task') {
                 fromPortId = `port-task-out-${conn.fromId}`;
               } else {
-                // legacy fallback
                 fromPortId = `port-auth-out-${conn.fromId}`;
               }
+
 
               // 2. Determine toPort
               let toPortId = '';
@@ -741,98 +777,266 @@ export default function NotificationRoutingMatrix() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 relative z-20 h-full overflow-hidden">
             
             {/* ------------------------------------------------------------ */}
-            {/* COLUMN 1 (RIGHT in RTL): دەسەڵاتەکان کێ بێت (AUTHORITIES) */}
+            {/* COLUMN 1 (RIGHT in RTL): کارمەندان (دیاریکردنی بینینی دوگمە و دەسەڵات) */}
             {/* ------------------------------------------------------------ */}
             <div className="bg-white/60 dark:bg-[#1f1f22]/60 backdrop-blur-sm border border-slate-200/80 dark:border-white/5 rounded-2xl p-2.5 flex flex-col h-full overflow-hidden shadow-2xs">
               
               {/* Header */}
-              <div className="pb-2 border-b border-slate-200/70 dark:border-white/5 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#007AFF]"></span>
-                  <div>
-                    <h2 className="text-xs font-black text-slate-900 dark:text-white">
-                      ستوونی ١: دەسەڵاتەکان کێ بێت
-                    </h2>
-                    <p className="text-[10px] text-slate-400">
-                      بڕیاردەر و پەسەندکەر لە تەلەگرام
-                    </p>
-                  </div>
-                </div>
-                <span className="text-[10px] font-mono text-slate-400 font-bold bg-slate-100 dark:bg-white/10 px-2 py-0.5 rounded-md">
-                  {AUTHORITIES_LIST.length} دەسەڵات
-                </span>
-              </div>
-
-              {/* Authorities Cards */}
-              <div 
-                className="flex-1 overflow-y-auto space-y-2 py-1.5 pr-0.5 pl-2 custom-scrollbar"
-                onScroll={updatePortCoordinates}
-              >
-                {AUTHORITIES_LIST.map((auth) => {
-                  const outCount = connections.filter(
-                    (c) => (c.fromType === 'authority' || c.fromType === 'employee') && c.fromId === auth.id
-                  ).length;
-
-                  const isHovered = hoveredItem?.type === 'authority' && hoveredItem.id === auth.id;
-                  const isSelected = selectedItem?.type === 'authority' && selectedItem.id === auth.id;
-                  const isDrawingFromThis = drawingWire?.fromType === 'authority' && drawingWire?.fromId === auth.id;
-
-                  return (
-                    <div
-                      key={auth.id}
-                      onMouseEnter={() => setHoveredItem({ type: 'authority', id: auth.id })}
-                      onMouseLeave={() => setHoveredItem(null)}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedItem(selectedItem?.id === auth.id ? null : { type: 'authority', id: auth.id });
-                      }}
-                      className={`p-2.5 rounded-xl border transition-all relative flex flex-col justify-between gap-1 cursor-pointer ${
-                        isSelected || isHovered || isDrawingFromThis
-                          ? 'bg-white dark:bg-[#2a2a2d] border-[#007AFF] shadow-xs'
-                          : 'bg-white/80 dark:bg-[#242426]/80 border-slate-200/70 dark:border-white/5 hover:border-slate-300'
-                      }`}
-                      style={{
-                        borderRightWidth: '3px',
-                        borderRightColor: auth.color,
-                      }}
-                    >
-                      {/* OUT-PORT ANCHOR (Micro Dot facing Col 2) */}
-                      <button
-                        type="button"
-                        id={`port-auth-out-${auth.id}`}
-                        onClick={(e) => handleStartWire('authority', auth.id, auth.name, `port-auth-out-${auth.id}`, e)}
-                        className={`absolute -left-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full flex items-center justify-center cursor-pointer transition-all z-30 ${
-                          isDrawingFromThis
-                            ? 'bg-[#007AFF] text-white ring-2 ring-blue-500/40 scale-125'
-                            : 'bg-white dark:bg-[#1c1c1e] border-2 border-[#007AFF] hover:scale-125 hover:bg-[#007AFF]'
-                        }`}
-                        title="بەستنەوە بە یەکێک لە ئەرکەکان بۆ پێدانی دەسەڵات"
-                      />
-
-                      <div className="flex items-center justify-between">
-                        <span 
-                          className="px-1.5 py-0.5 rounded text-[9px] font-black text-white shrink-0"
-                          style={{ backgroundColor: auth.color }}
-                        >
-                          {auth.badge}
-                        </span>
-                        <span className="text-[9px] font-mono text-slate-400 font-bold">
-                          {outCount} ئەرک بەستراوە
-                        </span>
-                      </div>
-
-                      <div className="text-[11px] font-black text-slate-900 dark:text-white">
-                        {auth.name}
-                      </div>
-
-                      <p className="text-[10px] text-slate-400 line-clamp-1">
-                        {auth.description}
+              <div className="pb-2 border-b border-slate-200/70 dark:border-white/5 space-y-1.5 shrink-0">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#007AFF]"></span>
+                    <div>
+                      <h2 className="text-xs font-black text-slate-900 dark:text-white">
+                        ستوونی ١: کێ دەسەڵاتی بینینی هەبێت
+                      </h2>
+                      <p className="text-[10px] text-slate-400">
+                        دیاریکردنی کارمەند بۆ بینین و بەکارهێنانی دوگمە لە تەلەگرام
                       </p>
                     </div>
-                  );
-                })}
+                  </div>
+
+                  {/* Mode toggle */}
+                  <div className="flex items-center bg-slate-100 dark:bg-white/10 p-0.5 rounded-lg text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setCol1Mode('employees')}
+                      className={`px-2 py-0.5 rounded-md font-bold transition-all ${
+                        col1Mode === 'employees'
+                          ? 'bg-white dark:bg-[#2c2c2e] text-[#007AFF] shadow-2xs font-black'
+                          : 'text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      کارمەندان ({filteredCol1Employees.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCol1Mode('authorities')}
+                      className={`px-2 py-0.5 rounded-md font-bold transition-all ${
+                        col1Mode === 'authorities'
+                          ? 'bg-white dark:bg-[#2c2c2e] text-[#007AFF] shadow-2xs font-black'
+                          : 'text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      ڕۆڵەکان ({AUTHORITIES_LIST.length})
+                    </button>
+                  </div>
+                </div>
+
+                {col1Mode === 'employees' && (
+                  <div className="space-y-1">
+                    {/* Search Input */}
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={col1Search}
+                        onChange={(e) => setCol1Search(e.target.value)}
+                        placeholder="گەڕان بەپێی ناو یان کۆد..."
+                        className="w-full pr-6 pl-2 py-0.5 text-[11px] rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none"
+                      />
+                      <Search className="w-3 h-3 text-slate-400 absolute right-2 top-1.5" />
+                    </div>
+
+                    {/* Department Filter Pills */}
+                    <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                      {[
+                        { id: 'all', label: 'هەمووان' },
+                        { id: 'sales', label: 'فرۆشیار' },
+                        { id: 'warehouse', label: 'کۆگا' },
+                        { id: 'transport', label: 'نقڵ' },
+                        { id: 'admin', label: 'ئیدارە' },
+                        { id: 'management', label: 'بەڕێوەبردن' },
+                      ].map((dp) => (
+                        <button
+                          key={dp.id}
+                          type="button"
+                          onClick={() => setCol1Dept(dp.id as any)}
+                          className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold transition-all whitespace-nowrap cursor-pointer ${
+                            col1Dept === dp.id
+                              ? 'bg-[#007AFF] text-white font-black shadow-2xs'
+                              : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                          }`}
+                        >
+                          {dp.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Cards Container */}
+              <div 
+                className="flex-1 overflow-y-auto space-y-1.5 py-1.5 pr-0.5 pl-2 custom-scrollbar"
+                onScroll={updatePortCoordinates}
+              >
+                {col1Mode === 'employees' ? (
+                  filteredCol1Employees.map((emp) => {
+                    const assignedRole = employeeRoles[emp.id] || resolveEmployeeRole(emp.id, emp.name, employeeRoles);
+                    const roleOption = ROLE_OPTIONS.find((r) => r.id === assignedRole) || ROLE_OPTIONS[10];
+
+                    const outCount = connections.filter(
+                      (c) => (c.fromType === 'employee' && (c.fromId === emp.id || c.fromId === emp.employeeId)) ||
+                             (c.fromType === 'authority' && c.fromId === assignedRole)
+                    ).length;
+
+                    const isHovered = hoveredItem?.type === 'employee' && hoveredItem.id === emp.id;
+                    const isSelected = selectedItem?.type === 'employee' && selectedItem.id === emp.id;
+                    const isDrawingFromThis = drawingWire?.fromType === 'employee' && drawingWire?.fromId === emp.id;
+
+                    return (
+                      <div
+                        key={emp.id}
+                        onMouseEnter={() => setHoveredItem({ type: 'employee', id: emp.id })}
+                        onMouseLeave={() => setHoveredItem(null)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (selectedItem?.type === 'task') {
+                            const taskId = selectedItem.id;
+                            const connId = `${emp.id}__${taskId}`;
+                            setConnections((prev) => {
+                              if (prev.some((c) => c.id === connId)) {
+                                return prev.filter((c) => c.id !== connId);
+                              }
+                              return [
+                                ...prev,
+                                {
+                                  id: connId,
+                                  fromType: 'employee',
+                                  fromId: emp.id,
+                                  toType: 'task',
+                                  toId: taskId,
+                                  createdAt: new Date().toISOString(),
+                                },
+                              ];
+                            });
+                          } else {
+                            setSelectedItem(selectedItem?.id === emp.id ? null : { type: 'employee', id: emp.id });
+                          }
+                        }}
+                        className={`p-2 rounded-xl border transition-all relative flex flex-col justify-between gap-1 cursor-pointer ${
+                          isSelected || isHovered || isDrawingFromThis
+                            ? 'bg-white dark:bg-[#2a2a2d] border-[#007AFF] shadow-xs'
+                            : 'bg-white/80 dark:bg-[#242426]/80 border-slate-200/70 dark:border-white/5 hover:border-slate-300'
+                        }`}
+                        style={{
+                          borderRightWidth: '3px',
+                          borderRightColor: roleOption.color,
+                        }}
+                      >
+                        {/* OUT-PORT ANCHOR (Micro Dot facing Col 2) */}
+                        <button
+                          type="button"
+                          id={`port-emp-out-${emp.id}`}
+                          onClick={(e) => handleStartWire('employee', emp.id, emp.name, `port-emp-out-${emp.id}`, e)}
+                          className={`absolute -left-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full flex items-center justify-center cursor-pointer transition-all z-30 ${
+                            isDrawingFromThis
+                              ? 'bg-[#007AFF] text-white ring-2 ring-blue-500/40 scale-125'
+                              : 'bg-white dark:bg-[#1c1c1e] border-2 border-[#007AFF] hover:scale-125 hover:bg-[#007AFF]'
+                          }`}
+                          title="بەستنەوە بە یەکێک لە ئەرکەکان بۆ پێدانی دوگمە لە تەلەگرام"
+                        />
+
+                        <div className="flex items-center justify-between">
+                          <span 
+                            className="px-1.5 py-0.2 rounded text-[9px] font-black text-white shrink-0"
+                            style={{ backgroundColor: roleOption.color }}
+                          >
+                            {roleOption.badge}
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-400 font-bold">
+                            {outCount > 0 ? `${outCount} ئەرک چالاکە` : 'بێ دەسەڵات'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div 
+                            className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[9px] font-black shrink-0"
+                            style={{ backgroundColor: roleOption.color }}
+                          >
+                            {emp.name.charAt(0)}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-black text-slate-900 dark:text-white truncate">
+                              {emp.fullName3Part || emp.name}
+                            </div>
+                            <div className="text-[9px] font-mono text-slate-400 flex items-center gap-1.5">
+                              <span>کۆد: {emp.employeeId || emp.id}</span>
+                              {emp.phone && <span>• {emp.phone}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  AUTHORITIES_LIST.map((auth) => {
+                    const outCount = connections.filter(
+                      (c) => (c.fromType === 'authority' || c.fromType === 'employee') && c.fromId === auth.id
+                    ).length;
+
+                    const isHovered = hoveredItem?.type === 'authority' && hoveredItem.id === auth.id;
+                    const isSelected = selectedItem?.type === 'authority' && selectedItem.id === auth.id;
+                    const isDrawingFromThis = drawingWire?.fromType === 'authority' && drawingWire?.fromId === auth.id;
+
+                    return (
+                      <div
+                        key={auth.id}
+                        onMouseEnter={() => setHoveredItem({ type: 'authority', id: auth.id })}
+                        onMouseLeave={() => setHoveredItem(null)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedItem(selectedItem?.id === auth.id ? null : { type: 'authority', id: auth.id });
+                        }}
+                        className={`p-2.5 rounded-xl border transition-all relative flex flex-col justify-between gap-1 cursor-pointer ${
+                          isSelected || isHovered || isDrawingFromThis
+                            ? 'bg-white dark:bg-[#2a2a2d] border-[#007AFF] shadow-xs'
+                            : 'bg-white/80 dark:bg-[#242426]/80 border-slate-200/70 dark:border-white/5 hover:border-slate-300'
+                        }`}
+                        style={{
+                          borderRightWidth: '3px',
+                          borderRightColor: auth.color,
+                        }}
+                      >
+                        {/* OUT-PORT ANCHOR (Micro Dot facing Col 2) */}
+                        <button
+                          type="button"
+                          id={`port-auth-out-${auth.id}`}
+                          onClick={(e) => handleStartWire('authority', auth.id, auth.name, `port-auth-out-${auth.id}`, e)}
+                          className={`absolute -left-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full flex items-center justify-center cursor-pointer transition-all z-30 ${
+                            isDrawingFromThis
+                              ? 'bg-[#007AFF] text-white ring-2 ring-blue-500/40 scale-125'
+                              : 'bg-white dark:bg-[#1c1c1e] border-2 border-[#007AFF] hover:scale-125 hover:bg-[#007AFF]'
+                          }`}
+                          title="بەستنەوە بە یەکێک لە ئەرکەکان بۆ پێدانی دەسەڵات"
+                        />
+
+                        <div className="flex items-center justify-between">
+                          <span 
+                            className="px-1.5 py-0.5 rounded text-[9px] font-black text-white shrink-0"
+                            style={{ backgroundColor: auth.color }}
+                          >
+                            {auth.badge}
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-400 font-bold">
+                            {outCount} ئەرک بەستراوە
+                          </span>
+                        </div>
+
+                        <div className="text-[11px] font-black text-slate-900 dark:text-white">
+                          {auth.name}
+                        </div>
+
+                        <p className="text-[10px] text-slate-400 line-clamp-1">
+                          {auth.description}
+                        </p>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
+
 
             {/* ------------------------------------------------------------ */}
             {/* COLUMN 2 (MIDDLE): ئەرکەکان (TASKS & ACTIONS) */}
