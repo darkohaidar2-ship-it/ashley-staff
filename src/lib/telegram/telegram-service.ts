@@ -414,6 +414,9 @@ export function getRoleBasedReplyKeyboard(role: UserRole = 'employee') {
         ],
         [
           { text: '🌴 دیاریکردنی پشوو' },
+          { text: '📢 ناردنی ئاگاداری گشتی' },
+        ],
+        [
           { text: 'ℹ️ شوێنەکانی دەوام' },
         ],
       ],
@@ -1989,30 +1992,93 @@ export async function clearPendingProfileEdit(telegramId: string | number) {
 }
 
 // -------------------------------------------------------------
-// BROADCAST ANNOUNCEMENT TO ALL BOUND TELEGRAM EMPLOYEES
+// BROADCAST ANNOUNCEMENT TO ALL BOUND TELEGRAM EMPLOYEES & SYSTEM
 // -------------------------------------------------------------
 export async function broadcastAnnouncement(
   messageText: string,
-  senderName: string = 'کاک دارکۆ'
+  senderName: string = 'کاک دارکۆ',
+  photoUrl?: string | null,
+  senderId?: string
 ): Promise<{ total: number; sent: number }> {
   const bindings = await getTelegramBindings();
   const chatIds = Object.keys(bindings);
+  const { dateStr, timeStr } = getBaghdadNow();
 
   const formattedMsg =
     `📢 <b>ئاگاداری فەرمی لە بەڕێوەبەرایەتی کۆمپانیای ئاشڵی</b>\n` +
-    `نێردراو لە لایەن: <b>${senderName}</b>\n` +
     `━━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `👤 <b>ئاگادارکردنەوە لەلایەن:</b> <b>${senderName}</b>\n` +
+    `📅 <b>بەروار و کات:</b> ${dateStr} - ${timeStr}\n\n` +
+    `📝 <b>دەقی ئاگاداری:</b>\n` +
     `${messageText}\n\n` +
     `🏢 <b>کۆمپانیای ئاشڵی بۆ مۆبیلیات</b>`;
 
   let sent = 0;
   for (const chatId of chatIds) {
     try {
-      const res = await sendTelegramMessage(chatId, formattedMsg);
-      if (res && res.ok) sent++;
+      if (photoUrl) {
+        const res = await sendTelegramPhoto(chatId, photoUrl, formattedMsg);
+        if (res && res.ok) sent++;
+      } else {
+        const res = await sendTelegramMessage(chatId, formattedMsg);
+        if (res && res.ok) sent++;
+      }
     } catch (e) {
       logger.warn(`[TelegramService] Broadcast failed for chatId ${chatId}:`, e);
     }
+  }
+
+  // Persist as active system notification in Supabase
+  try {
+    const { data: setRow } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_system_announcements')
+      .maybeSingle();
+
+    let allAnnouncements: any[] = [];
+    if (setRow?.qr_code) {
+      allAnnouncements = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+      if (!Array.isArray(allAnnouncements)) allAnnouncements = [];
+    }
+
+    const newAnn = {
+      id: `ann-${Date.now()}`,
+      senderName,
+      senderId: senderId || 'admin',
+      text: messageText,
+      photoUrl: photoUrl || null,
+      createdAt: new Date().toISOString(),
+      dateStr,
+      timeStr,
+      sentCount: sent,
+    };
+
+    allAnnouncements.unshift(newAnn);
+    if (allAnnouncements.length > 50) allAnnouncements = allAnnouncements.slice(0, 50);
+
+    await supabase.from('warehouses').upsert({
+      id: 'ashley_system_announcements',
+      name: 'SYSTEM_ANNOUNCEMENTS',
+      qr_code: JSON.stringify(allAnnouncements),
+    }, { onConflict: 'id' });
+
+    // Also record audit log in attendance_logs
+    await supabase.from('attendance_logs').insert({
+      id: `broadcast-log-${Date.now()}`,
+      employee_id: senderId || 'admin',
+      employee_name: senderName,
+      log_type: 'Broadcast',
+      log_date: dateStr,
+      log_time_str: timeStr,
+      metadata: {
+        text: messageText,
+        hasPhoto: Boolean(photoUrl),
+        sentCount: sent,
+      },
+    });
+  } catch (err) {
+    logger.warn('[TelegramService] Error saving system announcement to Supabase:', err);
   }
 
   return { total: chatIds.length, sent };

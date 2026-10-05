@@ -6,6 +6,7 @@ import { AppProvider, useAppContext } from '@/context/app-provider';
 import { LanguageProvider } from '@/context/language-provider';
 import { ThemeProvider } from '@/context/theme-provider';
 import { TopNavbar } from '@/components/layout/TopNavbar';
+import { SystemBroadcastBanner } from '@/components/layout/SystemBroadcastBanner';
 
 function DynamicFontInjector({ children }: { children: React.ReactNode }) {
   const { settings } = useAppContext();
@@ -63,6 +64,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       <LanguageProvider>
         <AppProvider>
           <DynamicFontInjector>
+            <SystemBroadcastBanner />
             <TopNavbar />
             {isStandalonePage ? (
               // 📱 STANDALONE CLEAN IMMERSIVE FULLSCREEN SHELL

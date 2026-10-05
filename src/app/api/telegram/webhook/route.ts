@@ -78,6 +78,19 @@ interface LeaveSession {
 }
 const LEAVE_SESSIONS: Record<string, LeaveSession> = {};
 
+interface BroadcastSession {
+  step: 'awaiting_content' | 'awaiting_confirm';
+  senderId: string;
+  senderName: string;
+  senderRole: UserRole;
+  chatId: number | string;
+  text?: string;
+  photoId?: string;
+  caption?: string;
+  type?: 'text' | 'photo';
+}
+const PENDING_BROADCAST: Record<string, BroadcastSession> = {};
+
 export async function POST(req: NextRequest) {
   try {
     // 🔒 1. Webhook Secret Token Verification
@@ -260,6 +273,56 @@ export async function POST(req: NextRequest) {
               ],
             ],
           });
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // -------------------------------------------------------------
+      // BROADCAST ANNOUNCEMENT CALLBACKS
+      // -------------------------------------------------------------
+      if (data === 'broadcast_cancel') {
+        delete PENDING_BROADCAST[cqFromId];
+        if (cqMsgId) {
+          await editTelegramMessage(cqChatId, cqMsgId, `❌ ناردنی ئاگاداری گشتی هەڵوەشێندرایەوە.`);
+        }
+        await answerCallbackQuery(cqId, 'هەڵوەشێندرایەوە');
+        return NextResponse.json({ ok: true });
+      }
+
+      if (data === 'broadcast_confirm') {
+        const session = PENDING_BROADCAST[cqFromId];
+        if (!session) {
+          await answerCallbackQuery(cqId, 'داواکاری ئاگاداری نەدۆزرایەوە', true);
+          return NextResponse.json({ ok: true });
+        }
+
+        await answerCallbackQuery(cqId, '⏳ خەریکی بڵاوکردنەوەی ئاگادارییە بۆ سەرجەم کارمەندان...');
+
+        const messageText = session.type === 'photo' 
+          ? (session.caption || 'وێنەی فەرمی هاوپێچ کراوە') 
+          : (session.text || '');
+
+        const photoUrl = session.type === 'photo' ? session.photoId : null;
+
+        const result = await broadcastAnnouncement(
+          messageText,
+          session.senderName,
+          photoUrl,
+          session.senderId
+        );
+
+        delete PENDING_BROADCAST[cqFromId];
+
+        const successText =
+          `✅ <b>ئاگادارییەکە بە سەرکەوتوویی بڵاوکرایەوە!</b>\n\n` +
+          `👤 <b>لەلایەن:</b> <b>${session.senderName}</b>\n` +
+          `📤 <b>ژمارەی وەرگران لە تەلەگرام:</b> <b>${result.sent}</b> کارمەند\n` +
+          `🔔 لە سیستەمی فەرمی ئاشڵیش وەک نۆتیفیکەیشن جێگیر کرا ✨`;
+
+        if (cqMsgId) {
+          await editTelegramMessage(cqChatId, cqMsgId, successText);
+        } else {
+          await sendTelegramMessage(cqChatId, successText);
         }
         return NextResponse.json({ ok: true });
       }
@@ -730,9 +793,37 @@ export async function POST(req: NextRequest) {
     const isManager = userRole === 'founder' || userRole === 'warehouse_manager' || userRole === 'general_manager';
 
     // -------------------------------------------------------------
-    // HANDLE PROFILE PHOTO SUBMISSION
+    // HANDLE PHOTO SUBMISSION (BROADCAST ANNOUNCEMENT OR PROFILE)
     // -------------------------------------------------------------
     if (message.photo && Array.isArray(message.photo) && message.photo.length > 0) {
+      // 1. Broadcast Announcement Photo
+      if (PENDING_BROADCAST[fromId] && PENDING_BROADCAST[fromId].step === 'awaiting_content') {
+        const largest = message.photo[message.photo.length - 1];
+        const photoId = largest.file_id;
+        const caption = message.caption || '';
+
+        const session = PENDING_BROADCAST[fromId];
+        session.photoId = photoId;
+        session.caption = caption;
+        session.type = 'photo';
+        session.step = 'awaiting_confirm';
+
+        const previewMsg =
+          `📋 <b>پێداچوونەوەی ئاگاداری وێنە پێش ناردن:</b>\n\n` +
+          `👤 <b>نێرەر:</b> <b>${session.senderName}</b>\n` +
+          `👥 <b>وەرگران:</b> سەرجەم کارمەندانی بەستراوی ئاشڵی\n` +
+          `📝 <b>دەقی هاوپێچ:</b>\n<i>${caption || 'بەبێ نووسین'}</i>\n\n` +
+          `ئایا دڵنیایت لە بڵاوکردنەوەی ئەم وێنە و ئاگادارییە بۆ سەرجەم کارمەندان بە نۆتیفیکەیشن؟`;
+
+        await sendTelegramPhoto(chatId, photoId, previewMsg, {
+          inline_keyboard: [
+            [{ text: '🚀 پەسەندکردن و ناردن بۆ هەمووان', callback_data: 'broadcast_confirm' }],
+            [{ text: '❌ هەڵوەشاندنەوە', callback_data: 'broadcast_cancel' }],
+          ],
+        });
+        return NextResponse.json({ ok: true });
+      }
+
       const pendingProfileEdit = await getPendingProfileEdit(fromId);
       if ((pendingProfileEdit === 'photo' || PENDING_PHOTOS[fromId]) && currentBinding) {
         await clearPendingProfileEdit(fromId);
@@ -903,6 +994,37 @@ export async function POST(req: NextRequest) {
           ],
         });
       }
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // HANDLE BROADCAST ANNOUNCEMENT TEXT INPUT
+    // -------------------------------------------------------------
+    if (PENDING_BROADCAST[fromId] && PENDING_BROADCAST[fromId].step === 'awaiting_content' && text && !text.startsWith('/')) {
+      if (text === '❌ هەڵوەشاندنەوە') {
+        delete PENDING_BROADCAST[fromId];
+        await sendTelegramMessage(chatId, `ناردنی ئاگاداری هەڵوەشێندرایەوە.`, getMainReplyKeyboard(userRole));
+        return NextResponse.json({ ok: true });
+      }
+
+      const session = PENDING_BROADCAST[fromId];
+      session.text = text;
+      session.type = 'text';
+      session.step = 'awaiting_confirm';
+
+      const previewMsg =
+        `📋 <b>پێداچوونەوەی ئاگاداری پێش ناردن:</b>\n\n` +
+        `👤 <b>نێرەر:</b> <b>${session.senderName}</b>\n` +
+        `👥 <b>وەرگران:</b> سەرجەم کارمەندانی بەستراوی ئاشڵی\n` +
+        `📝 <b>دەقی ئاگاداری:</b>\n<i>${text}</i>\n\n` +
+        `ئایا دڵنیایت لە بڵاوکردنەوەی ئەم ئاگادارییە بۆ سەرجەم کارمەندان بە نۆتیفیکەیشن؟`;
+
+      await sendTelegramMessage(chatId, previewMsg, {
+        inline_keyboard: [
+          [{ text: '🚀 پەسەندکردن و ناردن بۆ هەمووان', callback_data: 'broadcast_confirm' }],
+          [{ text: '❌ هەڵوەشاندنەوە', callback_data: 'broadcast_cancel' }],
+        ],
+      });
       return NextResponse.json({ ok: true });
     }
 
@@ -1353,6 +1475,39 @@ export async function POST(req: NextRequest) {
         `تکایە <b>بەرواری ڕۆژی مۆڵەتەکەت</b> لەم کالێندەرەی خوارەوە هەڵبژێرە (یان یەکێک لە ڕۆژە نزیکەکان دیاری بکە):`,
         calKb
       );
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 10c. COMMAND: BROADCAST ANNOUNCEMENT (📢 ناردنی ئاگاداری گشتی)
+    // -------------------------------------------------------------
+    if (text === '📢 ناردنی ئاگاداری گشتی' || text === '/broadcast') {
+      const canBroadcast = isManager || await hasActionPermission(currentBinding.employeeId, 'broadcast_msg');
+      if (!canBroadcast) {
+        await sendTelegramMessage(chatId, `⛔ ببورە! دەسەڵاتی ناردنی ئاگاداری گشتیت پێ نەدراوە.`, getMainReplyKeyboard(userRole));
+        return NextResponse.json({ ok: true });
+      }
+
+      PENDING_BROADCAST[fromId] = {
+        step: 'awaiting_content',
+        senderId: currentBinding.employeeId,
+        senderName: currentBinding.employeeName,
+        senderRole: userRole,
+        chatId: chatId,
+      };
+
+      const promptMsg =
+        `📢 <b>ناردنی ئاگاداری گشتی بۆ سەرجەم کارمەندان</b>\n\n` +
+        `بەڕێز <b>${currentBinding.employeeName}</b>، تکایە دەقی ئاگادارییەکەت بنێرە:\n\n` +
+        `✍️ <b>بە دەق:</b> دەتوانیت ڕاستەوخۆ دەقی ئاگادارییەکە لێرە بنووسیت.\n` +
+        `📸 <b>بە وێنە:</b> یان وێنەیەک بنێرە لەگەڵ نووسینی ڕوونکردنەوە لەسەر وێنەکە (Caption).\n\n` +
+        `💡 کاتێک پەیامەکەت نارد، پێداچوونەوەت بۆ دەکرێت پێش ئەوەی بە فەرمی بۆ هەمووان بڵاوبکرێتەوە.`;
+
+      await sendTelegramMessage(chatId, promptMsg, {
+        inline_keyboard: [
+          [{ text: '❌ هەڵوەشاندنەوە', callback_data: 'broadcast_cancel' }],
+        ],
+      });
       return NextResponse.json({ ok: true });
     }
 
