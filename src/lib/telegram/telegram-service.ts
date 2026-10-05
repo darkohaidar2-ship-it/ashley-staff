@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase/client';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import { DEFAULT_COMPANY_LOCATIONS } from '@/lib/geo-constants';
 import { logger } from '@/lib/logger';
+import { resolveEmployeeRole, UserRole, getActionRecipients } from '@/lib/workflow/workflow-service';
 
 // Bot token is strictly read from environment variable - no hardcoded fallback
 function getBotToken(): string {
@@ -280,35 +281,186 @@ export async function getTelegramFileUrl(fileId: string): Promise<string | null>
 }
 
 // Keyboards
-export function getMainReplyKeyboard(isManager: boolean = false) {
-  const rows: any[][] = [
-    [
-      { text: '🟢 تۆمارکردنی هاتن' },
-      { text: '🔴 تۆمارکردنی دەرچوون' },
-    ],
-    [
-      { text: '📊 دۆخی دەوامی ئەمڕۆم' },
-      { text: '📋 لیستی ئامادەبووانی ئەمڕۆ' },
-    ],
-    [
-      { text: '📅 دۆخی دەوامی ئەم مانگەم' },
-      { text: '👤 پرۆفایلی من' },
-    ],
-    [
-      { text: '🏖️ داواکردنی مۆڵەت' },
-      { text: 'ℹ️ شوێنەکانی دەوام' },
-    ],
-  ];
-
-  if (isManager) {
-    rows.push([{ text: '⚡ تۆمارکردنی خێرا (بەڕێوەبەر)' }]);
+// -------------------------------------------------------------
+// DYNAMIC ROLE-BASED KEYBOARDS
+// -------------------------------------------------------------
+export function getRoleBasedReplyKeyboard(role: UserRole = 'employee') {
+  // 1. FOUNDER (کاک دارکۆ حەیدەر) - Full Super Admin Access
+  if (role === 'founder') {
+    return {
+      keyboard: [
+        [
+          { text: '🟢 تۆمارکردنی هاتن' },
+          { text: '🔴 تۆمارکردنی دەرچوون' },
+        ],
+        [
+          { text: '📊 دۆخی دەوامی ئەمڕۆم' },
+          { text: '📅 دۆخی دەوامی ئەم مانگەم' },
+        ],
+        [
+          { text: '👤 پرۆفایلی من' },
+          { text: '⚡ تۆمارکردنی خێرا (دامەزرێنەر)' },
+        ],
+        [
+          { text: '📋 لیستی گشتی دەوام' },
+          { text: '🏖️ داواکارییەکانی مۆڵەت' },
+        ],
+        [
+          { text: '❌ تۆمارکردنی غیاب' },
+          { text: '🌴 دیاریکردنی پشوو' },
+        ],
+        [
+          { text: '📢 ناردنی ئاگاداری گشتی' },
+          { text: '📱 بەستنەوەی ئامێرەکان' },
+        ],
+      ],
+      resize_keyboard: true,
+      is_persistent: true,
+    };
   }
 
+  // 2. WAREHOUSE MANAGER (کاک کامەران عومەر) - Warehouse Authority
+  if (role === 'warehouse_manager') {
+    return {
+      keyboard: [
+        [
+          { text: '🟢 تۆمارکردنی هاتن' },
+          { text: '🔴 تۆمارکردنی دەرچوون' },
+        ],
+        [
+          { text: '📊 دۆخی دەوامی ئەمڕۆم' },
+          { text: '📅 دۆخی دەوامی ئەم مانگەم' },
+        ],
+        [
+          { text: '👤 پرۆفایلی من' },
+          { text: '📦 ئامادەبووانی کۆگا' },
+        ],
+        [
+          { text: '🏖️ داواکارییەکانی مۆڵەت' },
+          { text: '❌ تۆمارکردنی غیاب' },
+        ],
+        [
+          { text: '🌴 دیاریکردنی پشوو' },
+          { text: 'ℹ️ شوێنەکانی دەوام' },
+        ],
+      ],
+      resize_keyboard: true,
+      is_persistent: true,
+    };
+  }
+
+  // 3. GENERAL MANAGER (مامۆستا وەلید)
+  if (role === 'general_manager') {
+    return {
+      keyboard: [
+        [
+          { text: '🟢 تۆمارکردنی هاتن' },
+          { text: '🔴 تۆمارکردنی دەرچوون' },
+        ],
+        [
+          { text: '📊 دۆخی دەوامی ئەمڕۆم' },
+          { text: '📅 دۆخی دەوامی ئەم مانگەم' },
+        ],
+        [
+          { text: '👤 پرۆفایلی من' },
+          { text: '📋 لیستی گشتی دەوام' },
+        ],
+        [
+          { text: '🏖️ داواکارییەکانی مۆڵەت' },
+          { text: '📢 ناردنی ئاگاداری گشتی' },
+        ],
+        [
+          { text: '🌴 دیاریکردنی پشوو' },
+          { text: 'ℹ️ شوێنەکانی دەوام' },
+        ],
+      ],
+      resize_keyboard: true,
+      is_persistent: true,
+    };
+  }
+
+  // 4. IT SUPPORT (بەشی ئایتی)
+  if (role === 'it_admin') {
+    return {
+      keyboard: [
+        [
+          { text: '🟢 تۆمارکردنی هاتن' },
+          { text: '🔴 تۆمارکردنی دەرچوون' },
+        ],
+        [
+          { text: '📊 دۆخی دەوامی ئەمڕۆم' },
+          { text: '📅 دۆخی دەوامی ئەم مانگەم' },
+        ],
+        [
+          { text: '👤 پرۆفایلی من' },
+          { text: '📱 بەستنەوەی ئامێرەکان' },
+        ],
+        [
+          { text: '🔍 پشکنینی سیستەم' },
+          { text: 'ℹ️ شوێنەکانی دەوام' },
+        ],
+      ],
+      resize_keyboard: true,
+      is_persistent: true,
+    };
+  }
+
+  // 5. SUPERVISOR (سەرپەرشتیاری بەش)
+  if (role === 'supervisor') {
+    return {
+      keyboard: [
+        [
+          { text: '🟢 تۆمارکردنی هاتن' },
+          { text: '🔴 تۆمارکردنی دەرچوون' },
+        ],
+        [
+          { text: '📊 دۆخی دەوامی ئەمڕۆم' },
+          { text: '📅 دۆخی دەوامی ئەم مانگەم' },
+        ],
+        [
+          { text: '👤 پرۆفایلی من' },
+          { text: '📋 لیستی ئامادەبووانی ئەمڕۆ' },
+        ],
+        [
+          { text: '🏖️ داواکردنی مۆڵەت' },
+          { text: 'ℹ️ شوێنەکانی دەوام' },
+        ],
+      ],
+      resize_keyboard: true,
+      is_persistent: true,
+    };
+  }
+
+  // 6. DEFAULT REGULAR EMPLOYEE (کارمەندی ئاسایی)
   return {
-    keyboard: rows,
+    keyboard: [
+      [
+        { text: '🟢 تۆمارکردنی هاتن' },
+        { text: '🔴 تۆمارکردنی دەرچوون' },
+      ],
+      [
+        { text: '📊 دۆخی دەوامی ئەمڕۆم' },
+        { text: '📋 لیستی ئامادەبووانی ئەمڕۆ' },
+      ],
+      [
+        { text: '📅 دۆخی دەوامی ئەم مانگەم' },
+        { text: '👤 پرۆفایلی من' },
+      ],
+      [
+        { text: '🏖️ داواکردنی مۆڵەت' },
+        { text: 'ℹ️ شوێنەکانی دەوام' },
+      ],
+    ],
     resize_keyboard: true,
     is_persistent: true,
   };
+}
+
+export function getMainReplyKeyboard(roleOrManager: UserRole | boolean = 'employee') {
+  const role: UserRole = typeof roleOrManager === 'boolean'
+    ? (roleOrManager ? 'founder' : 'employee')
+    : roleOrManager;
+  return getRoleBasedReplyKeyboard(role);
 }
 
 export function getLocationRequestKeyboard(isManager: boolean = false) {
@@ -1010,7 +1162,7 @@ export async function recordAttendance(
 }
 
 // -------------------------------------------------------------
-// LEAVE REQUESTS SERVICE
+// LEAVE REQUESTS, ABSENCE & HOLIDAY MANAGEMENT
 // -------------------------------------------------------------
 export interface LeaveRequest {
   id: string;
@@ -1020,17 +1172,69 @@ export interface LeaveRequest {
   details: string;
   targetDate?: string;
   status: 'pending' | 'approved' | 'rejected';
+  approvedBy?: string;
   createdAt: string;
+}
+
+// Convert Kurdish / Arabic numerals (۰-۹ / ٠-٩) to English digits
+export function normalizeNumerals(str: string): string {
+  const kurdishDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+  const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+  let res = str || '';
+  for (let i = 0; i < 10; i++) {
+    res = res.replaceAll(kurdishDigits[i], String(i)).replaceAll(persianDigits[i], String(i));
+  }
+  return res;
+}
+
+// Smart date parser from Kurdish text (supports 11-10-2026, 2026-10-11, 11/10/2026, سبەی, etc.)
+export function parseTargetDateFromText(rawText: string): string {
+  const text = normalizeNumerals(rawText || '').trim();
+  const { dateStr } = getBaghdadNow();
+
+  // 1. Check for DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY (e.g. 11-10-2026)
+  const dmyMatch = text.match(/\b([0-3]?\d)[-/.]([0-1]?\d)[-/.]((?:202|203)\d)\b/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const month = dmyMatch[2].padStart(2, '0');
+    const year = dmyMatch[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  // 2. Check for YYYY-MM-DD or YYYY/MM/DD (e.g. 2026-10-11)
+  const ymdMatch = text.match(/\b((?:202|203)\d)[-/.]([0-1]?\d)[-/.]([0-3]?\d)\b/);
+  if (ymdMatch) {
+    const year = ymdMatch[1];
+    const month = ymdMatch[2].padStart(2, '0');
+    const day = ymdMatch[3].padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  // 3. Kurdish relative dates
+  if (text.includes('سبەی') || text.includes('سبەینێ') || text.includes('بەیانی')) {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+  if (text.includes('دووسبەی')) {
+    const d = new Date();
+    d.setDate(d.getDate() + 2);
+    return d.toISOString().slice(0, 10);
+  }
+
+  return dateStr;
 }
 
 export async function saveLeaveRequest(
   employeeId: string,
   employeeName: string,
   chatId: string | number,
-  details: string
+  details: string,
+  customTargetDate?: string
 ): Promise<LeaveRequest> {
   const reqId = 'leave-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
   const nowIso = new Date().toISOString();
+  const targetDate = customTargetDate || parseTargetDateFromText(details);
 
   const newReq: LeaveRequest = {
     id: reqId,
@@ -1038,6 +1242,7 @@ export async function saveLeaveRequest(
     employeeName,
     chatId,
     details,
+    targetDate,
     status: 'pending',
     createdAt: nowIso,
   };
@@ -1088,6 +1293,7 @@ export async function getLeaveRequest(requestId: string): Promise<LeaveRequest |
 export async function updateLeaveRequestStatus(
   requestId: string,
   status: 'approved' | 'rejected',
+  approverName: string = 'بەڕێوەبەر',
   targetDate?: string
 ): Promise<LeaveRequest | null> {
   try {
@@ -1103,6 +1309,7 @@ export async function updateLeaveRequestStatus(
     if (!req) return null;
 
     req.status = status;
+    req.approvedBy = approverName;
     allReqs[requestId] = req;
 
     await supabase.from('warehouses').upsert({
@@ -1111,12 +1318,13 @@ export async function updateLeaveRequestStatus(
       qr_code: JSON.stringify(allReqs),
     }, { onConflict: 'id' });
 
-    // If approved, automatically update manual attendance records as Leave!
+    // If approved, synchronize BOTH manual attendance records AND supabase attendance table!
     if (status === 'approved') {
       const { dateStr } = getBaghdadNow();
-      const dateToApply = targetDate || dateStr;
+      const dateToApply = targetDate || req.targetDate || parseTargetDateFromText(req.details) || dateStr;
 
       try {
+        // 1. Update manual attendance overrides
         const { data: attRow } = await supabase
           .from('warehouses')
           .select('qr_code')
@@ -1148,7 +1356,7 @@ export async function updateLeaveRequestStatus(
           checkInTime: null,
           checkOutTime: null,
           note: `مۆڵەتی فەرمی: ${req.details}`,
-          adminNote: 'مۆڵەت لە ڕێگەی تەلەگرامەوە پەسەندکرا',
+          adminNote: `مۆڵەت پەسەندکرا لەلایەن: ${approverName}`,
           updatedAt: new Date().toISOString(),
           action: 'update',
         };
@@ -1162,6 +1370,37 @@ export async function updateLeaveRequestStatus(
           name: 'MANUAL_ATTENDANCE_OVERRIDES',
           qr_code: JSON.stringify(currentOverrides),
         }, { onConflict: 'id' });
+
+        // 2. Direct Sync into Supabase attendance table (Crucial for Web ERP Matrix Table)
+        const rowId = `${req.employeeId}-${dateToApply}`;
+        await supabase.from('attendance').upsert({
+          id: rowId,
+          user_id: req.employeeId,
+          user_name: req.employeeName,
+          date: dateToApply,
+          status: 'Leave',
+          check_in: null,
+          check_in_time: null,
+          check_out: null,
+          check_out_time: null,
+          warehouse_name: 'مۆڵەتی فەرمی',
+          check_in_address: `مۆڵەت: ${req.details}`,
+        }, { onConflict: 'id' });
+
+        // 3. Insert audit log in attendance_logs
+        await supabase.from('attendance_logs').insert({
+          id: `leave-log-${req.employeeId}-${dateToApply}-${Date.now()}`,
+          employee_id: req.employeeId,
+          employee_name: req.employeeName,
+          log_type: 'Leave',
+          log_date: dateToApply,
+          log_time_str: '08:00',
+          location_address: `مۆڵەتی فەرمی: ${req.details}`,
+          created_at: new Date().toISOString(),
+          edit_note: `مۆڵەت پەسەندکرا لەلایەن: ${approverName}`,
+        });
+
+        logger.info(`[TelegramService] Successfully recorded Leave for ${req.employeeName} on ${dateToApply}`);
       } catch (attErr) {
         logger.warn('[TelegramService] Error updating leave to attendance:', attErr);
       }
@@ -1172,6 +1411,191 @@ export async function updateLeaveRequestStatus(
     logger.error('[TelegramService] Error updating leave status:', err);
     return null;
   }
+}
+
+// -------------------------------------------------------------
+// MARK ABSENCE (تۆمارکردنی غیاب - بۆ کاک کامەران و بەڕێوەبەر)
+// -------------------------------------------------------------
+export async function markEmployeeAbsent(
+  employeeId: string,
+  employeeName: string,
+  targetDate: string,
+  managerName: string = 'کاک کامەران'
+): Promise<boolean> {
+  try {
+    const rowId = `${employeeId}-${targetDate}`;
+
+    // 1. Supabase attendance table
+    await supabase.from('attendance').upsert({
+      id: rowId,
+      user_id: employeeId,
+      user_name: employeeName,
+      date: targetDate,
+      status: 'Absent',
+      check_in: null,
+      check_in_time: null,
+      check_out: null,
+      check_out_time: null,
+      warehouse_name: 'غیاب',
+      check_in_address: `غیاب تۆمارکرا لەلایەن: ${managerName}`,
+    }, { onConflict: 'id' });
+
+    // 2. Manual attendance overrides
+    const { data: attRow } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_manual_attendance_records')
+      .maybeSingle();
+
+    let currentOverrides = {};
+    if (attRow?.qr_code) {
+      currentOverrides = typeof attRow.qr_code === 'string' ? JSON.parse(attRow.qr_code) : attRow.qr_code;
+    }
+
+    const cleanId = employeeId.replace(/^emp-0*/i, '') || employeeId.replace('emp-', '');
+    const cleanPadded = cleanId.length === 1 ? `0${cleanId}` : cleanId;
+
+    const keysToUpdate = [
+      `${cleanId}_${targetDate}`,
+      `${cleanPadded}_${targetDate}`,
+      `emp-${cleanId}_${targetDate}`,
+      `emp-${cleanPadded}_${targetDate}`,
+      `${employeeId}_${targetDate}`,
+      `${employeeName}_${targetDate}`,
+    ];
+
+    const absRecord = {
+      userId: employeeId,
+      userName: employeeName,
+      date: targetDate,
+      status: 'Absent',
+      checkInTime: null,
+      checkOutTime: null,
+      note: `غیاب لەلایەن ${managerName} تۆمارکرا`,
+      adminNote: `غیابی فەرمی لە تەلەگرام`,
+      updatedAt: new Date().toISOString(),
+      action: 'update',
+    };
+
+    for (const k of keysToUpdate) {
+      (currentOverrides as any)[k] = absRecord;
+    }
+
+    await supabase.from('warehouses').upsert({
+      id: 'ashley_manual_attendance_records',
+      name: 'MANUAL_ATTENDANCE_OVERRIDES',
+      qr_code: JSON.stringify(currentOverrides),
+    }, { onConflict: 'id' });
+
+    // 3. Attendance log
+    await supabase.from('attendance_logs').insert({
+      id: `abs-log-${employeeId}-${targetDate}-${Date.now()}`,
+      employee_id: employeeId,
+      employee_name: employeeName,
+      log_type: 'Absent',
+      log_date: targetDate,
+      log_time_str: '08:00',
+      location_address: `غیاب لەلایەن ${managerName} تۆمارکرا`,
+      created_at: new Date().toISOString(),
+      edit_note: `غیاب تۆمارکرا لەلایەن ${managerName}`,
+    });
+
+    return true;
+  } catch (err) {
+    logger.error('[TelegramService] Error marking employee absent:', err);
+    return false;
+  }
+}
+
+// -------------------------------------------------------------
+// SET COMPANY HOLIDAY (دیاریکردنی پشووی فەرمی کۆمپانیا)
+// -------------------------------------------------------------
+export async function setCompanyHoliday(
+  targetDate: string,
+  holidayName: string = 'پشووی فەرمی',
+  managerName: string = 'کاک کامەران'
+): Promise<boolean> {
+  try {
+    const allEmps = await getAllEmployees();
+
+    const { data: attRow } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_manual_attendance_records')
+      .maybeSingle();
+
+    let currentOverrides = {};
+    if (attRow?.qr_code) {
+      currentOverrides = typeof attRow.qr_code === 'string' ? JSON.parse(attRow.qr_code) : attRow.qr_code;
+    }
+
+    for (const emp of allEmps) {
+      const rowId = `${emp.id}-${targetDate}`;
+
+      await supabase.from('attendance').upsert({
+        id: rowId,
+        user_id: emp.id,
+        user_name: emp.name,
+        date: targetDate,
+        status: 'Holiday',
+        check_in: null,
+        check_in_time: null,
+        check_out: null,
+        check_out_time: null,
+        warehouse_name: 'پشوو',
+        check_in_address: `${holidayName} (لەلایەن: ${managerName})`,
+      }, { onConflict: 'id' });
+
+      const cleanId = emp.id.replace(/^emp-0*/i, '') || emp.id.replace('emp-', '');
+      const cleanPadded = cleanId.length === 1 ? `0${cleanId}` : cleanId;
+
+      const keysToUpdate = [
+        `${cleanId}_${targetDate}`,
+        `${cleanPadded}_${targetDate}`,
+        `emp-${cleanId}_${targetDate}`,
+        `emp-${cleanPadded}_${targetDate}`,
+        `${emp.id}_${targetDate}`,
+        `${emp.name}_${targetDate}`,
+      ];
+
+      const holRecord = {
+        userId: emp.id,
+        userName: emp.name,
+        date: targetDate,
+        status: 'Holiday',
+        checkInTime: null,
+        checkOutTime: null,
+        note: holidayName,
+        adminNote: `پشووی فەرمی دیاریکرا لەلایەن: ${managerName}`,
+        updatedAt: new Date().toISOString(),
+        action: 'update',
+      };
+
+      for (const k of keysToUpdate) {
+        (currentOverrides as any)[k] = holRecord;
+      }
+    }
+
+    await supabase.from('warehouses').upsert({
+      id: 'ashley_manual_attendance_records',
+      name: 'MANUAL_ATTENDANCE_OVERRIDES',
+      qr_code: JSON.stringify(currentOverrides),
+    }, { onConflict: 'id' });
+
+    return true;
+  } catch (err) {
+    logger.error('[TelegramService] Error setting holiday:', err);
+    return false;
+  }
+}
+
+// -------------------------------------------------------------
+// GET WAREHOUSE ATTENDANCE SUMMARY (ئامادەبووانی کۆگا - کاک کامەران)
+// -------------------------------------------------------------
+export async function getWarehouseAttendanceSummary(): Promise<string> {
+  const { dateStr } = getBaghdadNow();
+  const summary = await getTodayAttendanceSummary();
+  return `📦 <b>لیستی ئامادەبووانی بەشی کۆگا و کارگە (${dateStr}):</b>\n\n` + summary;
 }
 
 // -------------------------------------------------------------

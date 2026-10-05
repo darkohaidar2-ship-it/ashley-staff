@@ -12,6 +12,7 @@ import { AdminDailyAttendanceTable } from '@/components/admin/AdminDailyAttendan
 import { AdminFaceEnrollModal } from '@/components/attendance/AdminFaceEnrollModal';
 import { AdminEmployeeDetailsModal } from '@/components/admin/AdminEmployeeDetailsModal';
 import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChangeModal';
+import NotificationRoutingMatrix from '@/components/admin/NotificationRoutingMatrix';
 import { format } from 'date-fns';
 import { 
   Users, 
@@ -37,7 +38,8 @@ import {
   Smartphone, 
   ExternalLink, 
   ShieldCheck, 
-  Wrench 
+  Wrench,
+  SlidersHorizontal 
 } from 'lucide-react';
 
 export function AdminDashboardWorkspace() {
@@ -46,7 +48,7 @@ export function AdminDashboardWorkspace() {
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools'>('matrix');
+  const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools' | 'workflow'>('matrix');
 
   // Live Desktop Clock for ERP Admin
   const [currentTimeStr, setCurrentTimeStr] = useState('');
@@ -351,6 +353,20 @@ export function AdminDashboardWorkspace() {
               <Wrench className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">ئامرازەکان</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setAdminView('workflow')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                adminView === 'workflow'
+                  ? 'bg-white dark:bg-[#1c1c1e] text-[#007AFF] shadow-2xs font-black'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="بەڕێوەبردنی ئاگادارییەکان و دەسەڵاتەکان"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">ئاگادارییەکان</span>
+            </button>
           </div>
 
           <button
@@ -489,6 +505,15 @@ export function AdminDashboardWorkspace() {
 
             </div>
           </div>
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ⚡ VIEW 4: NOTIFICATION & PERMISSION ROUTING MATRIX */}
+      {/* ========================================================================= */}
+      {adminView === 'workflow' && (
+        <section className="w-full">
+          <NotificationRoutingMatrix />
         </section>
       )}
 

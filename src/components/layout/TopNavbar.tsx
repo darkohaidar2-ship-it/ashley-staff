@@ -12,7 +12,8 @@ import {
   MapPin, 
   Settings,
   Sparkles,
-  Building2
+  Building2,
+  SlidersHorizontal
 } from 'lucide-react';
 
 interface NavSection {
@@ -34,6 +35,12 @@ const NAV_SECTIONS: NavSection[] = [
     href: '/employees',
     icon: Users,
     matches: ['/employees'],
+  },
+  {
+    title: 'بەڕێوەبردنی ئاگادارییەکان',
+    href: '/notifications-matrix',
+    icon: SlidersHorizontal,
+    matches: ['/notifications-matrix'],
   },
   {
     title: 'کاتی زیادە',
