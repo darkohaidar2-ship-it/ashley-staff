@@ -48,7 +48,8 @@ import {
   resolveEmployeeRole, 
   UserRole, 
   getActionRecipients, 
-  hasActionPermission 
+  hasActionPermission,
+  getDynamicEmployeeTelegramKeyboard
 } from '@/lib/workflow/workflow-service';
 import { 
   getMonthlyAttendanceStats, 
@@ -776,10 +777,11 @@ export async function POST(req: NextRequest) {
         }
 
         const targetEmpRole = resolveEmployeeRole(pendingPin.employeeId, pendingPin.employeeName);
+        const dynamicKb = await getDynamicEmployeeTelegramKeyboard(pendingPin.employeeId, targetEmpRole);
         await sendTelegramMessage(
           chatId,
           `✅ <b>پیرۆزە! کۆدی نهێنی پەسەندکرا و هەژمارەکەت بە سەرکەوتوویی بەستراوەتەوە.</b>\n\n👤 ناوی کارمەند: <b>${pendingPin.employeeName}</b>\n🆔 کۆدی کارمەند: <b>${pendingPin.employeeId}</b>\n🔒 <b>ئاسایش:</b> ئەم هەژمارە تەنها بۆ ئەم ئەکاونت و ئامێرەی تەلەگرامە قوفڵکرا.\n\nئێستا دەتوانیت لە ڕێگەی دوگمەکانی خوارەوە دەوام تۆمار بکەیت:`,
-          getMainReplyKeyboard(targetEmpRole)
+          dynamicKb || getMainReplyKeyboard(targetEmpRole)
         );
         return NextResponse.json({ ok: true });
       } else {
@@ -801,6 +803,18 @@ export async function POST(req: NextRequest) {
     const allEmployees = await getAllEmployees();
     const userRole: UserRole = currentBinding ? resolveEmployeeRole(currentBinding.employeeId, currentBinding.employeeName) : 'employee';
     const isManager = userRole === 'founder' || userRole === 'warehouse_manager' || userRole === 'general_manager' || userRole === 'transport_manager' || userRole === 'administration';
+
+    // 🔒 Dynamic Telegram Keyboard:
+    // Strictly enforces the 2-Column Notification Routing Matrix assignments.
+    // "ئەو کارمەندە لە تەلگرام ئەو ئەرکە ببینێت . گەر بۆی ڕانەکێشرابوو لە تەلگرام نەیبینێت"
+    const getEmployeeReplyKeyboard = async (fallbackRole?: UserRole) => {
+      if (currentBinding?.employeeId) {
+        const dyn = await getDynamicEmployeeTelegramKeyboard(currentBinding.employeeId, fallbackRole || userRole);
+        if (dyn) return dyn;
+      }
+      return getMainReplyKeyboard(fallbackRole || userRole);
+    };
+    const replyKeyboard = await getEmployeeReplyKeyboard();
 
     // -------------------------------------------------------------
     // HANDLE PHOTO SUBMISSION (BROADCAST ANNOUNCEMENT OR PROFILE)
@@ -882,7 +896,7 @@ export async function POST(req: NextRequest) {
     if (pendingProfileEdit && text && !text.startsWith('/') && currentBinding) {
       if (text === '❌ هەڵوەشاندنەوە') {
         await clearPendingProfileEdit(fromId);
-        await sendTelegramMessage(chatId, `دەستکاریکردنی پرۆفایل هەڵوەشێندرایەوە.`, getMainReplyKeyboard(userRole));
+        await sendTelegramMessage(chatId, `دەستکاریکردنی پرۆفایل هەڵوەشێندرایەوە.`, replyKeyboard);
         return NextResponse.json({ ok: true });
       }
 
@@ -907,7 +921,7 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessage(
           chatId,
           `✅ <b>ژمارەی مۆبایل بە سەرکەوتوویی نوێکرایەوە!</b>`,
-          getMainReplyKeyboard(userRole)
+          replyKeyboard
         );
 
         const updated = await getEmployeeProfileDetails(currentBinding.employeeId);
@@ -928,7 +942,7 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessage(
           chatId,
           `✅ <b>ناونیشان بە سەرکەوتوویی نوێکرایەوە!</b>`,
-          getMainReplyKeyboard(userRole)
+          replyKeyboard
         );
 
         const updated = await getEmployeeProfileDetails(currentBinding.employeeId);
@@ -951,7 +965,7 @@ export async function POST(req: NextRequest) {
       if (text === '❌ هەڵوەشاندنەوە') {
         delete LEAVE_SESSIONS[fromId];
         delete PENDING_LEAVE[fromId];
-        await sendTelegramMessage(chatId, `داواکاری مۆڵەت هەڵوەشێندرایەوە.`, getMainReplyKeyboard(userRole));
+        await sendTelegramMessage(chatId, `داواکاری مۆڵەت هەڵوەشێندرایەوە.`, replyKeyboard);
         return NextResponse.json({ ok: true });
       }
 
@@ -970,7 +984,7 @@ export async function POST(req: NextRequest) {
     if (PENDING_LEAVE[fromId] && text && !text.startsWith('/') && currentBinding) {
       delete PENDING_LEAVE[fromId];
       if (text === '❌ هەڵوەشاندنەوە') {
-        await sendTelegramMessage(chatId, `داواکاری مۆڵەت هەڵوەشێندرایەوە.`, getMainReplyKeyboard(userRole));
+        await sendTelegramMessage(chatId, `داواکاری مۆڵەت هەڵوەشێندرایەوە.`, replyKeyboard);
         return NextResponse.json({ ok: true });
       }
 
@@ -979,7 +993,7 @@ export async function POST(req: NextRequest) {
       await sendTelegramMessage(
         chatId,
         `✅ <b>داواکاری مۆڵەتەکەت تۆمارکرا!</b>\n\n📅 بەرواری مۆڵەت: <b>${parsedTargetDate}</b>\n📝 هۆکار و کات: <i>${text}</i>\n\nڕەوانەی بەڕێوەبەرایەتی کرا بۆ پێداچوونەوە و پەسەندکردن. دوای بڕیاردان ڕاستەوخۆ لێرە ئەنجامەکەت پێ دەگاتەوە.`,
-        getMainReplyKeyboard(userRole)
+        replyKeyboard
       );
 
       const approvers = await getActionRecipients('leave_approval', bindings);
@@ -1010,7 +1024,7 @@ export async function POST(req: NextRequest) {
     if (PENDING_BROADCAST[fromId] && PENDING_BROADCAST[fromId].step === 'awaiting_content' && text && !text.startsWith('/')) {
       if (text === '❌ هەڵوەشاندنەوە') {
         delete PENDING_BROADCAST[fromId];
-        await sendTelegramMessage(chatId, `ناردنی ئاگاداری هەڵوەشێندرایەوە.`, getMainReplyKeyboard(userRole));
+        await sendTelegramMessage(chatId, `ناردنی ئاگاداری هەڵوەشێندرایەوە.`, replyKeyboard);
         return NextResponse.json({ ok: true });
       }
 
@@ -1043,7 +1057,7 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessage(
           chatId,
           `سڵاو بەڕێز <b>${currentBinding.employeeName}</b> ✨\nبەخێربێیت بۆ سیستەمی فەرمی دەوامی ئاشڵی 🏢\n\nتکایە لە دوگمەکانی خوارەوە هەڵبژێرە:`,
-          getMainReplyKeyboard(userRole)
+          replyKeyboard
         );
         return NextResponse.json({ ok: true });
       }
@@ -1081,7 +1095,7 @@ export async function POST(req: NextRequest) {
           `ئەم تەلەگرامە بە شێوەی هەمیشەیی بەستراوەتەوە بە ناوی: <b>${currentBinding.employeeName}</b>.\n` +
           `ڕێگە نادرێت کارمەند لۆگ‌ئاوت بکات یان هەژمارەکەی بگۆڕێت.\n\n` +
           `ئەگەر مۆبایلت گۆڕیوە یان کێشەیەک هەیە، تەنها بەڕێوەبەر (کاک دارکۆ) دەتوانێت لە سیستەمەوە قوفڵەکەت بکاتەوە.`,
-          getMainReplyKeyboard(userRole)
+          replyKeyboard
         );
         return NextResponse.json({ ok: true });
       }
@@ -1131,6 +1145,7 @@ export async function POST(req: NextRequest) {
         const saveRes = await saveTelegramBinding(fromId, matchedEmp.id, matchedEmp.name);
         if (saveRes.success) {
           const boundEmpRole = resolveEmployeeRole(matchedEmp.id, matchedEmp.name);
+          const boundEmpKb = await getDynamicEmployeeTelegramKeyboard(matchedEmp.id, boundEmpRole);
           await sendTelegramMessage(
             chatId,
             `✅ <b>پیرۆزە! هەژمارەکەت بە سەرکەوتوویی بەستراوەتەوە.</b>\n\n` +
@@ -1138,7 +1153,7 @@ export async function POST(req: NextRequest) {
             `🆔 کۆدی کارمەند: <b>${matchedEmp.id}</b>\n` +
             `🔒 <b>ئاسایش:</b> ئەم هەژمارە تەنها بۆ ئەم مۆبایل و ئەکاونتەی تەلەگرام قوفڵکرا.\n\n` +
             `ئێستا دەتوانیت لە ڕێگەی دوگمەکانی خوارەوە کاتی دەوام تۆمار بکەیت:`,
-            getMainReplyKeyboard(boundEmpRole)
+            boundEmpKb || getMainReplyKeyboard(boundEmpRole)
           );
           return NextResponse.json({ ok: true });
         }
@@ -1161,7 +1176,7 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessage(
           chatId, 
           `⛔ بەستنەوەی دەستی تەنها بۆ بەڕێوەبەر (کاک دارکۆ) ڕێگەپێدراوە.`, 
-          getMainReplyKeyboard(userRole)
+          replyKeyboard
         );
         return NextResponse.json({ ok: true });
       }
@@ -1178,7 +1193,7 @@ export async function POST(req: NextRequest) {
           `نموونە:\n` +
           `• <code>/bind 123456789 emp-05</code>\n` +
           `• <code>/bind 123456789 ئالان</code>`,
-          getMainReplyKeyboard(userRole)
+          replyKeyboard
         );
         return NextResponse.json({ ok: true });
       }
@@ -1198,7 +1213,7 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessage(
           chatId,
           `❌ هیچ کارمەندێک نەدۆزرایەوە بە ناونیشانی: <b>${targetEmp}</b>`,
-          getMainReplyKeyboard(userRole)
+          replyKeyboard
         );
         return NextResponse.json({ ok: true });
       }
@@ -1208,20 +1223,21 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessage(
           chatId,
           `✅ <b>هەژمار بە سەرکەوتوویی بەستراوەتەوە!</b>\n\n👤 کارمەند: <b>${matchedEmp.name}</b> (${matchedEmp.id})\n🆔 تەلەگرام ئایدی: <code>${targetTelegramId}</code>`,
-          getMainReplyKeyboard(userRole)
+          replyKeyboard
         );
 
         // Notify the employee directly in their Telegram chat
+        const targetDynKb = await getDynamicEmployeeTelegramKeyboard(matchedEmp.id, resolveEmployeeRole(matchedEmp.id, matchedEmp.name));
         await sendTelegramMessage(
           targetTelegramId,
           `🎉 <b>سڵاو بەڕێز ${matchedEmp.name}</b>\n\nهەژمارەکەت لەلایەن بەڕێوەبەرەوە بە سەرکەوتوویی بەستراوەتەوە بە سیستەمی دەوامی ئاشڵی 🏢\n\nئێستا دەتوانیت لە ڕێگەی دوگمەکانی خوارەوە کاتی هاتن و دەرچوون تۆمار بکەیت:`,
-          getMainReplyKeyboard(resolveEmployeeRole(matchedEmp.id, matchedEmp.name))
+          targetDynKb || getMainReplyKeyboard(resolveEmployeeRole(matchedEmp.id, matchedEmp.name))
         );
       } else {
         await sendTelegramMessage(
           chatId,
           `❌ هەڵە لە بەستنەوە: ${saveRes.error}`,
-          getMainReplyKeyboard(userRole)
+          replyKeyboard
         );
       }
       return NextResponse.json({ ok: true });
@@ -1232,7 +1248,7 @@ export async function POST(req: NextRequest) {
     // -------------------------------------------------------------
     if (text === '/bindings' || text === '/telegram_users') {
       if (!isManager) {
-        await sendTelegramMessage(chatId, `⛔ تەنها بەڕێوەبەر بۆی هەیە ئەم لیستە ببینێت.`, getMainReplyKeyboard(userRole));
+        await sendTelegramMessage(chatId, `⛔ تەنها بەڕێوەبەر بۆی هەیە ئەم لیستە ببینێت.`, replyKeyboard);
         return NextResponse.json({ ok: true });
       }
 
@@ -1251,7 +1267,7 @@ export async function POST(req: NextRequest) {
       msg += `💡 <i>بۆ بەستنەوە: <code>/bind [Telegram_ID] [کۆدی کارمەند]</code></i>\n`;
       msg += `💡 <i>بۆ کردنەوە: <code>/unbind [کۆدی کارمەند]</code></i>`;
 
-      await sendTelegramMessage(chatId, msg, getMainReplyKeyboard(userRole));
+      await sendTelegramMessage(chatId, msg, replyKeyboard);
       return NextResponse.json({ ok: true });
     }
 
@@ -1273,7 +1289,7 @@ export async function POST(req: NextRequest) {
     // -------------------------------------------------------------
     if (text.startsWith('/unbind') || text.startsWith('/unlock')) {
       if (!isManager) {
-        await sendTelegramMessage(chatId, `⛔ تەنها بەڕێوەبەر بۆی هەیە قوفڵی هەژمارەکان بکاتەوە.`, getMainReplyKeyboard(userRole));
+        await sendTelegramMessage(chatId, `⛔ تەنها بەڕێوەبەر بۆی هەیە قوفڵی هەژمارەکان بکاتەوە.`, replyKeyboard);
         return NextResponse.json({ ok: true });
       }
 
@@ -1283,7 +1299,7 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessage(
           chatId,
           `ℹ️ <b>شێوازی کردنەوەی قوفڵی هەژمار:</b>\n<code>/unbind [کۆدی کارمەند]</code>\nنموونە: <code>/unbind emp-05</code>`,
-          getMainReplyKeyboard(userRole)
+          replyKeyboard
         );
         return NextResponse.json({ ok: true });
       }
@@ -1293,13 +1309,13 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessage(
           chatId,
           `🔓 <b>هەژماری (${target}) بە سەرکەوتوویی لە تەلەگرام کرایەوە!</b>\nئێستا دەتوانێت لە مۆبایلێکی نوێوە ببەسترێتەوە.`,
-          getMainReplyKeyboard(userRole)
+          replyKeyboard
         );
       } else {
         await sendTelegramMessage(
           chatId,
           `❌ هیچ تۆمارێکی تەلەگرام نەدۆزرایەوە بە کۆدی: <b>${target}</b>`,
-          getMainReplyKeyboard(userRole)
+          replyKeyboard
         );
       }
       return NextResponse.json({ ok: true });
@@ -1309,14 +1325,24 @@ export async function POST(req: NextRequest) {
     // 9. ACTION: TODAY'S ATTENDANCE SUMMARY LIST / WAREHOUSE ATTENDANCE
     // -------------------------------------------------------------
     if (text === '📦 ئامادەبووانی کۆگا') {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'warehouse_attendance');
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ بینینی ئامادەبووانی کۆگا ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
       const summary = await getWarehouseAttendanceSummary();
-      await sendTelegramMessage(chatId, summary, getMainReplyKeyboard(userRole));
+      await sendTelegramMessage(chatId, summary, replyKeyboard);
       return NextResponse.json({ ok: true });
     }
 
     if (text === '🚚 ستافی نقڵ و گواستنەوە') {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'transport_attendance');
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ بینینی ستافی نقڵ و گواستنەوە ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
       const summary = await getTodayAttendanceSummary();
-      await sendTelegramMessage(chatId, `🚚 <b>لیستی ئامادەبووانی ستافی نقڵ و گواستنەوە:</b>\n\n` + summary, getMainReplyKeyboard(userRole));
+      await sendTelegramMessage(chatId, `🚚 <b>لیستی ئامادەبووانی ستافی نقڵ و گواستنەوە:</b>\n\n` + summary, replyKeyboard);
       return NextResponse.json({ ok: true });
     }
 
@@ -1326,8 +1352,13 @@ export async function POST(req: NextRequest) {
       text === '/list' || 
       text === '/today'
     ) {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'view_attendance');
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ بینینی لیستی گشتی دەوام ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
       const summary = await getTodayAttendanceSummary();
-      await sendTelegramMessage(chatId, summary, getMainReplyKeyboard(userRole));
+      await sendTelegramMessage(chatId, summary, replyKeyboard);
       return NextResponse.json({ ok: true });
     }
 
@@ -1399,88 +1430,89 @@ export async function POST(req: NextRequest) {
       await sendTelegramMessage(
         chatId,
         `⛔ <b>دەستکاریکردنی ناو بە هیچ شێوەیەک ڕێگەپێدراو نییە!</b>\n\n🔒 ناوی فەرمی کارمەند لە سیستەمی کۆمپانیای ئاشڵی قوفڵ کراوە و پارێزراوە بۆ ڕێگری لە هەر چەشنە ساختەکاری و تەزویرێک.\nگۆڕینی ناو تەنها و تەنها لە دەسەڵاتی بەڕێوەبەردایە لە سیستەمی سەرەکی ERP.`,
-        getMainReplyKeyboard(userRole)
+        replyKeyboard
       );
       return NextResponse.json({ ok: true });
     }
 
     // -------------------------------------------------------------
-    // 10c. ACTION: REQUEST OFFICIAL LEAVE / VIEW LEAVE REQUESTS
+    // 10c. ACTION: VIEW LEAVE REQUESTS & APPROVAL (🏖️ داواکارییەکانی مۆڵەت)
     // -------------------------------------------------------------
     if (text === '🏖️ داواکارییەکانی مۆڵەت' || text === '/pending_leaves') {
-      if (isManager) {
-        try {
-          const { data: setRow } = await supabase
-            .from('warehouses')
-            .select('qr_code')
-            .eq('id', 'ashley_leave_requests')
-            .maybeSingle();
-
-          let allReqs: Record<string, any> = {};
-          if (setRow?.qr_code) {
-            allReqs = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
-          }
-
-          const pendingList = Object.values(allReqs).filter((r: any) => r.status === 'pending');
-          if (pendingList.length === 0) {
-            await sendTelegramMessage(
-              chatId,
-              `🏖️ <b>داواکارییەکانی مۆڵەت:</b>\n\nلە ئێستادا هیچ داواکارییەکی هەڵپەسێردراو نییە ✨`,
-              getMainReplyKeyboard(userRole)
-            );
-            return NextResponse.json({ ok: true });
-          }
-
-          await sendTelegramMessage(
-            chatId,
-            `🏖️ <b>لیستی داواکارییە هەڵپەسێردراوەکانی مۆڵەت (${pendingList.length}):</b>\nتکایە بڕیاریان لەسەر بدە:`,
-            getMainReplyKeyboard(userRole)
-          );
-
-          for (const req of pendingList.slice(0, 5)) {
-            const reqDate = req.targetDate || parseTargetDateFromText(req.details) || 'ئەمڕۆ';
-            await sendTelegramMessage(
-              chatId,
-              `👤 کارمەند: <b>${req.employeeName}</b> (${req.employeeId})\n📅 بەروار: <b>${reqDate}</b>\n📝 هۆکار: ${req.details}`,
-              {
-                inline_keyboard: [
-                  [
-                    { text: '✅ پەسەندکردنی مۆڵەت', callback_data: `leave_app:${req.id}` },
-                    { text: '❌ ڕەتکردنەوە', callback_data: `leave_rej:${req.id}` },
-                  ],
-                ],
-              }
-            );
-          }
-          return NextResponse.json({ ok: true });
-        } catch (err: any) {
-          logger.error('Error fetching pending leaves:', err);
-        }
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'leave_approval');
+      if (!allowed) {
+        await sendTelegramMessage(
+          chatId,
+          `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ بینین و پەسەندکردنی داواکارییەکانی مۆڵەت ڕانەکێشراویت لە سیستەمدا.`,
+          replyKeyboard
+        );
+        return NextResponse.json({ ok: true });
       }
 
-      // If regular employee clicks it, treat as requesting leave via calendar
-      const now = new Date();
-      const nowYear = now.getFullYear();
-      const nowMonth = now.getMonth() + 1;
+      try {
+        const { data: setRow } = await supabase
+          .from('warehouses')
+          .select('qr_code')
+          .eq('id', 'ashley_leave_requests')
+          .maybeSingle();
 
-      LEAVE_SESSIONS[fromId] = {
-        step: 'awaiting_date',
-        employeeId: currentBinding.employeeId,
-        employeeName: currentBinding.employeeName,
-        chatId: chatId,
-      };
+        let allReqs: Record<string, any> = {};
+        if (setRow?.qr_code) {
+          allReqs = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+        }
 
-      const calKb = generateTelegramCalendar(nowYear, nowMonth);
-      await sendTelegramMessage(
-        chatId,
-        `🏖️ <b>داواکردنی مۆڵەتی فەرمی:</b>\n\n` +
-        `تکایە <b>بەرواری ڕۆژی مۆڵەتەکەت</b> لەم کالێندەرەی خوارەوە هەڵبژێرە:`,
-        calKb
-      );
+        const pendingList = Object.values(allReqs).filter((r: any) => r.status === 'pending');
+        if (pendingList.length === 0) {
+          await sendTelegramMessage(
+            chatId,
+            `🏖️ <b>داواکارییەکانی مۆڵەت:</b>\n\nلە ئێستادا هیچ داواکارییەکی هەڵپەسێردراو نییە ✨`,
+            replyKeyboard
+          );
+          return NextResponse.json({ ok: true });
+        }
+
+        await sendTelegramMessage(
+          chatId,
+          `🏖️ <b>لیستی داواکارییە هەڵپەسێردراوەکانی مۆڵەت (${pendingList.length}):</b>\nتکایە بڕیاریان لەسەر بدە:`,
+          replyKeyboard
+        );
+
+        for (const req of pendingList.slice(0, 5)) {
+          const reqDate = req.targetDate || parseTargetDateFromText(req.details) || 'ئەمڕۆ';
+          await sendTelegramMessage(
+            chatId,
+            `👤 کارمەند: <b>${req.employeeName}</b> (${req.employeeId})\n📅 بەروار: <b>${reqDate}</b>\n📝 هۆکار: ${req.details}`,
+            {
+              inline_keyboard: [
+                [
+                  { text: '✅ پەسەندکردنی مۆڵەت', callback_data: `leave_app:${req.id}` },
+                  { text: '❌ ڕەتکردنەوە', callback_data: `leave_rej:${req.id}` },
+                ],
+              ],
+            }
+          );
+        }
+        return NextResponse.json({ ok: true });
+      } catch (err: any) {
+        logger.error('Error fetching pending leaves:', err);
+      }
       return NextResponse.json({ ok: true });
     }
 
+    // -------------------------------------------------------------
+    // 10c2. ACTION: REQUEST OFFICIAL LEAVE (🏖️ داواکردنی مۆڵەت)
+    // -------------------------------------------------------------
     if (text === '🏖️ داواکردنی مۆڵەت' || text === '/leave') {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'request_leave');
+      if (!allowed) {
+        await sendTelegramMessage(
+          chatId,
+          `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ داواکردنی مۆڵەت ڕانەکێشراویت لە سیستەمدا.`,
+          replyKeyboard
+        );
+        return NextResponse.json({ ok: true });
+      }
+
       const now = new Date();
       const nowYear = now.getFullYear();
       const nowMonth = now.getMonth() + 1;
@@ -1503,12 +1535,12 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------
-    // 10c. COMMAND: BROADCAST ANNOUNCEMENT (📢 ناردنی ئاگاداری گشتی)
+    // 10c3. COMMAND: BROADCAST ANNOUNCEMENT (📢 ناردنی ئاگاداری گشتی)
     // -------------------------------------------------------------
     if (text === '📢 ناردنی ئاگاداری گشتی' || text === '/broadcast') {
-      const canBroadcast = isManager || await hasActionPermission(currentBinding.employeeId, 'broadcast_msg');
+      const canBroadcast = await hasActionPermission(currentBinding.employeeId, 'broadcast_msg');
       if (!canBroadcast) {
-        await sendTelegramMessage(chatId, `⛔ ببورە! دەسەڵاتی ناردنی ئاگاداری گشتیت پێ نەدراوە.`, getMainReplyKeyboard(userRole));
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ ناردنی ئاگاداری گشتی ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
         return NextResponse.json({ ok: true });
       }
 
@@ -1536,11 +1568,12 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------
-    // 10d. ACTION: MARK ABSENCE (❌ تۆمارکردنی غیاب - کاک کامەران و بەڕێوەبەر)
+    // 10d. ACTION: MARK ABSENCE (❌ تۆمارکردنی غیاب)
     // -------------------------------------------------------------
     if (text === '❌ تۆمارکردنی غیاب') {
-      if (!isManager) {
-        await sendTelegramMessage(chatId, `⛔ دەسەڵاتی تۆمارکردنی غیابت نییە.`, getMainReplyKeyboard(userRole));
+      const canMark = await hasActionPermission(currentBinding.employeeId, 'mark_absence');
+      if (!canMark) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ تۆمارکردنی غیاب ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
         return NextResponse.json({ ok: true });
       }
 
@@ -1567,8 +1600,9 @@ export async function POST(req: NextRequest) {
     // 10e. ACTION: DEFINE COMPANY HOLIDAY (🌴 دیاریکردنی پشوو)
     // -------------------------------------------------------------
     if (text === '🌴 دیاریکردنی پشوو') {
-      if (!isManager) {
-        await sendTelegramMessage(chatId, `⛔ دەسەڵاتی دیاریکردنی پشووت نییە.`, getMainReplyKeyboard(userRole));
+      const canHoliday = await hasActionPermission(currentBinding.employeeId, 'set_holiday');
+      if (!canHoliday) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ دیاریکردنی پشووی فەرمی ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
         return NextResponse.json({ ok: true });
       }
 
@@ -1591,8 +1625,9 @@ export async function POST(req: NextRequest) {
     // 10f. ACTION: VIEW BINDINGS (📱 بەستنەوەی ئامێرەکان)
     // -------------------------------------------------------------
     if (text === '📱 بەستنەوەی ئامێرەکان') {
-      if (userRole !== 'founder' && userRole !== 'it_admin' && !isManager) {
-        await sendTelegramMessage(chatId, `⛔ دەسەڵاتی بینینی بەستنەوەی ئامێرەکانت نییە.`, getMainReplyKeyboard(userRole));
+      const canDevice = await hasActionPermission(currentBinding.employeeId, 'device_management');
+      if (!canDevice) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ بینین و بەڕێوەبردنی بەستنەوەی ئامێرەکان ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
         return NextResponse.json({ ok: true });
       }
 
@@ -1611,7 +1646,7 @@ export async function POST(req: NextRequest) {
       msg += `💡 <i>بۆ بەستنەوە: <code>/bind [Telegram_ID] [کۆدی کارمەند]</code></i>\n`;
       msg += `💡 <i>بۆ کردنەوە: <code>/unbind [کۆدی کارمەند]</code></i>`;
 
-      await sendTelegramMessage(chatId, msg, getMainReplyKeyboard(userRole));
+      await sendTelegramMessage(chatId, msg, replyKeyboard);
       return NextResponse.json({ ok: true });
     }
 
@@ -1631,7 +1666,7 @@ export async function POST(req: NextRequest) {
         `4️⃣ <b>لقی هەولێر و دهۆک:</b>\n` +
         `   📍 پێشانگاکان و ئۆفیسی هەرێمی\n\n` +
         `🔒 تۆمارکردنی دەوام بەپێی GPS دەپشکنرێت تا دڵنیابین لە ئامادەبوونت لە شوێنی کار.`;
-      await sendTelegramMessage(chatId, infoMsg, getMainReplyKeyboard(userRole));
+      await sendTelegramMessage(chatId, infoMsg, replyKeyboard);
       return NextResponse.json({ ok: true });
     }
 
@@ -1649,7 +1684,7 @@ export async function POST(req: NextRequest) {
         `👥 کۆی کارمەندان: <b>${allEmployees.length} کارمەند</b>\n` +
         `🕒 کاتی بەغدا: <b>${dateStr} - ${timeStr}</b>\n` +
         `🛡️ پاراستنی دژە-تەزویر: <b>چالاکە (Single-Device Strict Lock)</b>`;
-      await sendTelegramMessage(chatId, statusMsg, getMainReplyKeyboard(userRole));
+      await sendTelegramMessage(chatId, statusMsg, replyKeyboard);
       return NextResponse.json({ ok: true });
     }
 
@@ -1666,7 +1701,7 @@ export async function POST(req: NextRequest) {
         isManager,
       });
 
-      await sendTelegramMessage(chatId, result.message, getMainReplyKeyboard(userRole));
+      await sendTelegramMessage(chatId, result.message, replyKeyboard);
       return NextResponse.json({ ok: true });
     }
 
@@ -1680,7 +1715,7 @@ export async function POST(req: NextRequest) {
         isManager,
       });
 
-      await sendTelegramMessage(chatId, result.message, getMainReplyKeyboard(userRole));
+      await sendTelegramMessage(chatId, result.message, replyKeyboard);
       return NextResponse.json({ ok: true });
     }
 
@@ -1696,7 +1731,7 @@ export async function POST(req: NextRequest) {
       await sendTelegramMessage(
         chatId,
         `کردارەکە هەڵوەشێندرایەوە. دەتوانیت لە خوارەوە هەڵبژێریت:`,
-        getMainReplyKeyboard(userRole)
+        replyKeyboard
       );
       return NextResponse.json({ ok: true });
     }
@@ -1710,7 +1745,7 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessage(
           chatId,
           `⛔ <b>لۆکەیشنی نێردراوە (Forwarded) قبوڵ ناکرێت!</b>\n\nتکایە بە شێوەی ڕاستەوخۆ لۆکەیشنی ئێستای خۆت بنێرە لە شوێنی دەوام.`,
-          getMainReplyKeyboard(userRole)
+          replyKeyboard
         );
         return NextResponse.json({ ok: true });
       }
@@ -1721,7 +1756,7 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessage(
           chatId,
           `⛔ <b>ئەم لۆکەیشنە کۆنە یان درەنگ گەیشتووە!</b>\n\nتکایە دووبارە لۆکەیشنی نوێ بنێرەوە.`,
-          getMainReplyKeyboard(userRole)
+          replyKeyboard
         );
         return NextResponse.json({ ok: true });
       }
@@ -1739,7 +1774,7 @@ export async function POST(req: NextRequest) {
         isManager,
       });
 
-      await sendTelegramMessage(chatId, result.message, getMainReplyKeyboard(userRole));
+      await sendTelegramMessage(chatId, result.message, replyKeyboard);
       return NextResponse.json({ ok: true });
     }
 
@@ -1764,7 +1799,7 @@ export async function POST(req: NextRequest) {
           `• <b>/reset_today</b>: پاککردنەوەی دەوامی ئەمڕۆی خۆت بۆ تاقیکردنەوە`;
       }
 
-      await sendTelegramMessage(chatId, helpText, getMainReplyKeyboard(userRole));
+      await sendTelegramMessage(chatId, helpText, replyKeyboard);
       return NextResponse.json({ ok: true });
     }
 
@@ -1772,7 +1807,7 @@ export async function POST(req: NextRequest) {
     await sendTelegramMessage(
       chatId,
       `سڵاو بەڕێز <b>${currentBinding.employeeName}</b>، تکایە دوگمەیەکی خوارەوە هەڵبژێرە:`,
-      getMainReplyKeyboard(userRole)
+      replyKeyboard
     );
 
     return NextResponse.json({ ok: true });

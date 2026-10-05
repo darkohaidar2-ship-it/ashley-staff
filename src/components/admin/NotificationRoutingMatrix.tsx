@@ -1,28 +1,20 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   UserRole,
   ROLE_OPTIONS,
-  DESTINATION_ROLES,
   WORKFLOW_ACTIONS,
-  AUTHORITIES_LIST,
-  RECIPIENTS_LIST,
-  AuthorityDefinition,
-  RecipientDefinition,
-  WireConnection,
   WorkflowConfiguration,
   fetchWorkflowConfiguration,
   saveWorkflowConfiguration,
   getDefaultEmployeeRoles,
-  getDefaultConnections,
+  getDefaultTaskAssignments,
   resolveEmployeeRole,
+  getDynamicEmployeeTelegramKeyboard,
 } from '@/lib/workflow/workflow-service';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import { 
-  SlidersHorizontal, 
-  Zap, 
-  Send, 
   Save, 
   RefreshCw, 
   Trash2, 
@@ -40,1595 +32,885 @@ import {
   Smartphone, 
   Maximize2,
   Minimize2,
-  Eye,
-  EyeOff,
   Filter,
-  Layers,
   Activity,
-  ChevronRight,
-  ShieldCheck,
-  UserCheck,
-  Bell,
   Building2,
   Truck,
-  Store,
-  Briefcase,
-  Code,
-  Wrench
+  ArrowRightLeft,
+  GripVertical,
+  Plus,
+  Eye,
+  CheckCheck,
+  Send,
+  SlidersHorizontal,
+  Info,
 } from 'lucide-react';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Palmtree,
+  CheckCircle2,
   Megaphone,
   UserX,
   CalendarOff,
   ClockAlert: Clock,
+  Clock,
   Smartphone,
-  ShieldCheck,
+  Activity,
   Building2,
   Truck,
-  Store,
-  Briefcase,
-  Code,
-  Wrench,
 };
 
-interface ActiveDrawingWire {
-  fromType: 'authority' | 'task' | 'employee';
-  fromId: string;
-  fromName: string;
-  startX: number;
-  startY: number;
-  currentX: number;
-  currentY: number;
-}
+// Map each task to its exact Telegram reply keyboard button label
+const TELEGRAM_BUTTON_LABELS: Record<string, string> = {
+  request_leave: '🏖️ داواکردنی مۆڵەت',
+  leave_approval: '🏖️ داواکارییەکانی مۆڵەت',
+  broadcast_msg: '📢 ناردنی ئاگاداری گشتی',
+  mark_absence: '❌ تۆمارکردنی غیاب',
+  set_holiday: '🌴 دیاریکردنی پشوو',
+  device_management: '📱 بەستنەوەی ئامێرەکان',
+  view_attendance: '📋 لیستی ئامادەبووانی ئەمڕۆ',
+  warehouse_attendance: '📦 ئامادەبووانی کۆگا',
+  transport_attendance: '🚚 ستافی نقڵ و گواستنەوە',
+  late_alerts: '⏰ ئاگاداری دواکەوتنی دەوام (نۆتیفیکەیشن)',
+};
 
 export default function NotificationRoutingMatrix() {
   // State
   const [employeeRoles, setEmployeeRoles] = useState<Record<string, UserRole>>({});
-  const [connections, setConnections] = useState<WireConnection[]>([]);
+  const [taskAssignments, setTaskAssignments] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  
-  // Navigation tabs:
-  // 1. 'visual' -> 3-Column Wiring Matrix (کارمەندان -> ئەرکەکان -> وەرگرانی ئاگاداری)
-  // 2. 'roles' -> Dedicated Employee Role Management (کارمەندان و پلەکانیان)
-  // 3. 'simulator' -> Telegram Notification Simulator
-  const [activeTab, setActiveTab] = useState<'visual' | 'roles' | 'simulator'>('visual');
 
   // Fullscreen state
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Focus & Wire visibility mode
-  const [focusOnlyMode, setFocusOnlyMode] = useState(false);
-  const [hoveredItem, setHoveredItem] = useState<{ type: 'authority' | 'task' | 'recipient' | 'employee'; id: string } | null>(null);
-  const [selectedItem, setSelectedItem] = useState<{ type: 'authority' | 'task' | 'recipient' | 'employee'; id: string } | null>(null);
-  const [hoveredWireId, setHoveredWireId] = useState<string | null>(null);
+  // Column 1 (Right): Employee Selection & Search
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState<'all' | 'sales' | 'warehouse' | 'transport' | 'admin'>('all');
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const [batchTargetTask, setBatchTargetTask] = useState<string>('request_leave');
 
-  // Column 1 Mode & Filters: 'employees' (all 21 employees) vs 'authorities' (roles)
-  const [col1Mode, setCol1Mode] = useState<'employees' | 'authorities'>('employees');
-  const [col1Search, setCol1Search] = useState('');
-  const [col1Dept, setCol1Dept] = useState<'all' | 'sales' | 'warehouse' | 'transport' | 'admin' | 'management'>('all');
+  // Drag and drop state
+  const [draggedEmployeeIds, setDraggedEmployeeIds] = useState<string[]>([]);
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
 
-  // Column 3 Sub-mode: 'groups' vs 'individual' employees
-  const [recipientMode, setRecipientMode] = useState<'groups' | 'individuals'>('groups');
-  const [recipientSearch, setRecipientSearch] = useState('');
+  // Column 2 (Left): Task search
+  const [taskSearch, setTaskSearch] = useState('');
 
-  // Filters & Search for the dedicated employee roles tab
-  const [rolesSearchQuery, setRolesSearchQuery] = useState('');
-  const [rolesDepartmentFilter, setRolesDepartmentFilter] = useState<string>('all');
-
-  // Interactive Wiring State
-  const [drawingWire, setDrawingWire] = useState<ActiveDrawingWire | null>(null);
-
-  // Simulator State
-  const [simTask, setSimTask] = useState<string>('leave_approval');
-  const [simEmployeeId, setSimEmployeeId] = useState<string>('emp-06');
-  const [simDate, setSimDate] = useState<string>('2026-10-11');
-  const [simNote, setSimNote] = useState<string>('سەردانی پزیشک و پشکنین');
-
-  // Refs and Port Coordinates
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [portCoords, setPortCoords] = useState<Record<string, { x: number; y: number }>>({});
-
+  // Telegram Simulator Modal
+  const [simulatorOpen, setSimulatorOpen] = useState(false);
+  const [simulatorEmpId, setSimulatorEmpId] = useState<string>('emp-02');
+  const [simulatorKeyboard, setSimulatorKeyboard] = useState<any>(null);
 
   // 1. Load configuration from Supabase on mount
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      const config = await fetchWorkflowConfiguration();
+  const loadConfig = useCallback(async (force = false) => {
+    setLoading(true);
+    try {
+      const config = await fetchWorkflowConfiguration(force);
       setEmployeeRoles(config.employeeRoles || getDefaultEmployeeRoles());
-      setConnections(config.connections || getDefaultConnections());
+      setTaskAssignments(config.taskAssignments || getDefaultTaskAssignments());
+    } catch (err) {
+      console.error('Failed to load workflow configuration:', err);
+    } finally {
       setLoading(false);
     }
-    load();
-  }, []);
-
-  // 2. Measure & update all port positions
-  const updatePortCoordinates = useCallback(() => {
-    if (!containerRef.current) return;
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const newCoords: Record<string, { x: number; y: number }> = {};
-
-    const measure = (portId: string) => {
-      const el = document.getElementById(portId);
-      if (el) {
-        const r = el.getBoundingClientRect();
-        newCoords[portId] = {
-          x: r.left + r.width / 2 - containerRect.left,
-          y: r.top + r.height / 2 - containerRect.top,
-        };
-      }
-    };
-
-    // Column 1 & 3: Individual Employees
-    ASHLEY_OFFICIAL_EMPLOYEES.forEach((emp) => {
-      measure(`port-emp-out-${emp.id}`);
-      measure(`port-emp-in-${emp.id}`);
-    });
-
-    // Column 1: Authorities
-    AUTHORITIES_LIST.forEach((auth) => {
-      measure(`port-auth-out-${auth.id}`);
-    });
-
-    // Column 2: Tasks
-    WORKFLOW_ACTIONS.forEach((act) => {
-      measure(`port-task-in-${act.id}`);
-      measure(`port-task-out-${act.id}`);
-    });
-
-    // Column 3: Recipients (Groups & Roles)
-    RECIPIENTS_LIST.forEach((rec) => {
-      measure(`port-rec-in-${rec.id}`);
-    });
-
-    setPortCoords(newCoords);
   }, []);
 
   useEffect(() => {
-    updatePortCoordinates();
-    const handleResize = () => updatePortCoordinates();
-    window.addEventListener('resize', handleResize);
-    const timer = setTimeout(updatePortCoordinates, 300);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      clearTimeout(timer);
-    };
-  }, [updatePortCoordinates, loading, activeTab, recipientMode, connections, isFullscreen, col1Mode, col1Search, col1Dept]);
+    loadConfig();
+  }, [loadConfig]);
 
+  // Update simulator keyboard when previewing an employee
+  useEffect(() => {
+    async function updateSim() {
+      if (simulatorOpen && simulatorEmpId) {
+        const kb = await getDynamicEmployeeTelegramKeyboard(simulatorEmpId);
+        setSimulatorKeyboard(kb);
+      }
+    }
+    updateSim();
+  }, [simulatorOpen, simulatorEmpId, taskAssignments]);
 
-  // 3. Handle Role Assignment for Employees
-  const handleRoleChange = (employeeId: string, newRole: UserRole) => {
-    setEmployeeRoles((prev) => ({
-      ...prev,
-      [employeeId]: newRole,
-    }));
-  };
-
-  // 4. Save entire configuration to Supabase
+  // Save changes to Supabase
   const handleSave = async () => {
     setSaving(true);
     setSaveSuccess(false);
-    const ok = await saveWorkflowConfiguration({
-      employeeRoles,
-      connections,
-    });
-    setSaving(false);
-    if (ok) {
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2500);
-    } else {
-      alert('❌ هەڵەیەک ڕوویدا لە کاتی هەڵگرتنی نەخشەی بەستەر لە بنکەدراوە.');
-    }
-  };
-
-  // 5. Reset to defaults
-  const handleResetDefaults = () => {
-    if (!confirm('ئایا دڵنیایت لە گەڕاندنەوەی هێڵەکان و ڕۆڵەکان بۆ باری پێشنیارکراوی فەرمی کۆمپانیا؟')) return;
-    setEmployeeRoles(getDefaultEmployeeRoles());
-    setConnections(getDefaultConnections());
-  };
-
-  // 6. Clear all wire connections
-  const handleClearConnections = () => {
-    if (!confirm('ئایا دڵنیایت لە سڕینەوەی سەرجەم هێڵە دەستییەکان؟')) return;
-    setConnections([]);
-  };
-
-  // 7. Delete a specific connection
-  const handleRemoveConnection = (connId: string) => {
-    setConnections((prev) => prev.filter((c) => c.id !== connId));
-  };
-
-  // 8. Start Drawing a Connection Wire
-  const handleStartWire = (
-    fromType: 'authority' | 'task' | 'employee', 
-    fromId: string, 
-    fromName: string, 
-    portId: string,
-    e: React.MouseEvent
-  ) => {
-    e.stopPropagation();
-    const portPos = portCoords[portId];
-    if (!containerRef.current) return;
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const startX = portPos ? portPos.x : e.clientX - containerRect.left;
-    const startY = portPos ? portPos.y : e.clientY - containerRect.top;
-
-    setDrawingWire({
-      fromType,
-      fromId,
-      fromName,
-      startX,
-      startY,
-      currentX: startX,
-      currentY: startY,
-    });
-  };
-
-  // 9. Update live drawing wire position on mouse move
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!drawingWire || !containerRef.current) return;
-    const containerRect = containerRef.current.getBoundingClientRect();
-    setDrawingWire((prev) => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        currentX: e.clientX - containerRect.left,
-        currentY: e.clientY - containerRect.top,
+    try {
+      const updatedConfig: WorkflowConfiguration = {
+        employeeRoles,
+        taskAssignments,
+        connections: [], // populated automatically in saveWorkflowConfiguration
       };
-    });
-  };
-
-  // 10. Complete a wire connection
-  const handleCompleteWire = (
-    toType: 'task' | 'recipient' | 'employee', 
-    toId: string, 
-    e: React.MouseEvent
-  ) => {
-    e.stopPropagation();
-    if (!drawingWire) return;
-
-    if ((drawingWire.fromType === 'authority' || drawingWire.fromType === 'employee') && toType !== 'task') {
-      alert('⚠️ تکایە دەسەڵاتی کارمەند لە ستوونی یەکەمەوە ببەستەوە بە یەکێک لە ئەرکەکانی ستوونی دووەم.');
-      setDrawingWire(null);
-      return;
-    }
-
-    if (drawingWire.fromType === 'task' && toType !== 'recipient' && toType !== 'employee') {
-      alert('⚠️ تکایە ئەرکی ستوونی دووەم ببەستەوە بە وەرگرانی ئاگاداری لە ستوونی سێیەم.');
-      setDrawingWire(null);
-      return;
-    }
-
-    const connId = `${drawingWire.fromId}__${toId}`;
-
-    setConnections((prev) => {
-      // Toggle if already exists
-      if (prev.some((c) => c.id === connId)) {
-        return prev.filter((c) => c.id !== connId);
+      const ok = await saveWorkflowConfiguration(updatedConfig);
+      if (ok) {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3500);
       }
-      return [
-        ...prev,
-        {
-          id: connId,
-          fromType: drawingWire.fromType,
-          fromId: drawingWire.fromId,
-          toType: toType as any,
-          toId,
-          createdAt: new Date().toISOString(),
-        },
-      ];
-    });
-
-    setDrawingWire(null);
-  };
-
-  // Cancel drawing wire if clicked elsewhere
-  const handleContainerClick = () => {
-    if (drawingWire) {
-      setDrawingWire(null);
+    } catch (err) {
+      console.error('Error saving:', err);
+    } finally {
+      setSaving(false);
     }
-    setSelectedItem(null);
   };
 
-  // Filtered employees list for Column 1 (Who can see & execute task in Telegram/ERP)
-  const filteredCol1Employees = useMemo(() => {
+  // Reset to default configuration
+  const handleResetToDefaults = () => {
+    if (confirm('ئایا دڵنیایت لە گەڕاندنەوەی سەرجەم ئەرکەکان بۆ باری بنەڕەتی؟')) {
+      setTaskAssignments(getDefaultTaskAssignments());
+    }
+  };
+
+  // Filter employees
+  const filteredEmployees = useMemo(() => {
     return ASHLEY_OFFICIAL_EMPLOYEES.filter((emp) => {
-      const q = col1Search.toLowerCase().trim();
+      const query = employeeSearch.toLowerCase().trim();
       const matchesSearch = 
-        !q ||
-        emp.name.toLowerCase().includes(q) ||
-        emp.id.toLowerCase().includes(q) ||
-        (emp.role && emp.role.toLowerCase().includes(q)) ||
-        (emp.fullName3Part && emp.fullName3Part.toLowerCase().includes(q));
+        !query ||
+        emp.name.toLowerCase().includes(query) ||
+        (emp.fullName3Part && emp.fullName3Part.toLowerCase().includes(query)) ||
+        emp.id.toLowerCase().includes(query) ||
+        (emp.employeeId && emp.employeeId.includes(query)) ||
+        (emp.phone && emp.phone.includes(query));
 
-      const role = employeeRoles[emp.id] || resolveEmployeeRole(emp.id, emp.name, employeeRoles);
-      const matchesDept = 
-        col1Dept === 'all' ||
-        (col1Dept === 'sales' && (role === 'salesperson' || emp.role?.includes('فرۆشیار') || emp.role?.toLowerCase().includes('sales'))) ||
-        (col1Dept === 'warehouse' && (role === 'warehouse_manager' || role === 'warehouse_staff' || emp.id === 'emp-06' || emp.id === 'emp-03')) ||
-        (col1Dept === 'transport' && (role === 'transport_manager' || emp.id === 'emp-04' || emp.name.includes('هەڤاڵ') || emp.role?.includes('نقڵ'))) ||
-        (col1Dept === 'admin' && (role === 'administration' || emp.name.includes('ئیدارە') || emp.name.includes('کاشێر') || emp.id === 'emp-7347' || emp.id === 'emp-4973')) ||
-        (col1Dept === 'management' && (role === 'founder' || role === 'general_manager' || emp.id === 'emp-02' || emp.id === 'fe2ad0d3-4d9d-48f8-8cbb-51dc705678e3'));
+      if (!matchesSearch) return false;
 
-      return matchesSearch && matchesDept;
+      const role = (emp.role || '').toLowerCase();
+      const name = emp.name.toLowerCase();
+
+      if (departmentFilter === 'sales') {
+        return role.includes('فرۆشیار') || role.includes('sales') || name.includes('فرۆشیار');
+      }
+      if (departmentFilter === 'warehouse') {
+        return role.includes('کۆگا') || role.includes('warehouse') || name.includes('کامەران') || name.includes('شادیار');
+      }
+      if (departmentFilter === 'transport') {
+        return role.includes('نقڵ') || role.includes('transport') || name.includes('هەڤاڵ');
+      }
+      if (departmentFilter === 'admin') {
+        return role.includes('manager') || role.includes('بەڕێوەبەر') || role.includes('ئیدارە') || role.includes('کاشێر') || name.includes('دارکۆ') || name.includes('وەلید');
+      }
+
+      return true;
     });
-  }, [col1Search, col1Dept, employeeRoles]);
+  }, [employeeSearch, departmentFilter]);
 
-
-  // Filtered employees list for the dedicated roles tab
-  const filteredEmployeesForRoles = useMemo(() => {
-    return ASHLEY_OFFICIAL_EMPLOYEES.filter((emp) => {
-      const q = rolesSearchQuery.toLowerCase().trim();
-      const matchesSearch = 
-        !q ||
-        emp.name.toLowerCase().includes(q) ||
-        emp.id.toLowerCase().includes(q) ||
-        (emp.role && emp.role.toLowerCase().includes(q));
-
-      const role = employeeRoles[emp.id] || resolveEmployeeRole(emp.id, emp.name, employeeRoles);
-      const matchesDept = 
-        rolesDepartmentFilter === 'all' ||
-        (rolesDepartmentFilter === 'warehouse' && (role === 'warehouse_manager' || role === 'warehouse_staff' || emp.id === 'emp-06' || emp.id === 'emp-03')) ||
-        (rolesDepartmentFilter === 'transport' && (role === 'transport_manager' || emp.id === 'emp-04' || emp.name.includes('هەڤاڵ') || emp.role?.toLowerCase().includes('transport'))) ||
-        (rolesDepartmentFilter === 'admin' && (role === 'founder' || role === 'general_manager' || role === 'administration' || emp.id === 'emp-02' || emp.id === 'emp-13')) ||
-        (rolesDepartmentFilter === 'sales' && (role === 'salesperson' || emp.role?.toLowerCase().includes('sales') || emp.role?.includes('فرۆشیار'))) ||
-        (rolesDepartmentFilter === 'it' && (role === 'it_admin' || emp.id === 'it-admin' || emp.name.includes('ئایتی'))) ||
-        (rolesDepartmentFilter === 'dev' && (role === 'developer' || emp.name.includes('دیڤلۆپەر') || emp.role?.toLowerCase().includes('developer')));
-
-      return matchesSearch && matchesDept;
-    });
-  }, [rolesSearchQuery, rolesDepartmentFilter, employeeRoles]);
-
-  // Filtered individual employees for Column 3
-  const filteredRecipientsEmployees = useMemo(() => {
-    const q = recipientSearch.toLowerCase().trim();
-    if (!q) return ASHLEY_OFFICIAL_EMPLOYEES;
-    return ASHLEY_OFFICIAL_EMPLOYEES.filter((emp) => 
-      emp.name.toLowerCase().includes(q) || 
-      emp.id.toLowerCase().includes(q)
+  // Filter tasks
+  const filteredTasks = useMemo(() => {
+    if (!taskSearch.trim()) return WORKFLOW_ACTIONS;
+    const q = taskSearch.toLowerCase().trim();
+    return WORKFLOW_ACTIONS.filter(
+      t => t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q) || t.id.includes(q)
     );
-  }, [recipientSearch]);
+  }, [taskSearch]);
 
-  // Simulator recipients calculation
-  const simulatedRecipients = useMemo(() => {
-    const targetKeys = new Set<string>();
-    connections.forEach((c) => {
-      if (c.toId === simTask) targetKeys.add(c.fromId);
-      if (c.fromId === simTask) targetKeys.add(c.toId);
+  // Toggle single employee selection
+  const toggleEmployeeSelect = (empId: string) => {
+    setSelectedEmployeeIds(prev =>
+      prev.includes(empId) ? prev.filter(id => id !== empId) : [...prev, empId]
+    );
+  };
+
+  // Toggle select all
+  const toggleSelectAll = () => {
+    if (selectedEmployeeIds.length === filteredEmployees.length) {
+      setSelectedEmployeeIds([]);
+    } else {
+      setSelectedEmployeeIds(filteredEmployees.map(e => e.id));
+    }
+  };
+
+  // Assign multiple employees to a task
+  const assignEmployeesToTask = (taskId: string, empIds: string[]) => {
+    if (empIds.length === 0) return;
+    setTaskAssignments(prev => {
+      const existing = prev[taskId] || [];
+      const updated = Array.from(new Set([...existing, ...empIds]));
+      return { ...prev, [taskId]: updated };
     });
+  };
 
-    targetKeys.add('founder');
-
-    const list: Array<{ name: string; title: string; color: string; reason: string; type: string }> = [];
-
-    // Authorities who have approval/action control
-    AUTHORITIES_LIST.forEach((auth) => {
-      if (targetKeys.has(auth.id) || auth.id === 'founder') {
-        list.push({
-          name: auth.name,
-          title: auth.title,
-          color: auth.color,
-          reason: 'دەسەڵاتی پەسەندکردن و بڕیاردان لە تەلەگرام',
-          type: 'دەسەڵاتی بڕیار',
-        });
-      }
+  // Remove single employee from a task
+  const removeEmployeeFromTask = (taskId: string, empId: string) => {
+    setTaskAssignments(prev => {
+      const existing = prev[taskId] || [];
+      return { ...prev, [taskId]: existing.filter(id => id !== empId) };
     });
+  };
 
-    // Groups & Audiences
-    RECIPIENTS_LIST.forEach((rec) => {
-      if (targetKeys.has(rec.id)) {
-        list.push({
-          name: rec.name,
-          title: rec.title,
-          color: rec.color,
-          reason: 'وەرگرتنی ئاگاداری و نۆتیفیکەیشنی فەرمی',
-          type: 'وەرگری ئاگاداری',
-        });
-      }
+  // Assign all employees to a task
+  const assignAllToTask = (taskId: string) => {
+    const allIds = ASHLEY_OFFICIAL_EMPLOYEES.map(e => e.id);
+    setTaskAssignments(prev => ({
+      ...prev,
+      [taskId]: allIds,
+    }));
+  };
+
+  // Clear all employees from a task
+  const clearTask = (taskId: string) => {
+    setTaskAssignments(prev => ({
+      ...prev,
+      [taskId]: [],
+    }));
+  };
+
+  // Drag handlers
+  const handleDragStart = (empId: string, e: React.DragEvent) => {
+    // If the dragged item is already in selection, drag all selected; otherwise drag only this one
+    const idsToDrag = selectedEmployeeIds.includes(empId) && selectedEmployeeIds.length > 0
+      ? selectedEmployeeIds
+      : [empId];
+    setDraggedEmployeeIds(idsToDrag);
+    e.dataTransfer.setData('text/plain', JSON.stringify(idsToDrag));
+    e.dataTransfer.effectAllowed = 'copyMove';
+  };
+
+  const handleDropOnTask = (taskId: string, e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverTaskId(null);
+    let idsToAdd: string[] = [];
+    try {
+      const raw = e.dataTransfer.getData('text/plain');
+      if (raw) idsToAdd = JSON.parse(raw);
+    } catch {
+      idsToAdd = draggedEmployeeIds;
+    }
+    if (!idsToAdd || idsToAdd.length === 0) idsToAdd = draggedEmployeeIds;
+    if (idsToAdd.length > 0) {
+      assignEmployeesToTask(taskId, idsToAdd);
+    }
+    setDraggedEmployeeIds([]);
+  };
+
+  // Count how many tasks an employee is assigned to
+  const getEmployeeTaskCount = (empId: string) => {
+    let count = 0;
+    Object.values(taskAssignments).forEach(ids => {
+      if (Array.isArray(ids) && ids.includes(empId)) count++;
     });
+    return count;
+  };
 
-    return list;
-  }, [connections, simTask]);
-
-  // Active highlighted target
-  const activeFocus = hoveredItem || selectedItem;
+  // Helper to get employee info by id
+  const getEmp = (id: string) => {
+    return ASHLEY_OFFICIAL_EMPLOYEES.find(e => e.id === id || e.employeeId === id);
+  };
 
   return (
-    <div 
-      className={`w-full transition-all duration-300 select-none flex flex-col ${
-        isFullscreen 
-          ? 'fixed inset-0 z-50 bg-[#f8fafc] dark:bg-[#121214] p-3 sm:p-4 h-screen overflow-hidden' 
-          : 'h-[calc(100vh-65px)] min-h-[700px] space-y-3'
-      }`}
-      dir="rtl"
-    >
+    <div className={`flex flex-col bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-white/10 overflow-hidden shadow-xl transition-all duration-300 ${isFullscreen ? 'fixed inset-0 z-50 rounded-none' : 'w-full'}`} dir="rtl">
       
-      {/* ============================================================== */}
-      {/* 1. TOP COMPACT CONTROLS & SUB-TABS BAR */}
-      {/* ============================================================== */}
-      <div className="bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-xl border border-slate-200/90 dark:border-white/10 rounded-2xl px-4 py-2.5 shadow-xs flex flex-wrap items-center justify-between gap-3 shrink-0">
-        
-        {/* Title & Badge */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#007AFF] via-[#AF52DE] to-[#34C759] flex items-center justify-center text-white shadow-xs shrink-0">
-            <SlidersHorizontal className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
-                نەخشەی ئاگادارییەکان و دەسەڵاتەکان
-              </h1>
-              <span className="px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-[#007AFF] text-[10px] font-bold">
-                تەلەگرام & ERP
-              </span>
+      {/* 1. TOP HEADER & TOOLBAR */}
+      <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/10 p-4 sm:px-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-500 flex items-center justify-center shadow-md shadow-indigo-500/20 text-white">
+              <ArrowRightLeft className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+                ماتریسی دەسەڵات و دوگمەکانی تەلەگرام
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-bold">
+                  سیستەمی نوێی ٢ ستوون
+                </span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                کارمەندان ڕابکێشە بۆ سەر هەر ئەرکێک تاوەکو ڕاستەوخۆ لە بۆتی تەلەگرام ئەو دوگمەیە ببینن.
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Sub-Tab Navigation (Separating Roles from Matrix) */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <div className="flex items-center bg-slate-100 dark:bg-white/10 p-0.5 rounded-xl text-[11px]">
-            {/* Tab 1: Visual 3-Column Wiring */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('visual')}
-              className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'visual'
-                  ? 'bg-white dark:bg-[#2c2c2e] text-[#007AFF] shadow-xs font-black'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Zap className="w-3 h-3" />
-              <span>نەخشەی ئاگاداری (٣ ستوون)</span>
-            </button>
+        {/* Global Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+          {/* Simulator Preview Button */}
+          <button
+            onClick={() => setSimulatorOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-white/10 transition-all shadow-xs"
+            title="پشکنینی شێوازی تەلەگرام لای کارمەند"
+          >
+            <Smartphone className="w-4 h-4 text-indigo-500" />
+            <span>پشکنینی بۆتی تەلەگرام</span>
+          </button>
 
-            {/* Tab 2: Separate Dedicated Employee Roles List */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('roles')}
-              className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'roles'
-                  ? 'bg-white dark:bg-[#2c2c2e] text-purple-600 dark:text-purple-400 shadow-xs font-black'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Users className="w-3 h-3" />
-              <span>کارمەندان و پلەکانیان</span>
-            </button>
+          {/* Refresh Button */}
+          <button
+            onClick={() => loadConfig(true)}
+            disabled={loading}
+            className="p-2 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-white/10 transition-all shadow-xs"
+            title="نوێکردنەوە لە سوپابەیس"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-500' : ''}`} />
+          </button>
 
-            {/* Tab 3: Simulator */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('simulator')}
-              className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'simulator'
-                  ? 'bg-white dark:bg-[#2c2c2e] text-emerald-600 dark:text-emerald-400 shadow-xs font-black'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Send className="w-3 h-3" />
-              <span>تاقیکەرەوە</span>
-            </button>
-          </div>
+          {/* Reset Defaults Button */}
+          <button
+            onClick={handleResetToDefaults}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 border border-rose-200 dark:border-rose-900/50 transition-all shadow-xs"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>باری سەرەتایی</span>
+          </button>
 
-          {/* Focus Wire Mode Toggle */}
-          {activeTab === 'visual' && (
-            <button
-              type="button"
-              onClick={() => setFocusOnlyMode(!focusOnlyMode)}
-              className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
-                focusOnlyMode
-                  ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-300 dark:border-purple-800 text-purple-600 dark:text-purple-300'
-                  : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400'
-              }`}
-              title="نیشاندانی هێڵەکان بە تەنها لە کاتی هەڵبژاردن"
-            >
-              {focusOnlyMode ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-              <span className="hidden sm:inline">{focusOnlyMode ? 'تەنها هێڵی چالاک' : 'هەموو هێڵەکان'}</span>
-            </button>
-          )}
+          {/* Save Button */}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-5 py-2 text-xs font-black rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white shadow-md shadow-indigo-600/20 active:scale-95 transition-all"
+          >
+            {saving ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : saveSuccess ? (
+              <Check className="w-4 h-4 text-emerald-300" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            <span>{saving ? 'پاشەکەوت دەکرێت...' : saveSuccess ? 'پاشەکەوت کرا!' : 'پاشەکەوتکردنی گۆڕانکاری'}</span>
+          </button>
 
           {/* Fullscreen Toggle */}
           <button
-            type="button"
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className="p-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
-            title={isFullscreen ? 'دەرچوون لە فوول سکرین' : 'فوول سکرین'}
+            className="p-2 rounded-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 transition-all"
           >
-            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-          </button>
-        </div>
-
-        {/* Save & Reset Buttons */}
-        <div className="flex items-center gap-1.5">
-          {activeTab === 'visual' && (
-            <button
-              type="button"
-              onClick={handleClearConnections}
-              disabled={loading || saving}
-              className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl border border-red-200/80 dark:border-red-900/40 bg-red-50/50 hover:bg-red-100/70 text-red-600 dark:text-red-400 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
-              title="سڕینەوەی سەرجەم هێڵەکان"
-            >
-              <Trash2 className="w-3 h-3" />
-              <span className="hidden md:inline">سڕینەوە</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={handleResetDefaults}
-            disabled={loading || saving}
-            className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 hover:bg-slate-100 text-slate-700 dark:text-slate-300 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
-            title="گەڕاندنەوە بۆ باری بنەڕەتی"
-          >
-            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
-            <span className="hidden md:inline">بنەڕەتی</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={loading || saving}
-            className="px-3.5 py-1.5 rounded-xl bg-[#007AFF] hover:bg-blue-600 active:scale-95 text-white text-[11px] font-black shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-          >
-            {saving ? (
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-            ) : saveSuccess ? (
-              <Check className="w-3.5 h-3.5 text-emerald-300" />
-            ) : (
-              <Save className="w-3.5 h-3.5" />
-            )}
-            <span>{saveSuccess ? 'پاشەکەوت کرا!' : 'پاشەکەوتکردن'}</span>
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
         </div>
       </div>
 
-      {/* ============================================================== */}
-      {/* TAB 1: 3-COLUMN VISUAL WIRING CANVAS */}
-      {/* ستونی ١: دەسەڵاتەکان | ستونی ٢: ئەرکەکان | ستونی ٣: وەرگرانی ئاگاداری */}
-      {/* ============================================================== */}
-      {activeTab === 'visual' && (
-        <div 
-          ref={containerRef}
-          onMouseMove={handleMouseMove}
-          onClick={handleContainerClick}
-          className="flex-1 relative bg-white/80 dark:bg-[#18181a]/80 backdrop-blur-md border border-slate-200/90 dark:border-white/10 rounded-2xl p-3 shadow-xs overflow-hidden flex flex-col"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(148, 163, 184, 0.22) 1px, transparent 1px)',
-            backgroundSize: '20px 20px',
-          }}
-        >
+      {/* Success banner */}
+      {saveSuccess && (
+        <div className="bg-emerald-50 dark:bg-emerald-950/80 border-b border-emerald-200 dark:border-emerald-800/80 px-6 py-2.5 flex items-center justify-between animate-in fade-in">
+          <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 dark:text-emerald-200">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            <span>دەسەڵاتە نوێیەکان لە سوپابەیس پاشەکەوت کران و ڕاستەوخۆ بەسەر بۆتی تەلەگرامدا جێبەجێ کران.</span>
+          </div>
+          <span className="text-[10px] text-emerald-600 font-mono">Live In Sync</span>
+        </div>
+      )}
 
-          {/* SVG WIRES OVERLAY */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
-            {/* Render established connections */}
-            {connections.map((conn) => {
-              // 1. Determine fromPort
-              let fromPortId = '';
-              if (conn.fromType === 'employee') {
-                fromPortId = `port-emp-out-${conn.fromId}`;
-              } else if (conn.fromType === 'authority') {
-                fromPortId = `port-auth-out-${conn.fromId}`;
-              } else if (conn.fromType === 'task') {
-                fromPortId = `port-task-out-${conn.fromId}`;
-              } else {
-                fromPortId = `port-auth-out-${conn.fromId}`;
-              }
+      {/* 2. MAIN TWO-COLUMN WORKSPACE */}
+      <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-0 relative">
+        
+        {/* ========================================================= */}
+        {/* RIGHT COLUMN: EMPLOYEES (کارمەندەکان)                     */}
+        {/* ========================================================= */}
+        <div className="lg:col-span-5 flex flex-col pl-0 lg:pl-4 space-y-4">
+          
+          {/* Column Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              <h3 className="text-base font-black text-slate-900 dark:text-white">
+                کارمەندان ({filteredEmployees.length} لە ٢١)
+              </h3>
+            </div>
+            <span className="text-xs text-slate-500">
+              {selectedEmployeeIds.length > 0 ? (
+                <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                  {selectedEmployeeIds.length} کارمەند هەڵبژێردراوە
+                </span>
+              ) : (
+                'ڕایبکێشە بۆ سەر ئەرکەکان'
+              )}
+            </span>
+          </div>
 
+          {/* Department Filter Tabs */}
+          <div className="flex flex-wrap gap-1.5 p-1 bg-slate-200/70 dark:bg-slate-800/60 rounded-xl">
+            {[
+              { id: 'all', label: 'هەمووان' },
+              { id: 'admin', label: 'ئیدارە' },
+              { id: 'sales', label: 'فرۆشتن' },
+              { id: 'warehouse', label: 'کۆگا' },
+              { id: 'transport', label: 'نقڵ' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setDepartmentFilter(tab.id as any)}
+                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                  departmentFilter === tab.id
+                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
-              // 2. Determine toPort
-              let toPortId = '';
-              if (conn.toType === 'task') {
-                toPortId = `port-task-in-${conn.toId}`;
-              } else if (conn.toType === 'recipient' || conn.toType === 'role') {
-                toPortId = `port-rec-in-${conn.toId}`;
-              } else if (conn.toType === 'employee') {
-                toPortId = `port-emp-in-${conn.toId}`;
-              }
+          {/* Search Box */}
+          <div className="relative">
+            <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={employeeSearch}
+              onChange={(e) => setEmployeeSearch(e.target.value)}
+              placeholder="گەڕان بەپێی ناوی کارمەند، کۆد، مۆبایل..."
+              className="w-full pl-8 pr-9 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            {employeeSearch && (
+              <button 
+                onClick={() => setEmployeeSearch('')}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
 
-              const fromCoord = portCoords[fromPortId];
-              const toCoord = portCoords[toPortId];
+          {/* Multi-Selection Control Bar */}
+          <div className="p-2.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 flex flex-wrap items-center justify-between gap-2">
+            <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={selectedEmployeeIds.length > 0 && selectedEmployeeIds.length === filteredEmployees.length}
+                onChange={toggleSelectAll}
+                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+              />
+              <span>دەستنیشانکردنی هەمووان ({filteredEmployees.length})</span>
+            </label>
 
-              if (!fromCoord || !toCoord) return null;
+            {selectedEmployeeIds.length > 0 && (
+              <div className="flex items-center gap-2">
+                <select
+                  value={batchTargetTask}
+                  onChange={(e) => setBatchTargetTask(e.target.value)}
+                  className="px-2 py-1 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 font-bold"
+                >
+                  {WORKFLOW_ACTIONS.map(act => (
+                    <option key={act.id} value={act.id}>{act.title}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => {
+                    assignEmployeesToTask(batchTargetTask, selectedEmployeeIds);
+                    setSelectedEmployeeIds([]);
+                  }}
+                  className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>زیادکردن ({selectedEmployeeIds.length})</span>
+                </button>
+              </div>
+            )}
+          </div>
 
-              // Cubic Bézier Curve
-              const dx = (toCoord.x - fromCoord.x) / 2;
-              const pathD = `M ${fromCoord.x} ${fromCoord.y} C ${fromCoord.x + dx} ${fromCoord.y}, ${toCoord.x - dx} ${toCoord.y}, ${toCoord.x} ${toCoord.y}`;
-
-              // Determine relationship to active hovered/selected item
-              let isRelated = true;
-              if (activeFocus) {
-                if (activeFocus.type === 'authority') {
-                  isRelated = conn.fromId === activeFocus.id || (conn.fromType === 'task' && connections.some(c => c.fromId === activeFocus.id && c.toId === conn.fromId));
-                } else if (activeFocus.type === 'task') {
-                  isRelated = conn.fromId === activeFocus.id || conn.toId === activeFocus.id;
-                } else if (activeFocus.type === 'recipient' || activeFocus.type === 'employee') {
-                  isRelated = conn.toId === activeFocus.id || (conn.fromType === 'authority' && connections.some(c => c.toId === conn.toId && c.fromId === activeFocus.id));
-                }
-              } else if (focusOnlyMode) {
-                isRelated = false;
-              }
-
-              if (focusOnlyMode && !isRelated && !activeFocus) {
-                return null;
-              }
-
-              // Color determination
-              let wireColor = '#007AFF';
-              if (conn.fromType === 'authority') {
-                const auth = AUTHORITIES_LIST.find((a) => a.id === conn.fromId);
-                if (auth) wireColor = auth.color;
-              } else {
-                const actDef = WORKFLOW_ACTIONS.find((a) => a.id === conn.fromId);
-                if (actDef) wireColor = actDef.color;
-              }
-
-              const isWireHovered = hoveredWireId === conn.id;
-              const midX = (fromCoord.x + toCoord.x) / 2;
-              const midY = (fromCoord.y + toCoord.y) / 2;
+          {/* Scrollable Employee Cards List */}
+          <div className="space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
+            {filteredEmployees.map((emp) => {
+              const isSelected = selectedEmployeeIds.includes(emp.id);
+              const taskCount = getEmployeeTaskCount(emp.id);
+              const role = resolveEmployeeRole(emp.id, emp.name, employeeRoles);
+              const roleObj = ROLE_OPTIONS.find(r => r.id === role);
 
               return (
-                <g 
-                  key={conn.id}
-                  className="transition-all duration-200"
-                  onMouseEnter={() => setHoveredWireId(conn.id)}
-                  onMouseLeave={() => setHoveredWireId(null)}
-                >
-                  {/* Invisible wide stroke for easy mouse hovering */}
-                  <path
-                    d={pathD}
-                    fill="none"
-                    stroke="transparent"
-                    strokeWidth={16}
-                    className="pointer-events-auto cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveConnection(conn.id);
-                    }}
-                  />
-
-                  {/* Main delicate connection line */}
-                  <path
-                    d={pathD}
-                    fill="none"
-                    stroke={wireColor}
-                    strokeWidth={isWireHovered || (isRelated && activeFocus) ? 2.5 : 1.3}
-                    strokeOpacity={isWireHovered ? 1 : isRelated ? (activeFocus ? 0.95 : 0.5) : 0.08}
-                  />
-
-                  {/* Subtle dash animation when focused or hovered */}
-                  {(isWireHovered || (isRelated && activeFocus)) && (
-                    <path
-                      d={pathD}
-                      fill="none"
-                      stroke="#ffffff"
-                      strokeWidth={1.5}
-                      strokeDasharray="4,6"
-                      strokeOpacity={0.8}
-                    />
-                  )}
-
-                  {/* Delete button only appears when line is hovered or related */}
-                  {(isWireHovered || (isRelated && activeFocus)) && (
-                    <foreignObject
-                      x={midX - 9}
-                      y={midY - 9}
-                      width={18}
-                      height={18}
-                      className="pointer-events-auto overflow-visible"
-                    >
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveConnection(conn.id);
-                        }}
-                        className="w-4.5 h-4.5 rounded-full bg-red-600 text-white hover:scale-125 flex items-center justify-center text-[9px] font-bold shadow-sm transition-all cursor-pointer border border-white/40"
-                        title="سڕینەوەی ئەم هێڵە"
-                      >
-                        ✕
-                      </button>
-                    </foreignObject>
-                  )}
-                </g>
-              );
-            })}
-
-            {/* In-progress drawing wire */}
-            {drawingWire && (
-              <g>
-                {(() => {
-                  const dx = (drawingWire.currentX - drawingWire.startX) / 2;
-                  const pathD = `M ${drawingWire.startX} ${drawingWire.startY} C ${drawingWire.startX + dx} ${drawingWire.startY}, ${drawingWire.currentX - dx} ${drawingWire.currentY}, ${drawingWire.currentX} ${drawingWire.currentY}`;
-                  return (
-                    <>
-                      <path
-                        d={pathD}
-                        fill="none"
-                        stroke="#007AFF"
-                        strokeWidth={2.5}
-                        strokeDasharray="4,4"
-                      />
-                      <circle
-                        cx={drawingWire.currentX}
-                        cy={drawingWire.currentY}
-                        r={4}
-                        fill="#007AFF"
-                        className="animate-ping"
-                      />
-                      <circle
-                        cx={drawingWire.currentX}
-                        cy={drawingWire.currentY}
-                        r={3}
-                        fill="#ffffff"
-                      />
-                    </>
-                  );
-                })()}
-              </g>
-            )}
-          </svg>
-
-          {/* 3-COLUMN RESPONSIVE GRID */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 relative z-20 h-full overflow-hidden">
-            
-            {/* ------------------------------------------------------------ */}
-            {/* COLUMN 1 (RIGHT in RTL): کارمەندان (دیاریکردنی بینینی دوگمە و دەسەڵات) */}
-            {/* ------------------------------------------------------------ */}
-            <div className="bg-white/60 dark:bg-[#1f1f22]/60 backdrop-blur-sm border border-slate-200/80 dark:border-white/5 rounded-2xl p-2.5 flex flex-col h-full overflow-hidden shadow-2xs">
-              
-              {/* Header */}
-              <div className="pb-2 border-b border-slate-200/70 dark:border-white/5 space-y-1.5 shrink-0">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#007AFF]"></span>
-                    <div>
-                      <h2 className="text-xs font-black text-slate-900 dark:text-white">
-                        ستوونی ١: کێ دەسەڵاتی بینینی هەبێت
-                      </h2>
-                      <p className="text-[10px] text-slate-400">
-                        دیاریکردنی کارمەند بۆ بینین و بەکارهێنانی دوگمە لە تەلەگرام
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Mode toggle */}
-                  <div className="flex items-center bg-slate-100 dark:bg-white/10 p-0.5 rounded-lg text-[10px]">
-                    <button
-                      type="button"
-                      onClick={() => setCol1Mode('employees')}
-                      className={`px-2 py-0.5 rounded-md font-bold transition-all ${
-                        col1Mode === 'employees'
-                          ? 'bg-white dark:bg-[#2c2c2e] text-[#007AFF] shadow-2xs font-black'
-                          : 'text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      کارمەندان ({filteredCol1Employees.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCol1Mode('authorities')}
-                      className={`px-2 py-0.5 rounded-md font-bold transition-all ${
-                        col1Mode === 'authorities'
-                          ? 'bg-white dark:bg-[#2c2c2e] text-[#007AFF] shadow-2xs font-black'
-                          : 'text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      ڕۆڵەکان ({AUTHORITIES_LIST.length})
-                    </button>
-                  </div>
-                </div>
-
-                {col1Mode === 'employees' && (
-                  <div className="space-y-1">
-                    {/* Search Input */}
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={col1Search}
-                        onChange={(e) => setCol1Search(e.target.value)}
-                        placeholder="گەڕان بەپێی ناو یان کۆد..."
-                        className="w-full pr-6 pl-2 py-0.5 text-[11px] rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none"
-                      />
-                      <Search className="w-3 h-3 text-slate-400 absolute right-2 top-1.5" />
-                    </div>
-
-                    {/* Department Filter Pills */}
-                    <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
-                      {[
-                        { id: 'all', label: 'هەمووان' },
-                        { id: 'sales', label: 'فرۆشیار' },
-                        { id: 'warehouse', label: 'کۆگا' },
-                        { id: 'transport', label: 'نقڵ' },
-                        { id: 'admin', label: 'ئیدارە' },
-                        { id: 'management', label: 'بەڕێوەبردن' },
-                      ].map((dp) => (
-                        <button
-                          key={dp.id}
-                          type="button"
-                          onClick={() => setCol1Dept(dp.id as any)}
-                          className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold transition-all whitespace-nowrap cursor-pointer ${
-                            col1Dept === dp.id
-                              ? 'bg-[#007AFF] text-white font-black shadow-2xs'
-                              : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-                          }`}
-                        >
-                          {dp.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Cards Container */}
-              <div 
-                className="flex-1 overflow-y-auto space-y-1.5 py-1.5 pr-0.5 pl-2 custom-scrollbar"
-                onScroll={updatePortCoordinates}
-              >
-                {col1Mode === 'employees' ? (
-                  filteredCol1Employees.map((emp) => {
-                    const assignedRole = employeeRoles[emp.id] || resolveEmployeeRole(emp.id, emp.name, employeeRoles);
-                    const roleOption = ROLE_OPTIONS.find((r) => r.id === assignedRole) || ROLE_OPTIONS[10];
-
-                    const outCount = connections.filter(
-                      (c) => (c.fromType === 'employee' && (c.fromId === emp.id || c.fromId === emp.employeeId)) ||
-                             (c.fromType === 'authority' && c.fromId === assignedRole)
-                    ).length;
-
-                    const isHovered = hoveredItem?.type === 'employee' && hoveredItem.id === emp.id;
-                    const isSelected = selectedItem?.type === 'employee' && selectedItem.id === emp.id;
-                    const isDrawingFromThis = drawingWire?.fromType === 'employee' && drawingWire?.fromId === emp.id;
-
-                    return (
-                      <div
-                        key={emp.id}
-                        onMouseEnter={() => setHoveredItem({ type: 'employee', id: emp.id })}
-                        onMouseLeave={() => setHoveredItem(null)}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (selectedItem?.type === 'task') {
-                            const taskId = selectedItem.id;
-                            const connId = `${emp.id}__${taskId}`;
-                            setConnections((prev) => {
-                              if (prev.some((c) => c.id === connId)) {
-                                return prev.filter((c) => c.id !== connId);
-                              }
-                              return [
-                                ...prev,
-                                {
-                                  id: connId,
-                                  fromType: 'employee',
-                                  fromId: emp.id,
-                                  toType: 'task',
-                                  toId: taskId,
-                                  createdAt: new Date().toISOString(),
-                                },
-                              ];
-                            });
-                          } else {
-                            setSelectedItem(selectedItem?.id === emp.id ? null : { type: 'employee', id: emp.id });
-                          }
-                        }}
-                        className={`p-2 rounded-xl border transition-all relative flex flex-col justify-between gap-1 cursor-pointer ${
-                          isSelected || isHovered || isDrawingFromThis
-                            ? 'bg-white dark:bg-[#2a2a2d] border-[#007AFF] shadow-xs'
-                            : 'bg-white/80 dark:bg-[#242426]/80 border-slate-200/70 dark:border-white/5 hover:border-slate-300'
-                        }`}
-                        style={{
-                          borderRightWidth: '3px',
-                          borderRightColor: roleOption.color,
-                        }}
-                      >
-                        {/* OUT-PORT ANCHOR (Micro Dot facing Col 2) */}
-                        <button
-                          type="button"
-                          id={`port-emp-out-${emp.id}`}
-                          onClick={(e) => handleStartWire('employee', emp.id, emp.name, `port-emp-out-${emp.id}`, e)}
-                          className={`absolute -left-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full flex items-center justify-center cursor-pointer transition-all z-30 ${
-                            isDrawingFromThis
-                              ? 'bg-[#007AFF] text-white ring-2 ring-blue-500/40 scale-125'
-                              : 'bg-white dark:bg-[#1c1c1e] border-2 border-[#007AFF] hover:scale-125 hover:bg-[#007AFF]'
-                          }`}
-                          title="بەستنەوە بە یەکێک لە ئەرکەکان بۆ پێدانی دوگمە لە تەلەگرام"
-                        />
-
-                        <div className="flex items-center justify-between">
-                          <span 
-                            className="px-1.5 py-0.2 rounded text-[9px] font-black text-white shrink-0"
-                            style={{ backgroundColor: roleOption.color }}
-                          >
-                            {roleOption.badge}
-                          </span>
-                          <span className="text-[9px] font-mono text-slate-400 font-bold">
-                            {outCount > 0 ? `${outCount} ئەرک چالاکە` : 'بێ دەسەڵات'}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <div 
-                            className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[9px] font-black shrink-0"
-                            style={{ backgroundColor: roleOption.color }}
-                          >
-                            {emp.name.charAt(0)}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-[11px] font-black text-slate-900 dark:text-white truncate">
-                              {emp.fullName3Part || emp.name}
-                            </div>
-                            <div className="text-[9px] font-mono text-slate-400 flex items-center gap-1.5">
-                              <span>کۆد: {emp.employeeId || emp.id}</span>
-                              {emp.phone && <span>• {emp.phone}</span>}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  AUTHORITIES_LIST.map((auth) => {
-                    const outCount = connections.filter(
-                      (c) => (c.fromType === 'authority' || c.fromType === 'employee') && c.fromId === auth.id
-                    ).length;
-
-                    const isHovered = hoveredItem?.type === 'authority' && hoveredItem.id === auth.id;
-                    const isSelected = selectedItem?.type === 'authority' && selectedItem.id === auth.id;
-                    const isDrawingFromThis = drawingWire?.fromType === 'authority' && drawingWire?.fromId === auth.id;
-
-                    return (
-                      <div
-                        key={auth.id}
-                        onMouseEnter={() => setHoveredItem({ type: 'authority', id: auth.id })}
-                        onMouseLeave={() => setHoveredItem(null)}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedItem(selectedItem?.id === auth.id ? null : { type: 'authority', id: auth.id });
-                        }}
-                        className={`p-2.5 rounded-xl border transition-all relative flex flex-col justify-between gap-1 cursor-pointer ${
-                          isSelected || isHovered || isDrawingFromThis
-                            ? 'bg-white dark:bg-[#2a2a2d] border-[#007AFF] shadow-xs'
-                            : 'bg-white/80 dark:bg-[#242426]/80 border-slate-200/70 dark:border-white/5 hover:border-slate-300'
-                        }`}
-                        style={{
-                          borderRightWidth: '3px',
-                          borderRightColor: auth.color,
-                        }}
-                      >
-                        {/* OUT-PORT ANCHOR (Micro Dot facing Col 2) */}
-                        <button
-                          type="button"
-                          id={`port-auth-out-${auth.id}`}
-                          onClick={(e) => handleStartWire('authority', auth.id, auth.name, `port-auth-out-${auth.id}`, e)}
-                          className={`absolute -left-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full flex items-center justify-center cursor-pointer transition-all z-30 ${
-                            isDrawingFromThis
-                              ? 'bg-[#007AFF] text-white ring-2 ring-blue-500/40 scale-125'
-                              : 'bg-white dark:bg-[#1c1c1e] border-2 border-[#007AFF] hover:scale-125 hover:bg-[#007AFF]'
-                          }`}
-                          title="بەستنەوە بە یەکێک لە ئەرکەکان بۆ پێدانی دەسەڵات"
-                        />
-
-                        <div className="flex items-center justify-between">
-                          <span 
-                            className="px-1.5 py-0.5 rounded text-[9px] font-black text-white shrink-0"
-                            style={{ backgroundColor: auth.color }}
-                          >
-                            {auth.badge}
-                          </span>
-                          <span className="text-[9px] font-mono text-slate-400 font-bold">
-                            {outCount} ئەرک بەستراوە
-                          </span>
-                        </div>
-
-                        <div className="text-[11px] font-black text-slate-900 dark:text-white">
-                          {auth.name}
-                        </div>
-
-                        <p className="text-[10px] text-slate-400 line-clamp-1">
-                          {auth.description}
-                        </p>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-
-            {/* ------------------------------------------------------------ */}
-            {/* COLUMN 2 (MIDDLE): ئەرکەکان (TASKS & ACTIONS) */}
-            {/* ------------------------------------------------------------ */}
-            <div className="bg-white/60 dark:bg-[#1f1f22]/60 backdrop-blur-sm border border-slate-200/80 dark:border-white/5 rounded-2xl p-2.5 flex flex-col h-full overflow-hidden shadow-2xs">
-              
-              <div className="pb-2 border-b border-slate-200/70 dark:border-white/5 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#AF52DE]"></span>
-                  <div>
-                    <h2 className="text-xs font-black text-slate-900 dark:text-white">
-                      ستوونی ٢: ئەرکەکان
-                    </h2>
-                    <p className="text-[10px] text-slate-400">
-                      مۆڵەت، ئاگاداری، غیاب، پشوو و ئامێر
-                    </p>
-                  </div>
-                </div>
-                <span className="text-[10px] font-mono text-slate-400 font-bold bg-slate-100 dark:bg-white/10 px-2 py-0.5 rounded-md">
-                  {WORKFLOW_ACTIONS.length} ئەرک
-                </span>
-              </div>
-
-              <div 
-                className="flex-1 overflow-y-auto space-y-2 py-1.5 px-2 custom-scrollbar"
-                onScroll={updatePortCoordinates}
-              >
-                {WORKFLOW_ACTIONS.map((action) => {
-                  const IconComp = ICON_MAP[action.iconName] || Zap;
-
-                  const inCount = connections.filter(
-                    (c) => c.toType === 'task' && c.toId === action.id
-                  ).length;
-
-                  const outCount = connections.filter(
-                    (c) => c.fromType === 'task' && c.fromId === action.id
-                  ).length;
-
-                  const isHovered = hoveredItem?.type === 'task' && hoveredItem.id === action.id;
-                  const isSelected = selectedItem?.type === 'task' && selectedItem.id === action.id;
-                  const isTargetHovered = drawingWire?.fromType === 'authority';
-                  const isSourceActive = drawingWire?.fromType === 'task' && drawingWire?.fromId === action.id;
-
-                  return (
-                    <div
-                      key={action.id}
-                      onMouseEnter={() => setHoveredItem({ type: 'task', id: action.id })}
-                      onMouseLeave={() => setHoveredItem(null)}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedItem(selectedItem?.id === action.id ? null : { type: 'task', id: action.id });
-                      }}
-                      className={`p-2.5 rounded-xl border transition-all relative flex flex-col justify-between gap-1.5 cursor-pointer ${
-                        isSelected || isHovered || isSourceActive
-                          ? 'bg-white dark:bg-[#2a2a2d] border-[#AF52DE] shadow-xs'
-                          : 'bg-white/80 dark:bg-[#242426]/80 border-slate-200/70 dark:border-white/5 hover:border-slate-300'
-                      }`}
-                    >
-                      {/* IN-PORT ANCHOR (Right - connects from Authorities) */}
-                      <button
-                        type="button"
-                        id={`port-task-in-${action.id}`}
-                        onClick={(e) => handleCompleteWire('task', action.id, e)}
-                        className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full flex items-center justify-center cursor-pointer transition-all z-30 ${
-                          isTargetHovered
-                            ? 'bg-emerald-500 text-white ring-2 ring-emerald-500/40 scale-125 animate-pulse'
-                            : 'bg-white dark:bg-[#1c1c1e] border-2 border-emerald-500 hover:scale-125 hover:bg-emerald-500'
-                        }`}
-                        title="بەستنەوە لە دەسەڵاتی ستوونی یەکەمەوە"
-                      />
-
-                      {/* OUT-PORT ANCHOR (Left - connects to Recipients) */}
-                      <button
-                        type="button"
-                        id={`port-task-out-${action.id}`}
-                        onClick={(e) => handleStartWire('task', action.id, action.title, `port-task-out-${action.id}`, e)}
-                        className={`absolute -left-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full flex items-center justify-center cursor-pointer transition-all z-30 ${
-                          isSourceActive
-                            ? 'bg-[#AF52DE] text-white ring-2 ring-purple-500/40 scale-125'
-                            : 'bg-white dark:bg-[#1c1c1e] border-2 border-[#AF52DE] hover:scale-125 hover:bg-[#AF52DE]'
-                        }`}
-                        title="بەستنەوە بە وەرگرانی ئاگاداری لە ستوونی سێیەم"
-                      />
-
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-white shrink-0 shadow-2xs"
-                          style={{ backgroundColor: action.color }}
-                        >
-                          <IconComp className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="text-[11px] font-black text-slate-900 dark:text-white truncate">
-                            {action.title}
-                          </h3>
-                          <p className="text-[10px] text-slate-400 truncate">
-                            {action.description}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Stats pill */}
-                      <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 pt-1 border-t border-slate-100 dark:border-white/5">
-                        <span>⬅️ {inCount} دەسەڵات</span>
-                        <span>➡️ {outCount} وەرگر</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* ------------------------------------------------------------ */}
-            {/* COLUMN 3 (LEFT in RTL): ئاگەدار کردنەوەکان بۆ کێ ئەچێ */}
-            {/* ------------------------------------------------------------ */}
-            <div className="bg-white/60 dark:bg-[#1f1f22]/60 backdrop-blur-sm border border-slate-200/80 dark:border-white/5 rounded-2xl p-2.5 flex flex-col h-full overflow-hidden shadow-2xs">
-              
-              {/* Header with Sub-tabs for Groups vs Individuals */}
-              <div className="pb-2 border-b border-slate-200/70 dark:border-white/5 space-y-1.5 shrink-0">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#34C759]"></span>
-                    <div>
-                      <h2 className="text-xs font-black text-slate-900 dark:text-white">
-                        ستوونی ٣: ئاگادارییەکان بۆ کێ دەچێت
-                      </h2>
-                      <p className="text-[10px] text-slate-400">
-                        وەرگرانی نۆتیفیکەیشن و ڕاگەیاندن
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center bg-slate-100 dark:bg-white/10 p-0.5 rounded-lg text-[10px]">
-                    <button
-                      type="button"
-                      onClick={() => setRecipientMode('groups')}
-                      className={`px-2 py-0.5 rounded-md font-bold transition-all ${
-                        recipientMode === 'groups'
-                          ? 'bg-white dark:bg-[#2c2c2e] text-[#007AFF] shadow-2xs font-black'
-                          : 'text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      بەشەکان
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRecipientMode('individuals')}
-                      className={`px-2 py-0.5 rounded-md font-bold transition-all ${
-                        recipientMode === 'individuals'
-                          ? 'bg-white dark:bg-[#2c2c2e] text-[#007AFF] shadow-2xs font-black'
-                          : 'text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      کارمەندان
-                    </button>
-                  </div>
-                </div>
-
-                {recipientMode === 'individuals' && (
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={recipientSearch}
-                      onChange={(e) => setRecipientSearch(e.target.value)}
-                      placeholder="گەڕان لە کارمەندان..."
-                      className="w-full pr-6 pl-2 py-0.5 text-[11px] rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none"
-                    />
-                    <Search className="w-3 h-3 text-slate-400 absolute right-2 top-1.5" />
-                  </div>
-                )}
-              </div>
-
-              {/* Groups View */}
-              {recipientMode === 'groups' ? (
-                <div 
-                  className="flex-1 overflow-y-auto space-y-2 py-1.5 pr-2 pl-0.5 custom-scrollbar"
-                  onScroll={updatePortCoordinates}
-                >
-                  {RECIPIENTS_LIST.map((rec) => {
-                    const inCount = connections.filter(
-                      (c) => (c.toType === 'recipient' || c.toType === 'role') && c.toId === rec.id
-                    ).length;
-
-                    const isHovered = hoveredItem?.type === 'recipient' && hoveredItem.id === rec.id;
-                    const isSelected = selectedItem?.type === 'recipient' && selectedItem.id === rec.id;
-                    const isTargetHovered = drawingWire?.fromType === 'task';
-
-                    return (
-                      <div
-                        key={rec.id}
-                        onMouseEnter={() => setHoveredItem({ type: 'recipient', id: rec.id })}
-                        onMouseLeave={() => setHoveredItem(null)}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedItem(selectedItem?.id === rec.id ? null : { type: 'recipient', id: rec.id });
-                        }}
-                        className={`p-2.5 rounded-xl border transition-all relative flex flex-col justify-between gap-1 cursor-pointer ${
-                          isSelected || isHovered
-                            ? 'bg-white dark:bg-[#2a2a2d] border-[#34C759] shadow-xs'
-                            : 'bg-white/80 dark:bg-[#242426]/80 border-slate-200/70 dark:border-white/5 hover:border-slate-300'
-                        }`}
-                        style={{
-                          borderLeftWidth: '3px',
-                          borderLeftColor: rec.color,
-                        }}
-                      >
-                        {/* IN-PORT ANCHOR (Right - connects from Task) */}
-                        <button
-                          type="button"
-                          id={`port-rec-in-${rec.id}`}
-                          onClick={(e) => handleCompleteWire('recipient', rec.id, e)}
-                          className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full flex items-center justify-center cursor-pointer transition-all z-30 ${
-                            isTargetHovered
-                              ? 'bg-purple-500 text-white ring-2 ring-purple-500/40 scale-125 animate-pulse'
-                              : 'bg-white dark:bg-[#1c1c1e] border-2 border-purple-500 hover:scale-125 hover:bg-purple-500'
-                          }`}
-                          title="بەستنەوە لە ئەرکەوە بۆ وەرگرتنی ئاگاداری"
-                        />
-
-                        <div className="flex items-center justify-between">
-                          <span 
-                            className="px-1.5 py-0.5 rounded text-[9px] font-bold text-white shrink-0"
-                            style={{ backgroundColor: rec.color }}
-                          >
-                            {rec.badge}
-                          </span>
-                          <span className="text-[9px] font-mono text-slate-400 font-bold">
-                            {inCount} ئەرک
-                          </span>
-                        </div>
-
-                        <div className="text-[11px] font-black text-slate-900 dark:text-white">
-                          {rec.name}
-                        </div>
-
-                        <p className="text-[10px] text-slate-400 line-clamp-1">
-                          {rec.description}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                /* Individual Employees View */
-                <div 
-                  className="flex-1 overflow-y-auto space-y-1.5 py-1.5 pr-2 pl-0.5 custom-scrollbar"
-                  onScroll={updatePortCoordinates}
-                >
-                  {filteredRecipientsEmployees.map((emp) => {
-                    const role = employeeRoles[emp.id] || resolveEmployeeRole(emp.id, emp.name, employeeRoles);
-                    const roleOption = ROLE_OPTIONS.find((r) => r.id === role) || ROLE_OPTIONS[10];
-
-                    const inCount = connections.filter(
-                      (c) => c.toType === 'employee' && c.toId === emp.id
-                    ).length;
-
-                    const isHovered = hoveredItem?.type === 'employee' && hoveredItem.id === emp.id;
-                    const isSelected = selectedItem?.type === 'employee' && selectedItem.id === emp.id;
-                    const isTargetHovered = drawingWire?.fromType === 'task';
-
-                    return (
-                      <div
-                        key={emp.id}
-                        onMouseEnter={() => setHoveredItem({ type: 'employee', id: emp.id })}
-                        onMouseLeave={() => setHoveredItem(null)}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedItem(selectedItem?.id === emp.id ? null : { type: 'employee', id: emp.id });
-                        }}
-                        className={`px-2 py-1.5 rounded-xl border transition-all relative flex items-center justify-between gap-1.5 cursor-pointer ${
-                          isSelected || isHovered
-                            ? 'bg-white dark:bg-[#2a2a2d] border-[#34C759] shadow-xs'
-                            : 'bg-white/80 dark:bg-[#242426]/80 border-slate-200/70 dark:border-white/5 hover:border-slate-300'
-                        }`}
-                        style={{
-                          borderLeftWidth: '3px',
-                          borderLeftColor: roleOption.color,
-                        }}
-                      >
-                        {/* IN-PORT ANCHOR (Right) */}
-                        <button
-                          type="button"
-                          id={`port-emp-in-${emp.id}`}
-                          onClick={(e) => handleCompleteWire('employee', emp.id, e)}
-                          className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full flex items-center justify-center cursor-pointer transition-all z-30 ${
-                            isTargetHovered
-                              ? 'bg-purple-500 text-white ring-2 ring-purple-500/40 scale-125 animate-pulse'
-                              : 'bg-white dark:bg-[#1c1c1e] border-2 border-purple-500 hover:scale-125 hover:bg-purple-500'
-                          }`}
-                          title="بەستنەوە بەم کارمەندە"
-                        />
-
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <div 
-                            className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[9px] font-bold shrink-0"
-                            style={{ backgroundColor: roleOption.color }}
-                          >
-                            {emp.name.charAt(0)}
-                          </div>
-                          <div className="min-w-0 leading-tight">
-                            <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100 truncate">
-                              {emp.name}
-                            </div>
-                            <div className="text-[9px] font-mono text-slate-400">
-                              {emp.id}
-                            </div>
-                          </div>
-                        </div>
-
-                        {inCount > 0 && (
-                          <span 
-                            className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold text-white shrink-0"
-                            style={{ backgroundColor: roleOption.color }}
-                          >
-                            {inCount}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================== */}
-      {/* TAB 2: DEDICATED EMPLOYEE ROLES MANAGEMENT LIST */}
-      {/* کارمەندان و پلەکانیان لە لیستێکی جیاواز و فراوان */}
-      {/* ============================================================== */}
-      {activeTab === 'roles' && (
-        <div className="flex-1 bg-white/90 dark:bg-[#1c1c1e]/90 backdrop-blur-xl border border-slate-200/90 dark:border-white/10 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col gap-4 overflow-hidden">
-          
-          {/* Header & Role Distribution Summary */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-white/10 shrink-0">
-            <div>
-              <h2 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <Users className="w-4 h-4 text-[#007AFF]" />
-                بەڕێوەبردنی پلەی کارمەندان (ڕۆڵەکان)
-              </h2>
-              <p className="text-[11px] text-slate-400">
-                دیاریکردنی پلە بۆ سەرجەم کارمەندانی کۆمپانیای ئاشڵی بە شێوەیەکی فەرمی
-              </p>
-            </div>
-
-            {/* Quick role counts */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {ROLE_OPTIONS.slice(0, 7).map((ro) => {
-                const count = ASHLEY_OFFICIAL_EMPLOYEES.filter(
-                  (e) => (employeeRoles[e.id] || resolveEmployeeRole(e.id, e.name, employeeRoles)) === ro.id
-                ).length;
-                if (count === 0) return null;
-                return (
-                  <span
-                    key={ro.id}
-                    className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 border border-slate-200/60 dark:border-white/5"
-                    style={{ backgroundColor: `${ro.color}15`, color: ro.color }}
-                  >
-                    <span>{ro.badge}:</span>
-                    <span className="font-mono font-black">{count}</span>
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Search & Filter Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5 shrink-0">
-            <div className="relative flex-1 min-w-[200px] max-w-md">
-              <input
-                type="text"
-                value={rolesSearchQuery}
-                onChange={(e) => setRolesSearchQuery(e.target.value)}
-                placeholder="گەڕان بەپێی ناوی کارمەند، کۆد یان ڕۆڵ..."
-                className="w-full pr-8 pl-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
-              />
-              <Search className="w-4 h-4 text-slate-400 absolute right-2.5 top-2" />
-            </div>
-
-            {/* Department Filter Pills */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 max-w-full">
-              {[
-                { id: 'all', label: 'هەمووان' },
-                { id: 'warehouse', label: 'کۆگا و کارگە' },
-                { id: 'transport', label: 'بەشی نقڵ' },
-                { id: 'admin', label: 'ئیدارە و بەڕێوەبردن' },
-                { id: 'sales', label: 'فرۆشتن و پێشانگا' },
-                { id: 'it', label: 'ئایتی' },
-                { id: 'dev', label: 'دیڤلۆپەر' },
-              ].map((df) => (
-                <button
-                  key={df.id}
-                  type="button"
-                  onClick={() => setRolesDepartmentFilter(df.id)}
-                  className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all whitespace-nowrap cursor-pointer ${
-                    rolesDepartmentFilter === df.id
-                      ? 'bg-[#007AFF] text-white shadow-xs'
-                      : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                <div
+                  key={emp.id}
+                  draggable={true}
+                  onDragStart={(e) => handleDragStart(emp.id, e)}
+                  onClick={() => toggleEmployeeSelect(emp.id)}
+                  className={`p-3 rounded-xl border transition-all cursor-grab active:cursor-grabbing flex items-center justify-between gap-3 select-none ${
+                    isSelected
+                      ? 'bg-indigo-50/90 dark:bg-indigo-950/70 border-indigo-400 dark:border-indigo-600 shadow-md ring-1 ring-indigo-500'
+                      : 'bg-white dark:bg-slate-900/90 border-slate-200/80 dark:border-white/5 hover:border-indigo-300 dark:hover:border-indigo-800 shadow-xs'
                   }`}
                 >
-                  {df.label}
-                </button>
-              ))}
+                  {/* Left: Checkbox + Grip + Avatar + Info */}
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        toggleEmployeeSelect(emp.id);
+                      }}
+                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                    />
+
+                    <GripVertical className="w-4 h-4 text-slate-400 hover:text-slate-600 shrink-0" />
+
+                    {/* Avatar */}
+                    <div className="w-9 h-9 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0 flex items-center justify-center font-bold text-xs text-indigo-600">
+                      {emp.photoUrl ? (
+                        <img 
+                          src={emp.photoUrl} 
+                          alt={emp.name} 
+                          className="w-full h-full object-cover" 
+                          onError={(e) => {
+                            (e.currentTarget as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        emp.name.charAt(0)
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span>{emp.name}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">({emp.employeeId})</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span 
+                          className="text-[9px] font-bold px-1.5 py-0.2 rounded-md"
+                          style={{
+                            backgroundColor: `${roleObj?.color || '#64748B'}15`,
+                            color: roleObj?.color || '#64748B',
+                          }}
+                        >
+                          {roleObj?.badge || emp.role}
+                        </span>
+                        {emp.phone && (
+                          <span className="text-[9px] text-slate-400 font-mono dir-ltr">{emp.phone}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: Assigned Tasks Counter badge */}
+                  <div className="shrink-0 text-left">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      taskCount > 0 
+                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-white/10'
+                    }`}>
+                      {taskCount} ئەرک
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ========================================================= */}
+        {/* CENTER DIVIDER LINE (هێڵی لە نێوان دا بێت)                 */}
+        {/* ========================================================= */}
+        <div className="hidden lg:flex lg:col-span-1 items-center justify-center relative">
+          <div className="h-full w-px bg-gradient-to-b from-transparent via-indigo-300 dark:via-indigo-500/50 to-transparent relative">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-2.5 rounded-full bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 shadow-md text-indigo-600 dark:text-indigo-400 z-10 flex items-center justify-center">
+              <ArrowRightLeft className="w-4 h-4" />
             </div>
           </div>
+        </div>
 
-          {/* Employees List Grid */}
-          <div className="flex-1 overflow-y-auto pr-1 pl-1 custom-scrollbar">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-              {filteredEmployeesForRoles.map((emp) => {
-                const assignedRole = employeeRoles[emp.id] || resolveEmployeeRole(emp.id, emp.name, employeeRoles);
-                const roleOption = ROLE_OPTIONS.find((r) => r.id === assignedRole) || ROLE_OPTIONS[10];
+        {/* ========================================================= */}
+        {/* LEFT COLUMN: TASKS & TELEGRAM BUTTONS (ئەرکەکان)         */}
+        {/* ========================================================= */}
+        <div className="lg:col-span-6 flex flex-col pr-0 lg:pr-4 space-y-4 mt-6 lg:mt-0">
+          
+          {/* Column Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              <h3 className="text-base font-black text-slate-900 dark:text-white">
+                ئەرکەکان و دوگمەکانی تەلەگرام ({filteredTasks.length})
+              </h3>
+            </div>
+            <span className="text-xs text-slate-500">
+              {draggedEmployeeIds.length > 0 ? (
+                <span className="text-indigo-600 font-bold animate-pulse">
+                  لێرە بەری بدە بۆ زیادکردن!
+                </span>
+              ) : (
+                'کارمەندان لێرە بەردە تا دوگمەکە ببینن'
+              )}
+            </span>
+          </div>
 
-                return (
-                  <div
-                    key={emp.id}
-                    className="p-3 rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-[#252528]/80 hover:shadow-xs transition-all flex flex-col justify-between gap-2.5"
-                    style={{
-                      borderRightWidth: '4px',
-                      borderRightColor: roleOption.color,
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div 
-                          className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0 shadow-2xs"
-                          style={{ backgroundColor: roleOption.color }}
-                        >
-                          {emp.name.charAt(0)}
-                        </div>
+          {/* Task Search Box */}
+          <div className="relative">
+            <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={taskSearch}
+              onChange={(e) => setTaskSearch(e.target.value)}
+              placeholder="گەڕان لەناو ئەرک و دوگمەکانی تەلەگرام..."
+              className="w-full pl-8 pr-9 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
 
-                        <div className="min-w-0">
-                          <h3 className="text-xs font-black text-slate-900 dark:text-white truncate">
-                            {emp.name}
-                          </h3>
-                          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
-                            <span>{emp.id}</span>
-                            <span>•</span>
-                            <span className="font-sans truncate">{emp.role || 'کارمەند'}</span>
-                          </div>
-                        </div>
+          {/* Scrollable Tasks List with Drop Zones */}
+          <div className="space-y-3 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
+            {filteredTasks.map((task) => {
+              const assignedEmpIds = taskAssignments[task.id] || [];
+              const IconComp = ICON_MAP[task.iconName] || Palmtree;
+              const isDragOver = dragOverTaskId === task.id;
+              const buttonText = TELEGRAM_BUTTON_LABELS[task.id] || task.title;
+
+              return (
+                <div
+                  key={task.id}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOverTaskId(task.id);
+                  }}
+                  onDragLeave={() => setDragOverTaskId(null)}
+                  onDrop={(e) => handleDropOnTask(task.id, e)}
+                  className={`p-4 rounded-2xl border transition-all duration-200 relative ${
+                    isDragOver
+                      ? 'bg-indigo-50/90 dark:bg-indigo-950/80 border-indigo-500 ring-2 ring-indigo-500 shadow-lg scale-[1.01]'
+                      : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 shadow-xs'
+                  }`}
+                >
+                  {/* Task Card Header */}
+                  <div className="flex items-start justify-between gap-3 mb-2.5">
+                    <div className="flex items-start gap-3">
+                      <div 
+                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-xs text-white"
+                        style={{ backgroundColor: task.color || '#007AFF' }}
+                      >
+                        <IconComp className="w-5 h-5" />
                       </div>
 
-                      <span
-                        className="px-2 py-0.5 rounded-full text-[10px] font-black shrink-0"
-                        style={{ backgroundColor: `${roleOption.color}20`, color: roleOption.color }}
-                      >
-                        {roleOption.badge}
+                      <div>
+                        <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                          {task.title}
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+                          {task.description}
+                        </p>
+
+                        {/* Telegram Button Badge */}
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          <span className="text-[10px] text-slate-400">دوگمەی تەلەگرام:</span>
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-slate-200 dark:border-white/10 flex items-center gap-1">
+                            <Send className="w-2.5 h-2.5 text-indigo-500" />
+                            {buttonText}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Counter badge */}
+                    <div className="shrink-0 text-left">
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
+                        assignedEmpIds.length > 0
+                          ? 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+                          : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900/50'
+                      }`}>
+                        {assignedEmpIds.length > 0 ? `${assignedEmpIds.length} کارمەند دەیبینن` : '🔕 لە کەس دەرناکەوێت'}
                       </span>
                     </div>
+                  </div>
 
-                    {/* Role Selector */}
-                    <div className="pt-2 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-2">
-                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 shrink-0">
-                        دیاریکردنی پلە:
-                      </label>
-                      <select
-                        value={assignedRole}
-                        onChange={(e) => handleRoleChange(emp.id, e.target.value as UserRole)}
-                        className="flex-1 text-[11px] font-bold py-1 px-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#1f1f22] text-slate-800 dark:text-slate-200 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#007AFF]"
-                      >
-                        {ROLE_OPTIONS.map((opt) => (
-                          <option key={opt.id} value={opt.id}>
-                            {opt.title} ({opt.badge})
-                          </option>
-                        ))}
-                      </select>
+                  {/* Drop Zone / Assigned Employees Container */}
+                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                        کارمەندە ڕێپێدراوەکان بۆ ئەم ئەرکە:
+                      </span>
+
+                      {/* Quick Utility Buttons */}
+                      <div className="flex items-center gap-2">
+                        {selectedEmployeeIds.length > 0 && (
+                          <button
+                            onClick={() => assignEmployeesToTask(task.id, selectedEmployeeIds)}
+                            className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>زیادکردنی ({selectedEmployeeIds.length}) هەڵبژێردراو</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => assignAllToTask(task.id)}
+                          className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 transition-colors"
+                        >
+                          + هەمووان
+                        </button>
+                        {assignedEmpIds.length > 0 && (
+                          <button
+                            onClick={() => clearTask(task.id)}
+                            className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 text-rose-600 dark:text-rose-400 transition-colors"
+                          >
+                            سڕینەوەی هەموو
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
 
+                    {/* Chips list of assigned employees */}
+                    {assignedEmpIds.length === 0 ? (
+                      <div className="p-3 rounded-xl border border-dashed border-slate-200 dark:border-white/10 text-center text-xs text-slate-400 dark:text-slate-500">
+                        🔕 هیچ کارمەندێک بۆ ئەم ئەرکە دیاری نەکراوە — ئەم دوگمەیە لە تەلەگرامی هیچ کەسێکدا دەرناکەوێت.
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1">
+                        {assignedEmpIds.map(empId => {
+                          const emp = getEmp(empId);
+                          const name = emp?.name || empId;
+                          const role = resolveEmployeeRole(empId, name, employeeRoles);
+                          const roleObj = ROLE_OPTIONS.find(r => r.id === role);
+
+                          return (
+                            <div
+                              key={empId}
+                              className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-800 dark:text-slate-200 shadow-2xs group"
+                            >
+                              <div className="w-4 h-4 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0 text-[8px] flex items-center justify-center font-mono">
+                                {emp?.photoUrl ? (
+                                  <img 
+                                    src={emp.photoUrl} 
+                                    alt={name} 
+                                    className="w-full h-full object-cover" 
+                                    onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                                  />
+                                ) : (
+                                  name.charAt(0)
+                                )}
+                              </div>
+                              <span className="text-[11px] truncate max-w-[120px]">{name}</span>
+                              <span 
+                                className="text-[9px] px-1 rounded-sm"
+                                style={{
+                                  backgroundColor: `${roleObj?.color || '#64748B'}20`,
+                                  color: roleObj?.color || '#64748B'
+                                }}
+                              >
+                                {roleObj?.badge || 'کارمەند'}
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeEmployeeFromTask(task.id, empId);
+                                }}
+                                className="w-3.5 h-3.5 rounded-full hover:bg-rose-200 dark:hover:bg-rose-900/60 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors mr-0.5"
+                                title="لابردن لەم ئەرکە"
+                              >
+                                <X className="w-2.5 h-2.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      )}
 
-      {/* ============================================================== */}
-      {/* TAB 3: SIMULATOR TAB */}
-      {/* ============================================================== */}
-      {activeTab === 'simulator' && (
-        <div className="flex-1 bg-white/90 dark:bg-[#1c1c1e]/90 backdrop-blur-xl border border-slate-200/90 dark:border-white/10 rounded-2xl p-5 shadow-xs space-y-4 overflow-y-auto">
-          <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-white/10">
-            <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-[#007AFF] flex items-center justify-center">
-              <Send className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-sm font-black text-slate-900 dark:text-white">
-                تاقیکەرەوەی ڕێڕەوی ئاگادارییەکان لە تەلەگرام
-              </h2>
-              <p className="text-[11px] text-slate-400">
-                پێشبینیکردنی دەسەڵاتدارانی پەسەندکەر و ئەو کارمەندانەی لە تەلەگرام ئاگاداری وەردەگرن
-              </p>
-            </div>
-          </div>
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                جۆری ئەرک
-              </label>
-              <select
-                value={simTask}
-                onChange={(e) => setSimTask(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-xs font-bold text-slate-800 dark:text-slate-200"
-              >
-                {WORKFLOW_ACTIONS.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                کارمەندی داواکار
-              </label>
-              <select
-                value={simEmployeeId}
-                onChange={(e) => setSimEmployeeId(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-xs font-bold text-slate-800 dark:text-slate-200"
-              >
-                {ASHLEY_OFFICIAL_EMPLOYEES.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name} ({emp.id})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                بەرواری پەیوەندیدار
-              </label>
-              <input
-                type="date"
-                value={simDate}
-                onChange={(e) => setSimDate(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-xs font-bold text-slate-800 dark:text-slate-200"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                دەق یان تێبینی
-              </label>
-              <input
-                type="text"
-                value={simNote}
-                onChange={(e) => setSimNote(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-xs font-bold text-slate-800 dark:text-slate-200"
-              />
-            </div>
-          </div>
-
-          {/* Results Grid */}
-          <div className="pt-3 border-t border-slate-100 dark:border-white/10">
-            <h3 className="text-xs font-black text-slate-900 dark:text-white mb-2.5">
-              ئەو کەس و بەشانەی لە تەلەگرام کاردانەوەیان بۆ دەڕوات ({simulatedRecipients.length}):
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {simulatedRecipients.map((rec, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-white/5 space-y-1.5"
-                  style={{ borderRightWidth: '4px', borderRightColor: rec.color }}
-                >
-                  <div className="flex items-center justify-between">
-                    <span 
-                      className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
-                      style={{ backgroundColor: rec.color }}
-                    >
-                      {rec.title}
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-400 font-bold">
-                      {rec.type}
-                    </span>
-                  </div>
-
-                  <div className="text-xs font-black text-slate-900 dark:text-white">
-                    {rec.name}
-                  </div>
-
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {rec.reason}
+      {/* ========================================================= */}
+      {/* 3. TELEGRAM BOT SIMULATOR PREVIEW MODAL                   */}
+      {/* ========================================================= */}
+      {simulatorOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95">
+            
+            {/* Modal Header */}
+            <div className="p-4 sm:px-6 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-slate-50 dark:bg-slate-950">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    پشکنینی دوگمەکانی تەلەگرام (Simulator)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    هەر کارمەندێک هەڵبژێرە تا بزانیت کاتێ دەچێتە تەلەگرام کام دوگمانە دەبینێت.
                   </p>
                 </div>
-              ))}
+              </div>
+
+              <button
+                onClick={() => setSimulatorOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-4">
+              {/* Employee selector */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
+                  کارمەند هەڵبژێرە بۆ پشکنینی دوگمەکانی:
+                </label>
+                <select
+                  value={simulatorEmpId}
+                  onChange={(e) => setSimulatorEmpId(e.target.value)}
+                  className="w-full p-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 font-bold focus:ring-2 focus:ring-indigo-500"
+                >
+                  {ASHLEY_OFFICIAL_EMPLOYEES.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} ({emp.employeeId}) — {emp.role}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Telegram Phone Mockup */}
+              <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-white/10 space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-white/10">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-200">
+                      Telegram Attendance Bot
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">Ashley ERP Live</span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs leading-relaxed text-slate-800 dark:text-slate-200">
+                  سڵاو <b>{getEmp(simulatorEmpId)?.name}</b>، بەخێربێیت بۆ بۆتی فەرمیی دەوامی ئاشڵی. ئەمەش ئەو دوگمانەیە کە بەپێی ماتریسی نوێ لەسەر شاشەی مۆبایلەکەت دەردەکەون:
+                </div>
+
+                {/* Keyboard Grid Mockup */}
+                <div className="space-y-1.5 pt-2">
+                  <div className="text-[11px] font-bold text-slate-500 mb-1">
+                    دوگمەکانی خوارەوەی چاتی تەلەگرام (Reply Keyboard):
+                  </div>
+
+                  {simulatorKeyboard?.keyboard && simulatorKeyboard.keyboard.length > 0 ? (
+                    simulatorKeyboard.keyboard.map((row: any[], rowIdx: number) => (
+                      <div key={rowIdx} className="grid grid-cols-2 gap-1.5">
+                        {row.map((btn: any, btnIdx: number) => (
+                          <div
+                            key={btnIdx}
+                            className={`p-2.5 rounded-xl text-center text-xs font-bold shadow-xs border transition-all ${
+                              btn.text.includes('هاتن')
+                                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300'
+                                : btn.text.includes('دەرچوون')
+                                ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300'
+                                : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-white/10'
+                            }`}
+                          >
+                            {btn.text}
+                          </div>
+                        ))}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-xs text-slate-400">
+                      هیچ دوگمەیەک بۆ ئەم کارمەندە دەستنیشان نەکراوە.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Status explanation */}
+              <div className="p-3 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-xs text-indigo-900 dark:text-indigo-200 flex items-start gap-2">
+                <Info className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+                <div>
+                  ئەم کارمەندە تەنها ئەو دوگمانە دەبینێت کە بە فەرمی لە ستوونی ڕاستەوە بۆ سەر ئەرکەکان ڕاکێشراون. ئەگەر بۆ هەر ئەرکێک ڕانەکێشرابێت، ئەو دوگمەیە لە تەلەگرام دەشاردرێتەوە و بۆی دەرناکەوێت.
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-200 dark:border-white/10 flex justify-end bg-slate-50 dark:bg-slate-950">
+              <button
+                onClick={() => setSimulatorOpen(false)}
+                className="px-5 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                تەواو (داخستن)
+              </button>
             </div>
           </div>
         </div>

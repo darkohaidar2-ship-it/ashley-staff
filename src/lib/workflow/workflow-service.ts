@@ -297,6 +297,7 @@ export interface WireConnection {
 export interface WorkflowConfiguration {
   employeeRoles: Record<string, UserRole>;
   connections: WireConnection[];
+  taskAssignments?: Record<string, string[]>; // taskId -> string[] of assigned employee IDs (emp-XX)
   rules?: NotificationWorkflowRule[];
 }
 
@@ -502,6 +503,30 @@ export const WORKFLOW_ACTIONS: TaskActionDefinition[] = [
     defaultRoles: ['founder', 'it_admin'],
     color: '#5856D6',
   },
+  {
+    id: 'view_attendance',
+    title: 'لیستی ئامادەبووانی ئەمڕۆ',
+    description: 'بینینی ناوی ئەو کارمەندانەی ئەمڕۆ لە دەوام ئامادەن لە تەلەگرام',
+    iconName: 'Activity',
+    defaultRoles: ['founder', 'general_manager', 'warehouse_manager', 'transport_manager', 'administration', 'supervisor'],
+    color: '#0284C7',
+  },
+  {
+    id: 'warehouse_attendance',
+    title: 'ئامادەبووانی کۆگا',
+    description: 'بینینی لیستی دەوام و ئامادەبووانی بەشی کۆگا و کارگە لە تەلەگرام',
+    iconName: 'Building2',
+    defaultRoles: ['warehouse_manager', 'founder', 'warehouse_staff'],
+    color: '#D97706',
+  },
+  {
+    id: 'transport_attendance',
+    title: 'ستافی نقڵ و گواستنەوە',
+    description: 'بینینی ئامادەبووانی شۆفێران و تیمی گواستنەوە لە تەلەگرام',
+    iconName: 'Truck',
+    defaultRoles: ['transport_manager', 'founder'],
+    color: '#EA580C',
+  },
 ];
 
 export const WORKFLOW_SCOPES: ScopeBranchDefinition[] = [
@@ -517,6 +542,26 @@ export const WORKFLOW_SCOPES: ScopeBranchDefinition[] = [
 
 const WORKFLOW_CONFIG_KEY = 'ashley_notification_workflows_config';
 const WORKFLOW_REGISTRY_KEY = 'ashley_notification_workflows';
+
+/**
+ * Returns default task assignments (task ID -> assigned employee IDs)
+ * Authoritative mapping for the 2-Column Notification Board
+ */
+export function getDefaultTaskAssignments(): Record<string, string[]> {
+  const allEmpIds = ASHLEY_OFFICIAL_EMPLOYEES.map((e) => e.id);
+  return {
+    request_leave: allEmpIds, // Everyone can submit leave requests by default
+    leave_approval: ['emp-06', 'emp-02', 'emp-13', 'emp-04'], // Kamaran, Darko, Walid, Heval
+    broadcast_msg: ['emp-02', 'emp-13'], // Darko, Walid
+    mark_absence: ['emp-06', 'emp-02', 'emp-04'], // Kamaran, Darko, Heval
+    set_holiday: ['emp-02', 'emp-06', 'emp-13'], // Darko, Kamaran, Walid
+    device_management: ['emp-02'], // Darko
+    view_attendance: ['emp-02', 'emp-06', 'emp-13', 'emp-04', 'emp-03'], // Managers & supervisors
+    warehouse_attendance: ['emp-06', 'emp-03', 'emp-02'], // Kamaran, Shadyar, Darko
+    transport_attendance: ['emp-04', 'emp-02'], // Heval, Darko
+    late_alerts: ['emp-02', 'emp-06'], // Darko, Kamaran
+  };
+}
 
 /**
  * Returns default employee-to-role mappings
@@ -628,27 +673,40 @@ export function getDefaultConnections(): WireConnection[] {
   return connections;
 }
 
+let cachedWorkflowConfig: { config: WorkflowConfiguration; timestamp: number } | null = null;
+const CACHE_TTL_MS = 15000; // 15 seconds
+
 /**
- * Fetch the complete workflow configuration (roles + manual wire connections)
+ * Fetch the complete workflow configuration (roles + manual wire connections + taskAssignments)
  */
-export async function fetchWorkflowConfiguration(): Promise<WorkflowConfiguration> {
+export async function fetchWorkflowConfiguration(forceRefresh: boolean = false): Promise<WorkflowConfiguration> {
+  const now = Date.now();
+  if (!forceRefresh && cachedWorkflowConfig && (now - cachedWorkflowConfig.timestamp < CACHE_TTL_MS)) {
+    return cachedWorkflowConfig.config;
+  }
+
   const fallback: WorkflowConfiguration = {
     employeeRoles: getDefaultEmployeeRoles(),
     connections: getDefaultConnections(),
+    taskAssignments: getDefaultTaskAssignments(),
   };
 
   try {
     const config = await fetchSupabaseJson<WorkflowConfiguration | null>(WORKFLOW_CONFIG_KEY, null);
-    if (config && config.connections && Array.isArray(config.connections)) {
-      return {
+    if (config) {
+      const merged: WorkflowConfiguration = {
         employeeRoles: { ...fallback.employeeRoles, ...(config.employeeRoles || {}) },
-        connections: config.connections.length > 0 ? config.connections : fallback.connections,
+        connections: (config.connections && Array.isArray(config.connections) && config.connections.length > 0) ? config.connections : fallback.connections,
+        taskAssignments: config.taskAssignments || fallback.taskAssignments,
       };
+      cachedWorkflowConfig = { config: merged, timestamp: now };
+      return merged;
     }
   } catch (err) {
     logger.warn('[WorkflowService] Error reading workflow configuration from Supabase:', err);
   }
 
+  cachedWorkflowConfig = { config: fallback, timestamp: now };
   return fallback;
 }
 
@@ -657,31 +715,40 @@ export async function fetchWorkflowConfiguration(): Promise<WorkflowConfiguratio
  */
 export async function saveWorkflowConfiguration(config: WorkflowConfiguration): Promise<boolean> {
   try {
+    cachedWorkflowConfig = null;
+
+    if (!config.taskAssignments) {
+      config.taskAssignments = getDefaultTaskAssignments();
+    }
+
+    // Auto-generate wire connections from taskAssignments to keep legacy readers compatible
+    const newConnections: WireConnection[] = [];
+    Object.entries(config.taskAssignments).forEach(([taskId, empIds]) => {
+      if (Array.isArray(empIds)) {
+        empIds.forEach((empId) => {
+          newConnections.push({
+            id: `${empId}__${taskId}`,
+            fromType: 'employee',
+            fromId: empId,
+            toType: 'task',
+            toId: taskId,
+          });
+        });
+      }
+    });
+
+    if (newConnections.length > 0) {
+      config.connections = newConnections;
+    }
+
     const ok = await saveSupabaseJson<WorkflowConfiguration>(
       WORKFLOW_CONFIG_KEY,
       'Ashley Notification & Manual Workflow Wiring Configuration',
       config
     );
 
-    // Also sync to legacy rules format for backward compatibility
     if (ok) {
-      const legacyRules: NotificationWorkflowRule[] = [];
-      config.connections
-        .filter((c) => c.fromType === 'task' && c.toType === 'role')
-        .forEach((c) => {
-          legacyRules.push({
-            roleId: c.toId as UserRole,
-            employeeId: '*',
-            actionId: c.fromId,
-            scopeId: 'all_branches',
-            enabled: true,
-          });
-        });
-      await saveSupabaseJson<NotificationWorkflowRule[]>(
-        WORKFLOW_REGISTRY_KEY,
-        'Ashley Notification Legacy Rules',
-        legacyRules
-      );
+      cachedWorkflowConfig = { config, timestamp: Date.now() };
     }
 
     return ok;
@@ -690,6 +757,7 @@ export async function saveWorkflowConfiguration(config: WorkflowConfiguration): 
     return false;
   }
 }
+
 
 /**
  * Determine employee role considering custom overrides
@@ -823,7 +891,9 @@ export async function saveNotificationWorkflowRules(rules: NotificationWorkflowR
 }
 
 /**
- * Check if a specific employee or role has permission for an action in a scope
+ * Check if a specific employee has permission for an action / telegram button
+ * Authoritative: follows taskAssignments from the 2-Column Board
+ * "ئەو کارمەندە لە تەلگرام ئەو ئەرکە ببینێت . گەر بۆی ڕانەکێشرابوو لە تەلگرام نەیبینێت"
  */
 export async function hasActionPermission(
   employeeId: string, 
@@ -831,10 +901,25 @@ export async function hasActionPermission(
   scopeId?: string
 ): Promise<boolean> {
   const config = await fetchWorkflowConfiguration();
-  const role = resolveEmployeeRole(employeeId, undefined, config.employeeRoles);
   const rawNum = employeeId.replace('emp-', '');
+  const cleanId = employeeId.startsWith('emp-') ? employeeId : `emp-${employeeId}`;
 
-  // Check if role or employeeId is connected to the action in Column 1 (c.toId === actionId or c.fromId === actionId)
+  // 1. Authoritative check in taskAssignments (2-Column Board)
+  const assignments = config.taskAssignments || getDefaultTaskAssignments();
+  if (assignments && assignments[actionId]) {
+    const list = assignments[actionId];
+    return list.some(id => 
+      id === employeeId || 
+      id === cleanId || 
+      id === rawNum || 
+      id === `emp-${rawNum}` ||
+      id === '*' ||
+      id === 'all'
+    );
+  }
+
+  // 2. Fallback to connections
+  const role = resolveEmployeeRole(employeeId, undefined, config.employeeRoles);
   const isConnected = config.connections.some((c) => {
     const matchesAction = c.fromId === actionId || c.toId === actionId;
     const matchesEntity = 
@@ -845,15 +930,100 @@ export async function hasActionPermission(
     return matchesAction && matchesEntity;
   });
 
-  if (isConnected) return true;
+  return isConnected;
+}
 
-  // Founder has system access except when checking custom permissions
-  if (role === 'founder' && actionId !== 'request_leave') return true;
+export const isActionAllowedForEmployee = hasActionPermission;
 
-  // Everyone can request leave by default
-  if (actionId === 'request_leave') return true;
+/**
+ * Dynamic Telegram Reply Keyboard Generator:
+ * Builds the keyboard containing ONLY the buttons the employee is assigned to!
+ * "ئەو کارمەندە لە تەلگرام ئەو ئەرکە ببینێت . گەر بۆی ڕانەکێشرابوو لە تەلگرام نەیبینێت"
+ */
+export async function getDynamicEmployeeTelegramKeyboard(
+  employeeId?: string,
+  fallbackRole?: UserRole
+) {
+  const config = await fetchWorkflowConfiguration();
+  const assignments = config.taskAssignments || getDefaultTaskAssignments();
 
-  return false;
+  const isAssigned = (taskId: string) => {
+    if (!employeeId) return false;
+    const list = assignments[taskId];
+    if (!Array.isArray(list)) return false;
+    const rawNum = employeeId.replace('emp-', '');
+    const cleanId = employeeId.startsWith('emp-') ? employeeId : `emp-${employeeId}`;
+    return list.some(id => 
+      id === employeeId || 
+      id === cleanId || 
+      id === rawNum || 
+      id === `emp-${rawNum}` || 
+      id === '*' || 
+      id === 'all'
+    );
+  };
+
+  // 1. Fundamental base rows that ALL employees always have:
+  const keyboard: any[][] = [
+    [
+      { text: '🟢 تۆمارکردنی هاتن' },
+      { text: '🔴 تۆمارکردنی دەرچوون' },
+    ],
+    [
+      { text: '📊 دۆخی دەوامی ئەمڕۆم' },
+      { text: '📅 دۆخی دەوامی ئەم مانگەم' },
+    ],
+    [
+      { text: '👤 پرۆفایلی من' },
+      { text: 'ℹ️ شوێنەکانی دەوام' },
+    ],
+  ];
+
+  // 2. Dynamic buttons based strictly on tasks the employee was dragged/assigned to:
+  const dynamicButtons: { text: string }[] = [];
+
+  if (isAssigned('request_leave')) {
+    dynamicButtons.push({ text: '🏖️ داواکردنی مۆڵەت' });
+  }
+  if (isAssigned('leave_approval')) {
+    dynamicButtons.push({ text: '🏖️ داواکارییەکانی مۆڵەت' });
+  }
+  if (isAssigned('broadcast_msg')) {
+    dynamicButtons.push({ text: '📢 ناردنی ئاگاداری گشتی' });
+  }
+  if (isAssigned('mark_absence')) {
+    dynamicButtons.push({ text: '❌ تۆمارکردنی غیاب' });
+  }
+  if (isAssigned('set_holiday')) {
+    dynamicButtons.push({ text: '🌴 دیاریکردنی پشوو' });
+  }
+  if (isAssigned('device_management')) {
+    dynamicButtons.push({ text: '📱 بەستنەوەی ئامێرەکان' });
+  }
+  if (isAssigned('view_attendance')) {
+    dynamicButtons.push({ text: '📋 لیستی ئامادەبووانی ئەمڕۆ' });
+  }
+  if (isAssigned('warehouse_attendance')) {
+    dynamicButtons.push({ text: '📦 ئامادەبووانی کۆگا' });
+  }
+  if (isAssigned('transport_attendance')) {
+    dynamicButtons.push({ text: '🚚 ستافی نقڵ و گواستنەوە' });
+  }
+
+  // Pair dynamic buttons 2 per row
+  for (let i = 0; i < dynamicButtons.length; i += 2) {
+    if (i + 1 < dynamicButtons.length) {
+      keyboard.push([dynamicButtons[i], dynamicButtons[i + 1]]);
+    } else {
+      keyboard.push([dynamicButtons[i]]);
+    }
+  }
+
+  return {
+    keyboard,
+    resize_keyboard: true,
+    is_persistent: true,
+  };
 }
 
 /**

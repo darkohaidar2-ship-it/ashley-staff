@@ -2,7 +2,8 @@ import { supabase } from '@/lib/supabase/client';
 import { ASHLEY_OFFICIAL_EMPLOYEES, OFFICIAL_PIN_MAP, normalizeKurdishDigits } from '@/lib/ashley-employees';
 import { DEFAULT_COMPANY_LOCATIONS } from '@/lib/geo-constants';
 import { logger } from '@/lib/logger';
-import { resolveEmployeeRole, UserRole, getActionRecipients } from '@/lib/workflow/workflow-service';
+import { resolveEmployeeRole, UserRole, getActionRecipients, getDynamicEmployeeTelegramKeyboard } from '@/lib/workflow/workflow-service';
+export { getDynamicEmployeeTelegramKeyboard };
 
 // Bot token is strictly read from environment variable - no hardcoded fallback
 function getBotToken(): string {
