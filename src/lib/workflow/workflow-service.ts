@@ -447,6 +447,49 @@ export const WORKFLOW_ROLES: RoleDefinition[] = [
 ];
 
 export const WORKFLOW_ACTIONS: TaskActionDefinition[] = [
+  // --- ١. دەوامی سەرەکی و دۆخی دەوام ---
+  {
+    id: 'self_checkin',
+    title: 'تۆمارکردنی هاتن و دەرچوون (Check-in / Out)',
+    description: 'دوگمەکانی [🟢 تۆمارکردنی هاتن] و [🔴 تۆمارکردنی دەرچوون] بە GPS لە تەلەگرام',
+    iconName: 'Clock',
+    defaultRoles: ['founder', 'general_manager', 'warehouse_manager', 'transport_manager', 'administration', 'developer', 'it_admin', 'salesperson', 'warehouse_staff', 'supervisor', 'employee'],
+    color: '#10B981',
+  },
+  {
+    id: 'today_status',
+    title: 'دۆخی دەوامی ئەمڕۆم',
+    description: 'دوگمەی [📊 دۆخی دەوامی ئەمڕۆم] بۆ بینینی کاتی تۆمارکراوی هاتن و دەرچوونی ئەمڕۆ',
+    iconName: 'Calendar',
+    defaultRoles: ['founder', 'general_manager', 'warehouse_manager', 'transport_manager', 'administration', 'developer', 'it_admin', 'salesperson', 'warehouse_staff', 'supervisor', 'employee'],
+    color: '#0EA5E9',
+  },
+  {
+    id: 'monthly_report',
+    title: 'دۆخی دەوامی ئەم مانگەم (ڕاپۆرت و PDF)',
+    description: 'دوگمەی [📅 دۆخی دەوامی ئەم مانگەم] بۆ داگرتنی PDF و ئاماری دەوامی مانگانە',
+    iconName: 'FileText',
+    defaultRoles: ['founder', 'general_manager', 'warehouse_manager', 'transport_manager', 'administration', 'developer', 'it_admin', 'salesperson', 'warehouse_staff', 'supervisor', 'employee'],
+    color: '#6366F1',
+  },
+  {
+    id: 'view_profile',
+    title: 'پرۆفایلی من (زانیاری و وێنە)',
+    description: 'دوگمەی [👤 پرۆفایلی من] بۆ بینینی وێنەی فەرمی سیستەم و کارتی زانیاری کارمەند',
+    iconName: 'User',
+    defaultRoles: ['founder', 'general_manager', 'warehouse_manager', 'transport_manager', 'administration', 'developer', 'it_admin', 'salesperson', 'warehouse_staff', 'supervisor', 'employee'],
+    color: '#8B5CF6',
+  },
+  {
+    id: 'work_locations',
+    title: 'شوێنەکانی دەوام',
+    description: 'دوگمەی [ℹ️ شوێنەکانی دەوام] بۆ زانینی لۆکەیشنە پەسەندکراوەکانی کۆمپانیای ئاشڵی',
+    iconName: 'MapPin',
+    defaultRoles: ['founder', 'general_manager', 'warehouse_manager', 'transport_manager', 'administration', 'developer', 'it_admin', 'salesperson', 'warehouse_staff', 'supervisor', 'employee'],
+    color: '#64748B',
+  },
+
+  // --- ٢. مۆڵەت و پەیوەندییەکان ---
   {
     id: 'request_leave',
     title: 'داواکردنی مۆڵەت',
@@ -471,6 +514,8 @@ export const WORKFLOW_ACTIONS: TaskActionDefinition[] = [
     defaultRoles: ['founder', 'general_manager'],
     color: '#AF52DE',
   },
+
+  // --- ٣. بەڕێوەبەرایەتی و ستاف ---
   {
     id: 'mark_absence',
     title: 'تۆمارکردنی غیاب و لێبڕین',
@@ -527,6 +572,14 @@ export const WORKFLOW_ACTIONS: TaskActionDefinition[] = [
     defaultRoles: ['transport_manager', 'founder'],
     color: '#EA580C',
   },
+  {
+    id: 'system_diagnostics',
+    title: 'پشکنینی سیستەم (System Diagnostics)',
+    description: 'دوگمەی [🔍 پشکنینی سیستەم] بۆ پیشاندانی دۆخی بەستراوی بنکەدراوە و بۆت',
+    iconName: 'Cpu',
+    defaultRoles: ['founder', 'developer', 'it_admin'],
+    color: '#6366F1',
+  },
 ];
 
 export const WORKFLOW_SCOPES: ScopeBranchDefinition[] = [
@@ -550,6 +603,11 @@ const WORKFLOW_REGISTRY_KEY = 'ashley_notification_workflows';
 export function getDefaultTaskAssignments(): Record<string, string[]> {
   const allEmpIds = ASHLEY_OFFICIAL_EMPLOYEES.map((e) => e.id);
   return {
+    self_checkin: allEmpIds, // Everyone by default
+    today_status: allEmpIds, // Everyone by default
+    monthly_report: allEmpIds, // Everyone by default
+    view_profile: allEmpIds, // Everyone by default
+    work_locations: allEmpIds, // Everyone by default
     request_leave: allEmpIds, // Everyone can submit leave requests by default
     leave_approval: ['emp-06', 'emp-02', 'emp-13', 'emp-04'], // Kamaran, Darko, Walid, Heval
     broadcast_msg: ['emp-02', 'emp-13'], // Darko, Walid
@@ -559,6 +617,7 @@ export function getDefaultTaskAssignments(): Record<string, string[]> {
     view_attendance: ['emp-02', 'emp-06', 'emp-13', 'emp-04', 'emp-03'], // Managers & supervisors
     warehouse_attendance: ['emp-06', 'emp-03', 'emp-02'], // Kamaran, Shadyar, Darko
     transport_attendance: ['emp-04', 'emp-02'], // Heval, Darko
+    system_diagnostics: ['emp-02', 'it-admin'], // Darko, IT
     late_alerts: ['emp-02', 'emp-06'], // Darko, Kamaran
   };
 }
@@ -963,23 +1022,41 @@ export async function getDynamicEmployeeTelegramKeyboard(
     );
   };
 
-  // 1. Fundamental base rows that ALL employees always have:
-  const keyboard: any[][] = [
-    [
+  const keyboard: any[][] = [];
+
+  // 1. Check-in & Check-out row (strictly based on self_checkin assignment)
+  if (isAssigned('self_checkin')) {
+    keyboard.push([
       { text: '🟢 تۆمارکردنی هاتن' },
       { text: '🔴 تۆمارکردنی دەرچوون' },
-    ],
-    [
-      { text: '📊 دۆخی دەوامی ئەمڕۆم' },
-      { text: '📅 دۆخی دەوامی ئەم مانگەم' },
-    ],
-    [
-      { text: '👤 پرۆفایلی من' },
-      { text: 'ℹ️ شوێنەکانی دەوام' },
-    ],
-  ];
+    ]);
+  }
 
-  // 2. Dynamic buttons based strictly on tasks the employee was dragged/assigned to:
+  // 2. Attendance Status row (Today status & Monthly report)
+  const statusRow: any[] = [];
+  if (isAssigned('today_status')) {
+    statusRow.push({ text: '📊 دۆخی دەوامی ئەمڕۆم' });
+  }
+  if (isAssigned('monthly_report')) {
+    statusRow.push({ text: '📅 دۆخی دەوامی ئەم مانگەم' });
+  }
+  if (statusRow.length > 0) {
+    keyboard.push(statusRow);
+  }
+
+  // 3. Profile & Work Locations row
+  const profileRow: any[] = [];
+  if (isAssigned('view_profile')) {
+    profileRow.push({ text: '👤 پرۆفایلی من' });
+  }
+  if (isAssigned('work_locations')) {
+    profileRow.push({ text: 'ℹ️ شوێنەکانی دەوام' });
+  }
+  if (profileRow.length > 0) {
+    keyboard.push(profileRow);
+  }
+
+  // 4. Other dynamic action buttons:
   const dynamicButtons: { text: string }[] = [];
 
   if (isAssigned('request_leave')) {
@@ -1009,6 +1086,9 @@ export async function getDynamicEmployeeTelegramKeyboard(
   if (isAssigned('transport_attendance')) {
     dynamicButtons.push({ text: '🚚 ستافی نقڵ و گواستنەوە' });
   }
+  if (isAssigned('system_diagnostics')) {
+    dynamicButtons.push({ text: '🔍 پشکنینی سیستەم' });
+  }
 
   // Pair dynamic buttons 2 per row
   for (let i = 0; i < dynamicButtons.length; i += 2) {
@@ -1017,6 +1097,12 @@ export async function getDynamicEmployeeTelegramKeyboard(
     } else {
       keyboard.push([dynamicButtons[i]]);
     }
+  }
+
+  // Minimal fallback if admin unchecked all buttons for this employee:
+  if (keyboard.length === 0) {
+    keyboard.push([{ text: '🟢 تۆمارکردنی هاتن' }, { text: '🔴 تۆمارکردنی دەرچوون' }]);
+    keyboard.push([{ text: '👤 پرۆفایلی من' }]);
   }
 
   return {

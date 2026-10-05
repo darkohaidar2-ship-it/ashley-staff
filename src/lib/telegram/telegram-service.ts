@@ -1024,6 +1024,72 @@ export async function getTodayAttendanceSummary(): Promise<string> {
   }
 }
 
+/**
+ * Returns a personalized Kurdish message showing today's attendance status for a single employee
+ */
+export async function getEmployeeTodayAttendanceStatus(employeeId: string, employeeName: string): Promise<string> {
+  const { dateStr, timeStr } = getBaghdadNow();
+  const cleanId = employeeId.replace(/^emp-0*/i, '') || employeeId.replace('emp-', '');
+  const cleanPadded = cleanId.length === 1 ? `0${cleanId}` : cleanId;
+
+  try {
+    const { data: rec } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('date', dateStr)
+      .or(`user_id.eq.${employeeId},user_id.eq.emp-${cleanPadded},user_name.eq.${employeeName}`)
+      .maybeSingle();
+
+    let manualMap: Record<string, any> = {};
+    try {
+      const { data: setRow } = await supabase
+        .from('warehouses')
+        .select('qr_code')
+        .eq('id', 'ashley_manual_attendance_records')
+        .maybeSingle();
+      if (setRow?.qr_code) {
+        manualMap = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+      }
+    } catch (err) { logger.warn(err); }
+
+    const ov = manualMap[`${employeeId}_${dateStr}`] || manualMap[`${cleanPadded}_${dateStr}`] || manualMap[`${employeeName}_${dateStr}`];
+    const inTime = ov?.checkInTime || rec?.check_in_time;
+    const outTime = ov?.checkOutTime || rec?.check_out_time;
+    const loc = rec?.warehouse_name || 'کۆمپانیای ئاشڵی';
+
+    let msg = `📊 <b>دۆخی دەوامی ئەمڕۆی بەڕێز ${employeeName}:</b>\n\n`;
+    msg += `📅 بەروار: <b>${dateStr}</b>\n`;
+    msg += `🕒 کاتی ئێستا: <b>${timeStr}</b>\n\n`;
+
+    if (inTime) {
+      msg += `🟢 <b>کاتی هاتن:</b> <code>${inTime}</code>\n`;
+    } else {
+      msg += `⚪ <b>کاتی هاتن:</b> <i>تۆمار نەکراوە</i>\n`;
+    }
+
+    if (outTime) {
+      msg += `🔴 <b>کاتی دەرچوون:</b> <code>${outTime}</code>\n`;
+    } else {
+      msg += `⚪ <b>کاتی دەرچوون:</b> <i>تۆمار نەکراوە</i>\n`;
+    }
+
+    msg += `📍 <b>شوێنی تۆمارکراو:</b> ${loc}\n\n`;
+
+    if (inTime && !outTime) {
+      msg += `✅ <i>ئێستا لە دەوام ئامادەیت. لە کاتی ڕۆشتنەوە دەتوانیت دوگمەی [🔴 تۆمارکردنی دەرچوون] دابگریت.</i>`;
+    } else if (inTime && outTime) {
+      msg += `🏁 <i>دەوامی ئەمڕۆت تەواو بووە. ماندوو نەبیت!</i>`;
+    } else {
+      msg += `⏳ <i>بۆ تۆمارکردنی کاتی هاتن، دوگمەی [🟢 تۆمارکردنی هاتن] دابگرە.</i>`;
+    }
+
+    return msg;
+  } catch (err: any) {
+    logger.error('[TelegramService] Error fetching today status:', err);
+    return `❌ کێشەیەک ڕوویدا لە پشکنینی دۆخی دەوامی ئەمڕۆ: ${err.message}`;
+  }
+}
+
 // Reset today's attendance (for testing or manager correction)
 export async function resetTodayAttendance(employeeId: string, employeeName?: string): Promise<boolean> {
   const { dateStr } = getBaghdadNow();

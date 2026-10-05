@@ -44,6 +44,11 @@ import {
   Send,
   SlidersHorizontal,
   Info,
+  FileText,
+  User,
+  Calendar,
+  MapPin,
+  Cpu,
 } from 'lucide-react';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -58,10 +63,20 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Activity,
   Building2,
   Truck,
+  FileText,
+  User,
+  Calendar,
+  MapPin,
+  Cpu,
 };
 
 // Map each task to its exact Telegram reply keyboard button label
 const TELEGRAM_BUTTON_LABELS: Record<string, string> = {
+  self_checkin: '🟢 تۆمارکردنی هاتن / 🔴 دەرچوون',
+  today_status: '📊 دۆخی دەوامی ئەمڕۆم',
+  monthly_report: '📅 دۆخی دەوامی ئەم مانگەم',
+  view_profile: '👤 پرۆفایلی من',
+  work_locations: 'ℹ️ شوێنەکانی دەوام',
   request_leave: '🏖️ داواکردنی مۆڵەت',
   leave_approval: '🏖️ داواکارییەکانی مۆڵەت',
   broadcast_msg: '📢 ناردنی ئاگاداری گشتی',
@@ -71,6 +86,7 @@ const TELEGRAM_BUTTON_LABELS: Record<string, string> = {
   view_attendance: '📋 لیستی ئامادەبووانی ئەمڕۆ',
   warehouse_attendance: '📦 ئامادەبووانی کۆگا',
   transport_attendance: '🚚 ستافی نقڵ و گواستنەوە',
+  system_diagnostics: '🔍 پشکنینی سیستەم',
   late_alerts: '⏰ ئاگاداری دواکەوتنی دەوام (نۆتیفیکەیشن)',
 };
 
@@ -95,8 +111,9 @@ export default function NotificationRoutingMatrix() {
   const [draggedEmployeeIds, setDraggedEmployeeIds] = useState<string[]>([]);
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
 
-  // Column 2 (Left): Task search
+  // Column 2 (Left): Task search & category filter
   const [taskSearch, setTaskSearch] = useState('');
+  const [taskCategoryFilter, setTaskCategoryFilter] = useState<'all' | 'attendance' | 'leave' | 'admin'>('all');
 
   // Telegram Simulator Modal
   const [simulatorOpen, setSimulatorOpen] = useState(false);
@@ -195,14 +212,30 @@ export default function NotificationRoutingMatrix() {
     });
   }, [employeeSearch, departmentFilter]);
 
-  // Filter tasks
+  // Filter tasks with category tabs and search
   const filteredTasks = useMemo(() => {
-    if (!taskSearch.trim()) return WORKFLOW_ACTIONS;
-    const q = taskSearch.toLowerCase().trim();
-    return WORKFLOW_ACTIONS.filter(
-      t => t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q) || t.id.includes(q)
-    );
-  }, [taskSearch]);
+    return WORKFLOW_ACTIONS.filter((t) => {
+      if (taskCategoryFilter === 'attendance') {
+        const isAtt = ['self_checkin', 'today_status', 'monthly_report', 'view_profile', 'work_locations'].includes(t.id);
+        if (!isAtt) return false;
+      } else if (taskCategoryFilter === 'leave') {
+        const isLeave = ['request_leave', 'leave_approval', 'mark_absence', 'set_holiday'].includes(t.id);
+        if (!isLeave) return false;
+      } else if (taskCategoryFilter === 'admin') {
+        const isAdmin = ['broadcast_msg', 'device_management', 'view_attendance', 'warehouse_attendance', 'transport_attendance', 'system_diagnostics', 'late_alerts'].includes(t.id);
+        if (!isAdmin) return false;
+      }
+
+      if (!taskSearch.trim()) return true;
+      const q = taskSearch.toLowerCase().trim();
+      return (
+        t.title.toLowerCase().includes(q) ||
+        t.description.toLowerCase().includes(q) ||
+        t.id.includes(q) ||
+        (TELEGRAM_BUTTON_LABELS[t.id] && TELEGRAM_BUTTON_LABELS[t.id].toLowerCase().includes(q))
+      );
+    });
+  }, [taskSearch, taskCategoryFilter]);
 
   // Toggle single employee selection
   const toggleEmployeeSelect = (empId: string) => {
@@ -629,6 +662,50 @@ export default function NotificationRoutingMatrix() {
               placeholder="گەڕان لەناو ئەرک و دوگمەکانی تەلەگرام..."
               className="w-full pl-8 pr-9 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
+          </div>
+
+          {/* Task Category Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            <button
+              onClick={() => setTaskCategoryFilter('all')}
+              className={`px-3 py-1 rounded-lg font-bold transition-all shrink-0 ${
+                taskCategoryFilter === 'all'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:border-indigo-300'
+              }`}
+            >
+              هەموو دوگمەکان ({WORKFLOW_ACTIONS.length})
+            </button>
+            <button
+              onClick={() => setTaskCategoryFilter('attendance')}
+              className={`px-3 py-1 rounded-lg font-bold transition-all shrink-0 ${
+                taskCategoryFilter === 'attendance'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:border-emerald-300'
+              }`}
+            >
+              🟢 دەوام و دۆخ (٥)
+            </button>
+            <button
+              onClick={() => setTaskCategoryFilter('leave')}
+              className={`px-3 py-1 rounded-lg font-bold transition-all shrink-0 ${
+                taskCategoryFilter === 'leave'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:border-blue-300'
+              }`}
+            >
+              🏖️ مۆڵەت و پشوو (٤)
+            </button>
+            <button
+              onClick={() => setTaskCategoryFilter('admin')}
+              className={`px-3 py-1 rounded-lg font-bold transition-all shrink-0 ${
+                taskCategoryFilter === 'admin'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:border-purple-300'
+              }`}
+            >
+              👑 ئیدارە و کۆگا (٧)
+            </button>
           </div>
 
           {/* Scrollable Tasks List with Drop Zones */}

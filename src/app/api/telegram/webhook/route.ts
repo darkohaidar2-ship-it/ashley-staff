@@ -16,6 +16,7 @@ import {
   unbindTelegramAccount,
   getAllEmployees,
   getTodayAttendanceSummary,
+  getEmployeeTodayAttendanceStatus,
   getWarehouseAttendanceSummary,
   resetTodayAttendance,
   getBaghdadNow,
@@ -1363,9 +1364,59 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------
+    // 9b. ACTION: CHECK-IN & CHECK-OUT (🟢 تۆمارکردنی هاتن / 🔴 تۆمارکردنی دەرچوون)
+    // -------------------------------------------------------------
+    if (text === '🟢 تۆمارکردنی هاتن') {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'self_checkin');
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ تۆمارکردنی هاتنی دەوام لە تەلەگرام ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
+      PENDING_INTENTS[fromId] = 'check_in';
+      const prompt = `📍 <b>تۆمارکردنی هاتن بۆ دەوام:</b>\n\nتکایە دوگمەی <b>[📍 ناردنی لۆکەیشنی دەوام (GPS)]</b> لە خوارەوە دابگرە تاوەکو لۆکەیشنەکەت بنێریت و کاتەکەت تۆمار بکرێت:`;
+      await sendTelegramMessage(chatId, prompt, getLocationRequestKeyboard(isManager));
+      return NextResponse.json({ ok: true });
+    }
+
+    if (text === '🔴 تۆمارکردنی دەرچوون') {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'self_checkin');
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ تۆمارکردنی دەرچوونی دەوام لە تەلەگرام ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
+      PENDING_INTENTS[fromId] = 'check_out';
+      const prompt = `📍 <b>تۆمارکردنی دەرچوون لە دەوام:</b>\n\nتکایە دوگمەی <b>[📍 ناردنی لۆکەیشنی دەوام (GPS)]</b> لە خوارەوە دابگرە تاوەکو لۆکەیشنەکەت بنێریت و کاتەکەت تۆمار بکرێت:`;
+      await sendTelegramMessage(chatId, prompt, getLocationRequestKeyboard(isManager));
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 9c. ACTION: TODAY'S ATTENDANCE STATUS (📊 دۆخی دەوامی ئەمڕۆم)
+    // -------------------------------------------------------------
+    if (text === '📊 دۆخی دەوامی ئەمڕۆم') {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'today_status');
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ بینینی دۆخی دەوامی ئەمڕۆ ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
+      const statusMsg = await getEmployeeTodayAttendanceStatus(currentBinding.employeeId, currentBinding.employeeName);
+      await sendTelegramMessage(chatId, statusMsg, replyKeyboard);
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
     // 10. ACTION: MONTHLY ATTENDANCE REPORT WITH PDF & NAVIGATION
     // -------------------------------------------------------------
     if (text === '📅 دۆخی دەوامی ئەم مانگەم' || text === '/month' || text === '/report') {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'monthly_report');
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ بینینی ڕاپۆرتی دەوامی مانگانە ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
       const stats = await getMonthlyAttendanceStats(currentBinding.employeeId, currentBinding.employeeName);
       const reportMsg = formatMonthlyReportMessage(stats);
       const kb = getMonthlyReportInlineKeyboard(stats.monthStr);
@@ -1377,6 +1428,12 @@ export async function POST(req: NextRequest) {
     // 10b. ACTION: MY OFFICIAL PROFILE CARD
     // -------------------------------------------------------------
     if (text === '👤 پرۆفایلی من' || text === '/profile') {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'view_profile');
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ بینینی پرۆفایلی فەرمی ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
       const profile = await getEmployeeProfileDetails(currentBinding.employeeId);
 
       // Resolve photo strictly from official Ashley ERP system:
@@ -1654,6 +1711,12 @@ export async function POST(req: NextRequest) {
     // 10g. ACTION: LOCATIONS INFO (ℹ️ شوێنەکانی دەوام)
     // -------------------------------------------------------------
     if (text === 'ℹ️ شوێنەکانی دەوام') {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'work_locations');
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ بینینی شوێنەکانی دەوام ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
       const infoMsg = 
         `🏢 <b>شوێنە پەسەندکراوەکانی کۆمپانیای ئاشڵی بۆ تۆمارکردنی دەوام:</b>\n\n` +
         `1️⃣ <b>کۆگای سەرەکی و کارگە:</b>\n` +
@@ -1674,6 +1737,12 @@ export async function POST(req: NextRequest) {
     // 10h. ACTION: SYSTEM DIAGNOSTICS (🔍 پشکنینی سیستەم)
     // -------------------------------------------------------------
     if (text === '🔍 پشکنینی سیستەم') {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'system_diagnostics');
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ پشکنینی سیستەم ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
       const boundCount = Object.keys(bindings).length;
       const { dateStr, timeStr } = getBaghdadNow();
       const statusMsg = 
@@ -1692,6 +1761,12 @@ export async function POST(req: NextRequest) {
     // 16. DIRECT COMMANDS (/in and /out)
     // -------------------------------------------------------------
     if (text === '/in' || text === '/checkin') {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'self_checkin');
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ تۆمارکردنی هاتنی دەوام لە تەلەگرام ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
       const result = await evaluateAndRecordAttendance({
         source: 'telegram',
         employeeId: currentBinding.employeeId,
@@ -1706,6 +1781,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (text === '/out' || text === '/checkout') {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'self_checkin');
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ تۆمارکردنی دەرچوونی دەوام لە تەلەگرام ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
       const result = await evaluateAndRecordAttendance({
         source: 'telegram',
         employeeId: currentBinding.employeeId,
@@ -1740,6 +1821,12 @@ export async function POST(req: NextRequest) {
     // 18. GPS LOCATION RECEIVED (ATTENDANCE PROCESSING THROUGH ENGINE)
     // -------------------------------------------------------------
     if (location && typeof location.latitude === 'number' && typeof location.longitude === 'number') {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'self_checkin');
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ تۆمارکردنی دەوام لە تەلەگرام ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
       // 🔒 Reject forwarded locations
       if ((message as any).forward_date || (message as any).forward_origin || (message as any).forward_from) {
         await sendTelegramMessage(
