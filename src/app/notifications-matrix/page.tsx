@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function NotificationsMatrixPage() {
   return (
-    <main className="min-h-screen bg-slate-50/50 dark:bg-[#121214] py-6 px-3 sm:px-6">
+    <main className="h-screen w-full bg-[#f8fafc] dark:bg-[#101012] p-2 sm:p-3 overflow-hidden flex flex-col">
       <NotificationRoutingMatrix />
     </main>
   );

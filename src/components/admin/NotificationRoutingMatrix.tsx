@@ -13,10 +13,8 @@ import {
   getDefaultEmployeeRoles,
   getDefaultConnections,
   resolveEmployeeRole,
-  TaskActionDefinition,
-  DestinationRoleDefinition,
 } from '@/lib/workflow/workflow-service';
-import { ASHLEY_OFFICIAL_EMPLOYEES, AshleyOfficialEmployee } from '@/lib/ashley-employees';
+import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import { 
   SlidersHorizontal, 
   Zap, 
@@ -36,12 +34,14 @@ import {
   CalendarOff, 
   Clock, 
   Smartphone, 
-  Filter, 
-  HelpCircle,
-  Building,
-  Shield,
+  Maximize2,
+  Minimize2,
+  Eye,
+  EyeOff,
+  Filter,
   Layers,
-  Activity
+  Activity,
+  ChevronRight
 } from 'lucide-react';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -72,14 +72,21 @@ export default function NotificationRoutingMatrix() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState<'visual' | 'simulator'>('visual');
 
+  // Fullscreen state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Focus & Wire visibility mode
+  const [focusOnlyMode, setFocusOnlyMode] = useState(false);
+  const [hoveredItem, setHoveredItem] = useState<{ type: 'employee' | 'task' | 'role'; id: string } | null>(null);
+  const [selectedItem, setSelectedItem] = useState<{ type: 'employee' | 'task' | 'role'; id: string } | null>(null);
+  const [hoveredWireId, setHoveredWireId] = useState<string | null>(null);
+
   // Filters & Search for employees
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
 
   // Interactive Wiring State
   const [drawingWire, setDrawingWire] = useState<ActiveDrawingWire | null>(null);
-  const [hoveredPort, setHoveredPort] = useState<string | null>(null);
-  const [hoveredNode, setHoveredNode] = useState<{ type: string; id: string } | null>(null);
 
   // Simulator State
   const [simTask, setSimTask] = useState<string>('leave_approval');
@@ -109,7 +116,6 @@ export default function NotificationRoutingMatrix() {
     const containerRect = containerRef.current.getBoundingClientRect();
     const newCoords: Record<string, { x: number; y: number }> = {};
 
-    // Helper to record port center
     const measure = (portId: string) => {
       const el = document.getElementById(portId);
       if (el) {
@@ -121,18 +127,15 @@ export default function NotificationRoutingMatrix() {
       }
     };
 
-    // Right Column: Employee Out Ports
     ASHLEY_OFFICIAL_EMPLOYEES.forEach((emp) => {
       measure(`port-emp-out-${emp.id}`);
     });
 
-    // Middle Column: Task In & Out Ports
     WORKFLOW_ACTIONS.forEach((act) => {
       measure(`port-task-in-${act.id}`);
       measure(`port-task-out-${act.id}`);
     });
 
-    // Left Column: Destination Role In Ports
     DESTINATION_ROLES.forEach((role) => {
       measure(`port-role-in-${role.id}`);
     });
@@ -140,17 +143,16 @@ export default function NotificationRoutingMatrix() {
     setPortCoords(newCoords);
   }, []);
 
-  // Update coordinates on resize, tab switch, scroll, search, or data load
   useEffect(() => {
     updatePortCoordinates();
     const handleResize = () => updatePortCoordinates();
     window.addEventListener('resize', handleResize);
-    const timer = setTimeout(updatePortCoordinates, 350);
+    const timer = setTimeout(updatePortCoordinates, 300);
     return () => {
       window.removeEventListener('resize', handleResize);
       clearTimeout(timer);
     };
-  }, [updatePortCoordinates, loading, activeTab, searchQuery, departmentFilter, connections]);
+  }, [updatePortCoordinates, loading, activeTab, searchQuery, departmentFilter, connections, isFullscreen]);
 
   // 3. Handle Role Assignment for Employees
   const handleRoleChange = (employeeId: string, newRole: UserRole) => {
@@ -171,7 +173,7 @@ export default function NotificationRoutingMatrix() {
     setSaving(false);
     if (ok) {
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setTimeout(() => setSaveSuccess(false), 2500);
     } else {
       alert('❌ هەڵەیەک ڕوویدا لە کاتی هەڵگرتنی نەخشەی بەستەر لە بنکەدراوە.');
     }
@@ -235,7 +237,7 @@ export default function NotificationRoutingMatrix() {
     });
   };
 
-  // 10. Complete a wire connection by clicking on a target port
+  // 10. Complete a wire connection
   const handleCompleteWire = (
     toType: 'task' | 'role', 
     toId: string, 
@@ -244,9 +246,6 @@ export default function NotificationRoutingMatrix() {
     e.stopPropagation();
     if (!drawingWire) return;
 
-    // Validate connection logic:
-    // Employee can ONLY connect to Task
-    // Task can ONLY connect to Role
     if (drawingWire.fromType === 'employee' && toType !== 'task') {
       alert('⚠️ تکایە کارمەند ببەستەوە بە یەکێک لە ئەرکەکانی ناوەڕاست.');
       setDrawingWire(null);
@@ -261,7 +260,6 @@ export default function NotificationRoutingMatrix() {
     const connId = `${drawingWire.fromId}__${toId}`;
     setConnections((prev) => {
       if (prev.some((c) => c.id === connId)) {
-        // Toggle remove if already connected
         return prev.filter((c) => c.id !== connId);
       }
       return [
@@ -280,11 +278,12 @@ export default function NotificationRoutingMatrix() {
     setDrawingWire(null);
   };
 
-  // 11. Cancel drawing wire if clicked elsewhere
+  // Cancel drawing wire if clicked elsewhere
   const handleContainerClick = () => {
     if (drawingWire) {
       setDrawingWire(null);
     }
+    setSelectedItem(null);
   };
 
   // Filtered employees list
@@ -309,25 +308,22 @@ export default function NotificationRoutingMatrix() {
 
   // Simulator recipients calculation
   const simulatedRecipients = useMemo(() => {
-    // 1. Roles connected to simTask
     const targetRoles = new Set<string>();
     connections
       .filter((c) => c.fromType === 'task' && c.fromId === simTask && c.toType === 'role')
       .forEach((c) => targetRoles.add(c.toId));
 
-    // Founder always gets alerts
     targetRoles.add('founder');
 
-    // 2. Map target roles to officials
     const recipients: Array<{ role: UserRole; name: string; title: string; color: string; reason: string }> = [];
 
     DESTINATION_ROLES.forEach((r) => {
       if (targetRoles.has(r.id)) {
         let reason = 'دەسەڵاتی بڕیاردان و ئاگاداری فەرمی لە تەلەگرام';
-        if (r.id === 'warehouse_manager') reason = 'بەرپرسی کۆگا - وەرگرتنی مۆڵەت و جێگیرکردن لە خشتەی دەوام';
-        else if (r.id === 'founder') reason = 'ئەدمین و خاوەنی کۆمپانیا - سەرپەرشتی تەواوی بڕیارەکان';
-        else if (r.id === 'general_manager') reason = 'بەڕێوەبەری گشتی - ئاگاداری ڕاستەوخۆ لە تەلەگرام';
-        else if (r.id === 'it_admin') reason = 'بەشی ئایتی - بەستنەوەی ئامێرەکان و پاراستنی سیستم';
+        if (r.id === 'warehouse_manager') reason = 'بەرپرسی کۆگا - وەرگرتنی داواکاری مۆڵەت و خستنە خشتە';
+        else if (r.id === 'founder') reason = 'ئەدمین و دامەزرێنەر - سەرپەرشتی گشتی و پەسەندکردن';
+        else if (r.id === 'general_manager') reason = 'بەڕێوەبەری گشتی - ئاگاداری ڕاستەوخۆ';
+        else if (r.id === 'it_admin') reason = 'بەشی ئایتی - بەستنەوەی ئامێر و سیستم';
 
         recipients.push({
           role: r.id,
@@ -342,136 +338,154 @@ export default function NotificationRoutingMatrix() {
     return recipients;
   }, [connections, simTask]);
 
+  // Active highlighted target
+  const activeFocus = hoveredItem || selectedItem;
+
   return (
     <div 
-      className="w-full max-w-[1400px] mx-auto space-y-6 select-none animate-fade-in print:hidden" 
+      className={`w-full transition-all duration-300 select-none flex flex-col ${
+        isFullscreen 
+          ? 'fixed inset-0 z-50 bg-[#f8fafc] dark:bg-[#121214] p-3 sm:p-4 h-screen overflow-hidden' 
+          : 'h-[calc(100vh-65px)] min-h-[700px] space-y-3'
+      }`}
       dir="rtl"
     >
       
-      {/* 1. TOP HEADER & MAIN CONTROLS */}
-      <div className="bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-xl border border-slate-200/90 dark:border-white/10 rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#007AFF] via-[#5856D6] to-[#AF52DE] flex items-center justify-center text-white shadow-md shadow-blue-500/25 shrink-0">
-            <SlidersHorizontal className="w-6 h-6" />
+      {/* 1. TOP COMPACT CONTROLS BAR */}
+      <div className="bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-xl border border-slate-200/90 dark:border-white/10 rounded-2xl px-4 py-2.5 shadow-xs flex flex-wrap items-center justify-between gap-3 shrink-0">
+        
+        {/* Left/Start info */}
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#007AFF] to-[#AF52DE] flex items-center justify-center text-white shadow-xs shrink-0">
+            <SlidersHorizontal className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+              <h1 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
                 بەڕێوەبردنی ئاگادارییەکان و دەسەڵاتەکان
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-[#007AFF] dark:text-blue-400 border border-blue-200/50 dark:border-blue-800/40 text-[11px] font-bold">
-                بەستەری دەستی (Interactive Wire Builder)
+              <span className="px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-[#007AFF] text-[10px] font-bold">
+                تەلەگرام & ERP
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-              هەڵبژاردنی پلەی کارمەندان (لای ڕاست)، ئەرکەکان (ناوەڕاست)، و گەیاندنی دەستی هێڵەکان بۆ دەسەڵاتی بڕیاردان (لای چەپ)
-            </p>
           </div>
         </div>
 
-        {/* Action Buttons & Tabs */}
-        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
-          <div className="flex items-center bg-slate-100 dark:bg-white/10 p-1 rounded-2xl">
+        {/* Center / Action Toggles */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center bg-slate-100 dark:bg-white/10 p-0.5 rounded-xl text-[11px]">
             <button
               type="button"
               onClick={() => setActiveTab('visual')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
                 activeTab === 'visual'
                   ? 'bg-white dark:bg-[#2c2c2e] text-[#007AFF] shadow-xs font-black'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  : 'text-slate-600 dark:text-slate-400'
               }`}
             >
-              <Zap className="w-3.5 h-3.5" />
-              <span>نەخشەی بەستەری دەستی</span>
+              <Zap className="w-3 h-3" />
+              <span>نەخشەی بەستەر</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('simulator')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
                 activeTab === 'simulator'
                   ? 'bg-white dark:bg-[#2c2c2e] text-[#007AFF] shadow-xs font-black'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  : 'text-slate-600 dark:text-slate-400'
               }`}
             >
-              <Send className="w-3.5 h-3.5" />
-              <span>تاقیکردنەوەی تەلەگرام</span>
+              <Send className="w-3 h-3" />
+              <span>تاقیکەرەوە</span>
             </button>
           </div>
 
+          {/* Focus Wire Mode Toggle */}
+          <button
+            type="button"
+            onClick={() => setFocusOnlyMode(!focusOnlyMode)}
+            className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
+              focusOnlyMode
+                ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-300 dark:border-purple-800 text-purple-600 dark:text-purple-300'
+                : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400'
+            }`}
+            title="نیشاندانی هێڵەکان بە تەنها لە کاتی هەڵبژاردن یان ماوس لەسەردانان"
+          >
+            {focusOnlyMode ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+            <span className="hidden sm:inline">{focusOnlyMode ? 'تەنها هێڵی چالاک' : 'هەموو هێڵەکان (ورد)'}</span>
+          </button>
+
+          {/* Fullscreen Toggle */}
+          <button
+            type="button"
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            className="p-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+            title={isFullscreen ? 'دەرچوون لە فوول سکرین' : 'فوول سکرین'}
+          >
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+
+        {/* Right / Save & Reset Buttons */}
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={handleClearConnections}
             disabled={loading || saving}
-            className="p-2 sm:px-3 sm:py-2 rounded-2xl border border-red-200/80 dark:border-red-900/40 bg-red-50/50 hover:bg-red-100/70 dark:bg-red-950/20 text-red-600 dark:text-red-400 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-            title="سڕینەوەی هەموو هێڵەکان"
+            className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl border border-red-200/80 dark:border-red-900/40 bg-red-50/50 hover:bg-red-100/70 text-red-600 dark:text-red-400 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
+            title="سڕینەوەی هێڵەکان"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">سڕینەوەی هێڵەکان</span>
+            <Trash2 className="w-3 h-3" />
+            <span className="hidden md:inline">سڕینەوە</span>
           </button>
 
           <button
             type="button"
             onClick={handleResetDefaults}
             disabled={loading || saving}
-            className="p-2 sm:px-3 sm:py-2 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-            title="گەڕاندنەوە بۆ باری پێشنیارکراو"
+            className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 hover:bg-slate-100 text-slate-700 dark:text-slate-300 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
+            title="باری بنەڕەتی"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">باری پێشنیارکراو</span>
+            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden md:inline">بنەڕەتی</span>
           </button>
 
           <button
             type="button"
             onClick={handleSave}
             disabled={loading || saving}
-            className="px-4 py-2 rounded-2xl bg-[#007AFF] hover:bg-blue-600 active:scale-95 text-white text-xs font-black shadow-md shadow-blue-500/25 transition-all cursor-pointer flex items-center gap-2"
+            className="px-3.5 py-1.5 rounded-xl bg-[#007AFF] hover:bg-blue-600 active:scale-95 text-white text-[11px] font-black shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
           >
             {saving ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
             ) : saveSuccess ? (
-              <Check className="w-4 h-4 text-emerald-300" />
+              <Check className="w-3.5 h-3.5 text-emerald-300" />
             ) : (
-              <Save className="w-4 h-4" />
+              <Save className="w-3.5 h-3.5" />
             )}
-            <span>{saveSuccess ? 'پاشەکەوت کرا!' : 'پاشەکەوتکردن لە سیستەم'}</span>
+            <span>{saveSuccess ? 'پاشەکەوت کرا!' : 'پاشەکەوتکردن'}</span>
           </button>
         </div>
       </div>
 
-      {/* 2. VISUAL CANVAS (MAIN 3-COLUMN INTERACTIVE MATRIX) */}
+      {/* 2. FULLSCREEN MAIN WORKSPACE CANVAS */}
       {activeTab === 'visual' && (
         <div 
           ref={containerRef}
           onMouseMove={handleMouseMove}
           onClick={handleContainerClick}
-          className="relative bg-white/70 dark:bg-[#1c1c1e]/70 backdrop-blur-md border border-slate-200/90 dark:border-white/10 rounded-3xl p-4 sm:p-6 shadow-xs overflow-hidden min-h-[750px]"
+          className="flex-1 relative bg-white/80 dark:bg-[#18181a]/80 backdrop-blur-md border border-slate-200/90 dark:border-white/10 rounded-2xl p-3 shadow-xs overflow-hidden flex flex-col"
+          style={{
+            backgroundImage: 'radial-gradient(rgba(148, 163, 184, 0.22) 1px, transparent 1px)',
+            backgroundSize: '20px 20px',
+          }}
         >
-          {/* Quick Guidance Alert */}
-          <div className="mb-6 p-4 rounded-2xl bg-blue-50/80 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-blue-950 dark:text-blue-200">
-            <div className="flex items-center gap-2.5 font-medium">
-              <Sparkles className="w-4 h-4 text-[#007AFF] shrink-0" />
-              <span>
-                <b>ڕێنمایی بەستەری دەستی:</b> دەتوانیت لە ڕێگەی کلیک یان ڕاکێشان، لە خاڵی دەرچوونی هەر کارمەندێکەوە هێڵ ببەستیتەوە بە ئەرکی ناوەڕاست، و لە ئەرکەوە بۆ دەسەڵاتی بڕیاردانی لای چەپ (کاک کامەران یان بەڕێوەبەر). بۆ سڕینەوەی هەر هێڵێک، کلیک لەسەر دوگمەی <b className="text-red-500">✕</b> سەر هێڵەکە بکە.
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-[11px] font-mono shrink-0">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>{connections.length} هێڵی چالاک</span>
-            </div>
-          </div>
 
           {/* ============================================================== */}
-          {/* SVG INTERACTIVE WIRES OVERLAY */}
+          {/* ULTRA-FINE REFINED SVG WIRES OVERLAY */}
           {/* ============================================================== */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
-            <defs>
-              <linearGradient id="wireGradientActive" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#007AFF" />
-                <stop offset="100%" stopColor="#AF52DE" />
-              </linearGradient>
-            </defs>
-
-            {/* 1. Render all established connections */}
+            {/* Render established connections */}
             {connections.map((conn) => {
               const fromPortId = conn.fromType === 'employee' 
                 ? `port-emp-out-${conn.fromId}` 
@@ -490,7 +504,26 @@ export default function NotificationRoutingMatrix() {
               const dx = (toCoord.x - fromCoord.x) / 2;
               const pathD = `M ${fromCoord.x} ${fromCoord.y} C ${fromCoord.x + dx} ${fromCoord.y}, ${toCoord.x - dx} ${toCoord.y}, ${toCoord.x} ${toCoord.y}`;
 
-              // Determine color
+              // Determine relationship to active hovered/selected item
+              let isRelated = true;
+              if (activeFocus) {
+                if (activeFocus.type === 'employee') {
+                  isRelated = conn.fromId === activeFocus.id || (conn.fromType === 'task' && connections.some(c => c.fromId === activeFocus.id && c.toId === conn.fromId));
+                } else if (activeFocus.type === 'task') {
+                  isRelated = conn.fromId === activeFocus.id || conn.toId === activeFocus.id;
+                } else if (activeFocus.type === 'role') {
+                  isRelated = conn.toId === activeFocus.id || (conn.fromType === 'employee' && connections.some(c => c.toId === conn.toId && c.fromId === activeFocus.id));
+                }
+              } else if (focusOnlyMode) {
+                isRelated = false;
+              }
+
+              // Hide or fade if not related in focus mode
+              if (focusOnlyMode && !isRelated && !activeFocus) {
+                return null;
+              }
+
+              // Color determination
               let wireColor = '#007AFF';
               if (conn.fromType === 'employee') {
                 const role = employeeRoles[conn.fromId] || 'employee';
@@ -501,64 +534,78 @@ export default function NotificationRoutingMatrix() {
                 if (actDef) wireColor = actDef.color;
               }
 
+              const isWireHovered = hoveredWireId === conn.id;
               const midX = (fromCoord.x + toCoord.x) / 2;
               const midY = (fromCoord.y + toCoord.y) / 2;
 
               return (
-                <g key={conn.id} className="transition-all duration-200">
-                  {/* Outer subtle glow */}
+                <g 
+                  key={conn.id}
+                  className="transition-all duration-200"
+                  onMouseEnter={() => setHoveredWireId(conn.id)}
+                  onMouseLeave={() => setHoveredWireId(null)}
+                >
+                  {/* Invisible wide stroke for easy mouse hovering */}
+                  <path
+                    d={pathD}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth={16}
+                    className="pointer-events-auto cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveConnection(conn.id);
+                    }}
+                  />
+
+                  {/* Main delicate connection line */}
                   <path
                     d={pathD}
                     fill="none"
                     stroke={wireColor}
-                    strokeWidth={5}
-                    strokeOpacity={0.18}
+                    strokeWidth={isWireHovered || (isRelated && activeFocus) ? 2.5 : 1.2}
+                    strokeOpacity={isWireHovered ? 1 : isRelated ? (activeFocus ? 0.95 : 0.4) : 0.08}
                   />
 
-                  {/* Main connection line */}
-                  <path
-                    d={pathD}
-                    fill="none"
-                    stroke={wireColor}
-                    strokeWidth={2.5}
-                    strokeOpacity={0.85}
-                  />
+                  {/* Subtle dash animation when focused or hovered */}
+                  {(isWireHovered || (isRelated && activeFocus)) && (
+                    <path
+                      d={pathD}
+                      fill="none"
+                      stroke="#ffffff"
+                      strokeWidth={1.5}
+                      strokeDasharray="4,6"
+                      strokeOpacity={0.8}
+                    />
+                  )}
 
-                  {/* Animated dash flow */}
-                  <path
-                    d={pathD}
-                    fill="none"
-                    stroke="#ffffff"
-                    strokeWidth={1.5}
-                    strokeDasharray="4,6"
-                    strokeOpacity={0.7}
-                  />
-
-                  {/* Interactive center delete button */}
-                  <foreignObject
-                    x={midX - 10}
-                    y={midY - 10}
-                    width={20}
-                    height={20}
-                    className="pointer-events-auto overflow-visible"
-                  >
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemoveConnection(conn.id);
-                      }}
-                      className="w-5 h-5 rounded-full bg-slate-900/90 text-white hover:bg-red-600 hover:scale-125 flex items-center justify-center text-[10px] font-bold shadow-md transition-all cursor-pointer border border-white/20"
-                      title="سڕینەوەی ئەم هێڵە"
+                  {/* Delete button only appears when line is hovered or related */}
+                  {(isWireHovered || (isRelated && activeFocus)) && (
+                    <foreignObject
+                      x={midX - 9}
+                      y={midY - 9}
+                      width={18}
+                      height={18}
+                      className="pointer-events-auto overflow-visible"
                     >
-                      ✕
-                    </button>
-                  </foreignObject>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveConnection(conn.id);
+                        }}
+                        className="w-4.5 h-4.5 rounded-full bg-red-600 text-white hover:scale-125 flex items-center justify-center text-[9px] font-bold shadow-sm transition-all cursor-pointer border border-white/40"
+                        title="سڕینەوەی ئەم هێڵە"
+                      >
+                        ✕
+                      </button>
+                    </foreignObject>
+                  )}
                 </g>
               );
             })}
 
-            {/* 2. Live in-progress drawing wire */}
+            {/* In-progress drawing wire */}
             {drawingWire && (
               <g>
                 {(() => {
@@ -570,27 +617,20 @@ export default function NotificationRoutingMatrix() {
                         d={pathD}
                         fill="none"
                         stroke="#007AFF"
-                        strokeWidth={6}
-                        strokeOpacity={0.3}
-                      />
-                      <path
-                        d={pathD}
-                        fill="none"
-                        stroke="#007AFF"
-                        strokeWidth={3}
-                        strokeDasharray="6,4"
+                        strokeWidth={2.5}
+                        strokeDasharray="4,4"
                       />
                       <circle
                         cx={drawingWire.currentX}
                         cy={drawingWire.currentY}
-                        r={6}
+                        r={4}
                         fill="#007AFF"
                         className="animate-ping"
                       />
                       <circle
                         cx={drawingWire.currentX}
                         cy={drawingWire.currentY}
-                        r={4}
+                        r={3}
                         fill="#ffffff"
                       />
                     </>
@@ -601,160 +641,115 @@ export default function NotificationRoutingMatrix() {
           </svg>
 
           {/* ============================================================== */}
-          {/* 3-COLUMN GRID: RIGHT (EMPLOYEES) -> MIDDLE (TASKS) -> LEFT (ROLES) */}
+          {/* 3-COLUMN COMPACT RESPONSIVE GRID */}
           {/* ============================================================== */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-20">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 relative z-20 h-full overflow-hidden">
             
             {/* ------------------------------------------------------------ */}
-            {/* COLUMN 1 (RIGHT): هەموو کارمەندەکان و هەڵبژاردنی پلە بۆیان */}
+            {/* COLUMN 1 (RIGHT): هەموو کارمەندەکان (COMPACT & MICRO ROWS) */}
             {/* ------------------------------------------------------------ */}
-            <div className="space-y-4 flex flex-col">
-              <div className="pb-3 border-b border-slate-200/80 dark:border-white/10 space-y-2">
+            <div className="bg-white/60 dark:bg-[#1f1f22]/60 backdrop-blur-sm border border-slate-200/80 dark:border-white/5 rounded-2xl p-2.5 flex flex-col h-full overflow-hidden shadow-2xs">
+              
+              {/* Header & Mini Search */}
+              <div className="pb-2 border-b border-slate-200/70 dark:border-white/5 space-y-1.5 shrink-0">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-[#007AFF]"></span>
-                    <h2 className="text-sm font-black text-slate-900 dark:text-white">
-                      لای ڕاست: کارمەندان و پلەکانیان
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#007AFF]"></span>
+                    <h2 className="text-xs font-black text-slate-900 dark:text-white">
+                      کارمەندان و پلەکانیان
                     </h2>
                   </div>
-                  <span className="text-[11px] font-mono text-slate-400 font-bold">
-                    {filteredEmployees.length} کارمەند
+                  <span className="text-[10px] font-mono text-slate-400 font-bold">
+                    {filteredEmployees.length}
                   </span>
                 </div>
 
-                {/* Search Bar */}
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="گەڕان بەدوای کارمەنددا..."
-                    className="w-full pr-8 pl-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-[#2c2c2e]/90 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5" />
-                </div>
+                <div className="flex items-center gap-1">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="گەڕان..."
+                      className="w-full pr-6 pl-2 py-1 text-[11px] rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none"
+                    />
+                    <Search className="w-3 h-3 text-slate-400 absolute right-2 top-2" />
+                  </div>
 
-                {/* Category Chips */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px]">
-                  <button
-                    type="button"
-                    onClick={() => setDepartmentFilter('all')}
-                    className={`px-2 py-0.5 rounded-lg font-bold transition-all ${
-                      departmentFilter === 'all'
-                        ? 'bg-[#007AFF] text-white'
-                        : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400'
-                    }`}
+                  <select
+                    value={departmentFilter}
+                    onChange={(e) => setDepartmentFilter(e.target.value)}
+                    className="text-[10px] py-1 px-1 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-slate-700 dark:text-slate-300 font-bold"
                   >
-                    هەمووان
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDepartmentFilter('warehouse')}
-                    className={`px-2 py-0.5 rounded-lg font-bold transition-all ${
-                      departmentFilter === 'warehouse'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    کۆگا
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDepartmentFilter('admin')}
-                    className={`px-2 py-0.5 rounded-lg font-bold transition-all ${
-                      departmentFilter === 'admin'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    ئیدارە
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDepartmentFilter('it')}
-                    className={`px-2 py-0.5 rounded-lg font-bold transition-all ${
-                      departmentFilter === 'it'
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    ئایتی
-                  </button>
+                    <option value="all">هەمووان</option>
+                    <option value="warehouse">کۆگا</option>
+                    <option value="admin">ئیدارە</option>
+                    <option value="it">ئایتی</option>
+                  </select>
                 </div>
               </div>
 
-              {/* Employees List Container */}
+              {/* Compact Micro-Row Employee List */}
               <div 
-                className="space-y-3 overflow-y-auto max-h-[620px] pr-1 pl-3 custom-scrollbar"
+                className="flex-1 overflow-y-auto space-y-1.5 py-1.5 pl-2 pr-0.5 custom-scrollbar"
                 onScroll={updatePortCoordinates}
               >
                 {filteredEmployees.map((emp) => {
                   const assignedRole = employeeRoles[emp.id] || 'employee';
                   const roleOption = ROLE_OPTIONS.find((r) => r.id === assignedRole) || ROLE_OPTIONS[5];
                   
-                  // Count wires from this employee
                   const wireCount = connections.filter(
                     (c) => c.fromType === 'employee' && c.fromId === emp.id
                   ).length;
 
-                  const isWired = wireCount > 0;
+                  const isHovered = hoveredItem?.type === 'employee' && hoveredItem.id === emp.id;
+                  const isSelected = selectedItem?.type === 'employee' && selectedItem.id === emp.id;
                   const isDrawingFromThis = drawingWire?.fromType === 'employee' && drawingWire?.fromId === emp.id;
 
                   return (
                     <div
                       key={emp.id}
-                      className={`p-3.5 rounded-2xl border transition-all relative group bg-white/90 dark:bg-[#242426]/90 shadow-2xs ${
-                        isDrawingFromThis
-                          ? 'border-[#007AFF] ring-2 ring-blue-500/20 shadow-md'
-                          : 'border-slate-200/80 dark:border-white/5 hover:border-slate-300'
+                      onMouseEnter={() => setHoveredItem({ type: 'employee', id: emp.id })}
+                      onMouseLeave={() => setHoveredItem(null)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedItem(selectedItem?.id === emp.id ? null : { type: 'employee', id: emp.id });
+                      }}
+                      className={`px-2 py-1.5 rounded-xl border transition-all relative flex items-center justify-between gap-1.5 cursor-pointer ${
+                        isSelected || isHovered || isDrawingFromThis
+                          ? 'bg-white dark:bg-[#2a2a2d] border-[#007AFF] shadow-xs'
+                          : 'bg-white/80 dark:bg-[#242426]/80 border-slate-200/70 dark:border-white/5 hover:border-slate-300'
                       }`}
                       style={{
-                        borderRightWidth: '4px',
+                        borderRightWidth: '3px',
                         borderRightColor: roleOption.color,
                       }}
                     >
-                      <div className="flex items-start justify-between gap-2.5">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {/* Initials circle */}
-                          <div 
-                            className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-2xs"
-                            style={{ backgroundColor: roleOption.color }}
-                          >
-                            {emp.name.charAt(0)}
-                          </div>
-                          <div className="min-w-0">
-                            <h3 className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                              {emp.name}
-                            </h3>
-                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                              <span className="font-mono">{emp.id}</span>
-                              <span>•</span>
-                              <span>{emp.role || 'کارمەند'}</span>
-                            </div>
-                          </div>
+                      {/* Name & Initial */}
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div 
+                          className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[9px] font-bold shrink-0"
+                          style={{ backgroundColor: roleOption.color }}
+                        >
+                          {emp.name.charAt(0)}
                         </div>
 
-                        {/* Connected Wires Badge */}
-                        {isWired && (
-                          <span 
-                            className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono text-white shrink-0"
-                            style={{ backgroundColor: roleOption.color }}
-                          >
-                            {wireCount} هێڵ
-                          </span>
-                        )}
+                        <div className="min-w-0 leading-tight">
+                          <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100 truncate">
+                            {emp.name}
+                          </div>
+                          <div className="text-[9px] font-mono text-slate-400">
+                            {emp.id}
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Role Selector Dropdown */}
-                      <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-2">
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold shrink-0">
-                          پلەی کارمەند:
-                        </span>
-
+                      {/* Micro Role Dropdown */}
+                      <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                         <select
                           value={assignedRole}
                           onChange={(e) => handleRoleChange(emp.id, e.target.value as UserRole)}
-                          className="text-[11px] font-bold px-2 py-1 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#2c2c2e] text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+                          className="text-[10px] font-bold py-0.5 px-1 rounded-md border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#2c2c2e] text-slate-800 dark:text-slate-200 cursor-pointer"
                         >
                           {ROLE_OPTIONS.map((opt) => (
                             <option key={opt.id} value={opt.id}>
@@ -762,22 +757,29 @@ export default function NotificationRoutingMatrix() {
                             </option>
                           ))}
                         </select>
+
+                        {wireCount > 0 && (
+                          <span 
+                            className="px-1 py-0.2 rounded text-[9px] font-mono font-bold text-white shrink-0"
+                            style={{ backgroundColor: roleOption.color }}
+                          >
+                            {wireCount}
+                          </span>
+                        )}
                       </div>
 
-                      {/* OUT-PORT ANCHOR (دەرچەی بەستەری هێڵ) */}
+                      {/* OUT-PORT ANCHOR (Micro Dot) */}
                       <button
                         type="button"
                         id={`port-emp-out-${emp.id}`}
                         onClick={(e) => handleStartWire('employee', emp.id, emp.name, `port-emp-out-${emp.id}`, e)}
-                        className={`absolute -left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-all shadow-md z-30 ${
+                        className={`absolute -left-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full flex items-center justify-center cursor-pointer transition-all z-30 ${
                           isDrawingFromThis
-                            ? 'bg-[#007AFF] text-white ring-4 ring-blue-500/30 scale-125'
-                            : 'bg-white dark:bg-[#1c1c1e] text-slate-500 hover:text-white hover:bg-[#007AFF] border-2 border-[#007AFF] hover:scale-125'
+                            ? 'bg-[#007AFF] text-white ring-2 ring-blue-500/40 scale-125'
+                            : 'bg-white dark:bg-[#1c1c1e] border-2 border-[#007AFF] hover:scale-125 hover:bg-[#007AFF]'
                         }`}
-                        title="کلیک یان ڕابکێشە بۆ بەستنەوە بە ئەرک"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
-                      </button>
+                        title="بەستنەوە بە ئەرک"
+                      />
                     </div>
                   );
                 })}
@@ -785,106 +787,104 @@ export default function NotificationRoutingMatrix() {
             </div>
 
             {/* ------------------------------------------------------------ */}
-            {/* COLUMN 2 (MIDDLE): ئەرکەکان (TASKS & TRIGGERS) */}
+            {/* COLUMN 2 (MIDDLE): ئەرکەکان (COMPACT TASK CARDS) */}
             {/* ------------------------------------------------------------ */}
-            <div className="space-y-4 flex flex-col">
-              <div className="pb-3 border-b border-slate-200/80 dark:border-white/10 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-[#AF52DE]"></span>
-                  <h2 className="text-sm font-black text-slate-900 dark:text-white">
-                    ناوەڕاست: ئەرکەکان و کارلێکەکان
+            <div className="bg-white/60 dark:bg-[#1f1f22]/60 backdrop-blur-sm border border-slate-200/80 dark:border-white/5 rounded-2xl p-2.5 flex flex-col h-full overflow-hidden shadow-2xs">
+              
+              <div className="pb-2 border-b border-slate-200/70 dark:border-white/5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#AF52DE]"></span>
+                  <h2 className="text-xs font-black text-slate-900 dark:text-white">
+                    ئەرک و کارلێکەکان
                   </h2>
                 </div>
-                <span className="text-[11px] font-mono text-slate-400 font-bold">
+                <span className="text-[10px] font-mono text-slate-400 font-bold">
                   {WORKFLOW_ACTIONS.length} ئەرک
                 </span>
               </div>
 
               <div 
-                className="space-y-3 overflow-y-auto max-h-[620px] px-3 custom-scrollbar"
+                className="flex-1 overflow-y-auto space-y-2 py-1.5 px-2 custom-scrollbar"
                 onScroll={updatePortCoordinates}
               >
                 {WORKFLOW_ACTIONS.map((action) => {
                   const IconComp = ICON_MAP[action.iconName] || Zap;
 
-                  // Count incoming wires from employees
                   const inCount = connections.filter(
                     (c) => c.toType === 'task' && c.toId === action.id
                   ).length;
 
-                  // Count outgoing wires to roles
                   const outCount = connections.filter(
                     (c) => c.fromType === 'task' && c.fromId === action.id
                   ).length;
 
+                  const isHovered = hoveredItem?.type === 'task' && hoveredItem.id === action.id;
+                  const isSelected = selectedItem?.type === 'task' && selectedItem.id === action.id;
                   const isTargetHovered = drawingWire?.fromType === 'employee';
                   const isSourceActive = drawingWire?.fromType === 'task' && drawingWire?.fromId === action.id;
 
                   return (
                     <div
                       key={action.id}
-                      className={`p-4 rounded-2xl border transition-all relative group bg-white/90 dark:bg-[#242426]/90 shadow-2xs ${
-                        isSourceActive
-                          ? 'border-[#AF52DE] ring-2 ring-purple-500/20 shadow-md'
-                          : 'border-slate-200/80 dark:border-white/5 hover:border-slate-300'
+                      onMouseEnter={() => setHoveredItem({ type: 'task', id: action.id })}
+                      onMouseLeave={() => setHoveredItem(null)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedItem(selectedItem?.id === action.id ? null : { type: 'task', id: action.id });
+                      }}
+                      className={`p-2.5 rounded-xl border transition-all relative flex flex-col justify-between gap-1.5 cursor-pointer ${
+                        isSelected || isHovered || isSourceActive
+                          ? 'bg-white dark:bg-[#2a2a2d] border-[#AF52DE] shadow-xs'
+                          : 'bg-white/80 dark:bg-[#242426]/80 border-slate-200/70 dark:border-white/5 hover:border-slate-300'
                       }`}
                     >
-                      {/* IN-PORT ANCHOR (Receives from Employees) */}
+                      {/* IN-PORT ANCHOR (Right) */}
                       <button
                         type="button"
                         id={`port-task-in-${action.id}`}
                         onClick={(e) => handleCompleteWire('task', action.id, e)}
-                        className={`absolute -right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-all shadow-md z-30 ${
+                        className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full flex items-center justify-center cursor-pointer transition-all z-30 ${
                           isTargetHovered
-                            ? 'bg-emerald-500 text-white ring-4 ring-emerald-500/30 scale-125 animate-pulse'
-                            : 'bg-white dark:bg-[#1c1c1e] text-slate-500 border-2 border-emerald-500 hover:scale-125 hover:bg-emerald-500 hover:text-white'
+                            ? 'bg-emerald-500 text-white ring-2 ring-emerald-500/40 scale-125 animate-pulse'
+                            : 'bg-white dark:bg-[#1c1c1e] border-2 border-emerald-500 hover:scale-125 hover:bg-emerald-500'
                         }`}
-                        title="کلیک بکە بۆ تەواوکردنی بەستەری ئەم ئەرکە لەگەڵ کارمەند"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
-                      </button>
+                        title="بەستنەوە لە کارمەندەوە"
+                      />
 
-                      {/* OUT-PORT ANCHOR (Sends to Roles) */}
+                      {/* OUT-PORT ANCHOR (Left) */}
                       <button
                         type="button"
                         id={`port-task-out-${action.id}`}
                         onClick={(e) => handleStartWire('task', action.id, action.title, `port-task-out-${action.id}`, e)}
-                        className={`absolute -left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-all shadow-md z-30 ${
+                        className={`absolute -left-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full flex items-center justify-center cursor-pointer transition-all z-30 ${
                           isSourceActive
-                            ? 'bg-[#AF52DE] text-white ring-4 ring-purple-500/30 scale-125'
-                            : 'bg-white dark:bg-[#1c1c1e] text-slate-500 hover:text-white hover:bg-[#AF52DE] border-2 border-[#AF52DE] hover:scale-125'
+                            ? 'bg-[#AF52DE] text-white ring-2 ring-purple-500/40 scale-125'
+                            : 'bg-white dark:bg-[#1c1c1e] border-2 border-[#AF52DE] hover:scale-125 hover:bg-[#AF52DE]'
                         }`}
-                        title="کلیک یان ڕابکێشە بۆ بەستنەوە بە دەسەڵاتی بڕیاردانی لای چەپ"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
-                      </button>
+                        title="بەستنەوە بە دەسەڵاتی لای چەپ"
+                      />
 
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-center gap-2">
                         <div 
-                          className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs"
+                          className="w-7 h-7 rounded-lg flex items-center justify-center text-white shrink-0 shadow-2xs"
                           style={{ backgroundColor: action.color }}
                         >
-                          <IconComp className="w-5 h-5" />
+                          <IconComp className="w-3.5 h-3.5" />
                         </div>
-
-                        <div className="flex-1 space-y-1">
-                          <h3 className="text-xs font-black text-slate-900 dark:text-white">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-[11px] font-black text-slate-900 dark:text-white truncate">
                             {action.title}
                           </h3>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                          <p className="text-[10px] text-slate-400 truncate">
                             {action.description}
                           </p>
-
-                          {/* Stats badge */}
-                          <div className="flex items-center gap-2 pt-2 text-[10px] font-mono text-slate-500">
-                            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 font-bold">
-                              ⬅️ {inCount} کارمەند
-                            </span>
-                            <span className="px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-300 font-bold">
-                              ➡️ {outCount} دەسەڵات
-                            </span>
-                          </div>
                         </div>
+                      </div>
+
+                      {/* Stats pill */}
+                      <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 pt-1 border-t border-slate-100 dark:border-white/5">
+                        <span>⬅️ {inCount} کارمەند</span>
+                        <span>➡️ {outCount} دەسەڵات</span>
                       </div>
                     </div>
                   );
@@ -893,78 +893,86 @@ export default function NotificationRoutingMatrix() {
             </div>
 
             {/* ------------------------------------------------------------ */}
-            {/* COLUMN 3 (LEFT): ڕۆڵەکان و دەسەڵاتەکانی بڕیاردان */}
+            {/* COLUMN 3 (LEFT): دەسەڵاتەکان (COMPACT ROLE CARDS) */}
             {/* ------------------------------------------------------------ */}
-            <div className="space-y-4 flex flex-col">
-              <div className="pb-3 border-b border-slate-200/80 dark:border-white/10 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-[#34C759]"></span>
-                  <h2 className="text-sm font-black text-slate-900 dark:text-white">
-                    لای چەپ: دەسەڵات و وەرگرانی بڕیار
+            <div className="bg-white/60 dark:bg-[#1f1f22]/60 backdrop-blur-sm border border-slate-200/80 dark:border-white/5 rounded-2xl p-2.5 flex flex-col h-full overflow-hidden shadow-2xs">
+              
+              <div className="pb-2 border-b border-slate-200/70 dark:border-white/5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#34C759]"></span>
+                  <h2 className="text-xs font-black text-slate-900 dark:text-white">
+                    دەسەڵاتی بڕیاردان
                   </h2>
                 </div>
-                <span className="text-[11px] font-mono text-slate-400 font-bold">
+                <span className="text-[10px] font-mono text-slate-400 font-bold">
                   {DESTINATION_ROLES.length} دەسەڵات
                 </span>
               </div>
 
               <div 
-                className="space-y-3 overflow-y-auto max-h-[620px] pl-1 pr-3 custom-scrollbar"
+                className="flex-1 overflow-y-auto space-y-2 py-1.5 pr-2 pl-0.5 custom-scrollbar"
                 onScroll={updatePortCoordinates}
               >
                 {DESTINATION_ROLES.map((role) => {
-                  // Count wires incoming to this role
                   const inCount = connections.filter(
                     (c) => c.toType === 'role' && c.toId === role.id
                   ).length;
 
+                  const isHovered = hoveredItem?.type === 'role' && hoveredItem.id === role.id;
+                  const isSelected = selectedItem?.type === 'role' && selectedItem.id === role.id;
                   const isTargetHovered = drawingWire?.fromType === 'task';
 
                   return (
                     <div
                       key={role.id}
-                      className="p-4 rounded-2xl border transition-all relative group bg-white/90 dark:bg-[#242426]/90 border-slate-200/80 dark:border-white/5 hover:border-slate-300 shadow-2xs"
+                      onMouseEnter={() => setHoveredItem({ type: 'role', id: role.id })}
+                      onMouseLeave={() => setHoveredItem(null)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedItem(selectedItem?.id === role.id ? null : { type: 'role', id: role.id });
+                      }}
+                      className={`p-2.5 rounded-xl border transition-all relative flex flex-col justify-between gap-1 cursor-pointer ${
+                        isSelected || isHovered
+                          ? 'bg-white dark:bg-[#2a2a2d] border-[#34C759] shadow-xs'
+                          : 'bg-white/80 dark:bg-[#242426]/80 border-slate-200/70 dark:border-white/5 hover:border-slate-300'
+                      }`}
                       style={{
-                        borderLeftWidth: '4px',
+                        borderLeftWidth: '3px',
                         borderLeftColor: role.color,
                       }}
                     >
-                      {/* IN-PORT ANCHOR (Receives from Tasks) */}
+                      {/* IN-PORT ANCHOR (Right) */}
                       <button
                         type="button"
                         id={`port-role-in-${role.id}`}
                         onClick={(e) => handleCompleteWire('role', role.id, e)}
-                        className={`absolute -right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-all shadow-md z-30 ${
+                        className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full flex items-center justify-center cursor-pointer transition-all z-30 ${
                           isTargetHovered
-                            ? 'bg-purple-500 text-white ring-4 ring-purple-500/30 scale-125 animate-pulse'
-                            : 'bg-white dark:bg-[#1c1c1e] text-slate-500 border-2 border-purple-500 hover:scale-125 hover:bg-purple-500 hover:text-white'
+                            ? 'bg-purple-500 text-white ring-2 ring-purple-500/40 scale-125 animate-pulse'
+                            : 'bg-white dark:bg-[#1c1c1e] border-2 border-purple-500 hover:scale-125 hover:bg-purple-500'
                         }`}
-                        title="کلیک بکە بۆ تەواوکردنی بەستەری ئەم دەسەڵاتە لەگەڵ ئەرک"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
-                      </button>
+                        title="بەستنەوە لە ئەرکەوە"
+                      />
 
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <span 
-                            className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white shrink-0"
-                            style={{ backgroundColor: role.color }}
-                          >
-                            {role.title}
-                          </span>
-                          <span className="text-[10px] font-mono font-bold text-slate-400">
-                            {inCount} ئەرک
-                          </span>
-                        </div>
-
-                        <h3 className="text-xs font-black text-slate-900 dark:text-white">
-                          {role.name}
-                        </h3>
-
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                          {role.description}
-                        </p>
+                      <div className="flex items-center justify-between">
+                        <span 
+                          className="px-1.5 py-0.5 rounded text-[9px] font-bold text-white shrink-0"
+                          style={{ backgroundColor: role.color }}
+                        >
+                          {role.title}
+                        </span>
+                        <span className="text-[9px] font-mono text-slate-400 font-bold">
+                          {inCount} ئەرک
+                        </span>
                       </div>
+
+                      <div className="text-[11px] font-black text-slate-900 dark:text-white">
+                        {role.name}
+                      </div>
+
+                      <p className="text-[10px] text-slate-400 line-clamp-1">
+                        {role.description}
+                      </p>
                     </div>
                   );
                 })}
@@ -975,32 +983,32 @@ export default function NotificationRoutingMatrix() {
         </div>
       )}
 
-      {/* 3. LIVE NOTIFICATION SIMULATOR TAB */}
+      {/* 3. SIMULATOR TAB */}
       {activeTab === 'simulator' && (
-        <div className="bg-white/90 dark:bg-[#1c1c1e]/90 backdrop-blur-xl border border-slate-200/90 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
-          <div className="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-white/10">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-[#007AFF] flex items-center justify-center">
-              <Send className="w-5 h-5" />
+        <div className="flex-1 bg-white/90 dark:bg-[#1c1c1e]/90 backdrop-blur-xl border border-slate-200/90 dark:border-white/10 rounded-2xl p-5 shadow-xs space-y-4 overflow-y-auto">
+          <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-white/10">
+            <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-[#007AFF] flex items-center justify-center">
+              <Send className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-black text-slate-900 dark:text-white">
-                تاقیکەرەوەی ڕاستەوخۆی ئاگادارییەکانی تەلەگرام بەپێی بەستەرە دەستییەکان
+              <h2 className="text-sm font-black text-slate-900 dark:text-white">
+                تاقیکەرەوەی ئاگادارییەکانی تەلەگرام
               </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                کاتێک کارمەند لە تەلەگرام یان سیستم داواکاری یان چالاکییەک ئەنجام دەدات، کێ ئاگادارییەکەی پێ دەگات و دوگمەی پەسەندکردنی دەبێت
+              <p className="text-[11px] text-slate-400">
+                کاتێک کارمەند لە تەلەگرام داواکارییەک دەنێرێت، کێ لە تەلەگرام ئاگاداری وەردەگرێت
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                جۆری ئەرک / چالاکی
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                جۆری ئەرک
               </label>
               <select
                 value={simTask}
                 onChange={(e) => setSimTask(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-xs font-bold text-slate-800 dark:text-slate-200"
+                className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-xs font-bold text-slate-800 dark:text-slate-200"
               >
                 {WORKFLOW_ACTIONS.map((a) => (
                   <option key={a.id} value={a.id}>
@@ -1011,13 +1019,13 @@ export default function NotificationRoutingMatrix() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
                 کارمەندی داواکار
               </label>
               <select
                 value={simEmployeeId}
                 onChange={(e) => setSimEmployeeId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-xs font-bold text-slate-800 dark:text-slate-200"
+                className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-xs font-bold text-slate-800 dark:text-slate-200"
               >
                 {ASHLEY_OFFICIAL_EMPLOYEES.map((emp) => (
                   <option key={emp.id} value={emp.id}>
@@ -1028,96 +1036,72 @@ export default function NotificationRoutingMatrix() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                بەرواری دیاریکراو
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                بەروار
               </label>
               <input
                 type="text"
                 value={simDate}
                 onChange={(e) => setSimDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-xs font-bold text-slate-800 dark:text-slate-200"
+                className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-xs font-bold text-slate-800 dark:text-slate-200"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                تێبینی / هۆکار
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                هۆکار
               </label>
               <input
                 type="text"
                 value={simNote}
                 onChange={(e) => setSimNote(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-xs font-bold text-slate-800 dark:text-slate-200"
+                className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#2c2c2e] text-xs font-bold text-slate-800 dark:text-slate-200"
               />
             </div>
           </div>
 
-          {/* Results: Approvers & Telegram Bot Cards */}
-          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/10 space-y-4">
-            <h3 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-2">
+          <div className="pt-3 border-t border-slate-100 dark:border-white/10 space-y-3">
+            <h3 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              <span>ئەو بەڕێوەبەر و کەسانەی ڕاستەوخۆ لە تەلەگرام ئەم ئاگادارییە وەردەگرن ({simulatedRecipients.length}):</span>
+              <span>ئەو بەڕێوەبەرانەی ڕاستەوخۆ لە تەلەگرام بڕیار لەسەر ئەم ئەرکە دەدەن ({simulatedRecipients.length}):</span>
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {simulatedRecipients.map((rec) => {
-                const empObj = ASHLEY_OFFICIAL_EMPLOYEES.find((e) => e.id === simEmployeeId);
-                const empName = empObj?.name || 'کارمەندی ئاشڵی';
-
-                return (
-                  <div
-                    key={rec.role}
-                    className="p-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 space-y-3 relative"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span 
-                        className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white"
-                        style={{ backgroundColor: rec.color }}
-                      >
-                        {rec.title}
-                      </span>
-                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-                        ئامادەیە بۆ بڕیاردان
-                      </span>
-                    </div>
-
-                    <div>
-                      <h4 className="text-xs font-black text-slate-900 dark:text-white">
-                        {rec.name}
-                      </h4>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                        {rec.reason}
-                      </p>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-white dark:bg-[#242426] border border-slate-200/60 dark:border-white/5 text-[11px] font-mono text-slate-700 dark:text-slate-300 space-y-1.5">
-                      <div className="font-bold text-blue-600 dark:text-blue-400">
-                        🔔 داواکاری مۆڵەتی نوێ
-                      </div>
-                      <div>👤 کارمەند: <b>{empName}</b> ({simEmployeeId})</div>
-                      <div>📅 بەرواری مۆڵەت: <b>{simDate}</b></div>
-                      <div>📝 هۆکار: <i>{simNote}</i></div>
-                    </div>
-
-                    {/* Interactive Telegram Mock Buttons */}
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <button 
-                        type="button" 
-                        className="py-1.5 px-2 rounded-xl bg-emerald-600 text-white text-[11px] font-bold shadow-2xs hover:bg-emerald-500 transition-all cursor-pointer text-center"
-                      >
-                        ✅ پەسەندکردن
-                      </button>
-                      <button 
-                        type="button" 
-                        className="py-1.5 px-2 rounded-xl bg-red-600 text-white text-[11px] font-bold shadow-2xs hover:bg-red-500 transition-all cursor-pointer text-center"
-                      >
-                        ❌ ڕەتکردنەوە
-                      </button>
-                    </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {simulatedRecipients.map((rec) => (
+                <div
+                  key={rec.role}
+                  className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span 
+                      className="px-2 py-0.5 rounded text-[9px] font-bold text-white"
+                      style={{ backgroundColor: rec.color }}
+                    >
+                      {rec.title}
+                    </span>
+                    <span className="text-[10px] text-emerald-500 font-bold">
+                      ● ئامادەیە
+                    </span>
                   </div>
-                );
-              })}
+
+                  <h4 className="text-xs font-black text-slate-900 dark:text-white">
+                    {rec.name}
+                  </h4>
+
+                  <p className="text-[10px] text-slate-400">
+                    {rec.reason}
+                  </p>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="px-2 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold">
+                      ✅ پەسەندکردن
+                    </span>
+                    <span className="px-2 py-1 rounded-lg bg-red-600 text-white text-[10px] font-bold">
+                      ❌ ڕەتکردنەوە
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
