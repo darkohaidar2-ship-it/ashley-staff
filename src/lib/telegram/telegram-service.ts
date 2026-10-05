@@ -113,7 +113,7 @@ export async function sendTelegramDocument(
   }
 }
 
-// Telegram API photo sender
+// Telegram API photo sender (supports base64 data URLs, Telegram file_id, and HTTP URLs)
 export async function sendTelegramPhoto(
   chatId: number | string,
   photo: string,
@@ -123,13 +123,45 @@ export async function sendTelegramPhoto(
   const token = getBotToken();
   if (!token) return null;
 
-  let resolvedPhoto = photo;
-  if (resolvedPhoto.startsWith('/')) {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ashley-staff.vercel.app';
-    resolvedPhoto = `${baseUrl.replace(/\/$/, '')}${resolvedPhoto}`;
-  }
-
   try {
+    // 1. Handle base64 Data URLs via multipart/form-data
+    if (photo && photo.startsWith('data:')) {
+      const commaIdx = photo.indexOf(',');
+      if (commaIdx > -1) {
+        const header = photo.substring(0, commaIdx);
+        const base64Data = photo.substring(commaIdx + 1);
+        const mimeMatch = header.match(/^data:([^;]+)/);
+        const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+        const buffer = Buffer.from(base64Data, 'base64');
+        const blob = new Blob([buffer], { type: mimeType });
+        const formData = new FormData();
+        formData.append('chat_id', String(chatId));
+        formData.append('photo', blob, 'profile.jpg');
+        if (caption) {
+          formData.append('caption', caption);
+          formData.append('parse_mode', 'HTML');
+        }
+        if (replyMarkup) {
+          formData.append('reply_markup', JSON.stringify(replyMarkup));
+        }
+
+        const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+          method: 'POST',
+          body: formData,
+        });
+        const result = await res.json();
+        if (result?.ok) return result;
+        logger.warn('[TelegramService] sendPhoto with base64 FormData failed:', result);
+      }
+    }
+
+    // 2. Handle standard URL or Telegram file_id
+    let resolvedPhoto = photo;
+    if (resolvedPhoto && resolvedPhoto.startsWith('/')) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ashley-staff.vercel.app';
+      resolvedPhoto = `${baseUrl.replace(/\/$/, '')}${resolvedPhoto}`;
+    }
+
     const payload: any = {
       chat_id: chatId,
       photo: resolvedPhoto,
@@ -146,7 +178,27 @@ export async function sendTelegramPhoto(
     const result = await res.json();
     if (!result?.ok) {
       logger.warn('[TelegramService] sendTelegramPhoto returned not ok:', result);
-      // Fallback to sending message text + buttons so user is not blocked
+      // Try fallback to Ashley company logo if photo URL failed
+      if (resolvedPhoto && resolvedPhoto !== 'https://ashley-staff.vercel.app/logo.png') {
+        try {
+          const fallbackPayload: any = {
+            chat_id: chatId,
+            photo: 'https://ashley-staff.vercel.app/logo.png',
+            parse_mode: 'HTML',
+          };
+          if (caption) fallbackPayload.caption = caption;
+          if (replyMarkup) fallbackPayload.reply_markup = replyMarkup;
+          const fbRes = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fallbackPayload),
+          });
+          const fbResult = await fbRes.json();
+          if (fbResult?.ok) return fbResult;
+        } catch (e) {
+          logger.warn('[TelegramService] Fallback logo photo failed:', e);
+        }
+      }
       if (caption) {
         return await sendTelegramMessage(chatId, caption, replyMarkup);
       }
@@ -159,6 +211,27 @@ export async function sendTelegramPhoto(
     }
     return null;
   }
+}
+
+// Fetch user's Telegram profile photo (returns file_id of largest resolution)
+export async function getUserTelegramProfilePhoto(userId: number | string): Promise<string | null> {
+  const token = getBotToken();
+  if (!token) return null;
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/getUserProfilePhotos?user_id=${userId}&limit=1`);
+    const data = await res.json();
+    if (data?.ok && data.result?.total_count > 0 && Array.isArray(data.result.photos) && data.result.photos.length > 0) {
+      const photoVariants = data.result.photos[0];
+      if (Array.isArray(photoVariants) && photoVariants.length > 0) {
+        const largest = photoVariants[photoVariants.length - 1];
+        return largest.file_id;
+      }
+    }
+  } catch (err) {
+    logger.warn('[TelegramService] Error getting user profile photos:', err);
+  }
+  return null;
 }
 
 // Edit existing message text & inline keyboard
@@ -1642,7 +1715,7 @@ export async function getEmployeeProfileDetails(employeeId: string) {
     name: emp?.name || officialEmp?.name || profileData.name || 'کارمەندی ئاشڵی',
     role: emp?.role || profileData.role || officialEmp?.role || 'کارمەند',
     department: profileData.department || profileData.branch || 'کۆمپانیای سەرەکی ئاشڵی',
-    photoUrl: profileData.photoUrl || profileData.avatar || profileData.photo || officialEmp?.photoUrl || null,
+    photoUrl: (profileData.photoUrl || profileData.avatar || profileData.photo || null),
     shift: profileData.shift || '08:00 - 17:00 (١٥ خولەک لێخۆشبوون)',
     phone: profileData.phone || profileData.phoneNumber || officialEmp?.phone || '',
     address: profileData.address || profileData.location || '',

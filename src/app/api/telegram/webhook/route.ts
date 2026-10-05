@@ -40,6 +40,7 @@ import {
   clearPendingProfileEdit,
   approveEmployeePhoto,
   broadcastAnnouncement,
+  getUserTelegramProfilePhoto,
 } from '@/lib/telegram/telegram-service';
 import { 
   resolveEmployeeRole, 
@@ -577,21 +578,22 @@ export async function POST(req: NextRequest) {
           await updateEmployeeProfileField(currentBinding.employeeId, 'photoUrl', photoUrl);
         }
 
-        await sendTelegramMessage(
-          chatId,
-          `✅ <b>وێنەی نوێی پرۆفایلەکەت بە سەرکەوتوویی نوێکرایەوە!</b>`,
-          getMainReplyKeyboard(userRole)
-        );
-
-        // Send the updated profile card with the new photo!
+        // 1. Send the updated photo first ("وێنەکەم بۆ بنێرەوە")
         const updated = await getEmployeeProfileDetails(currentBinding.employeeId);
+        const photoToSend = updated.photoUrl || photoUrl || fileId;
+        if (photoToSend) {
+          await sendTelegramPhoto(
+            chatId,
+            photoToSend,
+            `✅ <b>وێنەی نوێی پرۆفایلەکەت بە سەرکەوتوویی نوێکرایەوە!</b>`
+          );
+        }
+
+        // 2. Then send the updated information card ("انجا زانیاریەکان")
+        // 3. Followed by options inline keyboard ("انجا ئختیارەکان")
         const cardMsg = formatProfileCard(updated);
         const kb = getProfileInlineKeyboard();
-        if (updated.photoUrl) {
-          await sendTelegramPhoto(chatId, updated.photoUrl, cardMsg, kb);
-        } else {
-          await sendTelegramMessage(chatId, cardMsg, kb);
-        }
+        await sendTelegramMessage(chatId, cardMsg, kb);
 
         // Notify manager as a notice (non-blocking)
         const mgrChatId = Object.entries(bindings).find(([_, info]) => info.employeeId === 'emp-02')?.[0];
@@ -1022,14 +1024,34 @@ export async function POST(req: NextRequest) {
     // -------------------------------------------------------------
     if (text === '👤 پرۆفایلی من' || text === '/profile') {
       const profile = await getEmployeeProfileDetails(currentBinding.employeeId);
+
+      // Resolve photo:
+      let photoToSend = profile.photoUrl;
+      if (!photoToSend || photoToSend.includes('/employees/')) {
+        const tgPhoto = await getUserTelegramProfilePhoto(fromId);
+        if (tgPhoto) {
+          photoToSend = tgPhoto;
+          profile.photoUrl = tgPhoto;
+          await updateEmployeeProfileField(currentBinding.employeeId, 'photoUrl', tgPhoto);
+        } else {
+          photoToSend = 'https://ashley-staff.vercel.app/logo.png';
+        }
+      }
+
+      // 1. Send the Photo first ("وێنەکەم بۆ بنێرەوە")
+      if (photoToSend) {
+        await sendTelegramPhoto(
+          chatId,
+          photoToSend,
+          `📸 <b>وێنەی پرۆفایلی فەرمی:</b> <b>${profile.name}</b>`
+        );
+      }
+
+      // 2. Then send the Information card ("انجا زانیاریەکان")
+      // 3. Along with the Options keyboard ("انجا ئختیارەکان")
       const profileMsg = formatProfileCard(profile);
       const kb = getProfileInlineKeyboard();
-
-      if (profile.photoUrl) {
-        await sendTelegramPhoto(chatId, profile.photoUrl, profileMsg, kb);
-      } else {
-        await sendTelegramMessage(chatId, profileMsg, kb);
-      }
+      await sendTelegramMessage(chatId, profileMsg, kb);
       return NextResponse.json({ ok: true });
     }
 
