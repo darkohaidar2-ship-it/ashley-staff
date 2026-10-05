@@ -40,7 +40,6 @@ import {
   clearPendingProfileEdit,
   approveEmployeePhoto,
   broadcastAnnouncement,
-  getUserTelegramProfilePhoto,
   generateTelegramCalendar,
   getLeaveNotePresetKeyboard,
   getLeaveConfirmKeyboard,
@@ -1349,39 +1348,24 @@ export async function POST(req: NextRequest) {
     if (text === '👤 پرۆفایلی من' || text === '/profile') {
       const profile = await getEmployeeProfileDetails(currentBinding.employeeId);
 
-      // Resolve photo with robust priority:
-      // Priority 1: telegramFileId (persistent Telegram native file_id, never expires)
-      // Priority 2: profile.photoUrl (if already set)
-      // Priority 3: official employee avatar from ASHLEY_OFFICIAL_EMPLOYEES
-      // Priority 4: live user Telegram profile photo via getUserTelegramProfilePhoto
-      // Fallback ONLY: company logo
-      let photoToSend = (profile as any).telegramFileId;
+      // Resolve photo strictly from official Ashley ERP system:
+      // Priority 1: User's custom photo set in ERP (profile.photoUrl, Data URL or valid URL)
+      // Priority 2: Official employee photo from ASHLEY_OFFICIAL_EMPLOYEES (e.g. /employees/emp-02.jpg)
+      // Priority 3: Official Ashley company badge or logo
+      // NOTE: NEVER fetch or display personal Telegram account photos!
+      let photoToSend = profile.photoUrl;
 
-      if (!photoToSend && profile.photoUrl) {
-        photoToSend = profile.photoUrl;
-      }
-
-      if (!photoToSend) {
+      if (!photoToSend || photoToSend.startsWith('AgAC') || photoToSend.includes('api.telegram.org')) {
         const offEmp = ASHLEY_OFFICIAL_EMPLOYEES.find(e => 
           e.id === currentBinding.employeeId || 
           e.employeeId === currentBinding.employeeId
         );
-        if (offEmp?.photoUrl) {
-          photoToSend = offEmp.photoUrl;
-        }
+        photoToSend = offEmp?.photoUrl || null;
       }
 
-      if (!photoToSend) {
-        const tgPhoto = await getUserTelegramProfilePhoto(fromId);
-        if (tgPhoto) {
-          photoToSend = tgPhoto;
-          await updateEmployeeProfileField(currentBinding.employeeId, 'telegramFileId', tgPhoto);
-          await updateEmployeeProfileField(currentBinding.employeeId, 'photoUrl', tgPhoto);
-        }
-      }
-
-      if (!photoToSend) {
-        photoToSend = 'https://ashley-staff.vercel.app/logo.png';
+      if (!photoToSend || photoToSend.startsWith('AgAC') || photoToSend.includes('api.telegram.org')) {
+        const cleanEmpId = currentBinding.employeeId.startsWith('emp-') ? currentBinding.employeeId : `emp-${currentBinding.employeeId}`;
+        photoToSend = `https://ashley-staff.vercel.app/employees/${cleanEmpId}.jpg`;
       }
 
       if (typeof photoToSend === 'string' && photoToSend.startsWith('/')) {
@@ -1393,7 +1377,7 @@ export async function POST(req: NextRequest) {
         await sendTelegramPhoto(
           chatId,
           photoToSend,
-          `📸 <b>وێنەی پرۆفایلی فەرمی:</b> <b>${profile.name}</b>`
+          `📸 <b>وێنەی فەرمی سیستەم:</b> <b>${profile.name}</b>`
         );
       }
 

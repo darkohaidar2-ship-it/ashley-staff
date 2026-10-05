@@ -179,31 +179,7 @@ export async function sendTelegramPhoto(
     if (!result?.ok) {
       logger.warn('[TelegramService] sendTelegramPhoto returned not ok:', result);
 
-      // 1. Try resolving the live Telegram profile photo if chatId is a user
-      if (chatId) {
-        try {
-          const livePhotoId = await getUserTelegramProfilePhoto(chatId);
-          if (livePhotoId && livePhotoId !== resolvedPhoto) {
-            const retryRes = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: chatId,
-                photo: livePhotoId,
-                caption,
-                parse_mode: 'HTML',
-                reply_markup: replyMarkup,
-              }),
-            });
-            const retryResult = await retryRes.json();
-            if (retryResult?.ok) return retryResult;
-          }
-        } catch (retryErr) {
-          logger.warn('[TelegramService] Live profile photo retry failed:', retryErr);
-        }
-      }
-
-      // 2. Try fallback to Ashley company logo if photo URL failed
+      // Fallback directly to Ashley company logo if photo URL failed
       if (resolvedPhoto && resolvedPhoto !== 'https://ashley-staff.vercel.app/logo.png') {
         try {
           const fallbackPayload: any = {
@@ -1915,14 +1891,20 @@ export async function getEmployeeProfileDetails(employeeId: string) {
     e.employeeId === rawNum
   );
 
+  // Sanitize photoUrl: purge any Telegram avatar file IDs (AgAC...) or expired api.telegram.org URLs
+  let resolvedPhotoUrl = profileData.photoUrl || profileData.avatar || profileData.photo || (emp as any)?.photoUrl || (emp as any)?.photo || officialEmp?.photoUrl || null;
+  if (resolvedPhotoUrl && typeof resolvedPhotoUrl === 'string' && (resolvedPhotoUrl.startsWith('AgAC') || resolvedPhotoUrl.includes('api.telegram.org'))) {
+    resolvedPhotoUrl = officialEmp?.photoUrl || 'https://ashley-staff.vercel.app/logo.png';
+  }
+
   return {
     id: emp?.id || employeeId,
     employeeId: emp?.employeeId || rawNum,
     name: emp?.name || officialEmp?.name || profileData.name || 'کارمەندی ئاشڵی',
     role: emp?.role || profileData.role || officialEmp?.role || 'کارمەند',
     department: profileData.department || profileData.branch || 'کۆمپانیای سەرەکی ئاشڵی',
-    photoUrl: (profileData.photoUrl || profileData.avatar || profileData.photo || null),
-    telegramFileId: (profileData.telegramFileId || null),
+    photoUrl: resolvedPhotoUrl,
+    telegramFileId: (profileData.telegramFileId && !String(profileData.telegramFileId).startsWith('AgAC') ? profileData.telegramFileId : null),
     shift: profileData.shift || '08:00 - 17:00 (١٥ خولەک لێخۆشبوون)',
     phone: profileData.phone || profileData.phoneNumber || officialEmp?.phone || '',
     address: profileData.address || profileData.location || '',

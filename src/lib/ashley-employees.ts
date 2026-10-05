@@ -255,7 +255,7 @@ export const ASHLEY_OFFICIAL_EMPLOYEES: AshleyOfficialEmployee[] = [
     faceRegistered: false,
     isActive: true,
     status: 'active',
-    photoUrl: 'https://picsum.photos/seed/مامۆستا-وەلید/400',
+    photoUrl: '/employees/emp-4545.jpg',
   },
   {
     id: 'emp-3743',
@@ -273,7 +273,7 @@ export const ASHLEY_OFFICIAL_EMPLOYEES: AshleyOfficialEmployee[] = [
     deviceBound: false,
     isActive: true,
     status: 'active',
-    photoUrl: 'https://picsum.photos/seed/ئارجان-(-فرۆشیار-)/400',
+    photoUrl: '/employees/emp-3743.jpg',
   },
   {
     id: 'emp-5908',
@@ -291,7 +291,7 @@ export const ASHLEY_OFFICIAL_EMPLOYEES: AshleyOfficialEmployee[] = [
     deviceBound: false,
     isActive: true,
     status: 'active',
-    photoUrl: 'https://picsum.photos/seed/ئەڤین-(-فرۆشیار-)/400',
+    photoUrl: '/employees/emp-5908.jpg',
   },
   {
     id: 'emp-4997',
@@ -309,7 +309,7 @@ export const ASHLEY_OFFICIAL_EMPLOYEES: AshleyOfficialEmployee[] = [
     deviceBound: false,
     isActive: true,
     status: 'active',
-    photoUrl: 'https://picsum.photos/seed/بڕوا--(-فرۆشیار-)/400',
+    photoUrl: '/employees/emp-4997.jpg',
   },
   {
     id: 'emp-7347',
@@ -327,7 +327,7 @@ export const ASHLEY_OFFICIAL_EMPLOYEES: AshleyOfficialEmployee[] = [
     deviceBound: false,
     isActive: true,
     status: 'active',
-    photoUrl: 'https://picsum.photos/seed/شاکار-(-کاشێر-)/400',
+    photoUrl: '/employees/emp-7347.jpg',
   },
   {
     id: 'emp-7037',
@@ -345,7 +345,7 @@ export const ASHLEY_OFFICIAL_EMPLOYEES: AshleyOfficialEmployee[] = [
     deviceBound: false,
     isActive: true,
     status: 'active',
-    photoUrl: 'https://picsum.photos/seed/شنیا-(-فرۆشیار-)/400',
+    photoUrl: '/employees/emp-7037.jpg',
   },
   {
     id: 'emp-4973',
@@ -363,7 +363,7 @@ export const ASHLEY_OFFICIAL_EMPLOYEES: AshleyOfficialEmployee[] = [
     deviceBound: false,
     isActive: true,
     status: 'active',
-    photoUrl: 'https://picsum.photos/seed/مامۆستا-بنار-(-کاشێر-)/400',
+    photoUrl: '/employees/emp-4973.jpg',
   },
   {
     id: 'emp-4150',
@@ -381,7 +381,7 @@ export const ASHLEY_OFFICIAL_EMPLOYEES: AshleyOfficialEmployee[] = [
     deviceBound: false,
     isActive: true,
     status: 'active',
-    photoUrl: 'https://picsum.photos/seed/نگین-(-فرۆشیار-)/400',
+    photoUrl: '/employees/emp-4150.jpg',
   },
   {
     id: 'emp-6312',
@@ -399,7 +399,7 @@ export const ASHLEY_OFFICIAL_EMPLOYEES: AshleyOfficialEmployee[] = [
     deviceBound: false,
     isActive: true,
     status: 'active',
-    photoUrl: 'https://picsum.photos/seed/پەیڤی-(-فرۆشیار-)/400',
+    photoUrl: '/employees/emp-6312.jpg',
   },
 ];
 
