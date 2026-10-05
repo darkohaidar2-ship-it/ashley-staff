@@ -122,10 +122,16 @@ export async function sendTelegramPhoto(
   const token = getBotToken();
   if (!token) return null;
 
+  let resolvedPhoto = photo;
+  if (resolvedPhoto.startsWith('/')) {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ashley-staff.vercel.app';
+    resolvedPhoto = `${baseUrl.replace(/\/$/, '')}${resolvedPhoto}`;
+  }
+
   try {
     const payload: any = {
       chat_id: chatId,
-      photo,
+      photo: resolvedPhoto,
       parse_mode: 'HTML',
     };
     if (caption) payload.caption = caption;
@@ -136,9 +142,20 @@ export async function sendTelegramPhoto(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    return await res.json();
+    const result = await res.json();
+    if (!result?.ok) {
+      logger.warn('[TelegramService] sendTelegramPhoto returned not ok:', result);
+      // Fallback to sending message text + buttons so user is not blocked
+      if (caption) {
+        return await sendTelegramMessage(chatId, caption, replyMarkup);
+      }
+    }
+    return result;
   } catch (err) {
     logger.error('[TelegramService] sendTelegramPhoto error:', err);
+    if (caption) {
+      return await sendTelegramMessage(chatId, caption, replyMarkup);
+    }
     return null;
   }
 }
@@ -172,6 +189,49 @@ export async function editTelegramMessage(
     logger.error('[TelegramService] editTelegramMessage error:', err);
     return null;
   }
+}
+
+// Edit existing photo message caption & inline keyboard
+export async function editTelegramCaption(
+  chatId: number | string,
+  messageId: number | string,
+  caption: string,
+  replyMarkup?: any
+) {
+  const token = getBotToken();
+  if (!token) return null;
+
+  try {
+    const payload: any = {
+      chat_id: chatId,
+      message_id: messageId,
+      caption,
+      parse_mode: 'HTML',
+    };
+    if (replyMarkup) payload.reply_markup = replyMarkup;
+
+    const res = await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (err) {
+    logger.error('[TelegramService] editTelegramCaption error:', err);
+    return null;
+  }
+}
+
+// Unified card editor: works for both photo messages and text messages
+export async function editTelegramCard(
+  chatId: number | string,
+  messageId: number | string,
+  textOrCaption: string,
+  replyMarkup?: any
+) {
+  const resCap = await editTelegramCaption(chatId, messageId, textOrCaption, replyMarkup);
+  if (resCap && resCap.ok) return resCap;
+  return await editTelegramMessage(chatId, messageId, textOrCaption, replyMarkup);
 }
 
 // Answer callback query to dismiss loading indicator
@@ -1119,7 +1179,15 @@ export async function updateLeaveRequestStatus(
 // -------------------------------------------------------------
 export async function getEmployeeProfileDetails(employeeId: string) {
   const allEmps = await getAllEmployees();
-  const emp = allEmps.find(e => e.id === employeeId || e.employeeId === employeeId);
+  const rawNum = employeeId.replace('emp-', '');
+  const emp = allEmps.find(e => 
+    e.id === employeeId || 
+    e.employeeId === employeeId || 
+    e.id === `emp-${rawNum}` || 
+    e.employeeId === rawNum ||
+    e.id === `emp-0${rawNum}` ||
+    e.employeeId === `0${rawNum}`
+  );
 
   let profileData: any = {};
   try {
@@ -1131,25 +1199,155 @@ export async function getEmployeeProfileDetails(employeeId: string) {
 
     if (setRow?.qr_code) {
       const profiles = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
-      const rawNum = employeeId.replace('emp-', '');
-      profileData = profiles[employeeId] || profiles[rawNum] || profiles[`emp-${rawNum}`] || {};
+      profileData = profiles[employeeId] || profiles[rawNum] || profiles[`emp-${rawNum}`] || (emp?.employeeId ? profiles[emp.employeeId] : {}) || {};
     }
   } catch (err) {
     logger.warn('[TelegramService] Error fetching employee profile:', err);
   }
 
+  const officialEmp = ASHLEY_OFFICIAL_EMPLOYEES.find(e => 
+    e.id === employeeId || 
+    e.employeeId === employeeId || 
+    e.id === `emp-${rawNum}` ||
+    e.employeeId === rawNum
+  );
+
   return {
-    id: employeeId,
-    name: emp?.name || profileData.name || 'کارمەندی ئاشڵی',
-    role: emp?.role || profileData.role || 'کارمەند',
-    department: profileData.department || 'کۆمپانیای سەرەکی ئاشڵی',
-    photoUrl: profileData.photoUrl || profileData.avatar || null,
+    id: emp?.id || employeeId,
+    employeeId: emp?.employeeId || rawNum,
+    name: emp?.name || officialEmp?.name || profileData.name || 'کارمەندی ئاشڵی',
+    role: emp?.role || profileData.role || officialEmp?.role || 'کارمەند',
+    department: profileData.department || profileData.branch || 'کۆمپانیای سەرەکی ئاشڵی',
+    photoUrl: profileData.photoUrl || profileData.avatar || profileData.photo || officialEmp?.photoUrl || null,
     shift: profileData.shift || '08:00 - 17:00 (١٥ خولەک لێخۆشبوون)',
-    phone: profileData.phone || profileData.phoneNumber || null,
+    phone: profileData.phone || profileData.phoneNumber || officialEmp?.phone || '',
+    address: profileData.address || profileData.location || '',
+    bloodType: profileData.bloodType || profileData.bloodGroup || '',
+    emergencyContact: profileData.emergencyContact || profileData.emergencyPhone || '',
   };
 }
 
-export async function approveEmployeePhoto(employeeId: string, photoUrl: string): Promise<boolean> {
+export function formatProfileCard(profile: {
+  id: string;
+  employeeId?: string;
+  name: string;
+  role: string;
+  department: string;
+  photoUrl?: string | null;
+  shift: string;
+  phone?: string;
+  address?: string;
+  bloodType?: string;
+  emergencyContact?: string;
+}) {
+  const phoneText = profile.phone ? `<code>${profile.phone}</code>` : '<i>(دیاری نەکراوە)</i>';
+  const addressText = profile.address ? `<b>${profile.address}</b>` : '<i>(دیاری نەکراوە)</i>';
+  const bloodText = profile.bloodType ? `<b>${profile.bloodType}</b>` : '<i>(دیاری نەکراوە)</i>';
+  const emergencyText = profile.emergencyContact ? `<code>${profile.emergencyContact}</code>` : '';
+
+  let msg = `👤 <b>پرۆفایلی فەرمی کارمەند</b>\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+  msg += `• 👤 ناو: <b>${profile.name}</b> 🔒 <i>(نەگۆڕ)</i>\n`;
+  msg += `• 🆔 کۆدی کارمەند: <b>${profile.id}</b> 🔒 <i>(نەگۆڕ)</i>\n`;
+  msg += `• 💼 پلە و ڕۆڵ: <b>${profile.role}</b>\n`;
+  msg += `• 🏢 بەش / لق: <b>${profile.department}</b>\n`;
+  msg += `• 📞 ژمارەی مۆبایل: ${phoneText}\n`;
+  msg += `• 📍 ناونیشان: ${addressText}\n`;
+  msg += `• 🩸 گرووپی خوێن: ${bloodText}\n`;
+  if (emergencyText) {
+    msg += `• 🚨 پەیوەندی فریاگوزاری: ${emergencyText}\n`;
+  }
+  msg += `• ⏰ کاتژمێری دەوام: <b>${profile.shift}</b>\n`;
+  msg += `• 🔒 دۆخی ئامێر: <b>قوفڵکراوە بۆ ئەم تەلەگرامە</b>\n\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `💡 <i>دەتوانیت لە ڕێگەی دوگمەکانی خوارەوە پرۆفایلەکەت دەستکاری بکەیت و تەواوی بکەیت:</i>`;
+
+  return msg;
+}
+
+export function getProfileInlineKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: '📸 گۆڕینی وێنە', callback_data: 'prof:photo' },
+        { text: '📞 گۆڕینی مۆبایل', callback_data: 'prof:phone' },
+      ],
+      [
+        { text: '📍 گۆڕینی ناونیشان', callback_data: 'prof:address' },
+        { text: '🩸 گرووپی خوێن', callback_data: 'prof:blood' },
+      ],
+      [
+        { text: '🏢 بەش / لق', callback_data: 'prof:dept' },
+        { text: '🔄 نوێکردنەوەی پرۆفایل', callback_data: 'prof:refresh' },
+      ],
+    ],
+  };
+}
+
+export function getBloodGroupKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: '🅰️ A+', callback_data: 'set_blood:A+' },
+        { text: '🅰️ A-', callback_data: 'set_blood:A-' },
+        { text: '🅱️ B+', callback_data: 'set_blood:B+' },
+        { text: '🅱️ B-', callback_data: 'set_blood:B-' },
+      ],
+      [
+        { text: '🆎 AB+', callback_data: 'set_blood:AB+' },
+        { text: '🆎 AB-', callback_data: 'set_blood:AB-' },
+        { text: '🅾️ O+', callback_data: 'set_blood:O+' },
+        { text: '🅾️ O-', callback_data: 'set_blood:O-' },
+      ],
+      [
+        { text: '🔙 گەڕانەوە بۆ پرۆفایل', callback_data: 'prof:refresh' },
+      ],
+    ],
+  };
+}
+
+export function getDepartmentKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: '🏢 پێشانگای سەرەکی (Showroom)', callback_data: 'set_dept:پێشانگای سەرەکی' },
+      ],
+      [
+        { text: '🏭 کارگە و دروستکردن', callback_data: 'set_dept:کارگە و دروستکردن' },
+      ],
+      [
+        { text: '📦 کۆگای سەرەکی', callback_data: 'set_dept:کۆگای سەرەکی' },
+      ],
+      [
+        { text: '🛠️ بەشی چاککردنەوە و ڕاگرتن', callback_data: 'set_dept:بەشی چاککردنەوە' },
+      ],
+      [
+        { text: '💼 کارگێڕی و ژمێریاری', callback_data: 'set_dept:کارگێڕی و ژمێریاری' },
+      ],
+      [
+        { text: '🔙 گەڕانەوە بۆ پرۆفایل', callback_data: 'prof:refresh' },
+      ],
+    ],
+  };
+}
+
+// 🔒 STRICT SECURITY CONSTRAINT: IMMUTABLE IDENTITY FIELDS
+const IMMUTABLE_PROFILE_FIELDS = ['name', 'fullName3Part', 'kurdishName', 'id', 'employeeId', 'pin', 'password'];
+
+export async function updateEmployeeProfileField(
+  employeeId: string,
+  field: string,
+  value: any
+): Promise<{ success: boolean; error?: string }> {
+  // 🔒 REJECT ANY ATTEMPT TO ALTER NAME OR ID
+  if (IMMUTABLE_PROFILE_FIELDS.includes(field)) {
+    logger.warn(`[TelegramService] BLOCKED attempt to edit immutable field "${field}" for employee ${employeeId}`);
+    return {
+      success: false,
+      error: 'ببورە! ناوی کارمەند و کۆدی کارمەند نەگۆڕن و پارێزراون.',
+    };
+  }
+
   try {
     const { data: setRow } = await supabase
       .from('warehouses')
@@ -1164,12 +1362,20 @@ export async function approveEmployeePhoto(employeeId: string, photoUrl: string)
 
     const rawNum = employeeId.replace('emp-', '');
     const current = profiles[employeeId] || profiles[rawNum] || profiles[`emp-${rawNum}`] || {};
-    current.photoUrl = photoUrl;
-    current.avatar = photoUrl;
+
+    current[field] = value;
+    if (field === 'photoUrl') {
+      current.avatar = value;
+      current.photo = value;
+    }
+    if (field === 'phone') {
+      current.phoneNumber = value;
+    }
     current.updatedAt = new Date().toISOString();
 
     profiles[employeeId] = current;
     profiles[`emp-${rawNum}`] = current;
+    profiles[rawNum] = current;
 
     await supabase.from('warehouses').upsert({
       id: 'ashley_employee_profiles',
@@ -1177,10 +1383,111 @@ export async function approveEmployeePhoto(employeeId: string, photoUrl: string)
       qr_code: JSON.stringify(profiles),
     }, { onConflict: 'id' });
 
-    return true;
+    // Sync to users table if applicable
+    try {
+      const uPayload: any = {};
+      if (field === 'phone') uPayload.phone = value;
+      if (field === 'address') uPayload.address = value;
+      if (field === 'photoUrl') uPayload.avatar = value;
+      if (Object.keys(uPayload).length > 0) {
+        await supabase.from('users').update(uPayload).eq('id', employeeId);
+      }
+    } catch (uErr) {
+      logger.warn('[TelegramService] Users table sync note:', uErr);
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    logger.error('[TelegramService] Error updating employee profile field:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function approveEmployeePhoto(employeeId: string, photoUrl: string): Promise<boolean> {
+  const res = await updateEmployeeProfileField(employeeId, 'photoUrl', photoUrl);
+  return res.success;
+}
+
+export async function getPendingProfileEdit(telegramId: string | number): Promise<'photo' | 'phone' | 'address' | null> {
+  try {
+    const { data } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_telegram_pending_profile_edits')
+      .maybeSingle();
+
+    if (data?.qr_code) {
+      const stateMap = typeof data.qr_code === 'string' ? JSON.parse(data.qr_code) : data.qr_code;
+      const entry = stateMap[String(telegramId)];
+      if (entry && Date.now() < entry.expiresAt) {
+        return entry.field;
+      }
+    }
   } catch (err) {
-    logger.error('[TelegramService] Error approving employee photo:', err);
-    return false;
+    logger.warn('[TelegramService] Error reading pending profile edit:', err);
+  }
+  return null;
+}
+
+export async function setPendingProfileEdit(
+  telegramId: string | number, 
+  field: 'photo' | 'phone' | 'address'
+) {
+  try {
+    const { data } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_telegram_pending_profile_edits')
+      .maybeSingle();
+
+    let stateMap: Record<string, any> = {};
+    if (data?.qr_code) {
+      stateMap = typeof data.qr_code === 'string' ? JSON.parse(data.qr_code) : data.qr_code;
+    }
+
+    const now = Date.now();
+    for (const [k, v] of Object.entries(stateMap)) {
+      if (!v?.expiresAt || v.expiresAt < now) {
+        delete stateMap[k];
+      }
+    }
+
+    stateMap[String(telegramId)] = {
+      field,
+      expiresAt: now + 15 * 60 * 1000, // 15 min expiry
+    };
+
+    await supabase.from('warehouses').upsert({
+      id: 'ashley_telegram_pending_profile_edits',
+      name: 'TELEGRAM_PENDING_PROFILE_EDITS',
+      qr_code: JSON.stringify(stateMap),
+    }, { onConflict: 'id' });
+  } catch (err) {
+    logger.error('[TelegramService] Error saving pending profile edit:', err);
+  }
+}
+
+export async function clearPendingProfileEdit(telegramId: string | number) {
+  try {
+    const { data } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_telegram_pending_profile_edits')
+      .maybeSingle();
+
+    if (data?.qr_code) {
+      const stateMap = typeof data.qr_code === 'string' ? JSON.parse(data.qr_code) : data.qr_code;
+      if (stateMap[String(telegramId)]) {
+        delete stateMap[String(telegramId)];
+        await supabase.from('warehouses').upsert({
+          id: 'ashley_telegram_pending_profile_edits',
+          name: 'TELEGRAM_PENDING_PROFILE_EDITS',
+          qr_code: JSON.stringify(stateMap),
+        }, { onConflict: 'id' });
+      }
+    }
+  } catch (err) {
+    logger.warn('[TelegramService] Error clearing pending profile edit:', err);
   }
 }
 

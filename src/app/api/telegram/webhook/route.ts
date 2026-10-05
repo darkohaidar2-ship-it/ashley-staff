@@ -4,6 +4,8 @@ import {
   sendTelegramDocument,
   sendTelegramPhoto,
   editTelegramMessage,
+  editTelegramCaption,
+  editTelegramCard,
   answerCallbackQuery,
   getTelegramFileUrl,
   getMainReplyKeyboard, 
@@ -23,6 +25,14 @@ import {
   saveLeaveRequest,
   updateLeaveRequestStatus,
   getEmployeeProfileDetails,
+  formatProfileCard,
+  getProfileInlineKeyboard,
+  getBloodGroupKeyboard,
+  getDepartmentKeyboard,
+  updateEmployeeProfileField,
+  getPendingProfileEdit,
+  setPendingProfileEdit,
+  clearPendingProfileEdit,
   approveEmployeePhoto,
   broadcastAnnouncement,
 } from '@/lib/telegram/telegram-service';
@@ -107,14 +117,143 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // C. REQUEST PHOTO UPLOAD (📸 داواکاری گۆڕینی وێنە)
-      if (data === 'req_photo') {
+      // C. EDIT PROFILE: CHANGE PHOTO (📸 گۆڕینی وێنە)
+      if (data === 'prof:photo' || data === 'req_photo') {
+        await setPendingProfileEdit(cqFromId, 'photo');
         PENDING_PHOTOS[cqFromId] = true;
         await answerCallbackQuery(cqId);
         await sendTelegramMessage(
           cqChatId,
-          `📸 <b>ناردنی وێنەی نوێی پرۆفایل:</b>\n\nتکایە <b>وێنەیەکی ڕوونی ڕووخسارت</b> وەک نامە بنێرە.\nداواکارییەکە دەچێتە لای بەڕێوەبەر بۆ پەسەندکردن.\n\n<i>(یان بنووسە: ❌ هەڵوەشاندنەوە)</i>`
+          `📸 <b>گۆڕینی وێنەی پرۆفایل:</b>\n\nتکایە ئێستا <b>وێنەیەکی نوێی خۆت</b> وەک فایلی وێنە بنێرە.\nسیستەم دەستبەجێ لە پرۆفایلەکەتدا جێگیری دەکات.\n\n<i>(یان بنووسە: ❌ هەڵوەشاندنەوە)</i>`,
+          {
+            keyboard: [[{ text: '❌ هەڵوەشاندنەوە' }]],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+          }
         );
+        return NextResponse.json({ ok: true });
+      }
+
+      // D. EDIT PROFILE: CHANGE PHONE (📞 گۆڕینی ژمارەی مۆبایل)
+      if (data === 'prof:phone') {
+        await setPendingProfileEdit(cqFromId, 'phone');
+        await answerCallbackQuery(cqId);
+        await sendTelegramMessage(
+          cqChatId,
+          `📞 <b>گۆڕینی ژمارەی مۆبایل:</b>\n\nتکایە <b>ژمارە مۆبایلی نوێت</b> بنووسە:\n<i>(نموونە: 07701234567 یان 07501234567)</i>\n\n<i>(یان بنووسە: ❌ هەڵوەشاندنەوە)</i>`,
+          {
+            keyboard: [[{ text: '❌ هەڵوەشاندنەوە' }]],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+          }
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      // E. EDIT PROFILE: CHANGE ADDRESS (📍 گۆڕینی ناونیشان)
+      if (data === 'prof:address') {
+        await setPendingProfileEdit(cqFromId, 'address');
+        await answerCallbackQuery(cqId);
+        await sendTelegramMessage(
+          cqChatId,
+          `📍 <b>گۆڕینی ناونیشان / شوێنی نیشتەجێبوون:</b>\n\nتکایە <b>ناونیشانی نوێت</b> بنووسە:\n<i>(نموونە: سلێمانی - ڕاپەڕین یان هەولێر - بەختیاری)</i>\n\n<i>(یان بنووسە: ❌ هەڵوەشاندنەوە)</i>`,
+          {
+            keyboard: [[{ text: '❌ هەڵوەشاندنەوە' }]],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+          }
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      // F. EDIT PROFILE: SELECT BLOOD GROUP (🩸 گرووپی خوێن)
+      if (data === 'prof:blood') {
+        await answerCallbackQuery(cqId);
+        if (cqMsgId) {
+          const bloodKb = getBloodGroupKeyboard();
+          await editTelegramCard(
+            cqChatId,
+            cqMsgId,
+            `🩸 <b>دیاریکردنی گرووپی خوێن:</b>\n\nتکایە گرووپی خوێنی خۆت لە دوگمەکانی خوارەوە هەڵبژێرە:`,
+            bloodKb
+          );
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // G. SAVE BLOOD GROUP
+      if (data.startsWith('set_blood:')) {
+        const blood = data.replace('set_blood:', '');
+        if (binding) {
+          await updateEmployeeProfileField(binding.employeeId, 'bloodType', blood);
+          await answerCallbackQuery(cqId, `✅ گرووپی خوێن دیاریکرا: ${blood}`);
+          if (cqMsgId) {
+            const updated = await getEmployeeProfileDetails(binding.employeeId);
+            await editTelegramCard(
+              cqChatId,
+              cqMsgId,
+              formatProfileCard(updated),
+              getProfileInlineKeyboard()
+            );
+          }
+        } else {
+          await answerCallbackQuery(cqId, 'هەژمار نەدۆزرایەوە', true);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // H. EDIT PROFILE: SELECT DEPARTMENT (🏢 بەش / لق)
+      if (data === 'prof:dept') {
+        await answerCallbackQuery(cqId);
+        if (cqMsgId) {
+          const deptKb = getDepartmentKeyboard();
+          await editTelegramCard(
+            cqChatId,
+            cqMsgId,
+            `🏢 <b>دیاریکردنی بەش / لقی کارکردن:</b>\n\nتکایە بەشەکەت لە خوارەوە هەڵبژێرە:`,
+            deptKb
+          );
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // I. SAVE DEPARTMENT
+      if (data.startsWith('set_dept:')) {
+        const dept = data.replace('set_dept:', '');
+        if (binding) {
+          await updateEmployeeProfileField(binding.employeeId, 'department', dept);
+          await answerCallbackQuery(cqId, `✅ بەش نوێکرایەوە: ${dept}`);
+          if (cqMsgId) {
+            const updated = await getEmployeeProfileDetails(binding.employeeId);
+            await editTelegramCard(
+              cqChatId,
+              cqMsgId,
+              formatProfileCard(updated),
+              getProfileInlineKeyboard()
+            );
+          }
+        } else {
+          await answerCallbackQuery(cqId, 'هەژمار نەدۆزرایەوە', true);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // J. REFRESH PROFILE (🔄 نوێکردنەوەی پرۆفایل)
+      if (data === 'prof:refresh') {
+        if (binding) {
+          await answerCallbackQuery(cqId, '🔄 پرۆفایل نوێکرایەوە');
+          if (cqMsgId) {
+            const updated = await getEmployeeProfileDetails(binding.employeeId);
+            await editTelegramCard(
+              cqChatId,
+              cqMsgId,
+              formatProfileCard(updated),
+              getProfileInlineKeyboard()
+            );
+          }
+        } else {
+          await answerCallbackQuery(cqId, 'هەژمار نەدۆزرایەوە', true);
+        }
         return NextResponse.json({ ok: true });
       }
 
@@ -306,33 +445,112 @@ export async function POST(req: NextRequest) {
     // HANDLE PROFILE PHOTO SUBMISSION
     // -------------------------------------------------------------
     if (message.photo && Array.isArray(message.photo) && message.photo.length > 0) {
-      if (PENDING_PHOTOS[fromId] && currentBinding) {
+      const pendingProfileEdit = await getPendingProfileEdit(fromId);
+      if ((pendingProfileEdit === 'photo' || PENDING_PHOTOS[fromId]) && currentBinding) {
+        await clearPendingProfileEdit(fromId);
         delete PENDING_PHOTOS[fromId];
         const largest = message.photo[message.photo.length - 1];
         const fileId = largest.file_id;
+        const photoUrl = await getTelegramFileUrl(fileId);
+
+        if (photoUrl) {
+          await updateEmployeeProfileField(currentBinding.employeeId, 'photoUrl', photoUrl);
+        }
 
         await sendTelegramMessage(
           chatId,
-          `✅ <b>وێنەکەت بە سەرکەوتوویی وەرگیرا!</b>\n\nداواکارییەکەت نێردرا بۆ بەڕێوەبەر (کاک دارکۆ). دوای پەسەندکردن لە پرۆفایلی فەرمیتدا دادەنرێت.`,
+          `✅ <b>وێنەی نوێی پرۆفایلەکەت بە سەرکەوتوویی نوێکرایەوە!</b>`,
           getMainReplyKeyboard(isManager)
         );
 
+        // Send the updated profile card with the new photo!
+        const updated = await getEmployeeProfileDetails(currentBinding.employeeId);
+        const cardMsg = formatProfileCard(updated);
+        const kb = getProfileInlineKeyboard();
+        if (updated.photoUrl) {
+          await sendTelegramPhoto(chatId, updated.photoUrl, cardMsg, kb);
+        } else {
+          await sendTelegramMessage(chatId, cardMsg, kb);
+        }
+
+        // Notify manager as a notice (non-blocking)
         const mgrChatId = Object.entries(bindings).find(([_, info]) => info.employeeId === 'emp-02')?.[0];
-        if (mgrChatId) {
+        if (mgrChatId && mgrChatId !== chatId) {
           const caption =
-            `📸 <b>داواکاری نوێکردنەوەی وێنەی کارمەند:</b>\n\n` +
+            `📸 <b>نوێکردنەوەی وێنەی کارمەند:</b>\n\n` +
             `👤 کارمەند: <b>${currentBinding.employeeName}</b>\n` +
             `🆔 کۆد: <b>${currentBinding.employeeId}</b>\n` +
-            `🕒 کات: ${getBaghdadNow().dateStr} ${getBaghdadNow().timeStr}`;
+            `🕒 کات: ${getBaghdadNow().dateStr} ${getBaghdadNow().timeStr}\n\n` +
+            `<i>وێنەکە لە سیستەمی فەرمیدا جێگیر کرا.</i>`;
+          await sendTelegramPhoto(mgrChatId, fileId, caption);
+        }
+        return NextResponse.json({ ok: true });
+      }
+    }
 
-          await sendTelegramPhoto(mgrChatId, fileId, caption, {
-            inline_keyboard: [
-              [
-                { text: '✅ پەسەندکردنی وێنە', callback_data: `photo_app:${currentBinding.employeeId}:${fileId}` },
-                { text: '❌ ڕەتکردنەوە', callback_data: `photo_rej:${currentBinding.employeeId}` },
-              ],
-            ],
-          });
+    // -------------------------------------------------------------
+    // HANDLE PROFILE TEXT EDITS (PHONE & ADDRESS)
+    // -------------------------------------------------------------
+    const pendingProfileEdit = await getPendingProfileEdit(fromId);
+    if (pendingProfileEdit && text && !text.startsWith('/') && currentBinding) {
+      if (text === '❌ هەڵوەشاندنەوە') {
+        await clearPendingProfileEdit(fromId);
+        await sendTelegramMessage(chatId, `دەستکاریکردنی پرۆفایل هەڵوەشێندرایەوە.`, getMainReplyKeyboard(isManager));
+        return NextResponse.json({ ok: true });
+      }
+
+      if (pendingProfileEdit === 'phone') {
+        const cleanDigits = text.replace(/[^\d+]/g, '');
+        if (cleanDigits.length < 7) {
+          await sendTelegramMessage(
+            chatId,
+            `❌ <b>ژمارەی مۆبایل دروست نییە!</b>\n\nتکایە ژمارەیەکی دروست بنووسە (کەمترین ٧ ژمارە)، یان دوگمەی [❌ هەڵوەشاندنەوە] دابگرە:`,
+            {
+              keyboard: [[{ text: '❌ هەڵوەشاندنەوە' }]],
+              resize_keyboard: true,
+              one_time_keyboard: true,
+            }
+          );
+          return NextResponse.json({ ok: true });
+        }
+
+        await updateEmployeeProfileField(currentBinding.employeeId, 'phone', cleanDigits);
+        await clearPendingProfileEdit(fromId);
+
+        await sendTelegramMessage(
+          chatId,
+          `✅ <b>ژمارەی مۆبایل بە سەرکەوتوویی نوێکرایەوە!</b>`,
+          getMainReplyKeyboard(isManager)
+        );
+
+        const updated = await getEmployeeProfileDetails(currentBinding.employeeId);
+        const cardMsg = formatProfileCard(updated);
+        const kb = getProfileInlineKeyboard();
+        if (updated.photoUrl) {
+          await sendTelegramPhoto(chatId, updated.photoUrl, cardMsg, kb);
+        } else {
+          await sendTelegramMessage(chatId, cardMsg, kb);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      if (pendingProfileEdit === 'address') {
+        await updateEmployeeProfileField(currentBinding.employeeId, 'address', text);
+        await clearPendingProfileEdit(fromId);
+
+        await sendTelegramMessage(
+          chatId,
+          `✅ <b>ناونیشان بە سەرکەوتوویی نوێکرایەوە!</b>`,
+          getMainReplyKeyboard(isManager)
+        );
+
+        const updated = await getEmployeeProfileDetails(currentBinding.employeeId);
+        const cardMsg = formatProfileCard(updated);
+        const kb = getProfileInlineKeyboard();
+        if (updated.photoUrl) {
+          await sendTelegramPhoto(chatId, updated.photoUrl, cardMsg, kb);
+        } else {
+          await sendTelegramMessage(chatId, cardMsg, kb);
         }
         return NextResponse.json({ ok: true });
       }
@@ -670,29 +888,29 @@ export async function POST(req: NextRequest) {
     // -------------------------------------------------------------
     if (text === '👤 پرۆفایلی من' || text === '/profile') {
       const profile = await getEmployeeProfileDetails(currentBinding.employeeId);
-      const profileMsg =
-        `👤 <b>پرۆفایلی فەرمی کارمەند</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━\n\n` +
-        `• 👤 ناو: <b>${profile.name}</b>\n` +
-        `• 🆔 کۆدی کارمەند: <b>${profile.id}</b>\n` +
-        `• 💼 پلە و ڕۆڵ: <b>${profile.role}</b>\n` +
-        `• 🏢 بەش: <b>${profile.department}</b>\n` +
-        `• ⏰ کاتژمێری دەوام: <b>${profile.shift}</b>\n` +
-        `• 🔒 دۆخی ئامێر: <b>قوفڵکراوە بۆ ئەم تەلەگرامە</b>\n\n` +
-        `━━━━━━━━━━━━━━━━━━━━━\n` +
-        `<i>💡 بۆ داواکاری نوێکردنەوەی وێنەی پرۆفایل، دوگمەی خوارەوە دابگرە:</i>`;
-
-      const kb = {
-        inline_keyboard: [
-          [{ text: '📸 داواکاری گۆڕینی وێنە', callback_data: 'req_photo' }],
-        ],
-      };
+      const profileMsg = formatProfileCard(profile);
+      const kb = getProfileInlineKeyboard();
 
       if (profile.photoUrl) {
         await sendTelegramPhoto(chatId, profile.photoUrl, profileMsg, kb);
       } else {
         await sendTelegramMessage(chatId, profileMsg, kb);
       }
+      return NextResponse.json({ ok: true });
+    }
+
+    // 🔒 STRICT IMMUTABILITY GUARD: EMPLOYEES CANNOT ALTER THEIR NAME UNDER ANY CIRCUMSTANCES
+    if (
+      text.startsWith('/name') || 
+      text.startsWith('/edit_name') || 
+      text.startsWith('/change_name') || 
+      text.startsWith('/set_name')
+    ) {
+      await sendTelegramMessage(
+        chatId,
+        `⛔ <b>دەستکاریکردنی ناو بە هیچ شێوەیەک ڕێگەپێدراو نییە!</b>\n\n🔒 ناوی فەرمی کارمەند لە سیستەمی کۆمپانیای ئاشڵی قوفڵ کراوە و پارێزراوە بۆ ڕێگری لە هەر چەشنە ساختەکاری و تەزویرێک.\nگۆڕینی ناو تەنها و تەنها لە دەسەڵاتی بەڕێوەبەردایە لە سیستەمی سەرەکی ERP.`,
+        getMainReplyKeyboard(isManager)
+      );
       return NextResponse.json({ ok: true });
     }
 
@@ -880,6 +1098,7 @@ export async function POST(req: NextRequest) {
       delete PENDING_LEAVE[fromId];
       delete PENDING_PHOTOS[fromId];
       await clearPendingPinState(fromId);
+      await clearPendingProfileEdit(fromId);
       await sendTelegramMessage(
         chatId,
         `کردارەکە هەڵوەشێندرایەوە. دەتوانیت لە خوارەوە هەڵبژێریت:`,
