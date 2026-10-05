@@ -2017,3 +2017,156 @@ export async function broadcastAnnouncement(
 
   return { total: chatIds.length, sent };
 }
+
+// -------------------------------------------------------------
+// INTERACTIVE TELEGRAM CALENDAR & LEAVE WORKFLOW KEYBOARDS
+// -------------------------------------------------------------
+
+export const KURDISH_MONTH_NAMES = [
+  'کانوونی دووەم (١)',
+  'شوبات (٢)',
+  'ئازار (٣)',
+  'نیسان (٤)',
+  'ئایار (٥)',
+  'حوزەیران (٦)',
+  'تەممووز (٧)',
+  'ئاب (٨)',
+  'ئەیلوول (٩)',
+  'تشرینی یەکەم (١٠)',
+  'تشرینی دووەم (١١)',
+  'کانوونی یەکەم (١٢)',
+];
+
+/**
+ * Generates an interactive Kurdish inline calendar keyboard for Telegram
+ */
+export function generateTelegramCalendar(year: number, month: number, selectedDate?: string) {
+  const keyboard: any[][] = [];
+  const { dateStr: todayStr } = getBaghdadNow();
+
+  // 1. Quick Shortcut buttons for nearest dates
+  const today = new Date();
+  const dTom = new Date(today);
+  dTom.setDate(dTom.getDate() + 1);
+  const dAft = new Date(today);
+  dAft.setDate(dAft.getDate() + 2);
+
+  const tomStr = dTom.toISOString().slice(0, 10);
+  const aftStr = dAft.toISOString().slice(0, 10);
+
+  keyboard.push([
+    { text: `📌 ئەمڕۆ (${todayStr.slice(8)})`, callback_data: `cal_day:${todayStr}` },
+    { text: `📌 سبەی (${tomStr.slice(8)})`, callback_data: `cal_day:${tomStr}` },
+    { text: `📌 دوو سبەی (${aftStr.slice(8)})`, callback_data: `cal_day:${aftStr}` },
+  ]);
+
+  // 2. Navigation Header Row
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+
+  keyboard.push([
+    { text: '◀️ پێشوو', callback_data: `cal_nav:${prevYear}-${String(prevMonth).padStart(2, '0')}` },
+    { text: `📅 ${KURDISH_MONTH_NAMES[month - 1]} ${year}`, callback_data: 'cal_ignore' },
+    { text: 'داهاتوو ▶️', callback_data: `cal_nav:${nextYear}-${String(nextMonth).padStart(2, '0')}` },
+  ]);
+
+  // 3. Kurdish Weekday Header Row (Saturday to Friday)
+  keyboard.push([
+    { text: 'شەم', callback_data: 'cal_ignore' },
+    { text: 'یەک', callback_data: 'cal_ignore' },
+    { text: 'دوو', callback_data: 'cal_ignore' },
+    { text: 'سێ', callback_data: 'cal_ignore' },
+    { text: 'چوار', callback_data: 'cal_ignore' },
+    { text: 'پێنج', callback_data: 'cal_ignore' },
+    { text: 'هەین', callback_data: 'cal_ignore' },
+  ]);
+
+  // 4. Month Days Grid
+  const firstDay = new Date(year, month - 1, 1).getDay();
+  // Map JavaScript Day (0=Sun) to Kurdistan Saturday-first (Sat=0, Sun=1... Fri=6)
+  const satFirstDay = (firstDay + 1) % 7;
+  const totalDays = new Date(year, month, 0).getDate();
+
+  let currentWeek: any[] = [];
+  for (let i = 0; i < satFirstDay; i++) {
+    currentWeek.push({ text: '·', callback_data: 'cal_ignore' });
+  }
+
+  for (let d = 1; d <= totalDays; d++) {
+    const dPadded = String(d).padStart(2, '0');
+    const mPadded = String(month).padStart(2, '0');
+    const fullDate = `${year}-${mPadded}-${dPadded}`;
+
+    let label = `${d}`;
+    if (fullDate === todayStr) {
+      label = `📍${d}`;
+    }
+    if (selectedDate && fullDate === selectedDate) {
+      label = `✅${d}`;
+    }
+
+    currentWeek.push({ text: label, callback_data: `cal_day:${fullDate}` });
+
+    if (currentWeek.length === 7) {
+      keyboard.push(currentWeek);
+      currentWeek = [];
+    }
+  }
+
+  if (currentWeek.length > 0) {
+    while (currentWeek.length < 7) {
+      currentWeek.push({ text: '·', callback_data: 'cal_ignore' });
+    }
+    keyboard.push(currentWeek);
+  }
+
+  // 5. Cancel Button
+  keyboard.push([
+    { text: '❌ هەڵوەشاندنەوەی داواکاری', callback_data: 'cal_cancel' },
+  ]);
+
+  return { inline_keyboard: keyboard };
+}
+
+/**
+ * Presets and options for leave reason
+ */
+export function getLeaveNotePresetKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: '🏥 سەردانی پزیشک', callback_data: 'leave_preset:سەردانی پزیشک' },
+        { text: '🚗 کێشەی هاتوچۆ', callback_data: 'leave_preset:کێشەی هاتوچۆ' },
+      ],
+      [
+        { text: '👨‍👩‍👧‍👦 باری خێزانی', callback_data: 'leave_preset:باری خێزانی' },
+        { text: '🏢 کارێکی کتوپڕ', callback_data: 'leave_preset:کارێکی کتوپڕ' },
+      ],
+      [
+        { text: '⏭️ بەبێ تێبینی (تێپەڕاندن)', callback_data: 'leave_preset:بەبێ تێبینی' },
+      ],
+      [
+        { text: '❌ هەڵوەشاندنەوە', callback_data: 'cal_cancel' },
+      ],
+    ],
+  };
+}
+
+/**
+ * Final confirmation keyboard before submitting leave
+ */
+export function getLeaveConfirmKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: '✅ ناردنی فەرمی بۆ بەڕێوەبەرایەتی', callback_data: 'leave_confirm_send' },
+      ],
+      [
+        { text: '❌ هەڵوەشاندنەوە', callback_data: 'cal_cancel' },
+      ],
+    ],
+  };
+}
+

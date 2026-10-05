@@ -41,6 +41,9 @@ import {
   approveEmployeePhoto,
   broadcastAnnouncement,
   getUserTelegramProfilePhoto,
+  generateTelegramCalendar,
+  getLeaveNotePresetKeyboard,
+  getLeaveConfirmKeyboard,
 } from '@/lib/telegram/telegram-service';
 import { 
   resolveEmployeeRole, 
@@ -64,6 +67,16 @@ export const dynamic = 'force-dynamic';
 const PENDING_INTENTS: Record<string, 'check_in' | 'check_out'> = {};
 const PENDING_LEAVE: Record<string, boolean> = {};
 const PENDING_PHOTOS: Record<string, boolean> = {};
+
+interface LeaveSession {
+  step: 'awaiting_date' | 'awaiting_note' | 'awaiting_confirm';
+  targetDate?: string;
+  note?: string;
+  employeeId: string;
+  employeeName: string;
+  chatId: number | string;
+}
+const LEAVE_SESSIONS: Record<string, LeaveSession> = {};
 
 export async function POST(req: NextRequest) {
   try {
@@ -96,6 +109,160 @@ export async function POST(req: NextRequest) {
       const binding = bindings[cqFromId];
       const cqRole: UserRole = binding ? resolveEmployeeRole(binding.employeeId, binding.employeeName) : 'employee';
       const isManager = cqRole === 'founder' || cqRole === 'warehouse_manager' || cqRole === 'general_manager';
+
+      // -------------------------------------------------------------
+      // CALENDAR & LEAVE WORKFLOW CALLBACKS
+      // -------------------------------------------------------------
+      // 1. Calendar month navigation
+      if (data.startsWith('cal_nav:')) {
+        const [navYearStr, navMonthStr] = data.replace('cal_nav:', '').split('-');
+        const navYear = parseInt(navYearStr, 10);
+        const navMonth = parseInt(navMonthStr, 10);
+        const activeSession = LEAVE_SESSIONS[cqFromId];
+        const kb = generateTelegramCalendar(navYear, navMonth, activeSession?.targetDate);
+        if (cqMsgId) {
+          await editTelegramMessage(
+            cqChatId,
+            cqMsgId,
+            `🏖️ <b>داواکردنی مۆڵەتی فەرمی:</b>\n\nتکایە <b>بەرواری ڕۆژی مۆڵەتەکەت</b> لەم کالێندەرەی خوارەوە هەڵبژێرە:`,
+            kb
+          );
+        }
+        await answerCallbackQuery(cqId);
+        return NextResponse.json({ ok: true });
+      }
+
+      // 2. Ignore / Noop
+      if (data === 'cal_ignore') {
+        await answerCallbackQuery(cqId);
+        return NextResponse.json({ ok: true });
+      }
+
+      // 3. Cancel Leave Request
+      if (data === 'cal_cancel') {
+        delete LEAVE_SESSIONS[cqFromId];
+        delete PENDING_LEAVE[cqFromId];
+        if (cqMsgId) {
+          await editTelegramMessage(cqChatId, cqMsgId, `❌ داواکاری مۆڵەت هەڵوەشێندرایەوە.`);
+        }
+        await answerCallbackQuery(cqId, 'داواکاری هەڵوەشێندرایەوە');
+        return NextResponse.json({ ok: true });
+      }
+
+      // 4. Calendar Day Selection (دەستنیشانکردنی بەروار لە کالێندەر)
+      if (data.startsWith('cal_day:')) {
+        const selectedDate = data.replace('cal_day:', '');
+        if (!binding) {
+          await answerCallbackQuery(cqId, 'تکایە سەرەتا ئەکاونتەکەت ببەستەرەوە', true);
+          return NextResponse.json({ ok: true });
+        }
+
+        LEAVE_SESSIONS[cqFromId] = {
+          step: 'awaiting_note',
+          targetDate: selectedDate,
+          employeeId: binding.employeeId,
+          employeeName: binding.employeeName,
+          chatId: cqChatId,
+        };
+
+        await answerCallbackQuery(cqId, `📅 بەروار دیاریکرا: ${selectedDate}`);
+        const noteMsg = 
+          `📅 <b>بەرواری دیاریکراو بۆ مۆڵەت:</b> <b>${selectedDate}</b>\n\n` +
+          `📝 <b>هۆکار یان تێبینی مۆڵەتەکەت بنووسە:</b>\n` +
+          `دەتوانیت لە ڕێگەی نامەوە هۆکار بنووسیت، یان یەکێک لەم هەڵبژاردنانەی خوارەوە دیاری بکەیت:`;
+        const noteKb = getLeaveNotePresetKeyboard();
+        if (cqMsgId) {
+          await editTelegramMessage(cqChatId, cqMsgId, noteMsg, noteKb);
+        } else {
+          await sendTelegramMessage(cqChatId, noteMsg, noteKb);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // 5. Leave Reason Preset Click
+      if (data.startsWith('leave_preset:')) {
+        const preset = data.replace('leave_preset:', '');
+        const session = LEAVE_SESSIONS[cqFromId];
+        if (!session || !session.targetDate) {
+          await answerCallbackQuery(cqId, 'تکایە سەرلەنوێ بەروار دیاری بکەرەوە', true);
+          return NextResponse.json({ ok: true });
+        }
+
+        session.note = preset === 'بەبێ تێبینی' ? 'بەبێ تێبینی (فەرمی)' : preset;
+        session.step = 'awaiting_confirm';
+        await answerCallbackQuery(cqId, 'تێبینی تۆمارکرا');
+
+        const confirmMsg = 
+          `📋 <b>پێداچوونەوە و ناردنی داواکاری مۆڵەت:</b>\n\n` +
+          `👤 کارمەند: <b>${session.employeeName}</b> (${session.employeeId})\n` +
+          `📅 بەرواری مۆڵەت: <b>${session.targetDate}</b>\n` +
+          `📝 هۆکار و تێبینی: <b>${session.note}</b>\n\n` +
+          `تکایە دوگمەی ناردنی فەرمی دابگرە بۆ ڕەوانەکردنی بۆ بەڕێوەبەری کۆگا (کاک کامەران) و ئیدارە:`;
+        const confirmKb = getLeaveConfirmKeyboard();
+        if (cqMsgId) {
+          await editTelegramMessage(cqChatId, cqMsgId, confirmMsg, confirmKb);
+        } else {
+          await sendTelegramMessage(cqChatId, confirmMsg, confirmKb);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // 6. Final Send Confirmation (ناردنی فەرمی)
+      if (data === 'leave_confirm_send') {
+        const session = LEAVE_SESSIONS[cqFromId];
+        if (!session || !session.targetDate) {
+          await answerCallbackQuery(cqId, 'داواکاری نەدۆزرایەوە، تکایە سەرلەنوێ داوا بکەرەوە', true);
+          return NextResponse.json({ ok: true });
+        }
+
+        const targetDate = session.targetDate;
+        const noteText = session.note || 'بەبێ تێبینی';
+        const req = await saveLeaveRequest(
+          session.employeeId,
+          session.employeeName,
+          session.chatId,
+          noteText,
+          targetDate
+        );
+
+        delete LEAVE_SESSIONS[cqFromId];
+        delete PENDING_LEAVE[cqFromId];
+
+        await answerCallbackQuery(cqId, '✅ نێردرا');
+        const successMsg = 
+          `✅ <b>داواکاری مۆڵەتەکەت بە فەرمی نێردرا!</b>\n\n` +
+          `📅 بەرواری مۆڵەت: <b>${targetDate}</b>\n` +
+          `📝 هۆکار و تێبینی: <b>${noteText}</b>\n\n` +
+          `ڕەوانەی بەڕێوەبەری کۆگا (کاک کامەران) و بەڕێوەبەرایەتی کرا. لە کاتی پەسەندکردندا ڕاستەوخۆ دەخرێتە خشتەی فەرمی دەوام و لێرە ئاگادارت دەکەینەوە ✨`;
+
+        if (cqMsgId) {
+          await editTelegramMessage(cqChatId, cqMsgId, successMsg);
+        } else {
+          await sendTelegramMessage(cqChatId, successMsg);
+        }
+
+        // Notify approvers via notification workflow routing (Kak Kamaran, Kak Darko, Mamosta Walid)
+        const approvers = await getActionRecipients('leave_approval', bindings);
+        for (const approver of approvers) {
+          if (String(approver.chatId) === String(cqChatId)) continue;
+          const mgrText = 
+            `🔔 <b>داواکاری مۆڵەتی نوێ:</b>\n\n` +
+            `👤 کارمەند: <b>${session.employeeName}</b> (${session.employeeId})\n` +
+            `📅 بەرواری مۆڵەت: <b>${targetDate}</b>\n` +
+            `📝 هۆکار و تێبینی: <b>${noteText}</b>\n` +
+            `🕒 کاتی ناردن: ${getBaghdadNow().timeStr}`;
+
+          await sendTelegramMessage(approver.chatId, mgrText, {
+            inline_keyboard: [
+              [
+                { text: '✅ پەسەندکردنی مۆڵەت', callback_data: `leave_app:${req.id}` },
+                { text: '❌ ڕەتکردنەوە', callback_data: `leave_rej:${req.id}` },
+              ],
+            ],
+          });
+        }
+        return NextResponse.json({ ok: true });
+      }
 
       // A. MONTH NAVIGATION (◀️ مانگی پێشوو / مانگی دواتر ▶️)
       if (data.startsWith('month:')) {
@@ -679,8 +846,29 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------
-    // HANDLE LEAVE REQUEST TEXT SUBMISSION
+    // HANDLE LEAVE REQUEST INTERACTIVE TEXT & NOTE SUBMISSION
     // -------------------------------------------------------------
+    if (LEAVE_SESSIONS[fromId] && LEAVE_SESSIONS[fromId].step === 'awaiting_note' && text && !text.startsWith('/') && currentBinding) {
+      const session = LEAVE_SESSIONS[fromId];
+      if (text === '❌ هەڵوەشاندنەوە') {
+        delete LEAVE_SESSIONS[fromId];
+        delete PENDING_LEAVE[fromId];
+        await sendTelegramMessage(chatId, `داواکاری مۆڵەت هەڵوەشێندرایەوە.`, getMainReplyKeyboard(userRole));
+        return NextResponse.json({ ok: true });
+      }
+
+      session.note = text;
+      session.step = 'awaiting_confirm';
+      const confirmMsg = 
+        `📋 <b>پێداچوونەوە و ناردنی داواکاری مۆڵەت:</b>\n\n` +
+        `👤 کارمەند: <b>${session.employeeName}</b> (${session.employeeId})\n` +
+        `📅 بەرواری مۆڵەت: <b>${session.targetDate}</b>\n` +
+        `📝 هۆکار و تێبینی: <b>${session.note}</b>\n\n` +
+        `تکایە دوگمەی ناردنی فەرمی دابگرە بۆ ڕەوانەکردنی بۆ بەڕێوەبەری کۆگا (کاک کامەران) و ئیدارە:`;
+      await sendTelegramMessage(chatId, confirmMsg, getLeaveConfirmKeyboard());
+      return NextResponse.json({ ok: true });
+    }
+
     if (PENDING_LEAVE[fromId] && text && !text.startsWith('/') && currentBinding) {
       delete PENDING_LEAVE[fromId];
       if (text === '❌ هەڵوەشاندنەوە') {
@@ -1124,36 +1312,46 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // If regular employee clicks it, treat as requesting leave
-      PENDING_LEAVE[fromId] = true;
+      // If regular employee clicks it, treat as requesting leave via calendar
+      const now = new Date();
+      const nowYear = now.getFullYear();
+      const nowMonth = now.getMonth() + 1;
+
+      LEAVE_SESSIONS[fromId] = {
+        step: 'awaiting_date',
+        employeeId: currentBinding.employeeId,
+        employeeName: currentBinding.employeeName,
+        chatId: chatId,
+      };
+
+      const calKb = generateTelegramCalendar(nowYear, nowMonth);
       await sendTelegramMessage(
         chatId,
         `🏖️ <b>داواکردنی مۆڵەتی فەرمی:</b>\n\n` +
-        `تکایە <b>ڕۆژ و هۆکاری مۆڵەتەکەت</b> بنووسە:\n` +
-        `<i>نموونە: سبەی ١١-١٠-٢٠٢٦ بەهۆی سەردانی پزیشک</i>\n\n` +
-        `(یان بنووسە: ❌ هەڵوەشاندنەوە)`,
-        {
-          keyboard: [[{ text: '❌ هەڵوەشاندنەوە' }]],
-          resize_keyboard: true,
-          one_time_keyboard: true,
-        }
+        `تکایە <b>بەرواری ڕۆژی مۆڵەتەکەت</b> لەم کالێندەرەی خوارەوە هەڵبژێرە:`,
+        calKb
       );
       return NextResponse.json({ ok: true });
     }
 
     if (text === '🏖️ داواکردنی مۆڵەت' || text === '/leave') {
-      PENDING_LEAVE[fromId] = true;
+      const now = new Date();
+      const nowYear = now.getFullYear();
+      const nowMonth = now.getMonth() + 1;
+
+      LEAVE_SESSIONS[fromId] = {
+        step: 'awaiting_date',
+        employeeId: currentBinding.employeeId,
+        employeeName: currentBinding.employeeName,
+        chatId: chatId,
+      };
+
+      const calKb = generateTelegramCalendar(nowYear, nowMonth);
       await sendTelegramMessage(
         chatId,
         `🏖️ <b>داواکردنی مۆڵەتی فەرمی:</b>\n\n` +
-        `تکایە <b>ڕۆژ و هۆکاری مۆڵەتەکەت</b> بنووسە:\n` +
-        `<i>نموونە: سبەی ١١-١٠-٢٠٢٦ بەهۆی سەردانی پزیشک</i>\n\n` +
-        `(یان بنووسە: ❌ هەڵوەشاندنەوە)`,
-        {
-          keyboard: [[{ text: '❌ هەڵوەشاندنەوە' }]],
-          resize_keyboard: true,
-          one_time_keyboard: true,
-        }
+        `تکایە <b>بەرواری ڕۆژی مۆڵەتەکەت</b> لەم کالێندەرەی خوارەوە هەڵبژێرە (یان یەکێک لە ڕۆژە نزیکەکان دیاری بکە):`,
+        calKb
       );
       return NextResponse.json({ ok: true });
     }

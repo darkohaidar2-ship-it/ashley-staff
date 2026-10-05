@@ -3,12 +3,29 @@ import { logger } from '@/lib/logger';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 
 export type UserRole = 
-  | 'founder'             // کاک دارکۆ حەیدەر - Full Authority
-  | 'warehouse_manager'   // کاک کامەران - Warehouse Head (Leave, Absence, Holiday, Warehouse Staff)
-  | 'general_manager'     // مامۆستا وەلید - General Operations
-  | 'it_admin'            // بەشی ئایتی - System & Devices
-  | 'supervisor'          // سەرپەرشتیاری بەش - Team Attendance
-  | 'employee';           // کارمەندی ئاسایی - Standard Staff
+  | 'founder'             // ئەدمین / خاوەن کار (کاک دارکۆ حەیدەر)
+  | 'it_admin'            // ئایتی
+  | 'general_manager'     // بەڕێوەبەری گشتی (مامۆستا وەلید)
+  | 'warehouse_manager'   // بەڕێوەبەری کۆگا (کاک کامەران عومەر)
+  | 'warehouse_staff'     // ڕێکخستنی کۆگا
+  | 'supervisor'          // سەرپەرشتیاری بەش
+  | 'employee';           // کارمەندی ئاسایی
+
+export interface RoleOption {
+  id: UserRole;
+  title: string;
+  badge: string;
+  color: string;
+}
+
+export const ROLE_OPTIONS: RoleOption[] = [
+  { id: 'founder', title: 'ئەدمین / خاوەن کار', badge: 'ئەدمین', color: '#007AFF' },
+  { id: 'it_admin', title: 'ئایتی و تەکنیکی', badge: 'ئایتی', color: '#5856D6' },
+  { id: 'general_manager', title: 'بەڕێوەبەری گشتی', badge: 'بەڕێوەبەر', color: '#34C759' },
+  { id: 'warehouse_manager', title: 'بەڕێوەبەری کۆگا', badge: 'کۆگا', color: '#AF52DE' },
+  { id: 'warehouse_staff', title: 'ڕێکخستنی کۆگا', badge: 'ڕێکخستن', color: '#FF9500' },
+  { id: 'employee', title: 'کارمەندی ئاسایی', badge: 'کارمەند', color: '#64748B' },
+];
 
 export interface RoleDefinition {
   id: UserRole;
@@ -20,6 +37,59 @@ export interface RoleDefinition {
   allowedActions: string[];
   scope: string[];
 }
+
+export interface DestinationRoleDefinition {
+  id: UserRole;
+  title: string;
+  name: string;
+  description: string;
+  color: string;
+}
+
+export const DESTINATION_ROLES: DestinationRoleDefinition[] = [
+  {
+    id: 'founder',
+    title: 'ئەدمین و دامەزرێنەر',
+    name: 'دارکۆ حەیدەر حسێن',
+    description: 'دەسەڵاتی باڵا، پەسەندکردنی مۆڵەت و سەرپەرشتی تەواوی سیستم لە تەلەگرام',
+    color: '#007AFF',
+  },
+  {
+    id: 'warehouse_manager',
+    title: 'بەڕێوەبەری کۆگا (کاک کامەران)',
+    name: 'کامەران عومەر ڕووئوف',
+    description: 'وەرگرتن و پەسەندکردنی مۆڵەت، غیاب، و پشووی کۆگا لە تەلەگرام',
+    color: '#AF52DE',
+  },
+  {
+    id: 'general_manager',
+    title: 'بەڕێوەبەری گشتی',
+    name: 'مامۆستا وەلید',
+    description: 'پەسەندکردنی مۆڵەت و ناردنی ئاگاداری فەرمی گشتی بۆ هەمووان',
+    color: '#34C759',
+  },
+  {
+    id: 'it_admin',
+    title: 'بەشی ئایتی',
+    name: 'پشتگیری تەکنیکی و سیستم',
+    description: 'ئاگاداری مۆبایل و ئامێرەکان، بەستنەوەی تەلەگرام و ڕێگری تەزویر',
+    color: '#5856D6',
+  },
+  {
+    id: 'warehouse_staff',
+    title: 'ڕێکخستنی کۆگا',
+    name: 'کارمەندانی کۆگا و بەشەکان',
+    description: 'ئاگاداری ئەرکەکانی ناو کۆگا و هەماهەنگی ڕۆژانە',
+    color: '#FF9500',
+  },
+  {
+    id: 'employee',
+    title: 'سەرجەم کارمەندان',
+    name: 'هەموو ستافی ئاشڵی',
+    description: 'وەرگرتنی ئاگاداری گشتی، ڕاگەیاندنی پشوو و ڕێنماییەکان',
+    color: '#64748B',
+  },
+];
 
 export interface TaskActionDefinition {
   id: string;
@@ -44,6 +114,21 @@ export interface NotificationWorkflowRule {
   enabled: boolean;
 }
 
+export interface WireConnection {
+  id: string; // `${fromId}__${toId}`
+  fromType: 'employee' | 'task';
+  fromId: string;
+  toType: 'task' | 'role';
+  toId: string;
+  createdAt?: string;
+}
+
+export interface WorkflowConfiguration {
+  employeeRoles: Record<string, UserRole>;
+  connections: WireConnection[];
+  rules?: NotificationWorkflowRule[];
+}
+
 export const WORKFLOW_ROLES: RoleDefinition[] = [
   {
     id: 'founder',
@@ -53,12 +138,12 @@ export const WORKFLOW_ROLES: RoleDefinition[] = [
     color: '#007AFF', // Royal Blue
     allowedActions: [
       'leave_approval', 
+      'broadcast_msg', 
       'mark_absence', 
       'set_holiday', 
       'late_alerts', 
-      'gps_geofence', 
-      'broadcast_msg', 
       'device_management', 
+      'gps_geofence', 
       'shift_control',
       'full_reports'
     ],
@@ -94,18 +179,6 @@ export const WORKFLOW_ROLES: RoleDefinition[] = [
     scope: ['all_branches'],
   },
   {
-    id: 'supervisor',
-    title: 'سەرپەرشتیاری دەوام و گواستنەوە',
-    name: 'شادیار هوشیار / هەڤاڵ حبیب',
-    employeeId: 'emp-03',
-    color: '#FF9500', // Orange
-    allowedActions: [
-      'team_attendance', 
-      'late_alerts'
-    ],
-    scope: ['local_branch'],
-  },
-  {
     id: 'it_admin',
     title: 'بەشی ئایتی و پشتگیری تەکنیکی',
     name: 'ئایتی کۆمپانیای ئاشڵی',
@@ -118,11 +191,23 @@ export const WORKFLOW_ROLES: RoleDefinition[] = [
     scope: ['all_branches'],
   },
   {
+    id: 'warehouse_staff',
+    title: 'ڕێکخستنی کۆگا',
+    name: 'ستافی کۆگا و گواستنەوە',
+    employeeId: 'emp-03',
+    color: '#FF9500', // Orange
+    allowedActions: [
+      'team_attendance', 
+      'late_alerts'
+    ],
+    scope: ['warehouse'],
+  },
+  {
     id: 'employee',
     title: 'کارمەندی ئاسایی',
     name: 'سەرجەم کارمەندانی ئاشڵی',
     employeeId: '*',
-    color: '#FF2D55', // Pink
+    color: '#64748B', // Slate
     allowedActions: [
       'self_checkin', 
       'self_report', 
@@ -136,16 +221,24 @@ export const WORKFLOW_ROLES: RoleDefinition[] = [
 export const WORKFLOW_ACTIONS: TaskActionDefinition[] = [
   {
     id: 'leave_approval',
-    title: 'پەسەندکردنی داواکاری مۆڵەت',
-    description: 'وەرگرتن و پەسەندکردن یان ڕەتکردنەوەی مۆڵەتی کارمەندان',
+    title: 'داواکردنی مۆڵەت',
+    description: 'داواکاری مۆڵەت بە کالێندەر لە تەلەگرام و پەسەندکردن لەلایەن کاک کامەران یان بەڕێوەبەرایەتی',
     iconName: 'Palmtree',
     defaultRoles: ['founder', 'warehouse_manager', 'general_manager'],
     color: '#007AFF',
   },
   {
+    id: 'broadcast_msg',
+    title: 'ئاگەدارکردنەوەی کارمەندانی تر',
+    description: 'ناردنی ئاگاداری، بەیاننامە و ڕاگەیاندنی فەرمی لە تەلەگرام بۆ ستاف',
+    iconName: 'Megaphone',
+    defaultRoles: ['founder', 'general_manager'],
+    color: '#AF52DE',
+  },
+  {
     id: 'mark_absence',
     title: 'تۆمارکردنی غیاب و لێبڕین',
-    description: 'تۆمارکردنی غیابی ڕاستەوخۆ بۆ کارمەند لە تەلەگرام و سیستەم',
+    description: 'دیاریکردنی غیابی کارمەند لە تەلەگرام و لێبڕینی دەستبەجێ لە خشتەی دەوام',
     iconName: 'UserX',
     defaultRoles: ['founder', 'warehouse_manager'],
     color: '#FF3B30',
@@ -153,7 +246,7 @@ export const WORKFLOW_ACTIONS: TaskActionDefinition[] = [
   {
     id: 'set_holiday',
     title: 'دیاریکردنی پشووی فەرمی',
-    description: 'دیاریکردنی پشووی گشتی کۆمپانیا بەبێ هەژمارکردنی غیاب',
+    description: 'دیاریکردنی پشووی کۆمپانیا لە تەلەگرام بەبێ هەژمارکردنی غیاب لە خشتە',
     iconName: 'CalendarOff',
     defaultRoles: ['founder', 'warehouse_manager', 'general_manager'],
     color: '#34C759',
@@ -161,34 +254,18 @@ export const WORKFLOW_ACTIONS: TaskActionDefinition[] = [
   {
     id: 'late_alerts',
     title: 'ئاگاداری دواکەوتنی دەوام',
-    description: 'ناردنی ئاگاداری دەستبەجێ کاتێک کارمەند دوای ٠٨:١٥ دێت',
+    description: 'ناردنی ئاگاداری ڕاستەوخۆ کاتێک کارمەند دوای کاتژمێر ٠٨:١٥ دەگاتە دەوام',
     iconName: 'ClockAlert',
-    defaultRoles: ['founder', 'warehouse_manager', 'supervisor'],
+    defaultRoles: ['founder', 'warehouse_manager'],
     color: '#FF9500',
-  },
-  {
-    id: 'broadcast_msg',
-    title: 'ناردنی ئاگاداری گشتی',
-    description: 'ناردنی ڕاگەیاندنی فەرمی بەڕێوەبەرایەتی بۆ هەموو کارمەندان',
-    iconName: 'Megaphone',
-    defaultRoles: ['founder', 'general_manager'],
-    color: '#AF52DE',
   },
   {
     id: 'device_management',
     title: 'بەڕێوەبردنی مۆبایل و ئامێرەکان',
-    description: 'بەستنەوە، کردنەوەی قوفڵی ئامێر و ڕێگری لە تەزویر',
+    description: 'کردنەوەی قوفڵی ئامێر، بەستنەوەی تەلەگرام و ڕێگری لە دەستکاریکردنی ئامێر',
     iconName: 'Smartphone',
     defaultRoles: ['founder', 'it_admin'],
     color: '#5856D6',
-  },
-  {
-    id: 'gps_geofence',
-    title: 'دیاریکردنی لۆکەیشن و GPS',
-    description: 'پشکنین و دیاریکردنی سنوری بازنەی دەوامی لقەکان',
-    iconName: 'MapPin',
-    defaultRoles: ['founder'],
-    color: '#30B0C7',
   },
 ];
 
@@ -203,26 +280,201 @@ export const WORKFLOW_SCOPES: ScopeBranchDefinition[] = [
   { id: 'local_branch', title: 'لقەکانی خۆی', category: 'سنوردار' },
 ];
 
+const WORKFLOW_CONFIG_KEY = 'ashley_notification_workflows_config';
 const WORKFLOW_REGISTRY_KEY = 'ashley_notification_workflows';
 
 /**
- * Determine the user role based on employeeId, role, or name
+ * Returns default employee-to-role mappings
  */
-export function resolveEmployeeRole(employeeId: string, employeeName?: string): UserRole {
+export function getDefaultEmployeeRoles(): Record<string, UserRole> {
+  const roles: Record<string, UserRole> = {};
+
+  ASHLEY_OFFICIAL_EMPLOYEES.forEach((emp) => {
+    const cleanId = emp.id.toLowerCase().trim();
+    const name = emp.name.toLowerCase().trim();
+
+    if (cleanId === 'emp-02' || cleanId === '02' || name.includes('دارکۆ')) {
+      roles[emp.id] = 'founder';
+    } else if (cleanId === 'emp-06' || cleanId === '06' || name.includes('کامەران')) {
+      roles[emp.id] = 'warehouse_manager';
+    } else if (cleanId === 'emp-13' || cleanId === '13' || name.includes('وەلید')) {
+      roles[emp.id] = 'general_manager';
+    } else if (name.includes('ئایتی') || name.includes('it') || cleanId === 'it-admin') {
+      roles[emp.id] = 'it_admin';
+    } else if (cleanId === 'emp-03' || cleanId === 'emp-04' || name.includes('شادیار') || name.includes('هەڤاڵ')) {
+      roles[emp.id] = 'warehouse_staff';
+    } else {
+      roles[emp.id] = 'employee';
+    }
+  });
+
+  return roles;
+}
+
+/**
+ * Returns default manual wiring connections
+ */
+export function getDefaultConnections(): WireConnection[] {
+  const connections: WireConnection[] = [];
+
+  // 1. Employees to Tasks
+  // Kak Kamaran (emp-06) connected to Warehouse tasks
+  connections.push(
+    { id: 'emp-06__leave_approval', fromType: 'employee', fromId: 'emp-06', toType: 'task', toId: 'leave_approval' },
+    { id: 'emp-06__mark_absence', fromType: 'employee', fromId: 'emp-06', toType: 'task', toId: 'mark_absence' },
+    { id: 'emp-06__set_holiday', fromType: 'employee', fromId: 'emp-06', toType: 'task', toId: 'set_holiday' },
+    { id: 'emp-06__late_alerts', fromType: 'employee', fromId: 'emp-06', toType: 'task', toId: 'late_alerts' }
+  );
+
+  // Kak Darko (emp-02) connected to all tasks
+  WORKFLOW_ACTIONS.forEach((act) => {
+    connections.push({
+      id: `emp-02__${act.id}`,
+      fromType: 'employee',
+      fromId: 'emp-02',
+      toType: 'task',
+      toId: act.id,
+    });
+  });
+
+  // General employees connected to leave request
+  const sampleEmps = ['emp-01', 'emp-03', 'emp-05', 'emp-07', 'emp-08'];
+  sampleEmps.forEach((eId) => {
+    connections.push({
+      id: `${eId}__leave_approval`,
+      fromType: 'employee',
+      fromId: eId,
+      toType: 'task',
+      toId: 'leave_approval',
+    });
+  });
+
+  // 2. Tasks to Destination Roles
+  connections.push(
+    // Leave approval routes to Warehouse Manager (Kak Kamaran) & Founder
+    { id: 'leave_approval__warehouse_manager', fromType: 'task', fromId: 'leave_approval', toType: 'role', toId: 'warehouse_manager' },
+    { id: 'leave_approval__founder', fromType: 'task', fromId: 'leave_approval', toType: 'role', toId: 'founder' },
+    { id: 'leave_approval__general_manager', fromType: 'task', fromId: 'leave_approval', toType: 'role', toId: 'general_manager' },
+
+    // Broadcast routes to General Manager and Founder
+    { id: 'broadcast_msg__founder', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'founder' },
+    { id: 'broadcast_msg__general_manager', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'general_manager' },
+    { id: 'broadcast_msg__employee', fromType: 'task', fromId: 'broadcast_msg', toType: 'role', toId: 'employee' },
+
+    // Absence routes to Warehouse Manager and Founder
+    { id: 'mark_absence__warehouse_manager', fromType: 'task', fromId: 'mark_absence', toType: 'role', toId: 'warehouse_manager' },
+    { id: 'mark_absence__founder', fromType: 'task', fromId: 'mark_absence', toType: 'role', toId: 'founder' },
+
+    // Holiday routes to Warehouse Manager, General Manager, and Founder
+    { id: 'set_holiday__warehouse_manager', fromType: 'task', fromId: 'set_holiday', toType: 'role', toId: 'warehouse_manager' },
+    { id: 'set_holiday__founder', fromType: 'task', fromId: 'set_holiday', toType: 'role', toId: 'founder' },
+    { id: 'set_holiday__general_manager', fromType: 'task', fromId: 'set_holiday', toType: 'role', toId: 'general_manager' },
+
+    // Late alerts route to Warehouse Manager and Founder
+    { id: 'late_alerts__warehouse_manager', fromType: 'task', fromId: 'late_alerts', toType: 'role', toId: 'warehouse_manager' },
+    { id: 'late_alerts__founder', fromType: 'task', fromId: 'late_alerts', toType: 'role', toId: 'founder' },
+
+    // Device management routes to IT Admin and Founder
+    { id: 'device_management__it_admin', fromType: 'task', fromId: 'device_management', toType: 'role', toId: 'it_admin' },
+    { id: 'device_management__founder', fromType: 'task', fromId: 'device_management', toType: 'role', toId: 'founder' }
+  );
+
+  return connections;
+}
+
+/**
+ * Fetch the complete workflow configuration (roles + manual wire connections)
+ */
+export async function fetchWorkflowConfiguration(): Promise<WorkflowConfiguration> {
+  const fallback: WorkflowConfiguration = {
+    employeeRoles: getDefaultEmployeeRoles(),
+    connections: getDefaultConnections(),
+  };
+
+  try {
+    const config = await fetchSupabaseJson<WorkflowConfiguration | null>(WORKFLOW_CONFIG_KEY, null);
+    if (config && config.connections && Array.isArray(config.connections)) {
+      return {
+        employeeRoles: { ...fallback.employeeRoles, ...(config.employeeRoles || {}) },
+        connections: config.connections.length > 0 ? config.connections : fallback.connections,
+      };
+    }
+  } catch (err) {
+    logger.warn('[WorkflowService] Error reading workflow configuration from Supabase:', err);
+  }
+
+  return fallback;
+}
+
+/**
+ * Save complete workflow configuration to Supabase
+ */
+export async function saveWorkflowConfiguration(config: WorkflowConfiguration): Promise<boolean> {
+  try {
+    const ok = await saveSupabaseJson<WorkflowConfiguration>(
+      WORKFLOW_CONFIG_KEY,
+      'Ashley Notification & Manual Workflow Wiring Configuration',
+      config
+    );
+
+    // Also sync to legacy rules format for backward compatibility
+    if (ok) {
+      const legacyRules: NotificationWorkflowRule[] = [];
+      config.connections
+        .filter((c) => c.fromType === 'task' && c.toType === 'role')
+        .forEach((c) => {
+          legacyRules.push({
+            roleId: c.toId as UserRole,
+            employeeId: '*',
+            actionId: c.fromId,
+            scopeId: 'all_branches',
+            enabled: true,
+          });
+        });
+      await saveSupabaseJson<NotificationWorkflowRule[]>(
+        WORKFLOW_REGISTRY_KEY,
+        'Ashley Notification Legacy Rules',
+        legacyRules
+      );
+    }
+
+    return ok;
+  } catch (err) {
+    logger.error('[WorkflowService] Error saving workflow configuration:', err);
+    return false;
+  }
+}
+
+/**
+ * Determine employee role considering custom overrides
+ */
+export function resolveEmployeeRole(
+  employeeId: string, 
+  employeeName?: string,
+  customRoles?: Record<string, UserRole>
+): UserRole {
   const cleanId = (employeeId || '').toLowerCase().trim();
   const name = (employeeName || '').toLowerCase().trim();
 
-  // 1. Founder (کاک دارکۆ حەیدەر)
+  // 1. Check custom overrides first
+  if (customRoles) {
+    if (customRoles[employeeId]) return customRoles[employeeId];
+    if (customRoles[cleanId]) return customRoles[cleanId];
+    const matchKey = Object.keys(customRoles).find((k) => k.toLowerCase() === cleanId);
+    if (matchKey && customRoles[matchKey]) return customRoles[matchKey];
+  }
+
+  // 2. Founder (کاک دارکۆ حەیدەر)
   if (cleanId === 'emp-02' || cleanId === '02' || name.includes('دارکۆ')) {
     return 'founder';
   }
 
-  // 2. Warehouse Manager (کاک کامەران عومەر)
+  // 3. Warehouse Manager (کاک کامەران عومەر)
   if (cleanId === 'emp-06' || cleanId === '06' || name.includes('کامەران')) {
     return 'warehouse_manager';
   }
 
-  // 3. General Manager (مامۆستا وەلید)
+  // 4. General Manager (مامۆستا وەلید)
   if (
     cleanId === 'emp-13' || 
     cleanId === '13' || 
@@ -232,26 +484,26 @@ export function resolveEmployeeRole(employeeId: string, employeeName?: string): 
     return 'general_manager';
   }
 
-  // 4. IT Admin
+  // 5. IT Admin
   if (name.includes('ئایتی') || name.includes('it') || cleanId === 'it-admin') {
     return 'it_admin';
   }
 
-  // 5. Supervisors (شادیار / هەڤاڵ)
+  // 6. Warehouse Staff / Supervisor
   if (
     cleanId === 'emp-03' || 
     cleanId === 'emp-04' || 
     name.includes('شادیار') || 
     name.includes('هەڤاڵ')
   ) {
-    return 'supervisor';
+    return 'warehouse_staff';
   }
 
   return 'employee';
 }
 
 /**
- * Fetch the active workflow rules from Supabase
+ * Fetch the active workflow rules from Supabase (Legacy compat)
  */
 export async function fetchNotificationWorkflowRules(): Promise<NotificationWorkflowRule[]> {
   try {
@@ -263,10 +515,7 @@ export async function fetchNotificationWorkflowRules(): Promise<NotificationWork
     logger.warn('[WorkflowService] Error fetching rules from Supabase:', err);
   }
 
-  // Default seed rules matching the system structure
   const defaultRules: NotificationWorkflowRule[] = [];
-
-  // Founder has all actions for all branches
   for (const act of WORKFLOW_ACTIONS) {
     defaultRules.push({
       roleId: 'founder',
@@ -277,7 +526,6 @@ export async function fetchNotificationWorkflowRules(): Promise<NotificationWork
     });
   }
 
-  // Warehouse manager (کاک کامەران) has leave approval, absence, holiday, late alerts
   defaultRules.push(
     { roleId: 'warehouse_manager', employeeId: 'emp-06', actionId: 'leave_approval', scopeId: 'warehouse', enabled: true },
     { roleId: 'warehouse_manager', employeeId: 'emp-06', actionId: 'mark_absence', scopeId: 'warehouse', enabled: true },
@@ -285,13 +533,11 @@ export async function fetchNotificationWorkflowRules(): Promise<NotificationWork
     { roleId: 'warehouse_manager', employeeId: 'emp-06', actionId: 'late_alerts', scopeId: 'warehouse', enabled: true }
   );
 
-  // General manager (مامۆستا وەلید) has leave approval, broadcast
   defaultRules.push(
     { roleId: 'general_manager', employeeId: 'emp-13', actionId: 'leave_approval', scopeId: 'all_branches', enabled: true },
     { roleId: 'general_manager', employeeId: 'emp-13', actionId: 'broadcast_msg', scopeId: 'all_branches', enabled: true }
   );
 
-  // IT admin
   defaultRules.push(
     { roleId: 'it_admin', employeeId: 'it-admin', actionId: 'device_management', scopeId: 'all_branches', enabled: true }
   );
@@ -300,7 +546,7 @@ export async function fetchNotificationWorkflowRules(): Promise<NotificationWork
 }
 
 /**
- * Save updated workflow rules to Supabase
+ * Save updated workflow rules to Supabase (Legacy compat)
  */
 export async function saveNotificationWorkflowRules(rules: NotificationWorkflowRule[]): Promise<boolean> {
   try {
@@ -323,17 +569,25 @@ export async function hasActionPermission(
   actionId: string, 
   scopeId?: string
 ): Promise<boolean> {
-  const role = resolveEmployeeRole(employeeId);
+  const config = await fetchWorkflowConfiguration();
+  const role = resolveEmployeeRole(employeeId, undefined, config.employeeRoles);
+
   // Founder always has permission
   if (role === 'founder') return true;
 
-  const rules = await fetchNotificationWorkflowRules();
-  return rules.some(r => 
-    r.enabled && 
-    (r.employeeId === employeeId || r.roleId === role) && 
-    r.actionId === actionId &&
-    (!scopeId || r.scopeId === scopeId || r.scopeId === 'all_branches')
+  // Check manual task-to-role connections
+  const isRoleConnected = config.connections.some(
+    (c) => c.fromType === 'task' && c.fromId === actionId && c.toType === 'role' && c.toId === role
   );
+  if (isRoleConnected) return true;
+
+  // Check direct employee-to-task connection
+  const isEmployeeConnected = config.connections.some(
+    (c) => c.fromType === 'employee' && c.fromId === employeeId && c.toType === 'task' && c.toId === actionId
+  );
+  if (isEmployeeConnected) return true;
+
+  return false;
 }
 
 /**
@@ -343,18 +597,38 @@ export async function getActionRecipients(
   actionId: string, 
   bindings: Record<string, { employeeId: string; employeeName: string }>
 ): Promise<Array<{ chatId: string; employeeId: string; employeeName: string; role: UserRole }>> {
-  const rules = await fetchNotificationWorkflowRules();
-  const allowedRules = rules.filter(r => r.enabled && r.actionId === actionId);
+  const config = await fetchWorkflowConfiguration();
+  
+  // Find all destination roles connected to this task
+  const targetRoles = new Set<string>();
+  config.connections
+    .filter((c) => c.fromType === 'task' && c.fromId === actionId && c.toType === 'role')
+    .forEach((c) => targetRoles.add(c.toId));
+
+  // Fallback defaults if no connections configured
+  if (targetRoles.size === 0) {
+    const actDef = WORKFLOW_ACTIONS.find((a) => a.id === actionId);
+    if (actDef) {
+      actDef.defaultRoles.forEach((r) => targetRoles.add(r));
+    }
+  }
+
+  // Founder always included
+  targetRoles.add('founder');
 
   const recipients: Array<{ chatId: string; employeeId: string; employeeName: string; role: UserRole }> = [];
 
   for (const [chatId, info] of Object.entries(bindings)) {
-    const role = resolveEmployeeRole(info.employeeId, info.employeeName);
-    const matchesRule = allowedRules.some(r => r.roleId === role || r.employeeId === info.employeeId);
+    const role = resolveEmployeeRole(info.employeeId, info.employeeName, config.employeeRoles);
     
-    // Founder always gets important notifications
-    if (role === 'founder' || matchesRule) {
-      if (!recipients.some(rc => rc.chatId === chatId)) {
+    // Check if employee's role is in target roles or if employee is directly wired
+    const matchesRole = targetRoles.has(role);
+    const matchesDirect = config.connections.some(
+      (c) => c.fromType === 'employee' && c.fromId === info.employeeId && c.toType === 'task' && c.toId === actionId
+    );
+
+    if (matchesRole || matchesDirect || role === 'founder') {
+      if (!recipients.some((rc) => rc.chatId === chatId)) {
         recipients.push({
           chatId,
           employeeId: info.employeeId,
