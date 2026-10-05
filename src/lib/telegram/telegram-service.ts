@@ -82,6 +82,143 @@ export async function sendTelegramMessage(chatId: number | string, text: string,
   }
 }
 
+// Telegram API document sender (PDF files)
+export async function sendTelegramDocument(
+  chatId: number | string,
+  docBuffer: Buffer,
+  filename: string,
+  caption?: string
+) {
+  const token = getBotToken();
+  if (!token) return null;
+
+  try {
+    const formData = new FormData();
+    formData.append('chat_id', String(chatId));
+    formData.append('document', new Blob([docBuffer], { type: 'application/pdf' }), filename);
+    if (caption) {
+      formData.append('caption', caption);
+      formData.append('parse_mode', 'HTML');
+    }
+
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+      method: 'POST',
+      body: formData,
+    });
+    return await res.json();
+  } catch (err) {
+    logger.error('[TelegramService] sendTelegramDocument error:', err);
+    return null;
+  }
+}
+
+// Telegram API photo sender
+export async function sendTelegramPhoto(
+  chatId: number | string,
+  photo: string,
+  caption?: string,
+  replyMarkup?: any
+) {
+  const token = getBotToken();
+  if (!token) return null;
+
+  try {
+    const payload: any = {
+      chat_id: chatId,
+      photo,
+      parse_mode: 'HTML',
+    };
+    if (caption) payload.caption = caption;
+    if (replyMarkup) payload.reply_markup = replyMarkup;
+
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (err) {
+    logger.error('[TelegramService] sendTelegramPhoto error:', err);
+    return null;
+  }
+}
+
+// Edit existing message text & inline keyboard
+export async function editTelegramMessage(
+  chatId: number | string,
+  messageId: number | string,
+  text: string,
+  replyMarkup?: any
+) {
+  const token = getBotToken();
+  if (!token) return null;
+
+  try {
+    const payload: any = {
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      parse_mode: 'HTML',
+    };
+    if (replyMarkup) payload.reply_markup = replyMarkup;
+
+    const res = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (err) {
+    logger.error('[TelegramService] editTelegramMessage error:', err);
+    return null;
+  }
+}
+
+// Answer callback query to dismiss loading indicator
+export async function answerCallbackQuery(
+  callbackQueryId: string,
+  text?: string,
+  showAlert: boolean = false
+) {
+  const token = getBotToken();
+  if (!token) return null;
+
+  try {
+    const payload: any = { callback_query_id: callbackQueryId };
+    if (text) {
+      payload.text = text;
+      payload.show_alert = showAlert;
+    }
+
+    const res = await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (err) {
+    logger.error('[TelegramService] answerCallbackQuery error:', err);
+    return null;
+  }
+}
+
+// Get Telegram File direct URL
+export async function getTelegramFileUrl(fileId: string): Promise<string | null> {
+  const token = getBotToken();
+  if (!token) return null;
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
+    const data = await res.json();
+    if (data?.ok && data.result?.file_path) {
+      return `https://api.telegram.org/file/bot${token}/${data.result.file_path}`;
+    }
+  } catch (err) {
+    logger.error('[TelegramService] getTelegramFileUrl error:', err);
+  }
+  return null;
+}
+
 // Keyboards
 export function getMainReplyKeyboard(isManager: boolean = false) {
   const rows: any[][] = [
@@ -95,6 +232,10 @@ export function getMainReplyKeyboard(isManager: boolean = false) {
     ],
     [
       { text: '📅 دۆخی دەوامی ئەم مانگەم' },
+      { text: '👤 پرۆفایلی من' },
+    ],
+    [
+      { text: '🏖️ داواکردنی مۆڵەت' },
       { text: 'ℹ️ شوێنەکانی دەوام' },
     ],
   ];
@@ -806,4 +947,269 @@ export async function recordAttendance(
     logger.error('[TelegramService] Error recording attendance:', err);
     return { success: false, error: err.message };
   }
+}
+
+// -------------------------------------------------------------
+// LEAVE REQUESTS SERVICE
+// -------------------------------------------------------------
+export interface LeaveRequest {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  chatId: string | number;
+  details: string;
+  targetDate?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+}
+
+export async function saveLeaveRequest(
+  employeeId: string,
+  employeeName: string,
+  chatId: string | number,
+  details: string
+): Promise<LeaveRequest> {
+  const reqId = 'leave-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
+  const nowIso = new Date().toISOString();
+
+  const newReq: LeaveRequest = {
+    id: reqId,
+    employeeId,
+    employeeName,
+    chatId,
+    details,
+    status: 'pending',
+    createdAt: nowIso,
+  };
+
+  try {
+    const { data: setRow } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_leave_requests')
+      .maybeSingle();
+
+    let allReqs: Record<string, LeaveRequest> = {};
+    if (setRow?.qr_code) {
+      allReqs = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+    }
+    allReqs[reqId] = newReq;
+
+    await supabase.from('warehouses').upsert({
+      id: 'ashley_leave_requests',
+      name: 'EMPLOYEE_LEAVE_REQUESTS',
+      qr_code: JSON.stringify(allReqs),
+    }, { onConflict: 'id' });
+  } catch (err) {
+    logger.error('[TelegramService] Error saving leave request:', err);
+  }
+
+  return newReq;
+}
+
+export async function getLeaveRequest(requestId: string): Promise<LeaveRequest | null> {
+  try {
+    const { data: setRow } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_leave_requests')
+      .maybeSingle();
+
+    if (setRow?.qr_code) {
+      const allReqs = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+      return allReqs[requestId] || null;
+    }
+  } catch (err) {
+    logger.error('[TelegramService] Error reading leave request:', err);
+  }
+  return null;
+}
+
+export async function updateLeaveRequestStatus(
+  requestId: string,
+  status: 'approved' | 'rejected',
+  targetDate?: string
+): Promise<LeaveRequest | null> {
+  try {
+    const { data: setRow } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_leave_requests')
+      .maybeSingle();
+
+    if (!setRow?.qr_code) return null;
+    const allReqs = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+    const req = allReqs[requestId];
+    if (!req) return null;
+
+    req.status = status;
+    allReqs[requestId] = req;
+
+    await supabase.from('warehouses').upsert({
+      id: 'ashley_leave_requests',
+      name: 'EMPLOYEE_LEAVE_REQUESTS',
+      qr_code: JSON.stringify(allReqs),
+    }, { onConflict: 'id' });
+
+    // If approved, automatically update manual attendance records as Leave!
+    if (status === 'approved') {
+      const { dateStr } = getBaghdadNow();
+      const dateToApply = targetDate || dateStr;
+
+      try {
+        const { data: attRow } = await supabase
+          .from('warehouses')
+          .select('qr_code')
+          .eq('id', 'ashley_manual_attendance_records')
+          .maybeSingle();
+
+        let currentOverrides = {};
+        if (attRow?.qr_code) {
+          currentOverrides = typeof attRow.qr_code === 'string' ? JSON.parse(attRow.qr_code) : attRow.qr_code;
+        }
+
+        const cleanId = req.employeeId.replace(/^emp-0*/i, '') || req.employeeId.replace('emp-', '');
+        const cleanPadded = cleanId.length === 1 ? `0${cleanId}` : cleanId;
+
+        const keysToUpdate = [
+          `${cleanId}_${dateToApply}`,
+          `${cleanPadded}_${dateToApply}`,
+          `emp-${cleanId}_${dateToApply}`,
+          `emp-${cleanPadded}_${dateToApply}`,
+          `${req.employeeId}_${dateToApply}`,
+          `${req.employeeName}_${dateToApply}`,
+        ];
+
+        const leaveRecord = {
+          userId: req.employeeId,
+          userName: req.employeeName,
+          date: dateToApply,
+          status: 'Leave',
+          checkInTime: null,
+          checkOutTime: null,
+          note: `مۆڵەتی فەرمی: ${req.details}`,
+          adminNote: 'مۆڵەت لە ڕێگەی تەلەگرامەوە پەسەندکرا',
+          updatedAt: new Date().toISOString(),
+          action: 'update',
+        };
+
+        for (const k of keysToUpdate) {
+          (currentOverrides as any)[k] = leaveRecord;
+        }
+
+        await supabase.from('warehouses').upsert({
+          id: 'ashley_manual_attendance_records',
+          name: 'MANUAL_ATTENDANCE_OVERRIDES',
+          qr_code: JSON.stringify(currentOverrides),
+        }, { onConflict: 'id' });
+      } catch (attErr) {
+        logger.warn('[TelegramService] Error updating leave to attendance:', attErr);
+      }
+    }
+
+    return req;
+  } catch (err) {
+    logger.error('[TelegramService] Error updating leave status:', err);
+    return null;
+  }
+}
+
+// -------------------------------------------------------------
+// PROFILE & PHOTO MANAGEMENT
+// -------------------------------------------------------------
+export async function getEmployeeProfileDetails(employeeId: string) {
+  const allEmps = await getAllEmployees();
+  const emp = allEmps.find(e => e.id === employeeId || e.employeeId === employeeId);
+
+  let profileData: any = {};
+  try {
+    const { data: setRow } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_employee_profiles')
+      .maybeSingle();
+
+    if (setRow?.qr_code) {
+      const profiles = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+      const rawNum = employeeId.replace('emp-', '');
+      profileData = profiles[employeeId] || profiles[rawNum] || profiles[`emp-${rawNum}`] || {};
+    }
+  } catch (err) {
+    logger.warn('[TelegramService] Error fetching employee profile:', err);
+  }
+
+  return {
+    id: employeeId,
+    name: emp?.name || profileData.name || 'کارمەندی ئاشڵی',
+    role: emp?.role || profileData.role || 'کارمەند',
+    department: profileData.department || 'کۆمپانیای سەرەکی ئاشڵی',
+    photoUrl: profileData.photoUrl || profileData.avatar || null,
+    shift: profileData.shift || '08:00 - 17:00 (١٥ خولەک لێخۆشبوون)',
+    phone: profileData.phone || profileData.phoneNumber || null,
+  };
+}
+
+export async function approveEmployeePhoto(employeeId: string, photoUrl: string): Promise<boolean> {
+  try {
+    const { data: setRow } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', 'ashley_employee_profiles')
+      .maybeSingle();
+
+    let profiles: Record<string, any> = {};
+    if (setRow?.qr_code) {
+      profiles = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+    }
+
+    const rawNum = employeeId.replace('emp-', '');
+    const current = profiles[employeeId] || profiles[rawNum] || profiles[`emp-${rawNum}`] || {};
+    current.photoUrl = photoUrl;
+    current.avatar = photoUrl;
+    current.updatedAt = new Date().toISOString();
+
+    profiles[employeeId] = current;
+    profiles[`emp-${rawNum}`] = current;
+
+    await supabase.from('warehouses').upsert({
+      id: 'ashley_employee_profiles',
+      name: 'EMPLOYEE_PROFILES',
+      qr_code: JSON.stringify(profiles),
+    }, { onConflict: 'id' });
+
+    return true;
+  } catch (err) {
+    logger.error('[TelegramService] Error approving employee photo:', err);
+    return false;
+  }
+}
+
+// -------------------------------------------------------------
+// BROADCAST ANNOUNCEMENT TO ALL BOUND TELEGRAM EMPLOYEES
+// -------------------------------------------------------------
+export async function broadcastAnnouncement(
+  messageText: string,
+  senderName: string = 'کاک دارکۆ'
+): Promise<{ total: number; sent: number }> {
+  const bindings = await getTelegramBindings();
+  const chatIds = Object.keys(bindings);
+
+  const formattedMsg =
+    `📢 <b>ئاگاداری فەرمی لە بەڕێوەبەرایەتی کۆمپانیای ئاشڵی</b>\n` +
+    `نێردراو لە لایەن: <b>${senderName}</b>\n` +
+    `━━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `${messageText}\n\n` +
+    `🏢 <b>کۆمپانیای ئاشڵی بۆ مۆبیلیات</b>`;
+
+  let sent = 0;
+  for (const chatId of chatIds) {
+    try {
+      const res = await sendTelegramMessage(chatId, formattedMsg);
+      if (res && res.ok) sent++;
+    } catch (e) {
+      logger.warn(`[TelegramService] Broadcast failed for chatId ${chatId}:`, e);
+    }
+  }
+
+  return { total: chatIds.length, sent };
 }

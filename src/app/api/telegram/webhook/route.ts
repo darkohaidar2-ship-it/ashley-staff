@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { 
   sendTelegramMessage, 
+  sendTelegramDocument,
+  sendTelegramPhoto,
+  editTelegramMessage,
+  answerCallbackQuery,
+  getTelegramFileUrl,
   getMainReplyKeyboard, 
   getLocationRequestKeyboard, 
   getTelegramBindings, 
   saveTelegramBinding, 
   unbindTelegramAccount,
-  getMonthlyAttendanceReport,
   getAllEmployees,
   getTodayAttendanceSummary,
   resetTodayAttendance,
@@ -15,16 +19,29 @@ import {
   findEmployeeByPin,
   getPendingPinState,
   setPendingPinState,
-  clearPendingPinState
+  clearPendingPinState,
+  saveLeaveRequest,
+  updateLeaveRequestStatus,
+  getEmployeeProfileDetails,
+  approveEmployeePhoto,
+  broadcastAnnouncement,
 } from '@/lib/telegram/telegram-service';
+import { 
+  getMonthlyAttendanceStats, 
+  formatMonthlyReportMessage, 
+  getMonthlyReportInlineKeyboard, 
+  generateMonthlyAttendancePdf 
+} from '@/lib/attendance/report-service';
 import { evaluateAndRecordAttendance } from '@/lib/attendance/punch-service';
 import { supabase } from '@/lib/supabase/client';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
-// Temporary in-memory cache for user intents (check_in vs check_out)
+// Temporary in-memory cache for user intents
 const PENDING_INTENTS: Record<string, 'check_in' | 'check_out'> = {};
+const PENDING_LEAVE: Record<string, boolean> = {};
+const PENDING_PHOTOS: Record<string, boolean> = {};
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,7 +55,163 @@ export async function POST(req: NextRequest) {
 
     const update = await req.json();
 
-    if (!update || !update.message) {
+    if (!update) {
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 🔔 HANDLE INLINE KEYBOARD CALLBACK QUERIES
+    // -------------------------------------------------------------
+    if (update.callback_query) {
+      const cq = update.callback_query;
+      const cqId = cq.id;
+      const data: string = cq.data || '';
+      const cqFromId = String(cq.from?.id || '');
+      const cqChatId = cq.message?.chat?.id || cqFromId;
+      const cqMsgId = cq.message?.message_id;
+
+      const bindings = await getTelegramBindings();
+      const binding = bindings[cqFromId];
+      const isManager = Boolean(binding && (binding.employeeId === 'emp-02' || binding.employeeName.includes('دارکۆ')));
+
+      // A. MONTH NAVIGATION (◀️ مانگی پێشوو / مانگی دواتر ▶️)
+      if (data.startsWith('month:')) {
+        const targetMonth = data.replace('month:', '');
+        if (binding) {
+          const stats = await getMonthlyAttendanceStats(binding.employeeId, binding.employeeName, targetMonth);
+          const text = formatMonthlyReportMessage(stats);
+          const kb = getMonthlyReportInlineKeyboard(targetMonth);
+          if (cqMsgId) {
+            await editTelegramMessage(cqChatId, cqMsgId, text, kb);
+          }
+          await answerCallbackQuery(cqId);
+        } else {
+          await answerCallbackQuery(cqId, 'هەژمار نەدۆزرایەوە', true);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // B. OFFICIAL PDF DOWNLOAD (📥 داگرتنی پسوولەی فەرمی دەوام)
+      if (data.startsWith('pdf:')) {
+        const targetMonth = data.replace('pdf:', '');
+        if (binding) {
+          await answerCallbackQuery(cqId, '⏳ خەریکی ئامادەکردنی فایلی فەرمی PDF ین...');
+          const stats = await getMonthlyAttendanceStats(binding.employeeId, binding.employeeName, targetMonth);
+          const pdfBuf = await generateMonthlyAttendancePdf(stats);
+          const filename = `Ashley_Report_${targetMonth}_${binding.employeeId}.pdf`;
+          const caption = `📄 <b>پسوولەی فەرمی دەوامی مانگی (${targetMonth})</b>\n\n👤 کارمەند: <b>${binding.employeeName}</b>\n🏢 کۆمپانیای ئاشڵی بۆ مۆبیلیات`;
+          await sendTelegramDocument(cqChatId, pdfBuf, filename, caption);
+        } else {
+          await answerCallbackQuery(cqId, 'هەژمار نەدۆزرایەوە', true);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // C. REQUEST PHOTO UPLOAD (📸 داواکاری گۆڕینی وێنە)
+      if (data === 'req_photo') {
+        PENDING_PHOTOS[cqFromId] = true;
+        await answerCallbackQuery(cqId);
+        await sendTelegramMessage(
+          cqChatId,
+          `📸 <b>ناردنی وێنەی نوێی پرۆفایل:</b>\n\nتکایە <b>وێنەیەکی ڕوونی ڕووخسارت</b> وەک نامە بنێرە.\nداواکارییەکە دەچێتە لای بەڕێوەبەر بۆ پەسەندکردن.\n\n<i>(یان بنووسە: ❌ هەڵوەشاندنەوە)</i>`
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      // D. ADMIN APPROVES PHOTO
+      if (data.startsWith('photo_app:')) {
+        if (!isManager) {
+          await answerCallbackQuery(cqId, '⛔ تەنها بەڕێوەبەر دەسەڵاتی پەسەندکردنی هەیە.', true);
+          return NextResponse.json({ ok: true });
+        }
+        const parts = data.split(':');
+        const targetEmpId = parts[1];
+        const fileId = parts[2];
+        const photoUrl = await getTelegramFileUrl(fileId);
+        if (photoUrl) {
+          await approveEmployeePhoto(targetEmpId, photoUrl);
+          await answerCallbackQuery(cqId, '✅ وێنەکە پەسەندکرا');
+          if (cqMsgId) {
+            await editTelegramMessage(cqChatId, cqMsgId, `✅ وێنەی نوێ بۆ کارمەند (${targetEmpId}) بە سەرکەوتوویی پەسەندکرا.`);
+          }
+          const empEntry = Object.entries(bindings).find(([_, info]) => info.employeeId === targetEmpId);
+          if (empEntry) {
+            await sendTelegramMessage(
+              empEntry[0],
+              `🎉 <b>پیرۆزە!</b> وێنەی نوێی پرۆفایلەکەت لەلایەن بەڕێوەبەرەوە پەسەندکرا و لە سیستەمی فەرمیدا جێگیر کرا.`
+            );
+          }
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // E. ADMIN REJECTS PHOTO
+      if (data.startsWith('photo_rej:')) {
+        const targetEmpId = data.replace('photo_rej:', '');
+        await answerCallbackQuery(cqId, '❌ ڕەتکرایەوە');
+        if (cqMsgId) {
+          await editTelegramMessage(cqChatId, cqMsgId, `❌ داواکاری وێنەی کارمەند (${targetEmpId}) ڕەتکرایەوە.`);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // F. ADMIN APPROVES LEAVE REQUEST
+      if (data.startsWith('leave_app:')) {
+        if (!isManager) {
+          await answerCallbackQuery(cqId, '⛔ تەنها بەڕێوەبەر دەسەڵاتی هەیە.', true);
+          return NextResponse.json({ ok: true });
+        }
+        const reqId = data.replace('leave_app:', '');
+        const updated = await updateLeaveRequestStatus(reqId, 'approved');
+        if (updated) {
+          await answerCallbackQuery(cqId, '✅ مۆڵەتەکە پەسەندکرا');
+          if (cqMsgId) {
+            await editTelegramMessage(
+              cqChatId,
+              cqMsgId,
+              `✅ <b>داواکاری مۆڵەت پەسەندکرا:</b>\n\n👤 کارمەند: <b>${updated.employeeName}</b> (${updated.employeeId})\n📝 هۆکار: ${updated.details}\n🕒 دۆخ: مۆڵەتەکە لە سیستەم بە فەرمی تۆمارکرا.`
+            );
+          }
+          await sendTelegramMessage(
+            updated.chatId,
+            `🎉 <b>پیرۆزە بەڕێز ${updated.employeeName}!</b>\n\nداواکاری مۆڵەتەکەت (${updated.details}) لەلایەن بەڕێوەبەرەوە پەسەندکرا و لە خشتەی دەوامدا جێگیر کرا.`
+          );
+        } else {
+          await answerCallbackQuery(cqId, '❌ ئەم داواکارییە نەدۆزرایەوە', true);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // G. ADMIN REJECTS LEAVE REQUEST
+      if (data.startsWith('leave_rej:')) {
+        if (!isManager) {
+          await answerCallbackQuery(cqId, '⛔ تەنها بەڕێوەبەر دەسەڵاتی هەیە.', true);
+          return NextResponse.json({ ok: true });
+        }
+        const reqId = data.replace('leave_rej:', '');
+        const updated = await updateLeaveRequestStatus(reqId, 'rejected');
+        if (updated) {
+          await answerCallbackQuery(cqId, '❌ ڕەتکرایەوە');
+          if (cqMsgId) {
+            await editTelegramMessage(
+              cqChatId,
+              cqMsgId,
+              `❌ <b>داواکاری مۆڵەت ڕەتکرایەوە:</b>\n\n👤 کارمەند: <b>${updated.employeeName}</b> (${updated.employeeId})\n📝 هۆکار: ${updated.details}`
+            );
+          }
+          await sendTelegramMessage(
+            updated.chatId,
+            `ℹ️ <b>ئاگاداری داواکاری مۆڵەت:</b>\n\nداواکاری مۆڵەتەکەت (${updated.details}) لەلایەن بەڕێوەبەرەوە پەسەند نەکرا.`
+          );
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      await answerCallbackQuery(cqId);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (!update.message) {
       return NextResponse.json({ ok: true });
     }
 
@@ -128,6 +301,79 @@ export async function POST(req: NextRequest) {
     const currentBinding = bindings[fromId];
     const allEmployees = await getAllEmployees();
     const isManager = Boolean(currentBinding && (currentBinding.employeeId === 'emp-02' || currentBinding.employeeName.includes('دارکۆ')));
+
+    // -------------------------------------------------------------
+    // HANDLE PROFILE PHOTO SUBMISSION
+    // -------------------------------------------------------------
+    if (message.photo && Array.isArray(message.photo) && message.photo.length > 0) {
+      if (PENDING_PHOTOS[fromId] && currentBinding) {
+        delete PENDING_PHOTOS[fromId];
+        const largest = message.photo[message.photo.length - 1];
+        const fileId = largest.file_id;
+
+        await sendTelegramMessage(
+          chatId,
+          `✅ <b>وێنەکەت بە سەرکەوتوویی وەرگیرا!</b>\n\nداواکارییەکەت نێردرا بۆ بەڕێوەبەر (کاک دارکۆ). دوای پەسەندکردن لە پرۆفایلی فەرمیتدا دادەنرێت.`,
+          getMainReplyKeyboard(isManager)
+        );
+
+        const mgrChatId = Object.entries(bindings).find(([_, info]) => info.employeeId === 'emp-02')?.[0];
+        if (mgrChatId) {
+          const caption =
+            `📸 <b>داواکاری نوێکردنەوەی وێنەی کارمەند:</b>\n\n` +
+            `👤 کارمەند: <b>${currentBinding.employeeName}</b>\n` +
+            `🆔 کۆد: <b>${currentBinding.employeeId}</b>\n` +
+            `🕒 کات: ${getBaghdadNow().dateStr} ${getBaghdadNow().timeStr}`;
+
+          await sendTelegramPhoto(mgrChatId, fileId, caption, {
+            inline_keyboard: [
+              [
+                { text: '✅ پەسەندکردنی وێنە', callback_data: `photo_app:${currentBinding.employeeId}:${fileId}` },
+                { text: '❌ ڕەتکردنەوە', callback_data: `photo_rej:${currentBinding.employeeId}` },
+              ],
+            ],
+          });
+        }
+        return NextResponse.json({ ok: true });
+      }
+    }
+
+    // -------------------------------------------------------------
+    // HANDLE LEAVE REQUEST TEXT SUBMISSION
+    // -------------------------------------------------------------
+    if (PENDING_LEAVE[fromId] && text && !text.startsWith('/') && currentBinding) {
+      delete PENDING_LEAVE[fromId];
+      if (text === '❌ هەڵوەشاندنەوە') {
+        await sendTelegramMessage(chatId, `داواکاری مۆڵەت هەڵوەشێندرایەوە.`, getMainReplyKeyboard(isManager));
+        return NextResponse.json({ ok: true });
+      }
+
+      const req = await saveLeaveRequest(currentBinding.employeeId, currentBinding.employeeName, chatId, text);
+      await sendTelegramMessage(
+        chatId,
+        `✅ <b>داواکاری مۆڵەتەکەت تۆمارکرا!</b>\n\n📝 هۆکار و کات: <i>${text}</i>\n\nڕەوانەی بەڕێوەبەر (کاک دارکۆ) کرا بۆ پێداچوونەوە. دوای بڕیاردان وەڵامت پێ دەگاتەوە.`,
+        getMainReplyKeyboard(isManager)
+      );
+
+      const mgrChatId = Object.entries(bindings).find(([_, info]) => info.employeeId === 'emp-02')?.[0];
+      if (mgrChatId) {
+        const mgrText =
+          `🔔 <b>داواکاری مۆڵەتی نوێ:</b>\n\n` +
+          `👤 کارمەند: <b>${currentBinding.employeeName}</b> (${currentBinding.employeeId})\n` +
+          `📝 هۆکار و کات: <b>${text}</b>\n` +
+          `🕒 کاتژمێر: ${getBaghdadNow().timeStr}`;
+
+        await sendTelegramMessage(mgrChatId, mgrText, {
+          inline_keyboard: [
+            [
+              { text: '✅ پەسەندکردنی مۆڵەت', callback_data: `leave_app:${req.id}` },
+              { text: '❌ ڕەتکردنەوە', callback_data: `leave_rej:${req.id}` },
+            ],
+          ],
+        });
+      }
+      return NextResponse.json({ ok: true });
+    }
 
     // -------------------------------------------------------------
     // 5. COMMAND: /start
@@ -409,11 +655,92 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------
-    // 10. ACTION: MONTHLY ATTENDANCE REPORT (FOR ME)
+    // 10. ACTION: MONTHLY ATTENDANCE REPORT WITH PDF & NAVIGATION
     // -------------------------------------------------------------
     if (text === '📅 دۆخی دەوامی ئەم مانگەم' || text === '/month' || text === '/report') {
-      const reportMsg = await getMonthlyAttendanceReport(currentBinding.employeeId, currentBinding.employeeName);
-      await sendTelegramMessage(chatId, reportMsg, getMainReplyKeyboard(isManager));
+      const stats = await getMonthlyAttendanceStats(currentBinding.employeeId, currentBinding.employeeName);
+      const reportMsg = formatMonthlyReportMessage(stats);
+      const kb = getMonthlyReportInlineKeyboard(stats.monthStr);
+      await sendTelegramMessage(chatId, reportMsg, kb);
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 10b. ACTION: MY OFFICIAL PROFILE CARD
+    // -------------------------------------------------------------
+    if (text === '👤 پرۆفایلی من' || text === '/profile') {
+      const profile = await getEmployeeProfileDetails(currentBinding.employeeId);
+      const profileMsg =
+        `👤 <b>پرۆفایلی فەرمی کارمەند</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━\n\n` +
+        `• 👤 ناو: <b>${profile.name}</b>\n` +
+        `• 🆔 کۆدی کارمەند: <b>${profile.id}</b>\n` +
+        `• 💼 پلە و ڕۆڵ: <b>${profile.role}</b>\n` +
+        `• 🏢 بەش: <b>${profile.department}</b>\n` +
+        `• ⏰ کاتژمێری دەوام: <b>${profile.shift}</b>\n` +
+        `• 🔒 دۆخی ئامێر: <b>قوفڵکراوە بۆ ئەم تەلەگرامە</b>\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━━\n` +
+        `<i>💡 بۆ داواکاری نوێکردنەوەی وێنەی پرۆفایل، دوگمەی خوارەوە دابگرە:</i>`;
+
+      const kb = {
+        inline_keyboard: [
+          [{ text: '📸 داواکاری گۆڕینی وێنە', callback_data: 'req_photo' }],
+        ],
+      };
+
+      if (profile.photoUrl) {
+        await sendTelegramPhoto(chatId, profile.photoUrl, profileMsg, kb);
+      } else {
+        await sendTelegramMessage(chatId, profileMsg, kb);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 10c. ACTION: REQUEST OFFICIAL LEAVE
+    // -------------------------------------------------------------
+    if (text === '🏖️ داواکردنی مۆڵەت' || text === '/leave') {
+      PENDING_LEAVE[fromId] = true;
+      await sendTelegramMessage(
+        chatId,
+        `🏖️ <b>داواکردنی مۆڵەتی فەرمی:</b>\n\n` +
+        `تکایە <b>ڕۆژ و هۆکاری مۆڵەتەکەت</b> بە نامەیەک بنووسە:\n` +
+        `<i>نموونە: سبەی ٢٠٢٦-١٠-٠٦ بەهۆی سەردانی پزیشک</i>\n\n` +
+        `(یان بنووسە: ❌ هەڵوەشاندنەوە)`,
+        {
+          keyboard: [[{ text: '❌ هەڵوەشاندنەوە' }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        }
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 10d. MANAGER COMMAND: BROADCAST ANNOUNCEMENT
+    // -------------------------------------------------------------
+    if (text.startsWith('/broadcast') || text.startsWith('/announce')) {
+      if (!isManager) {
+        await sendTelegramMessage(chatId, `⛔ ناردنی ئاگاداری گشتی تەنها بۆ بەڕێوەبەرە.`, getMainReplyKeyboard(isManager));
+        return NextResponse.json({ ok: true });
+      }
+
+      const announcement = text.replace(/^\/(broadcast|announce)\s*/, '').trim();
+      if (!announcement) {
+        await sendTelegramMessage(
+          chatId,
+          `ℹ️ <b>شێوازی ناردنی ئاگاداری گشتی:</b>\n<code>/broadcast [دەقی ئاگادارییەکە]</code>\n\nنموونە:\n<code>/broadcast سبەی کۆبوونەوەی گشتییە سەعات ٠٩:٠٠</code>`,
+          getMainReplyKeyboard(isManager)
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      const res = await broadcastAnnouncement(announcement, currentBinding.employeeName);
+      await sendTelegramMessage(
+        chatId,
+        `📢 <b>ئاگاداری گشتی بە سەرکەوتوویی نێردرا!</b>\n\n📊 بۆ <b>${res.sent}</b> لە <b>${res.total}</b> کارمەند نێردرا.`,
+        getMainReplyKeyboard(isManager)
+      );
       return NextResponse.json({ ok: true });
     }
 
@@ -550,6 +877,8 @@ export async function POST(req: NextRequest) {
     // -------------------------------------------------------------
     if (text === '❌ هەڵوەشاندنەوە') {
       delete PENDING_INTENTS[fromId];
+      delete PENDING_LEAVE[fromId];
+      delete PENDING_PHOTOS[fromId];
       await clearPendingPinState(fromId);
       await sendTelegramMessage(
         chatId,
