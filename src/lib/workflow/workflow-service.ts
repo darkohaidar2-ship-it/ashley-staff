@@ -1121,7 +1121,33 @@ export async function getActionRecipients(
 ): Promise<Array<{ chatId: string; employeeId: string; employeeName: string; role: UserRole }>> {
   const config = await fetchWorkflowConfiguration();
   
-  // Find all authorities, roles, recipient groups, or employee IDs connected to this task in Column 3
+  // 🎯 PRIORITY 1: Direct 2-Column Task Assignments (Strictly only assigned employees)
+  if (config.taskAssignments && Array.isArray(config.taskAssignments[actionId])) {
+    const assignedIds = new Set(config.taskAssignments[actionId]);
+    if (assignedIds.size > 0) {
+      const explicitRecipients: Array<{ chatId: string; employeeId: string; employeeName: string; role: UserRole }> = [];
+      for (const [chatId, info] of Object.entries(bindings)) {
+        const cleanEmpId = info.employeeId.startsWith('emp-') ? info.employeeId : `emp-${info.employeeId}`;
+        const rawNum = info.employeeId.replace('emp-', '');
+        if (
+          assignedIds.has(cleanEmpId) || 
+          assignedIds.has(info.employeeId) || 
+          assignedIds.has(rawNum) ||
+          assignedIds.has(`emp-${rawNum}`)
+        ) {
+          explicitRecipients.push({
+            chatId,
+            employeeId: info.employeeId,
+            employeeName: info.employeeName,
+            role: resolveEmployeeRole(info.employeeId, info.employeeName, config.employeeRoles),
+          });
+        }
+      }
+      return explicitRecipients;
+    }
+  }
+
+  // Find all authorities, roles, recipient groups, or employee IDs connected to this task in legacy Column 3
   const targetKeys = new Set<string>();
   config.connections.forEach((c) => {
     if (c.fromId === actionId) targetKeys.add(c.toId);
@@ -1130,6 +1156,24 @@ export async function getActionRecipients(
 
   // If no connections in active config, check defaults
   if (targetKeys.size === 0) {
+    // For leave_approval, NEVER broadcast to entire warehouse team - only default to managers
+    if (actionId === 'leave_approval') {
+      const defaultApprovers = ['emp-01', 'emp-06']; // Darko & Kak Kamaran
+      const explicitRecipients: Array<{ chatId: string; employeeId: string; employeeName: string; role: UserRole }> = [];
+      for (const [chatId, info] of Object.entries(bindings)) {
+        const rawNum = info.employeeId.replace('emp-', '');
+        if (defaultApprovers.includes(info.employeeId) || defaultApprovers.includes(`emp-${rawNum}`)) {
+          explicitRecipients.push({
+            chatId,
+            employeeId: info.employeeId,
+            employeeName: info.employeeName,
+            role: resolveEmployeeRole(info.employeeId, info.employeeName, config.employeeRoles),
+          });
+        }
+      }
+      return explicitRecipients;
+    }
+
     const defaults = getDefaultConnections();
     defaults.forEach((c) => {
       if (c.fromId === actionId) targetKeys.add(c.toId);

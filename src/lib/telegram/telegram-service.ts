@@ -1075,6 +1075,21 @@ export async function getEmployeeTodayAttendanceStatus(employeeId: string, emplo
 
     msg += `📍 <b>شوێنی تۆمارکراو:</b> ${loc}\n\n`;
 
+    if (inTime) {
+      const [inH, inM] = inTime.split(':').map(Number);
+      const endT = outTime || timeStr;
+      const [endH, endM] = endT.split(':').map(Number);
+      const totalInMin = (inH || 0) * 60 + (inM || 0);
+      const totalEndMin = (endH || 0) * 60 + (endM || 0);
+      const workedMins = Math.max(0, totalEndMin - totalInMin);
+      const workedH = Math.floor(workedMins / 60);
+      const workedM = workedMins % 60;
+      const todayPercent = Math.min(100, Math.round((workedMins / 540) * 100)); // 9h shift = 540m
+
+      msg += `⏱️ <b>کۆی کاتی کارکردنی ئەمڕۆ:</b> <b>${workedH} کاتژمێر و ${workedM} خولەک</b>\n`;
+      msg += `📈 <b>ڕێژەی سەدی دەوامی ئەمڕۆ:</b> <b>${todayPercent}%</b> (لە 9 کاتژمێری فەرمی)\n\n`;
+    }
+
     if (inTime && !outTime) {
       msg += `✅ <i>ئێستا لە دەوام ئامادەیت. لە کاتی ڕۆشتنەوە دەتوانیت دوگمەی [🔴 تۆمارکردنی دەرچوون] دابگریت.</i>`;
     } else if (inTime && outTime) {
@@ -2011,9 +2026,18 @@ export function formatProfileCard(profile: {
     msg += `• 🚨 پەیوەندی فریاگوزاری: ${emergencyText}\n`;
   }
   msg += `• ⏰ کاتژمێری دەوام: <b>${profile.shift}</b>\n`;
+  if ((profile as any).totalWorkHoursStr) {
+    msg += `• ⏱️ کۆی گشتی کاتژمێری دەوام (ئەم مانگە): <b>${(profile as any).totalWorkHoursStr}</b>\n`;
+  }
+  if ((profile as any).attendancePercent !== undefined) {
+    msg += `• 📈 ڕێژەی سەدی ئامادەبوون (Attendance %): <b>${(profile as any).attendancePercent}%</b>\n`;
+  }
+  if ((profile as any).presentDays !== undefined) {
+    msg += `• 🟢 ڕۆژانی دەوام (ئەم مانگە): <b>${(profile as any).presentDays} ڕۆژ</b>\n`;
+  }
   msg += `• 🔒 دۆخی ئامێر: <b>قوفڵکراوە بۆ ئەم تەلەگرامە</b>\n\n`;
   msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
-  msg += `💡 <i>دەتوانیت لە ڕێگەی دوگمەکانی خوارەوە پرۆفایلەکەت دەستکاری بکەیت و تەواوی بکەیت:</i>`;
+  msg += `💡 <i>دەتوانیت لە ڕێگەی دوگمەکانی خوارەوە پرۆفایلەکەت دەستکاری بکەیت یان پسوولەی فەرمی دابەزێنیت:</i>`;
 
   return msg;
 }
@@ -2021,6 +2045,9 @@ export function formatProfileCard(profile: {
 export function getProfileInlineKeyboard() {
   return {
     inline_keyboard: [
+      [
+        { text: '📥 داگرتنی ڕاپۆرتی فەرمی (PDF)', callback_data: 'pdf:current' },
+      ],
       [
         { text: '📸 گۆڕینی وێنە', callback_data: 'prof:photo' },
         { text: '📞 گۆڕینی مۆبایل', callback_data: 'prof:phone' },
@@ -2138,6 +2165,43 @@ export async function updateEmployeeProfileField(
       name: 'EMPLOYEE_PROFILES',
       qr_code: JSON.stringify(profiles),
     }, { onConflict: 'id' });
+
+    // Sync to ashley_employees directory so changes reflect everywhere on the website
+    try {
+      const { data: empRow } = await supabase
+        .from('warehouses')
+        .select('qr_code')
+        .eq('id', 'ashley_employees')
+        .maybeSingle();
+
+      if (empRow?.qr_code) {
+        let empList = typeof empRow.qr_code === 'string' ? JSON.parse(empRow.qr_code) : empRow.qr_code;
+        if (Array.isArray(empList)) {
+          const idx = empList.findIndex((e: any) => 
+            e.id === employeeId || 
+            e.id === `emp-${rawNum}` || 
+            e.id === rawNum || 
+            e.employeeId === rawNum
+          );
+          if (idx >= 0) {
+            if (field === 'photoUrl') {
+              empList[idx].photoUrl = value;
+              empList[idx].photo = value;
+            }
+            if (field === 'phone') {
+              empList[idx].phone = value;
+            }
+            await supabase.from('warehouses').upsert({
+              id: 'ashley_employees',
+              name: 'Ashley Official Employees Directory',
+              qr_code: JSON.stringify(empList),
+            }, { onConflict: 'id' });
+          }
+        }
+      }
+    } catch (dirErr) {
+      logger.warn('[TelegramService] ashley_employees directory sync error:', dirErr);
+    }
 
     // Sync to users table if applicable
     try {

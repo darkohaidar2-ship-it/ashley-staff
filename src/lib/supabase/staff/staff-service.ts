@@ -33,7 +33,10 @@ export async function fetchEmployees(): Promise<Employee[]> {
           ? (deviceBindings[emp.id] || deviceBindings[rawNum] || deviceBindings[`emp-${rawNum}`] || (emp.employeeId ? deviceBindings[emp.employeeId] : null))
           : null;
         const isDeviceBound = emp.id === 'emp-02' || Boolean(devEntry && !devEntry.unbound && devEntry.deviceToken);
-        const photoUrl = extra.photoUrl || extra.photo || emp.photoUrl || null;
+        let photoUrl = extra.photoUrl || extra.photo || emp.photoUrl || null;
+        if (typeof photoUrl === 'string' && (photoUrl.startsWith('AgAC') || photoUrl.includes('api.telegram.org'))) {
+          photoUrl = emp.photoUrl && !emp.photoUrl.includes('api.telegram.org') && !emp.photoUrl.startsWith('AgAC') ? emp.photoUrl : null;
+        }
 
         return { 
           ...emp, 

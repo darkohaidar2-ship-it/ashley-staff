@@ -348,13 +348,16 @@ export async function POST(req: NextRequest) {
 
       // B. OFFICIAL PDF DOWNLOAD (📥 داگرتنی پسوولەی فەرمی دەوام)
       if (data.startsWith('pdf:')) {
-        const targetMonth = data.replace('pdf:', '');
+        let targetMonth = data.replace('pdf:', '');
+        if (targetMonth === 'current' || !targetMonth) {
+          targetMonth = getBaghdadNow().dateStr.slice(0, 7);
+        }
         if (binding) {
           await answerCallbackQuery(cqId, '⏳ خەریکی ئامادەکردنی فایلی فەرمی PDF ین...');
           const stats = await getMonthlyAttendanceStats(binding.employeeId, binding.employeeName, targetMonth);
           const pdfBuf = await generateMonthlyAttendancePdf(stats);
           const filename = `Ashley_Report_${targetMonth}_${binding.employeeId}.pdf`;
-          const caption = `📄 <b>پسوولەی فەرمی دەوامی مانگی (${targetMonth})</b>\n\n👤 کارمەند: <b>${binding.employeeName}</b>\n🏢 کۆمپانیای ئاشڵی بۆ مۆبیلیات`;
+          const caption = `📄 <b>پسوولەی فەرمی دەوامی مانگی (${targetMonth})</b>\n\n👤 کارمەند: <b>${binding.employeeName}</b>\n📈 ڕێژەی سەدی ئامادەبوون: <b>${stats.attendancePercent}%</b>\n🏢 کۆمپانیای ئاشڵی بۆ مۆبیلیات`;
           await sendTelegramDocument(cqChatId, pdfBuf, filename, caption);
         } else {
           await answerCallbackQuery(cqId, 'هەژمار نەدۆزرایەوە', true);
@@ -857,9 +860,23 @@ export async function POST(req: NextRequest) {
         const fileId = largest.file_id;
         const photoUrl = await getTelegramFileUrl(fileId);
 
-        // Store permanent telegramFileId for Telegram API and photoUrl
+        let finalPhoto = photoUrl || fileId;
+        if (photoUrl) {
+          try {
+            const imgRes = await fetch(photoUrl);
+            if (imgRes.ok) {
+              const arrayBuffer = await imgRes.arrayBuffer();
+              const base64 = Buffer.from(arrayBuffer).toString('base64');
+              finalPhoto = `data:image/jpeg;base64,${base64}`;
+            }
+          } catch (e) {
+            logger.warn('Failed to convert telegram photo to base64:', e);
+          }
+        }
+
+        // Store permanent telegramFileId for Telegram API and durable photoUrl
         await updateEmployeeProfileField(currentBinding.employeeId, 'telegramFileId', fileId);
-        await updateEmployeeProfileField(currentBinding.employeeId, 'photoUrl', photoUrl || fileId);
+        await updateEmployeeProfileField(currentBinding.employeeId, 'photoUrl', finalPhoto);
 
         // 1. Send the updated photo first using fileId directly (never expires on Telegram!)
         await sendTelegramPhoto(
@@ -1421,6 +1438,16 @@ export async function POST(req: NextRequest) {
       const reportMsg = formatMonthlyReportMessage(stats);
       const kb = getMonthlyReportInlineKeyboard(stats.monthStr);
       await sendTelegramMessage(chatId, reportMsg, kb);
+
+      // Automatically generate and deliver official PDF report
+      try {
+        const pdfBuf = await generateMonthlyAttendancePdf(stats);
+        const filename = `Ashley_Report_${stats.monthStr}_${currentBinding.employeeId}.pdf`;
+        const caption = `📄 <b>پسوولەی فەرمی دەوامی مانگی (${stats.monthStr})</b>\n\n👤 کارمەند: <b>${currentBinding.employeeName}</b>\n📈 ڕێژەی سەدی ئامادەبوون: <b>${stats.attendancePercent}%</b>\n⏱️ کۆی کاتژمێر: <b>${stats.totalWorkHoursStr}</b>`;
+        await sendTelegramDocument(chatId, pdfBuf, filename, caption);
+      } catch (pdfErr) {
+        logger.warn('Failed to auto-send monthly PDF:', pdfErr);
+      }
       return NextResponse.json({ ok: true });
     }
 
@@ -1435,6 +1462,16 @@ export async function POST(req: NextRequest) {
       }
 
       const profile = await getEmployeeProfileDetails(currentBinding.employeeId);
+
+      // Attach live monthly attendance stats (hours & percentage)
+      try {
+        const stats = await getMonthlyAttendanceStats(currentBinding.employeeId, currentBinding.employeeName);
+        (profile as any).totalWorkHoursStr = stats.totalWorkHoursStr;
+        (profile as any).attendancePercent = stats.attendancePercent;
+        (profile as any).presentDays = stats.presentDays;
+      } catch (stErr) {
+        logger.warn('Failed to attach monthly stats to profile:', stErr);
+      }
 
       // Resolve photo strictly from official Ashley ERP system:
       // Priority 1: User's custom photo set in ERP (profile.photoUrl, Data URL or valid URL)
@@ -1719,16 +1756,15 @@ export async function POST(req: NextRequest) {
 
       const infoMsg = 
         `🏢 <b>شوێنە پەسەندکراوەکانی کۆمپانیای ئاشڵی بۆ تۆمارکردنی دەوام:</b>\n\n` +
-        `1️⃣ <b>کۆگای سەرەکی و کارگە:</b>\n` +
-        `   📍 سلێمانی - ڕاپەڕین (مەودای ڕێگەپێدراو: 150m)\n` +
-        `   👤 بەرپرسی کۆگا: <b>کاک کامەران عومەر</b>\n\n` +
-        `2️⃣ <b>پێشانگای ئاشڵی سەرەکی:</b>\n` +
-        `   📍 سلێمانی - شەقامی سەرەکی بازنەیی مەلیک مەحمود\n\n` +
-        `3️⃣ <b>دیوانی بەڕێوەبەرایەتی سەرەکی:</b>\n` +
-        `   📍 ئۆفیسی سەرەکی ئاشڵی\n\n` +
-        `4️⃣ <b>لقی هەولێر و دهۆک:</b>\n` +
-        `   📍 پێشانگاکان و ئۆفیسی هەرێمی\n\n` +
-        `🔒 تۆمارکردنی دەوام بەپێی GPS دەپشکنرێت تا دڵنیابین لە ئامادەبوونت لە شوێنی کار.`;
+        `1️⃣ <b>کۆمپانیای سەرەکی ئاشڵی (Ashley Base):</b>\n` +
+        `   📍 سلێمانی - کارگە و کۆمپانیای سەرەکی\n` +
+        `   🛡️ مەودای ڕێگەپێدراو: <b>400 مەتر</b>\n` +
+        `   🌐 هێڵی پانی/درێژی: <code>35.562431, 45.474850</code>\n\n` +
+        `2️⃣ <b>کۆگای سەرەکی هوانە (Huana Warehouse):</b>\n` +
+        `   📍 سلێمانی - کۆگای سەرەکی هوانە\n` +
+        `   🛡️ مەودای ڕێگەپێدراو: <b>400 مەتر</b>\n` +
+        `   🌐 هێڵی پانی/درێژی: <code>35.508880, 45.453089</code>\n\n` +
+        `🔒 تۆمارکردنی دەوام بەپێی GPS دەپشکنرێت تا دڵنیابین لە ئامادەبوونت لە یەکێک لەم دوو شوێنەی کار.`;
       await sendTelegramMessage(chatId, infoMsg, replyKeyboard);
       return NextResponse.json({ ok: true });
     }

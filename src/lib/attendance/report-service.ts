@@ -33,6 +33,8 @@ export interface MonthlyAttendanceStats {
   totalLateStr: string;
   totalOvertimeMinutes: number;
   totalOvertimeStr: string;
+  targetWorkingDays: number;
+  attendancePercent: number;
   records: DayPunchRecord[];
 }
 
@@ -239,6 +241,13 @@ export async function getMonthlyAttendanceStats(
     });
   }
 
+  // Total expected working days in the month (excluding Fridays / official holidays)
+  const targetWorkingDays = Math.max(1, dayRecords.filter(r => r.status !== 'Holiday').length);
+  const targetWorkMinutes = targetWorkingDays * 540; // 9 hours official shift
+  const attendancePercent = targetWorkMinutes > 0 
+    ? Math.min(100, Math.round(((totalWorkMinutes + totalOvertimeMinutes) / targetWorkMinutes) * 100))
+    : 0;
+
   return {
     monthStr,
     employeeId,
@@ -253,6 +262,8 @@ export async function getMonthlyAttendanceStats(
     totalLateStr: formatMinutesToKurdish(totalLateMinutes),
     totalOvertimeMinutes,
     totalOvertimeStr: formatMinutesToKurdish(totalOvertimeMinutes),
+    targetWorkingDays,
+    attendancePercent,
     records: dayRecords,
   };
 }
@@ -271,8 +282,9 @@ export function formatMonthlyReportMessage(stats: MonthlyAttendanceStats): strin
   msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
   msg += `📊 <b>ئاماری گشتی دەوام:</b>\n`;
-  msg += `• 🟢 ڕۆژانی ئامادەبوو: <b>${stats.presentDays}</b> ڕۆژ\n`;
+  msg += `• 🟢 ڕۆژانی دەوام: <b>${stats.presentDays}</b> ڕۆژ لە کۆی <b>${stats.targetWorkingDays}</b> ڕۆژی فەرمی\n`;
   msg += `• ⏱️ کۆی کاتژمێری کارکردن: <b>${stats.totalWorkHoursStr}</b>\n`;
+  msg += `• 📈 <b>ڕێژەی سەدی ئامادەبوون (Attendance %):</b> <b>${stats.attendancePercent}%</b>\n`;
   msg += `• ⭐ کاتژمێری ئۆڤەرتایم: <b>${stats.totalOvertimeStr}</b>\n`;
   if (stats.totalLateMinutes > 0) {
     msg += `• ⚠️ کۆی دواکەوتن (درەنگ): <b>${stats.totalLateStr}</b>\n`;
@@ -302,14 +314,15 @@ export function formatMonthlyReportMessage(stats: MonthlyAttendanceStats): strin
         let extra = '';
         if (r.overtimeMinutes > 0) extra += ` (+${r.overtimeMinutes}خ ئەزافی)`;
         if (r.lateMinutes > 0) extra += ` (⚠️ ${r.lateMinutes}خ درەنگ)`;
-        msg += `📅 <b>${shortDate}</b>: [${inText} | ${outText}]${extra}\n`;
+        const dayPct = Math.min(100, Math.round((r.durationMinutes / 540) * 100));
+        msg += `📅 <b>${shortDate}</b>: [${inText} | ${outText}] (${r.durationStr} - ${dayPct}%)${extra}\n`;
       }
     }
   } else {
     msg += `<i>تا ئێستا هیچ تۆمارێکی دەوام بۆ ئەم مانگە نییە.</i>\n`;
   }
 
-  msg += `\n✨ <i>دەتوانیت لە ڕێگەی دوگمەکانی خوارەوە مانگەکان بگۆڕیت یان فایلی فەرمی PDF دابەزێنیت:</i>`;
+  msg += `\n✨ <i>ڕاپۆرتی فەرمی PDF بۆ دەوامی ئەم مانگە ئامادەکراوە و لە خوارەوە بۆتان دەنێردرێت:</i>`;
   return msg;
 }
 
@@ -390,6 +403,9 @@ export async function generateMonthlyAttendancePdf(stats: MonthlyAttendanceStats
   doc.text(`مانگی دەوام: ${kurdishMonth}`, 15, 51, { align: 'left' });
   const { dateStr, timeStr } = getBaghdadNow();
   doc.text(`کاتی دەرچوواندن: ${dateStr} ${timeStr}`, 15, 60, { align: 'left' });
+  doc.setFontSize(10);
+  doc.setTextColor(5, 150, 105); // emerald-600
+  doc.text(`ڕێژەی ئامادەبوون: ${stats.attendancePercent}%`, 105, 60, { align: 'center' });
 
   // Summary Stat Boxes (4-column grid)
   const boxY = 72;
@@ -401,7 +417,7 @@ export async function generateMonthlyAttendancePdf(stats: MonthlyAttendanceStats
   doc.rect(156, boxY, boxW, boxH, 'FD');
   doc.setTextColor(6, 95, 70); // emerald-800
   doc.setFontSize(9);
-  doc.text('کۆی کاتژمێری کار', 178, boxY + 7, { align: 'center' });
+  doc.text(`کۆی کاتژمێر (${stats.attendancePercent}%)`, 178, boxY + 7, { align: 'center' });
   doc.setFontSize(11);
   doc.text(stats.totalWorkHoursStr, 178, boxY + 15, { align: 'center' });
 
@@ -410,9 +426,9 @@ export async function generateMonthlyAttendancePdf(stats: MonthlyAttendanceStats
   doc.rect(108, boxY, boxW, boxH, 'FD');
   doc.setTextColor(30, 64, 175); // blue-800
   doc.setFontSize(9);
-  doc.text('ڕۆژانی ئامادەبوو', 130, boxY + 7, { align: 'center' });
-  doc.setFontSize(12);
-  doc.text(`${stats.presentDays} ڕۆژ`, 130, boxY + 15, { align: 'center' });
+  doc.text('ڕۆژانی دەوام', 130, boxY + 7, { align: 'center' });
+  doc.setFontSize(11);
+  doc.text(`${stats.presentDays} لە ${stats.targetWorkingDays} ڕۆژ`, 130, boxY + 15, { align: 'center' });
 
   // Box 3: Overtime
   doc.setFillColor(254, 243, 199); // amber-50

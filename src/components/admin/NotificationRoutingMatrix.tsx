@@ -49,7 +49,9 @@ import {
   Calendar,
   MapPin,
   Cpu,
+  Bot,
 } from 'lucide-react';
+import { TelegramBotSimulatorModal } from '@/components/admin/TelegramBotSimulatorModal';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Palmtree,
@@ -118,7 +120,6 @@ export default function NotificationRoutingMatrix() {
   // Telegram Simulator Modal
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [simulatorEmpId, setSimulatorEmpId] = useState<string>('emp-02');
-  const [simulatorKeyboard, setSimulatorKeyboard] = useState<any>(null);
 
   // 1. Load configuration from Supabase on mount
   const loadConfig = useCallback(async (force = false) => {
@@ -137,17 +138,6 @@ export default function NotificationRoutingMatrix() {
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
-
-  // Update simulator keyboard when previewing an employee
-  useEffect(() => {
-    async function updateSim() {
-      if (simulatorOpen && simulatorEmpId) {
-        const kb = await getDynamicEmployeeTelegramKeyboard(simulatorEmpId);
-        setSimulatorKeyboard(kb);
-      }
-    }
-    updateSim();
-  }, [simulatorOpen, simulatorEmpId, taskAssignments]);
 
   // Save changes to Supabase
   const handleSave = async () => {
@@ -359,11 +349,11 @@ export default function NotificationRoutingMatrix() {
           {/* Simulator Preview Button */}
           <button
             onClick={() => setSimulatorOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-white/10 transition-all shadow-xs"
-            title="پشکنینی شێوازی تەلەگرام لای کارمەند"
+            className="flex items-center gap-2 px-3.5 py-2 text-xs font-black rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white shadow-md shadow-sky-600/20 active:scale-95 transition-all cursor-pointer"
+            title="تاقیکردنەوەی ڕاستەوخۆی بۆتی تەلەگرام لەناو وێبسایتەکە"
           >
-            <Smartphone className="w-4 h-4 text-indigo-500" />
-            <span>پشکنینی بۆتی تەلەگرام</span>
+            <Bot className="w-4 h-4 text-sky-200" />
+            <span>🤖 تێست بۆت (Simulator)</span>
           </button>
 
           {/* Refresh Button */}
@@ -872,126 +862,13 @@ export default function NotificationRoutingMatrix() {
       </div>
 
       {/* ========================================================= */}
-      {/* 3. TELEGRAM BOT SIMULATOR PREVIEW MODAL                   */}
+      {/* 3. INTERACTIVE TELEGRAM BOT SIMULATOR MODAL               */}
       {/* ========================================================= */}
-      {simulatorOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95">
-            
-            {/* Modal Header */}
-            <div className="p-4 sm:px-6 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-slate-50 dark:bg-slate-950">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
-                  <Smartphone className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white">
-                    پشکنینی دوگمەکانی تەلەگرام (Simulator)
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    هەر کارمەندێک هەڵبژێرە تا بزانیت کاتێ دەچێتە تەلەگرام کام دوگمانە دەبینێت.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setSimulatorOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-4">
-              {/* Employee selector */}
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
-                  کارمەند هەڵبژێرە بۆ پشکنینی دوگمەکانی:
-                </label>
-                <select
-                  value={simulatorEmpId}
-                  onChange={(e) => setSimulatorEmpId(e.target.value)}
-                  className="w-full p-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 font-bold focus:ring-2 focus:ring-indigo-500"
-                >
-                  {ASHLEY_OFFICIAL_EMPLOYEES.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.employeeId}) — {emp.role}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Telegram Phone Mockup */}
-              <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-white/10 space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-white/10">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-xs font-black text-slate-800 dark:text-slate-200">
-                      Telegram Attendance Bot
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-slate-400">Ashley ERP Live</span>
-                </div>
-
-                <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs leading-relaxed text-slate-800 dark:text-slate-200">
-                  سڵاو <b>{getEmp(simulatorEmpId)?.name}</b>، بەخێربێیت بۆ بۆتی فەرمیی دەوامی ئاشڵی. ئەمەش ئەو دوگمانەیە کە بەپێی ماتریسی نوێ لەسەر شاشەی مۆبایلەکەت دەردەکەون:
-                </div>
-
-                {/* Keyboard Grid Mockup */}
-                <div className="space-y-1.5 pt-2">
-                  <div className="text-[11px] font-bold text-slate-500 mb-1">
-                    دوگمەکانی خوارەوەی چاتی تەلەگرام (Reply Keyboard):
-                  </div>
-
-                  {simulatorKeyboard?.keyboard && simulatorKeyboard.keyboard.length > 0 ? (
-                    simulatorKeyboard.keyboard.map((row: any[], rowIdx: number) => (
-                      <div key={rowIdx} className="grid grid-cols-2 gap-1.5">
-                        {row.map((btn: any, btnIdx: number) => (
-                          <div
-                            key={btnIdx}
-                            className={`p-2.5 rounded-xl text-center text-xs font-bold shadow-xs border transition-all ${
-                              btn.text.includes('هاتن')
-                                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300'
-                                : btn.text.includes('دەرچوون')
-                                ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300'
-                                : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-white/10'
-                            }`}
-                          >
-                            {btn.text}
-                          </div>
-                        ))}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-4 text-center text-xs text-slate-400">
-                      هیچ دوگمەیەک بۆ ئەم کارمەندە دەستنیشان نەکراوە.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Status explanation */}
-              <div className="p-3 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-xs text-indigo-900 dark:text-indigo-200 flex items-start gap-2">
-                <Info className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
-                <div>
-                  ئەم کارمەندە تەنها ئەو دوگمانە دەبینێت کە بە فەرمی لە ستوونی ڕاستەوە بۆ سەر ئەرکەکان ڕاکێشراون. ئەگەر بۆ هەر ئەرکێک ڕانەکێشرابێت، ئەو دوگمەیە لە تەلەگرام دەشاردرێتەوە و بۆی دەرناکەوێت.
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-200 dark:border-white/10 flex justify-end bg-slate-50 dark:bg-slate-950">
-              <button
-                onClick={() => setSimulatorOpen(false)}
-                className="px-5 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white"
-              >
-                تەواو (داخستن)
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <TelegramBotSimulatorModal
+        isOpen={simulatorOpen}
+        onClose={() => setSimulatorOpen(false)}
+        defaultEmployeeId={selectedEmployeeIds[0] || simulatorEmpId || 'emp-01'}
+      />
 
     </div>
   );

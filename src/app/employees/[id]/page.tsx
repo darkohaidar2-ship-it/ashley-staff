@@ -282,13 +282,13 @@ function EmployeeDetailPage() {
     }
   };
 
-  // Save Profile Edits
-  const handleSaveProfile = () => {
+  // Save Profile Edits (Permanently synced to Supabase)
+  const handleSaveProfile = async () => {
     if (!selectedEmployee) return;
     const updated = {
       ...selectedEmployee,
-      name: editName,
-      fullName3Part: editFullName3Part,
+      name: editName || editFullName3Part,
+      fullName3Part: editFullName3Part || editName,
       role: editRole,
       phone: editPhone,
       startDate: editStartDate,
@@ -296,10 +296,74 @@ function EmployeeDetailPage() {
     };
     setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? (updated as any) : e));
     setIsEditing(false);
-    toast({
-      title: '✅ زانیارییەکان نوێکرانەوە',
-      description: 'گۆڕانکارییەکان لە پرۆفایلی کارمەند بە سەرکەوتوویی پاشەکەوت کران.'
-    });
+
+    try {
+      await fetch('/api/attendance/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedEmployee.id,
+          name: editFullName3Part || editName,
+          phone: editPhone,
+          hireDate: editStartDate,
+          photoUrl: editPhotoUrl,
+        }),
+      });
+      toast({
+        title: '✅ زانیارییەکان نوێکرانەوە',
+        description: 'گۆڕانکارییەکان لە پرۆفایلی کارمەند بە سەرکەوتوویی لە تەواوی سێرڤەر و وێبسایت پاشەکەوت کران.'
+      });
+    } catch (err) {
+      toast({
+        title: '⚠️ تێبینی',
+        description: 'گۆڕانکارییەکان بە شێوەی خۆجێیی پاشەکەوت کران.'
+      });
+    }
+  };
+
+  // Direct Photo Upload Handler
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedEmployee) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({ variant: 'destructive', title: 'هەڵە', description: 'تکایە تەنها فایلی وێنە هەڵبژێرە.' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const base64Url = ev.target?.result as string;
+      if (!base64Url) return;
+
+      setEditPhotoUrl(base64Url);
+      const updated = {
+        ...selectedEmployee,
+        photoUrl: base64Url,
+      };
+      setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? (updated as any) : e));
+
+      try {
+        await fetch('/api/attendance/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: selectedEmployee.id,
+            photoUrl: base64Url,
+          }),
+        });
+        toast({
+          title: '📸 وێنەی نوێ جێگیر کرا',
+          description: 'وێنەی کارمەند بە سەرکەوتوویی نوێکرایەوە و لە تەواوی سیستەمدا چەسپێنرا.'
+        });
+      } catch (err) {
+        toast({
+          title: '📸 وێنە لە بیرگە تۆمارکرا',
+          description: 'وێنەکە لە ئامێرەکەت جێگیر کرا.'
+        });
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   // Toggle Resigned / Active
@@ -675,6 +739,21 @@ function EmployeeDetailPage() {
               ) : (
                 <span>{(selectedEmployee.name || '').slice(0, 2)}</span>
               )}
+              <label 
+                htmlFor="employee-photo-hero-upload" 
+                className="absolute inset-0 bg-slate-900/80 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-all text-white text-[9px] font-bold text-center p-1 backdrop-blur-xs"
+                title="گۆڕینی وێنەی فەرمی کارمەند"
+              >
+                <Camera className="w-5 h-5 mb-0.5 text-amber-300 animate-pulse" />
+                <span>گۆڕینی وێنە</span>
+              </label>
+              <input 
+                id="employee-photo-hero-upload" 
+                type="file" 
+                accept="image/*" 
+                onChange={handlePhotoUpload} 
+                className="hidden" 
+              />
             </div>
 
             <div className="space-y-1">
@@ -753,7 +832,7 @@ function EmployeeDetailPage() {
             <button onClick={() => setIsEditing(false)} className="text-xs text-slate-500 font-bold hover:text-black">✕ داخستن</button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-700">ناوی سێ قۆڵی:</label>
               <input
@@ -780,6 +859,21 @@ function EmployeeDetailPage() {
                 onChange={e => setEditPhone(e.target.value)}
                 className="w-full text-xs font-bold p-2 bg-white border border-slate-300 outline-none font-mono"
               />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-700">وێنەی پرۆفایل:</label>
+              <div className="flex items-center gap-2">
+                <label className="px-3 py-2 bg-white border border-slate-300 hover:bg-slate-100 cursor-pointer text-[11px] font-bold text-slate-700 flex items-center gap-1.5 w-full justify-center">
+                  <Camera className="w-3.5 h-3.5 text-blue-600" />
+                  <span>هەڵبژاردنی وێنە</span>
+                  <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                </label>
+                {editPhotoUrl && (
+                  <div className="w-9 h-9 border border-slate-300 overflow-hidden shrink-0">
+                    <img src={editPhotoUrl} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
