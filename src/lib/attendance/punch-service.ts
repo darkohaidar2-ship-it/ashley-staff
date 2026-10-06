@@ -3,6 +3,7 @@ import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import { DEFAULT_COMPANY_LOCATIONS } from '@/lib/geo-constants';
 import { logger } from '@/lib/logger';
 import { getBaghdadNow, getDistanceMeters } from '@/lib/telegram/telegram-service';
+import { getEmployeeShiftConfig, calculateNetWorkedAndOvertime } from '@/lib/attendance/shift-service';
 
 export interface PunchRequest {
   source: 'telegram' | 'whatsapp' | 'web' | 'mobile_app';
@@ -24,6 +25,10 @@ export interface PunchResponse {
   locationName?: string;
   distanceMeters?: number;
   message: string;
+  hasOvertime?: boolean;
+  overtimeMinutes?: number;
+  netWorkedMinutes?: number;
+  breakDeductedMinutes?: number;
 }
 
 /**
@@ -206,6 +211,9 @@ export async function evaluateAndRecordAttendance(req: PunchRequest): Promise<Pu
       };
     }
 
+    let finalIn: string | null = targetPunch === 'check_in' ? timeStr : (existing?.check_in_time || null);
+    let finalOut: string | null = targetPunch === 'check_out' ? timeStr : (existing?.check_out_time || null);
+
     // 6c. Authoritative Overrides Store Sync (ashley_manual_attendance_records)
     try {
       const { data: setRow } = await supabase
@@ -234,8 +242,8 @@ export async function evaluateAndRecordAttendance(req: PunchRequest): Promise<Pu
       }
 
       const existingOv = currentOverrides[`${req.employeeId}_${dateStr}`] || currentOverrides[`${cleanPadded}_${dateStr}`] || {};
-      const finalIn = targetPunch === 'check_in' ? timeStr : (existing?.check_in_time || existingOv?.checkInTime || null);
-      const finalOut = targetPunch === 'check_out' ? timeStr : (existing?.check_out_time || existingOv?.checkOutTime || null);
+      if (!finalIn && existingOv?.checkInTime) finalIn = existingOv.checkInTime;
+      if (!finalOut && existingOv?.checkOutTime) finalOut = existingOv.checkOutTime;
 
       const liveOverride = {
         userId: req.employeeId,
@@ -266,7 +274,32 @@ export async function evaluateAndRecordAttendance(req: PunchRequest): Promise<Pu
       logger.warn('[PunchService] Error updating manual overrides store:', whErr);
     }
 
-    // 7. Success Output Message
+    // 7. Success Output Message & Net Work / Overtime Evaluation
+    let hasOvertime = false;
+    let overtimeMinutes = 0;
+    let netWorkedMinutes = 0;
+    let breakDeductedMinutes = 0;
+    let workStatsSummary = '';
+
+    if (targetPunch === 'check_out' && finalIn && finalOut) {
+      const shiftCfg = getEmployeeShiftConfig(req.employeeId);
+      const calc = calculateNetWorkedAndOvertime(finalIn, finalOut, shiftCfg);
+      netWorkedMinutes = calc.netWorkedMinutes;
+      breakDeductedMinutes = calc.breakDeductedMinutes;
+      overtimeMinutes = calc.overtimeMinutes;
+      hasOvertime = calc.isOvertime && calc.overtimeMinutes > 0;
+
+      const netHours = Math.floor(netWorkedMinutes / 60);
+      const netMins = netWorkedMinutes % 60;
+      workStatsSummary += `\n⏱ کاتی کارکردنی خاوێن: <b>${netHours} کاتژمێر و ${netMins} خولەک</b>`;
+      if (breakDeductedMinutes > 0) {
+        workStatsSummary += ` <i>(پشووی ١٢-١ داشکێنرا: ${breakDeductedMinutes} خولەک)</i>`;
+      }
+      if (hasOvertime) {
+        workStatsSummary += `\n⏰ کاتی زیادە (ئۆڤەرتایم): <b>${overtimeMinutes} خولەک</b>`;
+      }
+    }
+
     const typeLabel = targetPunch === 'check_in' ? '🟢 دەوامی هاتن' : '🔴 دەوامی دەرچوون';
     const distanceNote = distanceMeters > 0 ? `\n📍 مەودا لە سەنتەر: <b>${distanceMeters} مەتر</b>` : '';
     const sourceLabel = req.source === 'whatsapp' ? 'واتس ئەپ' : req.source === 'telegram' ? 'تەلەگرام' : 'مۆبایل';
@@ -279,7 +312,11 @@ export async function evaluateAndRecordAttendance(req: PunchRequest): Promise<Pu
       timeStr,
       locationName,
       distanceMeters,
-      message: `✅ <b>بەڵێ، ${typeLabel} بە سەرکەوتوویی تۆمارکرا!</b>\n\n👤 کارمەند: <b>${empName}</b>\n⏱ کاتژمێر: <b>${timeStr}</b> (${dateStr})\n🏢 شوێن: <b>${locationName}</b>${distanceNote}\n📱 لەڕێگەی: <b>${sourceLabel}</b>\n\nدەستت خۆش بێت و لە خشتەی سەرەکی وێبسایتەکە دانیشت! ✨`
+      hasOvertime,
+      overtimeMinutes,
+      netWorkedMinutes,
+      breakDeductedMinutes,
+      message: `✅ <b>بەڵێ، ${typeLabel} بە سەرکەوتوویی تۆمارکرا!</b>\n\n👤 کارمەند: <b>${empName}</b>\n⏱ کاتژمێر: <b>${timeStr}</b> (${dateStr})\n🏢 شوێن: <b>${locationName}</b>${distanceNote}${workStatsSummary}\n📱 لەڕێگەی: <b>${sourceLabel}</b>\n\nدەستت خۆش بێت و لە خشتەی سەرەکی وێبسایتەکە دانیشت! ✨`
     };
   } catch (err: any) {
     logger.error('[PunchService] Unexpected error:', err);

@@ -59,6 +59,13 @@ import {
   generateMonthlyAttendancePdf 
 } from '@/lib/attendance/report-service';
 import { evaluateAndRecordAttendance } from '@/lib/attendance/punch-service';
+import { 
+  fetchPendingExpenseRequests, 
+  createPendingExpenseRequest, 
+  approveExpenseRequest, 
+  rejectExpenseRequest 
+} from '@/lib/supabase/expenses/expenses-service';
+import type { PendingExpenseRequest } from '@/lib/types';
 import { supabase } from '@/lib/supabase/client';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import { logger } from '@/lib/logger';
@@ -92,6 +99,99 @@ interface BroadcastSession {
   type?: 'text' | 'photo';
 }
 const PENDING_BROADCAST: Record<string, BroadcastSession> = {};
+
+interface ExpenseSession {
+  step: 'awaiting_amount' | 'awaiting_category' | 'awaiting_note' | 'awaiting_receipt';
+  employeeId: string;
+  employeeName: string;
+  chatId: number | string;
+  amount?: number;
+  category?: string;
+  note?: string;
+  receiptPhotoId?: string;
+  receiptPhotoUrl?: string;
+}
+const EXPENSE_SESSIONS: Record<string, ExpenseSession> = {};
+
+interface OvertimeNoteSession {
+  employeeId: string;
+  employeeName: string;
+  dateStr: string;
+  overtimeMinutes: number;
+}
+const PENDING_OVERTIME_NOTE: Record<string, OvertimeNoteSession> = {};
+
+async function submitExpenseRequestFromTelegram(session: ExpenseSession, bindings: Record<string, any>) {
+  const req = await createPendingExpenseRequest({
+    employeeId: session.employeeId,
+    employeeName: session.employeeName,
+    amount: session.amount || 0,
+    category: session.category || 'مەسروفاتی گشتی',
+    note: session.note || 'بەبێ تێبینی',
+    receiptPhotoUrl: session.receiptPhotoUrl,
+    receiptTelegramFileId: session.receiptPhotoId,
+    dateStr: getBaghdadNow().dateStr,
+    chatId: session.chatId,
+  });
+
+  // 1. Notify Requester
+  const userMsg = 
+    `✅ <b>داواکاری مەسروفاتەکەت بە سەرکەوتوویی نێردرا!</b>\n\n` +
+    `💵 بڕی پارە: <b>${(session.amount || 0).toLocaleString()} دینار</b>\n` +
+    `📂 جۆری خەرجی: <b>${session.category || 'مەسروفاتی گشتی'}</b>\n` +
+    `📝 تێبینی و هۆکار: <i>${session.note || 'بەبێ تێبینی'}</i>\n` +
+    (session.receiptPhotoId ? `📸 وێنەی پسوولە: <b>هاوپێچ کراوە</b>\n` : `📸 وێنەی پسوولە: <i>بەبێ وێنە</i>\n`) +
+    `\nڕەوانەی ئایتی و بەڕێوەبەرایەتی کرا بۆ پێداچوونەوە و پەسەندکردن ✨`;
+
+  await sendTelegramMessage(session.chatId, userMsg);
+
+  // 2. Notify Approvers (wired to approve_expense)
+  let approvers = await getActionRecipients('approve_expense', bindings);
+  if (approvers.length === 0) {
+    const founderEntry = Object.entries(bindings).find(([_, info]: any) => info.employeeId === 'emp-02' || info.employeeId === 'emp-01');
+    if (founderEntry) {
+      approvers = [{
+        chatId: founderEntry[0],
+        employeeId: (founderEntry[1] as any).employeeId,
+        employeeName: (founderEntry[1] as any).employeeName,
+        role: 'founder' as UserRole,
+      }];
+    }
+  }
+
+  const approverCard = 
+    `🔔 <b>داواکاری نوێی مەسروفات:</b>\n\n` +
+    `👤 کارمەند: <b>${session.employeeName}</b> (${session.employeeId})\n` +
+    `💵 بڕی داواکراو: <b>${(session.amount || 0).toLocaleString()} دینار</b>\n` +
+    `📂 جۆری مەسروف: <b>${session.category || 'مەسروفاتی گشتی'}</b>\n` +
+    `📝 تێبینی / هۆکار: <b>${session.note || 'بەبێ تێبینی'}</b>\n` +
+    `🕒 کات: ${getBaghdadNow().dateStr} - ${getBaghdadNow().timeStr}\n\n` +
+    `تکایە بڕیاری لەسەر بدە:`;
+
+  const inlineApprovalKeyboard = {
+    inline_keyboard: [
+      [
+        { text: '✅ پەسەندکردن (قبوڵ)', callback_data: `exp_app:${req.id}` },
+        { text: '❌ ڕەتکردنەوە (ڕەفز)', callback_data: `exp_rej:${req.id}` },
+      ],
+    ],
+  };
+
+  for (const approver of approvers) {
+    if (String(approver.chatId) === String(session.chatId)) continue;
+    if (session.receiptPhotoId) {
+      try {
+        await sendTelegramPhoto(approver.chatId, session.receiptPhotoId, approverCard, inlineApprovalKeyboard);
+        continue;
+      } catch (e) {
+        logger.warn('Failed to send receipt photo to approver, fallback to message:', e);
+      }
+    }
+    await sendTelegramMessage(approver.chatId, approverCard, inlineApprovalKeyboard);
+  }
+
+  return req;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -325,6 +425,143 @@ export async function POST(req: NextRequest) {
           await editTelegramMessage(cqChatId, cqMsgId, successText);
         } else {
           await sendTelegramMessage(cqChatId, successText);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // -------------------------------------------------------------
+      // EXPENSE WORKFLOW CALLBACKS (داواکردن و پەسەندکردنی مەسروفات)
+      // -------------------------------------------------------------
+      // 1. Category selected
+      if (data.startsWith('exp_cat:')) {
+        const category = data.replace('exp_cat:', '');
+        const session = EXPENSE_SESSIONS[cqFromId];
+        if (!session) {
+          await answerCallbackQuery(cqId, 'داواکاری مەسروفات بەسەرچووە، تکایە سەرلەنوێ داوا بکەرەوە', true);
+          return NextResponse.json({ ok: true });
+        }
+        session.category = category;
+        session.step = 'awaiting_note';
+        await answerCallbackQuery(cqId, `جۆر دیاریکرا: ${category}`);
+
+        const notePrompt = 
+          `📂 جۆری مەسروفات: <b>${category}</b>\n` +
+          `💵 بڕی پارە: <b>${(session.amount || 0).toLocaleString()} دینار</b>\n\n` +
+          `📝 تکایە ئێستا <b>تێبینی و هۆکاری خەرجییەکە بنووسە</b>:\n` +
+          `<i>(نموونە: کڕینی پێداویستی بۆ کۆگا، یان تەکسی بۆ هوانە)</i>\n\n` +
+          `<i>(یان بنووسە: ❌ هەڵوەشاندنەوە)</i>`;
+
+        if (cqMsgId) {
+          await editTelegramMessage(cqChatId, cqMsgId, notePrompt);
+        } else {
+          await sendTelegramMessage(cqChatId, notePrompt);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // 2. Skip photo and submit
+      if (data === 'exp_skip_photo') {
+        const session = EXPENSE_SESSIONS[cqFromId];
+        if (!session) {
+          await answerCallbackQuery(cqId, 'داواکاری نەدۆزرایەوە', true);
+          return NextResponse.json({ ok: true });
+        }
+        delete EXPENSE_SESSIONS[cqFromId];
+        await answerCallbackQuery(cqId, 'نێردرا');
+        if (cqMsgId) {
+          await editTelegramMessage(cqChatId, cqMsgId, '⏳ خەریکی ناردنی داواکاری مەسروفاتە...');
+        }
+        await submitExpenseRequestFromTelegram(session, bindings);
+        return NextResponse.json({ ok: true });
+      }
+
+      // 3. Cancel expense
+      if (data === 'exp_cancel') {
+        delete EXPENSE_SESSIONS[cqFromId];
+        if (cqMsgId) {
+          await editTelegramMessage(cqChatId, cqMsgId, '❌ داواکاری مەسروفات هەڵوەشێندرایەوە.');
+        }
+        await answerCallbackQuery(cqId, 'هەڵوەشێندرایەوە');
+        return NextResponse.json({ ok: true });
+      }
+
+      // 4. Approve expense
+      if (data.startsWith('exp_app:')) {
+        const reqId = data.replace('exp_app:', '');
+        const approverName = binding?.employeeName || (cqRole === 'warehouse_manager' ? 'کاک کامەران' : cqRole === 'administration' ? 'ئیدارە' : 'بەڕێوەبەر');
+        const canApprove = (await hasActionPermission(cqFromId, 'approve_expense')) || isManager || (cqRole as string) === 'it_admin';
+        if (!canApprove) {
+          await answerCallbackQuery(cqId, '⛔ دەسەڵاتی پەسەندکردنی مەسروفاتت نییە.', true);
+          return NextResponse.json({ ok: true });
+        }
+
+        const approveRes = await approveExpenseRequest(reqId, approverName);
+        if (approveRes.success && approveRes.request) {
+          const reqData = approveRes.request;
+          await answerCallbackQuery(cqId, '✅ مەسروفات پەسەندکرا');
+          const updatedCard = 
+            `✅ <b>داواکاری مەسروفات پەسەندکرا:</b>\n\n` +
+            `👤 کارمەند: <b>${reqData.employeeName}</b> (${reqData.employeeId})\n` +
+            `💵 بڕی پارە: <b>${reqData.amount.toLocaleString()} دینار</b>\n` +
+            `📂 جۆر: <b>${reqData.category}</b>\n` +
+            `📝 تێبینی: ${reqData.note}\n` +
+            `✍️ پەسەندکرا لەلایەن: <b>${approverName}</b>\n` +
+            `🕒 کات: ${getBaghdadNow().timeStr}\n\n` +
+            `💰 <b>ئەنجام:</b> خرایە ناو لیستی مەسروفاتی فەرمی سیستەم و وێبسایت.`;
+
+          if (cqMsgId) {
+            await editTelegramCard(cqChatId, cqMsgId, updatedCard);
+          }
+
+          // Notify requester
+          const targetChatId = reqData.chatId || Object.entries(bindings).find(([_, info]) => info.employeeId === reqData.employeeId)?.[0];
+          if (targetChatId) {
+            await sendTelegramMessage(
+              targetChatId,
+              `🎉 <b>سڵاو بەڕێز ${reqData.employeeName}</b>\n\nداواکاری مەسروفاتەکەت بە بڕی <b>${reqData.amount.toLocaleString()} دینار</b> بۆ (<b>${reqData.category}</b>) لەلایەن <b>${approverName}</b> پەسەندکرا و خرایە نێو حساباتی فەرمی ئاشڵی ✨`
+            );
+          }
+        } else {
+          await answerCallbackQuery(cqId, '❌ ئەم داواکارییە پێشتر بڕیاری لەسەر دراوە یان نەدۆزرایەوە', true);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // 5. Reject expense
+      if (data.startsWith('exp_rej:')) {
+        const reqId = data.replace('exp_rej:', '');
+        const approverName = binding?.employeeName || (cqRole === 'warehouse_manager' ? 'کاک کامەران' : cqRole === 'administration' ? 'ئیدارە' : 'بەڕێوەبەر');
+        const canApprove = (await hasActionPermission(cqFromId, 'approve_expense')) || isManager || (cqRole as string) === 'it_admin';
+        if (!canApprove) {
+          await answerCallbackQuery(cqId, '⛔ دەسەڵاتی پەسەندکردنی مەسروفاتت نییە.', true);
+          return NextResponse.json({ ok: true });
+        }
+
+        const rejectRes = await rejectExpenseRequest(reqId, approverName);
+        if (rejectRes.success && rejectRes.request) {
+          const reqData = rejectRes.request;
+          await answerCallbackQuery(cqId, '❌ ڕەتکرایەوە');
+          const updatedCard = 
+            `❌ <b>داواکاری مەسروفات ڕەتکرایەوە:</b>\n\n` +
+            `👤 کارمەند: <b>${reqData.employeeName}</b> (${reqData.employeeId})\n` +
+            `💵 بڕی پارە: <b>${reqData.amount.toLocaleString()} دینار</b>\n` +
+            `📂 جۆر: <b>${reqData.category}</b>\n` +
+            `📝 تێبینی: ${reqData.note}\n` +
+            `✍️ ڕەتکرایەوە لەلایەن: <b>${approverName}</b>`;
+
+          if (cqMsgId) {
+            await editTelegramCard(cqChatId, cqMsgId, updatedCard);
+          }
+
+          const targetChatId = reqData.chatId || Object.entries(bindings).find(([_, info]) => info.employeeId === reqData.employeeId)?.[0];
+          if (targetChatId) {
+            await sendTelegramMessage(
+              targetChatId,
+              `ℹ️ <b>ئاگاداری داواکاری مەسروفات:</b>\n\nداواکاری مەسروفاتەکەت بە بڕی <b>${reqData.amount.toLocaleString()} دینار</b> بۆ (${reqData.category}) لەلایەن <b>${approverName}</b> پەسەند نەکرا.`
+            );
+          }
+        } else {
+          await answerCallbackQuery(cqId, '❌ ئەم داواکارییە نەدۆزرایەوە', true);
         }
         return NextResponse.json({ ok: true });
       }
@@ -852,6 +1089,19 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
+      // 2. Expense Receipt Photo
+      if (EXPENSE_SESSIONS[fromId] && EXPENSE_SESSIONS[fromId].step === 'awaiting_receipt') {
+        const session = EXPENSE_SESSIONS[fromId];
+        delete EXPENSE_SESSIONS[fromId];
+        const largest = message.photo[message.photo.length - 1];
+        session.receiptPhotoId = largest.file_id;
+        const photoUrl = await getTelegramFileUrl(largest.file_id);
+        session.receiptPhotoUrl = photoUrl || undefined;
+
+        await submitExpenseRequestFromTelegram(session, bindings);
+        return NextResponse.json({ ok: true });
+      }
+
       const pendingProfileEdit = await getPendingProfileEdit(fromId);
       if ((pendingProfileEdit === 'photo' || PENDING_PHOTOS[fromId]) && currentBinding) {
         await clearPendingProfileEdit(fromId);
@@ -1065,6 +1315,177 @@ export async function POST(req: NextRequest) {
         ],
       });
       return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // HANDLE MANDATORY OVERTIME REASON NOTE INPUT (تێبینی کاتی زیادە / ئیزافە)
+    // -------------------------------------------------------------
+    if (PENDING_OVERTIME_NOTE[fromId] && text && !text.startsWith('/')) {
+      const pendingOt = PENDING_OVERTIME_NOTE[fromId];
+      delete PENDING_OVERTIME_NOTE[fromId];
+
+      if (text === '❌ هەڵوەشاندنەوە') {
+        await sendTelegramMessage(chatId, `تۆمارکردنی هۆکاری کاتی زیادە هەڵوەشێندرایەوە.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
+      const noteToSave = text === 'بەبێ تێبینی' ? 'مانەوەی زیادە بەبێ تێبینی' : text;
+
+      // 1. Update attendance table
+      try {
+        const { data: curAtt } = await supabase
+          .from('attendance')
+          .select('notes')
+          .eq('user_id', pendingOt.employeeId)
+          .eq('date', pendingOt.dateStr)
+          .maybeSingle();
+
+        const existingNotes = curAtt?.notes ? `${curAtt.notes} | ` : '';
+        await supabase
+          .from('attendance')
+          .update({ notes: `${existingNotes}هۆکاری ئیزافە: ${noteToSave}` })
+          .eq('user_id', pendingOt.employeeId)
+          .eq('date', pendingOt.dateStr);
+      } catch (err) {
+        logger.error('Error updating overtime note in attendance:', err);
+      }
+
+      // 2. Update ashley_manual_attendance_records store
+      try {
+        const { data: setRow } = await supabase
+          .from('warehouses')
+          .select('qr_code')
+          .eq('id', 'ashley_manual_attendance_records')
+          .maybeSingle();
+
+        let currentOverrides: Record<string, any> = {};
+        if (setRow?.qr_code) {
+          currentOverrides = typeof setRow.qr_code === 'string' ? JSON.parse(setRow.qr_code) : setRow.qr_code;
+        }
+
+        const cleanId = pendingOt.employeeId.toString().replace(/^emp-0*/i, '') || pendingOt.employeeId.replace('emp-', '');
+        const cleanPadded = cleanId.length === 1 ? `0${cleanId}` : cleanId;
+        const allKeys = [
+          `${pendingOt.employeeId}_${pendingOt.dateStr}`,
+          `${cleanId}_${pendingOt.dateStr}`,
+          `${cleanPadded}_${pendingOt.dateStr}`,
+          `emp-${cleanId}_${pendingOt.dateStr}`,
+          `emp-${cleanPadded}_${pendingOt.dateStr}`,
+        ];
+
+        for (const k of allKeys) {
+          if (currentOverrides[k]) {
+            currentOverrides[k].adminNote = currentOverrides[k].adminNote 
+              ? `${currentOverrides[k].adminNote} | هۆکاری کاتی زیادە: ${noteToSave}`
+              : `هۆکاری کاتی زیادە: ${noteToSave}`;
+          }
+        }
+
+        await supabase.from('warehouses').upsert({
+          id: 'ashley_manual_attendance_records',
+          name: 'MANUAL_ATTENDANCE_OVERRIDES',
+          qr_code: JSON.stringify(currentOverrides),
+        }, { onConflict: 'id' });
+      } catch (err) {
+        logger.error('Error updating overtime note in overrides:', err);
+      }
+
+      await sendTelegramMessage(
+        chatId,
+        `✅ <b>هۆکاری کاتی زیادە تۆمارکرا!</b>\n\n⏱ کاتی زیادە: <b>${pendingOt.overtimeMinutes} خولەک</b>\n📝 هۆکار: <i>${noteToSave}</i>\n\nتێبینییەکە لە ڕاپۆرتی فەرمی و دەوامی مانگانەتدا جێگیر کرا ✨`,
+        replyKeyboard
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // HANDLE EXPENSE REQUEST INTERACTIVE TEXT INPUT (AMOUNT & NOTE)
+    // -------------------------------------------------------------
+    if (EXPENSE_SESSIONS[fromId] && text && !text.startsWith('/')) {
+      const session = EXPENSE_SESSIONS[fromId];
+      if (text === '❌ هەڵوەشاندنەوە') {
+        delete EXPENSE_SESSIONS[fromId];
+        await sendTelegramMessage(chatId, `داواکاری مەسروفات هەڵوەشێندرایەوە.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
+      // Step 1: Parse Amount
+      if (session.step === 'awaiting_amount') {
+        const cleaned = text.replace(/[^\d]/g, '');
+        const amount = parseInt(cleaned, 10);
+        if (isNaN(amount) || amount <= 0 || amount > 100000000) {
+          await sendTelegramMessage(
+            chatId,
+            `❌ <b>تکایە بڕێکی دروست بە ژمارە بنووسە:</b>\n<i>(نموونە: 15000 یان 50000)</i>`,
+            {
+              keyboard: [[{ text: '❌ هەڵوەشاندنەوە' }]],
+              resize_keyboard: true,
+              one_time_keyboard: true,
+            }
+          );
+          return NextResponse.json({ ok: true });
+        }
+
+        session.amount = amount;
+        session.step = 'awaiting_category';
+
+        const categoryKeyboard = {
+          inline_keyboard: [
+            [
+              { text: '🥪 خواردن و پێداویستی', callback_data: 'exp_cat:خواردن و پێداویستی' },
+              { text: '🚕 تەکسی و هاتوچۆ', callback_data: 'exp_cat:تەکسی و هاتوچۆ' },
+            ],
+            [
+              { text: '📦 پێداویستی کۆگا', callback_data: 'exp_cat:پێداویستی کۆگا' },
+              { text: '🔧 چاککردنەوە و سڕف', callback_data: 'exp_cat:چاککردنەوە و سڕف' },
+            ],
+            [
+              { text: '🧾 مەسروفاتی گشتی', callback_data: 'exp_cat:مەسروفاتی گشتی' },
+              { text: '❌ هەڵوەشاندنەوە', callback_data: 'exp_cancel' },
+            ],
+          ],
+        };
+
+        await sendTelegramMessage(
+          chatId,
+          `💵 بڕی پارە: <b>${amount.toLocaleString()} دینار</b>\n\nتکایە <b>جۆری مەسروفاتەکە</b> لە دوگمەکانی خوارەوە هەڵبژێرە:`,
+          categoryKeyboard
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      // Step 2: Parse Note / Reason
+      if (session.step === 'awaiting_note') {
+        session.note = text;
+        session.step = 'awaiting_receipt';
+
+        const receiptPrompt = 
+          `📝 تێبینی تۆمارکرا: <i>${text}</i>\n\n` +
+          `📸 <b>ئەگەر پسوولە (وەسڵ)ت پێیە، وێنەکەی لێرە بنێرە:</b>\n\n` +
+          `<i>(ئەگەر پسوولەت پێ نییە، دوگمەی خوارەوە دابگرە تا بەبێ وێنە بنێردرێت):</i>`;
+
+        await sendTelegramMessage(
+          chatId,
+          receiptPrompt,
+          {
+            inline_keyboard: [
+              [{ text: '⏭️ بەبێ وێنە بینێرە (ناردن)', callback_data: 'exp_skip_photo' }],
+              [{ text: '❌ هەڵوەشاندنەوە', callback_data: 'exp_cancel' }],
+            ],
+          }
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      // Step 3: Handle text when awaiting receipt (user didn't send photo, sent text instead)
+      if (session.step === 'awaiting_receipt') {
+        delete EXPENSE_SESSIONS[fromId];
+        if (text !== 'بەبێ وێنە' && text !== 'ناردن') {
+          session.note = session.note ? `${session.note} (${text})` : text;
+        }
+        await submitExpenseRequestFromTelegram(session, bindings);
+        return NextResponse.json({ ok: true });
+      }
     }
 
     // -------------------------------------------------------------
@@ -1443,6 +1864,26 @@ export async function POST(req: NextRequest) {
       });
 
       await sendTelegramMessage(chatId, result.message, replyKeyboard);
+
+      if (result.success && result.punchType === 'check_out' && result.hasOvertime && (result.overtimeMinutes || 0) > 0) {
+        PENDING_OVERTIME_NOTE[fromId] = {
+          employeeId: currentBinding.employeeId,
+          employeeName: currentBinding.employeeName,
+          dateStr: result.dateStr || getBaghdadNow().dateStr,
+          overtimeMinutes: result.overtimeMinutes || 0,
+        };
+        const otPrompt = 
+          `⏰ <b>تۆمارکردنی هۆکاری کاتی زیادە (ئۆڤەرتایم):</b>\n\n` +
+          `بەڕێز <b>${currentBinding.employeeName}</b>، ئەمڕۆ تۆ <b>${result.overtimeMinutes} خولەک</b> کاتی زیادەت تۆمار کردووە.\n\n` +
+          `📝 تکایە <b>هۆکاری کاتی زیادەکەت بنووسە</b> تا لە ڕاپۆرتی دەوامدا جێگیر بکرێت:\n` +
+          `<i>(نموونە: بارکردنی کەلوپەل، ئیشی کۆگا، پاککردنەوە، پێداویستی پێشانگا)</i>\n\n` +
+          `<i>(دەتوانیت بنووسیت: بەبێ تێبینی)</i>`;
+        await sendTelegramMessage(chatId, otPrompt, {
+          keyboard: [[{ text: 'بەبێ تێبینی' }], [{ text: '❌ هەڵوەشاندنەوە' }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        });
+      }
       return NextResponse.json({ ok: true });
     }
 
@@ -1831,6 +2272,93 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------
+    // 10i. ACTION: REQUEST EXPENSES (💸 داواکردنی مەسروفات)
+    // -------------------------------------------------------------
+    if (text === '💸 داواکردنی مەسروفات' || text === '/expense' || text === '/request_expense') {
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'request_expense');
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ داواکردنی مەسروفات ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
+      EXPENSE_SESSIONS[fromId] = {
+        step: 'awaiting_amount',
+        employeeId: currentBinding.employeeId,
+        employeeName: currentBinding.employeeName,
+        chatId: chatId,
+      };
+
+      await sendTelegramMessage(
+        chatId,
+        `💸 <b>داواکردنی مەسروفات (خەرجی):</b>\n\nتکایە <b>بڕی پارەی داواکراو بە دینار (IQD)</b> بنووسە:\n<i>(نموونە: 15000 یان 25000)</i>\n\n<i>(یان بنووسە: ❌ هەڵوەشاندنەوە)</i>`,
+        {
+          keyboard: [[{ text: '❌ هەڵوەشاندنەوە' }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        }
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 10j. ACTION: APPROVE EXPENSES (💰 پەسەندکردنی مەسروفات)
+    // -------------------------------------------------------------
+    if (text === '💰 پەسەندکردنی مەسروفات' || text === '/pending_expenses') {
+      const allowed = (await hasActionPermission(currentBinding.employeeId, 'approve_expense')) || isManager || userRole === 'it_admin';
+      if (!allowed) {
+        await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ پەسەندکردنی مەسروفات ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
+      const allReqs = await fetchPendingExpenseRequests();
+      const pending = allReqs.filter(r => r.status === 'pending');
+
+      if (pending.length === 0) {
+        await sendTelegramMessage(
+          chatId,
+          `💰 <b>داواکارییەکانی مەسروفات:</b>\n\nلە ئێستادا هیچ داواکارییەکی هەڵپەسێردراوی مەسروفات نییە ✨`,
+          replyKeyboard
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      await sendTelegramMessage(
+        chatId,
+        `💰 <b>لیستی داواکارییە هەڵپەسێردراوەکانی مەسروفات (${pending.length}):</b>\nتکایە بڕیاریان لەسەر بدە:`,
+        replyKeyboard
+      );
+
+      for (const r of pending.slice(0, 5)) {
+        const card = 
+          `👤 کارمەند: <b>${r.employeeName}</b> (${r.employeeId})\n` +
+          `💵 بڕی پارە: <b>${r.amount.toLocaleString()} دینار</b>\n` +
+          `📅 بەروار: <b>${r.dateStr}</b>\n` +
+          `📂 جۆر: <b>${r.category}</b>\n` +
+          `📝 هۆکار: ${r.note}`;
+
+        const kb = {
+          inline_keyboard: [
+            [
+              { text: '✅ پەسەندکردن (قبوڵ)', callback_data: `exp_app:${r.id}` },
+              { text: '❌ ڕەتکردنەوە (ڕەفز)', callback_data: `exp_rej:${r.id}` },
+            ],
+          ],
+        };
+
+        if (r.receiptTelegramFileId) {
+          try {
+            await sendTelegramPhoto(chatId, r.receiptTelegramFileId, card, kb);
+            continue;
+          } catch (e) {
+            // Fallback to text
+          }
+        }
+        await sendTelegramMessage(chatId, card, kb);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
     // 16. DIRECT COMMANDS (/in and /out)
     // -------------------------------------------------------------
     if (text === '/in' || text === '/checkin') {
@@ -1886,6 +2414,26 @@ export async function POST(req: NextRequest) {
       });
 
       await sendTelegramMessage(chatId, result.message, replyKeyboard);
+
+      if (result.success && result.punchType === 'check_out' && result.hasOvertime && (result.overtimeMinutes || 0) > 0) {
+        PENDING_OVERTIME_NOTE[fromId] = {
+          employeeId: currentBinding.employeeId,
+          employeeName: currentBinding.employeeName,
+          dateStr: result.dateStr || getBaghdadNow().dateStr,
+          overtimeMinutes: result.overtimeMinutes || 0,
+        };
+        const otPrompt = 
+          `⏰ <b>تۆمارکردنی هۆکاری کاتی زیادە (ئۆڤەرتایم):</b>\n\n` +
+          `بەڕێز <b>${currentBinding.employeeName}</b>، تۆ ئەمڕۆ <b>${result.overtimeMinutes} خولەک</b> کاتی زیادەت تۆمار کردووە.\n\n` +
+          `📝 تکایە <b>هۆکاری کاتی زیادەکەت بنووسە</b> تا لە ڕاپۆرتی دەوامدا جێگیر بکرێت:\n` +
+          `<i>(نموونە: بارکردنی کەلوپەل، ئیشی کۆگا، پاککردنەوە، پێداویستی پێشانگا)</i>\n\n` +
+          `<i>(دەتوانیت بنووسیت: بەبێ تێبینی)</i>`;
+        await sendTelegramMessage(chatId, otPrompt, {
+          keyboard: [[{ text: 'بەبێ تێبینی' }], [{ text: '❌ هەڵوەشاندنەوە' }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        });
+      }
       return NextResponse.json({ ok: true });
     }
 
@@ -1896,6 +2444,8 @@ export async function POST(req: NextRequest) {
       delete PENDING_INTENTS[fromId];
       delete PENDING_LEAVE[fromId];
       delete PENDING_PHOTOS[fromId];
+      delete EXPENSE_SESSIONS[fromId];
+      delete PENDING_OVERTIME_NOTE[fromId];
       await clearPendingPinState(fromId);
       await clearPendingProfileEdit(fromId);
       await sendTelegramMessage(
@@ -1951,6 +2501,26 @@ export async function POST(req: NextRequest) {
       });
 
       await sendTelegramMessage(chatId, result.message, replyKeyboard);
+
+      if (result.success && result.punchType === 'check_out' && result.hasOvertime && (result.overtimeMinutes || 0) > 0) {
+        PENDING_OVERTIME_NOTE[fromId] = {
+          employeeId: currentBinding.employeeId,
+          employeeName: currentBinding.employeeName,
+          dateStr: result.dateStr || getBaghdadNow().dateStr,
+          overtimeMinutes: result.overtimeMinutes || 0,
+        };
+        const otPrompt = 
+          `⏰ <b>تۆمارکردنی هۆکاری کاتی زیادە (ئۆڤەرتایم):</b>\n\n` +
+          `بەڕێز <b>${currentBinding.employeeName}</b>، تۆ ئەمڕۆ <b>${result.overtimeMinutes} خولەک</b> کاتی زیادەت تۆمار کردووە.\n\n` +
+          `📝 تکایە <b>هۆکاری کاتی زیادەکەت بنووسە</b> تا لە ڕاپۆرتی دەوامدا جێگیر بکرێت:\n` +
+          `<i>(نموونە: بارکردنی کەلوپەل، ئیشی کۆگا، پاککردنەوە، پێداویستی پێشانگا)</i>\n\n` +
+          `<i>(دەتوانیت بنووسیت: بەبێ تێبینی)</i>`;
+        await sendTelegramMessage(chatId, otPrompt, {
+          keyboard: [[{ text: 'بەبێ تێبینی' }], [{ text: '❌ هەڵوەشاندنەوە' }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        });
+      }
       return NextResponse.json({ ok: true });
     }
 

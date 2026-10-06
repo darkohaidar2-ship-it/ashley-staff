@@ -56,6 +56,7 @@ import {
 import { CategoryManagerModal } from './expenses/CategoryManagerModal';
 import { AuditLogModal } from './expenses/AuditLogModal';
 import { PayrollSummarySlip } from './expenses/PayrollSummarySlip';
+import { PendingExpensesTab } from './expenses/PendingExpensesTab';
 
 export interface ArchivedVoucher {
   id: string;
@@ -327,8 +328,28 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
 
   const employees = propEmployees || contextEmployees || [];
 
-  // Active Tab: Expenses vs Bonuses vs Withdrawals vs Monthly Analytics
-  const [activeTab, setActiveTab] = useState<'expenses' | 'bonuses' | 'withdrawals' | 'analytics'>('expenses');
+  // Active Tab: Expenses vs Bonuses vs Withdrawals vs Monthly Analytics vs Pending Requests
+  const [activeTab, setActiveTab] = useState<'expenses' | 'bonuses' | 'withdrawals' | 'analytics' | 'pending'>('expenses');
+  const [pendingCount, setPendingCount] = useState<number>(0);
+
+  const fetchPendingCount = useCallback(async () => {
+    try {
+      const res = await fetch('/api/expenses/pending');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.requests)) {
+        const count = data.requests.filter((r: any) => r.status === 'pending').length;
+        setPendingCount(count);
+      }
+    } catch (e) {
+      // Non-blocking
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPendingCount();
+    const interval = setInterval(fetchPendingCount, 20000);
+    return () => clearInterval(interval);
+  }, [fetchPendingCount]);
 
   // View Mode: 'archive' (Initial Archived Lists) vs 'create' (Create/Edit List) vs 'view_voucher' (Inspect Specific List)
   const [viewMode, setViewMode] = useState<'archive' | 'create' | 'view_voucher'>('archive');
@@ -2317,6 +2338,28 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
             <BarChart3 className="w-4 h-4" />
             <span>📊 ڕاپۆرتی گشتگیری دارایی مانگانە</span>
           </button>
+
+          {/* 🌟 Tab 5: PENDING EXPENSES FROM TELEGRAM & WEB */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('pending');
+              if (viewMode === 'view_voucher') setViewMode('archive');
+            }}
+            className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-black text-xs cursor-pointer relative ${
+              activeTab === 'pending' 
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md scale-102' 
+                : 'bg-white dark:bg-[#2c2c2e] text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>💰 داواکارییە هەڵپەسێردراوەکان</span>
+            {pendingCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white animate-pulse">
+                {pendingCount}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* View Indicator Badge & Sleek Density Toggle */}
@@ -2352,7 +2395,12 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
             <span className="hidden sm:inline text-[11px]">مێژووی چاودێری</span>
           </button>
 
-          {activeTab === 'analytics' ? (
+          {activeTab === 'pending' ? (
+            <span className="px-3 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-xs font-bold flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" />
+              <span>داواکارییە هەڵپەسێردراوەکان ({pendingCount})</span>
+            </span>
+          ) : activeTab === 'analytics' ? (
             <span className="px-3 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-xs font-bold flex items-center gap-1.5">
               <BarChart3 className="w-3.5 h-3.5" />
               <span>ڕاپۆرتی دارایی مانگانە</span>
@@ -4016,9 +4064,16 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       )}
 
       {/* ========================================================= */}
+      {/* 💰 VIEW 5: PENDING EXPENSES TAB (TELEGRAM & WEB WORKFLOW) */}
+      {/* ========================================================= */}
+      {activeTab === 'pending' && (
+        <PendingExpensesTab onExpenseApproved={fetchPendingCount} />
+      )}
+
+      {/* ========================================================= */}
       {/* 📁 VIEW 1: ARCHIVED LISTS (PRIMARY MAIN VIEW)             */}
       {/* ========================================================= */}
-      {activeTab !== 'analytics' && viewMode === 'archive' && (
+      {activeTab !== 'analytics' && activeTab !== 'pending' && viewMode === 'archive' && (
         <div className="space-y-4">
           
           {/* Top Action Bar: Prominent 'Create New List' Button + Month Selector */}
@@ -4262,7 +4317,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       {/* ========================================================= */}
       {/* 📝 VIEW 2: CREATE / EDIT LIST (WORKSHEET)                 */}
       {/* ========================================================= */}
-      {activeTab !== 'analytics' && viewMode === 'create' && (
+      {activeTab !== 'analytics' && activeTab !== 'pending' && viewMode === 'create' && (
         <div className="space-y-4">
           
           {/* Header Bar with Back and Save List buttons */}
@@ -4835,7 +4890,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       {/* ========================================================= */}
       {/* 👁️ VIEW 3: VIEW / INSPECT SPECIFIC ARCHIVED VOUCHER        */}
       {/* ========================================================= */}
-      {activeTab !== 'analytics' && viewMode === 'view_voucher' && selectedVoucher && (
+      {activeTab !== 'analytics' && activeTab !== 'pending' && viewMode === 'view_voucher' && selectedVoucher && (
         <div className="space-y-4">
           
           {/* Header Bar */}

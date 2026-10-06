@@ -1,9 +1,10 @@
 import { logger } from '@/lib/logger';
 import { fetchSupabaseJson, saveSupabaseJson } from '@/lib/supabase/client';
-import type { Expense, Bonus, CashWithdrawal, SalarySettings } from '@/lib/types';
+import type { Expense, Bonus, CashWithdrawal, SalarySettings, PendingExpenseRequest } from '@/lib/types';
 import { initialData, initialSettings } from '@/context/initial-data';
 
 const EXPENSES_KEY = 'ashley_expenses';
+const PENDING_EXPENSES_KEY = 'ashley_pending_expenses';
 const BONUSES_KEY = 'ashley_bonuses';
 const WITHDRAWALS_KEY = 'ashley_withdrawals';
 const SALARY_SETTINGS_KEY = 'ashley_salary_settings';
@@ -184,4 +185,112 @@ export async function saveArchivedVouchers(vouchers: any[]): Promise<boolean> {
     return false;
   }
 }
+
+// ===================== PENDING EXPENSES WORKFLOW =====================
+
+export async function fetchPendingExpenseRequests(): Promise<PendingExpenseRequest[]> {
+  try {
+    const list = await fetchSupabaseJson<PendingExpenseRequest[]>(PENDING_EXPENSES_KEY, []);
+    return Array.isArray(list) ? list : [];
+  } catch (err) {
+    logger.error('[ExpensesService] Error fetching pending expense requests:', err);
+    return [];
+  }
+}
+
+export async function savePendingExpenseRequests(requests: PendingExpenseRequest[]): Promise<boolean> {
+  try {
+    return await saveSupabaseJson<PendingExpenseRequest[]>(
+      PENDING_EXPENSES_KEY,
+      'Ashley Pending Expense Submissions Database',
+      requests
+    );
+  } catch (err) {
+    logger.error('[ExpensesService] Error saving pending expense requests:', err);
+    return false;
+  }
+}
+
+export async function createPendingExpenseRequest(
+  data: Omit<PendingExpenseRequest, 'id' | 'createdAt' | 'status'>
+): Promise<PendingExpenseRequest> {
+  const all = await fetchPendingExpenseRequests();
+  const id = `exp_req_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  const newReq: PendingExpenseRequest = {
+    ...data,
+    id,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+  };
+
+  all.unshift(newReq);
+  await savePendingExpenseRequests(all);
+  return newReq;
+}
+
+export async function approveExpenseRequest(
+  id: string, 
+  approverName: string
+): Promise<{ success: boolean; request?: PendingExpenseRequest; newExpense?: Expense }> {
+  try {
+    const all = await fetchPendingExpenseRequests();
+    const reqIndex = all.findIndex(r => r.id === id);
+    if (reqIndex === -1) {
+      return { success: false };
+    }
+
+    const req = all[reqIndex];
+    req.status = 'approved';
+    req.approvedBy = approverName;
+    req.approvedAt = new Date().toISOString();
+
+    // 1. Create official expense record
+    const expenses = await fetchExpenses();
+    const newExpense: Expense = {
+      id: `exp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      employeeId: req.employeeId,
+      amount: req.amount,
+      date: req.dateStr,
+      notes: `[داواکراوە لە تەلەگرام]: ${req.category} - ${req.note}`,
+      expenseReportId: '',
+      expenseType: req.category,
+    };
+
+    expenses.unshift(newExpense);
+    await saveExpenses(expenses);
+    await savePendingExpenseRequests(all);
+
+    return { success: true, request: req, newExpense };
+  } catch (err) {
+    logger.error('[ExpensesService] Error approving expense request:', err);
+    return { success: false };
+  }
+}
+
+export async function rejectExpenseRequest(
+  id: string, 
+  approverName: string,
+  reason?: string
+): Promise<{ success: boolean; request?: PendingExpenseRequest }> {
+  try {
+    const all = await fetchPendingExpenseRequests();
+    const reqIndex = all.findIndex(r => r.id === id);
+    if (reqIndex === -1) {
+      return { success: false };
+    }
+
+    const req = all[reqIndex];
+    req.status = 'rejected';
+    req.approvedBy = approverName;
+    req.approvedAt = new Date().toISOString();
+    if (reason) req.rejectionReason = reason;
+
+    await savePendingExpenseRequests(all);
+    return { success: true, request: req };
+  } catch (err) {
+    logger.error('[ExpensesService] Error rejecting expense request:', err);
+    return { success: false };
+  }
+}
+
 

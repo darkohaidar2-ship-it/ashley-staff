@@ -589,6 +589,22 @@ export const WORKFLOW_ACTIONS: TaskActionDefinition[] = [
     defaultRoles: ['founder', 'general_manager', 'warehouse_manager', 'transport_manager'],
     color: '#EAB308',
   },
+  {
+    id: 'request_expense',
+    title: 'داواکردنی مەسروفات',
+    description: 'دوگمەی [💸 داواکردنی مەسروفات] بۆ ناردنی داواکاری مەسروفات بە بڕ، جۆر، تێبینی و وێنە لە تەلەگرام',
+    iconName: 'Receipt',
+    defaultRoles: ['founder', 'general_manager', 'warehouse_manager', 'transport_manager', 'administration', 'developer', 'it_admin', 'salesperson', 'warehouse_staff', 'supervisor', 'employee'],
+    color: '#10B981',
+  },
+  {
+    id: 'approve_expense',
+    title: 'پەسەندکردنی مەسروفات',
+    description: 'دوگمەی [💰 پەسەندکردنی مەسروفات] بۆ وەرگرتن، پشکنین و پەسەندکردنی مەسروفات لەلایەن ئایتی و بەڕێوەبەر لە تەلەگرام و وێبسایت',
+    iconName: 'Wallet',
+    defaultRoles: ['founder', 'general_manager', 'warehouse_manager', 'it_admin'],
+    color: '#007AFF',
+  },
 ];
 
 export const WORKFLOW_SCOPES: ScopeBranchDefinition[] = [
@@ -629,6 +645,8 @@ export function getDefaultTaskAssignments(): Record<string, string[]> {
     system_diagnostics: ['emp-02', 'it-admin'], // Darko, IT
     late_alerts: ['emp-02', 'emp-06'], // Darko, Kamaran
     quick_checkin_no_gps: ['emp-02'], // Darko (Admin can assign to any employee in the matrix)
+    request_expense: allEmpIds, // Everyone can submit expense requests by default
+    approve_expense: ['emp-02', 'emp-06', 'emp-13', 'it-admin'], // Darko, Kamaran, Walid, IT
   };
 }
 
@@ -1101,6 +1119,12 @@ export async function getDynamicEmployeeTelegramKeyboard(
   }
   if (isAssigned('quick_checkin_no_gps')) {
     dynamicButtons.push({ text: '⚡ تۆمارکردنی خێرا (بەبێ GPS)' });
+  }
+  if (isAssigned('request_expense')) {
+    dynamicButtons.push({ text: '💸 داواکردنی مەسروفات' });
+  }
+  if (isAssigned('approve_expense')) {
+    dynamicButtons.push({ text: '💰 پەسەندکردنی مەسروفات' });
   }
 
   // Pair dynamic buttons 2 per row

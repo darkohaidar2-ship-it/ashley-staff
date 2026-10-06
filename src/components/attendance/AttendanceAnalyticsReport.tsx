@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { getDaysInMonth, format, getDay } from 'date-fns';
 import { exportToPDF, exportToCSV, formatTime12H, type ExportTableColumn } from '@/lib/export-utils';
+import { getEmployeeShiftConfig, calculateNetWorkedAndOvertime } from '@/lib/attendance/shift-service';
 
 interface AttendanceAnalyticsReportProps {
   attendanceLogs: AttendanceRecord[];
@@ -203,6 +204,7 @@ export function AttendanceAnalyticsReport({
   // Compute detailed analytics for each employee
   const employeeAnalytics = useMemo(() => {
     return activeEmployees.map(emp => {
+      const empShiftCfg = getEmployeeShiftConfig(emp);
       let daysPresent = 0;
       let totalLateMinutes = 0;
       let totalEarlyLeaveMinutes = 0;
@@ -295,53 +297,33 @@ export function AttendanceAnalyticsReport({
           absentDaysCount++;
         }
 
-        // Work Hours calculation
+        // Work Hours, Break Deduction, Late & Overtime calculation
         let dayWorkedMins = 0;
-        if (checkInTimeStr && checkOutTimeStr) {
-          const inM = timeToMinutes(checkInTimeStr);
-          let outM = timeToMinutes(checkOutTimeStr);
-          if (outM <= 360) outM += 1440; // 🌟 12 midnight / 00:00 is 1440 mins
-          if (outM > inM) {
-            dayWorkedMins = outM - inM;
-            totalWorkedMinutes += dayWorkedMins;
-          }
-        } else if (checkInTimeStr && !checkOutTimeStr) {
-          dayWorkedMins = Math.max(0, shiftEndMins - shiftStartMins);
-          totalWorkedMinutes += dayWorkedMins;
-        }
-
-        // Late calculation (Check In > 08:15 with 15-min tolerance)
         let dayLateMins = 0;
-        if (checkInTimeStr) {
-          const checkInMins = timeToMinutes(checkInTimeStr);
-          if (checkInMins > 495) {
-            dayLateMins = checkInMins - 480;
-            totalLateMinutes += dayLateMins;
-            lateDaysCount++;
-          }
-        }
-
-        // Early Leave & Overtime calculation (with midnight support & 15-min tolerance)
         let dayEarlyLeaveMins = 0;
         let dayOvertimeMins = 0;
         let isOt30 = false;
-        if (checkOutTimeStr) {
-          let checkOutMins = timeToMinutes(checkOutTimeStr);
-          if (checkOutMins <= 360) checkOutMins += 1440; // 🌟 12 midnight / 00:00 is 1440 mins
 
-          if (checkOutMins < 1005) { // Early leave before 16:45
-            dayEarlyLeaveMins = 1020 - checkOutMins;
-            totalEarlyLeaveMinutes += dayEarlyLeaveMins;
-            earlyLeaveDaysCount++;
-          } else if (checkOutMins > 1035) { // Overtime after 17:15
-            dayOvertimeMins = checkOutMins - 1020;
-            totalOvertimeMinutes += dayOvertimeMins;
-            overtimeDaysCount++;
-            if (dayOvertimeMins >= 30) {
-              isOt30 = true;
-              overtime30DaysCount++;
-            }
-          }
+        if (checkInTimeStr && checkOutTimeStr) {
+          const calc = calculateNetWorkedAndOvertime(checkInTimeStr, checkOutTimeStr, empShiftCfg);
+          dayWorkedMins = calc.netWorkedMinutes; // Pure net work time! Lunch break automatically deducted!
+          dayLateMins = calc.lateMinutes;
+          dayEarlyLeaveMins = calc.earlyLeaveMinutes;
+          dayOvertimeMins = calc.overtimeMinutes;
+          isOt30 = dayOvertimeMins >= 30;
+
+          totalWorkedMinutes += dayWorkedMins;
+          totalLateMinutes += dayLateMins;
+          totalEarlyLeaveMinutes += dayEarlyLeaveMins;
+          totalOvertimeMinutes += dayOvertimeMins;
+
+          if (dayLateMins > 0) lateDaysCount++;
+          if (dayEarlyLeaveMins > 0) earlyLeaveDaysCount++;
+          if (dayOvertimeMins > 0) overtimeDaysCount++;
+          if (isOt30) overtime30DaysCount++;
+        } else if (checkInTimeStr && !checkOutTimeStr) {
+          dayWorkedMins = (empShiftCfg.targetWorkHours || 8) * 60;
+          totalWorkedMinutes += dayWorkedMins;
         }
 
         const dayNetMins = dayOvertimeMins - (dayLateMins + dayEarlyLeaveMins);

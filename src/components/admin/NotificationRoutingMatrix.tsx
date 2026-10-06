@@ -51,6 +51,8 @@ import {
   Cpu,
   Bot,
   Zap,
+  Receipt,
+  Wallet,
 } from 'lucide-react';
 import { TelegramBotSimulatorModal } from '@/components/admin/TelegramBotSimulatorModal';
 
@@ -72,6 +74,8 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   MapPin,
   Cpu,
   Zap,
+  Receipt,
+  Wallet,
 };
 
 // Map each task to its exact Telegram reply keyboard button label
@@ -93,6 +97,8 @@ const TELEGRAM_BUTTON_LABELS: Record<string, string> = {
   system_diagnostics: '🔍 پشکنینی سیستەم',
   late_alerts: '⏰ ئاگاداری دواکەوتنی دەوام (نۆتیفیکەیشن)',
   quick_checkin_no_gps: '⚡ تۆمارکردنی خێرا (بەبێ GPS)',
+  request_expense: '💸 داواکردنی مەسروفات',
+  approve_expense: '💰 پەسەندکردنی مەسروفات',
 };
 
 export default function NotificationRoutingMatrix() {

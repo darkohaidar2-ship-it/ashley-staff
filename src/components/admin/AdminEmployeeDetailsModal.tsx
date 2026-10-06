@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { getDaysInMonth, getDay, format } from 'date-fns';
 import { translateRoleToKurdish } from '@/lib/attendance-helpers';
+import { getEmployeeShiftConfig, calculateNetWorkedAndOvertime } from '@/lib/attendance/shift-service';
 
 export function formatMinutesHuman(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -83,6 +84,7 @@ export function AdminEmployeeDetailsModal({
 
   // Compute daily breakdown and totals
   const { dailyRecords, totals } = useMemo(() => {
+    const empShiftCfg = getEmployeeShiftConfig(employee);
     let daysPresent = 0;
     let totalWorkedMins = 0;
     let totalLateMins = 0;
@@ -169,36 +171,21 @@ export function AdminEmployeeDetailsModal({
       let dayOtHours = 0;
 
       if (inTime && outTime) {
-        const inM = timeToMinutes(inTime);
-        let outM = timeToMinutes(outTime);
-        if (outM <= 360) outM += 1440; // 🌟 12 midnight / 00:00 is 1440 mins
-        if (outM > inM) dayWorked = (outM - inM) / 60;
+        const calc = calculateNetWorkedAndOvertime(inTime, outTime, empShiftCfg);
+        dayWorked = calc.netWorkedHours;
+        dayLate = calc.lateMinutes;
+        dayEarly = calc.earlyLeaveMinutes;
+        dayOtHours = Math.round((calc.overtimeMinutes / 60) * 10) / 10;
+
+        totalLateMins += dayLate;
+        if (dayLate > 0) lateDaysCount++;
+
+        totalEarlyLeaveMins += dayEarly;
+
+        totalOvertimeMins += calc.overtimeMinutes;
+        if (calc.overtimeMinutes > 0) overtimeDaysCount++;
       } else if (inTime) {
-        dayWorked = 8;
-      }
-
-      if (inTime) {
-        const inM = timeToMinutes(inTime);
-        if (inM > 495) { // 15-min tolerance rule (> 08:15)
-          dayLate = inM - 480;
-          totalLateMins += dayLate;
-          lateDaysCount++;
-        }
-      }
-
-      if (outTime) {
-        let outM = timeToMinutes(outTime);
-        if (outM <= 360) outM += 1440; // 🌟 12 midnight / 00:00 is 1440 mins
-
-        if (outM < 1005) { // Early leave if before 16:45
-          dayEarly = 1020 - outM;
-          totalEarlyLeaveMins += dayEarly;
-        } else if (outM > 1035) { // Overtime if after 17:15
-          const otM = outM - 1020;
-          dayOtHours = Math.round((otM / 60) * 10) / 10;
-          totalOvertimeMins += otM;
-          overtimeDaysCount++;
-        }
+        dayWorked = empShiftCfg.targetWorkHours;
       }
 
       const isPresent = !!(inTime || outTime);

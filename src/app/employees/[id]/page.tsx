@@ -46,8 +46,9 @@ import { useToast } from '@/hooks/use-toast';
 import { AdminFaceEnrollModal } from '@/components/attendance/AdminFaceEnrollModal';
 import { ReportWrapper } from '@/components/reports/ReportWrapper';
 import { formatTime24H } from '@/lib/export-utils';
-import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import { resolveEmployeeDayAttendance, getCheckInStatus, getCheckOutStatus, getSavedEmployeeShiftOverride } from '@/lib/attendance-helpers';
+import { getEmployeeShiftConfig, saveEmployeeShiftSettings, type EmployeeShiftConfig } from '@/lib/attendance/shift-service';
+import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import * as XLSX from 'xlsx';
 
 const ASHLEY_DEFAULT_EMPLOYEES = ASHLEY_OFFICIAL_EMPLOYEES;
@@ -100,11 +101,17 @@ function EmployeeDetailPage() {
   const [showFaceModal, setShowFaceModal] = useState(false);
   const [isDeletingFace, setIsDeletingFace] = useState(false);
 
-  // Smart Shift & Friday Work Settings State
-  const [empShiftType, setEmpShiftType] = useState<'auto' | 'morning' | 'evening' | 'custom'>('auto');
+  // Smart Shift & Break Settings State
+  const [empShiftType, setEmpShiftType] = useState<'morning' | 'evening' | 'custom'>('morning');
   const [empCustomShiftStart, setEmpCustomShiftStart] = useState<string>('08:00');
   const [empCustomShiftEnd, setEmpCustomShiftEnd] = useState<string>('17:00');
+  const [empTargetHours, setEmpTargetHours] = useState<number>(8);
+  const [empHasBreak, setEmpHasBreak] = useState<boolean>(true);
+  const [empBreakStart, setEmpBreakStart] = useState<string>('12:00');
+  const [empBreakEnd, setEmpBreakEnd] = useState<string>('13:00');
+  const [empBreakMinutes, setEmpBreakMinutes] = useState<number>(60);
   const [empWorksOnFriday, setEmpWorksOnFriday] = useState<boolean>(false);
+  const [isSavingShift, setIsSavingShift] = useState(false);
 
   // Edit Mode for basic info
   const [isEditing, setIsEditing] = useState(false);
@@ -127,35 +134,57 @@ function EmployeeDetailPage() {
       setEmpPin((selectedEmployee as any).password || (selectedEmployee as any).pin || '1234');
       setIsDeviceBound(employeeId === 'emp-02' ? true : Boolean((selectedEmployee as any)?.deviceBound));
 
-      const savedShift = getSavedEmployeeShiftOverride(employeeId);
-      setEmpShiftType((savedShift?.shiftType || selectedEmployee.shiftType || 'auto') as any);
-      setEmpCustomShiftStart(savedShift?.customShiftStart || selectedEmployee.customShiftStart || '08:00');
-      setEmpCustomShiftEnd(savedShift?.customShiftEnd || selectedEmployee.customShiftEnd || '17:00');
-      setEmpWorksOnFriday(Boolean(savedShift?.worksOnFriday ?? selectedEmployee.worksOnFriday ?? false));
+      const shiftCfg = getEmployeeShiftConfig(selectedEmployee);
+      setEmpShiftType(shiftCfg.shiftType);
+      setEmpCustomShiftStart(shiftCfg.startTime);
+      setEmpCustomShiftEnd(shiftCfg.endTime);
+      setEmpTargetHours(shiftCfg.targetWorkHours);
+      setEmpHasBreak(shiftCfg.hasBreak);
+      setEmpBreakStart(shiftCfg.breakStart);
+      setEmpBreakEnd(shiftCfg.breakEnd);
+      setEmpBreakMinutes(shiftCfg.breakMinutes);
+      setEmpWorksOnFriday(shiftCfg.worksOnFriday);
     }
   }, [selectedEmployee, employeeId]);
 
   // Save Employee Shift & Friday Work Settings
-  const handleSaveShiftSettings = () => {
+  const handleSaveShiftSettings = async () => {
     if (!selectedEmployee) return;
+    setIsSavingShift(true);
     const shiftPayload = {
       shiftType: empShiftType,
-      customShiftStart: empCustomShiftStart || '08:00',
-      customShiftEnd: empCustomShiftEnd || '17:00',
+      startTime: empCustomShiftStart || '08:00',
+      endTime: empCustomShiftEnd || '17:00',
+      targetWorkHours: Number(empTargetHours) || (empHasBreak ? 8 : 7),
+      hasBreak: empHasBreak,
+      breakStart: empBreakStart || '12:00',
+      breakEnd: empBreakEnd || '13:00',
+      breakMinutes: empHasBreak ? Number(empBreakMinutes) || 60 : 0,
       worksOnFriday: empWorksOnFriday,
     };
+
     try {
-      const rawMap = localStorage.getItem('ashley_employee_shifts_map');
-      const parsedMap = rawMap ? JSON.parse(rawMap) : {};
-      parsedMap[selectedEmployee.id] = shiftPayload;
-      localStorage.setItem('ashley_employee_shifts_map', JSON.stringify(parsedMap));
+      await saveEmployeeShiftSettings(selectedEmployee.id, shiftPayload);
     } catch (err) { logger.warn(err); }
 
-    setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? { ...e, ...shiftPayload } as any : e));
+    setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? { 
+      ...e, 
+      shiftType: shiftPayload.shiftType,
+      customShiftStart: shiftPayload.startTime,
+      customShiftEnd: shiftPayload.endTime,
+      targetWorkHours: shiftPayload.targetWorkHours,
+      hasBreak: shiftPayload.hasBreak,
+      breakStart: shiftPayload.breakStart,
+      breakEnd: shiftPayload.breakEnd,
+      breakMinutes: shiftPayload.breakMinutes,
+      worksOnFriday: shiftPayload.worksOnFriday
+    } as any : e));
+
     window.dispatchEvent(new Event('ashley_attendance_updated'));
+    setIsSavingShift(false);
     toast({
-      title: '✅ ڕێکخستنی شەفت پاشەکەوت کرا',
-      description: 'شێوازی شەفتی دەوام و ڕۆژانی هەینی بۆ ئەم کارمەندە نوێکرایەوە.'
+      title: '✅ ڕێکخستنی کاتی دەوام و پشوو پاشەکەوت کرا',
+      description: `دەوامی ${selectedEmployee.name} دیاریکرا بە ${shiftPayload.targetWorkHours} کاتژمێر کارکردنی خاوێن.`
     });
   };
 
@@ -1079,9 +1108,7 @@ function EmployeeDetailPage() {
                 </div>
               </div>
               <span className="text-[10px] font-black px-2.5 py-0.5 border bg-indigo-50 text-indigo-900 border-indigo-300">
-                {empShiftType === 'auto'
-                  ? '✨ زیرەک (8-5 / 3-11)'
-                  : empShiftType === 'morning'
+                {empShiftType === 'morning'
                   ? '☀️ بەیانیان (8-5)'
                   : empShiftType === 'evening'
                   ? '🌙 ئێواران (3-11)'
@@ -1092,41 +1119,73 @@ function EmployeeDetailPage() {
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs">
               {[
                 {
-                  key: 'auto',
-                  title: '✨ شەفتی زیرەک (ئۆتۆماتیکی)',
-                  desc: 'پێش 12:30 = بەیانیان (8-5) • دوای 12:30 = ئێواران (3-11)',
+                  key: 'warehouse_8h',
+                  title: '🏢 دەوامی کۆگا (٨-٥ بە پشوو)',
+                  desc: 'دەوامی 8:00 تا 17:00 بە پشووی 12:00-13:00 (٨ کاتژمێر کارکردنی خاوێن)',
+                  active: empCustomShiftStart === '08:00' && empCustomShiftEnd === '17:00' && empHasBreak && empTargetHours === 8,
+                  apply: () => {
+                    setEmpShiftType('morning');
+                    setEmpCustomShiftStart('08:00');
+                    setEmpCustomShiftEnd('17:00');
+                    setEmpTargetHours(8);
+                    setEmpHasBreak(true);
+                    setEmpBreakStart('12:00');
+                    setEmpBreakEnd('13:00');
+                    setEmpBreakMinutes(60);
+                  }
                 },
                 {
-                  key: 'morning',
-                  title: '☀️ جێگیر: بەیانیان (8-5)',
-                  desc: 'هاتن 08:00 تا دەرچوون 17:00 (مۆڵەتی دواکەوتن تا 08:15)',
+                  key: 'continuous_7h',
+                  title: '⏱️ دەوامی ٧ کاتژمێری (بێ پشوو)',
+                  desc: 'دەوامی 8:00 تا 15:00 بەبێ کاتی پشوو (٧ کاتژمێر کارکردنی تەواو)',
+                  active: empCustomShiftStart === '08:00' && empCustomShiftEnd === '15:00' && !empHasBreak && empTargetHours === 7,
+                  apply: () => {
+                    setEmpShiftType('custom');
+                    setEmpCustomShiftStart('08:00');
+                    setEmpCustomShiftEnd('15:00');
+                    setEmpTargetHours(7);
+                    setEmpHasBreak(false);
+                    setEmpBreakMinutes(0);
+                  }
                 },
                 {
-                  key: 'evening',
-                  title: '🌙 جێگیر: ئێواران (3-11)',
-                  desc: 'هاتن 15:00 تا دەرچوون 23:00 (مۆڵەتی دواکەوتن تا 15:15)',
+                  key: 'evening_8h',
+                  title: '🌙 شەفتی ئێواران (٣-١١)',
+                  desc: 'هاتن 15:00 تا دەرچوون 23:00 (٨ کاتژمێر)',
+                  active: empShiftType === 'evening' || (empCustomShiftStart === '15:00' && empCustomShiftEnd === '23:00'),
+                  apply: () => {
+                    setEmpShiftType('evening');
+                    setEmpCustomShiftStart('15:00');
+                    setEmpCustomShiftEnd('23:00');
+                    setEmpTargetHours(8);
+                    setEmpHasBreak(false);
+                    setEmpBreakMinutes(0);
+                  }
                 },
                 {
                   key: 'custom',
-                  title: '⚙️ شەفتی تایبەت (کەستم)',
-                  desc: 'دیاریکردنی کاتی دەستپێک و کۆتایی تایبەت بۆ ئەم کارمەندە',
+                  title: '⚙️ شەفتی کەستم (دەستکاری)',
+                  desc: 'دیاریکردنی کاتی تایبەت و کاتی پشوو بە پێی خواستی ئیدارە',
+                  active: empShiftType === 'custom' && !(empCustomShiftStart === '08:00' && empCustomShiftEnd === '15:00'),
+                  apply: () => {
+                    setEmpShiftType('custom');
+                  }
                 },
               ].map((opt) => {
-                const active = empShiftType === opt.key;
                 return (
                   <button
                     key={opt.key}
                     type="button"
-                    onClick={() => setEmpShiftType(opt.key as any)}
+                    onClick={opt.apply}
                     className={`p-3 text-right border-2 transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
-                      active
-                        ? 'bg-indigo-50/90 border-indigo-600 text-indigo-950 shadow-xs'
+                      opt.active
+                        ? 'bg-indigo-50/90 border-indigo-600 text-indigo-950 shadow-xs ring-1 ring-indigo-500'
                         : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                     }`}
                   >
                     <div className="font-black text-xs flex items-center justify-between">
                       <span>{opt.title}</span>
-                      {active && <span className="w-2 h-2 rounded-full bg-indigo-600" />}
+                      {opt.active && <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />}
                     </div>
                     <div className="text-[10px] text-slate-500 font-bold leading-relaxed">{opt.desc}</div>
                   </button>
@@ -1134,28 +1193,102 @@ function EmployeeDetailPage() {
               })}
             </div>
 
-            {empShiftType === 'custom' && (
-              <div className="p-3 bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-black text-slate-700">کاتی دەستپێکی شەفت (هاتن):</label>
-                  <input
-                    type="time"
-                    value={empCustomShiftStart}
-                    onChange={(e) => setEmpCustomShiftStart(e.target.value)}
-                    className="w-full p-2 bg-white border border-slate-300 font-mono text-xs font-black outline-none"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-black text-slate-700">کاتی کۆتایی شەفت (دەرچوون):</label>
-                  <input
-                    type="time"
-                    value={empCustomShiftEnd}
-                    onChange={(e) => setEmpCustomShiftEnd(e.target.value)}
-                    className="w-full p-2 bg-white border border-slate-300 font-mono text-xs font-black outline-none"
-                  />
-                </div>
+            {/* Shift Hours & Target Work Hours */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-black text-slate-700">کاتی دەستپێکی دەوام (هاتن):</label>
+                <input
+                  type="time"
+                  value={empCustomShiftStart}
+                  onChange={(e) => {
+                    setEmpCustomShiftStart(e.target.value);
+                    setEmpShiftType('custom');
+                  }}
+                  className="w-full p-2 bg-white border border-slate-300 font-mono text-xs font-black outline-none"
+                />
               </div>
-            )}
+              <div className="space-y-1">
+                <label className="text-[11px] font-black text-slate-700">کاتی کۆتایی دەوام (دەرچوون):</label>
+                <input
+                  type="time"
+                  value={empCustomShiftEnd}
+                  onChange={(e) => {
+                    setEmpCustomShiftEnd(e.target.value);
+                    setEmpShiftType('custom');
+                  }}
+                  className="w-full p-2 bg-white border border-slate-300 font-mono text-xs font-black outline-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-black text-slate-700">کاتژمێری ئامانجی کارکردن (خاوێن):</label>
+                <select
+                  value={empTargetHours}
+                  onChange={(e) => setEmpTargetHours(Number(e.target.value))}
+                  className="w-full p-2 bg-white border border-slate-300 font-black text-xs outline-none"
+                >
+                  <option value={8}>٨ کاتژمێر کارکردنی تەواو</option>
+                  <option value={7}>٧ کاتژمێر کارکردنی تەواو</option>
+                  <option value={6}>٦ کاتژمێر</option>
+                  <option value={9}>٩ کاتژمێر</option>
+                </select>
+              </div>
+            </div>
+
+            {/* 🍱 LUNCH BREAK CONFIGURATION */}
+            <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={empHasBreak}
+                    onChange={(e) => setEmpHasBreak(e.target.checked)}
+                    className="w-4 h-4 accent-amber-600 cursor-pointer"
+                  />
+                  <span className="text-xs font-black text-amber-950">
+                    🍱 ئەم کارمەندە کاتی پشووی هەیە (داشکاندنی کاتی پشوو لە کاتی ئیشکردن)
+                  </span>
+                </label>
+                <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
+                  {empHasBreak ? `کاتی پشوو: ${empBreakMinutes} خولەک` : 'بێ پشوو'}
+                </span>
+              </div>
+
+              {empHasBreak && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-amber-900">دەستپێکی پشوو:</label>
+                    <input
+                      type="time"
+                      value={empBreakStart}
+                      onChange={(e) => setEmpBreakStart(e.target.value)}
+                      className="w-full p-1.5 bg-white border border-amber-300 font-mono text-xs font-black outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-amber-900">کۆتایی پشوو:</label>
+                    <input
+                      type="time"
+                      value={empBreakEnd}
+                      onChange={(e) => setEmpBreakEnd(e.target.value)}
+                      className="w-full p-1.5 bg-white border border-amber-300 font-mono text-xs font-black outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-amber-900">ماوەی پشوو (خولەک):</label>
+                    <input
+                      type="number"
+                      value={empBreakMinutes}
+                      onChange={(e) => setEmpBreakMinutes(Number(e.target.value))}
+                      className="w-full p-1.5 bg-white border border-amber-300 font-mono text-xs font-black outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <p className="text-[10px] text-amber-800 font-bold">
+                💡 <b>یاسای کاتی خاوێن:</b> تەنها کاتی ئیشکردنی ڕاستەقینە دەچێتە حسابات و ڕاپۆرتەوە (کاتی ئامادەبوون کەمکردنەوەی پشوو). لە دەوامی ٨-٥ کارمەندانی کۆگا، دەوامی فەرمی ٨ کاتژمێر دەبێت.
+              </p>
+            </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200">
               <label className="flex items-center gap-2.5 cursor-pointer select-none">
@@ -1173,10 +1306,11 @@ function EmployeeDetailPage() {
               <button
                 type="button"
                 onClick={handleSaveShiftSettings}
-                className="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 active:bg-indigo-900 text-white text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
+                disabled={isSavingShift}
+                className="px-5 py-2.5 bg-indigo-700 hover:bg-indigo-800 active:bg-indigo-900 text-white text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-xs transition-all disabled:opacity-50"
               >
                 <Save className="w-3.5 h-3.5" />
-                <span>پاشەکەوتکردنی ڕێکخستنی شەفت</span>
+                <span>{isSavingShift ? 'پاشەکەوت دەکرێت...' : 'پاشەکەوتکردنی ڕێکخستنی دەوام و پشوو'}</span>
               </button>
             </div>
           </div>

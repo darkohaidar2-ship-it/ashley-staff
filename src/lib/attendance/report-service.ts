@@ -17,6 +17,7 @@ import {
   getKurdishDayName 
 } from './report-helpers';
 export * from './report-helpers';
+import { getEmployeeShiftConfig, calculateNetWorkedAndOvertime } from '@/lib/attendance/shift-service';
 
 // Parse HH:MM into minutes from midnight
 function timeToMinutes(timeStr?: string | null): number | null {
@@ -91,6 +92,7 @@ export async function getMonthlyAttendanceStats(
   let totalLateMinutes = 0;
   let totalOvertimeMinutes = 0;
 
+  const shiftConfig = getEmployeeShiftConfig(employeeId);
   const sortedDates = Array.from(recordsMap.keys()).sort();
   const dayRecords: DayPunchRecord[] = [];
 
@@ -122,30 +124,18 @@ export async function getMonthlyAttendanceStats(
       holidayDays++;
     } else if (inTime || outTime) {
       presentDays++;
-      const inM = timeToMinutes(inTime);
-      const outM = timeToMinutes(outTime);
 
-      if (inM !== null && outM !== null && outM > inM) {
-        durationMins = outM - inM;
+      if (inTime && outTime) {
+        // 🧮 Pure Net Working Time Rule (Lunch break automatically deducted!)
+        const calc = calculateNetWorkedAndOvertime(inTime, outTime, shiftConfig);
+        durationMins = calc.netWorkedMinutes;
+        lateMins = calc.lateMinutes;
+        otMins = calc.overtimeMinutes;
+
         totalWorkMinutes += durationMins;
-      }
-
-      // Check Late arrival (Shift starts 08:00, Grace 15 mins -> after 08:15)
-      const officialStartM = 8 * 60; // 08:00
-      const graceEndM = 8 * 60 + 15; // 08:15
-      if (inM !== null && inM > graceEndM) {
-        lateMins = inM - officialStartM;
         totalLateMinutes += lateMins;
-      }
-
-      // Check Overtime (Shift ends 17:00 -> after 17:00)
-      const officialEndM = 17 * 60; // 17:00
-      if (outM !== null && outM > officialEndM) {
-        otMins = outM - officialEndM;
         totalOvertimeMinutes += otMins;
-      }
-
-      if (!inTime || !outTime) {
+      } else {
         dayStatus = 'Incomplete';
       }
     }
@@ -164,9 +154,10 @@ export async function getMonthlyAttendanceStats(
     });
   }
 
-  // Total expected working days in the month (excluding Fridays / official holidays)
+  // Total expected working days in the month (excluding official holidays)
   const targetWorkingDays = Math.max(1, dayRecords.filter(r => r.status !== 'Holiday').length);
-  const targetWorkMinutes = targetWorkingDays * 540; // 9 hours official shift
+  const targetDayMinutes = (shiftConfig.targetWorkHours || 8) * 60; // 8 * 60 = 480 mins, 7 * 60 = 420 mins
+  const targetWorkMinutes = targetWorkingDays * targetDayMinutes;
   const attendancePercent = targetWorkMinutes > 0 
     ? Math.min(100, Math.round(((totalWorkMinutes + totalOvertimeMinutes) / targetWorkMinutes) * 100))
     : 0;

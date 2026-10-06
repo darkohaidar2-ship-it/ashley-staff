@@ -67,6 +67,11 @@ export type Employee = {
   shiftType?: 'auto' | 'morning' | 'evening' | 'custom' | null;
   customShiftStart?: string | null;
   customShiftEnd?: string | null;
+  targetWorkHours?: number | null;
+  hasBreak?: boolean | null;
+  breakStart?: string | null;
+  breakEnd?: string | null;
+  breakMinutes?: number | null;
   worksOnFriday?: boolean | null;
 };
 
@@ -133,6 +138,24 @@ export type Expense = {
   expenseReportId: string;
   expenseType: string;
   expenseSubType?: string;
+};
+
+export type PendingExpenseRequest = {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  amount: number;
+  category: string;
+  note: string;
+  receiptPhotoUrl?: string;
+  receiptTelegramFileId?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  dateStr: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
+  chatId?: string | number;
 };
 
 export type ExpenseReport = {
