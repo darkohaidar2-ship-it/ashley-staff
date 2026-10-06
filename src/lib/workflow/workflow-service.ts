@@ -784,7 +784,10 @@ export async function fetchWorkflowConfiguration(forceRefresh: boolean = false):
       const merged: WorkflowConfiguration = {
         employeeRoles: { ...fallback.employeeRoles, ...(config.employeeRoles || {}) },
         connections: (config.connections && Array.isArray(config.connections) && config.connections.length > 0) ? config.connections : fallback.connections,
-        taskAssignments: config.taskAssignments || fallback.taskAssignments,
+        taskAssignments: {
+          ...fallback.taskAssignments,
+          ...(config.taskAssignments || {}),
+        },
       };
       cachedWorkflowConfig = { config: merged, timestamp: now };
       return merged;
@@ -1181,7 +1184,11 @@ export async function getActionRecipients(
         }
       }
       return explicitRecipients;
+    } else if (actionId === 'approve_expense') {
+      return [];
     }
+  } else if (actionId === 'approve_expense') {
+    return [];
   }
 
   // Find all authorities, roles, recipient groups, or employee IDs connected to this task in legacy Column 3

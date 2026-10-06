@@ -63,7 +63,8 @@ import {
   fetchPendingExpenseRequests, 
   createPendingExpenseRequest, 
   approveExpenseRequest, 
-  rejectExpenseRequest 
+  rejectExpenseRequest,
+  fetchCustomPresetReasons,
 } from '@/lib/supabase/expenses/expenses-service';
 import type { PendingExpenseRequest } from '@/lib/types';
 import { supabase } from '@/lib/supabase/client';
@@ -100,13 +101,119 @@ interface BroadcastSession {
 }
 const PENDING_BROADCAST: Record<string, BroadcastSession> = {};
 
+// -------------------------------------------------------------
+// 🚕 ASHLEY STANDARD COMPANY ROUTES FOR TRANSPORT EXPENSES
+// -------------------------------------------------------------
+const ROUTE_OPTIONS = [
+  { label: '🏢 سەرەکی ⬅️ هوانە', route: 'کۆمپانیای سەرەکی بۆ هوانە' },
+  { label: '📦 کۆگا ⬅️ پێشانگا', route: 'کۆگای سەرەکی بۆ پێشانگا' },
+  { label: '🏬 پێشانگا ⬅️ بازاڕ', route: 'پێشانگا بۆ بازاڕ' },
+  { label: '🚚 کۆگا ⬅️ ماڵان', route: 'کۆگا بۆ ماڵان (گەیاندن)' },
+  { label: '🏭 کارگە ⬅️ کۆگا', route: 'کارگە بۆ کۆگا' },
+  { label: '🛣️ دەرەوەی شار', route: 'دەرەوەی شار' },
+];
+
+// -------------------------------------------------------------
+// ⏱️ ASHLEY STANDARD OVERTIME REASONS (ئیزافە و کاتی زیادە)
+// -------------------------------------------------------------
+const OVERTIME_PRESET_REASONS = [
+  'IT',
+  'شۆردنی سۆلار',
+  'نقڵی دەرەوەی شار',
+  'نقڵی ماڵان',
+  'چاککردنەوە',
+  'کارکردنی شەوان لەعرض',
+];
+
+function getOvertimeReasonKeyboard() {
+  return {
+    keyboard: [
+      [{ text: 'IT' }, { text: 'شۆردنی سۆلار' }],
+      [{ text: 'نقڵی دەرەوەی شار' }, { text: 'نقڵی ماڵان' }],
+      [{ text: 'چاککردنەوە' }, { text: 'کارکردنی شەوان لەعرض' }],
+      [{ text: 'بەبێ تێبینی' }, { text: '❌ هەڵوەشاندنەوە' }],
+    ],
+    resize_keyboard: true,
+    one_time_keyboard: true,
+  };
+}
+
+// -------------------------------------------------------------
+// 💰 TOP 5 PRESET EXPENSE REASONS HELPER
+// -------------------------------------------------------------
+const DEFAULT_PRESET_EXPENSE_REASONS: Record<string, string[]> = {
+  taxi: [
+    'کرێ تەکسی بۆ چون لێدانی لەزگەی فرۆشراوە',
+    'کرێ تەکسی کار باری کۆمپانیا',
+    'کرێ تەکسی بۆ ڕێکخستنی کۆگا',
+    'کرێ تەکسی بۆ نقڵ',
+    'کرێ تەکسی هاتنەوە لە نقڵ',
+  ],
+  food: [
+    'نان خواردنی کارمەندان',
+    'نان خواردن دەرەوەی شار',
+    'چای و قاوە و میوانداری',
+    'پێداویستی خواردن و ئاو',
+    'میوانداری و نانی میوان',
+  ],
+  other: [
+    'کڕینی پێداویستی کۆگا',
+    'مەسروفاتی دەرەوەی شار',
+    'مەسروفاتی کارگە و کۆگا',
+    'مەسروفاتی پاککەرەوە و پێداویستی',
+    'چاککردنەوە و سڕف',
+  ],
+  fuel: [
+    'بەنزینی ئۆتۆمبێلی کۆمپانیا',
+    'بەنزینی مۆلیدەی کارگە',
+  ],
+  office: [
+    'کەلوپەلی ئۆفیس و کارگێڕی',
+    'چاپەمەنی و وەرەقە و مەرکەب',
+  ],
+};
+
+async function getTopPresetNotes(category: string): Promise<string[]> {
+  let customMap: Record<string, string[]> | null = null;
+  try {
+    customMap = await fetchCustomPresetReasons();
+  } catch (err) {
+    logger.warn('Failed to fetch custom preset reasons:', err);
+  }
+
+  const catKey = 
+    category.includes('تەکسی') || category.includes('هاتوچۆ') ? 'taxi' :
+    category.includes('خواردن') ? 'food' :
+    category.includes('بەنزین') ? 'fuel' :
+    category.includes('ئۆفیس') || category.includes('مەکتەب') ? 'office' : 'other';
+
+  const customList = (customMap && Array.isArray(customMap[catKey])) ? customMap[catKey] : [];
+  const defaultList = DEFAULT_PRESET_EXPENSE_REASONS[catKey] || [];
+  
+  const merged = Array.from(new Set([...customList, ...defaultList].filter(Boolean)));
+  if (merged.length >= 5) {
+    return merged.slice(0, 5);
+  }
+
+  const fallbackAll = [
+    'کڕینی پێداویستی کۆگا',
+    'نان خواردنی کارمەندان',
+    'کرێ تەکسی کار باری کۆمپانیا',
+    'چاککردنەوە و سڕف',
+    'مەسروفاتی دەرەوەی شار',
+  ];
+  return Array.from(new Set([...merged, ...fallbackAll])).slice(0, 5);
+}
+
 interface ExpenseSession {
-  step: 'awaiting_amount' | 'awaiting_category' | 'awaiting_note' | 'awaiting_receipt';
+  step: 'awaiting_amount' | 'awaiting_category' | 'awaiting_route' | 'awaiting_custom_route' | 'awaiting_note' | 'awaiting_receipt';
   employeeId: string;
   employeeName: string;
   chatId: number | string;
   amount?: number;
   category?: string;
+  route?: string;
+  presetNotes?: string[];
   note?: string;
   receiptPhotoId?: string;
   receiptPhotoUrl?: string;
@@ -122,12 +229,13 @@ interface OvertimeNoteSession {
 const PENDING_OVERTIME_NOTE: Record<string, OvertimeNoteSession> = {};
 
 async function submitExpenseRequestFromTelegram(session: ExpenseSession, bindings: Record<string, any>) {
+  const finalNote = session.note || (session.route ? `تەکسی: ${session.route}` : 'بەبێ تێبینی');
   const req = await createPendingExpenseRequest({
     employeeId: session.employeeId,
     employeeName: session.employeeName,
     amount: session.amount || 0,
     category: session.category || 'مەسروفاتی گشتی',
-    note: session.note || 'بەبێ تێبینی',
+    note: finalNote,
     receiptPhotoUrl: session.receiptPhotoUrl,
     receiptTelegramFileId: session.receiptPhotoId,
     dateStr: getBaghdadNow().dateStr,
@@ -139,13 +247,14 @@ async function submitExpenseRequestFromTelegram(session: ExpenseSession, binding
     `✅ <b>داواکاری مەسروفاتەکەت بە سەرکەوتوویی نێردرا!</b>\n\n` +
     `💵 بڕی پارە: <b>${(session.amount || 0).toLocaleString()} دینار</b>\n` +
     `📂 جۆری خەرجی: <b>${session.category || 'مەسروفاتی گشتی'}</b>\n` +
-    `📝 تێبینی و هۆکار: <i>${session.note || 'بەبێ تێبینی'}</i>\n` +
+    (session.route ? `🚕 هێڵی هاتوچۆ: <b>${session.route}</b>\n` : '') +
+    `📝 تێبینی و هۆکار: <i>${finalNote}</i>\n` +
     (session.receiptPhotoId ? `📸 وێنەی پسوولە: <b>هاوپێچ کراوە</b>\n` : `📸 وێنەی پسوولە: <i>بەبێ وێنە</i>\n`) +
-    `\nڕەوانەی ئایتی و بەڕێوەبەرایەتی کرا بۆ پێداچوونەوە و پەسەندکردن ✨`;
+    `\nڕەوانەی بەرپرسانی پەسەندکردنی مەسروفات کرا بۆ پێداچوونەوە ✨`;
 
   await sendTelegramMessage(session.chatId, userMsg);
 
-  // 2. Notify Approvers (wired to approve_expense)
+  // 2. Notify Approvers (strictly assigned to approve_expense)
   let approvers = await getActionRecipients('approve_expense', bindings);
   if (approvers.length === 0) {
     const founderEntry = Object.entries(bindings).find(([_, info]: any) => info.employeeId === 'emp-02' || info.employeeId === 'emp-01');
@@ -159,12 +268,22 @@ async function submitExpenseRequestFromTelegram(session: ExpenseSession, binding
     }
   }
 
+  // Deduplicate approvers by chatId
+  const seenChatIds = new Set<string>();
+  const uniqueApprovers = approvers.filter(app => {
+    const sId = String(app.chatId);
+    if (seenChatIds.has(sId)) return false;
+    seenChatIds.add(sId);
+    return true;
+  });
+
   const approverCard = 
     `🔔 <b>داواکاری نوێی مەسروفات:</b>\n\n` +
     `👤 کارمەند: <b>${session.employeeName}</b> (${session.employeeId})\n` +
     `💵 بڕی داواکراو: <b>${(session.amount || 0).toLocaleString()} دینار</b>\n` +
     `📂 جۆری مەسروف: <b>${session.category || 'مەسروفاتی گشتی'}</b>\n` +
-    `📝 تێبینی / هۆکار: <b>${session.note || 'بەبێ تێبینی'}</b>\n` +
+    (session.route ? `🚕 هێڵی هاتوچۆ: <b>${session.route}</b>\n` : '') +
+    `📝 تێبینی / هۆکار: <b>${finalNote}</b>\n` +
     `🕒 کات: ${getBaghdadNow().dateStr} - ${getBaghdadNow().timeStr}\n\n` +
     `تکایە بڕیاری لەسەر بدە:`;
 
@@ -177,7 +296,7 @@ async function submitExpenseRequestFromTelegram(session: ExpenseSession, binding
     ],
   };
 
-  for (const approver of approvers) {
+  for (const approver of uniqueApprovers) {
     if (String(approver.chatId) === String(session.chatId)) continue;
     if (session.receiptPhotoId) {
       try {
@@ -441,20 +560,192 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ ok: true });
         }
         session.category = category;
+
+        // If Taxi / Transport: Present route options ("لە کوێوە بۆ کوێ ئەرۆن")
+        if (category === 'تەکسی و هاتوچۆ') {
+          session.step = 'awaiting_route';
+          await answerCallbackQuery(cqId, 'تەکسی و هاتوچۆ');
+
+          const routeKeyboard = {
+            inline_keyboard: [
+              [
+                { text: '🏢 سەرەکی ⬅️ هوانە', callback_data: 'exp_r:0' },
+                { text: '📦 کۆگا ⬅️ پێشانگا', callback_data: 'exp_r:1' },
+              ],
+              [
+                { text: '🏬 پێشانگا ⬅️ بازاڕ', callback_data: 'exp_r:2' },
+                { text: '🚚 کۆگا ⬅️ ماڵان', callback_data: 'exp_r:3' },
+              ],
+              [
+                { text: '🏭 کارگە ⬅️ کۆگا', callback_data: 'exp_r:4' },
+                { text: '🛣️ دەرەوەی شار', callback_data: 'exp_r:5' },
+              ],
+              [
+                { text: '✍️ شوێنی تر (بە نووسین)', callback_data: 'exp_r:custom' },
+                { text: '❌ هەڵوەشاندنەوە', callback_data: 'exp_cancel' },
+              ],
+            ],
+          };
+
+          const routePrompt = 
+            `🚕 <b>هێڵی هاتوچۆ (لە کوێوە بۆ کوێ دەڕۆیت؟):</b>\n\n` +
+            `💵 بڕی پارە: <b>${(session.amount || 0).toLocaleString()} دینار</b>\n\n` +
+            `تکایە <b>شوێنی ڕۆیشتن</b> لە دوگمەکانی خوارەوە هەڵبژێرە، یان [شوێنی تر] دابگرە تا بە دەست بنووسیت:`;
+
+          if (cqMsgId) {
+            await editTelegramMessage(cqChatId, cqMsgId, routePrompt, routeKeyboard);
+          } else {
+            await sendTelegramMessage(cqChatId, routePrompt, routeKeyboard);
+          }
+          return NextResponse.json({ ok: true });
+        }
+
+        // For other categories: Present Top 5 Saved Preset Notes
         session.step = 'awaiting_note';
+        const presetNotes = await getTopPresetNotes(category);
+        session.presetNotes = presetNotes;
         await answerCallbackQuery(cqId, `جۆر دیاریکرا: ${category}`);
+
+        const noteKeyboard = {
+          inline_keyboard: [
+            ...presetNotes.map((n, idx) => [{ text: `🔹 ${n}`, callback_data: `exp_pnote:${idx}` }]),
+            [{ text: '⏭️ بەبێ تێبینی زیاتر', callback_data: 'exp_skip_note' }],
+            [{ text: '❌ هەڵوەشاندنەوە', callback_data: 'exp_cancel' }],
+          ],
+        };
 
         const notePrompt = 
           `📂 جۆری مەسروفات: <b>${category}</b>\n` +
           `💵 بڕی پارە: <b>${(session.amount || 0).toLocaleString()} دینار</b>\n\n` +
-          `📝 تکایە ئێستا <b>تێبینی و هۆکاری خەرجییەکە بنووسە</b>:\n` +
-          `<i>(نموونە: کڕینی پێداویستی بۆ کۆگا، یان تەکسی بۆ هوانە)</i>\n\n` +
+          `📝 <b>تێبینی و هۆکاری خەرجی دیاری بکە:</b>\n` +
+          `دەتوانیت یەکێک لەم <b>٥ تێبینییە سەرەکییە</b> هەڵبژێریت بە دەست لێدان، یان خۆت هۆکارەکەت بە دەست بنووسیت:\n\n` +
           `<i>(یان بنووسە: ❌ هەڵوەشاندنەوە)</i>`;
 
         if (cqMsgId) {
-          await editTelegramMessage(cqChatId, cqMsgId, notePrompt);
+          await editTelegramMessage(cqChatId, cqMsgId, notePrompt, noteKeyboard);
         } else {
-          await sendTelegramMessage(cqChatId, notePrompt);
+          await sendTelegramMessage(cqChatId, notePrompt, noteKeyboard);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // 1b. Route selected (for taxi / transport)
+      if (data.startsWith('exp_r:')) {
+        const routeIdx = data.replace('exp_r:', '');
+        const session = EXPENSE_SESSIONS[cqFromId];
+        if (!session) {
+          await answerCallbackQuery(cqId, 'داواکاری بەسەرچووە، تکایە سەرلەنوێ داوا بکەرەوە', true);
+          return NextResponse.json({ ok: true });
+        }
+
+        if (routeIdx === 'custom') {
+          session.step = 'awaiting_custom_route';
+          await answerCallbackQuery(cqId, 'شوێنی تر بنووسە');
+          const customPrompt = 
+            `🚕 <b>دیاریکردنی شوێنی هاتوچۆ:</b>\n\n` +
+            `✍️ تکایە بە دەست بنووسە لە کوێوە بۆ کوێ دەڕۆیت:\n` +
+            `<i>(نموونە: لە کۆگای سەرەکی بۆ ماڵی موشتەری لە بەختیاری)</i>\n\n` +
+            `<i>(یان بنووسە: ❌ هەڵوەشاندنەوە)</i>`;
+          if (cqMsgId) {
+            await editTelegramMessage(cqChatId, cqMsgId, customPrompt);
+          } else {
+            await sendTelegramMessage(cqChatId, customPrompt);
+          }
+          return NextResponse.json({ ok: true });
+        }
+
+        const idx = parseInt(routeIdx, 10);
+        const selectedRoute = ROUTE_OPTIONS[idx]?.route || 'هاتوچۆ';
+        session.route = selectedRoute;
+        session.step = 'awaiting_note';
+        const presetNotes = await getTopPresetNotes('تەکسی و هاتوچۆ');
+        session.presetNotes = presetNotes;
+        await answerCallbackQuery(cqId, `هێڵ دیاریکرا: ${selectedRoute}`);
+
+        const noteKeyboard = {
+          inline_keyboard: [
+            ...presetNotes.map((n, i) => [{ text: `🔹 ${n}`, callback_data: `exp_pnote:${i}` }]),
+            [{ text: '⏭️ تەنها هێڵەکە بەسە (بەبێ تێبینی)', callback_data: 'exp_skip_note' }],
+            [{ text: '❌ هەڵوەشاندنەوە', callback_data: 'exp_cancel' }],
+          ],
+        };
+
+        const notePrompt = 
+          `🚕 هێڵی هاتوچۆ: <b>${selectedRoute}</b>\n` +
+          `💵 بڕی پارە: <b>${(session.amount || 0).toLocaleString()} دینار</b>\n\n` +
+          `📝 <b>تێبینی و هۆکاری زیاتر:</b>\n` +
+          `دەتوانیت یەکێک لەم <b>٥ تێبینییە سەرەکییە</b> هەڵبژێریت، یان [تەنها هێڵەکە بەسە] دابگریت، یان هۆکارەکەت بە دەست بنووسیت:`;
+
+        if (cqMsgId) {
+          await editTelegramMessage(cqChatId, cqMsgId, notePrompt, noteKeyboard);
+        } else {
+          await sendTelegramMessage(cqChatId, notePrompt, noteKeyboard);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // 1c. Top 5 preset note chosen
+      if (data.startsWith('exp_pnote:')) {
+        const noteIdx = parseInt(data.replace('exp_pnote:', ''), 10);
+        const session = EXPENSE_SESSIONS[cqFromId];
+        if (!session) {
+          await answerCallbackQuery(cqId, 'داواکاری بەسەرچووە', true);
+          return NextResponse.json({ ok: true });
+        }
+        const chosen = session.presetNotes?.[noteIdx] || 'مەسروفات';
+        session.note = session.route ? `${session.route} (${chosen})` : chosen;
+        session.step = 'awaiting_receipt';
+        await answerCallbackQuery(cqId, `تێبینی دیاریکرا`);
+
+        const receiptPrompt = 
+          `📝 تێبینی تۆمارکرا: <b>${session.note}</b>\n` +
+          `💵 بڕی پارە: <b>${(session.amount || 0).toLocaleString()} دینار</b>\n\n` +
+          `📸 <b>ئەگەر پسوولە (وەسڵ)ت پێیە، وێنەکەی لێرە بنێرە:</b>\n\n` +
+          `<i>(ئەگەر پسوولەت پێ نییە، دوگمەی خوارەوە دابگرە تا بەبێ وێنە بنێردرێت):</i>`;
+
+        const receiptKb = {
+          inline_keyboard: [
+            [{ text: '⏭️ بەبێ وێنە بینێرە (ناردن)', callback_data: 'exp_skip_photo' }],
+            [{ text: '❌ هەڵوەشاندنەوە', callback_data: 'exp_cancel' }],
+          ],
+        };
+
+        if (cqMsgId) {
+          await editTelegramMessage(cqChatId, cqMsgId, receiptPrompt, receiptKb);
+        } else {
+          await sendTelegramMessage(cqChatId, receiptPrompt, receiptKb);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // 1d. Skip note button
+      if (data === 'exp_skip_note') {
+        const session = EXPENSE_SESSIONS[cqFromId];
+        if (!session) {
+          await answerCallbackQuery(cqId, 'داواکاری بەسەرچووە', true);
+          return NextResponse.json({ ok: true });
+        }
+        session.note = session.route || 'بەبێ تێبینی';
+        session.step = 'awaiting_receipt';
+        await answerCallbackQuery(cqId, `بەبێ تێبینی`);
+
+        const receiptPrompt = 
+          `📝 تێبینی تۆمارکرا: <b>${session.note}</b>\n` +
+          `💵 بڕی پارە: <b>${(session.amount || 0).toLocaleString()} دینار</b>\n\n` +
+          `📸 <b>ئەگەر پسوولە (وەسڵ)ت پێیە، وێنەکەی لێرە بنێرە:</b>\n\n` +
+          `<i>(ئەگەر پسوولەت پێ نییە، دوگمەی خوارەوە دابگرە تا بەبێ وێنە بنێردرێت):</i>`;
+
+        const receiptKb = {
+          inline_keyboard: [
+            [{ text: '⏭️ بەبێ وێنە بینێرە (ناردن)', callback_data: 'exp_skip_photo' }],
+            [{ text: '❌ هەڵوەشاندنەوە', callback_data: 'exp_cancel' }],
+          ],
+        };
+
+        if (cqMsgId) {
+          await editTelegramMessage(cqChatId, cqMsgId, receiptPrompt, receiptKb);
+        } else {
+          await sendTelegramMessage(cqChatId, receiptPrompt, receiptKb);
         }
         return NextResponse.json({ ok: true });
       }
@@ -485,13 +776,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // 4. Approve expense
+      // 4. Approve expense (strictly checks approve_expense assignment)
       if (data.startsWith('exp_app:')) {
         const reqId = data.replace('exp_app:', '');
         const approverName = binding?.employeeName || (cqRole === 'warehouse_manager' ? 'کاک کامەران' : cqRole === 'administration' ? 'ئیدارە' : 'بەڕێوەبەر');
-        const canApprove = (await hasActionPermission(cqFromId, 'approve_expense')) || isManager || (cqRole as string) === 'it_admin';
+        const canApprove = await hasActionPermission(cqFromId, 'approve_expense');
         if (!canApprove) {
-          await answerCallbackQuery(cqId, '⛔ دەسەڵاتی پەسەندکردنی مەسروفاتت نییە.', true);
+          await answerCallbackQuery(cqId, '⛔ دەسەڵاتی پەسەندکردنی مەسروفاتت نییە لە سیستەمدا.', true);
           return NextResponse.json({ ok: true });
         }
 
@@ -527,13 +818,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // 5. Reject expense
+      // 5. Reject expense (strictly checks approve_expense assignment)
       if (data.startsWith('exp_rej:')) {
         const reqId = data.replace('exp_rej:', '');
         const approverName = binding?.employeeName || (cqRole === 'warehouse_manager' ? 'کاک کامەران' : cqRole === 'administration' ? 'ئیدارە' : 'بەڕێوەبەر');
-        const canApprove = (await hasActionPermission(cqFromId, 'approve_expense')) || isManager || (cqRole as string) === 'it_admin';
+        const canApprove = await hasActionPermission(cqFromId, 'approve_expense');
         if (!canApprove) {
-          await answerCallbackQuery(cqId, '⛔ دەسەڵاتی پەسەندکردنی مەسروفاتت نییە.', true);
+          await answerCallbackQuery(cqId, '⛔ دەسەڵاتی ڕەتکردنەوەی مەسروفاتت نییە لە سیستەمدا.', true);
           return NextResponse.json({ ok: true });
         }
 
@@ -1454,13 +1745,38 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // Step 2: Parse Note / Reason
+      // Step 2a: Parse Custom Route text
+      if (session.step === 'awaiting_custom_route') {
+        session.route = text;
+        session.step = 'awaiting_note';
+        const presetNotes = await getTopPresetNotes('تەکسی و هاتوچۆ');
+        session.presetNotes = presetNotes;
+
+        const noteKeyboard = {
+          inline_keyboard: [
+            ...presetNotes.map((n, i) => [{ text: `🔹 ${n}`, callback_data: `exp_pnote:${i}` }]),
+            [{ text: '⏭️ تەنها هێڵەکە بەسە (بەبێ تێبینی)', callback_data: 'exp_skip_note' }],
+            [{ text: '❌ هەڵوەشاندنەوە', callback_data: 'exp_cancel' }],
+          ],
+        };
+
+        const notePrompt = 
+          `🚕 هێڵی تۆمارکراو: <b>${text}</b>\n` +
+          `💵 بڕی پارە: <b>${(session.amount || 0).toLocaleString()} دینار</b>\n\n` +
+          `📝 <b>تێبینی و هۆکاری زیاتر:</b>\n` +
+          `دەتوانیت یەکێک لەم <b>٥ تێبینییە سەرەکییە</b> هەڵبژێریت، یان [تەنها هێڵەکە بەسە] دابگریت، یان بە دەست بنووسیت:`;
+
+        await sendTelegramMessage(chatId, notePrompt, noteKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
+      // Step 2b: Parse Note / Reason
       if (session.step === 'awaiting_note') {
-        session.note = text;
+        session.note = session.route ? `${session.route} (${text})` : text;
         session.step = 'awaiting_receipt';
 
         const receiptPrompt = 
-          `📝 تێبینی تۆمارکرا: <i>${text}</i>\n\n` +
+          `📝 تێبینی تۆمارکرا: <i>${session.note}</i>\n\n` +
           `📸 <b>ئەگەر پسوولە (وەسڵ)ت پێیە، وێنەکەی لێرە بنێرە:</b>\n\n` +
           `<i>(ئەگەر پسوولەت پێ نییە، دوگمەی خوارەوە دابگرە تا بەبێ وێنە بنێردرێت):</i>`;
 
@@ -1875,14 +2191,8 @@ export async function POST(req: NextRequest) {
         const otPrompt = 
           `⏰ <b>تۆمارکردنی هۆکاری کاتی زیادە (ئۆڤەرتایم):</b>\n\n` +
           `بەڕێز <b>${currentBinding.employeeName}</b>، ئەمڕۆ تۆ <b>${result.overtimeMinutes} خولەک</b> کاتی زیادەت تۆمار کردووە.\n\n` +
-          `📝 تکایە <b>هۆکاری کاتی زیادەکەت بنووسە</b> تا لە ڕاپۆرتی دەوامدا جێگیر بکرێت:\n` +
-          `<i>(نموونە: بارکردنی کەلوپەل، ئیشی کۆگا، پاککردنەوە، پێداویستی پێشانگا)</i>\n\n` +
-          `<i>(دەتوانیت بنووسیت: بەبێ تێبینی)</i>`;
-        await sendTelegramMessage(chatId, otPrompt, {
-          keyboard: [[{ text: 'بەبێ تێبینی' }], [{ text: '❌ هەڵوەشاندنەوە' }]],
-          resize_keyboard: true,
-          one_time_keyboard: true,
-        });
+          `📝 تکایە <b>یەکێک لەم هۆکارە سەرەکییانە هەڵبژێرە</b> یان هۆکارەکەت بە دەست بنووسە:`;
+        await sendTelegramMessage(chatId, otPrompt, getOvertimeReasonKeyboard());
       }
       return NextResponse.json({ ok: true });
     }
@@ -2304,7 +2614,7 @@ export async function POST(req: NextRequest) {
     // 10j. ACTION: APPROVE EXPENSES (💰 پەسەندکردنی مەسروفات)
     // -------------------------------------------------------------
     if (text === '💰 پەسەندکردنی مەسروفات' || text === '/pending_expenses') {
-      const allowed = (await hasActionPermission(currentBinding.employeeId, 'approve_expense')) || isManager || userRole === 'it_admin';
+      const allowed = await hasActionPermission(currentBinding.employeeId, 'approve_expense');
       if (!allowed) {
         await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ پەسەندکردنی مەسروفات ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
         return NextResponse.json({ ok: true });
@@ -2425,14 +2735,8 @@ export async function POST(req: NextRequest) {
         const otPrompt = 
           `⏰ <b>تۆمارکردنی هۆکاری کاتی زیادە (ئۆڤەرتایم):</b>\n\n` +
           `بەڕێز <b>${currentBinding.employeeName}</b>، تۆ ئەمڕۆ <b>${result.overtimeMinutes} خولەک</b> کاتی زیادەت تۆمار کردووە.\n\n` +
-          `📝 تکایە <b>هۆکاری کاتی زیادەکەت بنووسە</b> تا لە ڕاپۆرتی دەوامدا جێگیر بکرێت:\n` +
-          `<i>(نموونە: بارکردنی کەلوپەل، ئیشی کۆگا، پاککردنەوە، پێداویستی پێشانگا)</i>\n\n` +
-          `<i>(دەتوانیت بنووسیت: بەبێ تێبینی)</i>`;
-        await sendTelegramMessage(chatId, otPrompt, {
-          keyboard: [[{ text: 'بەبێ تێبینی' }], [{ text: '❌ هەڵوەشاندنەوە' }]],
-          resize_keyboard: true,
-          one_time_keyboard: true,
-        });
+          `📝 تکایە <b>یەکێک لەم هۆکارە سەرەکییانە هەڵبژێرە</b> یان هۆکارەکەت بە دەست بنووسە:`;
+        await sendTelegramMessage(chatId, otPrompt, getOvertimeReasonKeyboard());
       }
       return NextResponse.json({ ok: true });
     }
@@ -2512,14 +2816,8 @@ export async function POST(req: NextRequest) {
         const otPrompt = 
           `⏰ <b>تۆمارکردنی هۆکاری کاتی زیادە (ئۆڤەرتایم):</b>\n\n` +
           `بەڕێز <b>${currentBinding.employeeName}</b>، تۆ ئەمڕۆ <b>${result.overtimeMinutes} خولەک</b> کاتی زیادەت تۆمار کردووە.\n\n` +
-          `📝 تکایە <b>هۆکاری کاتی زیادەکەت بنووسە</b> تا لە ڕاپۆرتی دەوامدا جێگیر بکرێت:\n` +
-          `<i>(نموونە: بارکردنی کەلوپەل، ئیشی کۆگا، پاککردنەوە، پێداویستی پێشانگا)</i>\n\n` +
-          `<i>(دەتوانیت بنووسیت: بەبێ تێبینی)</i>`;
-        await sendTelegramMessage(chatId, otPrompt, {
-          keyboard: [[{ text: 'بەبێ تێبینی' }], [{ text: '❌ هەڵوەشاندنەوە' }]],
-          resize_keyboard: true,
-          one_time_keyboard: true,
-        });
+          `📝 تکایە <b>یەکێک لەم هۆکارە سەرەکییانە هەڵبژێرە</b> یان هۆکارەکەت بە دەست بنووسە:`;
+        await sendTelegramMessage(chatId, otPrompt, getOvertimeReasonKeyboard());
       }
       return NextResponse.json({ ok: true });
     }
