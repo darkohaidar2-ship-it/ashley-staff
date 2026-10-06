@@ -47,6 +47,7 @@ import { MobilePwaInstallModal } from '@/components/attendance/MobilePwaInstallM
 import { MobileLogoutModal } from '@/components/attendance/MobileLogoutModal';
 
 import { ASHLEY_OFFICIAL_EMPLOYEES, OFFICIAL_PIN_MAP, normalizeKurdishDigits } from '@/lib/ashley-employees';
+import { fetchCustomOvertimeReasons } from '@/lib/supabase';
 
 // Default Employees Fallback covering all 21 employees with Official PINs
 const ASHLEY_DEFAULT_EMPLOYEES = ASHLEY_OFFICIAL_EMPLOYEES.map(e => ({
@@ -437,6 +438,16 @@ export default function MobileAttendanceOneTap() {
   const [customReason, setCustomReason] = useState<string>('');
   const [showLocationHelpModal, setShowLocationHelpModal] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
+  const [overtimeChips, setOvertimeChips] = useState<string[]>(OVERTIME_CHIPS);
+
+  // Sync overtime chips dynamically with Supabase
+  useEffect(() => {
+    fetchCustomOvertimeReasons().then((reasons) => {
+      if (reasons && Array.isArray(reasons) && reasons.length > 0) {
+        setOvertimeChips(reasons);
+      }
+    }).catch(() => {});
+  }, []);
 
   // 📱 Mobile Dashboard Unified Sheet Expansion State
   const [isFullSheetExpanded, setIsFullSheetExpanded] = useState<boolean>(false);
@@ -1989,7 +2000,7 @@ export default function MobileAttendanceOneTap() {
             setSelectedChip(LATE_IN_CHIPS[0]);
           } else {
             setReasonType(errMsg.includes('زیادە') ? 'OVERTIME_OUT' : 'EARLY_OUT');
-            setSelectedChip(errMsg.includes('زیادە') ? OVERTIME_CHIPS[0] : EARLY_OUT_CHIPS[0]);
+            setSelectedChip(errMsg.includes('زیادە') ? overtimeChips[0] : EARLY_OUT_CHIPS[0]);
           }
           setCustomReason('');
           setShowReasonModal(true);
@@ -2111,7 +2122,7 @@ export default function MobileAttendanceOneTap() {
       } else if (currentHm > shiftRules.overtimeThreshold) {
         setPendingAction('EXIT');
         setReasonType('OVERTIME_OUT');
-        setSelectedChip(OVERTIME_CHIPS[0]);
+        setSelectedChip(overtimeChips[0]);
         setCustomReason('');
         setShowReasonModal(true);
         setTriggerLoading(false);
@@ -3937,7 +3948,7 @@ export default function MobileAttendanceOneTap() {
             </div>
 
             <div className="grid grid-cols-1 gap-1.5">
-              {(reasonType === 'LATE_IN' ? LATE_IN_CHIPS : reasonType === 'EARLY_OUT' ? EARLY_OUT_CHIPS : OVERTIME_CHIPS).map((chip) => (
+              {(reasonType === 'LATE_IN' ? LATE_IN_CHIPS : reasonType === 'EARLY_OUT' ? EARLY_OUT_CHIPS : overtimeChips).map((chip) => (
                 <button
                   key={chip}
                   type="button"

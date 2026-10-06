@@ -65,6 +65,12 @@ import {
   approveExpenseRequest, 
   rejectExpenseRequest,
   fetchCustomPresetReasons,
+  fetchCustomRoutes,
+  fetchCustomOvertimeReasons,
+  fetchCustomExpenseCategories,
+  DEFAULT_CUSTOM_ROUTES,
+  DEFAULT_OVERTIME_REASONS,
+  type CustomRouteItem,
 } from '@/lib/supabase/expenses/expenses-service';
 import type { PendingExpenseRequest } from '@/lib/types';
 import { supabase } from '@/lib/supabase/client';
@@ -102,39 +108,106 @@ interface BroadcastSession {
 const PENDING_BROADCAST: Record<string, BroadcastSession> = {};
 
 // -------------------------------------------------------------
-// 🚕 ASHLEY STANDARD COMPANY ROUTES FOR TRANSPORT EXPENSES
+// 🚕 ASHLEY STANDARD COMPANY ROUTES FOR TRANSPORT EXPENSES (DYNAMIC & CLOUD SYNCED)
 // -------------------------------------------------------------
-const ROUTE_OPTIONS = [
-  { label: '🏢 سەرەکی ⬅️ هوانە', route: 'کۆمپانیای سەرەکی بۆ هوانە' },
-  { label: '📦 کۆگا ⬅️ پێشانگا', route: 'کۆگای سەرەکی بۆ پێشانگا' },
-  { label: '🏬 پێشانگا ⬅️ بازاڕ', route: 'پێشانگا بۆ بازاڕ' },
-  { label: '🚚 کۆگا ⬅️ ماڵان', route: 'کۆگا بۆ ماڵان (گەیاندن)' },
-  { label: '🏭 کارگە ⬅️ کۆگا', route: 'کارگە بۆ کۆگا' },
-  { label: '🛣️ دەرەوەی شار', route: 'دەرەوەی شار' },
-];
+const ROUTE_OPTIONS = DEFAULT_CUSTOM_ROUTES.map(r => ({
+  label: r.label || `${r.from} ⬅️ ${r.to}`,
+  route: `${r.from} بۆ ${r.to}`,
+}));
+
+async function getDynamicRoutes(): Promise<Array<{ label: string; route: string; from: string; to: string }>> {
+  try {
+    const custom = await fetchCustomRoutes();
+    if (custom && Array.isArray(custom) && custom.length > 0) {
+      return custom.map(r => ({
+        label: r.label || `${r.from} ⬅️ ${r.to}`,
+        route: `${r.from} بۆ ${r.to}`,
+        from: r.from,
+        to: r.to,
+      }));
+    }
+  } catch (err) {
+    logger.warn('Failed to fetch dynamic routes from Supabase:', err);
+  }
+  return DEFAULT_CUSTOM_ROUTES.map(r => ({
+    label: r.label || `${r.from} ⬅️ ${r.to}`,
+    route: `${r.from} بۆ ${r.to}`,
+    from: r.from,
+    to: r.to,
+  }));
+}
 
 // -------------------------------------------------------------
-// ⏱️ ASHLEY STANDARD OVERTIME REASONS (ئیزافە و کاتی زیادە)
+// ⏱️ ASHLEY DYNAMIC OVERTIME REASONS (ئیزافە و کاتی زیادە)
 // -------------------------------------------------------------
-const OVERTIME_PRESET_REASONS = [
-  'IT',
-  'شۆردنی سۆلار',
-  'نقڵی دەرەوەی شار',
-  'نقڵی ماڵان',
-  'چاککردنەوە',
-  'کارکردنی شەوان لەعرض',
-];
+const OVERTIME_PRESET_REASONS = DEFAULT_OVERTIME_REASONS;
 
-function getOvertimeReasonKeyboard() {
+async function getDynamicOvertimeReasonKeyboard() {
+  let reasons: string[] = [];
+  try {
+    const customOt = await fetchCustomOvertimeReasons();
+    if (customOt && Array.isArray(customOt) && customOt.length > 0) {
+      reasons = customOt;
+    }
+  } catch (err) {
+    logger.warn('Failed to fetch custom overtime reasons from Supabase:', err);
+  }
+  if (!reasons || reasons.length === 0) {
+    reasons = DEFAULT_OVERTIME_REASONS;
+  }
+
+  const rows: Array<Array<{ text: string }>> = [];
+  for (let i = 0; i < reasons.length; i += 2) {
+    const row: Array<{ text: string }> = [{ text: reasons[i] }];
+    if (i + 1 < reasons.length) {
+      row.push({ text: reasons[i + 1] });
+    }
+    rows.push(row);
+  }
+  rows.push([{ text: 'بەبێ تێبینی' }, { text: '❌ هەڵوەشاندنەوە' }]);
+
   return {
-    keyboard: [
-      [{ text: 'IT' }, { text: 'شۆردنی سۆلار' }],
-      [{ text: 'نقڵی دەرەوەی شار' }, { text: 'نقڵی ماڵان' }],
-      [{ text: 'چاککردنەوە' }, { text: 'کارکردنی شەوان لەعرض' }],
-      [{ text: 'بەبێ تێبینی' }, { text: '❌ هەڵوەشاندنەوە' }],
-    ],
+    keyboard: rows,
     resize_keyboard: true,
     one_time_keyboard: true,
+  };
+}
+
+async function getDynamicCategoryKeyboard() {
+  try {
+    const customCats = await fetchCustomExpenseCategories();
+    if (customCats && Array.isArray(customCats) && customCats.length > 0) {
+      const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+      for (let i = 0; i < customCats.length; i += 2) {
+        const row = [
+          { text: customCats[i].label, callback_data: `exp_cat:${customCats[i].label}` }
+        ];
+        if (i + 1 < customCats.length) {
+          row.push({ text: customCats[i + 1].label, callback_data: `exp_cat:${customCats[i + 1].label}` });
+        }
+        rows.push(row);
+      }
+      rows.push([{ text: '❌ هەڵوەشاندنەوە', callback_data: 'exp_cancel' }]);
+      return { inline_keyboard: rows };
+    }
+  } catch (err) {
+    logger.warn('Failed to fetch dynamic categories from Supabase:', err);
+  }
+  return {
+    inline_keyboard: [
+      [
+        { text: '🥪 خواردن و پێداویستی', callback_data: 'exp_cat:خواردن و پێداویستی' },
+        { text: '🚕 تەکسی و هاتوچۆ', callback_data: 'exp_cat:تەکسی و هاتوچۆ' },
+      ],
+      [
+        { text: '📦 پێداویستی کۆگا', callback_data: 'exp_cat:پێداویستی کۆگا' },
+        { text: '🔧 چاککردنەوە و سڕف', callback_data: 'exp_cat:چاککردنەوە و سڕف' },
+      ],
+      [
+        { text: '🧾 مەسروفاتی گشتی', callback_data: 'exp_cat:مەسروفاتی گشتی' },
+        { text: '❌ هەڵوەشاندنەوە', callback_data: 'exp_cancel' },
+      ],
+    ],
   };
 }
 
@@ -181,17 +254,45 @@ async function getTopPresetNotes(category: string): Promise<string[]> {
     logger.warn('Failed to fetch custom preset reasons:', err);
   }
 
+  const normalized = (category || '').toLowerCase().trim();
   const catKey = 
-    category.includes('تەکسی') || category.includes('هاتوچۆ') ? 'taxi' :
-    category.includes('خواردن') ? 'food' :
-    category.includes('بەنزین') ? 'fuel' :
-    category.includes('ئۆفیس') || category.includes('مەکتەب') ? 'office' : 'other';
+    normalized.includes('تەکسی') || normalized.includes('هاتوچۆ') ? 'taxi' :
+    normalized.includes('خواردن') ? 'food' :
+    normalized.includes('بەنزین') || normalized.includes('سووتەمەنی') ? 'fuel' :
+    normalized.includes('ئۆفیس') || normalized.includes('مەکتەب') ? 'office' :
+    normalized.includes('ئیزافە') || normalized.includes('زیادە') ? 'overtime' : 'other';
 
-  const customList = (customMap && Array.isArray(customMap[catKey])) ? customMap[catKey] : [];
+  let customList: string[] = [];
+  if (customMap) {
+    if (Array.isArray(customMap[catKey]) && customMap[catKey].length > 0) {
+      customList = customMap[catKey];
+    } else if (Array.isArray(customMap[category]) && customMap[category].length > 0) {
+      customList = customMap[category];
+    } else {
+      for (const [key, list] of Object.entries(customMap)) {
+        if (
+          key === normalized ||
+          (normalized.includes('تەکسی') || normalized.includes('هاتوچۆ')) && key === 'taxi' ||
+          (normalized.includes('خواردن') || normalized.includes('پێداویستی')) && key === 'food' ||
+          (normalized.includes('بەنزین') || normalized.includes('سووتەمەنی')) && key === 'fuel' ||
+          (normalized.includes('ئۆفیس') || normalized.includes('مەکتەب')) && key === 'office' ||
+          (normalized.includes('کۆگا') || normalized.includes('گشتی') || normalized.includes('سڕف')) && key === 'other' ||
+          (normalized.includes('ئیزافە') || normalized.includes('زیادە')) && key === 'overtime'
+        ) {
+          if (Array.isArray(list) && list.length > 0) {
+            customList = list;
+            break;
+          }
+        }
+      }
+    }
+  }
+
   const defaultList = DEFAULT_PRESET_EXPENSE_REASONS[catKey] || [];
   
+  // Custom notes configured on website ERP take first priority!
   const merged = Array.from(new Set([...customList, ...defaultList].filter(Boolean)));
-  if (merged.length >= 5) {
+  if (merged.length > 0) {
     return merged.slice(0, 5);
   }
 
@@ -213,6 +314,7 @@ interface ExpenseSession {
   amount?: number;
   category?: string;
   route?: string;
+  routes?: Array<{ label: string; route: string; from: string; to: string }>;
   presetNotes?: string[];
   note?: string;
   receiptPhotoId?: string;
@@ -562,29 +664,30 @@ export async function POST(req: NextRequest) {
         session.category = category;
 
         // If Taxi / Transport: Present route options ("لە کوێوە بۆ کوێ ئەرۆن")
-        if (category === 'تەکسی و هاتوچۆ') {
+        if (category === 'تەکسی و هاتوچۆ' || category.includes('تەکسی') || category.includes('هاتوچۆ')) {
           session.step = 'awaiting_route';
           await answerCallbackQuery(cqId, 'تەکسی و هاتوچۆ');
 
+          const routes = await getDynamicRoutes();
+          session.routes = routes;
+
+          const inlineRows: Array<Array<{ text: string; callback_data: string }>> = [];
+          for (let i = 0; i < routes.length; i += 2) {
+            const row: Array<{ text: string; callback_data: string }> = [
+              { text: routes[i].label, callback_data: `exp_r:${i}` }
+            ];
+            if (i + 1 < routes.length) {
+              row.push({ text: routes[i + 1].label, callback_data: `exp_r:${i + 1}` });
+            }
+            inlineRows.push(row);
+          }
+          inlineRows.push([
+            { text: '✍️ شوێنی تر (بە نووسین)', callback_data: 'exp_r:custom' },
+            { text: '❌ هەڵوەشاندنەوە', callback_data: 'exp_cancel' },
+          ]);
+
           const routeKeyboard = {
-            inline_keyboard: [
-              [
-                { text: '🏢 سەرەکی ⬅️ هوانە', callback_data: 'exp_r:0' },
-                { text: '📦 کۆگا ⬅️ پێشانگا', callback_data: 'exp_r:1' },
-              ],
-              [
-                { text: '🏬 پێشانگا ⬅️ بازاڕ', callback_data: 'exp_r:2' },
-                { text: '🚚 کۆگا ⬅️ ماڵان', callback_data: 'exp_r:3' },
-              ],
-              [
-                { text: '🏭 کارگە ⬅️ کۆگا', callback_data: 'exp_r:4' },
-                { text: '🛣️ دەرەوەی شار', callback_data: 'exp_r:5' },
-              ],
-              [
-                { text: '✍️ شوێنی تر (بە نووسین)', callback_data: 'exp_r:custom' },
-                { text: '❌ هەڵوەشاندنەوە', callback_data: 'exp_cancel' },
-              ],
-            ],
+            inline_keyboard: inlineRows,
           };
 
           const routePrompt = 
@@ -655,7 +758,12 @@ export async function POST(req: NextRequest) {
         }
 
         const idx = parseInt(routeIdx, 10);
-        const selectedRoute = ROUTE_OPTIONS[idx]?.route || 'هاتوچۆ';
+        let routes = session.routes;
+        if (!routes || !routes[idx]) {
+          routes = await getDynamicRoutes();
+          session.routes = routes;
+        }
+        const selectedRoute = routes?.[idx]?.route || ROUTE_OPTIONS[idx]?.route || 'هاتوچۆ';
         session.route = selectedRoute;
         session.step = 'awaiting_note';
         const presetNotes = await getTopPresetNotes('تەکسی و هاتوچۆ');
@@ -1720,22 +1828,7 @@ export async function POST(req: NextRequest) {
         session.amount = amount;
         session.step = 'awaiting_category';
 
-        const categoryKeyboard = {
-          inline_keyboard: [
-            [
-              { text: '🥪 خواردن و پێداویستی', callback_data: 'exp_cat:خواردن و پێداویستی' },
-              { text: '🚕 تەکسی و هاتوچۆ', callback_data: 'exp_cat:تەکسی و هاتوچۆ' },
-            ],
-            [
-              { text: '📦 پێداویستی کۆگا', callback_data: 'exp_cat:پێداویستی کۆگا' },
-              { text: '🔧 چاککردنەوە و سڕف', callback_data: 'exp_cat:چاککردنەوە و سڕف' },
-            ],
-            [
-              { text: '🧾 مەسروفاتی گشتی', callback_data: 'exp_cat:مەسروفاتی گشتی' },
-              { text: '❌ هەڵوەشاندنەوە', callback_data: 'exp_cancel' },
-            ],
-          ],
-        };
+        const categoryKeyboard = await getDynamicCategoryKeyboard();
 
         await sendTelegramMessage(
           chatId,
@@ -2192,7 +2285,7 @@ export async function POST(req: NextRequest) {
           `⏰ <b>تۆمارکردنی هۆکاری کاتی زیادە (ئۆڤەرتایم):</b>\n\n` +
           `بەڕێز <b>${currentBinding.employeeName}</b>، ئەمڕۆ تۆ <b>${result.overtimeMinutes} خولەک</b> کاتی زیادەت تۆمار کردووە.\n\n` +
           `📝 تکایە <b>یەکێک لەم هۆکارە سەرەکییانە هەڵبژێرە</b> یان هۆکارەکەت بە دەست بنووسە:`;
-        await sendTelegramMessage(chatId, otPrompt, getOvertimeReasonKeyboard());
+        await sendTelegramMessage(chatId, otPrompt, await getDynamicOvertimeReasonKeyboard());
       }
       return NextResponse.json({ ok: true });
     }
@@ -2736,7 +2829,7 @@ export async function POST(req: NextRequest) {
           `⏰ <b>تۆمارکردنی هۆکاری کاتی زیادە (ئۆڤەرتایم):</b>\n\n` +
           `بەڕێز <b>${currentBinding.employeeName}</b>، تۆ ئەمڕۆ <b>${result.overtimeMinutes} خولەک</b> کاتی زیادەت تۆمار کردووە.\n\n` +
           `📝 تکایە <b>یەکێک لەم هۆکارە سەرەکییانە هەڵبژێرە</b> یان هۆکارەکەت بە دەست بنووسە:`;
-        await sendTelegramMessage(chatId, otPrompt, getOvertimeReasonKeyboard());
+        await sendTelegramMessage(chatId, otPrompt, await getDynamicOvertimeReasonKeyboard());
       }
       return NextResponse.json({ ok: true });
     }
@@ -2817,7 +2910,7 @@ export async function POST(req: NextRequest) {
           `⏰ <b>تۆمارکردنی هۆکاری کاتی زیادە (ئۆڤەرتایم):</b>\n\n` +
           `بەڕێز <b>${currentBinding.employeeName}</b>، تۆ ئەمڕۆ <b>${result.overtimeMinutes} خولەک</b> کاتی زیادەت تۆمار کردووە.\n\n` +
           `📝 تکایە <b>یەکێک لەم هۆکارە سەرەکییانە هەڵبژێرە</b> یان هۆکارەکەت بە دەست بنووسە:`;
-        await sendTelegramMessage(chatId, otPrompt, getOvertimeReasonKeyboard());
+        await sendTelegramMessage(chatId, otPrompt, await getDynamicOvertimeReasonKeyboard());
       }
       return NextResponse.json({ ok: true });
     }

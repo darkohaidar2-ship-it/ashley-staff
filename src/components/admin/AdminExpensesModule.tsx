@@ -50,10 +50,16 @@ import {
   saveCustomExpenseCategories, 
   fetchCustomPresetReasons, 
   saveCustomPresetReasons, 
+  fetchCustomRoutes,
+  saveCustomRoutes,
+  type CustomRouteItem,
+  DEFAULT_CUSTOM_ROUTES,
+  DEFAULT_OVERTIME_REASONS,
+  saveCustomOvertimeReasons,
   fetchArchivedVouchers, 
   saveArchivedVouchers 
 } from '@/lib/supabase';
-import { CategoryManagerModal } from './expenses/CategoryManagerModal';
+import { CategoryManagerModal, type ManagerTabType } from './expenses/CategoryManagerModal';
 import { AuditLogModal } from './expenses/AuditLogModal';
 import { PayrollSummarySlip } from './expenses/PayrollSummarySlip';
 import { PendingExpensesTab } from './expenses/PendingExpensesTab';
@@ -132,6 +138,7 @@ export const DEFAULT_EXPENSE_CATEGORIES: CustomCategory[] = [
   { key: 'food', label: 'خواردن' },
   { key: 'office', label: 'مەکتەب' },
   { key: 'other', label: 'تر' },
+  { key: 'overtime', label: '⏰ کاتی زیادە و ئیزافە' },
 ];
 
 export const DEFAULT_PRESET_EXPENSE_REASONS: Record<string, string[]> = {
@@ -160,6 +167,7 @@ export const DEFAULT_PRESET_EXPENSE_REASONS: Record<string, string[]> = {
     'کەلوپەلی ئۆفیس و کارگێڕی',
     'چاپەمەنی و وەرەقە و مەرکەب',
   ],
+  overtime: DEFAULT_OVERTIME_REASONS,
 };
 
 export const PRESET_EXPENSE_REASONS = DEFAULT_PRESET_EXPENSE_REASONS;
@@ -670,9 +678,9 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     return DEFAULT_PRESET_EXPENSE_REASONS;
   });
 
-  // Modal State for managing Categories and Reasons
+  // Modal State for managing Categories, Reasons, and Routes
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
-  const [managerActiveTab, setManagerActiveTab] = useState<'categories' | 'reasons'>('categories');
+  const [managerActiveTab, setManagerActiveTab] = useState<ManagerTabType>('reasons');
   const [managerSelectedCatKey, setManagerSelectedCatKey] = useState<string>('taxi');
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategoryKey, setEditingCategoryKey] = useState<string | null>(null);
@@ -778,6 +786,9 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     saveCustomPresetReasons(updatedMap).catch(err => {
       logger.error('Failed to sync preset reasons to Supabase:', err);
     });
+    if (catKey === 'overtime') {
+      saveCustomOvertimeReasons(updatedList).catch(() => {});
+    }
     logAudit('create', 'preset_reason', `زیادکردنی تێبینی «${trimmed}» بۆ پۆلێنی ${catKey}`);
     setNewReasonText('');
   };
@@ -795,6 +806,9 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     saveCustomPresetReasons(updatedMap).catch(err => {
       logger.error('Failed to sync edited preset reason to Supabase:', err);
     });
+    if (catKey === 'overtime') {
+      saveCustomOvertimeReasons(updatedList).catch(() => {});
+    }
     logAudit('update', 'preset_reason', `دەستکاریکردنی تێبینی بۆ «${trimmed}» لە پۆلێنی ${catKey}`);
     setEditingReasonIndex(null);
     setEditingReasonText('');
@@ -813,6 +827,9 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     saveCustomPresetReasons(updatedMap).catch(err => {
       logger.error('Failed to sync deleted preset reason to Supabase:', err);
     });
+    if (catKey === 'overtime') {
+      saveCustomOvertimeReasons(updatedList).catch(() => {});
+    }
     logAudit('delete', 'preset_reason', `سڕینەوەی تێبینی «${targetText}» لە پۆلێنی ${catKey}`);
   };
 
@@ -826,10 +843,90 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     } catch (err) { logger.warn(err); }
     saveCustomExpenseCategories(DEFAULT_EXPENSE_CATEGORIES as any).catch(() => {});
     saveCustomPresetReasons(DEFAULT_PRESET_EXPENSE_REASONS).catch(() => {});
+    saveCustomOvertimeReasons(DEFAULT_OVERTIME_REASONS).catch(() => {});
     logAudit('update', 'category', 'گەڕاندنەوەی پۆلێن و تێبینییەکان بۆ ڕێکخستنی بنەڕەتی');
     setExpenseType('taxi');
     setManagerSelectedCatKey('taxi');
     alert('سەرجەم پۆلێن و تێبینییەکان گەڕانەوە بۆ باری بنەڕەتی سەرەتایی.');
+  };
+
+  // 🚕 Manageable Custom Routes (Cloud & Telegram Synced)
+  const [customRoutes, setCustomRoutes] = useState<CustomRouteItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ashley_custom_routes_v1');
+        if (stored) return JSON.parse(stored);
+      } catch (err) { logger.warn(err); }
+    }
+    return DEFAULT_CUSTOM_ROUTES;
+  });
+
+  // Load custom routes from Supabase on mount
+  useEffect(() => {
+    fetchCustomRoutes().then(routes => {
+      if (routes && Array.isArray(routes) && routes.length > 0) {
+        setCustomRoutes(routes);
+        try {
+          localStorage.setItem('ashley_custom_routes_v1', JSON.stringify(routes));
+        } catch (err) { logger.warn(err); }
+      }
+    }).catch(err => logger.warn('Failed to load custom routes from Supabase:', err));
+  }, []);
+
+  const handleAddRoute = (from: string, to: string) => {
+    const id = `r_${Date.now()}`;
+    const newRoute: CustomRouteItem = {
+      id,
+      from,
+      to,
+      label: `${from} ⬅️ ${to}`,
+    };
+    const updated = [...customRoutes, newRoute];
+    setCustomRoutes(updated);
+    try {
+      localStorage.setItem('ashley_custom_routes_v1', JSON.stringify(updated));
+    } catch (err) { logger.warn(err); }
+    saveCustomRoutes(updated).catch(err => {
+      logger.error('Failed to sync custom routes to Supabase:', err);
+    });
+    logAudit('create', 'category', `زیادکردنی هێڵی نوێی هاتوچۆ: ${from} بۆ ${to}`);
+  };
+
+  const handleSaveEditRoute = (id: string, from: string, to: string) => {
+    const updated = customRoutes.map(r => r.id === id ? { ...r, from, to, label: `${from} ⬅️ ${to}` } : r);
+    setCustomRoutes(updated);
+    try {
+      localStorage.setItem('ashley_custom_routes_v1', JSON.stringify(updated));
+    } catch (err) { logger.warn(err); }
+    saveCustomRoutes(updated).catch(err => {
+      logger.error('Failed to sync updated routes to Supabase:', err);
+    });
+    logAudit('update', 'category', `دەستکاریکردنی هێڵی هاتوچۆ: ${from} بۆ ${to}`);
+  };
+
+  const handleDeleteRoute = (id: string) => {
+    const target = customRoutes.find(r => r.id === id);
+    if (!window.confirm(`ئایا دڵنیایت لە سڕینەوەی ئەم هێڵە: «${target?.from} ⬅️ ${target?.to}»؟`)) return;
+    const updated = customRoutes.filter(r => r.id !== id);
+    setCustomRoutes(updated);
+    try {
+      localStorage.setItem('ashley_custom_routes_v1', JSON.stringify(updated));
+    } catch (err) { logger.warn(err); }
+    saveCustomRoutes(updated).catch(err => {
+      logger.error('Failed to sync deleted route to Supabase:', err);
+    });
+    logAudit('delete', 'category', `سڕینەوەی هێڵی هاتوچۆ: ${target?.from} بۆ ${target?.to}`);
+  };
+
+  const handleResetRoutes = () => {
+    if (!window.confirm('ئایا دڵنیایت لە گەڕاندنەوەی سەرجەم هێڵەکانی هاتوچۆ بۆ باری بنەڕەتی سەرەتایی؟')) return;
+    setCustomRoutes(DEFAULT_CUSTOM_ROUTES);
+    try {
+      localStorage.removeItem('ashley_custom_routes_v1');
+    } catch (err) { logger.warn(err); }
+    saveCustomRoutes(DEFAULT_CUSTOM_ROUTES).catch(() => {});
+    logAudit('update', 'category', 'گەڕاندنەوەی هێڵەکانی هاتوچۆ بۆ ڕێکخستنی بنەڕەتی');
+    alert('سەرجەم هێڵەکان گەڕانەوە بۆ باری بنەڕەتی سەرەتایی.');
   };
 
   const categoryPills = categories;
@@ -2393,6 +2490,20 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
           >
             <ShieldCheck className="w-3.5 h-3.5 text-rose-500 shrink-0" />
             <span className="hidden sm:inline text-[11px]">مێژووی چاودێری</span>
+          </button>
+
+          {/* ⚙️ Manage Notes & Routes Button (Telegram & Web Sync) */}
+          <button
+            type="button"
+            onClick={() => {
+              setManagerActiveTab('reasons');
+              setIsCategoryManagerOpen(true);
+            }}
+            className="px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer active:scale-95"
+            title="بەڕێوەبردنی تێبینی و هێڵەکان (تەلەگرام & وێبسایت)"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+            <span className="hidden sm:inline text-[11px]">بەڕێوەبردنی تێبینی و هێڵەکان</span>
           </button>
 
           {activeTab === 'pending' ? (
@@ -5096,6 +5207,11 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
         onSaveEditReason={handleSaveEditReason}
         onDeleteReason={handleDeleteReason}
         onResetDefaults={handleResetCategoryAndReasons}
+        customRoutes={customRoutes}
+        onAddRoute={handleAddRoute}
+        onSaveEditRoute={handleSaveEditRoute}
+        onDeleteRoute={handleDeleteRoute}
+        onResetRoutes={handleResetRoutes}
       />
 
       {/* ========================================================= */}

@@ -164,6 +164,94 @@ export async function saveCustomPresetReasons(reasonsMap: Record<string, string[
   }
 }
 
+// ===================== CUSTOM TRANSPORT ROUTES (CLOUD SYNC) =====================
+const CUSTOM_ROUTES_KEY = 'ashley_custom_routes_v1';
+const CUSTOM_OVERTIME_REASONS_KEY = 'ashley_custom_overtime_reasons_v1';
+
+export interface CustomRouteItem {
+  id: string;
+  from: string; // لە
+  to: string;   // بۆ
+  label?: string; // e.g. "🏢 سەرەکی ⬅️ هوانە"
+}
+
+export const DEFAULT_CUSTOM_ROUTES: CustomRouteItem[] = [
+  { id: 'r1', from: 'کۆمپانیای سەرەکی', to: 'هوانە', label: '🏢 سەرەکی ⬅️ هوانە' },
+  { id: 'r2', from: 'کۆگای سەرەکی', to: 'پێشانگا', label: '📦 کۆگا ⬅️ پێشانگا' },
+  { id: 'r3', from: 'پێشانگا', to: 'بازاڕ', label: '🏬 پێشانگا ⬅️ بازاڕ' },
+  { id: 'r4', from: 'کۆگا', to: 'ماڵان', label: '🚚 کۆگا ⬅️ ماڵان' },
+  { id: 'r5', from: 'کارگە', to: 'کۆگا', label: '🏭 کارگە ⬅️ کۆگا' },
+  { id: 'r6', from: 'ناوەوەی شار', to: 'دەرەوەی شار', label: '🛣️ دەرەوەی شار' },
+];
+
+export const DEFAULT_OVERTIME_REASONS: string[] = [
+  'IT',
+  'شۆردنی سۆلار',
+  'نقڵی دەرەوەی شار',
+  'نقڵی ماڵان',
+  'چاککردنەوە',
+  'کارکردنی شەوان لەعرض',
+];
+
+export async function fetchCustomRoutes(): Promise<CustomRouteItem[] | null> {
+  try {
+    return await fetchSupabaseJson<CustomRouteItem[] | null>(CUSTOM_ROUTES_KEY, null);
+  } catch (err) {
+    logger.error('[ExpensesService] Error fetching custom routes from Supabase:', err);
+    return null;
+  }
+}
+
+export async function saveCustomRoutes(routes: CustomRouteItem[]): Promise<boolean> {
+  try {
+    return await saveSupabaseJson<CustomRouteItem[]>(
+      CUSTOM_ROUTES_KEY,
+      'Ashley Custom Transport Routes',
+      routes
+    );
+  } catch (err) {
+    logger.error('[ExpensesService] Error saving custom routes to Supabase:', err);
+    return false;
+  }
+}
+
+export async function fetchCustomOvertimeReasons(): Promise<string[] | null> {
+  try {
+    // 1. Check dedicated overtime key
+    const list = await fetchSupabaseJson<string[] | null>(CUSTOM_OVERTIME_REASONS_KEY, null);
+    if (list && Array.isArray(list) && list.length > 0) return list;
+
+    // 2. Check preset reasons map 'overtime' key
+    const presetMap = await fetchCustomPresetReasons();
+    if (presetMap && Array.isArray(presetMap['overtime']) && presetMap['overtime'].length > 0) {
+      return presetMap['overtime'];
+    }
+
+    return null;
+  } catch (err) {
+    logger.error('[ExpensesService] Error fetching custom overtime reasons from Supabase:', err);
+    return null;
+  }
+}
+
+export async function saveCustomOvertimeReasons(reasons: string[]): Promise<boolean> {
+  try {
+    const ok = await saveSupabaseJson<string[]>(
+      CUSTOM_OVERTIME_REASONS_KEY,
+      'Ashley Custom Overtime Reasons',
+      reasons
+    );
+    // Also sync to preset reasons map
+    const presetMap = (await fetchCustomPresetReasons()) || {};
+    presetMap['overtime'] = reasons;
+    await saveCustomPresetReasons(presetMap);
+    return ok;
+  } catch (err) {
+    logger.error('[ExpensesService] Error saving custom overtime reasons to Supabase:', err);
+    return false;
+  }
+}
+
 export async function fetchArchivedVouchers(): Promise<any[] | null> {
   try {
     return await fetchSupabaseJson<any[] | null>(ARCHIVED_VOUCHERS_LEDGER_KEY, null);
