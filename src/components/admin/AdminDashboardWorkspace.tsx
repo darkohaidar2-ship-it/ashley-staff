@@ -186,7 +186,7 @@ export function AdminDashboardWorkspace() {
       const updated = { ...prev, [key]: note };
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('ashley_admin_notes_2026-08', JSON.stringify(updated));
+          localStorage.setItem(`ashley_admin_notes_${selectedMonth}`, JSON.stringify(updated));
         } catch (err) { logger.warn(err); }
       }
       return updated;
@@ -252,7 +252,8 @@ export function AdminDashboardWorkspace() {
       try {
         localStorage.removeItem('ashley_local_attendanceLogs');
         localStorage.removeItem('ashley_live_checkins');
-        localStorage.removeItem('ashley_local_overtime');
+        localStorage.removeItem(`ashley_admin_notes_${selectedMonth}`);
+        localStorage.removeItem(`ashley_ot_notes_${selectedMonth}`);
         localStorage.removeItem('ashley_admin_notes_2026-08');
         localStorage.removeItem('ashley_ot_notes_2026-08');
         Object.keys(localStorage).forEach(k => {
@@ -306,7 +307,7 @@ export function AdminDashboardWorkspace() {
               </span>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium font-mono">
-              {currentTimeStr || '2026-09-16'}
+              {currentTimeStr || format(new Date(), 'yyyy-MM-dd | HH:mm:ss')}
             </p>
           </div>
         </div>

@@ -135,6 +135,18 @@ export async function getMonthlyAttendanceStats(
         totalWorkMinutes += durationMins;
         totalLateMinutes += lateMins;
         totalOvertimeMinutes += otMins;
+      } else if (inTime && !outTime && d === getBaghdadNow().dateStr) {
+        // ⏱️ Real-time calculation for employee currently at work today!
+        const curTimeStr = getBaghdadNow().timeStr;
+        const calc = calculateNetWorkedAndOvertime(inTime, curTimeStr, shiftConfig);
+        durationMins = calc.netWorkedMinutes;
+        lateMins = calc.lateMinutes;
+        otMins = calc.overtimeMinutes;
+
+        totalWorkMinutes += durationMins;
+        totalLateMinutes += lateMins;
+        totalOvertimeMinutes += otMins;
+        dayStatus = 'Present';
       } else {
         dayStatus = 'Incomplete';
       }

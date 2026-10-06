@@ -339,7 +339,13 @@ function playRejectSound() {
 export default function MobileAttendanceOneTap() {
   // Real-time Clock
   const [currentTimeStr, setCurrentTimeStr] = useState('');
-  const [currentDateStr, setCurrentDateStr] = useState('');
+  const [currentDateStr, setCurrentDateStr] = useState(() => {
+    try {
+      return getTrustedBaghdadNow().dateStr;
+    } catch {
+      return '';
+    }
+  });
 
   // 🛡️ Anti-Cheat: Desktop PC Detection States
   const [isDesktop, setIsDesktop] = useState(false);
@@ -3061,7 +3067,7 @@ export default function MobileAttendanceOneTap() {
         {/* 🕒 TELEMETRY: CLOCK + GPS SATELLITE RADAR */}
         <div className="grid grid-cols-2 gap-2.5">
           <div className="p-3 light-glass rounded-3xl shadow-xs border border-slate-200/90 flex flex-col items-center justify-center relative overflow-hidden group">
-            <span className="text-[10px] font-mono text-slate-500 font-bold tracking-wider">{currentDateStr || '2026-09-07'}</span>
+            <span className="text-[10px] font-mono text-slate-500 font-bold tracking-wider">{currentDateStr || format(new Date(), 'yyyy-MM-dd')}</span>
             <div className="text-xl font-black font-mono tracking-widest text-slate-900 flex items-center gap-1.5 mt-0.5">
               <Clock className="w-4 h-4 text-emerald-600 animate-pulse" />
               <span>{currentTimeStr || '08:00:00'}</span>

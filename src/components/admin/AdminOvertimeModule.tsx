@@ -34,8 +34,8 @@ interface AdminOvertimeModuleProps {
 export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
   const { overtime, setOvertime, attendanceLogs, settings } = useAppContext();
   
-  const [selectedDate, setSelectedDate] = useState<string>(() => '2026-08-01');
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => '2026-08');
+  const [selectedDate, setSelectedDate] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'));
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'));
   const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
   const [expandedEmpId, setExpandedEmpId] = useState<string | null>(null);
 
@@ -47,7 +47,8 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
   const [adminNotes, setAdminNotes] = useState<Record<string, string>>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem('ashley_admin_notes_2026-08');
+        const curM = format(new Date(), 'yyyy-MM');
+        const stored = localStorage.getItem(`ashley_admin_notes_${curM}`);
         if (stored) return JSON.parse(stored);
       } catch (err) { logger.warn(err); }
     }
@@ -321,8 +322,9 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
   const shiftEndMins = useMemo(() => timeToMinutes(shiftEndTime), [shiftEndTime]);
 
   const [yearStr, monthStr] = selectedMonth.split('-');
-  const yearNum = parseInt(yearStr || '2026', 10);
-  const monthNum = parseInt(monthStr || '08', 10);
+  const now = new Date();
+  const yearNum = parseInt(yearStr || format(now, 'yyyy'), 10);
+  const monthNum = parseInt(monthStr || format(now, 'MM'), 10);
   const totalDaysInMonth = useMemo(() => getDaysInMonth(new Date(yearNum, monthNum - 1, 1)), [yearNum, monthNum]);
 
   // Generate combined overtime records dynamically from 31-Day Attendance Matrix + Manual Entries
@@ -419,8 +421,9 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
   // Days in selected month for 1-31 Calendar bar
   const monthDaysList = useMemo(() => {
     const [yStr, mStr] = selectedMonth.split('-');
-    const y = parseInt(yStr || '2026', 10);
-    const m = parseInt(mStr || '08', 10);
+    const curNow = new Date();
+    const y = parseInt(yStr || format(curNow, 'yyyy'), 10);
+    const m = parseInt(mStr || format(curNow, 'MM'), 10);
     const totalDays = getDaysInMonth(new Date(y, m - 1, 1));
     const days: Array<{
       dayNum: number;
@@ -820,16 +823,43 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 font-mono">
-          {/* 📅 Icon-only Month Picker */}
+          {/* ⚡ Quick Real-Time / Today button */}
+          <button
+            type="button"
+            onClick={() => {
+              const today = format(new Date(), 'yyyy-MM-dd');
+              const curM = format(new Date(), 'yyyy-MM');
+              setSelectedMonth(curM);
+              setSelectedDate(today);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-black flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
+            title="گەڕانەوە بۆ کاتی ئێستا و بەرواری ئەمڕۆ"
+          >
+            <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+            <span>⏱️ کاتی ئێستا (ئەمڕۆ)</span>
+          </button>
+
+          {/* 📅 Clear Month Picker with Visible Label */}
           <div 
-            className="relative h-8 w-8 rounded-full flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-2xs transition-all cursor-pointer"
+            className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-black shadow-2xs transition-all cursor-pointer"
             title={`دیاریکردنی مانگ (${selectedMonth})`}
           >
             <Calendar className="w-4 h-4 text-blue-600" />
+            <span>مانگی: {selectedMonth}</span>
             <input
               type="month"
               value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
+              onChange={(e) => {
+                const newM = e.target.value;
+                if (!newM) return;
+                setSelectedMonth(newM);
+                const today = format(new Date(), 'yyyy-MM-dd');
+                if (today.startsWith(newM)) {
+                  setSelectedDate(today);
+                } else {
+                  setSelectedDate(`${newM}-01`);
+                }
+              }}
               className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
               title={`دیاریکردنی مانگ (${selectedMonth})`}
             />
@@ -858,14 +888,29 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       {/* 📅 1-31 INTERACTIVE CALENDAR DAY SELECTOR BAR (FOR DAILY VIEW) */}
       {viewMode === 'daily' && (
         <div className="bg-white border-2 border-orange-300/80 rounded-xl p-2.5 shadow-sm space-y-2">
-          <div className="flex items-center justify-between border-b border-orange-100 pb-1.5">
+          <div className="flex flex-wrap items-center justify-between border-b border-orange-100 pb-1.5 gap-2">
             <span className="text-xs font-black text-orange-950 flex items-center gap-1.5">
               <Calendar className="w-4 h-4 text-orange-600" />
               <span>کالێندەری ۱ تا ۳۱ی مانگی ({selectedMonth}) - ڕۆژ دیاری بکە:</span>
             </span>
-            <span className="text-[11px] font-mono font-bold bg-orange-100 text-orange-900 border border-orange-300 px-2 py-0.5 rounded">
-              ڕۆژی هەڵبژێردراو: {selectedDate}
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const today = format(new Date(), 'yyyy-MM-dd');
+                  const curM = format(new Date(), 'yyyy-MM');
+                  setSelectedMonth(curM);
+                  setSelectedDate(today);
+                }}
+                className="px-2 py-0.5 rounded text-[11px] font-black bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1 cursor-pointer shadow-2xs transition-all active:scale-95"
+                title="ڕۆژی ئەمڕۆ لە کاتی ئێستا هەڵبژێرە"
+              >
+                <span>⚡ ئەمڕۆ</span>
+              </button>
+              <span className="text-[11px] font-mono font-bold bg-orange-100 text-orange-900 border border-orange-300 px-2 py-0.5 rounded">
+                ڕۆژی هەڵبژێردراو: {selectedDate}
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-7 sm:grid-cols-10 md:grid-cols-16 lg:grid-cols-31 gap-1">

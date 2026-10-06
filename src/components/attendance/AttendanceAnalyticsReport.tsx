@@ -289,7 +289,8 @@ export function AttendanceAnalyticsReport({
           : (checkOutLog as any)?.checkOutTime?.slice(0, 5) || null;
 
         const isPresent = !!(checkInTimeStr || checkOutTimeStr);
-        const isFutureDay = targetDate > '2026-08-15' && selectedMonth === '2026-08';
+        const todayIsoStr = format(new Date(), 'yyyy-MM-dd');
+        const isFutureDay = targetDate > todayIsoStr;
 
         if (isPresent) {
           daysPresent++;

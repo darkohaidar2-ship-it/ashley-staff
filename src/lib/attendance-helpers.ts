@@ -625,8 +625,32 @@ export function resolveEmployeeDayAttendance(
             }
             workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
           }
-        } else if (cIn && (!cOut || cOut === 'بەردەوام') && isToday) {
-          workedHours = 0;
+        } else if (cIn && (!cOut || cOut === 'بەردەوام') && isToday && cIn.includes(':')) {
+          // ⏱️ Dynamic Real-Time calculation for employees actively working today!
+          const baghdadParts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Baghdad',
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+          }).formatToParts(new Date());
+          let curH = parseInt(baghdadParts.find(p => p.type === 'hour')?.value || '17', 10);
+          if (curH === 24) curH = 0;
+          const curM = parseInt(baghdadParts.find(p => p.type === 'minute')?.value || '0', 10);
+          const [inH, inM] = cIn.split(':').map(Number);
+          const inTotal = inH * 60 + (inM || 0);
+          const nowTotal = curH * 60 + curM;
+          if (nowTotal > inTotal) {
+            const gross = nowTotal - inTotal;
+            let overlap = 0;
+            if (shiftRules.hasLunchBreak) {
+              const breakStart = 12 * 60;
+              const breakEnd = 13 * 60;
+              overlap = Math.max(0, Math.min(nowTotal, breakEnd) - Math.max(inTotal, breakStart));
+            }
+            workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
+          } else {
+            workedHours = 0;
+          }
         } else if (cIn && !cOut && !isToday) {
           workedHours = 8;
         }
@@ -887,8 +911,32 @@ export function resolveEmployeeDayAttendance(
       }
       workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
     }
-  } else if (hasRecord && isToday && (!checkOutTime || checkOutTime === 'بەردەوام')) {
-    workedHours = 0;
+  } else if (hasRecord && isToday && (!checkOutTime || checkOutTime === 'بەردەوام') && checkInTime && checkInTime.includes(':')) {
+    // ⏱️ Dynamic Real-Time calculation for employees actively working today!
+    const baghdadParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Baghdad',
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+    }).formatToParts(new Date());
+    let curH = parseInt(baghdadParts.find(p => p.type === 'hour')?.value || '17', 10);
+    if (curH === 24) curH = 0;
+    const curM = parseInt(baghdadParts.find(p => p.type === 'minute')?.value || '0', 10);
+    const [inH, inM] = checkInTime.split(':').map(Number);
+    const inTotal = inH * 60 + (inM || 0);
+    const nowTotal = curH * 60 + curM;
+    if (nowTotal > inTotal) {
+      const gross = nowTotal - inTotal;
+      let overlap = 0;
+      if (shiftRules.hasLunchBreak) {
+        const breakStart = 12 * 60;
+        const breakEnd = 13 * 60;
+        overlap = Math.max(0, Math.min(nowTotal, breakEnd) - Math.max(inTotal, breakStart));
+      }
+      workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
+    } else {
+      workedHours = 0;
+    }
   } else if (hasRecord && !isToday) {
     workedHours = 8;
   }
