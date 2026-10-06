@@ -41,7 +41,9 @@ import {
   Workflow,
   Minimize2,
   Maximize2,
-  ShieldCheck
+  ShieldCheck,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { format, addMonths, subMonths } from 'date-fns';
 import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
@@ -74,6 +76,9 @@ export interface ArchivedVoucher {
   totalAmount: number;
   itemCount: number;
   items: any[];
+  isLocked?: boolean; // 🔒 True if locked/closed, false/undefined if open
+  lockedAt?: string;
+  lockedBy?: string;
 }
 
 export interface EmployeeExpenseGroup {
@@ -1501,7 +1506,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     groups.forEach(group => {
       group.items.forEach(item => {
         globalIdx += 1;
-        const route = (item.from || item.to) ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—';
+        const route = (item.from || item.to) ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : (item.route || '—');
         data.push({
           index: globalIdx,
           date: item.date || '—',
@@ -2202,6 +2207,38 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     }
 
     alert(`✓ لیستی (${voucher.name}) بە سەرکەوتوویی سڕایەوە.`);
+  };
+
+  // -------------------------------------------------------------
+  // 🔒 LOCK / UNLOCK ARCHIVED VOUCHER (قوفڵکردن / کردنەوەی لیست)
+  // -------------------------------------------------------------
+  const handleToggleLockVoucher = (voucher: ArchivedVoucher) => {
+    const willLock = !voucher.isLocked;
+    const confirmMsg = willLock 
+      ? `ئایا دڵنیایت لە قوفڵکردنی لیستی «${voucher.name}»؟\n\n🔒 کاتێک لیستێک قوفڵ دەکرێت، هیچ مەسروفاتێکی نوێ لە بۆتەوە ناچێتە نێوی و وەک ئەرشیفی داخراو دەمێنێتەوە.\nئەگەر کارمەندێک لە بۆت مەسروفات بنێرێت و پەسەند بکرێت، خۆکارانە لیستی نوێ دروست دەبێت.`
+      : `ئایا دڵنیایت لە کردنەوەی لیستی «${voucher.name}»؟\n\n🟢 کاتێک دەکرێتەوە، خەرجییە نوێیە پەسەندکراوەکانی بۆت دەخرێنەوە نێو ئەم لیستە.`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    const updated = archivedVouchers.map(v => {
+      if (v.id === voucher.id) {
+        return {
+          ...v,
+          isLocked: willLock,
+          lockedAt: willLock ? new Date().toISOString() : undefined,
+          lockedBy: willLock ? 'بەڕێوەبەر' : undefined,
+        };
+      }
+      return v;
+    });
+
+    setArchivedVouchers(updated);
+    saveVouchersToStorage(updated);
+    logAudit('update', 'voucher', `${willLock ? 'قوفڵکردنی' : 'کردنەوەی'} لیستی «${voucher.name}»`);
+
+    if (selectedVoucher?.id === voucher.id) {
+      setSelectedVoucher(prev => prev ? { ...prev, isLocked: willLock, lockedAt: willLock ? new Date().toISOString() : undefined } : null);
+    }
   };
 
   // -------------------------------------------------------------
@@ -3961,7 +3998,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                                         </span>
                                       </td>
                                       <td className="p-3 text-slate-600 dark:text-slate-300">
-                                        {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—'}
+                                        {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : (item.route || '—')}
                                       </td>
                                       <td className="p-3 text-center font-mono text-slate-500">{item.trip || '—'}</td>
                                       <td className="p-3 text-center font-mono font-bold text-blue-600 dark:text-blue-400">
@@ -4178,7 +4215,14 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       {/* 💰 VIEW 5: PENDING EXPENSES TAB (TELEGRAM & WEB WORKFLOW) */}
       {/* ========================================================= */}
       {activeTab === 'pending' && (
-        <PendingExpensesTab onExpenseApproved={fetchPendingCount} />
+        <PendingExpensesTab 
+          onExpenseApproved={() => {
+            fetchPendingCount();
+            fetchArchivedVouchers().then(v => {
+              if (v) setArchivedVouchers(v);
+            });
+          }} 
+        />
       )}
 
       {/* ========================================================= */}
@@ -4285,6 +4329,37 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
               </div>
             </div>
 
+            {/* 🌟 Dynamic Active Open List Status Banner */}
+            {activeTab === 'expenses' && (() => {
+              const activeOpen = currentMonthArchivedVouchers.find(v => !v.isLocked);
+              return activeOpen ? (
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2 text-emerald-900 dark:text-emerald-200 font-bold">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <Unlock className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>لیستی کراوەی ئێستا (وەرگرتنی مەسروفاتی بۆت):</span>
+                    <span className="font-mono bg-white dark:bg-white/10 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300">
+                      {activeOpen.name} ({activeOpen.itemCount} پسوولە • {activeOpen.totalAmount.toLocaleString()} IQD)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleLockVoucher(activeOpen)}
+                    className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                    title="قوفڵکردنی ئەم لیستە تا هیچ مەسروفاتێکی تر نەچێتە ناوی و لە داهاتوودا لیستی نوێ دروست ببێت"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>🔒 قوفڵکردنی ئەم لیستە (داخستن)</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl flex items-center gap-2 text-xs text-amber-900 dark:text-amber-300 font-bold">
+                  <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>سەرجەم لیستەکانی ئەم مانگە قوفڵکراون (داخراون). هەر مەسروفاتێکی نوێ لە بۆتەوە پەسەند بکرێت، بە شێوەیەکی خۆکارانە لیستی نوێ دروست دەبێت.</span>
+                </div>
+              );
+            })()}
+
             {currentMonthArchivedVouchers.length === 0 ? (
               <div className="p-12 text-center space-y-3">
                 <div className="w-14 h-14 mx-auto rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400">
@@ -4321,14 +4396,18 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                       <th className={`${cellPad} text-center`}>ژمارەی پسوولەکان</th>
                       <th className={`${cellPad} text-center`}>مەودای بەرواری خەرجییەکان</th>
                       <th className={`${cellPad} text-center`}>کۆی گشتی (IQD)</th>
-                      <th className={`${cellPad} text-center w-52`}>کردارەکان</th>
+                      <th className={`${cellPad} text-center w-64`}>کردارەکان</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                     {currentMonthArchivedVouchers.map((voucher, idx) => (
                       <tr 
                         key={voucher.id} 
-                        className="hover:bg-slate-50/70 dark:hover:bg-white/5 transition-colors group"
+                        className={`transition-colors group ${
+                          voucher.isLocked 
+                            ? 'hover:bg-slate-50/70 dark:hover:bg-white/5 opacity-90' 
+                            : 'bg-emerald-50/20 hover:bg-emerald-50/50 dark:bg-emerald-950/10 dark:hover:bg-emerald-950/20'
+                        }`}
                       >
                         <td className={`${cellPad} text-center font-mono text-slate-400 font-bold`}>
                           {idx + 1}
@@ -4336,15 +4415,33 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
 
                         <td className={`${cellPad} font-bold text-slate-900 dark:text-white`}>
                           <div className="flex items-center gap-2">
-                            <span className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
-                              <Clock className="w-3.5 h-3.5" />
+                            <span className={`p-1.5 rounded-lg ${
+                              voucher.isLocked
+                                ? 'bg-slate-100 dark:bg-white/10 text-slate-500'
+                                : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600'
+                            }`}>
+                              {voucher.isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
                             </span>
                             <div>
-                              <span className="block text-xs font-bold text-slate-900 dark:text-white">
-                                {voucher.name}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="block text-xs font-bold text-slate-900 dark:text-white">
+                                  {voucher.name}
+                                </span>
+                                {voucher.isLocked ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-white/10 inline-flex items-center gap-0.5">
+                                    <Lock className="w-2.5 h-2.5 text-rose-500" />
+                                    <span>قوفڵکراو</span>
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-0.5">
+                                    <Unlock className="w-2.5 h-2.5 text-emerald-600" />
+                                    <span>کراوە</span>
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-[10px] text-slate-400 font-normal">
                                 تۆمارکراو: {format(new Date(voucher.createdAt), 'yyyy-MM-dd • hh:mm a')}
+                                {voucher.lockedAt && ` • قوفڵکراوە: ${format(new Date(voucher.lockedAt), 'yyyy-MM-dd • hh:mm a')}`}
                               </span>
                             </div>
                           </div>
@@ -4380,6 +4477,21 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                             >
                               <Eye className="w-3.5 h-3.5" />
                               <span>بینین</span>
+                            </button>
+
+                            {/* 🔒 LOCK / UNLOCK BUTTON */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleLockVoucher(voucher)}
+                              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                voucher.isLocked
+                                  ? 'bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200'
+                                  : 'bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                              }`}
+                              title={voucher.isLocked ? 'کردنەوەی ئەم لیستە بۆ وەرگرتنی مەسروفاتی بۆت' : 'قوفڵکردنی ئەم لیستە تا هیچ مەسروفاتێکی تر نەچێتە ناوی'}
+                            >
+                              {voucher.isLocked ? <Unlock className="w-3.5 h-3.5 text-amber-600" /> : <Lock className="w-3.5 h-3.5 text-rose-600" />}
+                              <span>{voucher.isLocked ? 'کردنەوە' : 'قوفڵکردن'}</span>
                             </button>
 
                             {/* ✏️ EDIT ARCHIVED LIST */}
@@ -4860,7 +4972,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                                       </span>
                                     </td>
                                     <td className={`${cellPad} text-slate-600 dark:text-slate-300`}>
-                                      {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—'}
+                                      {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : (item.route || '—')}
                                     </td>
                                     <td className={`${cellPad} text-center font-mono text-slate-500`}>{item.trip || '—'}</td>
                                     <td className={`${cellPad} text-center font-mono font-bold text-emerald-600 dark:text-emerald-400`}>
@@ -5017,17 +5129,46 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
               </button>
 
               <div>
-                <h2 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
-                  <span>{selectedVoucher.name}</span>
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>{selectedVoucher.name}</span>
+                  </h2>
+                  {selectedVoucher.isLocked ? (
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-white/10 inline-flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-rose-500" />
+                      <span>قوفڵکراو (داخراو)</span>
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1">
+                      <Unlock className="w-3 h-3 text-emerald-600" />
+                      <span>کراوە (وەرگرتنی مەسروفات)</span>
+                    </span>
+                  )}
+                </div>
                 <span className="text-[11px] text-slate-500">
                   تۆمارکراو لە: {format(new Date(selectedVoucher.createdAt), 'yyyy-MM-dd • hh:mm a')} • مانگی: {selectedVoucher.month}
+                  {selectedVoucher.lockedAt && ` • قوفڵکراوە لە: ${format(new Date(selectedVoucher.lockedAt), 'yyyy-MM-dd • hh:mm a')}`}
                 </span>
               </div>
             </div>
 
-            {/* Edit, Print & Delete Buttons */}
+            {/* Edit, Print, Lock & Delete Buttons */}
             <div className="flex items-center gap-2">
+              {/* 🔒 LOCK / UNLOCK THIS VOUCHER */}
+              <button
+                type="button"
+                onClick={() => handleToggleLockVoucher(selectedVoucher)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-2xs text-white ${
+                  selectedVoucher.isLocked
+                    ? 'bg-slate-700 hover:bg-slate-800'
+                    : 'bg-rose-600 hover:bg-rose-700'
+                }`}
+                title={selectedVoucher.isLocked ? 'کردنەوەی ئەم لیستە بۆ وەرگرتنی مەسروفاتی بۆت' : 'قوفڵکردن و داخستنی ئەم لیستە تا هیچ مەسروفاتێکی تر نەچێتە ناوی'}
+              >
+                {selectedVoucher.isLocked ? <Unlock className="w-4 h-4 text-amber-400" /> : <Lock className="w-4 h-4" />}
+                <span>{selectedVoucher.isLocked ? '🔓 کردنەوەی لیست' : '🔒 قوفڵکردنی لیست'}</span>
+              </button>
+
               {/* ✏️ EDIT THIS VOUCHER */}
               <button
                 type="button"
@@ -5106,7 +5247,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                                     </span>
                                   </td>
                                   <td className={`${cellPad} text-slate-600 dark:text-slate-300`}>
-                                    {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : '—'}
+                                    {item.from || item.to ? `${item.from || '—'} ⬅️ ${item.to || '—'}` : (item.route || '—')}
                                   </td>
                                   <td className={`${cellPad} text-center font-mono text-slate-500`}>{item.trip || '—'}</td>
                                   <td className={`${cellPad} text-center font-mono font-bold text-emerald-600 dark:text-emerald-400`}>

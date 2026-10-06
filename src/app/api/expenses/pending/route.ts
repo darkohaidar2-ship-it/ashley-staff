@@ -50,7 +50,13 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      return NextResponse.json({ success: true, request: res.request, newExpense: res.newExpense });
+      return NextResponse.json({ 
+        success: true, 
+        request: res.request, 
+        newExpense: res.newExpense,
+        voucher: res.voucher,
+        isNewVoucher: res.isNewVoucher 
+      });
     }
 
     if (action === 'reject') {

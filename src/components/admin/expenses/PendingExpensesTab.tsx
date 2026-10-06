@@ -70,9 +70,14 @@ export function PendingExpensesTab({ onExpenseApproved }: PendingExpensesTabProp
       });
       const data = await res.json();
       if (data.success) {
+        const voucherInfo = data.voucher?.name
+          ? (data.isNewVoucher
+              ? ` ✨ (لیستی نوێ دروستکرا: ${data.voucher.name})`
+              : ` 📁 (خرایە نێو لیستی کراوەی: ${data.voucher.name})`)
+          : '';
         toast({
           title: '✅ مەسروفات پەسەندکرا',
-          description: `داواکاری ${req.employeeName} بە بڕی ${req.amount.toLocaleString()} دینار خرایە حسابی فەرمی.`,
+          description: `داواکاری ${req.employeeName} بە بڕی ${req.amount.toLocaleString()} دینار پەسەندکرا.${voucherInfo}`,
         });
         loadRequests();
         if (onExpenseApproved) onExpenseApproved();
@@ -333,6 +338,18 @@ export function PendingExpensesTab({ onExpenseApproved }: PendingExpensesTabProp
                     </span>
                   </div>
                 </div>
+
+                {/* Transport Route if available */}
+                {(req.route || req.from || req.to) && (
+                  <div className="p-2.5 bg-blue-50/70 dark:bg-blue-950/30 rounded-2xl border border-blue-200/50 dark:border-blue-900/40 space-y-1">
+                    <span className="text-[11px] font-bold text-[#007AFF] flex items-center gap-1">
+                      <span>🚖</span> هاتوچۆ و ڕێڕەو:
+                    </span>
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      {req.route || `${req.from || '—'} ⬅️ ${req.to || '—'}`}
+                    </p>
+                  </div>
+                )}
 
                 {/* Note / Reason */}
                 <div className="space-y-1">

@@ -146,6 +146,9 @@ export type PendingExpenseRequest = {
   employeeName: string;
   amount: number;
   category: string;
+  route?: string;
+  from?: string;
+  to?: string;
   note: string;
   receiptPhotoUrl?: string;
   receiptTelegramFileId?: string;

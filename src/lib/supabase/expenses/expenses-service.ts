@@ -252,18 +252,33 @@ export async function saveCustomOvertimeReasons(reasons: string[]): Promise<bool
   }
 }
 
-export async function fetchArchivedVouchers(): Promise<any[] | null> {
+export interface ArchivedVoucher {
+  id: string;
+  type: 'expenses' | 'bonuses' | 'withdrawals';
+  name: string;
+  month: string;
+  createdAt: string;
+  dateRange: string;
+  totalAmount: number;
+  itemCount: number;
+  items: any[];
+  isLocked?: boolean;
+  lockedAt?: string;
+  lockedBy?: string;
+}
+
+export async function fetchArchivedVouchers(): Promise<ArchivedVoucher[] | null> {
   try {
-    return await fetchSupabaseJson<any[] | null>(ARCHIVED_VOUCHERS_LEDGER_KEY, null);
+    return await fetchSupabaseJson<ArchivedVoucher[] | null>(ARCHIVED_VOUCHERS_LEDGER_KEY, null);
   } catch (err) {
     logger.error('[ExpensesService] Error fetching archived vouchers from Supabase:', err);
     return null;
   }
 }
 
-export async function saveArchivedVouchers(vouchers: any[]): Promise<boolean> {
+export async function saveArchivedVouchers(vouchers: ArchivedVoucher[]): Promise<boolean> {
   try {
-    return await saveSupabaseJson<any[]>(
+    return await saveSupabaseJson<ArchivedVoucher[]>(
       ARCHIVED_VOUCHERS_LEDGER_KEY,
       'Ashley Archived Vouchers Ledger',
       vouchers
@@ -272,6 +287,186 @@ export async function saveArchivedVouchers(vouchers: any[]): Promise<boolean> {
     logger.error('[ExpensesService] Error saving archived vouchers to Supabase:', err);
     return false;
   }
+}
+
+export async function toggleVoucherLock(
+  voucherId: string, 
+  lockState?: boolean,
+  lockedBy?: string
+): Promise<{ success: boolean; isLocked: boolean; voucher?: ArchivedVoucher }> {
+  try {
+    const vouchers: ArchivedVoucher[] = (await fetchArchivedVouchers()) || [];
+    const index = vouchers.findIndex(v => v.id === voucherId);
+    if (index === -1) {
+      return { success: false, isLocked: false };
+    }
+
+    const current = vouchers[index];
+    const newLock = typeof lockState === 'boolean' ? lockState : !current.isLocked;
+
+    vouchers[index] = {
+      ...current,
+      isLocked: newLock,
+      lockedAt: newLock ? new Date().toISOString() : undefined,
+      lockedBy: newLock ? (lockedBy || 'بەڕێوەبەر') : undefined,
+    };
+
+    await saveArchivedVouchers(vouchers);
+    return { success: true, isLocked: newLock, voucher: vouchers[index] };
+  } catch (err) {
+    logger.error('[ExpensesService] Error toggling voucher lock:', err);
+    return { success: false, isLocked: false };
+  }
+}
+
+export async function getActiveOpenVoucher(
+  type: 'expenses' | 'bonuses' | 'withdrawals' = 'expenses',
+  month?: string
+): Promise<ArchivedVoucher | null> {
+  const vouchers = (await fetchArchivedVouchers()) || [];
+  if (month) {
+    const exact = vouchers.find(v => v.type === type && !v.isLocked && v.month === month);
+    if (exact) return exact;
+  }
+  return vouchers.find(v => v.type === type && !v.isLocked) || null;
+}
+
+export async function addApprovedExpenseToVoucherLedger(
+  req: PendingExpenseRequest,
+  approverName: string
+): Promise<{ voucher: ArchivedVoucher; isNewVoucher: boolean; item: any }> {
+  const allVouchers: ArchivedVoucher[] = (await fetchArchivedVouchers()) || [];
+
+  // 1. Precise Asia/Baghdad timezone timestamp
+  const now = new Date();
+  const baghdadParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Baghdad',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(now);
+  const getP = (t: string) => baghdadParts.find(p => p.type === t)?.value || '00';
+  let hh = getP('hour');
+  if (hh === '24') hh = '00';
+  const baghdadDateStr = `${getP('year')}-${getP('month')}-${getP('day')}`;
+  const baghdadTimeStr = `${hh}:${getP('minute')}:${getP('second')}`;
+
+  const effectiveDate = req.dateStr || baghdadDateStr;
+  const effectiveMonth = effectiveDate.slice(0, 7);
+
+  // 2. Parse category and route
+  const catLower = (req.category || '').toLowerCase();
+  const itemType = 
+    catLower.includes('تەکسی') || catLower.includes('هاتوچۆ') ? 'taxi' :
+    catLower.includes('خواردن') ? 'food' :
+    catLower.includes('بەنزین') || catLower.includes('سووتەمەنی') ? 'fuel' :
+    catLower.includes('ئۆفیس') || catLower.includes('مەکتەب') ? 'office' : 'other';
+
+  let fromLoc = req.from;
+  let toLoc = req.to;
+  if (!fromLoc && req.route) {
+    if (req.route.includes(' بۆ ')) {
+      const parts = req.route.split(' بۆ ');
+      fromLoc = parts[0]?.trim();
+      toLoc = parts[1]?.trim();
+    } else if (req.route.includes(' ⬅️ ')) {
+      const parts = req.route.split(' ⬅️ ');
+      fromLoc = parts[0]?.trim();
+      toLoc = parts[1]?.trim();
+    }
+  }
+
+  // Create rich item with all notes and details
+  const voucherItem = {
+    id: `exp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    employeeId: req.employeeId,
+    employeeName: req.employeeName,
+    date: effectiveDate,
+    amount: Number(req.amount || 0),
+    totalAmount: Number(req.amount || 0),
+    category: req.category,
+    type: itemType,
+    from: fromLoc || undefined,
+    to: toLoc || undefined,
+    route: req.route || (fromLoc && toLoc ? `${fromLoc} ⬅️ ${toLoc}` : undefined),
+    trip: itemType === 'taxi' ? 1 : undefined,
+    note: req.note,
+    reason: req.note,
+    receiptPhotoUrl: req.receiptPhotoUrl || undefined,
+    receiptTelegramFileId: req.receiptTelegramFileId || undefined,
+    source: 'telegram_bot',
+    approvedBy: approverName,
+    approvedAt: req.approvedAt || now.toISOString(),
+    createdAt: now.toISOString(),
+  };
+
+  // 3. Find an OPEN (unlocked) voucher for expenses in this month (or most recent open voucher)
+  let openVoucherIndex = allVouchers.findIndex(
+    v => v.type === 'expenses' && v.isLocked !== true && v.month === effectiveMonth
+  );
+
+  if (openVoucherIndex === -1) {
+    openVoucherIndex = allVouchers.findIndex(
+      v => v.type === 'expenses' && v.isLocked !== true
+    );
+  }
+
+  let finalVoucher: ArchivedVoucher;
+  let isNewVoucher = false;
+
+  if (openVoucherIndex !== -1) {
+    // 🌟 Found Open Voucher: Append to it!
+    const targetVoucher = allVouchers[openVoucherIndex];
+    targetVoucher.items = [voucherItem, ...(targetVoucher.items || [])];
+    targetVoucher.itemCount = targetVoucher.items.length;
+    targetVoucher.totalAmount = targetVoucher.items.reduce(
+      (sum, item) => sum + Number(item.amount || item.totalAmount || 0),
+      0
+    );
+
+    // Update date range
+    const allDates = Array.from(new Set(targetVoucher.items.map(i => i.date).filter(Boolean))).sort();
+    if (allDates.length === 1) {
+      targetVoucher.dateRange = String(allDates[0]);
+    } else if (allDates.length > 1) {
+      targetVoucher.dateRange = `${allDates[0]} تا ${allDates[allDates.length - 1]}`;
+    }
+
+    finalVoucher = targetVoucher;
+    allVouchers[openVoucherIndex] = targetVoucher;
+  } else {
+    // 🌟 No Open Voucher: Create Brand New Voucher with Exact Date & Metadata!
+    isNewVoucher = true;
+    const realTimeName = `لیستی خەرجییەکان • ${effectiveDate} (${baghdadTimeStr})`;
+
+    const newVoucher: ArchivedVoucher = {
+      id: `vch_expenses_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      type: 'expenses',
+      name: realTimeName,
+      month: effectiveMonth,
+      createdAt: now.toISOString(),
+      dateRange: effectiveDate,
+      totalAmount: Number(req.amount || 0),
+      itemCount: 1,
+      items: [voucherItem],
+      isLocked: false, // OPEN by default!
+    };
+
+    allVouchers.unshift(newVoucher);
+    finalVoucher = newVoucher;
+  }
+
+  await saveArchivedVouchers(allVouchers);
+
+  return {
+    voucher: finalVoucher,
+    isNewVoucher,
+    item: voucherItem,
+  };
 }
 
 // ===================== PENDING EXPENSES WORKFLOW =====================
@@ -319,7 +514,7 @@ export async function createPendingExpenseRequest(
 export async function approveExpenseRequest(
   id: string, 
   approverName: string
-): Promise<{ success: boolean; request?: PendingExpenseRequest; newExpense?: Expense }> {
+): Promise<{ success: boolean; request?: PendingExpenseRequest; newExpense?: Expense; voucher?: ArchivedVoucher; isNewVoucher?: boolean }> {
   try {
     const all = await fetchPendingExpenseRequests();
     const reqIndex = all.findIndex(r => r.id === id);
@@ -328,27 +523,36 @@ export async function approveExpenseRequest(
     }
 
     const req = all[reqIndex];
+    if (req.status === 'approved') {
+      return { success: false };
+    }
+
     req.status = 'approved';
     req.approvedBy = approverName;
     req.approvedAt = new Date().toISOString();
 
-    // 1. Create official expense record
+    // 1. Create official individual expense record
     const expenses = await fetchExpenses();
     const newExpense: Expense = {
       id: `exp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       employeeId: req.employeeId,
       amount: req.amount,
       date: req.dateStr,
-      notes: `[داواکراوە لە تەلەگرام]: ${req.category} - ${req.note}`,
+      notes: req.route ? `[${req.category}] (${req.route}): ${req.note}` : `[${req.category}]: ${req.note}`,
       expenseReportId: '',
       expenseType: req.category,
     };
 
     expenses.unshift(newExpense);
     await saveExpenses(expenses);
+
+    // 2. 🌟 Record into the active Open Voucher or create a New Voucher!
+    const { voucher, isNewVoucher } = await addApprovedExpenseToVoucherLedger(req, approverName);
+
+    // 3. Save pending requests
     await savePendingExpenseRequests(all);
 
-    return { success: true, request: req, newExpense };
+    return { success: true, request: req, newExpense, voucher, isNewVoucher };
   } catch (err) {
     logger.error('[ExpensesService] Error approving expense request:', err);
     return { success: false };

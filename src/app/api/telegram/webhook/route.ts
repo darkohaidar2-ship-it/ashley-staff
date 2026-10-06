@@ -332,11 +332,27 @@ const PENDING_OVERTIME_NOTE: Record<string, OvertimeNoteSession> = {};
 
 async function submitExpenseRequestFromTelegram(session: ExpenseSession, bindings: Record<string, any>) {
   const finalNote = session.note || (session.route ? `تەکسی: ${session.route}` : 'بەبێ تێبینی');
+
+  let fromLoc = session.routes?.find(r => r.route === session.route)?.from;
+  let toLoc = session.routes?.find(r => r.route === session.route)?.to;
+  if (!fromLoc && session.route && session.route.includes(' بۆ ')) {
+    const parts = session.route.split(' بۆ ');
+    fromLoc = parts[0]?.trim();
+    toLoc = parts[1]?.trim();
+  } else if (!fromLoc && session.route && session.route.includes(' ⬅️ ')) {
+    const parts = session.route.split(' ⬅️ ');
+    fromLoc = parts[0]?.trim();
+    toLoc = parts[1]?.trim();
+  }
+
   const req = await createPendingExpenseRequest({
     employeeId: session.employeeId,
     employeeName: session.employeeName,
     amount: session.amount || 0,
     category: session.category || 'مەسروفاتی گشتی',
+    route: session.route,
+    from: fromLoc,
+    to: toLoc,
     note: finalNote,
     receiptPhotoUrl: session.receiptPhotoUrl,
     receiptTelegramFileId: session.receiptPhotoId,
@@ -898,15 +914,22 @@ export async function POST(req: NextRequest) {
         if (approveRes.success && approveRes.request) {
           const reqData = approveRes.request;
           await answerCallbackQuery(cqId, '✅ مەسروفات پەسەندکرا');
+          const voucherInfo = approveRes.voucher 
+            ? (approveRes.isNewVoucher 
+                ? `لیستی نوێ دروستکرا: <b>${approveRes.voucher.name}</b>`
+                : `خرایە نێو لیستی کراوەی: <b>${approveRes.voucher.name}</b> (${approveRes.voucher.itemCount} پسوولە)`)
+            : 'خرایە ناو لیستی مەسروفاتی فەرمی سیستەم و وێبسایت.';
+
           const updatedCard = 
             `✅ <b>داواکاری مەسروفات پەسەندکرا:</b>\n\n` +
             `👤 کارمەند: <b>${reqData.employeeName}</b> (${reqData.employeeId})\n` +
             `💵 بڕی پارە: <b>${reqData.amount.toLocaleString()} دینار</b>\n` +
             `📂 جۆر: <b>${reqData.category}</b>\n` +
+            (reqData.route ? `🚕 هێڵی هاتوچۆ: <b>${reqData.route}</b>\n` : '') +
             `📝 تێبینی: ${reqData.note}\n` +
             `✍️ پەسەندکرا لەلایەن: <b>${approverName}</b>\n` +
             `🕒 کات: ${getBaghdadNow().timeStr}\n\n` +
-            `💰 <b>ئەنجام:</b> خرایە ناو لیستی مەسروفاتی فەرمی سیستەم و وێبسایت.`;
+            `💰 <b>ئەنجامی لیست:</b> ${voucherInfo}`;
 
           if (cqMsgId) {
             await editTelegramCard(cqChatId, cqMsgId, updatedCard);
