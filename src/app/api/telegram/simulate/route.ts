@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
         const targetMonth = callbackData.replace('month:', '');
         const stats = await getMonthlyAttendanceStats(cleanEmpId, employeeName, targetMonth);
         const reportMsg = formatMonthlyReportMessage(stats);
-        const kb = getMonthlyReportInlineKeyboard(stats.monthStr);
+        const kb = getMonthlyReportInlineKeyboard(stats.monthStr, cleanEmpId);
         return NextResponse.json({
           reply: reportMsg,
           inlineKeyboard: kb.inline_keyboard,
@@ -140,6 +140,30 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // 3b. ACTION: QUICK CHECK-IN WITHOUT GPS
+    if (
+      command === '⚡ تۆمارکردنی خێرا (بەبێ GPS)' ||
+      command === '⚡ تۆمارکردنی خێرا (دامەزرێنەر)' ||
+      command.startsWith('⚡ تۆمارکردنی خێرا') ||
+      command === '/quick'
+    ) {
+      const allowed = await hasActionPermission(cleanEmpId, 'quick_checkin_no_gps');
+      if (!allowed) {
+        return NextResponse.json({
+          reply: `⛔ <b>دەسەڵاتت نییە</b>\nتۆ دەسەڵاتی تۆمارکردنی دەوامی خێرات بەبێ GPS پێ نەدراوە لەلایەن بەڕێوەبەرەوە.\nتکایە لە شوێنی کارەکەتەوە لۆکەیشنی GPS بنێرە.`,
+          keyboard,
+          hasPermission: false,
+        });
+      }
+
+      const { timeStr, dateStr } = getBaghdadNow();
+      return NextResponse.json({
+        reply: `⚡ <b>دەوامی خێرا بە سەرکەوتوویی تۆمارکرا (بەبێ پێویستی بە GPS)!</b>\n\n👤 کارمەند: <b>${employeeName}</b>\n🆔 کۆدی کارمەند: <b>${cleanEmpId}</b>\n📅 بەروار: <b>${dateStr}</b>\n🕒 کاتژمێر: <b>${timeStr}</b>\n🛡️ جۆری تۆمار: <b>دەسەڵاتی دەوامی خێرا (Quick Bypass)</b>\n\nتۆمارەکەت لە سیستەمی سەرەکی ERP تۆمارکرا ✨`,
+        keyboard,
+        hasPermission: true,
+      });
+    }
+
     // 4. ACTION: TODAY ATTENDANCE STATUS
     if (command === '📊 دۆخی دەوامی ئەمڕۆم' || command === '/today') {
       const allowed = await hasActionPermission(cleanEmpId, 'today_status');
@@ -172,7 +196,7 @@ export async function POST(req: NextRequest) {
 
       const stats = await getMonthlyAttendanceStats(cleanEmpId, employeeName);
       const reportMsg = formatMonthlyReportMessage(stats);
-      const kb = getMonthlyReportInlineKeyboard(stats.monthStr);
+      const kb = getMonthlyReportInlineKeyboard(stats.monthStr, cleanEmpId);
 
       return NextResponse.json({
         reply: reportMsg,

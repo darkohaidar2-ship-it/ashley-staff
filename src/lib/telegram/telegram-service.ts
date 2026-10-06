@@ -686,7 +686,7 @@ export function getMainReplyKeyboard(roleOrManager: UserRole | boolean = 'employ
   return getRoleBasedReplyKeyboard(role);
 }
 
-export function getLocationRequestKeyboard(isManager: boolean = false) {
+export function getLocationRequestKeyboard(canBypassGps: boolean = false) {
   const rows: any[][] = [
     [
       {
@@ -696,7 +696,7 @@ export function getLocationRequestKeyboard(isManager: boolean = false) {
     ],
   ];
 
-  if (isManager) {
+  if (canBypassGps) {
     rows.push([
       { text: '⚡ تۆمارکردنی خێرا (بەبێ GPS)' },
       { text: '❌ هەڵوەشاندنەوە' },

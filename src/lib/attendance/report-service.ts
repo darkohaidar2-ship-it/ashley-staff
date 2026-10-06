@@ -5,95 +5,18 @@ import autoTable from 'jspdf-autotable';
 import { supabase } from '@/lib/supabase/client';
 import { logger } from '@/lib/logger';
 import { getBaghdadNow } from '@/lib/telegram/telegram-service';
+import { shapeKurdishForPdf } from '@/lib/attendance/kurdish-shaper';
 
-export interface DayPunchRecord {
-  date: string;
-  dayName: string;
-  checkIn: string | null;
-  checkOut: string | null;
-  durationMinutes: number;
-  durationStr: string;
-  lateMinutes: number;
-  overtimeMinutes: number;
-  status: 'Present' | 'Absent' | 'Leave' | 'Holiday' | 'Incomplete';
-  locationName: string;
-}
-
-export interface MonthlyAttendanceStats {
-  monthStr: string;
-  employeeId: string;
-  employeeName: string;
-  presentDays: number;
-  absentDays: number;
-  leaveDays: number;
-  holidayDays: number;
-  totalWorkMinutes: number;
-  totalWorkHoursStr: string;
-  totalLateMinutes: number;
-  totalLateStr: string;
-  totalOvertimeMinutes: number;
-  totalOvertimeStr: string;
-  targetWorkingDays: number;
-  attendancePercent: number;
-  records: DayPunchRecord[];
-}
-
-// Convert minutes to Kurdish readable string (e.g. 14 کاتژمێر و ٢٠ خولەک)
-export function formatMinutesToKurdish(totalMinutes: number): string {
-  if (!totalMinutes || totalMinutes <= 0) return '٠ خولەک';
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-
-  if (hours > 0 && minutes > 0) {
-    return `${hours} کاتژمێر و ${minutes} خولەک`;
-  }
-  if (hours > 0) {
-    return `${hours} کاتژمێر`;
-  }
-  return `${minutes} خولەک`;
-}
-
-// Calculate previous month string (e.g. 2026-10 -> 2026-09)
-export function getPreviousMonthStr(monthStr: string): string {
-  const [y, m] = monthStr.split('-').map(Number);
-  const d = new Date(Date.UTC(y, m - 2, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-}
-
-// Calculate next month string (e.g. 2026-10 -> 2026-11)
-export function getNextMonthStr(monthStr: string): string {
-  const [y, m] = monthStr.split('-').map(Number);
-  const d = new Date(Date.UTC(y, m, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-}
-
-// Format month name in Kurdish (e.g. 2026-10 -> تشرینی یەکەم ٢٠٢٦)
-export function formatKurdishMonthName(monthStr: string): string {
-  const monthNames: Record<string, string> = {
-    '01': 'کانوونی دووەم (مانگی ١)',
-    '02': 'شوبات (مانگی ٢)',
-    '03': 'ئازار (مانگی ٣)',
-    '04': 'نیسان (مانگی ٤)',
-    '05': 'ئایار (مانگی ٥)',
-    '06': 'حوزەیران (مانگی ٦)',
-    '07': 'تەمووز (مانگی ٧)',
-    '08': 'ئاب (مانگی ٨)',
-    '09': 'ئەیلوول (مانگی ٩)',
-    '10': 'تشرینی یەکەم (مانگی ١٠)',
-    '11': 'تشرینی دووەم (مانگی ١١)',
-    '12': 'کانوونی یەکەم (مانگی ١٢)',
-  };
-  const parts = monthStr.split('-');
-  const name = monthNames[parts[1]] || parts[1];
-  return `${name} ${parts[0]}`;
-}
-
-// Kurdish Day Names
-export function getKurdishDayName(dateString: string): string {
-  const days = ['یەکشەممە', 'دووشەممە', 'سێشەممە', 'چوارشەممە', 'پێنجشەممە', 'هەینی', 'شەممە'];
-  const d = new Date(dateString + 'T12:00:00Z');
-  return days[d.getUTCDay()] || '';
-}
+import { 
+  DayPunchRecord, 
+  MonthlyAttendanceStats, 
+  formatMinutesToKurdish, 
+  getPreviousMonthStr, 
+  getNextMonthStr, 
+  formatKurdishMonthName, 
+  getKurdishDayName 
+} from './report-helpers';
+export * from './report-helpers';
 
 // Parse HH:MM into minutes from midnight
 function timeToMinutes(timeStr?: string | null): number | null {
@@ -329,9 +252,11 @@ export function formatMonthlyReportMessage(stats: MonthlyAttendanceStats): strin
 // ---------------------------------------------------------------------------
 // 3. INLINE KEYBOARD FOR MONTH NAVIGATION & PDF DOWNLOAD
 // ---------------------------------------------------------------------------
-export function getMonthlyReportInlineKeyboard(monthStr: string) {
+export function getMonthlyReportInlineKeyboard(monthStr: string, employeeId?: string) {
   const prevMonth = getPreviousMonthStr(monthStr);
   const nextMonth = getNextMonthStr(monthStr);
+  const empParam = employeeId || 'emp-02';
+  const printUrl = `https://ashley-staff.vercel.app/attendance/report/print?emp=${encodeURIComponent(empParam)}&month=${encodeURIComponent(monthStr)}&auto=1`;
 
   return {
     inline_keyboard: [
@@ -341,14 +266,17 @@ export function getMonthlyReportInlineKeyboard(monthStr: string) {
         { text: 'مانگی دواتر ▶️', callback_data: `month:${nextMonth}` },
       ],
       [
-        { text: '📥 داگرتنی پسوولەی فەرمی دەوام (PDF)', callback_data: `pdf:${monthStr}` },
+        { text: '🖨️ بینین و چاپی فەرمی (Print / PDF)', url: printUrl },
+      ],
+      [
+        { text: '📥 داگرتنی فایلی پسوولە (PDF)', callback_data: `pdf:${monthStr}` },
       ],
     ],
   };
 }
 
 // ---------------------------------------------------------------------------
-// 4. GENERATE ELEGANT OFFICIAL PDF REPORT USING JSPDF & NRT KURDISH FONT
+// 4. GENERATE ELEGANT OFFICIAL PDF REPORT USING JSPDF, LOGOS & KURDISH SHAPER
 // ---------------------------------------------------------------------------
 export async function generateMonthlyAttendancePdf(stats: MonthlyAttendanceStats): Promise<Buffer> {
   const doc = new jsPDF({
@@ -377,89 +305,113 @@ export async function generateMonthlyAttendancePdf(stats: MonthlyAttendanceStats
     logger.warn('[ReportService] Error loading custom NRT font into jsPDF:', err);
   }
 
-  // Header Banner
+  // 🌟 1. UPPER LETTERHEAD BANNER (SLATE-950)
   doc.setFillColor(15, 23, 42); // slate-900
   doc.rect(0, 0, 210, 36, 'F');
 
-  // Title in Header
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
-  doc.text('ASHLEY FURNITURE HOMESTORE - KURDISTAN', 105, 14, { align: 'center' });
-  doc.setFontSize(13);
-  doc.text('کۆمپانیای سەرەکی ئاشڵی - ڕاپۆرتی فەرمی دەوامی مانگانە', 105, 24, { align: 'center' });
+  // Embed Ashley Official Logo on Top Left
+  try {
+    const logoPath = path.join(process.cwd(), 'public', 'ashley-logo.png');
+    if (fs.existsSync(logoPath)) {
+      const imgBase64 = fs.readFileSync(logoPath).toString('base64');
+      doc.addImage(`data:image/png;base64,${imgBase64}`, 'PNG', 12, 6, 28, 16);
+    }
+  } catch (logoErr) {
+    logger.warn('[ReportService] Error loading ashley-logo.png into PDF:', logoErr);
+  }
 
-  // Subheader info bar
-  doc.setFillColor(241, 245, 249); // slate-100
-  doc.rect(10, 42, 190, 24, 'F');
+  // Right Side: Diwan Group Title (Shaped Kurdish)
+  doc.setTextColor(245, 158, 11); // amber-500
+  doc.setFontSize(11);
+  doc.text(shapeKurdishForPdf('کۆمپانیای گروپی دیوان'), 196, 14, { align: 'right' });
+  doc.setTextColor(203, 213, 225); // slate-300
+  doc.setFontSize(8.5);
+  doc.text(shapeKurdishForPdf('ناسنامەی مۆبیلیات'), 196, 21, { align: 'right' });
+
+  // Center: Official Ashley Report Titles
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(13);
+  doc.text('ASHLEY FURNITURE HOMESTORE', 105, 13, { align: 'center' });
+  doc.setFontSize(11);
+  doc.text(shapeKurdishForPdf('کۆمپانیای مۆبیلیاتی ئاشڵی — ڕاپۆرتی فەرمی دەوامی مانگانە'), 105, 21, { align: 'center' });
+  
+  const kurdishMonth = formatKurdishMonthName(stats.monthStr);
+  doc.setTextColor(226, 232, 240);
+  doc.setFontSize(9);
+  doc.text(shapeKurdishForPdf(`مانگی ${kurdishMonth}`), 105, 28, { align: 'center' });
+
+  // 🌟 2. SUBHEADER INFO BAR
+  doc.setFillColor(248, 250, 252); // slate-50
+  doc.rect(10, 41, 190, 22, 'F');
   doc.setDrawColor(203, 213, 225); // slate-300
-  doc.rect(10, 42, 190, 24, 'S');
+  doc.rect(10, 41, 190, 22, 'S');
 
   doc.setTextColor(15, 23, 42);
-  doc.setFontSize(11);
-  doc.text(`ناوی کارمەند: ${stats.employeeName}`, 195, 51, { align: 'right' });
-  doc.text(`کۆدی کارمەند: ${stats.employeeId}`, 195, 60, { align: 'right' });
-
-  const kurdishMonth = formatKurdishMonthName(stats.monthStr);
-  doc.text(`مانگی دەوام: ${kurdishMonth}`, 15, 51, { align: 'left' });
-  const { dateStr, timeStr } = getBaghdadNow();
-  doc.text(`کاتی دەرچوواندن: ${dateStr} ${timeStr}`, 15, 60, { align: 'left' });
   doc.setFontSize(10);
-  doc.setTextColor(5, 150, 105); // emerald-600
-  doc.text(`ڕێژەی ئامادەبوون: ${stats.attendancePercent}%`, 105, 60, { align: 'center' });
+  doc.text(shapeKurdishForPdf(`ناوی کارمەند: ${stats.employeeName}`), 195, 49, { align: 'right' });
+  doc.text(shapeKurdishForPdf(`کۆدی کارمەند: ${stats.employeeId}`), 195, 57, { align: 'right' });
 
-  // Summary Stat Boxes (4-column grid)
-  const boxY = 72;
+  const { dateStr, timeStr } = getBaghdadNow();
+  doc.text(shapeKurdishForPdf(`بەرواری دەرچوواندن: ${dateStr}`), 15, 49, { align: 'left' });
+  doc.text(shapeKurdishForPdf(`کاتی تۆمار: ${timeStr}`), 15, 57, { align: 'left' });
+
+  doc.setFontSize(9.5);
+  doc.setTextColor(5, 150, 105); // emerald-600
+  doc.text(shapeKurdishForPdf(`ڕێژەی ئامادەبوون: ${stats.attendancePercent}%`), 105, 57, { align: 'center' });
+
+  // 🌟 3. SUMMARY STAT BOXES (4-COLUMN GRID)
+  const boxY = 68;
   const boxW = 44;
-  const boxH = 20;
+  const boxH = 19;
 
   // Box 1: Work Hours
   doc.setFillColor(236, 253, 245); // emerald-50
   doc.rect(156, boxY, boxW, boxH, 'FD');
   doc.setTextColor(6, 95, 70); // emerald-800
-  doc.setFontSize(9);
-  doc.text(`کۆی کاتژمێر (${stats.attendancePercent}%)`, 178, boxY + 7, { align: 'center' });
-  doc.setFontSize(11);
-  doc.text(stats.totalWorkHoursStr, 178, boxY + 15, { align: 'center' });
+  doc.setFontSize(8.5);
+  doc.text(shapeKurdishForPdf(`کۆی کاتژمێر (${stats.attendancePercent}%)`), 178, boxY + 6.5, { align: 'center' });
+  doc.setFontSize(10.5);
+  doc.text(stats.totalWorkHoursStr, 178, boxY + 14, { align: 'center' });
 
   // Box 2: Present Days
   doc.setFillColor(239, 246, 255); // blue-50
   doc.rect(108, boxY, boxW, boxH, 'FD');
   doc.setTextColor(30, 64, 175); // blue-800
-  doc.setFontSize(9);
-  doc.text('ڕۆژانی دەوام', 130, boxY + 7, { align: 'center' });
-  doc.setFontSize(11);
-  doc.text(`${stats.presentDays} لە ${stats.targetWorkingDays} ڕۆژ`, 130, boxY + 15, { align: 'center' });
+  doc.setFontSize(8.5);
+  doc.text(shapeKurdishForPdf('ڕۆژانی دەوام'), 130, boxY + 6.5, { align: 'center' });
+  doc.setFontSize(10.5);
+  doc.text(shapeKurdishForPdf(`${stats.presentDays} لە ${stats.targetWorkingDays} ڕۆژ`), 130, boxY + 14, { align: 'center' });
 
   // Box 3: Overtime
   doc.setFillColor(254, 243, 199); // amber-50
   doc.rect(60, boxY, boxW, boxH, 'FD');
   doc.setTextColor(146, 64, 14); // amber-800
-  doc.setFontSize(9);
-  doc.text('ئۆڤەرتایم (زیادە)', 82, boxY + 7, { align: 'center' });
-  doc.setFontSize(11);
-  doc.text(stats.totalOvertimeStr, 82, boxY + 15, { align: 'center' });
+  doc.setFontSize(8.5);
+  doc.text(shapeKurdishForPdf('ئۆڤەرتایم (ئیزافە)'), 82, boxY + 6.5, { align: 'center' });
+  doc.setFontSize(10.5);
+  doc.text(stats.totalOvertimeStr, 82, boxY + 14, { align: 'center' });
 
   // Box 4: Late minutes
   doc.setFillColor(254, 242, 242); // rose-50
   doc.rect(12, boxY, boxW, boxH, 'FD');
   doc.setTextColor(153, 27, 27); // rose-800
-  doc.setFontSize(9);
-  doc.text('کۆی دواکەوتن (درەنگ)', 34, boxY + 7, { align: 'center' });
-  doc.setFontSize(11);
-  doc.text(stats.totalLateStr, 34, boxY + 15, { align: 'center' });
+  doc.setFontSize(8.5);
+  doc.text(shapeKurdishForPdf('کۆی دواکەوتن'), 34, boxY + 6.5, { align: 'center' });
+  doc.setFontSize(10.5);
+  doc.text(stats.totalLateStr, 34, boxY + 14, { align: 'center' });
 
-  // Table of Records
+  // 🌟 4. TABLE OF RECORDS (SHAPED KURDISH HEADERS & BODY)
   const tableData: any[][] = [];
   for (const r of stats.records) {
     const statusLabel =
-      r.status === 'Present' ? 'ئامادە' :
-      r.status === 'Absent' ? 'غیاب' :
-      r.status === 'Leave' ? 'مۆڵەت' :
-      r.status === 'Holiday' ? 'پشوو' : 'ناڕوون';
+      r.status === 'Present' ? shapeKurdishForPdf('ئامادەبوو') :
+      r.status === 'Absent' ? shapeKurdishForPdf('غایب') :
+      r.status === 'Leave' ? shapeKurdishForPdf('مۆڵەت') :
+      r.status === 'Holiday' ? shapeKurdishForPdf('پشوو') : shapeKurdishForPdf('دەوام نەکراو');
 
     let notes = '';
-    if (r.overtimeMinutes > 0) notes += `+${r.overtimeMinutes}خ ئەزافی `;
-    if (r.lateMinutes > 0) notes += `درەنگ: ${r.lateMinutes}خ `;
+    if (r.overtimeMinutes > 0) notes += shapeKurdishForPdf(`+${r.overtimeMinutes}خ ئیزافە `);
+    if (r.lateMinutes > 0) notes += shapeKurdishForPdf(`درەنگ: ${r.lateMinutes}خ `);
 
     tableData.push([
       notes || '-',
@@ -467,21 +419,23 @@ export async function generateMonthlyAttendancePdf(stats: MonthlyAttendanceStats
       r.durationStr || '-',
       r.checkOut || '--:--',
       r.checkIn || '--:--',
-      r.dayName,
+      shapeKurdishForPdf(r.dayName),
       r.date,
     ]);
   }
 
+  const tableHeaders = ['تێبینی', 'دۆخ', 'ماوەی کار', 'دەرچوون', 'هاتن', 'ڕۆژ', 'ڕێکەوت'].map(shapeKurdishForPdf);
+
   autoTable(doc, {
-    startY: 98,
-    margin: { left: 10, right: 10 },
-    head: [['تێبینی', 'دۆخ', 'ماوەی کار', 'دەرچوون', 'هاتن', 'ڕۆژ', 'ڕێکەوت']],
-    body: tableData.length > 0 ? tableData : [['-', '-', '-', '-', '-', '-', 'هیچ دەوامێک تۆمار نەکراوە']],
+    startY: 92,
+    margin: { left: 10, right: 10, bottom: 38 },
+    head: [tableHeaders],
+    body: tableData.length > 0 ? tableData : [['-', '-', '-', '-', '-', '-', shapeKurdishForPdf('هیچ دەوامێک تۆمار نەکراوە')]],
     styles: {
       font: 'NRT',
-      fontSize: 9,
+      fontSize: 8.5,
       halign: 'center',
-      cellPadding: 2.5,
+      cellPadding: 2,
     },
     headStyles: {
       font: 'NRT',
@@ -495,17 +449,45 @@ export async function generateMonthlyAttendancePdf(stats: MonthlyAttendanceStats
     },
   });
 
-  // Footer / Signatures
+  // 🌟 5. LOWER LETTERHEAD SIGNATURES STRIP (3 OFFICIAL ROLES)
   const pageHeight = doc.internal.pageSize.getHeight();
-  const footerY = pageHeight - 20;
+  const sigY = pageHeight - 32;
 
   doc.setDrawColor(203, 213, 225);
-  doc.line(10, footerY - 5, 200, footerY - 5);
+  doc.line(10, sigY - 3, 200, sigY - 3);
 
-  doc.setFontSize(9);
-  doc.setTextColor(100, 116, 139);
-  doc.text('بەشی سەرچاوە مرۆییەکان و وردبینی دەوام - کۆمپانیای ئاشڵی', 105, footerY, { align: 'center' });
-  doc.text('تێبینی: ئەم پسوولەیە بە شێوەی ئۆتۆماتیکی لە سیستەمی دەوامی ئاشڵی دەرکراوە و پێویستی بە مۆر نییە.', 105, footerY + 5, { align: 'center' });
+  const sigRoles = [
+    { title: 'سەرپەرشتیاری ئایتی', x: 12, w: 58 },
+    { title: 'بەڕێوەبەری ژمێریاری و کۆگا', x: 76, w: 58 },
+    { title: 'بەڕێوەبەری گشتی', x: 140, w: 58 },
+  ];
+
+  sigRoles.forEach(sig => {
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.setDrawColor(203, 213, 225); // slate-300
+    doc.rect(sig.x, sigY, sig.w, 20, 'FD');
+
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.setFontSize(8.5);
+    doc.text(shapeKurdishForPdf(sig.title), sig.x + (sig.w / 2), sigY + 5, { align: 'center' });
+
+    doc.setDrawColor(226, 232, 240);
+    doc.line(sig.x + 3, sigY + 7, sig.x + sig.w - 3, sigY + 7);
+
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.setFontSize(7.5);
+    doc.text(shapeKurdishForPdf('ناو: .......................................'), sig.x + sig.w - 3, sigY + 11.5, { align: 'right' });
+    doc.text(shapeKurdishForPdf('واژوو: ....................................'), sig.x + sig.w - 3, sigY + 16.5, { align: 'right' });
+  });
+
+  doc.setFontSize(7);
+  doc.setTextColor(148, 163, 184);
+  doc.text(
+    shapeKurdishForPdf('ئەم پسوولەیە بە شێوەی فەرمی لە سیستەمی سەرەکی کۆمپانیای ئاشڵی (Ashley ERP) دەرکراوە و پەسەندکراوە.'),
+    105,
+    pageHeight - 6,
+    { align: 'center' }
+  );
 
   const pdfOutput = doc.output('arraybuffer');
   return Buffer.from(pdfOutput);

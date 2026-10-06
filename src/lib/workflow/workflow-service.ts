@@ -317,7 +317,8 @@ export const WORKFLOW_ROLES: RoleDefinition[] = [
       'device_management', 
       'gps_geofence', 
       'shift_control',
-      'full_reports'
+      'full_reports',
+      'quick_checkin_no_gps'
     ],
     scope: ['all_branches'],
   },
@@ -580,6 +581,14 @@ export const WORKFLOW_ACTIONS: TaskActionDefinition[] = [
     defaultRoles: ['founder', 'developer', 'it_admin'],
     color: '#6366F1',
   },
+  {
+    id: 'quick_checkin_no_gps',
+    title: 'تۆمارکردنی خێرا (بەبێ GPS)',
+    description: 'دوگمەی [⚡ تۆمارکردنی خێرا (بەبێ GPS)] بۆ تۆمارکردنی دەوام بەبێ مەرجی ناردنی لۆکەیشن',
+    iconName: 'Zap',
+    defaultRoles: ['founder', 'general_manager', 'warehouse_manager', 'transport_manager'],
+    color: '#EAB308',
+  },
 ];
 
 export const WORKFLOW_SCOPES: ScopeBranchDefinition[] = [
@@ -619,6 +628,7 @@ export function getDefaultTaskAssignments(): Record<string, string[]> {
     transport_attendance: ['emp-04', 'emp-02'], // Heval, Darko
     system_diagnostics: ['emp-02', 'it-admin'], // Darko, IT
     late_alerts: ['emp-02', 'emp-06'], // Darko, Kamaran
+    quick_checkin_no_gps: ['emp-02'], // Darko (Admin can assign to any employee in the matrix)
   };
 }
 
@@ -1088,6 +1098,9 @@ export async function getDynamicEmployeeTelegramKeyboard(
   }
   if (isAssigned('system_diagnostics')) {
     dynamicButtons.push({ text: '🔍 پشکنینی سیستەم' });
+  }
+  if (isAssigned('quick_checkin_no_gps')) {
+    dynamicButtons.push({ text: '⚡ تۆمارکردنی خێرا (بەبێ GPS)' });
   }
 
   // Pair dynamic buttons 2 per row

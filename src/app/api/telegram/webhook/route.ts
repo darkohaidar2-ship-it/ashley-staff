@@ -335,7 +335,7 @@ export async function POST(req: NextRequest) {
         if (binding) {
           const stats = await getMonthlyAttendanceStats(binding.employeeId, binding.employeeName, targetMonth);
           const text = formatMonthlyReportMessage(stats);
-          const kb = getMonthlyReportInlineKeyboard(targetMonth);
+          const kb = getMonthlyReportInlineKeyboard(targetMonth, binding.employeeId);
           if (cqMsgId) {
             await editTelegramMessage(cqChatId, cqMsgId, text, kb);
           }
@@ -1390,9 +1390,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
+      const canBypassGps = await hasActionPermission(currentBinding.employeeId, 'quick_checkin_no_gps');
       PENDING_INTENTS[fromId] = 'check_in';
       const prompt = `📍 <b>تۆمارکردنی هاتن بۆ دەوام:</b>\n\nتکایە دوگمەی <b>[📍 ناردنی لۆکەیشنی دەوام (GPS)]</b> لە خوارەوە دابگرە تاوەکو لۆکەیشنەکەت بنێریت و کاتەکەت تۆمار بکرێت:`;
-      await sendTelegramMessage(chatId, prompt, getLocationRequestKeyboard(isManager));
+      await sendTelegramMessage(chatId, prompt, getLocationRequestKeyboard(canBypassGps));
       return NextResponse.json({ ok: true });
     }
 
@@ -1403,9 +1404,45 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
+      const canBypassGps = await hasActionPermission(currentBinding.employeeId, 'quick_checkin_no_gps');
       PENDING_INTENTS[fromId] = 'check_out';
       const prompt = `📍 <b>تۆمارکردنی دەرچوون لە دەوام:</b>\n\nتکایە دوگمەی <b>[📍 ناردنی لۆکەیشنی دەوام (GPS)]</b> لە خوارەوە دابگرە تاوەکو لۆکەیشنەکەت بنێریت و کاتەکەت تۆمار بکرێت:`;
-      await sendTelegramMessage(chatId, prompt, getLocationRequestKeyboard(isManager));
+      await sendTelegramMessage(chatId, prompt, getLocationRequestKeyboard(canBypassGps));
+      return NextResponse.json({ ok: true });
+    }
+
+    // -------------------------------------------------------------
+    // 9b2. ACTION: QUICK CHECK-IN WITHOUT GPS (⚡ تۆمارکردنی خێرا بەبێ GPS)
+    // -------------------------------------------------------------
+    if (
+      text === '⚡ تۆمارکردنی خێرا (بەبێ GPS)' || 
+      text === '⚡ تۆمارکردنی خێرا (دامەزرێنەر)' || 
+      text.startsWith('⚡ تۆمارکردنی خێرا') ||
+      text === '/quick'
+    ) {
+      const canBypass = await hasActionPermission(currentBinding.employeeId, 'quick_checkin_no_gps');
+      if (!canBypass) {
+        await sendTelegramMessage(
+          chatId,
+          `⛔ <b>دەسەڵاتت نییە</b>\nتۆ دەسەڵاتی تۆمارکردنی دەوامی خێرات بەبێ GPS پێ نەدراوە لەلایەن بەڕێوەبەرەوە.\nتکایە دوگمەی <b>[📍 ناردنی لۆکەیشنی دەوام (GPS)]</b> دابگرە تاوەکو لە شوێنی کارەکەت دەوامت تۆمار بکرێت.`,
+          replyKeyboard
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      const intent = PENDING_INTENTS[fromId] || 'auto';
+      delete PENDING_INTENTS[fromId];
+
+      const result = await evaluateAndRecordAttendance({
+        source: 'telegram',
+        employeeId: currentBinding.employeeId,
+        employeeName: currentBinding.employeeName,
+        punchType: intent,
+        forceBypassLocation: true,
+        isManager: true,
+      });
+
+      await sendTelegramMessage(chatId, result.message, replyKeyboard);
       return NextResponse.json({ ok: true });
     }
 
@@ -1436,7 +1473,7 @@ export async function POST(req: NextRequest) {
 
       const stats = await getMonthlyAttendanceStats(currentBinding.employeeId, currentBinding.employeeName);
       const reportMsg = formatMonthlyReportMessage(stats);
-      const kb = getMonthlyReportInlineKeyboard(stats.monthStr);
+      const kb = getMonthlyReportInlineKeyboard(stats.monthStr, currentBinding.employeeId);
       await sendTelegramMessage(chatId, reportMsg, kb);
 
       // Automatically generate and deliver official PDF report
@@ -1803,6 +1840,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
+      const canBypassGps = await hasActionPermission(currentBinding.employeeId, 'quick_checkin_no_gps');
+      if (!canBypassGps) {
+        PENDING_INTENTS[fromId] = 'check_in';
+        const prompt = `📍 <b>تۆمارکردنی هاتن بۆ دەوام:</b>\n\nتکایە دوگمەی <b>[📍 ناردنی لۆکەیشنی دەوام (GPS)]</b> لە خوارەوە دابگرە تاوەکو لۆکەیشنەکەت بنێریت و کاتەکەت تۆمار بکرێت:`;
+        await sendTelegramMessage(chatId, prompt, getLocationRequestKeyboard(false));
+        return NextResponse.json({ ok: true });
+      }
+
       const result = await evaluateAndRecordAttendance({
         source: 'telegram',
         employeeId: currentBinding.employeeId,
@@ -1820,6 +1865,14 @@ export async function POST(req: NextRequest) {
       const allowed = await hasActionPermission(currentBinding.employeeId, 'self_checkin');
       if (!allowed) {
         await sendTelegramMessage(chatId, `⛔ <b>دەسەڵاتت نییە</b>\nتۆ بۆ تۆمارکردنی دەرچوونی دەوام لە تەلەگرام ڕانەکێشراویت لە سیستەمدا.`, replyKeyboard);
+        return NextResponse.json({ ok: true });
+      }
+
+      const canBypassGps = await hasActionPermission(currentBinding.employeeId, 'quick_checkin_no_gps');
+      if (!canBypassGps) {
+        PENDING_INTENTS[fromId] = 'check_out';
+        const prompt = `📍 <b>تۆمارکردنی دەرچوون لە دەوام:</b>\n\nتکایە دوگمەی <b>[📍 ناردنی لۆکەیشنی دەوام (GPS)]</b> لە خوارەوە دابگرە تاوەکو لۆکەیشنەکەت بنێریت و کاتەکەت تۆمار بکرێت:`;
+        await sendTelegramMessage(chatId, prompt, getLocationRequestKeyboard(false));
         return NextResponse.json({ ok: true });
       }
 
