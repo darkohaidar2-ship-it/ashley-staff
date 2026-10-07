@@ -50,15 +50,15 @@ function ImageControl({
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; 
 }) {
   return (
-    <Card className="border border-slate-200/80 dark:border-white/10 shadow-xs bg-white dark:bg-[#1c1c1e] rounded-2xl overflow-hidden">
-      <CardHeader className="pb-3 border-b border-slate-100 dark:border-white/5">
-        <CardTitle className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center justify-between">
+    <Card className="border border-slate-200/80 shadow-xs bg-white rounded-2xl overflow-hidden">
+      <CardHeader className="pb-3 border-b border-slate-100">
+        <CardTitle className="text-xs sm:text-sm font-bold text-slate-900 flex items-center justify-between">
           <span>{label}</span>
           {value && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pt-3">
-        <div className="relative w-full h-28 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-2 flex items-center justify-center bg-slate-50/50 dark:bg-white/5 overflow-hidden">
+        <div className="relative w-full h-28 border-2 border-dashed border-slate-200 rounded-xl p-2 flex items-center justify-center bg-slate-50/50 overflow-hidden">
           {value ? (
             <Image src={value} alt={label} fill className="object-contain p-1.5" unoptimized />
           ) : (
@@ -70,7 +70,7 @@ function ImageControl({
         </div>
         <div className="space-y-2">
           <div className="space-y-1">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
               <LinkIcon className="w-3 h-3" />
               <span>بەستەری وێنە (URL)</span>
             </div>
@@ -78,11 +78,11 @@ function ImageControl({
               value={value || ''} 
               onChange={e => onValueChange(e.target.value)} 
               placeholder="https://example.com/logo.png"
-              className="h-8 text-xs font-mono rounded-lg bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700"
+              className="h-8 text-xs font-mono rounded-lg bg-slate-50 border-slate-200"
             />
           </div>
           <div className="space-y-1">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
               <Plus className="w-3 h-3" />
               <span>بەرزکردنەوەی فایل (Upload File)</span>
             </div>
@@ -90,7 +90,7 @@ function ImageControl({
               type="file" 
               accept="image/*" 
               onChange={onFileUpload} 
-              className="h-8 text-xs cursor-pointer file:cursor-pointer file:rounded-md file:border-0 file:bg-[#007AFF] file:text-white file:text-[10px] file:font-bold" 
+              className="h-8 text-xs cursor-pointer file:cursor-pointer file:rounded-md file:border-0 file:bg-blue-600 file:text-white file:text-[10px] file:font-bold" 
             />
           </div>
         </div>
@@ -260,33 +260,36 @@ function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 dark:bg-[#121212] text-slate-900 dark:text-white p-4 sm:p-6 lg:p-8 dir-rtl" dir="rtl">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 p-4 sm:p-6 lg:p-8 dir-rtl" dir="rtl">
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* 🏛️ Top Header Banner */}
-        <div className="bg-gradient-to-r from-amber-500/10 via-blue-500/10 to-emerald-500/10 p-6 rounded-3xl border border-amber-500/20 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        {/* Top Header Banner */}
+        <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-700 flex items-center justify-center text-white shadow-md shadow-amber-500/20">
-              <Building2 className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-500/20 flex items-center justify-center shadow-2xs">
+              <Building2 className="w-6 h-6 text-amber-600" />
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+              <h1 className="text-lg sm:text-xl font-black text-slate-900">
                 ناسنامەی فەرمی کۆمپانیا و ڕێکخستنی لۆگۆکان
               </h1>
+              <p className="text-xs text-slate-500 font-medium">
+                ڕێکخستنی زانیارییە بازرگانییەکان، لۆگۆکانی وێبسایت و وەرەقەی فەرمی ڕاپۆرت
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 px-3.5 py-1.5 font-bold text-xs">
-              <Sparkles className="w-3.5 h-3.5 ml-1.5 text-amber-600 dark:text-amber-400" /> 
+            <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200 px-3.5 py-1.5 font-bold text-xs">
+              <Sparkles className="w-3.5 h-3.5 ml-1.5 text-amber-600" /> 
               گروپی دیوان • مۆبیلیاتی ئاشڵی
             </Badge>
           </div>
         </div>
 
-        {/* 🏢 Form 1: Official Corporate Details */}
-        <Card className="border border-slate-200/80 dark:border-white/10 shadow-xs bg-white dark:bg-[#1c1c1e] rounded-3xl overflow-hidden">
-          <CardHeader className="pb-3 border-b border-slate-100 dark:border-white/5">
-            <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+        {/* Form 1: Official Corporate Details */}
+        <Card className="border border-slate-200/90 shadow-xs bg-white rounded-3xl overflow-hidden">
+          <CardHeader className="pb-3 border-b border-slate-100">
+            <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-2 text-slate-900">
               <Building2 className="w-4 h-4 text-amber-500" />
               <span>زانیارییە فەرمییەکان، ناو و کورتەی کۆمپانیاکان</span>
             </CardTitle>
@@ -296,120 +299,120 @@ function SettingsPage() {
               
               {/* Mother Company Name */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                <Label className="text-xs font-bold text-slate-700">
                   ناوی کۆمپانیا (گروپی دیوان)
                 </Label>
                 <Input 
                   value={draftSettings.motherCompanyName || ''}
                   onChange={e => updateSetting('motherCompanyName', e.target.value)}
                   placeholder="کۆمپانیای گروپی دیوان"
-                  className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
+                  className="h-10 text-xs font-bold bg-slate-50 border-slate-200 rounded-xl"
                 />
               </div>
 
               {/* Mother Company Subtitle */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                <Label className="text-xs font-bold text-slate-700">
                   کورتە و ناسناوی کۆمپانیا (Subtitle)
                 </Label>
                 <Input 
                   value={draftSettings.motherCompanySubtitle ?? 'ناسنامەی مۆبیلیات'}
                   onChange={e => updateSetting('motherCompanySubtitle', e.target.value)}
                   placeholder="ناسنامەی مۆبیلیات"
-                  className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
+                  className="h-10 text-xs font-bold bg-slate-50 border-slate-200 rounded-xl"
                 />
               </div>
 
               {/* Agency Title */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                <Label className="text-xs font-bold text-slate-700">
                   ناونیشانی بریکاری سەرەکی (Agency Title)
                 </Label>
                 <Input 
                   value={draftSettings.agencyTitle || ''}
                   onChange={e => updateSetting('agencyTitle', e.target.value)}
                   placeholder="بریکاری سەرەکی مۆبیلیاتی ئاشڵین لە هەموو عێراق"
-                  className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
+                  className="h-10 text-xs font-bold bg-slate-50 border-slate-200 rounded-xl"
                 />
               </div>
 
               {/* Brand Name (Ashley Furniture) */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                <Label className="text-xs font-bold text-slate-700">
                   ناوی براند (مۆبیلیاتی ئاشڵی)
                 </Label>
                 <Input 
                   value={draftSettings.brandName || ''}
                   onChange={e => updateSetting('brandName', e.target.value)}
                   placeholder="کۆمپانیای مۆبیلیاتی ئاشڵی"
-                  className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
+                  className="h-10 text-xs font-bold bg-slate-50 border-slate-200 rounded-xl"
                 />
               </div>
 
               {/* Brand Subtitle */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                <Label className="text-xs font-bold text-slate-700">
                   کورتە و ناسناوی براند (Brand Subtitle)
                 </Label>
                 <Input 
                   value={draftSettings.brandSubtitle || ''}
                   onChange={e => updateSetting('brandSubtitle', e.target.value)}
                   placeholder="Official Document یان بەڵگەنامەی فەرمی"
-                  className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
+                  className="h-10 text-xs font-bold bg-slate-50 border-slate-200 rounded-xl"
                 />
               </div>
 
               {/* Brand Slogan */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                <Label className="text-xs font-bold text-slate-700">
                   دروشم و کورتەی براند (Brand Slogan)
                 </Label>
                 <Input 
                   value={draftSettings.brandSlogan || ''}
                   onChange={e => updateSetting('brandSlogan', e.target.value)}
                   placeholder="Inspire Your Home (ئیلهام بەخشین بە ماڵەکەت)"
-                  className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
+                  className="h-10 text-xs font-bold bg-slate-50 border-slate-200 rounded-xl"
                 />
               </div>
 
               {/* Center Document Title */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                <Label className="text-xs font-bold text-slate-700">
                   تایتڵی فەرمی بابەت لە ناوەڕاست (Document Title)
                 </Label>
                 <Input 
                   value={draftSettings.letterheadDocumentTitle ?? 'خشتەی تۆماری ئامادەبوونی فەرمی'}
                   onChange={e => updateSetting('letterheadDocumentTitle', e.target.value)}
                   placeholder="خشتەی تۆماری ئامادەبوونی فەرمی"
-                  className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
+                  className="h-10 text-xs font-bold bg-slate-50 border-slate-200 rounded-xl"
                 />
               </div>
 
               {/* Center Document Subtitle / Code */}
               <div className="space-y-1.5 md:col-span-2">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                <Label className="text-xs font-bold text-slate-700">
                   ژێرنووسی بابەت یان کۆدی بەڵگەنامە (Subtitle / Code)
                 </Label>
                 <Input 
                   value={draftSettings.letterheadDocumentSubtitle ?? 'کۆمپانیای گروپی دیوان • بریکاری سەرەکی مۆبیلیاتی ئاشڵی'}
                   onChange={e => updateSetting('letterheadDocumentSubtitle', e.target.value)}
                   placeholder="کۆمپانیای گروپی دیوان • بریکاری سەرەکی مۆبیلیاتی ئاشڵی"
-                  className="h-10 text-xs font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
+                  className="h-10 text-xs font-bold bg-slate-50 border-slate-200 rounded-xl"
                 />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* 🎨 Form 1.2: Official Letterhead Colors Customizer */}
-        <Card className="border border-slate-200/80 dark:border-white/10 shadow-xs bg-white dark:bg-[#1c1c1e] rounded-3xl overflow-hidden">
-          <CardHeader className="pb-3 border-b border-slate-100 dark:border-white/5">
+        {/* Form 1.2: Official Letterhead Colors Customizer */}
+        <Card className="border border-slate-200/90 shadow-xs bg-white rounded-3xl overflow-hidden">
+          <CardHeader className="pb-3 border-b border-slate-100">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-2 text-slate-900 dark:text-white">
-                <Palette className="w-4 h-4 text-purple-500" />
+              <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-2 text-slate-900">
+                <Palette className="w-4 h-4 text-purple-600" />
                 <span>دەستکاریکردنی ڕەنگەکانی وەرەقەی فەرمی (Letterhead Colors)</span>
               </CardTitle>
-              <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-600 border-purple-500/30">
+              <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
                 ڕەنگی دەستی
               </Badge>
             </div>
@@ -483,8 +486,8 @@ function SettingsPage() {
             {/* Custom Color Pickers */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
               {/* Primary & Border Color */}
-              <div className="space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200/60 dark:border-white/5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
+              <div className="space-y-1.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                <Label className="text-xs font-bold text-slate-700 flex items-center justify-between">
                   <span>ڕەنگی سەرەکی و هێڵەکان</span>
                   <div className="w-4 h-4 rounded-full border border-slate-300" style={{ backgroundColor: draftSettings.letterheadPrimaryColor || '#0f172a' }} />
                 </Label>
@@ -493,7 +496,7 @@ function SettingsPage() {
                     type="color" 
                     value={draftSettings.letterheadPrimaryColor || '#0f172a'} 
                     onChange={e => updateSetting('letterheadPrimaryColor', e.target.value)}
-                    className="w-9 h-9 rounded-xl border border-slate-300 dark:border-slate-600 cursor-pointer p-0.5 bg-white"
+                    className="w-9 h-9 rounded-xl border border-slate-300 cursor-pointer p-0.5 bg-white"
                   />
                   <Input 
                     value={draftSettings.letterheadPrimaryColor || '#0f172a'}
@@ -504,8 +507,8 @@ function SettingsPage() {
               </div>
 
               {/* Title Color */}
-              <div className="space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200/60 dark:border-white/5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
+              <div className="space-y-1.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                <Label className="text-xs font-bold text-slate-700 flex items-center justify-between">
                   <span>ڕەنگی تایتڵی ناوەڕاست</span>
                   <div className="w-4 h-4 rounded-full border border-slate-300" style={{ backgroundColor: draftSettings.letterheadTitleColor || '#0f172a' }} />
                 </Label>
@@ -514,7 +517,7 @@ function SettingsPage() {
                     type="color" 
                     value={draftSettings.letterheadTitleColor || '#0f172a'} 
                     onChange={e => updateSetting('letterheadTitleColor', e.target.value)}
-                    className="w-9 h-9 rounded-xl border border-slate-300 dark:border-slate-600 cursor-pointer p-0.5 bg-white"
+                    className="w-9 h-9 rounded-xl border border-slate-300 cursor-pointer p-0.5 bg-white"
                   />
                   <Input 
                     value={draftSettings.letterheadTitleColor || '#0f172a'}
@@ -525,8 +528,8 @@ function SettingsPage() {
               </div>
 
               {/* Accent & Subtitle Color */}
-              <div className="space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200/60 dark:border-white/5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
+              <div className="space-y-1.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                <Label className="text-xs font-bold text-slate-700 flex items-center justify-between">
                   <span>ڕەنگی دروشم و کورتەکان (Accent)</span>
                   <div className="w-4 h-4 rounded-full border border-slate-300" style={{ backgroundColor: draftSettings.letterheadAccentColor || '#d97706' }} />
                 </Label>
@@ -535,7 +538,7 @@ function SettingsPage() {
                     type="color" 
                     value={draftSettings.letterheadAccentColor || '#d97706'} 
                     onChange={e => updateSetting('letterheadAccentColor', e.target.value)}
-                    className="w-9 h-9 rounded-xl border border-slate-300 dark:border-slate-600 cursor-pointer p-0.5 bg-white"
+                    className="w-9 h-9 rounded-xl border border-slate-300 cursor-pointer p-0.5 bg-white"
                   />
                   <Input 
                     value={draftSettings.letterheadAccentColor || '#d97706'}
@@ -548,11 +551,11 @@ function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* ⏰ Form 1.5: Official Shift Times & Grace Period */}
-        <Card className="border border-slate-200/80 dark:border-white/10 shadow-xs bg-white dark:bg-[#1c1c1e] rounded-3xl overflow-hidden">
-          <CardHeader className="pb-3 border-b border-slate-100 dark:border-white/5">
-            <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-2 text-slate-900 dark:text-white">
-              <Clock className="w-4 h-4 text-[#007AFF]" />
+        {/* Form 1.5: Official Shift Times & Grace Period */}
+        <Card className="border border-slate-200/90 shadow-xs bg-white rounded-3xl overflow-hidden">
+          <CardHeader className="pb-3 border-b border-slate-100">
+            <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-2 text-slate-900">
+              <Clock className="w-4 h-4 text-blue-600" />
               <span>کاتەکانی دەوامی فەرمی و ماوەی لێخۆشبوون (Official Shift & Attendance Rules)</span>
             </CardTitle>
           </CardHeader>
@@ -561,37 +564,37 @@ function SettingsPage() {
               
               {/* Check-In Time */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 flex items-center justify-between">
                   <span>کاتی دەستپێکی دەوام (هاتن)</span>
-                  <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-[#007AFF] border-blue-500/30">دەستپێک</Badge>
+                  <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">دەستپێک</Badge>
                 </Label>
                 <Input 
                   type="time"
                   value={draftSettings.shiftSettings?.checkInTime || '08:00'}
                   onChange={e => updateShiftSetting('checkInTime', e.target.value)}
-                  className="h-10 text-sm font-mono font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
+                  className="h-10 text-sm font-mono font-bold bg-slate-50 border-slate-200 rounded-xl"
                 />
               </div>
 
               {/* Check-Out Time */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 flex items-center justify-between">
                   <span>کاتی کۆتایی دەوام (ڕۆیشتن)</span>
-                  <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-600 border-purple-500/30">کۆتایی</Badge>
+                  <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">کۆتایی</Badge>
                 </Label>
                 <Input 
                   type="time"
                   value={draftSettings.shiftSettings?.checkOutTime || '17:00'}
                   onChange={e => updateShiftSetting('checkOutTime', e.target.value)}
-                  className="h-10 text-sm font-mono font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
+                  className="h-10 text-sm font-mono font-bold bg-slate-50 border-slate-200 rounded-xl"
                 />
               </div>
 
               {/* Grace Period */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 flex items-center justify-between">
                   <span>ماوەی لێخۆشبوون (خولەک)</span>
-                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30">Grace</Badge>
+                  <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">Grace</Badge>
                 </Label>
                 <Input 
                   type="number"
@@ -599,7 +602,7 @@ function SettingsPage() {
                   max={60}
                   value={draftSettings.shiftSettings?.graceMinutes ?? 15}
                   onChange={e => updateShiftSetting('graceMinutes', parseInt(e.target.value) || 0)}
-                  className="h-10 text-sm font-mono font-bold bg-slate-50 dark:bg-[#2c2c2e] border-slate-200 dark:border-slate-700 rounded-xl"
+                  className="h-10 text-sm font-mono font-bold bg-slate-50 border-slate-200 rounded-xl"
                 />
               </div>
 
@@ -607,29 +610,32 @@ function SettingsPage() {
 
             {/* Quick Rules Summary */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200/60 dark:border-white/5 text-[11px] space-y-1">
-                <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  ☕ کاتی پشووی نیوەڕۆ (12:00 - 13:00)
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-[11px] space-y-1">
+                <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-blue-600" />
+                  <span>کاتی پشووی نیوەڕۆ (12:00 - 13:00)</span>
                 </span>
-                <p className="text-slate-500 dark:text-slate-400 leading-relaxed text-[10px]">
+                <p className="text-slate-500 leading-relaxed text-[10px]">
                   یەک کاتژمێری تەواو بۆ نانخواردن و پشوو بە شێوەی ئۆتۆماتیکی لە کاتژمێرەکانی کار لێدەردەکرێت.
                 </p>
               </div>
 
-              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-[11px] space-y-1">
-                <span className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                  ⚠️ مەرجی تێبینی درەنگکەوتن
+              <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200 text-[11px] space-y-1">
+                <span className="font-bold text-amber-900 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                  <span>مەرجی تێبینی درەنگکەوتن</span>
                 </span>
-                <p className="text-amber-700 dark:text-amber-400 leading-relaxed text-[10px]">
+                <p className="text-amber-800 leading-relaxed text-[10px]">
                   هاتن پاش کاتژمێر 08:15 وەک درەنگکەوتوو (Late) تۆمار دەبێت و پێویستی بە نووسینی هۆکار هەیە لە مۆبایل.
                 </p>
               </div>
 
-              <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] space-y-1">
-                <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                  ⏱️ ئۆڤەرتایم و غائیب
+              <div className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-[11px] space-y-1">
+                <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>ئۆڤەرتایم و غائیب</span>
                 </span>
-                <p className="text-emerald-700 dark:text-emerald-400 leading-relaxed text-[10px]">
+                <p className="text-emerald-800 leading-relaxed text-[10px]">
                   پاش 17:15 وەک کاتی زیادە دادەنرێت. ڕۆژانی ڕابردووش بەبێ دەوام ئۆتۆماتیکی بە &ldquo;غائیب&rdquo; دەنووسرێت لە خشتەدا.
                 </p>
               </div>
@@ -637,16 +643,16 @@ function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* 🖼️ Form 2: 4 Separate Logos */}
+        {/* Form 2: 4 Separate Logos */}
         <div className="space-y-3">
           <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">جیاکردنەوەی لۆگۆکان (Website Logo vs Report Logo)</h3>
+            <h3 className="text-sm font-bold text-slate-900">جیاکردنەوەی لۆگۆکان (Website Logo vs Report Logo)</h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* 1. Website & App Logo */}
             <ImageControl 
-              label="🌐 لۆگۆی وێبسایت و داشبۆرد" 
+              label="لۆگۆی وێبسایت و داشبۆرد" 
               description="ئەم لۆگۆیە لە هێدەری وێبسایت، مینیو، و لاپەڕەی چوونەژوورەوە نیشان دەدرێت." 
               value={draftSettings.websiteLogo || draftSettings.appLogo} 
               onValueChange={v => {
@@ -661,7 +667,7 @@ function SettingsPage() {
 
             {/* 2. Official Report Logo */}
             <ImageControl 
-              label="📄 لۆگۆی ڕاپۆرتە فەرمییەکان" 
+              label="لۆگۆی ڕاپۆرتە فەرمییەکان" 
               description="ئەم لۆگۆیە لەسەر وەرەقەی فەرمی، خشتەی ئامادەبوونی چاپکراو، و فایلی PDF نیشان دەدرێت." 
               value={draftSettings.reportLogo || draftSettings.ashleyLogo || draftSettings.appLogo} 
               onValueChange={v => updateSetting('reportLogo', v)}
@@ -670,7 +676,7 @@ function SettingsPage() {
 
             {/* 3. Diwan Group Logo */}
             <ImageControl 
-              label="🏛️ لۆگۆی گروپی دیوان (کۆمپانیای دایک)" 
+              label="لۆگۆی گروپی دیوان (کۆمپانیای دایک)" 
               description="لۆگۆی فەرمی کۆمپانیای دایک بۆ دانان لە هێدەری ڕاپۆرتەکان شانبەشانی ئاشڵی." 
               value={draftSettings.diwanLogo || null} 
               onValueChange={v => updateSetting('diwanLogo', v)}
@@ -679,7 +685,7 @@ function SettingsPage() {
 
             {/* 4. Ashley Furniture Logo */}
             <ImageControl 
-              label="🛋️ لۆگۆی مۆبیلیاتی ئاشڵی" 
+              label="لۆگۆی مۆبیلیاتی ئاشڵی" 
               description="لۆگۆی تایبەت بە براندی نێودەوڵەتی مۆبیلیاتی ئاشڵی." 
               value={draftSettings.ashleyLogo || draftSettings.appLogo} 
               onValueChange={v => updateSetting('ashleyLogo', v)}
@@ -688,31 +694,31 @@ function SettingsPage() {
           </div>
         </div>
 
-        {/* 👁️ Live Interactive Dual-Preview */}
+        {/* Live Interactive Dual-Preview */}
         <div className="space-y-3 pt-2">
-          <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+          <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-amber-500" />
             <span>پێشبینی ڕاستەوخۆ: جیاوازی نێوان وێبسایت و ڕاپۆرتی چاپکراو (Live Dual Preview)</span>
           </h3>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Preview 1: Website Header */}
-            <Card className="border border-slate-200/80 dark:border-white/10 shadow-xs bg-white dark:bg-[#1c1c1e] rounded-2xl overflow-hidden">
-              <CardHeader className="bg-slate-50 dark:bg-white/5 py-3 px-4 border-b border-slate-100 dark:border-white/5">
+            <Card className="border border-slate-200/90 shadow-xs bg-white rounded-2xl overflow-hidden">
+              <CardHeader className="bg-slate-50 py-3 px-4 border-b border-slate-100">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Globe className="w-4 h-4 text-blue-500" />
-                    <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">پێشبینی هێدەری وێبسایت و داشبۆرد</CardTitle>
+                    <CardTitle className="text-xs font-bold text-slate-900">پێشبینی هێدەری وێبسایت و داشبۆرد</CardTitle>
                   </div>
-                  <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-600 border-blue-500/20">
+                  <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
                     وێبسایت (Web UI)
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent className="p-4">
-                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-[#2c2c2e] p-3 flex items-center justify-between">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="relative w-28 h-10 bg-white dark:bg-black/20 rounded-lg p-1 flex items-center justify-center overflow-hidden border border-slate-200/50 dark:border-white/5">
+                    <div className="relative w-28 h-10 bg-white rounded-lg p-1 flex items-center justify-center overflow-hidden border border-slate-200/50">
                       <Image 
                         src={draftSettings.websiteLogo || draftSettings.appLogo || '/ashley-logo.png'} 
                         alt="Website Logo Preview" 
@@ -721,16 +727,16 @@ function SettingsPage() {
                         unoptimized 
                       />
                     </div>
-                    <div className="border-r border-slate-200 dark:border-slate-700 pr-3">
-                      <div className="text-xs font-black text-slate-900 dark:text-white">
+                    <div className="border-r border-slate-200 pr-3">
+                      <div className="text-xs font-black text-slate-900">
                         {draftSettings.motherCompanyName || 'کۆمپانیای گروپی دیوان'}
                       </div>
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                      <div className="text-[10px] text-slate-500 font-medium">
                         {draftSettings.motherCompanySubtitle || 'ناسنامەی مۆبیلیات'} • {draftSettings.agencyTitle || 'بریکاری سەرەکی مۆبیلیاتی ئاشڵین لە هەموو عێراق'}
                       </div>
                     </div>
                   </div>
-                  <div className="text-[9px] font-mono text-slate-500 bg-white dark:bg-white/10 px-2 py-1 rounded-md border border-slate-200/60 dark:border-white/5">
+                  <div className="text-[9px] font-mono text-slate-500 bg-white px-2 py-1 rounded-md border border-slate-200/60">
                     {draftSettings.shiftSettings?.checkInTime || '08:00'} - {draftSettings.shiftSettings?.checkOutTime || '17:00'}
                   </div>
                 </div>
@@ -738,14 +744,14 @@ function SettingsPage() {
             </Card>
 
             {/* Preview 2: Official Printable Letterhead */}
-            <Card className="border border-slate-200/80 dark:border-white/10 shadow-xs bg-white dark:bg-[#1c1c1e] rounded-2xl overflow-hidden">
-              <CardHeader className="bg-slate-50 dark:bg-white/5 py-3 px-4 border-b border-slate-100 dark:border-white/5">
+            <Card className="border border-slate-200/90 shadow-xs bg-white rounded-2xl overflow-hidden">
+              <CardHeader className="bg-slate-50 py-3 px-4 border-b border-slate-100">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Printer className="w-4 h-4 text-emerald-500" />
-                    <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">پێشبینی وەرەقەی فەرمی ڕاپۆرت و چاپ (Letterhead)</CardTitle>
+                    <CardTitle className="text-xs font-bold text-slate-900">پێشبینی وەرەقەی فەرمی ڕاپۆرت و چاپ (Letterhead)</CardTitle>
                   </div>
-                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                  <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
                     چاپ و PDF (Print Letterhead)
                   </Badge>
                 </div>
@@ -832,7 +838,7 @@ function SettingsPage() {
                   >
                     <div className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: draftSettings.letterheadAccentColor || '#d97706' }} />
-                      <span>📋 ڕوونکردنەوەی خشتە: تۆماری فەرمی ئامادەبوونی ۳۱ ڕۆژەیی • دەوامی 08:00 هاتن - 17:00 دەرچوون</span>
+                      <span>ڕوونکردنەوەی خشتە: تۆماری فەرمی ئامادەبوونی ۳۱ ڕۆژەیی • دەوامی 08:00 هاتن - 17:00 دەرچوون</span>
                     </div>
                     <span className="font-mono text-[8.5px] opacity-80">کۆدی فەرمی: ASH-DGP-2026</span>
                   </div>
@@ -861,12 +867,12 @@ function SettingsPage() {
           </div>
         </div>
 
-        {/* 💾 Actions Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-200/80 dark:border-white/10">
+        {/* Actions Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-200/80">
           <button
             type="button"
             onClick={handleResetDefaults}
-            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 flex items-center gap-2 transition-all cursor-pointer"
+            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 flex items-center gap-2 transition-all cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>گەڕانەوە بۆ پێشگریمانە (Defaults)</span>
@@ -876,12 +882,12 @@ function SettingsPage() {
             type="button"
             disabled={isSaving}
             onClick={handleSaveChanges}
-            className={`px-6 py-2.5 rounded-xl text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer ${
+            className={`px-6 py-2.5 rounded-xl text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-xs transition-all active:scale-95 cursor-pointer ${
               isSaved 
                 ? 'bg-emerald-600' 
                 : isSaving 
                   ? 'bg-blue-400 cursor-wait' 
-                  : 'bg-[#007AFF] hover:bg-[#0062cc]'
+                  : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
             {isSaved ? (

@@ -53,6 +53,7 @@ import {
   Zap,
   Receipt,
   Wallet,
+  BellOff,
 } from 'lucide-react';
 import { TelegramBotSimulatorModal } from '@/components/admin/TelegramBotSimulatorModal';
 
@@ -330,23 +331,23 @@ export default function NotificationRoutingMatrix() {
   };
 
   return (
-    <div className={`flex flex-col bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-white/10 overflow-hidden shadow-xl transition-all duration-300 ${isFullscreen ? 'fixed inset-0 z-50 rounded-none' : 'w-full'}`} dir="rtl">
+    <div className={`flex flex-col bg-[#f8fafc] rounded-2xl border border-slate-200 overflow-hidden shadow-sm transition-all duration-300 ${isFullscreen ? 'fixed inset-0 z-50 rounded-none' : 'w-full'}`} dir="rtl">
       
       {/* 1. TOP HEADER & TOOLBAR */}
-      <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/10 p-4 sm:px-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-white/95 backdrop-blur-md border-b border-slate-200 p-4 sm:px-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-500 flex items-center justify-center shadow-md shadow-indigo-500/20 text-white">
               <ArrowRightLeft className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-                ماتریسی دەسەڵات و دوگمەکانی تەلەگرام
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-bold">
+              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                <span>ماتریسی دەسەڵات و دوگمەکانی تەلەگرام</span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold">
                   سیستەمی نوێی ٢ ستوون
                 </span>
               </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 کارمەندان ڕابکێشە بۆ سەر هەر ئەرکێک تاوەکو ڕاستەوخۆ لە بۆتی تەلەگرام ئەو دوگمەیە ببینن.
               </p>
             </div>
@@ -362,14 +363,14 @@ export default function NotificationRoutingMatrix() {
             title="تاقیکردنەوەی ڕاستەوخۆی بۆتی تەلەگرام لەناو وێبسایتەکە"
           >
             <Bot className="w-4 h-4 text-sky-200" />
-            <span>🤖 تێست بۆت (Simulator)</span>
+            <span>تێست بۆت (Simulator)</span>
           </button>
 
           {/* Refresh Button */}
           <button
             onClick={() => loadConfig(true)}
             disabled={loading}
-            className="p-2 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-white/10 transition-all shadow-xs"
+            className="p-2 text-xs font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-all shadow-xs"
             title="نوێکردنەوە لە سوپابەیس"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-500' : ''}`} />
@@ -378,7 +379,7 @@ export default function NotificationRoutingMatrix() {
           {/* Reset Defaults Button */}
           <button
             onClick={handleResetToDefaults}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 border border-rose-200 dark:border-rose-900/50 transition-all shadow-xs"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition-all shadow-xs"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span>باری سەرەتایی</span>
@@ -403,7 +404,7 @@ export default function NotificationRoutingMatrix() {
           {/* Fullscreen Toggle */}
           <button
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className="p-2 rounded-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 transition-all"
+            className="p-2 rounded-xl text-slate-500 hover:text-slate-700 bg-slate-100 border border-slate-200 transition-all"
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
@@ -412,9 +413,9 @@ export default function NotificationRoutingMatrix() {
 
       {/* Success banner */}
       {saveSuccess && (
-        <div className="bg-emerald-50 dark:bg-emerald-950/80 border-b border-emerald-200 dark:border-emerald-800/80 px-6 py-2.5 flex items-center justify-between animate-in fade-in">
-          <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 dark:text-emerald-200">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+        <div className="bg-emerald-50 border-b border-emerald-200 px-6 py-2.5 flex items-center justify-between animate-in fade-in">
+          <div className="flex items-center gap-2 text-xs font-bold text-emerald-800">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             <span>دەسەڵاتە نوێیەکان لە سوپابەیس پاشەکەوت کران و ڕاستەوخۆ بەسەر بۆتی تەلەگرامدا جێبەجێ کران.</span>
           </div>
           <span className="text-[10px] text-emerald-600 font-mono">Live In Sync</span>
@@ -432,14 +433,14 @@ export default function NotificationRoutingMatrix() {
           {/* Column Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-              <h3 className="text-base font-black text-slate-900 dark:text-white">
+              <Users className="w-5 h-5 text-indigo-600" />
+              <h3 className="text-base font-black text-slate-900">
                 کارمەندان ({filteredEmployees.length} لە ٢١)
               </h3>
             </div>
             <span className="text-xs text-slate-500">
               {selectedEmployeeIds.length > 0 ? (
-                <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                <span className="font-bold text-indigo-600">
                   {selectedEmployeeIds.length} کارمەند هەڵبژێردراوە
                 </span>
               ) : (
@@ -449,7 +450,7 @@ export default function NotificationRoutingMatrix() {
           </div>
 
           {/* Department Filter Tabs */}
-          <div className="flex flex-wrap gap-1.5 p-1 bg-slate-200/70 dark:bg-slate-800/60 rounded-xl">
+          <div className="flex flex-wrap gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200/60">
             {[
               { id: 'all', label: 'هەمووان' },
               { id: 'admin', label: 'ئیدارە' },
@@ -462,8 +463,8 @@ export default function NotificationRoutingMatrix() {
                 onClick={() => setDepartmentFilter(tab.id as any)}
                 className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
                   departmentFilter === tab.id
-                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    ? 'bg-white text-indigo-600 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 {tab.label}
@@ -479,7 +480,7 @@ export default function NotificationRoutingMatrix() {
               value={employeeSearch}
               onChange={(e) => setEmployeeSearch(e.target.value)}
               placeholder="گەڕان بەپێی ناوی کارمەند، کۆد، مۆبایل..."
-              className="w-full pl-8 pr-9 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full pl-8 pr-9 py-2 text-xs rounded-xl bg-white border border-slate-200/90 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 shadow-2xs"
             />
             {employeeSearch && (
               <button 
@@ -492,8 +493,8 @@ export default function NotificationRoutingMatrix() {
           </div>
 
           {/* Multi-Selection Control Bar */}
-          <div className="p-2.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 flex flex-wrap items-center justify-between gap-2">
-            <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+          <div className="p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-100 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+            <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700">
               <input
                 type="checkbox"
                 checked={selectedEmployeeIds.length > 0 && selectedEmployeeIds.length === filteredEmployees.length}
@@ -508,7 +509,7 @@ export default function NotificationRoutingMatrix() {
                 <select
                   value={batchTargetTask}
                   onChange={(e) => setBatchTargetTask(e.target.value)}
-                  className="px-2 py-1 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 font-bold"
+                  className="px-2 py-1 text-xs rounded-lg bg-white border border-slate-200 font-bold text-slate-800 shadow-2xs"
                 >
                   {WORKFLOW_ACTIONS.map(act => (
                     <option key={act.id} value={act.id}>{act.title}</option>
@@ -519,7 +520,7 @@ export default function NotificationRoutingMatrix() {
                     assignEmployeesToTask(batchTargetTask, selectedEmployeeIds);
                     setSelectedEmployeeIds([]);
                   }}
-                  className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs"
+                  className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs transition-all active:scale-95"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>زیادکردن ({selectedEmployeeIds.length})</span>
@@ -544,8 +545,8 @@ export default function NotificationRoutingMatrix() {
                   onClick={() => toggleEmployeeSelect(emp.id)}
                   className={`p-3 rounded-xl border transition-all cursor-grab active:cursor-grabbing flex items-center justify-between gap-3 select-none ${
                     isSelected
-                      ? 'bg-indigo-50/90 dark:bg-indigo-950/70 border-indigo-400 dark:border-indigo-600 shadow-md ring-1 ring-indigo-500'
-                      : 'bg-white dark:bg-slate-900/90 border-slate-200/80 dark:border-white/5 hover:border-indigo-300 dark:hover:border-indigo-800 shadow-xs'
+                      ? 'bg-indigo-50/90 border-indigo-400 shadow-sm ring-1 ring-indigo-500'
+                      : 'bg-white border-slate-200/90 hover:border-indigo-300 shadow-2xs'
                   }`}
                 >
                   {/* Left: Checkbox + Grip + Avatar + Info */}
@@ -563,7 +564,7 @@ export default function NotificationRoutingMatrix() {
                     <GripVertical className="w-4 h-4 text-slate-400 hover:text-slate-600 shrink-0" />
 
                     {/* Avatar */}
-                    <div className="w-9 h-9 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0 flex items-center justify-center font-bold text-xs text-indigo-600">
+                    <div className="w-9 h-9 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0 flex items-center justify-center font-bold text-xs text-indigo-600 shadow-2xs">
                       {emp.photoUrl ? (
                         <img 
                           src={emp.photoUrl} 
@@ -579,7 +580,7 @@ export default function NotificationRoutingMatrix() {
                     </div>
 
                     <div>
-                      <div className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <div className="text-xs font-black text-slate-900 flex items-center gap-1.5">
                         <span>{emp.name}</span>
                         <span className="text-[10px] text-slate-400 font-mono">({emp.employeeId})</span>
                       </div>
@@ -604,8 +605,8 @@ export default function NotificationRoutingMatrix() {
                   <div className="shrink-0 text-left">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                       taskCount > 0 
-                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-white/10'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
+                        : 'bg-slate-100 text-slate-500 border-slate-200'
                     }`}>
                       {taskCount} ئەرک
                     </span>
@@ -620,8 +621,8 @@ export default function NotificationRoutingMatrix() {
         {/* CENTER DIVIDER LINE (هێڵی لە نێوان دا بێت)                 */}
         {/* ========================================================= */}
         <div className="hidden lg:flex lg:col-span-1 items-center justify-center relative">
-          <div className="h-full w-px bg-gradient-to-b from-transparent via-indigo-300 dark:via-indigo-500/50 to-transparent relative">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-2.5 rounded-full bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 shadow-md text-indigo-600 dark:text-indigo-400 z-10 flex items-center justify-center">
+          <div className="h-full w-px bg-gradient-to-b from-transparent via-indigo-300 to-transparent relative">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-2.5 rounded-full bg-white border border-indigo-200 shadow-xs text-indigo-600 z-10 flex items-center justify-center">
               <ArrowRightLeft className="w-4 h-4" />
             </div>
           </div>
@@ -635,8 +636,8 @@ export default function NotificationRoutingMatrix() {
           {/* Column Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-              <h3 className="text-base font-black text-slate-900 dark:text-white">
+              <Sparkles className="w-5 h-5 text-indigo-600" />
+              <h3 className="text-base font-black text-slate-900">
                 ئەرکەکان و دوگمەکانی تەلەگرام ({filteredTasks.length})
               </h3>
             </div>
@@ -659,7 +660,7 @@ export default function NotificationRoutingMatrix() {
               value={taskSearch}
               onChange={(e) => setTaskSearch(e.target.value)}
               placeholder="گەڕان لەناو ئەرک و دوگمەکانی تەلەگرام..."
-              className="w-full pl-8 pr-9 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full pl-8 pr-9 py-2 text-xs rounded-xl bg-white border border-slate-200/90 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 shadow-2xs"
             />
           </div>
 
@@ -669,8 +670,8 @@ export default function NotificationRoutingMatrix() {
               onClick={() => setTaskCategoryFilter('all')}
               className={`px-3 py-1 rounded-lg font-bold transition-all shrink-0 ${
                 taskCategoryFilter === 'all'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:border-indigo-300'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'bg-white text-slate-600 border border-slate-200/80 hover:border-indigo-300'
               }`}
             >
               هەموو دوگمەکان ({WORKFLOW_ACTIONS.length})
@@ -679,31 +680,31 @@ export default function NotificationRoutingMatrix() {
               onClick={() => setTaskCategoryFilter('attendance')}
               className={`px-3 py-1 rounded-lg font-bold transition-all shrink-0 ${
                 taskCategoryFilter === 'attendance'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:border-emerald-300'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'bg-white text-slate-600 border border-slate-200/80 hover:border-emerald-300'
               }`}
             >
-              🟢 دەوام و دۆخ (٥)
+              دەوام و دۆخ (٥)
             </button>
             <button
               onClick={() => setTaskCategoryFilter('leave')}
               className={`px-3 py-1 rounded-lg font-bold transition-all shrink-0 ${
                 taskCategoryFilter === 'leave'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:border-blue-300'
+                  ? 'bg-blue-600 text-white shadow-2xs'
+                  : 'bg-white text-slate-600 border border-slate-200/80 hover:border-blue-300'
               }`}
             >
-              🏖️ مۆڵەت و پشوو (٤)
+              مۆڵەت و پشوو (٤)
             </button>
             <button
               onClick={() => setTaskCategoryFilter('admin')}
               className={`px-3 py-1 rounded-lg font-bold transition-all shrink-0 ${
                 taskCategoryFilter === 'admin'
-                  ? 'bg-purple-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:border-purple-300'
+                  ? 'bg-purple-600 text-white shadow-2xs'
+                  : 'bg-white text-slate-600 border border-slate-200/80 hover:border-purple-300'
               }`}
             >
-              👑 ئیدارە و کۆگا (٧)
+              ئیدارە و کۆگا (٧)
             </button>
           </div>
 
@@ -726,32 +727,32 @@ export default function NotificationRoutingMatrix() {
                   onDrop={(e) => handleDropOnTask(task.id, e)}
                   className={`p-4 rounded-2xl border transition-all duration-200 relative ${
                     isDragOver
-                      ? 'bg-indigo-50/90 dark:bg-indigo-950/80 border-indigo-500 ring-2 ring-indigo-500 shadow-lg scale-[1.01]'
-                      : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 shadow-xs'
+                      ? 'bg-indigo-50/90 border-indigo-500 ring-2 ring-indigo-500 shadow-md scale-[1.01]'
+                      : 'bg-white border-slate-200/90 hover:border-slate-300 shadow-2xs'
                   }`}
                 >
                   {/* Task Card Header */}
                   <div className="flex items-start justify-between gap-3 mb-2.5">
                     <div className="flex items-start gap-3">
                       <div 
-                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-xs text-white"
+                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs text-white"
                         style={{ backgroundColor: task.color || '#007AFF' }}
                       >
                         <IconComp className="w-5 h-5" />
                       </div>
 
                       <div>
-                        <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
                           {task.title}
                         </h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
                           {task.description}
                         </p>
 
                         {/* Telegram Button Badge */}
                         <div className="flex items-center gap-1.5 mt-1.5">
                           <span className="text-[10px] text-slate-400">دوگمەی تەلەگرام:</span>
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-slate-200 dark:border-white/10 flex items-center gap-1">
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 text-indigo-700 border border-slate-200 flex items-center gap-1">
                             <Send className="w-2.5 h-2.5 text-indigo-500" />
                             {buttonText}
                           </span>
@@ -763,18 +764,25 @@ export default function NotificationRoutingMatrix() {
                     <div className="shrink-0 text-left">
                       <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
                         assignedEmpIds.length > 0
-                          ? 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
-                          : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900/50'
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200/80'
+                          : 'bg-rose-50 text-rose-700 border-rose-200/80 flex items-center gap-1'
                       }`}>
-                        {assignedEmpIds.length > 0 ? `${assignedEmpIds.length} کارمەند دەیبینن` : '🔕 لە کەس دەرناکەوێت'}
+                        {assignedEmpIds.length > 0 ? (
+                          `${assignedEmpIds.length} کارمەند دەیبینن`
+                        ) : (
+                          <>
+                            <BellOff className="w-3 h-3 text-rose-500" />
+                            <span>لە کەس دەرناکەوێت</span>
+                          </>
+                        )}
                       </span>
                     </div>
                   </div>
 
                   {/* Drop Zone / Assigned Employees Container */}
-                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/5">
+                  <div className="mt-3 pt-3 border-t border-slate-100">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                      <span className="text-xs font-bold text-slate-600">
                         کارمەندە ڕێپێدراوەکان بۆ ئەم ئەرکە:
                       </span>
 
@@ -783,7 +791,7 @@ export default function NotificationRoutingMatrix() {
                         {selectedEmployeeIds.length > 0 && (
                           <button
                             onClick={() => assignEmployeesToTask(task.id, selectedEmployeeIds)}
-                            className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs"
+                            className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-2xs active:scale-95 transition-all"
                           >
                             <Plus className="w-3 h-3" />
                             <span>زیادکردنی ({selectedEmployeeIds.length}) هەڵبژێردراو</span>
@@ -791,14 +799,14 @@ export default function NotificationRoutingMatrix() {
                         )}
                         <button
                           onClick={() => assignAllToTask(task.id)}
-                          className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 transition-colors"
+                          className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 transition-colors"
                         >
                           + هەمووان
                         </button>
                         {assignedEmpIds.length > 0 && (
                           <button
                             onClick={() => clearTask(task.id)}
-                            className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 text-rose-600 dark:text-rose-400 transition-colors"
+                            className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors"
                           >
                             سڕینەوەی هەموو
                           </button>
@@ -808,8 +816,9 @@ export default function NotificationRoutingMatrix() {
 
                     {/* Chips list of assigned employees */}
                     {assignedEmpIds.length === 0 ? (
-                      <div className="p-3 rounded-xl border border-dashed border-slate-200 dark:border-white/10 text-center text-xs text-slate-400 dark:text-slate-500">
-                        🔕 هیچ کارمەندێک بۆ ئەم ئەرکە دیاری نەکراوە — ئەم دوگمەیە لە تەلەگرامی هیچ کەسێکدا دەرناکەوێت.
+                      <div className="p-3 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                        <BellOff className="w-4 h-4 text-slate-400" />
+                        <span>هیچ کارمەندێک بۆ ئەم ئەرکە دیاری نەکراوە — ئەم دوگمەیە لە تەلەگرامی هیچ کەسێکدا دەرناکەوێت.</span>
                       </div>
                     ) : (
                       <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1">
@@ -822,9 +831,9 @@ export default function NotificationRoutingMatrix() {
                           return (
                             <div
                               key={empId}
-                              className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-800 dark:text-slate-200 shadow-2xs group"
+                              className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-lg bg-slate-100 border border-slate-200/80 text-xs font-bold text-slate-800 shadow-2xs group"
                             >
-                              <div className="w-4 h-4 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0 text-[8px] flex items-center justify-center font-mono">
+                              <div className="w-4 h-4 rounded-full overflow-hidden bg-slate-200 shrink-0 text-[8px] flex items-center justify-center font-mono">
                                 {emp?.photoUrl ? (
                                   <img 
                                     src={emp.photoUrl} 
@@ -851,7 +860,7 @@ export default function NotificationRoutingMatrix() {
                                   e.stopPropagation();
                                   removeEmployeeFromTask(task.id, empId);
                                 }}
-                                className="w-3.5 h-3.5 rounded-full hover:bg-rose-200 dark:hover:bg-rose-900/60 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors mr-0.5"
+                                className="w-3.5 h-3.5 rounded-full hover:bg-rose-200 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors mr-0.5 cursor-pointer"
                                 title="لابردن لەم ئەرکە"
                               >
                                 <X className="w-2.5 h-2.5" />

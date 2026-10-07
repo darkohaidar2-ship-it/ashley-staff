@@ -909,14 +909,14 @@ export function AdminDailyAttendanceTable({
     <div className="space-y-4 font-sans select-none" dir="rtl">
       
       {/* 🍏 Apple iOS Glassmorphic Top Controls Bar */}
-      <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[24px] p-4 sm:p-5 shadow-xs flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-white/80 backdrop-blur-xl border border-slate-200/80 rounded-[24px] p-4 sm:p-5 shadow-xs flex flex-wrap items-center justify-between gap-3">
         
         {/* Date Navigator - Apple Segmented Pill */}
-        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-[#3a3a3c] p-1 rounded-full border border-slate-200/60 dark:border-white/5">
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-full border border-slate-200/60">
           <button
             type="button"
             onClick={handlePrevDay}
-            className="w-8 h-8 rounded-full hover:bg-white dark:hover:bg-white/10 text-slate-700 dark:text-white flex items-center justify-center transition-all cursor-pointer active:scale-95"
+            className="w-8 h-8 rounded-full hover:bg-white text-slate-700 flex items-center justify-center transition-all cursor-pointer active:scale-95"
             title="ڕۆژی پێشوو"
           >
             <ChevronRight className="w-4 h-4" />
@@ -928,9 +928,9 @@ export function AdminDailyAttendanceTable({
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-transparent text-slate-900 dark:text-white font-mono font-bold text-xs focus:outline-none cursor-pointer"
+              className="bg-transparent text-slate-900 font-mono font-bold text-xs focus:outline-none cursor-pointer"
             />
-            <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/25">
+            <span className="text-[11px] font-bold text-amber-800 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/25">
               {dayName}
             </span>
           </div>
@@ -938,7 +938,7 @@ export function AdminDailyAttendanceTable({
           <button
             type="button"
             onClick={handleNextDay}
-            className="w-8 h-8 rounded-full hover:bg-white dark:hover:bg-white/10 text-slate-700 dark:text-white flex items-center justify-center transition-all cursor-pointer active:scale-95"
+            className="w-8 h-8 rounded-full hover:bg-white text-slate-700 flex items-center justify-center transition-all cursor-pointer active:scale-95"
             title="ڕۆژی دواتر"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -947,7 +947,7 @@ export function AdminDailyAttendanceTable({
           <button
             type="button"
             onClick={handleToday}
-            className="text-xs font-bold px-3 py-1.5 bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white rounded-full shadow-xs hover:bg-slate-50 transition-all cursor-pointer active:scale-95 border border-slate-200/60 dark:border-white/10"
+            className="text-xs font-bold px-3 py-1.5 bg-white text-slate-900 rounded-full shadow-xs hover:bg-slate-50 transition-all cursor-pointer active:scale-95 border border-slate-200/60"
           >
             ئەمڕۆ
           </button>
@@ -963,7 +963,7 @@ export function AdminDailyAttendanceTable({
               fetchDailyExcursions(selectedDate);
               setShowExcursionReportModal(true);
             }}
-            className="px-3.5 py-2 rounded-full bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 text-xs font-bold border border-amber-300/60 dark:border-amber-700/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+            className="px-3.5 py-2 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold border border-amber-300/60 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
             title="بینینی لیستی دەرچوونی کاتی کارمەندان"
           >
             <Clock className="w-3.5 h-3.5 text-amber-600" />
@@ -1003,7 +1003,7 @@ export function AdminDailyAttendanceTable({
           <button
             type="button"
             onClick={handleExportDayCSV}
-            className="h-8 w-8 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-700/40 flex items-center justify-center cursor-pointer transition-all active:scale-90 shadow-2xs"
+            className="h-8 w-8 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300/60 flex items-center justify-center cursor-pointer transition-all active:scale-90 shadow-2xs"
             title="داگرتنی خشتەی ئەمڕۆ"
             aria-label="خشتەی ڕۆژ"
           >
@@ -1014,11 +1014,11 @@ export function AdminDailyAttendanceTable({
           <button
             type="button"
             onClick={handleExportMonthCSV}
-            className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white flex items-center justify-center cursor-pointer transition-all active:scale-90 border border-slate-200/80 dark:border-white/10 shadow-2xs"
+            className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center justify-center cursor-pointer transition-all active:scale-90 border border-slate-200/80 shadow-2xs"
             title="داگرتنی خشتەی تەواوی مانگ"
             aria-label="خشتەی مانگ"
           >
-            <FileSpreadsheet className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+            <FileSpreadsheet className="w-4 h-4 text-slate-600" />
           </button>
 
         </div>
@@ -1027,50 +1027,50 @@ export function AdminDailyAttendanceTable({
 
       {/* 📊 Apple Style Daily Summary KPI Cards Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
+        <div className="bg-white/80 backdrop-blur-xl border border-slate-200/80 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
           <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">کۆی کارمەندانی چالاک</div>
-            <div className="text-lg font-black text-slate-900 dark:text-white font-mono mt-0.5">
+            <div className="text-xs text-slate-500 font-bold">کۆی کارمەندانی چالاک</div>
+            <div className="text-lg font-black text-slate-900 font-mono mt-0.5">
               {currentDayData.summary.totalEmployees} <span className="text-xs text-slate-400 font-medium">کەس</span>
             </div>
           </div>
-          <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-[#007AFF] dark:text-blue-400 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-2xl bg-blue-50 text-[#007AFF] flex items-center justify-center">
             <Users className="w-5 h-5" />
           </div>
         </div>
 
-        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
+        <div className="bg-white/80 backdrop-blur-xl border border-slate-200/80 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
           <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">ئامادەبووانی ئەم ڕۆژە</div>
-            <div className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
+            <div className="text-xs text-slate-500 font-bold">ئامادەبووانی ئەم ڕۆژە</div>
+            <div className="text-lg font-black text-emerald-600 font-mono mt-0.5">
               {currentDayData.summary.presentCount} <span className="text-xs text-slate-400 font-medium">کەس</span>
             </div>
           </div>
-          <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
             <CheckCircle2 className="w-5 h-5" />
           </div>
         </div>
 
-        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
+        <div className="bg-white/80 backdrop-blur-xl border border-slate-200/80 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
           <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">دواکەوتوو (دوای 08:15)</div>
-            <div className="text-lg font-black text-amber-600 dark:text-amber-400 font-mono mt-0.5">
+            <div className="text-xs text-slate-500 font-bold">دواکەوتوو (دوای 08:15)</div>
+            <div className="text-lg font-black text-amber-600 font-mono mt-0.5">
               {currentDayData.summary.lateCount} <span className="text-xs text-slate-400 font-medium">کەس</span>
             </div>
           </div>
-          <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
             <AlertTriangle className="w-5 h-5" />
           </div>
         </div>
 
-        <div className="bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
+        <div className="bg-white/80 backdrop-blur-xl border border-slate-200/80 rounded-[22px] p-3.5 flex items-center justify-between shadow-xs">
           <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">خاوەن ئیزافە</div>
-            <div className="text-lg font-black text-purple-600 dark:text-purple-400 font-mono mt-0.5">
+            <div className="text-xs text-slate-500 font-bold">خاوەن ئیزافە</div>
+            <div className="text-lg font-black text-purple-600 font-mono mt-0.5">
               {currentDayData.summary.overtimeCount} <span className="text-xs text-purple-500 font-medium">({currentDayData.summary.totalOvertimeHours} ک)</span>
             </div>
           </div>
-          <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
             <Sparkles className="w-5 h-5" />
           </div>
         </div>
@@ -1084,7 +1084,7 @@ export function AdminDailyAttendanceTable({
           placeholder="گەڕان بەدوای ناوی کارمەند، پۆست، تێبینی کارمەند، یان تێبینی ئەدمین..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-3 pr-10 py-2.5 rounded-2xl bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border border-slate-200/80 dark:border-white/5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-[#007AFF] placeholder-slate-400 shadow-xs"
+          className="w-full pl-3 pr-10 py-2.5 rounded-2xl bg-white/80 backdrop-blur-xl border border-slate-200/80 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#007AFF] placeholder-slate-400 shadow-xs"
         />
         {searchTerm && (
           <button onClick={() => setSearchTerm('')} className="absolute left-3 top-2.5 text-xs text-slate-400 hover:text-slate-700 p-1">
@@ -1094,24 +1094,24 @@ export function AdminDailyAttendanceTable({
       </div>
 
       {/* 📋 🍏 Apple iOS Master Daily Attendance Table */}
-      <div className="w-full overflow-x-auto border border-slate-200/80 dark:border-white/5 rounded-[24px] shadow-xs bg-white dark:bg-[#2c2c2e] overflow-hidden">
+      <div className="w-full overflow-x-auto border border-slate-200/80 rounded-[24px] shadow-xs bg-white overflow-hidden">
         <table className="w-full text-xs text-right border-collapse">
-          <thead className="bg-slate-50/90 dark:bg-[#2c2c2e]/90 backdrop-blur-md border-b border-slate-200 dark:border-white/10">
-            <tr className="text-slate-800 dark:text-slate-200 font-bold border-b-2 border-slate-300 dark:border-slate-700">
-              <th className="p-3 text-center w-10 border-l border-slate-300 dark:border-slate-700">#</th>
-              <th className="p-3 w-44 border-l border-slate-300 dark:border-slate-700">ناوی کارمەند</th>
-              <th className="p-3 w-32 border-l border-slate-300 dark:border-slate-700">پۆست / ئەرک</th>
-              <th className="p-3 text-center w-28 border-l border-slate-300 dark:border-slate-700">📥 کاتی هاتن</th>
-              <th className="p-3 w-40 border-l border-slate-300 dark:border-slate-700">💬 تێبینی کارمەند (هاتن)</th>
-              <th className="p-3 text-center w-28 border-l border-slate-300 dark:border-slate-700">📤 کاتی چوون</th>
-              <th className="p-3 w-40 border-l border-slate-300 dark:border-slate-700">💬 تێبینی کارمەند (چوون)</th>
-              <th className="p-3 text-center w-24 border-l border-slate-300 dark:border-slate-700">⏱️ دەوام</th>
-              <th className="p-3 text-center w-28 border-l border-slate-300 dark:border-slate-700 bg-purple-50/50 dark:bg-purple-950/20 text-purple-950 dark:text-purple-300">⚡ ئیزافەی ڕۆژ</th>
-              <th className="p-3 text-center w-32 border-l border-slate-300 dark:border-slate-700 bg-amber-50/50 dark:bg-amber-950/20 text-amber-950 dark:text-amber-300">📊 کۆی ئیزافەی مانگ</th>
+          <thead className="bg-slate-50/90 backdrop-blur-md border-b border-slate-200">
+            <tr className="text-slate-800 font-bold border-b-2 border-slate-300">
+              <th className="p-3 text-center w-10 border-l border-slate-300">#</th>
+              <th className="p-3 w-44 border-l border-slate-300">ناوی کارمەند</th>
+              <th className="p-3 w-32 border-l border-slate-300">پۆست / ئەرک</th>
+              <th className="p-3 text-center w-28 border-l border-slate-300">📥 کاتی هاتن</th>
+              <th className="p-3 w-40 border-l border-slate-300">💬 تێبینی کارمەند (هاتن)</th>
+              <th className="p-3 text-center w-28 border-l border-slate-300">📤 کاتی چوون</th>
+              <th className="p-3 w-40 border-l border-slate-300">💬 تێبینی کارمەند (چوون)</th>
+              <th className="p-3 text-center w-24 border-l border-slate-300">⏱️ دەوام</th>
+              <th className="p-3 text-center w-28 border-l border-slate-300 bg-purple-50/50 text-purple-950">⚡ ئیزافەی ڕۆژ</th>
+              <th className="p-3 text-center w-32 border-l border-slate-300 bg-amber-50/50 text-amber-950">📊 کۆی ئیزافەی مانگ</th>
               <th className="p-3">🛡️ تێبینی ئەدمین (دەستکاری)</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-300/80 dark:divide-slate-700">
+          <tbody className="divide-y divide-slate-300/80">
             {filteredRows.length > 0 ? (
               filteredRows.map((row, rIdx) => {
                 const inBadge = getAttendanceTimeBadge(row.checkInTime, 'in');
@@ -1119,12 +1119,12 @@ export function AdminDailyAttendanceTable({
                 const isEditingThisAdminNote = editingAdminNoteKey === row.empId;
 
                 return (
-                  <tr key={row.empId} className={`hover:bg-blue-50/40 dark:hover:bg-white/5 transition-colors border-b border-slate-300/80 dark:border-slate-700/80 ${rIdx % 2 === 1 ? 'bg-slate-50/50 dark:bg-white/[0.02]' : ''}`}>
-                    <td className="p-3 text-center font-mono text-slate-400 font-bold border-l-2 border-slate-300 dark:border-slate-700">
+                  <tr key={row.empId} className={`hover:bg-blue-50/40  transition-colors border-b border-slate-300/80  ${rIdx % 2 === 1 ? 'bg-slate-50/50 ' : ''}`}>
+                    <td className="p-3 text-center font-mono text-slate-400 font-bold border-l-2 border-slate-300">
                       {row.index}
                     </td>
 
-                    <td className="p-3 font-bold text-slate-900 dark:text-white border-l border-slate-300/80 dark:border-slate-700/80">
+                    <td className="p-3 font-bold text-slate-900 border-l border-slate-300/80">
                       <div className="flex items-center gap-1.5">
                         <Link 
                           href={`/employees/${row.empId}`}
@@ -1140,12 +1140,12 @@ export function AdminDailyAttendanceTable({
                       </div>
                     </td>
 
-                    <td className="p-3 text-slate-500 dark:text-slate-400 font-medium border-l border-slate-300/80 dark:border-slate-700/80">
+                    <td className="p-3 text-slate-500 font-medium border-l border-slate-300/80">
                       {row.role}
                     </td>
 
                     {/* Check-In */}
-                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80 text-center">
+                    <td className="p-2.5 border-l border-slate-300/80 text-center">
                       <div className="flex flex-col items-center justify-center gap-1">
                         {row.checkInTime !== '-' ? (
                           <div className="flex flex-col items-center">
@@ -1154,18 +1154,18 @@ export function AdminDailyAttendanceTable({
                                 <span className="line-through text-rose-400 font-bold font-mono text-[9px] block">
                                   {row.checkInOriginalTime}
                                 </span>
-                                <span className="px-2.5 py-1 rounded-xl bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25 font-mono font-bold text-xs inline-flex items-center gap-1 shadow-xs">
+                                <span className="px-2.5 py-1 rounded-xl bg-emerald-500/15 text-emerald-800 border border-emerald-500/25 font-mono font-bold text-xs inline-flex items-center gap-1 shadow-xs">
                                   📥 {inBadge.formattedTime}
                                 </span>
                               </>
                             ) : (
-                              <span className="px-2.5 py-1 rounded-xl bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25 font-mono font-bold text-xs inline-block">
+                              <span className="px-2.5 py-1 rounded-xl bg-emerald-500/15 text-emerald-800 border border-emerald-500/25 font-mono font-bold text-xs inline-block">
                                 📥 {inBadge.formattedTime}
                               </span>
                             )}
                           </div>
                         ) : (
-                          <span className="text-slate-300 dark:text-slate-600 font-mono font-bold">-</span>
+                          <span className="text-slate-300 font-mono font-bold">-</span>
                         )}
 
                         <button
@@ -1190,7 +1190,7 @@ export function AdminDailyAttendanceTable({
                             setModalIsWaived(Boolean(row.isWaived));
                             setAdminReasonInput(row.adminNote || '');
                           }}
-                          className="px-2 py-0.5 text-[10px] text-slate-400 hover:text-[#007AFF] hover:bg-blue-50 dark:hover:bg-white/10 rounded-full transition-all flex items-center gap-0.5 font-bold cursor-pointer"
+                          className="px-2 py-0.5 text-[10px] text-slate-400 hover:text-[#007AFF] hover:bg-blue-50 rounded-full transition-all flex items-center gap-0.5 font-bold cursor-pointer"
                           title="گۆڕینی کاتی هاتن"
                         >
                           <Edit3 className="w-2.5 h-2.5" />
@@ -1200,19 +1200,19 @@ export function AdminDailyAttendanceTable({
                     </td>
 
                     {/* Check-In Employee Note */}
-                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80">
+                    <td className="p-2.5 border-l border-slate-300/80">
                       {row.checkInNote ? (
-                        <div className="flex items-start gap-1.5 text-[11px] text-blue-900 dark:text-blue-200 font-medium bg-blue-50/80 dark:bg-blue-950/30 p-2 rounded-xl border border-blue-200/60 dark:border-blue-800/30">
+                        <div className="flex items-start gap-1.5 text-[11px] text-blue-900 font-medium bg-blue-50/80 p-2 rounded-xl border border-blue-200/60">
                           <MessageSquare className="w-3 h-3 text-[#007AFF] shrink-0 mt-0.5" />
                           <span>{row.checkInNote}</span>
                         </div>
                       ) : (
-                        <span className="text-slate-300 dark:text-slate-600 text-[11px]">-</span>
+                        <span className="text-slate-300 text-[11px]">-</span>
                       )}
                     </td>
 
                     {/* Check-Out */}
-                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80 text-center">
+                    <td className="p-2.5 border-l border-slate-300/80 text-center">
                       <div className="flex flex-col items-center justify-center gap-1">
                         {row.checkOutTime !== '-' ? (
                           <div className="flex flex-col items-center">
@@ -1221,18 +1221,18 @@ export function AdminDailyAttendanceTable({
                                 <span className="line-through text-rose-400 font-bold font-mono text-[9px] block">
                                   {row.checkOutOriginalTime}
                                 </span>
-                                <span className="px-2.5 py-1 rounded-xl bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/25 font-mono font-bold text-xs inline-flex items-center gap-1 shadow-xs">
+                                <span className="px-2.5 py-1 rounded-xl bg-blue-500/15 text-blue-800 border border-blue-500/25 font-mono font-bold text-xs inline-flex items-center gap-1 shadow-xs">
                                   📤 {outBadge.formattedTime}
                                 </span>
                               </>
                             ) : (
-                              <span className="px-2.5 py-1 rounded-xl bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/25 font-mono font-bold text-xs inline-block">
+                              <span className="px-2.5 py-1 rounded-xl bg-blue-500/15 text-blue-800 border border-blue-500/25 font-mono font-bold text-xs inline-block">
                                 📤 {outBadge.formattedTime}
                               </span>
                             )}
                           </div>
                         ) : (
-                          <span className="text-slate-300 dark:text-slate-600 font-mono font-bold">-</span>
+                          <span className="text-slate-300 font-mono font-bold">-</span>
                         )}
 
                         <button
@@ -1257,7 +1257,7 @@ export function AdminDailyAttendanceTable({
                             setModalIsWaived(Boolean(row.isWaived));
                             setAdminReasonInput(row.adminNote || '');
                           }}
-                          className="px-2 py-0.5 text-[10px] text-slate-400 hover:text-[#007AFF] hover:bg-blue-50 dark:hover:bg-white/10 rounded-full transition-all flex items-center gap-0.5 font-bold cursor-pointer"
+                          className="px-2 py-0.5 text-[10px] text-slate-400 hover:text-[#007AFF] hover:bg-blue-50 rounded-full transition-all flex items-center gap-0.5 font-bold cursor-pointer"
                           title="گۆڕینی کاتی چوون"
                         >
                           <Edit3 className="w-2.5 h-2.5" />
@@ -1267,46 +1267,46 @@ export function AdminDailyAttendanceTable({
                     </td>
 
                     {/* Check-Out Employee Note / Overtime Reason */}
-                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80">
+                    <td className="p-2.5 border-l border-slate-300/80">
                       {row.checkOutNote ? (
-                        <div className="flex items-start gap-1.5 text-[11px] text-purple-900 dark:text-purple-200 font-medium bg-purple-50/80 dark:bg-purple-950/30 p-2 rounded-xl border border-purple-200/60 dark:border-purple-800/30">
+                        <div className="flex items-start gap-1.5 text-[11px] text-purple-900 font-medium bg-purple-50/80 p-2 rounded-xl border border-purple-200/60">
                           <MessageSquare className="w-3 h-3 text-purple-600 shrink-0 mt-0.5" />
                           <span>{row.checkOutNote}</span>
                         </div>
                       ) : (
-                        <span className="text-slate-300 dark:text-slate-600 text-[11px]">-</span>
+                        <span className="text-slate-300 text-[11px]">-</span>
                       )}
                     </td>
 
                     {/* Duration */}
-                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
+                    <td className="p-2.5 border-l border-slate-300/80 text-center font-mono font-bold text-slate-800">
                       {row.durationStr}
                     </td>
 
                     {/* Daily Overtime */}
-                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80 text-center">
+                    <td className="p-2.5 border-l border-slate-300/80 text-center">
                       {row.overtimeStr !== '-' ? (
-                        <span className="px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/25 font-mono font-black text-xs inline-block">
+                        <span className="px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-800 border border-purple-500/25 font-mono font-black text-xs inline-block">
                           {row.overtimeStr}
                         </span>
                       ) : (
-                        <span className="text-slate-300 dark:text-slate-600 font-mono">-</span>
+                        <span className="text-slate-300 font-mono">-</span>
                       )}
                     </td>
 
                     {/* Monthly Overtime Total */}
-                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80 text-center">
+                    <td className="p-2.5 border-l border-slate-300/80 text-center">
                       {row.monthlyOvertimeStr && row.monthlyOvertimeStr !== '-' ? (
-                        <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-900 dark:text-amber-300 border border-amber-500/25 font-mono font-black text-xs inline-block">
+                        <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-900 border border-amber-500/25 font-mono font-black text-xs inline-block">
                           {row.monthlyOvertimeStr}
                         </span>
                       ) : (
-                        <span className="text-slate-300 dark:text-slate-600 font-mono">-</span>
+                        <span className="text-slate-300 font-mono">-</span>
                       )}
                     </td>
 
                     {/* Admin Note Column */}
-                    <td className="p-2.5 border-l border-slate-300/80 dark:border-slate-700/80">
+                    <td className="p-2.5 border-l border-slate-300/80">
                       {isEditingThisAdminNote ? (
                         <div className="flex items-center gap-1.5">
                           <textarea
@@ -1315,7 +1315,7 @@ export function AdminDailyAttendanceTable({
                             value={tempAdminNoteText}
                             onChange={(e) => setTempAdminNoteText(e.target.value)}
                             placeholder="تێبینی ئەدمین بنووسە..."
-                            className="w-full text-xs font-medium py-1.5 px-2.5 rounded-xl bg-slate-100 dark:bg-[#3a3a3c] border border-slate-200/80 dark:border-white/10 text-slate-900 dark:text-white focus:outline-none focus:border-[#007AFF]"
+                            className="w-full text-xs font-medium py-1.5 px-2.5 rounded-xl bg-slate-100 border border-slate-200/80 text-slate-900 focus:outline-none focus:border-[#007AFF]"
                           />
                           <div className="flex flex-col gap-1">
                             <button
@@ -1329,7 +1329,7 @@ export function AdminDailyAttendanceTable({
                             <button
                               type="button"
                               onClick={() => setEditingAdminNoteKey(null)}
-                              className="p-1.5 rounded-xl bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-300 cursor-pointer transition-all active:scale-90"
+                              className="p-1.5 rounded-xl bg-slate-200 text-slate-700 hover:bg-slate-300 cursor-pointer transition-all active:scale-90"
                               title="پاشگەزبوونەوە"
                             >
                               <X className="w-3.5 h-3.5" />
@@ -1339,16 +1339,16 @@ export function AdminDailyAttendanceTable({
                       ) : (
                         <div className="flex items-start justify-between gap-1.5 group">
                           {row.adminNote ? (
-                            <div className="flex flex-col gap-1 text-xs font-medium text-amber-950 dark:text-amber-200 flex-1">
+                            <div className="flex flex-col gap-1 text-xs font-medium text-amber-950 flex-1">
                               {row.adminNote.split('\n').filter(Boolean).map((noteLine, nIdx) => (
-                                <div key={nIdx} className="flex items-start gap-1.5 bg-amber-50/90 dark:bg-amber-950/30 px-2.5 py-1 rounded-xl border border-amber-300/60 dark:border-amber-700/30 shadow-xs">
+                                <div key={nIdx} className="flex items-start gap-1.5 bg-amber-50/90 px-2.5 py-1 rounded-xl border border-amber-300/60 shadow-xs">
                                   <Shield className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
                                   <span className="leading-relaxed">{noteLine}</span>
                                 </div>
                               ))}
                             </div>
                           ) : (
-                            <span className="text-slate-300 dark:text-slate-600 text-xs italic">تێبینی نییە</span>
+                            <span className="text-slate-300 text-xs italic">تێبینی نییە</span>
                           )}
                           <div className="flex items-center gap-1 shrink-0">
                             <button
@@ -1357,7 +1357,7 @@ export function AdminDailyAttendanceTable({
                                 setEditingAdminNoteKey(row.empId);
                                 setTempAdminNoteText(row.adminNote || '');
                               }}
-                              className="opacity-60 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-[#007AFF] hover:bg-blue-50 dark:hover:bg-white/10 rounded-xl transition-all cursor-pointer"
+                              className="opacity-60 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-[#007AFF] hover:bg-blue-50 rounded-xl transition-all cursor-pointer"
                               title="دەستکاریکردنی تێبینی ئەدمین"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
@@ -1365,7 +1365,7 @@ export function AdminDailyAttendanceTable({
                             <button
                               type="button"
                               onClick={() => handleDeleteRowAttendance(row.empId, row.name)}
-                              className="opacity-60 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-white/10 rounded-xl transition-all cursor-pointer"
+                              className="opacity-60 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
                               title="سڕینەوەی دەوامی کارمەند"
                             >
                               <Trash2 className="w-3.5 h-3.5 text-rose-500" />
@@ -1410,7 +1410,7 @@ export function AdminDailyAttendanceTable({
       {/* ⏱️ ENHANCED UNIFIED MODAL FOR CHECK-IN, CHECK-OUT, WAIVER & NOTES */}
       {editingTimeModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-300 dark:border-slate-700 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-3xl border border-slate-300 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
             <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 p-4 text-white flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1435,11 +1435,11 @@ export function AdminDailyAttendanceTable({
             </div>
 
             {/* Body */}
-            <div className="p-5 space-y-4 text-xs font-bold text-slate-800 dark:text-slate-200">
+            <div className="p-5 space-y-4 text-xs font-bold text-slate-800">
               
               {/* Status Selector */}
               <div className="space-y-1.5">
-                <label className="text-xs font-black text-slate-900 dark:text-white">حاڵەتی کارمەند لەم ڕۆژەدا:</label>
+                <label className="text-xs font-black text-slate-900">حاڵەتی کارمەند لەم ڕۆژەدا:</label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { key: 'Present', label: 'ئامادەبوو', color: 'border-emerald-500 bg-emerald-50 text-emerald-700' },
@@ -1451,7 +1451,7 @@ export function AdminDailyAttendanceTable({
                       type="button"
                       onClick={() => setModalStatus(st.key)}
                       className={`py-2 px-3 rounded-xl border text-xs font-black transition-all cursor-pointer ${
-                        modalStatus === st.key ? `${st.color} shadow-xs` : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50'
+                        modalStatus === st.key ? `${st.color} shadow-xs` : 'border-slate-200  text-slate-500 hover:bg-slate-50'
                       }`}
                     >
                       {st.label}
@@ -1462,17 +1462,17 @@ export function AdminDailyAttendanceTable({
 
               {/* Check-In & Check-Out Times Side by Side if Present */}
               {modalStatus === 'Present' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
                   {/* Check-In Time */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-black text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
+                    <label className="text-[11px] font-black text-emerald-800 flex items-center justify-between">
                       <span>📥 کاتی هاتن:</span>
                     </label>
                     <input
                       type="time"
                       value={modalCheckIn}
                       onChange={(e) => setModalCheckIn(e.target.value)}
-                      className="input-classic w-full text-base font-black text-center font-mono py-2 bg-white dark:bg-slate-900 border-emerald-300 focus:border-emerald-500 rounded-xl"
+                      className="input-classic w-full text-base font-black text-center font-mono py-2 bg-white border-emerald-300 focus:border-emerald-500 rounded-xl"
                     />
                     <div className="flex items-center gap-1 pt-0.5">
                       {['08:00', '08:15', '08:30'].map(t => (
@@ -1490,7 +1490,7 @@ export function AdminDailyAttendanceTable({
 
                   {/* Check-Out Time */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-black text-blue-800 dark:text-blue-300 flex items-center justify-between">
+                    <label className="text-[11px] font-black text-blue-800 flex items-center justify-between">
                       <span>📤 کاتی ڕۆیشتن:</span>
                       {modalCheckOut && (
                         <button
@@ -1506,7 +1506,7 @@ export function AdminDailyAttendanceTable({
                       type="time"
                       value={modalCheckOut}
                       onChange={(e) => setModalCheckOut(e.target.value)}
-                      className="input-classic w-full text-base font-black text-center font-mono py-2 bg-white dark:bg-slate-900 border-blue-300 focus:border-blue-500 rounded-xl"
+                      className="input-classic w-full text-base font-black text-center font-mono py-2 bg-white border-blue-300 focus:border-blue-500 rounded-xl"
                     />
                     <div className="flex items-center gap-1 pt-0.5">
                       {['17:00', '18:00', '19:00'].map(t => (
@@ -1526,7 +1526,7 @@ export function AdminDailyAttendanceTable({
 
               {/* Dynamic Duration Preview Box */}
               {modalStatus === 'Present' && (
-                <div className="p-3 bg-indigo-50/80 dark:bg-indigo-950/30 rounded-2xl border border-indigo-200/80 dark:border-indigo-800/40 flex items-center justify-between text-xs font-bold text-indigo-950 dark:text-indigo-200">
+                <div className="p-3 bg-indigo-50/80 rounded-2xl border border-indigo-200/80 flex items-center justify-between text-xs font-bold text-indigo-950">
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-indigo-600" />
                     <span>ماوەی کارکردن:</span>
@@ -1552,14 +1552,14 @@ export function AdminDailyAttendanceTable({
                       }
                       return '-';
                     })() : (
-                      <span className="text-amber-700 dark:text-amber-400">🟢 لە دەوامدایە (بەردەوام)</span>
+                      <span className="text-amber-700">🟢 لە دەوامدایە (بەردەوام)</span>
                     )}
                   </div>
                 </div>
               )}
 
               {/* Waiver Checkbox */}
-              <label className="flex items-center gap-2.5 p-3 rounded-2xl bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/40 cursor-pointer text-purple-950 dark:text-purple-200">
+              <label className="flex items-center gap-2.5 p-3 rounded-2xl bg-purple-50 border border-purple-200 cursor-pointer text-purple-950">
                 <input
                   type="checkbox"
                   checked={modalIsWaived}
@@ -1573,7 +1573,7 @@ export function AdminDailyAttendanceTable({
 
               {/* Admin Reason Input */}
               <div className="space-y-1.5">
-                <label className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                <label className="text-xs font-black text-slate-900 flex items-center gap-1.5">
                   <Shield className="w-3.5 h-3.5 text-amber-700" />
                   <span>تێبینی ئەدمین (لە خشتەکە و ڕاپۆرتدا پیشان دەدرێت):</span>
                 </label>
@@ -1582,14 +1582,14 @@ export function AdminDailyAttendanceTable({
                   value={adminReasonInput}
                   onChange={(e) => setAdminReasonInput(e.target.value)}
                   placeholder="هۆکاری گۆڕانکاری بنووسە (ئارەزوومەندانە)..."
-                  className="input-classic w-full text-xs font-bold p-2.5 rounded-xl border-amber-300 focus:border-amber-500 bg-amber-50/40 dark:bg-slate-900"
+                  className="input-classic w-full text-xs font-bold p-2.5 rounded-xl border-amber-300 focus:border-amber-500 bg-amber-50/40"
                 />
               </div>
 
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-between p-4 bg-slate-50 border-t border-slate-200">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -1607,7 +1607,7 @@ export function AdminDailyAttendanceTable({
                       handleDeleteRowAttendance(empId, empName);
                     }
                   }}
-                  className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer border border-rose-200 dark:border-rose-900/40"
+                  className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer border border-rose-200"
                   title="سڕینەوەی دەوامی ئەم کارمەندە بۆ ئەم ڕۆژە"
                 >
                   <Trash2 className="w-3.5 h-3.5" />

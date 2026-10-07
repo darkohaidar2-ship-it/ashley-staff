@@ -15,31 +15,19 @@ import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChange
 import NotificationRoutingMatrix from '@/components/admin/NotificationRoutingMatrix';
 import { format } from 'date-fns';
 import { 
-  Users, 
-  Settings, 
-  MapPin, 
-  Download, 
-  LogOut, 
-  Clock, 
-  DollarSign, 
-  Calendar, 
-  Trash2, 
-  Sparkles, 
-  KeyRound, 
-  BarChart3, 
-  Award, 
-  TrendingUp, 
-  RefreshCw, 
-  Table, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Layers, 
   Building2, 
-  Smartphone, 
-  ExternalLink, 
-  ShieldCheck, 
-  Wrench,
-  SlidersHorizontal 
+  Table, 
+  Calendar, 
+  Wrench, 
+  SlidersHorizontal, 
+  KeyRound, 
+  LogOut, 
+  Trash2, 
+  Download, 
+  Settings, 
+  RefreshCw,
+  Clock,
+  Sparkles
 } from 'lucide-react';
 
 export function AdminDashboardWorkspace() {
@@ -48,6 +36,8 @@ export function AdminDashboardWorkspace() {
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  
+  // Default directly to the weekly/monthly attendance matrix table per user preference
   const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools' | 'workflow'>('matrix');
 
   // Live Desktop Clock for ERP Admin
@@ -94,7 +84,7 @@ export function AdminDashboardWorkspace() {
     const resetInactivityTimer = () => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(async () => {
-        alert('⚠️ سێشنەکەت بەسەرچوو بەهۆی بێدەنگی بۆ ماوەی ٣٠ خولەک! تکایە دووبارە لۆگین بکەرەوە.');
+        alert('سێشنەکەت بەسەرچوو بەهۆی بێدەنگی بۆ ماوەی ٣٠ خولەک! تکایە دووبارە لۆگین بکەرەوە.');
         await logout();
         if (typeof window !== 'undefined') {
           sessionStorage.removeItem('ashley_admin_session');
@@ -122,7 +112,7 @@ export function AdminDashboardWorkspace() {
     exportStateAsJson
   } = useAppContext();
 
-  // Company Multi-Location Config for Quick Stats
+  // Company Multi-Location Config
   const [companyLocations, setCompanyLocations] = useState<any[]>([]);
 
   const fetchGlobalLocation = useCallback(async () => {
@@ -178,7 +168,7 @@ export function AdminDashboardWorkspace() {
     fetchRegisteredFaces();
   }, [fetchRegisteredFaces]);
 
-  // Admin notes map for August 2026
+  // Admin notes map for current month
   const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
 
   const handleUpdateAdminNote = (key: string, note: string) => {
@@ -197,25 +187,6 @@ export function AdminDashboardWorkspace() {
   const activeEmployees = useMemo(() => {
     return (employees || []).filter(e => e?.status !== 'resigned' && e?.isActive !== false);
   }, [employees]);
-
-  // Aggregated KPIs
-  const dashboardKpis = useMemo(() => {
-    const totalStaff = employees.length;
-    const activeStaff = activeEmployees.length;
-    const resignedStaff = employees.filter(e => e.status === 'resigned' || e?.isActive === false).length;
-
-    let totalOtHours = 0;
-    let totalOtCost = 0;
-
-    return {
-      totalStaff,
-      activeStaff,
-      resignedStaff,
-      totalOtHours: totalOtHours.toFixed(1),
-      totalOtCost: totalOtCost.toLocaleString(),
-      totalLocations: companyLocations.length || 2,
-    };
-  }, [employees, activeEmployees, companyLocations]);
 
   const handleDeleteFace = async (empId: string) => {
     if (!confirm('ئایا دڵنیایت لە سڕینەوەی دەموچاوی ئەم کارمەندە؟')) return;
@@ -239,7 +210,7 @@ export function AdminDashboardWorkspace() {
 
   // Wipe All Attendance Records Handler
   const handleWipeAllAttendance = async () => {
-    if (!confirm('⚠️ ئایا دڵنیایت لە سڕینەوەی سەرجەم داتاکانی ئامادەبوون و تۆماری دەوام؟ ئەم کارە تەواوی خشتەکان و سێرڤەر پاک دەکاتەوە.')) return;
+    if (!confirm('ئایا دڵنیایت لە سڕینەوەی سەرجەم داتاکانی ئامادەبوون و تۆماری دەوام؟ ئەم کارە تەواوی خشتەکان و سێرڤەر پاک دەکاتەوە.')) return;
     try {
       await fetch('/api/attendance/reset-today', {
         method: 'POST',
@@ -273,55 +244,60 @@ export function AdminDashboardWorkspace() {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('ashley_attendance_updated'));
     }
-    alert('✅ سەرجەم داتاکانی ئامادەبوون و تۆمارەکان بە سەرکەوتوویی لە داتابەیس و سیستم پاککرانەوە.');
+    alert('سەرجەم داتاکانی ئامادەبوون و تۆمارەکان بە سەرکەوتوویی لە داتابەیس و سیستم پاککرانەوە.');
   };
 
   if (authLoading || !authChecked) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#f2f2f7] dark:bg-[#1c1c1e]">
+      <div className="flex h-screen items-center justify-center bg-[#f8fafc]">
         <div className="flex flex-col items-center gap-3">
-          <RefreshCw className="h-8 w-8 animate-spin text-[#007AFF]" />
-          <p className="text-xs font-bold text-slate-500">پشکنینی ئاسایش و بارکردنی سیستەم...</p>
+          <div className="w-9 h-9 border-3 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+          <p className="text-xs font-bold text-slate-500">پشکنینی ئاسایش و لۆدکردنی داشبۆرد...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#f2f2f7] dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-3 sm:p-5 lg:p-6 dir-rtl font-sans space-y-5" dir="rtl">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 p-3 sm:p-5 lg:p-6 dir-rtl font-sans space-y-5 select-none transition-colors duration-300" dir="rtl">
       
-      {/* 🧭 TOP COMMAND HEADER BAR */}
-      <header className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3.5 bg-white/80 dark:bg-[#2c2c2e]/80 border border-slate-200/80 dark:border-white/5 rounded-[24px] shadow-sm backdrop-blur-xl">
+      {/* 🧭 TOP COMMAND HEADER BAR (PURE LIGHT MODE • TACTILE APPLE BUTTONS) */}
+      <header className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3.5 bg-white border border-slate-200/90 rounded-2xl shadow-xs transition-all duration-300">
+        
+        {/* Brand Identity & Server Telemetry */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-sm shadow-blue-500/20">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200/80 text-blue-600 flex items-center justify-center shadow-xs shrink-0 transition-transform duration-200 hover:scale-105">
             <Building2 className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-tight">
+              <h1 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
                 کۆمپانیای گروپی دیوان | ئاشڵی
               </h1>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800/40 text-[10px] font-mono font-bold flex items-center gap-1">
+              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-mono font-bold flex items-center gap-1.5 shadow-2xs">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 <span>سێرڤەر چالاکە</span>
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium font-mono">
+            <p className="text-[11px] text-slate-500 font-medium font-mono mt-0.5">
               {currentTimeStr || format(new Date(), 'yyyy-MM-dd | HH:mm:ss')}
             </p>
           </div>
         </div>
 
-        {/* Top Right Quick Actions & View Switcher */}
+        {/* View Switcher & Action Controls (Tactile Buttons) */}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/10 p-1 rounded-xl">
+          
+          {/* Segmented Tab Tray */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+            
             <button
               type="button"
               onClick={() => setAdminView('matrix')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 adminView === 'matrix'
-                  ? 'bg-white dark:bg-[#1c1c1e] text-[#007AFF] shadow-2xs font-black'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  ? 'bg-white text-blue-600 shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
               }`}
             >
               <Table className="w-3.5 h-3.5" />
@@ -331,10 +307,10 @@ export function AdminDashboardWorkspace() {
             <button
               type="button"
               onClick={() => setAdminView('daily')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 adminView === 'daily'
-                  ? 'bg-white dark:bg-[#1c1c1e] text-[#007AFF] shadow-2xs font-black'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  ? 'bg-white text-blue-600 shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
               }`}
             >
               <Calendar className="w-3.5 h-3.5" />
@@ -344,41 +320,44 @@ export function AdminDashboardWorkspace() {
             <button
               type="button"
               onClick={() => setAdminView('tools')}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 adminView === 'tools'
-                  ? 'bg-white dark:bg-[#1c1c1e] text-[#007AFF] shadow-2xs font-black'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  ? 'bg-white text-blue-600 shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
               }`}
               title="ئامرازەکان"
             >
               <Wrench className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">ئامرازەکان</span>
+              <span>ئامرازەکان</span>
             </button>
 
             <button
               type="button"
               onClick={() => setAdminView('workflow')}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 adminView === 'workflow'
-                  ? 'bg-white dark:bg-[#1c1c1e] text-[#007AFF] shadow-2xs font-black'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  ? 'bg-white text-blue-600 shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
               }`}
               title="بەڕێوەبردنی ئاگادارییەکان و دەسەڵاتەکان"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">ئاگادارییەکان</span>
             </button>
+
           </div>
 
+          {/* Password Modal Button */}
           <button
             type="button"
             onClick={() => setShowPasswordModal(true)}
-            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 transition-all cursor-pointer"
+            className="p-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-blue-600 shadow-xs transition-all duration-200 hover:-translate-y-0.5 active:scale-95 cursor-pointer"
             title="گۆڕینی وشەی تێپەڕ"
           >
             <KeyRound className="w-4 h-4" />
           </button>
 
+          {/* Logout Button */}
           <button
             type="button"
             onClick={async () => {
@@ -391,21 +370,21 @@ export function AdminDashboardWorkspace() {
                 router.replace('/adm1n_pan0l');
               }
             }}
-            className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-300 transition-all cursor-pointer"
+            className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 shadow-xs transition-all duration-200 hover:-translate-y-0.5 active:scale-95 cursor-pointer"
             title="چوونەدەرەوە"
           >
             <LogOut className="w-4 h-4" />
           </button>
+
         </div>
+
       </header>
 
-
-
       {/* ========================================================================= */}
-      {/* 📊 VIEW 1: 31-DAY GPS ATTENDANCE MATRIX (PRIMARY MASTER TABLE) */}
+      {/* 📊 VIEW 1: 31-DAY GPS ATTENDANCE MATRIX (PRIMARY MASTER TABLE OPEN DIRECTLY) */}
       {/* ========================================================================= */}
       {adminView === 'matrix' && (
-        <section className="w-full">
+        <section className="w-full transition-opacity duration-300">
           <NewGpsAttendanceMatrixTable 
             employees={activeEmployees} 
             attendanceLogs={attendanceLogs} 
@@ -417,7 +396,7 @@ export function AdminDashboardWorkspace() {
       {/* 📅 VIEW 2: DAILY SEQUENTIAL ATTENDANCE TABLE */}
       {/* ========================================================================= */}
       {adminView === 'daily' && (
-        <section className="w-full">
+        <section className="w-full transition-opacity duration-300">
           <AdminDailyAttendanceTable
             employees={employees}
             attendanceLogs={attendanceLogs}
@@ -429,28 +408,32 @@ export function AdminDashboardWorkspace() {
       )}
 
       {/* ========================================================================= */}
-      {/* 🛠️ VIEW 3: ADMIN TOOLS (WIPE, RESET, BACKUP & SECURITY) */}
+      {/* 🛠️ VIEW 3: ADMIN TOOLS (PURE LIGHT MODE • TACTILE BUTTONS) */}
       {/* ========================================================================= */}
       {adminView === 'tools' && (
-        <section className="space-y-4 animate-fade-in max-w-4xl mx-auto">
-          <div className="bg-white/80 dark:bg-[#2c2c2e]/80 p-5 rounded-[24px] border border-slate-200/80 dark:border-white/5 shadow-sm space-y-4">
-            <div className="flex items-center gap-2.5 text-slate-900 dark:text-white border-b border-slate-100 dark:border-white/10 pb-3">
-              <Wrench className="w-5 h-5 text-[#007AFF]" />
-              <h2 className="text-sm sm:text-base font-black">ئامرازەکانی سیستەم</h2>
+        <section className="space-y-4 max-w-4xl mx-auto transition-opacity duration-300">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
+            
+            <div className="flex items-center gap-2.5 text-slate-900 border-b border-slate-100 pb-3">
+              <Wrench className="w-5 h-5 text-blue-600" />
+              <h2 className="text-sm sm:text-base font-black">ئامرازەکانی سیستەم و ئاسایش</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
               
               {/* Reset All Attendance */}
-              <div className="p-4 bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200/60 dark:border-rose-900/40 rounded-2xl space-y-3">
-                <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400 font-black text-xs">
+              <div className="p-4 bg-rose-50/70 border border-rose-200 rounded-xl space-y-3">
+                <div className="flex items-center gap-2 text-rose-700 font-black text-xs">
                   <Trash2 className="w-4 h-4" />
                   <span>سڕینەوەی تۆمارەکانی ئامادەبوون</span>
                 </div>
+                <p className="text-[11px] text-slate-600">
+                  سڕینەوەی سەرجەم داتاکانی دەوام و ئامادەبوون لە داتابەیس.
+                </p>
                 <button
                   type="button"
                   onClick={handleWipeAllAttendance}
-                  className="w-full py-2.5 px-3 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-2.5 px-3 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all duration-200 hover:-translate-y-0.5 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>سڕینەوەی هەموو تۆمارەکان</span>
@@ -458,15 +441,18 @@ export function AdminDashboardWorkspace() {
               </div>
 
               {/* System Backup */}
-              <div className="p-4 bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40 rounded-2xl space-y-3">
-                <div className="flex items-center gap-2 text-[#007AFF] dark:text-blue-400 font-black text-xs">
+              <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl space-y-3">
+                <div className="flex items-center gap-2 text-blue-700 font-black text-xs">
                   <Download className="w-4 h-4" />
-                  <span>هەڵگرتنی داتای سیستەم</span>
+                  <span>هەڵگرتنی داتای سیستەم (Backup)</span>
                 </div>
+                <p className="text-[11px] text-slate-600">
+                  داگرتنی کۆپییەکی یەدەگی هەموو داتاکان بە فایلی JSON.
+                </p>
                 <button
                   type="button"
                   onClick={exportStateAsJson}
-                  className="w-full py-2.5 px-3 bg-[#007AFF] hover:bg-blue-600 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all duration-200 hover:-translate-y-0.5 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>داگرتنی فایلی یەدەگ</span>
@@ -474,15 +460,18 @@ export function AdminDashboardWorkspace() {
               </div>
 
               {/* Password Change */}
-              <div className="p-4 bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-900/40 rounded-2xl space-y-3">
-                <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400 font-black text-xs">
+              <div className="p-4 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-3">
+                <div className="flex items-center gap-2 text-indigo-700 font-black text-xs">
                   <KeyRound className="w-4 h-4" />
                   <span>وشەی تێپەڕی بەڕێوەبەر</span>
                 </div>
+                <p className="text-[11px] text-slate-600">
+                  نوێکردنەوەی وشەی نهێنی ئەکاونتی دەسەڵاتداری سەرەکی.
+                </p>
                 <button
                   type="button"
                   onClick={() => setShowPasswordModal(true)}
-                  className="w-full py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all duration-200 hover:-translate-y-0.5 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <KeyRound className="w-3.5 h-3.5" />
                   <span>گۆڕینی وشەی تێپەڕ</span>
@@ -490,14 +479,17 @@ export function AdminDashboardWorkspace() {
               </div>
 
               {/* Quick Jump to Corporate Settings */}
-              <div className="p-4 bg-purple-50/70 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-900/40 rounded-2xl space-y-3">
-                <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400 font-black text-xs">
+              <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-xl space-y-3">
+                <div className="flex items-center gap-2 text-purple-700 font-black text-xs">
                   <Settings className="w-4 h-4" />
                   <span>ناسنامەی کۆمپانیا و لۆگۆکان</span>
                 </div>
+                <p className="text-[11px] text-slate-600">
+                  ڕێکخستنی ناوی براند، لۆگۆی فەرمی و پێناسەکانی سیستم.
+                </p>
                 <Link
                   href="/settings"
-                  className="w-full py-2.5 px-3 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 text-center"
+                  className="w-full py-2.5 px-3 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all duration-200 hover:-translate-y-0.5 flex items-center justify-center gap-2 text-center"
                 >
                   <Settings className="w-3.5 h-3.5" />
                   <span>ناسنامە و لۆگۆکان</span>
@@ -505,6 +497,7 @@ export function AdminDashboardWorkspace() {
               </div>
 
             </div>
+
           </div>
         </section>
       )}
@@ -513,7 +506,7 @@ export function AdminDashboardWorkspace() {
       {/* ⚡ VIEW 4: NOTIFICATION & PERMISSION ROUTING MATRIX */}
       {/* ========================================================================= */}
       {adminView === 'workflow' && (
-        <section className="w-full">
+        <section className="w-full transition-opacity duration-300">
           <NotificationRoutingMatrix />
         </section>
       )}
@@ -540,7 +533,7 @@ export function AdminDashboardWorkspace() {
           onClose={() => setFaceEnrollEmp(null)}
           onSuccess={() => {
             fetchRegisteredFaces();
-            alert(`🎉 ڕوخساری (${faceEnrollEmp.fullName3Part || faceEnrollEmp.name}) بە سەرکەوتوویی تۆمارکرا!`);
+            alert(`ڕوخساری (${faceEnrollEmp.fullName3Part || faceEnrollEmp.name}) بە سەرکەوتوویی تۆمارکرا!`);
           }}
         />
       )}

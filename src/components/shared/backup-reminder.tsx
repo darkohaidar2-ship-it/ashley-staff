@@ -81,7 +81,7 @@ export function BackupReminder() {
 
             <button 
               onClick={handleDismiss}
-              className="group/close p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-all text-muted-foreground hover:text-foreground active:scale-90"
+              className="group/close p-2 hover:bg-black/5 rounded-full transition-all text-muted-foreground hover:text-foreground active:scale-90"
             >
               <X className="w-4 h-4 transition-transform group-hover/close:rotate-90" />
             </button>

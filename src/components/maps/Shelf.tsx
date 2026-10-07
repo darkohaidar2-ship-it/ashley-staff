@@ -30,7 +30,7 @@ export const Shelf = ({
           ? 'bg-primary/10 border-primary/50 text-primary-foreground'
           : 'bg-background/30 border-border hover:border-primary/50',
         isHighlighted &&
-          'ring-2 ring-green-500 border-green-500 bg-green-100 dark:bg-green-900'
+          'ring-2 ring-green-500 border-green-500 bg-green-100'
       )}
     >
       <span className="font-mono font-bold text-sm text-foreground group-hover:text-primary">

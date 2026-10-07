@@ -9,9 +9,9 @@ const AdminDashboardWorkspace = dynamic(
   { 
     ssr: false,
     loading: () => (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
-        <div className="w-12 h-12 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mb-4" />
-        <p className="text-slate-400 text-sm font-medium">چاوەڕوانبن، کۆنتڕۆڵ پانێڵ لۆد دەکرێت...</p>
+      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-4">
+        <div className="w-10 h-10 border-3 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4" />
+        <p className="text-slate-600 text-sm font-bold">چاوەڕوانبن، کۆنتڕۆڵ پانێڵ لۆد دەکرێت...</p>
       </div>
     )
   }
@@ -93,13 +93,13 @@ export default function HiddenAdminPanelPortal() {
     setError('');
 
     if (!username.trim()) {
-      setError('⚠️ تکایە ناوی بەکاربهێنەر بنووسە');
+      setError('تکایە ناوی بەکاربهێنەر بنووسە');
       setLoading(false);
       return;
     }
 
     if (!password.trim()) {
-      setError('⚠️ تکایە وشەی تێپەڕ بنووسە');
+      setError('تکایە وشەی تێپەڕ بنووسە');
       setLoading(false);
       return;
     }
@@ -119,7 +119,7 @@ export default function HiddenAdminPanelPortal() {
 
       if (res.status === 429 || data.isLocked) {
         setLockedUntil(data.lockedUntil || Date.now() + 15 * 60 * 1000);
-        setError(data.error || '🔒 بەهۆی ٥ هەوڵی هەڵە ئەکاونتەکە بۆ ماوەی ١٥ خولەک قوفڵکرا!');
+        setError(data.error || 'بەهۆی ٥ هەوڵی هەڵە ئەکاونتەکە بۆ ماوەی ١٥ خولەک قوفڵکرا!');
         setLoading(false);
         return;
       }
@@ -173,7 +173,7 @@ export default function HiddenAdminPanelPortal() {
         }
         setSessionUser(fallbackUser);
       } else {
-        setError('⚠️ وشەی تێپەڕ یان ناوی بەکارهێنەر هەڵەیە!');
+        setError('وشەی تێپەڕ یان ناوی بەکارهێنەر هەڵەیە!');
       }
     } finally {
       setLoading(false);
@@ -189,37 +189,38 @@ export default function HiddenAdminPanelPortal() {
     return <AdminDashboardWorkspace />;
   }
 
-  // 🔒 IF NOT AUTHENTICATED: Render Ultra-Secure Hidden Login Portal!
+  // 🔒 IF NOT AUTHENTICATED: Render Apple Light Mode Login Portal!
   const isLocked = !!(lockedUntil && lockedUntil > Date.now());
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-slate-950 text-slate-100 font-sans dir-rtl select-none" dir="rtl">
+    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-[#f8fafc] text-slate-900 font-sans dir-rtl select-none" dir="rtl">
       
       {/* Background Ambience */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-100/60 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-100/60 rounded-full blur-3xl" />
       </div>
 
-      <div className="w-full max-w-md bg-slate-900/90 text-slate-100 rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-800 backdrop-blur-xl space-y-6 relative z-10">
+      <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200/90 backdrop-blur-xl space-y-6 relative z-10">
         
         {/* Brand & Security Header */}
         <div className="text-center space-y-2">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shadow-inner">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-blue-50 border border-blue-200/80 text-blue-600 flex items-center justify-center shadow-xs">
             <ShieldCheck className="w-8 h-8" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-xl font-black text-white tracking-tight">سیستەمی بەڕێوەبەرایەتی باڵای ئاشڵی</h1>
+            <h1 className="text-xl font-black text-slate-900 tracking-tight">سیستەمی بەڕێوەبەرایەتی باڵای ئاشڵی</h1>
+            <p className="text-xs text-slate-500 font-medium">داشبۆردی کۆنترۆڵ و بەڕێوەبردنی گشتی</p>
           </div>
         </div>
 
         {/* Lockout Banner */}
         {isLocked && (
-          <div className="p-3.5 rounded-2xl bg-rose-950/40 border border-rose-800 text-rose-300 text-xs font-bold flex items-center gap-2 animate-pulse">
-            <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />
+          <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2 animate-pulse">
+            <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0" />
             <div>
               <span>ئەکاونتەکە قوفڵکراوە بەهۆی هەوڵی هەڵە!</span>
-              <span className="block text-[11px] font-mono mt-0.5 text-rose-400">
+              <span className="block text-[11px] font-mono mt-0.5 text-rose-600">
                 کاتی چاوەڕوانی: {lockCountdown}
               </span>
             </div>
@@ -228,8 +229,8 @@ export default function HiddenAdminPanelPortal() {
 
         {/* Error Notification */}
         {error && !isLocked && (
-          <div className="p-3 rounded-2xl bg-rose-950/40 border border-rose-800 text-rose-300 text-xs font-bold flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 shrink-0 text-rose-400" />
+          <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 shrink-0 text-rose-600" />
             <span>{error}</span>
           </div>
         )}
@@ -237,7 +238,7 @@ export default function HiddenAdminPanelPortal() {
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-black text-slate-300 mb-1.5">
+            <label className="block text-xs font-black text-slate-700 mb-1.5">
               ناوی بەکارهێنەر:
             </label>
             <div className="relative">
@@ -247,7 +248,7 @@ export default function HiddenAdminPanelPortal() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="ناوی بەکارهێنەر"
-                className="w-full px-3.5 py-3 rounded-xl border border-slate-700 bg-slate-800/80 text-white text-sm font-bold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all disabled:opacity-50"
+                className="w-full px-3.5 py-3 rounded-xl border border-slate-200/90 bg-slate-50/80 text-slate-900 text-sm font-bold focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all disabled:opacity-50"
                 autoComplete="username"
                 autoFocus
               />
@@ -256,7 +257,7 @@ export default function HiddenAdminPanelPortal() {
           </div>
 
           <div>
-            <label className="block text-xs font-black text-slate-300 mb-1.5">
+            <label className="block text-xs font-black text-slate-700 mb-1.5">
               وشەی تێپەڕ:
             </label>
             <div className="relative">
@@ -266,13 +267,13 @@ export default function HiddenAdminPanelPortal() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-3.5 py-3 rounded-xl border border-slate-700 bg-slate-800/80 text-white text-sm font-bold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all disabled:opacity-50"
+                className="w-full px-3.5 py-3 rounded-xl border border-slate-200/90 bg-slate-50/80 text-slate-900 text-sm font-bold focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all disabled:opacity-50"
                 autoComplete="current-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -282,16 +283,16 @@ export default function HiddenAdminPanelPortal() {
           <button
             type="submit"
             disabled={isLocked || loading}
-            className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm shadow-lg shadow-emerald-900/30 transition-all active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-xs transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
           >
             <KeyRound className="w-4 h-4" />
             <span>{loading ? 'لە پشکنیندایە...' : (isLocked ? 'قوفڵە' : 'چوونەژوورەوەی ئەدمین')}</span>
           </button>
         </form>
 
-        <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-500 font-bold">
+        <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500 font-bold">
           <span>پارێزراوە بە ئاسایشی ئاشڵی</span>
-          <span className="font-mono text-emerald-500">ROOT-SECURED • 2026</span>
+          <span className="font-mono text-blue-600">SECURE PORTAL</span>
         </div>
 
       </div>

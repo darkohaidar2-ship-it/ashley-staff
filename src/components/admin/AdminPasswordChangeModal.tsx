@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { KeyRound, Lock, User, CheckCircle2, AlertTriangle, X, Shield } from 'lucide-react';
+import { KeyRound, Lock, User, CheckCircle2, AlertTriangle, X, Shield, Save } from 'lucide-react';
 
 interface AdminPasswordChangeModalProps {
   isOpen: boolean;
@@ -60,7 +60,7 @@ export function AdminPasswordChangeModal({ isOpen, onClose }: AdminPasswordChang
         throw new Error(data.error || 'هەڵەیەک ڕوویدا');
       }
 
-      setMessage({ text: '🎉 وشەی تێپەڕی ئەدمین بە سەرکەوتوویی لەسەر سوپابەیس نوێکرایەوە!', isError: false });
+      setMessage({ text: 'وشەی تێپەڕی ئەدمین بە سەرکەوتوویی لەسەر سوپابەیس نوێکرایەوە!', isError: false });
       setTimeout(() => {
         onClose();
       }, 2000);
@@ -72,23 +72,23 @@ export function AdminPasswordChangeModal({ isOpen, onClose }: AdminPasswordChang
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 font-sans dir-rtl" dir="rtl">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in-95">
+    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 font-sans dir-rtl" dir="rtl">
+      <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-md overflow-hidden shadow-xl animate-in fade-in zoom-in-95">
         
         {/* Modal Header */}
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md">
+        <div className="p-4 bg-slate-50/80 border-b border-slate-200/80 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200/80 flex items-center justify-center text-indigo-600 shadow-2xs">
               <KeyRound className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-black">گۆڕینی وشەی تێپەڕی بەڕێوەبەر</h3>
+              <h3 className="text-sm font-black text-slate-900">گۆڕینی وشەی تێپەڕی بەڕێوەبەر</h3>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -99,7 +99,7 @@ export function AdminPasswordChangeModal({ isOpen, onClose }: AdminPasswordChang
           <div className={`p-3 text-xs font-bold flex items-center gap-2 ${
             message.isError ? 'bg-rose-50 text-rose-800 border-b border-rose-200' : 'bg-emerald-50 text-emerald-800 border-b border-emerald-200'
           }`}>
-            {message.isError ? <AlertTriangle className="w-4 h-4 flex-shrink-0" /> : <CheckCircle2 className="w-4 h-4 flex-shrink-0" />}
+            {message.isError ? <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" /> : <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />}
             <span>{message.text}</span>
           </div>
         )}
@@ -107,7 +107,7 @@ export function AdminPasswordChangeModal({ isOpen, onClose }: AdminPasswordChang
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs font-bold">
           <div>
-            <label className="block text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-slate-700 mb-1">
               وشەی تێپەڕی ئێستا:
             </label>
             <input
@@ -116,12 +116,12 @@ export function AdminPasswordChangeModal({ isOpen, onClose }: AdminPasswordChang
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               placeholder="••••••"
-              className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white outline-none font-mono"
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 outline-none font-mono focus:border-indigo-500 focus:bg-white transition-all"
             />
           </div>
 
-          <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
-            <label className="block text-slate-700 dark:text-slate-300 mb-1">
+          <div className="pt-2 border-t border-slate-100">
+            <label className="block text-slate-700 mb-1">
               ناوی بەکارهێنەری نوێ:
             </label>
             <input
@@ -129,12 +129,12 @@ export function AdminPasswordChangeModal({ isOpen, onClose }: AdminPasswordChang
               value={newUsername}
               onChange={(e) => setNewUsername(e.target.value)}
               placeholder="ئارەزوومەندانە"
-              className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white outline-none font-mono"
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 outline-none font-mono focus:border-indigo-500 focus:bg-white transition-all"
             />
           </div>
 
           <div>
-            <label className="block text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-slate-700 mb-1">
               وشەی تێپەڕی نوێ:
             </label>
             <input
@@ -143,12 +143,12 @@ export function AdminPasswordChangeModal({ isOpen, onClose }: AdminPasswordChang
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="••••••"
-              className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white outline-none font-mono"
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 outline-none font-mono focus:border-indigo-500 focus:bg-white transition-all"
             />
           </div>
 
           <div>
-            <label className="block text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-slate-700 mb-1">
               دووبارەکردنەوەی وشەی تێپەڕی نوێ:
             </label>
             <input
@@ -157,7 +157,7 @@ export function AdminPasswordChangeModal({ isOpen, onClose }: AdminPasswordChang
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="••••••"
-              className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white outline-none font-mono"
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 outline-none font-mono focus:border-indigo-500 focus:bg-white transition-all"
             />
           </div>
 
@@ -165,7 +165,7 @@ export function AdminPasswordChangeModal({ isOpen, onClose }: AdminPasswordChang
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl"
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors cursor-pointer"
             >
               پاشگەزبوونەوە
             </button>
@@ -173,9 +173,10 @@ export function AdminPasswordChangeModal({ isOpen, onClose }: AdminPasswordChang
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black shadow-md shadow-indigo-600/30 flex items-center gap-1.5 active:scale-95 transition-all"
+              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold shadow-xs flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
             >
-              {loading ? 'نوێکردنەوە...' : '💾 پاشەکەوتکردنی پاسۆرد'}
+              <Save className="w-3.5 h-3.5" />
+              <span>{loading ? 'نوێکردنەوە...' : 'پاشەکەوتکردنی پاسۆرد'}</span>
             </button>
           </div>
         </form>

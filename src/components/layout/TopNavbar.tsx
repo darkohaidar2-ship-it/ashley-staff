@@ -89,7 +89,7 @@ export function TopNavbar() {
 
   return (
     <header 
-      className="sticky top-0 z-[100] w-full bg-white/90 dark:bg-[#1c1c1e]/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-white/10 shadow-2xs select-none print:hidden transition-colors"
+      className="sticky top-0 z-[100] w-full bg-white/95 backdrop-blur-xl border-b border-slate-200/80 shadow-2xs select-none print:hidden transition-colors"
       dir="rtl"
     >
       <div className="max-w-[1920px] mx-auto px-2 sm:px-4 h-11 sm:h-12 flex items-center justify-between gap-2">
@@ -97,7 +97,7 @@ export function TopNavbar() {
         {/* Right Brand Badge (RTL First) */}
         <Link 
           href="/"
-          className="flex items-center gap-2 px-2 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors shrink-0"
+          className="flex items-center gap-2 px-2 py-1 rounded-xl hover:bg-slate-100 transition-colors shrink-0"
           title="گەڕانەوە بۆ پەڕەی سەرەکی دەوام"
         >
           {appLogo ? (
@@ -112,7 +112,7 @@ export function TopNavbar() {
               <Building2 className="w-4 h-4" />
             </div>
           )}
-          <span className="text-xs font-black tracking-tight text-slate-900 dark:text-white hidden min-[400px]:inline-block">
+          <span className="text-xs font-black tracking-tight text-slate-900 hidden min-[400px]:inline-block">
             {brandName}
           </span>
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse hidden sm:inline-block" title="سێرڤەر کارایە"></span>
@@ -133,11 +133,11 @@ export function TopNavbar() {
                 href={item.href}
                 className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap active:scale-95 ${
                   isActive
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs font-black'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
+                    ? 'bg-slate-900 text-white shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-emerald-400 dark:text-emerald-600' : 'text-slate-400 dark:text-slate-500'}`} />
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
                 <span>{item.title}</span>
               </Link>
             );

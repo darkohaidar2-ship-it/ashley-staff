@@ -206,7 +206,7 @@ export function AppSidebar() {
               href={item.href}
               className={cn(
                 "flex flex-col items-center justify-center flex-1 h-full gap-1 transition-all duration-200",
-                isActive ? "text-primary scale-105 font-bold" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-350"
+                isActive ? "text-primary scale-105 font-bold" : "text-slate-400 hover:text-slate-600"
               )}
             >
               <item.icon className="w-4.5 h-4.5 shrink-0" />

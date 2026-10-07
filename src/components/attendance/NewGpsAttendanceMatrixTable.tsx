@@ -61,44 +61,44 @@ const DAY_THEMES: Record<number, {
   6: { // 1. Saturday / شەممە (Sky Blue)
     name: 'شەممە',
     shortName: 'شەممە',
-    headerCls: 'bg-sky-100/80 text-sky-950 dark:bg-sky-950/50 dark:text-sky-200 border-t-2 border-t-sky-500',
-    cellCls: 'bg-sky-50/40 dark:bg-sky-950/15',
+    headerCls: 'bg-sky-50 text-sky-900 border-t-2 border-t-sky-500 font-bold',
+    cellCls: 'bg-sky-50/30 hover:bg-sky-100/60 transition-colors',
   },
   0: { // 2. Sunday / یەکشەممە (Indigo)
     name: 'یەکشەممە',
     shortName: 'یەکشەم',
-    headerCls: 'bg-indigo-100/80 text-indigo-950 dark:bg-indigo-950/50 dark:text-indigo-200 border-t-2 border-t-indigo-500',
-    cellCls: 'bg-indigo-50/40 dark:bg-indigo-950/15',
+    headerCls: 'bg-indigo-50 text-indigo-900 border-t-2 border-t-indigo-500 font-bold',
+    cellCls: 'bg-indigo-50/30 hover:bg-indigo-100/60 transition-colors',
   },
   1: { // 3. Monday / دووشەممە (Amber)
     name: 'دووشەممە',
     shortName: 'دووشەم',
-    headerCls: 'bg-amber-100/80 text-amber-950 dark:bg-amber-950/50 dark:text-amber-200 border-t-2 border-t-amber-500',
-    cellCls: 'bg-amber-50/40 dark:bg-amber-950/15',
+    headerCls: 'bg-amber-50 text-amber-900 border-t-2 border-t-amber-500 font-bold',
+    cellCls: 'bg-amber-50/30 hover:bg-amber-100/60 transition-colors',
   },
   2: { // 4. Tuesday / سێشەممە (Violet)
     name: 'سێشەممە',
     shortName: 'سێشەم',
-    headerCls: 'bg-purple-100/80 text-purple-950 dark:bg-purple-950/50 dark:text-purple-200 border-t-2 border-t-purple-500',
-    cellCls: 'bg-purple-50/40 dark:bg-purple-950/15',
+    headerCls: 'bg-purple-50 text-purple-900 border-t-2 border-t-purple-500 font-bold',
+    cellCls: 'bg-purple-50/30 hover:bg-purple-100/60 transition-colors',
   },
-  3: { // 5. Wednesday / چوارشەممە (Emerald)
+  3: { // 5. Wednesday / چوارشەممە (Teal)
     name: 'چوارشەممە',
     shortName: 'چوارشەم',
-    headerCls: 'bg-teal-100/80 text-teal-950 dark:bg-teal-950/50 dark:text-teal-200 border-t-2 border-t-teal-500',
-    cellCls: 'bg-teal-50/40 dark:bg-teal-950/15',
+    headerCls: 'bg-teal-50 text-teal-900 border-t-2 border-t-teal-500 font-bold',
+    cellCls: 'bg-teal-50/30 hover:bg-teal-100/60 transition-colors',
   },
   4: { // 6. Thursday / پێنجشەممە (Rose)
     name: 'پێنجشەممە',
     shortName: 'پێنجشەم',
-    headerCls: 'bg-rose-100/80 text-rose-950 dark:bg-rose-950/50 dark:text-rose-200 border-t-2 border-t-rose-500',
-    cellCls: 'bg-rose-50/40 dark:bg-rose-950/15',
+    headerCls: 'bg-rose-50 text-rose-900 border-t-2 border-t-rose-500 font-bold',
+    cellCls: 'bg-rose-50/30 hover:bg-rose-100/60 transition-colors',
   },
   5: { // 7. Friday / هەینی (Holiday - Emerald)
     name: 'هەینی',
     shortName: 'هەینی',
-    headerCls: 'bg-emerald-200/90 text-emerald-950 dark:bg-emerald-900/60 dark:text-emerald-200 border-t-2 border-t-emerald-600',
-    cellCls: 'bg-emerald-100/50 dark:bg-emerald-950/25',
+    headerCls: 'bg-emerald-100 text-emerald-950 border-t-2 border-t-emerald-600 font-bold',
+    cellCls: 'bg-emerald-50/60 hover:bg-emerald-100/70 transition-colors',
   },
 };
 
@@ -1514,7 +1514,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
     <div className="w-full space-y-2 font-sans select-none" dir="rtl">
       
       {/* 🍏 Apple iOS Matrix Header Container (Edge-to-Edge Fullscreen) */}
-      <div className="w-full bg-white dark:bg-[#2c2c2e] border border-slate-200/80 dark:border-white/10 rounded-xl p-3 sm:p-4 shadow-xs space-y-3">
+      <div className="w-full bg-white border border-slate-200/80 rounded-xl p-3 sm:p-4 shadow-xs space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3.5">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-sm shadow-blue-500/20">
@@ -1522,11 +1522,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white">
+                <h2 className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
                   {viewMode === 'weekly' ? 'خشتەی هەفتانەی ئامادەبوونی کارمەندان' : 'خشتەی مانگانەی ئامادەبوونی کارمەندان'}
                 </h2>
                 {isWaitingData && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 animate-pulse">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/60 animate-pulse">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
                     <span>بارکردنی داتاکان...</span>
                   </span>
@@ -1538,14 +1538,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           {/* Icon-Only Action Controls & Search */}
           <div className="flex flex-wrap items-center gap-2">
             {/* 🔀 Segmented View Switcher: Weekly (Default) vs Monthly */}
-            <div className="flex items-center bg-slate-100 dark:bg-white/10 p-0.5 rounded-full border border-slate-200/80 dark:border-white/10 shadow-2xs">
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-full border border-slate-200/80 shadow-2xs">
               <button
                 type="button"
                 onClick={() => setViewMode('weekly')}
                 className={`h-7 px-3 rounded-full flex items-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
                   viewMode === 'weekly'
                     ? 'bg-[#007AFF] text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+                    : 'text-slate-600 hover:text-slate-900  '
                 }`}
                 title="نیشاندانی هەفتانە (خێرا بۆ ئایپاد)"
               >
@@ -1558,7 +1558,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 className={`h-7 px-3 rounded-full flex items-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
                   viewMode === 'monthly'
                     ? 'bg-[#007AFF] text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+                    : 'text-slate-600 hover:text-slate-900  '
                 }`}
                 title="نیشاندانی تەواوی مانگ (٣١ ڕۆژ)"
               >
@@ -1568,10 +1568,10 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             </div>
             {/* 📅 Icon-only Month Calendar Picker */}
             <div 
-              className="relative h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white flex items-center justify-center transition-all active:scale-90 border border-slate-200/80 dark:border-white/10 cursor-pointer shadow-2xs shrink-0" 
+              className="relative h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center justify-center transition-all active:scale-90 border border-slate-200/80 cursor-pointer shadow-2xs shrink-0" 
               title={`دیاریکردنی مانگ (${selectedMonth})`}
             >
-              <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <Calendar className="w-4 h-4 text-blue-600" />
               <input
                 type="month"
                 value={selectedMonth}
@@ -1594,7 +1594,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               className={`relative h-8 px-3 rounded-full flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 cursor-pointer border shadow-2xs shrink-0 ${
                 isMultiSelectMode 
                   ? 'bg-[#007AFF] text-white border-[#007AFF] shadow-sm ring-2 ring-blue-400/40' 
-                  : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-[#007AFF] dark:text-blue-400 border-blue-200/60 dark:border-blue-800/40'
+                  : 'bg-blue-50 hover:bg-blue-100   text-[#007AFF]  border-blue-200/60 '
               }`}
               title="دەستکاری فرە-ڕۆژ"
               aria-label="دەستکاری فرە-ڕۆژ"
@@ -1611,17 +1611,17 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             {/* 🖨️ Icon-only Print Button */}
             <button 
               onClick={() => setShowPrintModal(true)} 
-              className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white flex items-center justify-center transition-all active:scale-90 border border-slate-200/80 dark:border-white/10 cursor-pointer shadow-2xs"
+              className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center justify-center transition-all active:scale-90 border border-slate-200/80 cursor-pointer shadow-2xs"
               title="چاپکردنی تایبەت"
               aria-label="چاپکردن"
             >
-              <Printer className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <Printer className="w-4 h-4 text-blue-600" />
             </button>
 
             {/* 📊 Icon-only Excel (.xlsx) Instant Export Button */}
             <button
               onClick={handleExportExcelMatrix}
-              className="h-8 w-8 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 flex items-center justify-center transition-all active:scale-90 cursor-pointer border border-emerald-200/80 dark:border-emerald-800/40 shadow-2xs"
+              className="h-8 w-8 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center transition-all active:scale-90 cursor-pointer border border-emerald-200/80 shadow-2xs"
               title="داگرتنی خشتەی ئێکسڵ"
               aria-label="ئێکسڵ"
             >
@@ -1646,7 +1646,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 placeholder="گەڕان..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-2.5 pr-8 py-1.5 rounded-full bg-slate-100 dark:bg-[#3a3a3c] border border-slate-200/60 dark:border-white/5 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 placeholder-slate-400"
+                className="w-full pl-2.5 pr-8 py-1.5 rounded-full bg-slate-100 border border-slate-200/60 text-xs font-medium text-slate-900 focus:outline-none focus:border-blue-500 placeholder-slate-400"
               />
             </div>
           </div>
@@ -1654,14 +1654,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
         {/* 📅 Weekly Navigation Bar (Visible only when Weekly View is active) */}
         {viewMode === 'weekly' && (
-          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t border-slate-100 dark:border-white/5">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t border-slate-100">
             {/* Prev / Next Week Controls */}
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 disabled={selectedWeekIdx === 0}
                 onClick={() => setSelectedWeekIdx(prev => Math.max(0, prev - 1))}
-                className="h-8 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 disabled:opacity-30 disabled:pointer-events-none text-slate-700 dark:text-white flex items-center gap-1 text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95"
+                className="h-8 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:pointer-events-none text-slate-700 flex items-center gap-1 text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95"
                 title="هەفتەی پێشوو"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -1672,7 +1672,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 type="button"
                 disabled={selectedWeekIdx >= weeksList.length - 1}
                 onClick={() => setSelectedWeekIdx(prev => Math.min(weeksList.length - 1, prev + 1))}
-                className="h-8 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 disabled:opacity-30 disabled:pointer-events-none text-slate-700 dark:text-white flex items-center gap-1 text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95"
+                className="h-8 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:pointer-events-none text-slate-700 flex items-center gap-1 text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95"
                 title="هەفتەی داهاتوو"
               >
                 <span>هەفتەی داهاتوو</span>
@@ -1692,15 +1692,15 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     className={`h-8 px-3 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
                       isSelected
                         ? 'bg-[#007AFF] text-white shadow-xs ring-2 ring-blue-400/40'
-                        : 'bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200'
+                        : 'bg-slate-100 hover:bg-slate-200   text-slate-700 '
                     }`}
                   >
                     <span>{w.shortLabel}</span>
-                    <span className={`text-[10px] font-mono px-1 rounded ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-200/70 dark:bg-white/10 text-slate-600 dark:text-slate-300'}`}>
+                    <span className={`text-[10px] font-mono px-1 rounded ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-200/70  text-slate-600 '}`}>
                       {w.startDay}-{w.endDay}
                     </span>
                     {w.hasToday && (
-                      <span className="w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-200 dark:ring-amber-900 animate-pulse" title="ئەمڕۆ لەم هەفتەیەیە" />
+                      <span className="w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-200 animate-pulse" title="ئەمڕۆ لەم هەفتەیەیە" />
                     )}
                   </button>
                 );
@@ -1708,7 +1708,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             </div>
 
             {/* Active Week Range Text Badge */}
-            <div className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5 bg-slate-50 dark:bg-white/5 px-3 py-1.5 rounded-lg border border-slate-200/60 dark:border-white/5">
+            <div className="text-xs font-bold text-slate-600 flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/60">
               <span className="w-2 h-2 rounded-full bg-[#007AFF]" />
               <span>{weeksList[selectedWeekIdx]?.label}</span>
             </div>
@@ -1717,11 +1717,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       </div>
 
       {/* 🍏 Apple iOS Clean Matrix Table Card with Crisp Grid Borders & Fluid Viewport Height */}
-      <div className="w-full overflow-x-auto border border-slate-300 dark:border-white/15 rounded-xl shadow-xs bg-white dark:bg-[#2c2c2e] max-h-[calc(100vh-140px)] min-h-[580px] overflow-y-auto">
-        <table className={`w-full text-right border-collapse border border-slate-300 dark:border-white/15 ${tableFitMode === 'fit' ? 'table-fixed text-[11px]' : 'text-xs'}`}>
-          <thead className="sticky top-0 bg-slate-50/98 dark:bg-[#2c2c2e]/98 backdrop-blur-md z-20">
-            <tr className="border-b-2 border-slate-300 dark:border-slate-700">
-              <th className={`sticky right-0 bg-slate-100/98 dark:bg-[#3a3a3c]/98 text-slate-900 dark:text-white font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l-2 border-l-slate-300 dark:border-l-slate-600 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] ${
+      <div className="w-full overflow-x-auto border border-slate-300 rounded-xl shadow-xs bg-white max-h-[calc(100vh-140px)] min-h-[580px] overflow-y-auto">
+        <table className={`w-full text-right border-collapse border border-slate-300  ${tableFitMode === 'fit' ? 'table-fixed text-[11px]' : 'text-xs'}`}>
+          <thead className="sticky top-0 bg-slate-50/98 backdrop-blur-md z-20">
+            <tr className="border-b-2 border-slate-300">
+              <th className={`sticky right-0 bg-slate-100/98  text-slate-900  font-bold border-b-2 border-slate-300  border-l-2 border-l-slate-300  z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] ${
                 tableFitMode === 'fit' ? 'w-[145px] min-w-[145px] px-2 py-2 text-[11px]' : 'min-w-[200px] px-3 py-3 text-xs'
               }`}>
                 <div className="flex items-center justify-between">
@@ -1753,17 +1753,17 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       }
                     }}
                     title={isMultiSelectMode ? `کرتە بکە بۆ دیاریکردنی هەموو کارمەندان لە ڕۆژی ${d.dayNum}` : `ڕۆژی ${d.dayNum} (${theme.name})`}
-                    className={`relative text-center font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 transition-all ${
+                    className={`relative text-center font-bold border-b-2 border-slate-300  border-l border-slate-300  transition-all ${
                       isMultiSelectMode ? 'cursor-pointer hover:brightness-95' : 'cursor-default'
                     } ${
                       isColFullySelected 
-                        ? 'bg-blue-200 dark:bg-blue-900 text-blue-950 dark:text-blue-100 ring-2 ring-[#007AFF] ring-inset shadow-xs' 
+                        ? 'bg-blue-200  text-blue-950  ring-2 ring-[#007AFF] ring-inset shadow-xs' 
                         : isColPartiallySelected 
-                        ? 'bg-blue-100/70 dark:bg-blue-950/70 ring-1 ring-blue-400 ring-inset' 
+                        ? 'bg-blue-100/70  ring-1 ring-blue-400 ring-inset' 
                         : theme.headerCls
                     } ${
                       isFriday 
-                        ? 'border-l-2 border-l-slate-400 dark:border-l-slate-500' 
+                        ? 'border-l-2 border-l-slate-400 ' 
                         : ''
                     } ${
                       d.isToday 
@@ -1790,39 +1790,39 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 );
               })}
               {/* 📊 Monthly Totals / KPI Summary Columns with Authoritative Divider */}
-              <th className={`bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 border-r-2 border-r-slate-400 dark:border-r-slate-500 text-center ${
+              <th className={`bg-emerald-50/90  text-emerald-900  font-bold border-b-2 border-slate-300  border-l border-slate-300  border-r-2 border-r-slate-400  text-center ${
                 tableFitMode === 'fit' ? 'w-[40px] min-w-[40px] px-0.5 py-1 text-[9px]' : 'min-w-[76px] px-2.5 py-2'
               }`}>
                 <div>ئامادەبوو</div>
-                <div className="text-[8px] font-medium text-emerald-700 dark:text-emerald-400">
+                <div className="text-[8px] font-medium text-emerald-700">
                   {viewMode === 'weekly' ? 'هەفتە' : 'ڕۆژ'}
                 </div>
               </th>
-              <th className={`bg-blue-50/90 dark:bg-blue-950/40 text-blue-900 dark:text-blue-300 font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 text-center ${
+              <th className={`bg-blue-50/90  text-blue-900  font-bold border-b-2 border-slate-300  border-l border-slate-300  text-center ${
                 tableFitMode === 'fit' ? 'w-[40px] min-w-[40px] px-0.5 py-1 text-[9px]' : 'min-w-[76px] px-2.5 py-2'
               }`}>
                 <div>کۆی کاژێر</div>
-                <div className="text-[8px] font-medium text-blue-700 dark:text-blue-400">کاتژمێر</div>
+                <div className="text-[8px] font-medium text-blue-700">کاتژمێر</div>
               </th>
-              <th className={`bg-amber-50/90 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300 font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 text-center ${
+              <th className={`bg-amber-50/90  text-amber-900  font-bold border-b-2 border-slate-300  border-l border-slate-300  text-center ${
                 tableFitMode === 'fit' ? 'w-[32px] min-w-[32px] px-0.5 py-1 text-[9px]' : 'min-w-[62px] px-2 py-2'
               }`}>
                 <div>درەنگ</div>
-                <div className="text-[8px] font-medium text-amber-700 dark:text-amber-400">جار</div>
+                <div className="text-[8px] font-medium text-amber-700">جار</div>
               </th>
-              <th className={`bg-rose-50/90 dark:bg-rose-950/40 text-rose-900 dark:text-rose-300 font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 text-center ${
+              <th className={`bg-rose-50/90  text-rose-900  font-bold border-b-2 border-slate-300  border-l border-slate-300  text-center ${
                 tableFitMode === 'fit' ? 'w-[32px] min-w-[32px] px-0.5 py-1 text-[9px]' : 'min-w-[60px] px-2 py-2'
               }`}>
                 <div>غیاب</div>
-                <div className="text-[8px] font-medium text-rose-700 dark:text-rose-400">ڕۆژ</div>
+                <div className="text-[8px] font-medium text-rose-700">ڕۆژ</div>
               </th>
-              <th className={`bg-amber-50/90 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300 font-bold border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 text-center ${
+              <th className={`bg-amber-50/90  text-amber-900  font-bold border-b-2 border-slate-300  border-l border-slate-300  text-center ${
                 tableFitMode === 'fit' ? 'w-[32px] min-w-[32px] px-0.5 py-1 text-[9px]' : 'min-w-[60px] px-2 py-2'
               }`}>
                 <div>مۆڵەت</div>
-                <div className="text-[8px] font-medium text-amber-700 dark:text-amber-400">ڕۆژ</div>
+                <div className="text-[8px] font-medium text-amber-700">ڕۆژ</div>
               </th>
-              <th className={`bg-slate-200 text-slate-900 font-black border-b-2 border-slate-300 dark:border-slate-700 border-l border-slate-300 dark:border-slate-700 text-center ${
+              <th className={`bg-slate-200 text-slate-900 font-black border-b-2 border-slate-300  border-l border-slate-300  text-center ${
                 tableFitMode === 'fit' ? 'w-[36px] min-w-[36px] px-0.5 py-1 text-[9px]' : 'min-w-[65px] px-2 py-2'
               }`}>
                 <div>ڕێژە ٪</div>
@@ -1830,7 +1830,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-300/80 dark:divide-slate-700">
+          <tbody className="divide-y divide-slate-300/80">
             {activeEmployees.map((emp, empIndex) => {
               const isDarko = emp.id === 'emp-02' || (emp.fullName3Part || emp.name || '').includes('دارکۆ');
               const isManager = emp.role === 'Manager' || isDarko;
@@ -1870,8 +1870,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               const attendanceRate = Math.min(100, Math.round((empPresentDays / workableDays) * 100));
 
               return (
-                <tr key={emp.id} className={`hover:bg-blue-50/60 dark:hover:bg-white/10 transition-colors border-b border-slate-300/80 dark:border-slate-700/80 ${isDarko ? 'bg-amber-50/20 dark:bg-amber-950/10' : empIndex % 2 === 1 ? 'bg-slate-50/50 dark:bg-white/[0.02]' : 'bg-white dark:bg-transparent'}`}>
-                  <td className={`sticky right-0 bg-white/98 dark:bg-[#2c2c2e]/98 backdrop-blur-md z-10 border-b border-slate-300/80 dark:border-slate-700/80 border-l-2 border-l-slate-400 dark:border-l-slate-500 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] ${
+                <tr key={emp.id} className={`hover:bg-blue-50/60  transition-colors border-b border-slate-300/80  ${isDarko ? 'bg-amber-50/20 ' : empIndex % 2 === 1 ? 'bg-slate-50/50 ' : 'bg-white '}`}>
+                  <td className={`sticky right-0 bg-white/98  backdrop-blur-md z-10 border-b border-slate-300/80  border-l-2 border-l-slate-400  shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] ${
                     tableFitMode === 'fit' ? 'w-[145px] min-w-[145px] px-1.5 py-1.5' : 'px-3 py-2.5'
                   }`}>
                     <div className="flex items-center gap-1 sm:gap-1.5">
@@ -1887,7 +1887,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           className={`p-1 rounded-md transition-colors shrink-0 ${
                             displayedDays.length > 0 && displayedDays.every(d => Boolean(selectedCells[`${emp.id}_${d.dateStr}`]))
                               ? 'bg-[#007AFF] text-white shadow-xs'
-                              : 'text-slate-300 hover:text-[#007AFF] dark:text-slate-600 dark:hover:text-blue-400'
+                              : 'text-slate-300 hover:text-[#007AFF]  '
                           }`}
                           title={viewMode === 'weekly' ? "دیاریکردنی هەموو ڕۆژەکانی ئەم کارمەندە لەم هەفتەیەدا" : "دیاریکردنی هەموو ڕۆژەکانی ئەم کارمەندە لەم مانگەدا"}
                         >
@@ -1904,7 +1904,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         className="flex items-center gap-1.5 sm:gap-2 text-right hover:text-[#007AFF] cursor-pointer group transition-colors w-full overflow-hidden"
                         title="کلیک بکە بۆ کردنەوەی پەیجی فەرمی ئەم کارمەندە و ئامێر و مۆبایلەکەی"
                       >
-                        <div className={`${tableFitMode === 'fit' ? 'w-6 h-6 rounded-lg text-[10px]' : 'w-8 h-8 rounded-xl text-xs'} bg-gradient-to-tr from-slate-800 to-slate-900 border border-slate-200/60 dark:border-white/10 overflow-hidden flex items-center justify-center text-white font-bold shrink-0 group-hover:border-[#007AFF] shadow-xs`}>
+                        <div className={`${tableFitMode === 'fit' ? 'w-6 h-6 rounded-lg text-[10px]' : 'w-8 h-8 rounded-xl text-xs'} bg-gradient-to-tr from-slate-800 to-slate-900 border border-slate-200/60  overflow-hidden flex items-center justify-center text-white font-bold shrink-0 group-hover:border-[#007AFF] shadow-xs`}>
                           {emp.photoUrl ? (
                             <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
                           ) : (
@@ -1912,7 +1912,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           )}
                         </div>
                         <div className="overflow-hidden">
-                          <div className={`${tableFitMode === 'fit' ? 'text-[11px]' : 'text-xs'} font-bold text-slate-900 dark:text-white group-hover:text-[#007AFF] flex items-center gap-1 truncate`}>
+                          <div className={`${tableFitMode === 'fit' ? 'text-[11px]' : 'text-xs'} font-bold text-slate-900  group-hover:text-[#007AFF] flex items-center gap-1 truncate`}>
                             <span className="truncate">{emp.fullName3Part || emp.name}</span>
                             <ExternalLink className="w-2.5 h-2.5 text-slate-400 group-hover:text-[#007AFF] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                           </div>
@@ -1939,37 +1939,37 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     const cellKey = `${emp.id}_${d.dateStr}`;
                     const isCellSelected = Boolean(selectedCells[cellKey]);
 
-                    let badgeColor = 'text-slate-300 dark:text-slate-600 font-normal';
+                    let badgeColor = 'text-slate-300  font-normal';
                     let badgeText = '-';
 
                     // 1. Holiday / پشوو
                     if (info.status === 'Holiday' || info.status === 'پشوو') {
-                      badgeColor = 'text-teal-700 dark:text-teal-400 font-bold';
+                      badgeColor = 'text-teal-700  font-bold';
                       badgeText = 'پشوو';
                     }
                     // 2. Present / Check-in
                     else if (isPresent) {
-                      badgeColor = 'text-emerald-800 dark:text-emerald-300 font-bold';
+                      badgeColor = 'text-emerald-800  font-bold';
                       badgeText = inTime;
                     }
                     // 3. Leave / مۆڵەت
                     else if (info.status === 'Leave' || info.status === 'مۆڵەت') {
-                      badgeColor = 'text-amber-800 dark:text-amber-300 font-bold';
+                      badgeColor = 'text-amber-800  font-bold';
                       badgeText = tableFitMode === 'fit' ? 'مۆڵەت' : 'مۆڵەت';
                     }
                     // 4. Absent / غیاب
                     else if (info.status === 'Absent' || info.status === 'غیاب') {
-                      badgeColor = 'text-rose-700 dark:text-rose-400 font-bold';
+                      badgeColor = 'text-rose-700  font-bold';
                       badgeText = tableFitMode === 'fit' ? 'غ' : 'غیاب';
                     }
                     // 5. Loading / چاوەڕوانی (Quiet clean state while loading server data)
                     else if (info.status === 'Loading' || isWaitingData) {
-                      badgeColor = 'text-slate-400 dark:text-slate-500 font-normal';
+                      badgeColor = 'text-slate-400  font-normal';
                       badgeText = '-';
                     }
                     // 6. Empty / Clean Blank / Future
                     else {
-                      badgeColor = 'text-slate-300 dark:text-slate-600 font-normal';
+                      badgeColor = 'text-slate-300  font-normal';
                       badgeText = '-';
                     }
 
@@ -2028,16 +2028,16 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           }
                         }}
                         title={`شێفت: ${info.shiftLabel || 'بەیانیان (8-5)'}\nهاتن: ${info.checkInTime || '08:00'} (${info.checkInStatus?.label || ''})\nڕۆیشتن: ${info.checkOutTime || (d.isToday ? 'بەردەوام' : 'تۆمار نەکراوە')} (${info.checkOutStatus?.label || ''})${info.checkInNote ? `\nتێبینی هاتن: ${info.checkInNote}` : ''}${info.checkOutNote ? `\nتێبینی ڕۆیشتن / ئیزافە: ${info.checkOutNote}` : ''}${info.note && info.note !== info.checkInNote && info.note !== info.checkOutNote ? `\nتێبینی: ${info.note}` : ''}${info.adminNote ? `\nتێبینی ئەدمین: ${info.adminNote}` : ''}`}
-                        className={`relative text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 select-none transition-all ${
+                        className={`relative text-center border-b border-slate-300/80  border-l border-slate-300/80  select-none transition-all ${
                           isCellSelected 
-                            ? 'ring-2 ring-[#007AFF] bg-blue-100 dark:bg-blue-900/90 font-black shadow-md z-20 scale-[1.03]' 
+                            ? 'ring-2 ring-[#007AFF] bg-blue-100  font-black shadow-md z-20 scale-[1.03]' 
                             : theme.cellCls
                         } ${
                           isMultiSelectMode || isDraggingCells ? 'cursor-cell' : 'cursor-pointer'
                         } hover:bg-[#007AFF]/20 ${
-                          isFriday ? 'border-l-2 border-l-slate-400 dark:border-l-slate-500' : ''
+                          isFriday ? 'border-l-2 border-l-slate-400 ' : ''
                         } ${
-                          d.isToday ? 'ring-1 ring-amber-400 ring-inset bg-amber-100/50 dark:bg-amber-950/40' : ''
+                          d.isToday ? 'ring-1 ring-amber-400 ring-inset bg-amber-100/50 ' : ''
                         } ${
                           viewMode === 'weekly'
                             ? 'p-2 min-w-[70px] sm:min-w-[90px]'
@@ -2077,16 +2077,16 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
                         {isPresent ? (
                           <div className={`w-full flex flex-col items-center justify-center ${viewMode === 'weekly' ? 'py-1.5' : tableFitMode === 'fit' ? 'py-0.5' : 'py-1'} leading-none select-none`}>
-                            <span className={`font-mono font-extrabold ${viewMode === 'weekly' ? 'text-xs sm:text-sm' : tableFitMode === 'fit' ? 'text-[9.5px]' : 'text-xs'} ${info.checkInStatus?.colorCls || 'text-slate-900 dark:text-slate-100'} leading-tight tracking-tight`}>
+                            <span className={`font-mono font-extrabold ${viewMode === 'weekly' ? 'text-xs sm:text-sm' : tableFitMode === 'fit' ? 'text-[9.5px]' : 'text-xs'} ${info.checkInStatus?.colorCls || 'text-slate-900 '} leading-tight tracking-tight`}>
                               {inTime}
                             </span>
-                            <span className={`font-mono font-semibold ${viewMode === 'weekly' ? 'text-[11px] mt-1' : tableFitMode === 'fit' ? 'text-[8px] mt-0.5' : 'text-[10px] mt-1'} ${info.checkOutStatus?.colorCls || 'text-slate-500 dark:text-slate-400'} leading-tight tracking-tight`}>
+                            <span className={`font-mono font-semibold ${viewMode === 'weekly' ? 'text-[11px] mt-1' : tableFitMode === 'fit' ? 'text-[8px] mt-0.5' : 'text-[10px] mt-1'} ${info.checkOutStatus?.colorCls || 'text-slate-500 '} leading-tight tracking-tight`}>
                               {outTime === 'بەردەوام' ? (tableFitMode === 'fit' ? '••' : 'بەردەوام') : outTime}
                             </span>
                           </div>
                         ) : info.status === 'Loading' ? (
                           <div className={`w-full ${viewMode === 'weekly' ? 'py-2' : tableFitMode === 'fit' ? 'py-1' : 'py-2'} flex items-center justify-center`}>
-                            <span className="inline-block w-3.5 h-1.5 bg-slate-200/90 dark:bg-slate-700/90 rounded-full animate-pulse" />
+                            <span className="inline-block w-3.5 h-1.5 bg-slate-200/90 rounded-full animate-pulse" />
                           </div>
                         ) : (
                           <div className={`w-full ${viewMode === 'weekly' ? 'py-2 text-xs' : tableFitMode === 'fit' ? 'py-1 text-[8.5px]' : 'py-2 text-[10px]'} font-bold flex items-center justify-center ${badgeColor}`}>
@@ -2098,76 +2098,76 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   })}
 
                   {/* 📊 Apple Summary Pills for this employee with Authoritative Divider */}
-                  <td className={`text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 border-r-2 border-r-slate-400 dark:border-r-slate-500 bg-slate-50/40 dark:bg-white/[0.01] ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
+                  <td className={`text-center border-b border-slate-300/80  border-l border-slate-300/80  border-r-2 border-r-slate-400  bg-slate-50/40  ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
                     {isWaitingData ? (
-                      <span className="inline-block w-8 h-4 bg-slate-200/80 dark:bg-slate-700/80 rounded-md animate-pulse" />
+                      <span className="inline-block w-8 h-4 bg-slate-200/80 rounded-md animate-pulse" />
                     ) : (
                       <span className={`inline-block font-mono font-bold ${
                         tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2.5 py-1 rounded-xl text-xs'
-                      } bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20`}>
+                      } bg-emerald-500/15 text-emerald-800  border border-emerald-500/20`}>
                         {empPresentDays}{tableFitMode === 'fit' ? '' : ' ڕۆژ'}
                       </span>
                     )}
                   </td>
-                  <td className={`text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 bg-slate-50/40 dark:bg-white/[0.01] ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
+                  <td className={`text-center border-b border-slate-300/80  border-l border-slate-300/80  bg-slate-50/40  ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
                     {isWaitingData ? (
-                      <span className="inline-block w-8 h-4 bg-slate-200/80 dark:bg-slate-700/80 rounded-md animate-pulse" />
+                      <span className="inline-block w-8 h-4 bg-slate-200/80 rounded-md animate-pulse" />
                     ) : (
                       <span className={`inline-block font-mono font-bold ${
                         tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2.5 py-1 rounded-xl text-xs'
-                      } bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/20`}>
+                      } bg-blue-500/15 text-blue-800  border border-blue-500/20`}>
                         {empTotalHours} ک
                       </span>
                     )}
                   </td>
-                  <td className={`text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 bg-slate-50/40 dark:bg-white/[0.01] ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
+                  <td className={`text-center border-b border-slate-300/80  border-l border-slate-300/80  bg-slate-50/40  ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
                     {isWaitingData ? (
-                      <span className="inline-block w-6 h-4 bg-slate-200/80 dark:bg-slate-700/80 rounded-md animate-pulse" />
+                      <span className="inline-block w-6 h-4 bg-slate-200/80 rounded-md animate-pulse" />
                     ) : (
                       <span className={`inline-block font-mono font-bold ${
                         tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2 py-0.5 rounded-lg text-xs'
                       } ${
-                        empLateDays > 0 ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30' : 'text-slate-400 dark:text-slate-600'
+                        empLateDays > 0 ? 'bg-amber-500/20 text-amber-800  border border-amber-500/30' : 'text-slate-400 '
                       }`}>
                         {empLateDays > 0 ? (tableFitMode === 'fit' ? empLateDays : `${empLateDays} جار`) : '٠'}
                       </span>
                     )}
                   </td>
-                  <td className={`text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 bg-slate-50/40 dark:bg-white/[0.01] ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
+                  <td className={`text-center border-b border-slate-300/80  border-l border-slate-300/80  bg-slate-50/40  ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
                     {isWaitingData ? (
-                      <span className="inline-block w-6 h-4 bg-slate-200/80 dark:bg-slate-700/80 rounded-md animate-pulse" />
+                      <span className="inline-block w-6 h-4 bg-slate-200/80 rounded-md animate-pulse" />
                     ) : (
                       <span className={`inline-block font-mono font-bold ${
                         tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2 py-0.5 rounded-lg text-xs'
                       } ${
-                        empAbsentDays > 0 ? 'bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-500/20' : 'text-slate-400 dark:text-slate-600'
+                        empAbsentDays > 0 ? 'bg-rose-500/15 text-rose-800  border border-rose-500/20' : 'text-slate-400 '
                       }`}>
                         {empAbsentDays > 0 ? (tableFitMode === 'fit' ? empAbsentDays : `${empAbsentDays} ڕۆژ`) : '٠'}
                       </span>
                     )}
                   </td>
-                  <td className={`text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 bg-slate-50/40 dark:bg-white/[0.01] ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
+                  <td className={`text-center border-b border-slate-300/80  border-l border-slate-300/80  bg-slate-50/40  ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
                     {isWaitingData ? (
-                      <span className="inline-block w-6 h-4 bg-slate-200/80 dark:bg-slate-700/80 rounded-md animate-pulse" />
+                      <span className="inline-block w-6 h-4 bg-slate-200/80 rounded-md animate-pulse" />
                     ) : (
                       <span className={`inline-block font-mono font-bold ${
                         tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2 py-0.5 rounded-lg text-xs'
                       } ${
-                        empLeaveDays > 0 ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/20' : 'text-slate-400 dark:text-slate-600'
+                        empLeaveDays > 0 ? 'bg-amber-500/15 text-amber-800  border border-amber-500/20' : 'text-slate-400 '
                       }`}>
                         {empLeaveDays > 0 ? (tableFitMode === 'fit' ? empLeaveDays : `${empLeaveDays} ڕۆژ`) : '٠'}
                       </span>
                     )}
                   </td>
-                  <td className={`text-center border-b border-slate-300/80 dark:border-slate-700/80 border-l border-slate-300/80 dark:border-slate-700/80 bg-slate-50/40 dark:bg-white/[0.01] ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
+                  <td className={`text-center border-b border-slate-300/80  border-l border-slate-300/80  bg-slate-50/40  ${tableFitMode === 'fit' ? 'p-0.5' : 'p-2'}`}>
                     {isWaitingData ? (
-                      <span className="inline-block w-7 h-4 bg-slate-200/80 dark:bg-slate-700/80 rounded-md animate-pulse" />
+                      <span className="inline-block w-7 h-4 bg-slate-200/80 rounded-md animate-pulse" />
                     ) : (
                       <span className={`inline-block font-mono font-bold ${
                         tableFitMode === 'fit' ? 'px-1 py-0.5 rounded-md text-[9px]' : 'px-2 py-0.5 rounded-lg text-xs'
                       } ${
-                        attendanceRate >= 90 ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300' : 
-                        attendanceRate >= 75 ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300' : 'bg-rose-500/15 text-rose-800 dark:text-rose-300'
+                        attendanceRate >= 90 ? 'bg-emerald-500/15 text-emerald-800 ' : 
+                        attendanceRate >= 75 ? 'bg-amber-500/15 text-amber-800 ' : 'bg-rose-500/15 text-rose-800 '
                       }`}>
                         %{attendanceRate}
                       </span>
@@ -2185,24 +2185,24 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       {/* ========================================================================= */}
       {selectedDayModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/45 backdrop-blur-xs animate-in fade-in duration-150 font-sans" dir="rtl" onClick={() => setSelectedDayModal(null)}>
-          <div className="bg-white dark:bg-[#1c1c1e] text-slate-900 dark:text-white rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-md w-full overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white text-slate-900 rounded-2xl border border-slate-200 shadow-xl max-w-md w-full overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
             
             {/* 1. Clean Neutral Header */}
-            <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-[#242426]">
+            <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-slate-900 dark:bg-slate-700 text-white font-bold flex items-center justify-center text-xs">
+                <div className="w-9 h-9 rounded-xl bg-slate-900 text-white font-bold flex items-center justify-center text-xs">
                   {(selectedDayModal.emp.name || '').slice(0, 2)}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                    <h3 className="font-bold text-sm text-slate-900">
                       {selectedDayModal.emp.fullName3Part || selectedDayModal.emp.name}
                     </h3>
-                    <span className="text-[10px] font-medium bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-md">
+                    <span className="text-[10px] font-medium bg-slate-200/70 text-slate-700 px-2 py-0.5 rounded-md">
                       {translateRoleToKurdish(selectedDayModal.emp.role)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono mt-0.5">
                     <span>{selectedDayModal.dayItem.dateStr}</span>
                     <span>•</span>
                     <span>#{selectedDayModal.emp.id}</span>
@@ -2213,7 +2213,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               <button 
                 type="button"
                 onClick={() => setSelectedDayModal(null)}
-                className="w-7 h-7 rounded-lg bg-slate-200/60 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 flex items-center justify-center cursor-pointer transition-colors"
+                className="w-7 h-7 rounded-lg bg-slate-200/60 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer transition-colors"
                 title="داخستن"
               >
                 <X className="w-4 h-4" />
@@ -2224,21 +2224,21 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             <div className="p-5 space-y-4 overflow-y-auto">
               
               {/* 2. Compact 1-Line Employee Mobile Record Strip */}
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#242426] border border-slate-200/80 dark:border-slate-800 space-y-1.5">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
+                  <span className="text-slate-500 font-bold flex items-center gap-1.5">
                     <Smartphone className="w-3.5 h-3.5 text-slate-500" />
                     <span>تۆماری مۆبایل ({selectedDayModal.info.shiftLabel || 'بەیانیان 8-5'}):</span>
                   </span>
-                  <div className="flex items-center gap-3 font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
+                  <div className="flex items-center gap-3 font-mono text-xs font-bold text-slate-800">
                     <span>هاتن: {selectedDayModal.info.rawCheckIn || selectedDayModal.info.checkInTime || '—'}</span>
-                    <span className="text-slate-300 dark:text-slate-700">|</span>
+                    <span className="text-slate-300">|</span>
                     <span>چوون: {selectedDayModal.info.rawCheckOut || selectedDayModal.info.checkOutTime || (selectedDayModal.dayItem.isToday ? 'بەردەوام' : '—')}</span>
                   </div>
                 </div>
 
                 {(selectedDayModal.info.checkInNote || selectedDayModal.info.checkOutNote || selectedDayModal.info.note) && (
-                  <div className="text-[11px] text-slate-600 dark:text-slate-300 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+                  <div className="text-[11px] text-slate-600 pt-1.5 border-t border-slate-200/60">
                     <span className="font-bold text-slate-500">تێبینی کارمەند: </span>
                     <span className="font-medium">
                       {[selectedDayModal.info.checkInNote || selectedDayModal.info.note, selectedDayModal.info.checkOutNote].filter(Boolean).join(' • ')}
@@ -2249,8 +2249,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
               {/* 3. Clean Neutral Status Selector */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">دۆخی ڕۆژ:</label>
-                <div className="p-1 bg-slate-100 dark:bg-[#242426] rounded-xl grid grid-cols-4 gap-1 border border-slate-200/70 dark:border-slate-800">
+                <label className="text-[11px] font-bold text-slate-600 block">دۆخی ڕۆژ:</label>
+                <div className="p-1 bg-slate-100 rounded-xl grid grid-cols-4 gap-1 border border-slate-200/70">
                   {[
                     { key: 'Present', label: 'ئامادەبوو' },
                     { key: 'Leave', label: 'مۆڵەت' },
@@ -2265,8 +2265,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         onClick={() => setModalStatus(s.key)}
                         className={`py-2 px-1 rounded-lg text-xs transition-all cursor-pointer text-center ${
                           isSelected 
-                            ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xs font-black' 
-                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold'
+                            ? 'bg-slate-900  text-white  shadow-xs font-black' 
+                            : 'text-slate-600  hover:text-slate-900  font-bold'
                         }`}
                       >
                         {s.label}
@@ -2281,15 +2281,15 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 <div className="space-y-2.5 pt-1">
                   {/* Quick Shift Presets (8-5 vs 3-11) */}
                   <div className="flex items-center justify-between gap-2 px-1">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">شێفتی خێرا:</span>
+                    <span className="text-[11px] font-bold text-slate-500">شێفتی خێرا:</span>
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => { setModalCheckIn('08:00'); setModalCheckOut('17:00'); }}
                         className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
                           modalCheckIn === '08:00' && modalCheckOut === '17:00'
-                            ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900'
-                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200 dark:bg-[#242426] dark:text-slate-300 dark:border-slate-800'
+                            ? 'bg-slate-900 text-white border-slate-900  '
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200   '
                         }`}
                       >
                         بەیانیان (8:00 - 5:00)
@@ -2299,8 +2299,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         onClick={() => { setModalCheckIn('15:00'); setModalCheckOut('23:00'); }}
                         className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
                           modalCheckIn === '15:00' && modalCheckOut === '23:00'
-                            ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900'
-                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200 dark:bg-[#242426] dark:text-slate-300 dark:border-slate-800'
+                            ? 'bg-slate-900 text-white border-slate-900  '
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200   '
                         }`}
                       >
                         ئێواران (3:00 - 11:00)
@@ -2309,18 +2309,18 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   </div>
 
                   {/* Check-in Row */}
-                  <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 bg-white dark:bg-[#242426]">
+                  <div className="p-3 rounded-xl border border-slate-200 flex items-center justify-between gap-2 bg-white">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 w-20">کاتی هاتن:</span>
+                      <span className="text-xs font-bold text-slate-700 w-20">کاتی هاتن:</span>
                       <input 
                         type="time" 
                         value={modalCheckIn}
                         onChange={(e) => setModalCheckIn(e.target.value)}
-                        className="text-xs font-bold font-mono bg-slate-50 dark:bg-[#1c1c1e] text-slate-900 dark:text-white px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 outline-none focus:border-slate-900"
+                        className="text-xs font-bold font-mono bg-slate-50 text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:border-slate-900"
                       />
                     </div>
 
-                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#1c1c1e] p-0.5 rounded-lg border border-slate-200/70 dark:border-slate-800">
+                    <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200/70">
                       <button
                         type="button"
                         onClick={() => {
@@ -2330,8 +2330,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         }}
                         className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${
                           modalCheckInDecision === 'waived'
-                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                            ? 'bg-slate-900 text-white  '
+                            : 'text-slate-600  hover:text-slate-900'
                         }`}
                       >
                         لێخۆشبوون
@@ -2346,7 +2346,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${
                           modalCheckInDecision === 'penalized'
                             ? 'bg-rose-600 text-white'
-                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                            : 'text-slate-600  hover:text-slate-900'
                         }`}
                       >
                         سزا
@@ -2355,18 +2355,18 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   </div>
 
                   {/* Check-out Row */}
-                  <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 bg-white dark:bg-[#242426]">
+                  <div className="p-3 rounded-xl border border-slate-200 flex items-center justify-between gap-2 bg-white">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 w-20">کاتی چوون:</span>
+                      <span className="text-xs font-bold text-slate-700 w-20">کاتی چوون:</span>
                       <input 
                         type="time" 
                         value={modalCheckOut}
                         onChange={(e) => setModalCheckOut(e.target.value)}
-                        className="text-xs font-bold font-mono bg-slate-50 dark:bg-[#1c1c1e] text-slate-900 dark:text-white px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 outline-none focus:border-slate-900"
+                        className="text-xs font-bold font-mono bg-slate-50 text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:border-slate-900"
                       />
                     </div>
 
-                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#1c1c1e] p-0.5 rounded-lg border border-slate-200/70 dark:border-slate-800">
+                    <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200/70">
                       <button
                         type="button"
                         onClick={() => {
@@ -2376,8 +2376,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         }}
                         className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${
                           modalCheckOutDecision === 'waived'
-                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                            ? 'bg-slate-900 text-white  '
+                            : 'text-slate-600  hover:text-slate-900'
                         }`}
                       >
                         لێخۆشبوون
@@ -2392,7 +2392,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${
                           modalCheckOutDecision === 'penalized'
                             ? 'bg-rose-600 text-white'
-                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                            : 'text-slate-600  hover:text-slate-900'
                         }`}
                       >
                         سزا
@@ -2404,7 +2404,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
               {/* 5. Single Clean Admin Note Input (Available for all statuses) */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">
+                <label className="text-[11px] font-bold text-slate-600 block">
                   تێبینی ئەدمین:
                 </label>
                 <input
@@ -2415,28 +2415,28 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     setModalAdminNote(e.target.value);
                   }}
                   placeholder="تێبینی یان هۆکاری گۆڕانکاری بنووسە..."
-                  className="w-full text-xs bg-slate-50 dark:bg-[#242426] border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl outline-none focus:bg-white focus:border-slate-900 text-slate-900 dark:text-white font-medium"
+                  className="w-full text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl outline-none focus:bg-white focus:border-slate-900 text-slate-900 font-medium"
                 />
               </div>
 
               {/* 6. Collapsible Edit History (Only rendered if history exists) */}
               {Array.isArray(selectedDayModal.info.historyLogs) && selectedDayModal.info.historyLogs.length > 0 && (
-                <details className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-[#242426] overflow-hidden">
-                  <summary className="px-3.5 py-2.5 text-[11px] font-bold text-slate-600 dark:text-slate-300 cursor-pointer flex items-center justify-between select-none list-none">
+                <details className="group rounded-xl border border-slate-200 bg-slate-50/60 overflow-hidden">
+                  <summary className="px-3.5 py-2.5 text-[11px] font-bold text-slate-600 cursor-pointer flex items-center justify-between select-none list-none">
                     <span className="flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 text-slate-400" />
                       <span>مێژووی دەستکارییەکان ({selectedDayModal.info.historyLogs.length})</span>
                     </span>
                     <span className="text-[10px] text-slate-400 group-open:rotate-180 transition-transform">▼</span>
                   </summary>
-                  <div className="p-3 pt-1 space-y-2 border-t border-slate-200/60 dark:border-slate-800 max-h-40 overflow-y-auto">
+                  <div className="p-3 pt-1 space-y-2 border-t border-slate-200/60 max-h-40 overflow-y-auto">
                     {selectedDayModal.info.historyLogs.map((log: any, idx: number) => (
-                      <div key={log.id || idx} className="p-2.5 rounded-lg bg-white dark:bg-[#1c1c1e] border border-slate-200/70 dark:border-slate-800 text-[11px] space-y-1">
+                      <div key={log.id || idx} className="p-2.5 rounded-lg bg-white border border-slate-200/70 text-[11px] space-y-1">
                         <div className="flex items-center justify-between text-slate-500">
-                          <span className="font-bold text-slate-700 dark:text-slate-300">{log.adminName || 'ئەدمین'}</span>
+                          <span className="font-bold text-slate-700">{log.adminName || 'ئەدمین'}</span>
                           <span className="font-mono text-[10px]">{log.formattedDate || log.time}</span>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] text-slate-700 dark:text-slate-300">
+                        <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] text-slate-700">
                           {log.checkInFrom && log.checkInTo && (
                             <span>هاتن: {log.checkInFrom} ← {log.checkInTo}</span>
                           )}
@@ -2448,7 +2448,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                           )}
                         </div>
                         {(log.adminNote || log.adminCheckInNote) && (
-                          <div className="text-[10px] text-slate-600 dark:text-slate-400">
+                          <div className="text-[10px] text-slate-600">
                             تێبینی: {log.adminNote || log.adminCheckInNote}
                           </div>
                         )}
@@ -2461,11 +2461,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             </div>
 
             {/* Clean Bottom Action Bar */}
-            <div className="px-5 py-3.5 bg-slate-50/80 dark:bg-[#242426] border-t border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
+            <div className="px-5 py-3.5 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between shrink-0">
               <button
                 type="button"
                 onClick={handleDeleteDayRecord}
-                className="px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>سڕینەوە</span>
@@ -2475,7 +2475,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 <button
                   type="button"
                   onClick={() => setSelectedDayModal(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-200/70 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-slate-200/70 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
                 >
                   داخستن
                 </button>
@@ -2483,7 +2483,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   type="button"
                   onClick={handleSaveModal}
                   disabled={isSavingModal}
-                  className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   <span>{isSavingModal ? 'پاشەکەوت دەکرێت...' : 'پاشەکەوتکردن'}</span>
@@ -2500,23 +2500,23 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       {/* ========================================================================= */}
       {showPrintModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-200 font-sans" dir="rtl">
-          <div className="bg-[#f2f2f7] dark:bg-[#1c1c1e] text-slate-900 dark:text-white rounded-[28px] border border-white/60 dark:border-white/10 shadow-2xl max-w-lg w-full p-0 overflow-hidden transition-all flex flex-col">
+          <div className="bg-[#f2f2f7] text-slate-900 rounded-[28px] border border-white/60 shadow-2xl max-w-lg w-full p-0 overflow-hidden transition-all flex flex-col">
             
             {/* Title Bar */}
-            <div className="px-6 py-4 bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between">
+            <div className="px-6 py-4 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-950/40 text-[#007AFF] dark:text-blue-400 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full bg-blue-50 text-[#007AFF] flex items-center justify-center">
                   <Printer className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                  <h3 className="font-bold text-sm text-slate-900">
                     چاپکردنی تایبەت
                   </h3>
                 </div>
               </div>
               <button 
                 onClick={() => setShowPrintModal(false)}
-                className="w-7 h-7 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-500 dark:text-slate-300 flex items-center justify-center cursor-pointer text-xs font-bold transition-all active:scale-90"
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer text-xs font-bold transition-all active:scale-90"
               >
                 ✕
               </button>
@@ -2526,15 +2526,15 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               
               {/* Preset Segmented Selector */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 px-1">شێوازی خێرای چاپ:</label>
-                <div className="p-1 bg-slate-200/70 dark:bg-[#2c2c2e] rounded-2xl grid grid-cols-3 gap-1">
+                <label className="text-[11px] font-bold text-slate-500 px-1">شێوازی خێرای چاپ:</label>
+                <div className="p-1 bg-slate-200/70 rounded-2xl grid grid-cols-3 gap-1">
                   <button
                     type="button"
                     onClick={() => { setPrintStartDay(1); setPrintEndDay(daysArray.length); }}
                     className={`py-2 px-1 text-xs font-bold rounded-xl transition-all cursor-pointer text-center ${
                       printStartDay === 1 && printEndDay === daysArray.length 
-                        ? 'bg-white dark:bg-[#3a3a3c] text-slate-900 dark:text-white shadow-sm font-black' 
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        ? 'bg-white  text-slate-900  shadow-sm font-black' 
+                        : 'text-slate-600  hover:text-slate-900 '
                     }`}
                   >
                     یەک لاپەڕە (١-{daysArray.length})
@@ -2544,8 +2544,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     onClick={() => { setPrintStartDay(1); setPrintEndDay(15); }}
                     className={`py-2 px-1 text-xs font-bold rounded-xl transition-all cursor-pointer text-center ${
                       printStartDay === 1 && printEndDay === 15 
-                        ? 'bg-white dark:bg-[#3a3a3c] text-slate-900 dark:text-white shadow-sm font-black' 
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        ? 'bg-white  text-slate-900  shadow-sm font-black' 
+                        : 'text-slate-600  hover:text-slate-900 '
                     }`}
                   >
                     پەڕەی ١ (١-١٥)
@@ -2555,8 +2555,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     onClick={() => { setPrintStartDay(16); setPrintEndDay(daysArray.length); }}
                     className={`py-2 px-1 text-xs font-bold rounded-xl transition-all cursor-pointer text-center ${
                       printStartDay === 16 && printEndDay === daysArray.length 
-                        ? 'bg-white dark:bg-[#3a3a3c] text-slate-900 dark:text-white shadow-sm font-black' 
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        ? 'bg-white  text-slate-900  shadow-sm font-black' 
+                        : 'text-slate-600  hover:text-slate-900 '
                     }`}
                   >
                     پەڕەی ٢ (١٦-{daysArray.length})
@@ -2565,14 +2565,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               </div>
 
               {/* Range Inputs Card */}
-              <div className="bg-white dark:bg-[#2c2c2e] p-4 rounded-2xl border border-slate-200/60 dark:border-white/5 space-y-3">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/60 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">لە ڕۆژی:</label>
+                    <label className="text-[11px] font-bold text-slate-600">لە ڕۆژی:</label>
                     <select 
                       value={printStartDay}
                       onChange={(e) => setPrintStartDay(Number(e.target.value))}
-                      className="w-full text-xs font-bold bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2 rounded-xl outline-none font-mono border border-slate-200/60 dark:border-white/5"
+                      className="w-full text-xs font-bold bg-slate-100 text-slate-900 p-2 rounded-xl outline-none font-mono border border-slate-200/60"
                     >
                       {daysArray.map(d => (
                         <option key={d.dayNum} value={d.dayNum}>ڕۆژی {d.dayNum}</option>
@@ -2581,11 +2581,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">بۆ ڕۆژی:</label>
+                    <label className="text-[11px] font-bold text-slate-600">بۆ ڕۆژی:</label>
                     <select 
                       value={printEndDay}
                       onChange={(e) => setPrintEndDay(Number(e.target.value))}
-                      className="w-full text-xs font-bold bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2 rounded-xl outline-none font-mono border border-slate-200/60 dark:border-white/5"
+                      className="w-full text-xs font-bold bg-slate-100 text-slate-900 p-2 rounded-xl outline-none font-mono border border-slate-200/60"
                     >
                       {daysArray.map(d => (
                         <option key={d.dayNum} value={d.dayNum}>ڕۆژی {d.dayNum}</option>
@@ -2595,11 +2595,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 </div>
 
                 <div className="space-y-1 pt-1">
-                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">دەستەی کارمەندان:</label>
+                  <label className="text-[11px] font-bold text-slate-600">دەستەی کارمەندان:</label>
                   <select 
                     value={printEmployeeFilter}
                     onChange={(e) => setPrintEmployeeFilter(e.target.value as any)}
-                    className="w-full text-xs font-bold bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2 rounded-xl outline-none border border-slate-200/60 dark:border-white/5"
+                    className="w-full text-xs font-bold bg-slate-100 text-slate-900 p-2 rounded-xl outline-none border border-slate-200/60"
                   >
                     <option value="all">👥 هەموو ستاف و کارمەندان ({activeEmployees.length})</option>
                     <option value="managers">👑 تەنها بەڕێوەبەر و لێپرسراوان</option>
@@ -2612,7 +2612,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 <button
                   type="button"
                   onClick={() => setShowPrintModal(false)}
-                  className="px-4 py-2 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer active:scale-95"
+                  className="px-4 py-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer active:scale-95"
                 >
                   داخستن
                 </button>
@@ -2641,7 +2641,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-4xl w-[95%] sm:w-auto animate-in slide-in-from-bottom-5 duration-300 pointer-events-auto select-none font-sans"
           dir="rtl"
         >
-          <div className="bg-slate-900/95 dark:bg-[#1c1c1e]/95 backdrop-blur-2xl text-white px-3 py-2.5 sm:px-5 sm:py-3 rounded-[26px] border border-white/20 shadow-2xl shadow-black/50 flex flex-wrap items-center justify-between sm:justify-start gap-2 sm:gap-3 text-xs">
+          <div className="bg-slate-900/95 backdrop-blur-2xl text-white px-3 py-2.5 sm:px-5 sm:py-3 rounded-[26px] border border-white/20 shadow-2xl shadow-black/50 flex flex-wrap items-center justify-between sm:justify-start gap-2 sm:gap-3 text-xs">
             
             {/* 1. Counter Badge & Status */}
             <div className="flex items-center gap-2 pr-1 sm:pr-2 border-l border-white/15 pl-2 sm:pl-3">
@@ -2793,23 +2793,23 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
       {/* ========================================================================= */}
       {showBatchModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-200 font-sans" dir="rtl">
-          <div className="bg-[#f2f2f7] dark:bg-[#1c1c1e] text-slate-900 dark:text-white rounded-[28px] border border-white/60 dark:border-white/10 shadow-2xl max-w-xl w-full p-0 overflow-hidden transition-all flex flex-col max-h-[92vh]">
+          <div className="bg-[#f2f2f7] text-slate-900 rounded-[28px] border border-white/60 shadow-2xl max-w-xl w-full p-0 overflow-hidden transition-all flex flex-col max-h-[92vh]">
             
             {/* Header */}
-            <div className="px-6 py-4 bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between shrink-0">
+            <div className="px-6 py-4 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white font-bold flex items-center justify-center shadow-md shadow-indigo-500/20">
                   <CalendarRange className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
+                  <h3 className="font-bold text-sm sm:text-base text-slate-900">
                     دەستکاری فرە-ڕۆژ
                   </h3>
                 </div>
               </div>
               <button
                 onClick={() => setShowBatchModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-500 dark:text-slate-300 flex items-center justify-center cursor-pointer transition-all active:scale-90"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer transition-all active:scale-90"
                 title="داخستن"
               >
                 <X className="w-4 h-4" />
@@ -2822,14 +2822,14 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               {/* Selected Cells Indicator Banner */}
               {selectedCount > 0 && (
                 <div className="p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-between text-xs">
-                  <span className="text-blue-900 dark:text-blue-200 font-bold flex items-center gap-1.5">
+                  <span className="text-blue-900 font-bold flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-[#007AFF]" />
                     <span>ئێستا {selectedCount} خانە لە خشتەکەدا دیاریکراوە و ئامادەیە</span>
                   </span>
                   <button
                     type="button"
                     onClick={clearAllSelection}
-                    className="text-[11px] text-rose-600 dark:text-rose-400 hover:underline font-bold cursor-pointer"
+                    className="text-[11px] text-rose-600 hover:underline font-bold cursor-pointer"
                   >
                     پاککردنەوە
                   </button>
@@ -2837,9 +2837,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               )}
 
               {/* 1. مەودای ڕۆژەکان و کارمەندان */}
-              <div className="bg-white dark:bg-[#2c2c2e] p-4 rounded-2xl border border-slate-200/70 dark:border-white/5 shadow-xs space-y-3">
-                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-white/5">
-                  <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/70 shadow-xs space-y-3">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-blue-500" />
                     <span>١. دیاریکردنی کارمەندان و مەودای ڕۆژەکان:</span>
                   </span>
@@ -2847,11 +2847,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
                 {/* Employee Target */}
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">کێ دەگرێتەوە؟</label>
+                  <label className="text-[11px] font-bold text-slate-600">کێ دەگرێتەوە؟</label>
                   <select
                     value={rangeTargetEmp}
                     onChange={(e) => setRangeTargetEmp(e.target.value)}
-                    className="w-full text-xs font-bold bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2.5 rounded-xl outline-none border border-slate-200/60 dark:border-white/5 focus:border-[#007AFF]"
+                    className="w-full text-xs font-bold bg-slate-100 text-slate-900 p-2.5 rounded-xl outline-none border border-slate-200/60 focus:border-[#007AFF]"
                   >
                     <option value="all">👥 هەموو ستاف و کارمەندان ({activeEmployees.length} کارمەند)</option>
                     <option value="managers">👑 تەنها بەڕێوەبەر و سەرپەرشتیاران</option>
@@ -2868,11 +2868,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 {/* Days Range (From Day -> To Day) */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">لە ڕۆژی مانگ:</label>
+                    <label className="text-[11px] font-bold text-slate-600">لە ڕۆژی مانگ:</label>
                     <select
                       value={rangeStartDay}
                       onChange={(e) => setRangeStartDay(Number(e.target.value))}
-                      className="w-full text-xs font-bold font-mono bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2 rounded-xl outline-none border border-slate-200/60 dark:border-white/5"
+                      className="w-full text-xs font-bold font-mono bg-slate-100 text-slate-900 p-2 rounded-xl outline-none border border-slate-200/60"
                     >
                       {daysArray.map(d => (
                         <option key={d.dayNum} value={d.dayNum}>ڕۆژی {d.dayNum}</option>
@@ -2880,11 +2880,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">تا ڕۆژی مانگ:</label>
+                    <label className="text-[11px] font-bold text-slate-600">تا ڕۆژی مانگ:</label>
                     <select
                       value={rangeEndDay}
                       onChange={(e) => setRangeEndDay(Number(e.target.value))}
-                      className="w-full text-xs font-bold font-mono bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2 rounded-xl outline-none border border-slate-200/60 dark:border-white/5"
+                      className="w-full text-xs font-bold font-mono bg-slate-100 text-slate-900 p-2 rounded-xl outline-none border border-slate-200/60"
                     >
                       {daysArray.map(d => (
                         <option key={d.dayNum} value={d.dayNum}>ڕۆژی {d.dayNum}</option>
@@ -2895,15 +2895,15 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
                 {/* Day Type Filter Presets */}
                 <div className="space-y-1 pt-1">
-                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">فلتەری جۆری ڕۆژەکان لەم مەودایە:</label>
-                  <div className="p-1 bg-slate-100 dark:bg-[#1c1c1e] rounded-xl grid grid-cols-3 gap-1">
+                  <label className="text-[11px] font-bold text-slate-600">فلتەری جۆری ڕۆژەکان لەم مەودایە:</label>
+                  <div className="p-1 bg-slate-100 rounded-xl grid grid-cols-3 gap-1">
                     <button
                       type="button"
                       onClick={() => setRangeDayType('all')}
                       className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         rangeDayType === 'all'
-                          ? 'bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white shadow-xs font-black'
-                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                          ? 'bg-white  text-slate-900  shadow-xs font-black'
+                          : 'text-slate-500 hover:text-slate-900 '
                       }`}
                     >
                       هەموو ڕۆژەکان
@@ -2913,8 +2913,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       onClick={() => setRangeDayType('workdays')}
                       className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         rangeDayType === 'workdays'
-                          ? 'bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white shadow-xs font-black'
-                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                          ? 'bg-white  text-slate-900  shadow-xs font-black'
+                          : 'text-slate-500 hover:text-slate-900 '
                       }`}
                     >
                       دەوام (بێ هەینی)
@@ -2924,8 +2924,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                       onClick={() => setRangeDayType('fridays')}
                       className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         rangeDayType === 'fridays'
-                          ? 'bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white shadow-xs font-black'
-                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                          ? 'bg-white  text-slate-900  shadow-xs font-black'
+                          : 'text-slate-500 hover:text-slate-900 '
                       }`}
                     >
                       تەنها هەینییەکان
@@ -2935,9 +2935,9 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
               </div>
 
               {/* 2. داتای نوێ بۆ جێبەجێکردن */}
-              <div className="bg-white dark:bg-[#2c2c2e] p-4 rounded-2xl border border-slate-200/70 dark:border-white/5 shadow-xs space-y-3">
-                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-white/5">
-                  <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/70 shadow-xs space-y-3">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
                     <span>٢. داتای نوێ بۆ داخڵکردن بە یەکجار:</span>
                   </span>
@@ -2945,8 +2945,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
                 {/* Status Choice */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">حاڵەت:</label>
-                  <div className="p-1 bg-slate-100 dark:bg-[#1c1c1e] rounded-2xl grid grid-cols-5 gap-1">
+                  <label className="text-[11px] font-bold text-slate-600">حاڵەت:</label>
+                  <div className="p-1 bg-slate-100 rounded-2xl grid grid-cols-5 gap-1">
                     {[
                       { key: 'Present', label: 'ئامادەبوو', dot: 'bg-emerald-500' },
                       { key: 'Leave', label: 'مۆڵەت', dot: 'bg-amber-500' },
@@ -2960,8 +2960,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         onClick={() => setBatchStatus(s.key)}
                         className={`py-2 px-1 rounded-xl text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
                           batchStatus === s.key
-                            ? 'bg-white dark:bg-[#2c2c2e] text-slate-900 dark:text-white shadow-xs font-black'
-                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                            ? 'bg-white  text-slate-900  shadow-xs font-black'
+                            : 'text-slate-600  hover:text-slate-900 '
                         }`}
                       >
                         <span className={`w-2 h-2 rounded-full ${s.dot}`} />
@@ -2984,8 +2984,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         }}
                         className={`flex-1 py-1.5 px-2.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                           batchCheckIn === '08:00' && batchCheckOut === '17:00'
-                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
-                            : 'bg-slate-100 dark:bg-[#1c1c1e] text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-white/5 hover:bg-slate-200/70'
+                            ? 'bg-emerald-50  text-emerald-700  border-emerald-300 '
+                            : 'bg-slate-100  text-slate-600  border-slate-200/70  hover:bg-slate-200/70'
                         }`}
                       >
                         <span>☀️ شەفتی بەیانیان (8:00 - 5:00)</span>
@@ -2998,8 +2998,8 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                         }}
                         className={`flex-1 py-1.5 px-2.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                           batchCheckIn === '15:00' && batchCheckOut === '23:00'
-                            ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700'
-                            : 'bg-slate-100 dark:bg-[#1c1c1e] text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-white/5 hover:bg-slate-200/70'
+                            ? 'bg-indigo-50  text-indigo-700  border-indigo-300 '
+                            : 'bg-slate-100  text-slate-600  border-slate-200/70  hover:bg-slate-200/70'
                         }`}
                       >
                         <span>🌙 شەفتی ئێواران (3:00 - 11:00)</span>
@@ -3008,21 +3008,21 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">کاتی هاتن:</label>
+                        <label className="text-[11px] font-bold text-slate-600">کاتی هاتن:</label>
                         <input
                           type="time"
                           value={batchCheckIn}
                           onChange={(e) => setBatchCheckIn(e.target.value)}
-                          className="w-full text-xs font-mono font-bold bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2.5 rounded-xl border border-slate-200/60 dark:border-white/5 outline-none focus:border-[#007AFF]"
+                          className="w-full text-xs font-mono font-bold bg-slate-100 text-slate-900 p-2.5 rounded-xl border border-slate-200/60 outline-none focus:border-[#007AFF]"
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">کاتی چوون:</label>
+                        <label className="text-[11px] font-bold text-slate-600">کاتی چوون:</label>
                         <input
                           type="time"
                           value={batchCheckOut}
                           onChange={(e) => setBatchCheckOut(e.target.value)}
-                          className="w-full text-xs font-mono font-bold bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2.5 rounded-xl border border-slate-200/60 dark:border-white/5 outline-none focus:border-[#007AFF]"
+                          className="w-full text-xs font-mono font-bold bg-slate-100 text-slate-900 p-2.5 rounded-xl border border-slate-200/60 outline-none focus:border-[#007AFF]"
                         />
                       </div>
                     </div>
@@ -3031,7 +3031,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
 
                 {/* Admin Note */}
                 <div className="space-y-1 pt-1">
-                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                  <label className="text-[11px] font-bold text-slate-600">
                     تێبینی ئەدمین (ئارەزوومەندانە):
                   </label>
                   <input
@@ -3039,7 +3039,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                     value={batchNote}
                     onChange={(e) => setBatchNote(e.target.value)}
                     placeholder="هۆکاری گۆڕانکاری، بۆ نموونە: پشووی فەرمی، ئامادەبوونی دەوامی تەواو..."
-                    className="w-full text-xs bg-slate-100 dark:bg-[#1c1c1e] text-slate-900 dark:text-white p-2.5 rounded-xl border border-slate-200/60 dark:border-white/5 outline-none focus:border-[#007AFF] font-medium"
+                    className="w-full text-xs bg-slate-100 text-slate-900 p-2.5 rounded-xl border border-slate-200/60 outline-none focus:border-[#007AFF] font-medium"
                   />
                 </div>
               </div>
@@ -3047,11 +3047,11 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
             </div>
 
             {/* Footer / Actions */}
-            <div className="px-6 py-4 bg-white/80 dark:bg-[#2c2c2e]/80 backdrop-blur-xl border-t border-slate-200/60 dark:border-slate-800/60 flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div className="px-6 py-4 bg-white/80 backdrop-blur-xl border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setShowBatchModal(false)}
-                className="px-4 py-2 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer active:scale-95"
+                className="px-4 py-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer active:scale-95"
               >
                 داخستن
               </button>
@@ -3061,7 +3061,7 @@ export function NewGpsAttendanceMatrixTable({ employees = [], attendanceLogs = [
                 <button
                   type="button"
                   onClick={selectByRange}
-                  className="px-4 py-2 rounded-full bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer border border-indigo-200/50"
+                  className="px-4 py-2 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer border border-indigo-200/50"
                   title="تەنها ئەم ڕۆژانە لە خشتەکەدا دەستنیشان بکە بێ ئەوەی یەکسەر دەستکاری بکرێت"
                 >
                   <MousePointerClick className="w-3.5 h-3.5" />

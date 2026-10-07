@@ -119,7 +119,7 @@ export function EditableText({ keyName, variables, as: Component = 'span', class
         onBlur={handleSave}
         onKeyDown={handleKeyDown}
         className={cn(
-          "bg-white/10 dark:bg-black/20 border border-primary/45 rounded px-1.5 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary w-full max-w-[220px] text-xs font-semibold inline-block",
+          "bg-white border border-primary/45 rounded px-1.5 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary w-full max-w-[220px] text-xs font-semibold inline-block",
           className
         )}
       />

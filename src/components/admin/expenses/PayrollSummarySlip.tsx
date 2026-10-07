@@ -230,74 +230,74 @@ export function PayrollSummarySlip({
   return (
     <div className="space-y-4 font-sans" dir="rtl">
       
-      {/* 🌟 KPI BADGES: 5 CARDS */}
+      {/* KPI BADGES: 5 CARDS */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {/* Card 1: Base Salary */}
-        <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1c1c1e] border border-slate-200/80 dark:border-white/10 shadow-2xs">
+        <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
           <div className="flex items-center justify-between text-slate-500 mb-1">
             <span className="text-[11px] font-bold">مووچەی بنەڕەتی</span>
             <DollarSign className="w-4 h-4 text-blue-500" />
           </div>
-          <span className="text-base font-bold font-mono text-slate-900 dark:text-white">
+          <span className="text-base font-bold font-mono text-slate-900">
             {totals.baseSalary > 0 ? totals.baseSalary.toLocaleString() : '۰'} IQD
           </span>
           <span className="block text-[10px] text-slate-400 mt-0.5">مووچەی چەسپاو</span>
         </div>
 
         {/* Card 2: Bonuses */}
-        <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/40 shadow-2xs">
-          <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-300 mb-1">
+        <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
+          <div className="flex items-center justify-between text-emerald-700 mb-1">
             <span className="text-[11px] font-bold">کۆی پاداشت (+)</span>
             <Gift className="w-4 h-4 text-emerald-600" />
           </div>
-          <span className="text-base font-bold font-mono text-emerald-700 dark:text-emerald-300">
+          <span className="text-base font-bold font-mono text-emerald-700">
             +{totals.bonuses.toLocaleString()} IQD
           </span>
           <span className="block text-[10px] text-emerald-600/70 mt-0.5">بەخشش و هاندان</span>
         </div>
 
         {/* Card 3: Overtime */}
-        <div className="p-3.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40 shadow-2xs">
-          <div className="flex items-center justify-between text-amber-700 dark:text-amber-300 mb-1">
+        <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
+          <div className="flex items-center justify-between text-amber-700 mb-1">
             <span className="text-[11px] font-bold">کاتی زیادە (+)</span>
             <Clock className="w-4 h-4 text-amber-600" />
           </div>
-          <span className="text-base font-bold font-mono text-amber-700 dark:text-amber-300">
+          <span className="text-base font-bold font-mono text-amber-700">
             +{totals.overtime.toLocaleString()} IQD
           </span>
           <span className="block text-[10px] text-amber-600/70 mt-0.5">شایستەی ئیزافی</span>
         </div>
 
         {/* Card 4: Deductions / Withdrawals */}
-        <div className="p-3.5 rounded-2xl bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-900/40 shadow-2xs">
-          <div className="flex items-center justify-between text-rose-700 dark:text-rose-300 mb-1">
+        <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
+          <div className="flex items-center justify-between text-rose-700 mb-1">
             <span className="text-[11px] font-bold">کۆی پێشینە (-)</span>
             <Banknote className="w-4 h-4 text-rose-600" />
           </div>
-          <span className="text-base font-bold font-mono text-rose-700 dark:text-rose-300">
+          <span className="text-base font-bold font-mono text-rose-700">
             -{totals.withdrawals.toLocaleString()} IQD
           </span>
           <span className="block text-[10px] text-rose-600/70 mt-0.5">کشانەوە لە مووچە</span>
         </div>
 
         {/* Card 5: Net Payable */}
-        <div className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-900 to-purple-900 text-white shadow-xs col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between text-indigo-200 mb-1">
-            <span className="text-[11px] font-bold">صافی مووچە (Net)</span>
-            <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+        <div className="p-3.5 rounded-2xl bg-white border-2 border-indigo-200 shadow-xs col-span-2 sm:col-span-1">
+          <div className="flex items-center justify-between text-indigo-700 mb-1">
+            <span className="text-[11px] font-black">صافی مووچە (Net)</span>
+            <Sparkles className="w-4 h-4 text-indigo-600" />
           </div>
-          <span className="text-lg font-bold font-mono text-white">
+          <span className="text-lg font-black font-mono text-indigo-900">
             {totals.net.toLocaleString()} IQD
           </span>
-          <span className="block text-[10px] text-indigo-200 mt-0.5">کۆی پارەی دابەشکراو</span>
+          <span className="block text-[10px] text-indigo-500 font-bold mt-0.5">کۆی پارەی دابەشکراو</span>
         </div>
       </div>
 
       {/* Main Table Container */}
-      <div className="bg-white dark:bg-[#1c1c1e] border border-slate-200/80 dark:border-white/10 rounded-2xl shadow-xs overflow-hidden">
+      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
         
         {/* Table Toolbar */}
-        <div className="p-4 border-b border-slate-100 dark:border-white/5 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50 dark:bg-white/[0.02]">
+        <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50/70">
           <div className="flex items-center gap-3 flex-1 min-w-[220px]">
             <div className="relative w-full max-w-xs">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -306,7 +306,7 @@ export function PayrollSummarySlip({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="گەڕان بەپێی ناوی کارمەند یان بەش..."
-                className="w-full pr-8 pl-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 focus:outline-hidden focus:ring-2 focus:ring-purple-500 text-slate-900 dark:text-white"
+                className="w-full pr-8 pl-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 text-slate-900 placeholder:text-slate-400"
               />
             </div>
             <span className="text-xs text-slate-500 font-bold shrink-0">
@@ -321,7 +321,7 @@ export function PayrollSummarySlip({
               className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>🖨️ چاپی پسوولەی مووچە (PDF)</span>
+              <span>چاپی پسوولەی مووچە (PDF)</span>
             </button>
             <button
               type="button"
@@ -329,7 +329,7 @@ export function PayrollSummarySlip({
               className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>📥 ئێکسیل</span>
+              <span>ئێکسیل</span>
             </button>
           </div>
         </div>
@@ -343,7 +343,7 @@ export function PayrollSummarySlip({
           <div className="overflow-x-auto">
             <table className="w-full text-right border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 font-bold">
+                <tr className="bg-slate-50/90 border-b border-slate-200/90 text-slate-700 font-bold">
                   <th className={`${cellPad} text-center w-10`}>#</th>
                   <th className={cellPad}>ناوی کارمەند</th>
                   <th className={`${cellPad} text-center`}>پلە / بەش</th>
@@ -354,16 +354,16 @@ export function PayrollSummarySlip({
                   <th className={`${cellPad} text-center`}>صافی مووچە (Net Pay)</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+              <tbody className="divide-y divide-slate-100">
                 {filteredPayroll.map((item, idx) => (
-                  <tr key={item.empId} className="hover:bg-slate-50/70 dark:hover:bg-white/5 transition-colors">
+                  <tr key={item.empId} className="hover:bg-slate-50/70 transition-colors">
                     <td className={`${cellPad} text-center font-mono text-slate-400 font-bold`}>
                       {idx + 1}
                     </td>
 
-                    <td className={`${cellPad} font-bold text-slate-900 dark:text-white`}>
+                    <td className={`${cellPad} font-bold text-slate-900`}>
                       <div className="flex items-center gap-2">
-                        <span className="w-7 h-7 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-bold text-[11px] flex items-center justify-center shrink-0">
+                        <span className="w-7 h-7 rounded-full bg-purple-50 border border-purple-200/60 text-purple-700 font-bold text-[11px] flex items-center justify-center shrink-0">
                           {item.empName.charAt(0)}
                         </span>
                         <div>
@@ -378,16 +378,16 @@ export function PayrollSummarySlip({
                     </td>
 
                     <td className={`${cellPad} text-center text-slate-500`}>
-                      <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/10 text-[10px] font-bold">
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-[10px] font-bold">
                         {item.role}
                       </span>
                     </td>
 
-                    <td className={`${cellPad} text-center font-mono text-slate-600 dark:text-slate-400`}>
+                    <td className={`${cellPad} text-center font-mono text-slate-600`}>
                       {item.baseSalary > 0 ? `${item.baseSalary.toLocaleString()} IQD` : '—'}
                     </td>
 
-                    <td className={`${cellPad} text-center font-mono font-bold text-emerald-600 dark:text-emerald-400`}>
+                    <td className={`${cellPad} text-center font-mono font-bold text-emerald-600`}>
                       {item.bonusesTotal > 0 ? (
                         <div>
                           <span>+{item.bonusesTotal.toLocaleString()} IQD</span>
@@ -396,7 +396,7 @@ export function PayrollSummarySlip({
                       ) : '—'}
                     </td>
 
-                    <td className={`${cellPad} text-center font-mono font-bold text-amber-600 dark:text-amber-400`}>
+                    <td className={`${cellPad} text-center font-mono font-bold text-amber-600`}>
                       {item.overtimeTotal > 0 ? (
                         <div>
                           <span>+{item.overtimeTotal.toLocaleString()} IQD</span>
@@ -405,7 +405,7 @@ export function PayrollSummarySlip({
                       ) : '—'}
                     </td>
 
-                    <td className={`${cellPad} text-center font-mono font-bold text-rose-600 dark:text-rose-400`}>
+                    <td className={`${cellPad} text-center font-mono font-bold text-rose-600`}>
                       {item.withdrawalsTotal > 0 ? (
                         <div>
                           <span>-{item.withdrawalsTotal.toLocaleString()} IQD</span>
@@ -414,8 +414,8 @@ export function PayrollSummarySlip({
                       ) : '—'}
                     </td>
 
-                    <td className={`${cellPad} text-center font-mono font-bold text-slate-900 dark:text-white`}>
-                      <span className="px-3 py-1 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-xs inline-block">
+                    <td className={`${cellPad} text-center font-mono font-bold text-slate-900`}>
+                      <span className="px-3 py-1 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/80 text-xs inline-block">
                         {item.netPay.toLocaleString()} IQD
                       </span>
                     </td>
@@ -423,23 +423,23 @@ export function PayrollSummarySlip({
                 ))}
 
                 {/* Grand Total Row */}
-                <tr className="bg-slate-900 text-white font-bold border-t-2 border-slate-700">
-                  <td colSpan={3} className={`${cellPad} text-right`}>
+                <tr className="bg-slate-100/90 text-slate-900 font-black border-t-2 border-slate-300">
+                  <td colSpan={3} className={`${cellPad} text-right font-black text-slate-900`}>
                     کۆی گشتی دارایی هەموو کارمەندان بۆ مانگی ({selectedMonth}):
                   </td>
-                  <td className={`${cellPad} text-center font-mono text-slate-300`}>
+                  <td className={`${cellPad} text-center font-mono text-slate-700`}>
                     {totals.baseSalary > 0 ? `${totals.baseSalary.toLocaleString()} IQD` : '—'}
                   </td>
-                  <td className={`${cellPad} text-center font-mono text-emerald-400`}>
+                  <td className={`${cellPad} text-center font-mono text-emerald-600`}>
                     +{totals.bonuses.toLocaleString()} IQD
                   </td>
-                  <td className={`${cellPad} text-center font-mono text-amber-400`}>
+                  <td className={`${cellPad} text-center font-mono text-amber-600`}>
                     +{totals.overtime.toLocaleString()} IQD
                   </td>
-                  <td className={`${cellPad} text-center font-mono text-rose-400`}>
+                  <td className={`${cellPad} text-center font-mono text-rose-600`}>
                     -{totals.withdrawals.toLocaleString()} IQD
                   </td>
-                  <td className={`${cellPad} text-center font-mono text-amber-300 text-sm`}>
+                  <td className={`${cellPad} text-center font-mono text-purple-700 text-sm font-black`}>
                     {totals.net.toLocaleString()} IQD
                   </td>
                 </tr>

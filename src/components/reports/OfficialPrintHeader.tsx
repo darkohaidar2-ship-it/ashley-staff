@@ -80,12 +80,12 @@ export const OfficialPrintHeader: React.FC<OfficialPrintHeaderProps> = ({
             {docTitle}
           </h1>
           {period && (
-            <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
+            <div className="text-[10px] font-bold text-slate-500 mt-0.5">
               ماوە: {period}
             </div>
           )}
           {subtitle && !period && (
-            <div className="text-[9.5px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
+            <div className="text-[9.5px] font-bold text-slate-500 mt-0.5">
               {subtitle}
             </div>
           )}

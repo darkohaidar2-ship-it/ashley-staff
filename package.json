@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "next dev -p 4000",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",
     "test": "echo \"No tests configured yet\"",
-    "start": "next start -p 3001",
+    "start": "next start -p 4000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },

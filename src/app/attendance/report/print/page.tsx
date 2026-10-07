@@ -86,24 +86,24 @@ function AttendancePrintReportContent() {
   const kurdishMonthTitle = formatKurdishMonthName(monthParam);
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 font-sans text-slate-900" dir="rtl">
+    <div className="min-h-screen bg-slate-100 font-sans text-slate-900" dir="rtl">
       
       {/* 🌟 1. ACTION & CONTROL BAR (HIDDEN IN PRINT) */}
-      <header className="no-print sticky top-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 py-3">
+      <header className="no-print sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-slate-200 shadow-xs px-4 py-3">
         <div className="max-w-[1200px] mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.back()}
-              className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition flex items-center gap-1.5 text-xs font-bold"
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 text-xs font-bold cursor-pointer active:scale-95 shadow-2xs"
               title="گەڕانەوە"
             >
               <ArrowRight className="w-4 h-4" />
               <span>گەڕانەوە</span>
             </button>
             <div>
-              <h1 className="text-sm sm:text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <h1 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
                 <span>چاپکردنی فەرمی ڕاپۆرتی دەوامی مانگانە</span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-bold">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80 font-bold">
                   {monthParam}
                 </span>
               </h1>
@@ -115,20 +115,20 @@ function AttendancePrintReportContent() {
 
           {/* Month Selector & Controls */}
           <div className="flex items-center gap-2">
-            <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1 border border-slate-200 dark:border-slate-700 text-xs">
+            <div className="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200/80 text-xs shadow-2xs">
               <button
                 onClick={() => handleMonthChange(getPreviousMonthStr(monthParam))}
-                className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+                className="p-1.5 rounded-lg hover:bg-white text-slate-700 transition-all cursor-pointer"
                 title="مانگی پێشوو"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
-              <span className="px-3 font-bold text-slate-800 dark:text-slate-200">
+              <span className="px-3 font-bold text-slate-800">
                 {kurdishMonthTitle}
               </span>
               <button
                 onClick={() => handleMonthChange(getNextMonthStr(monthParam))}
-                className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+                className="p-1.5 rounded-lg hover:bg-white text-slate-700 transition-all cursor-pointer"
                 title="مانگی دواتر"
               >
                 <ChevronLeft className="w-4 h-4" />

@@ -181,7 +181,7 @@ export function getCheckInStatus(
       isLate: false,
       isWaived: false,
       status: 'on_time',
-      colorCls: 'text-slate-900 dark:text-slate-100 font-extrabold',
+      colorCls: 'text-slate-900 font-extrabold',
       printColor: '#0f172a',
       label: 'ئاسایی'
     };
@@ -196,7 +196,7 @@ export function getCheckInStatus(
       isLate: false,
       isWaived: false,
       status: 'on_time',
-      colorCls: 'text-slate-900 dark:text-slate-100 font-extrabold',
+      colorCls: 'text-slate-900 font-extrabold',
       printColor: '#0f172a',
       label: 'لە کاتی خۆی'
     };
@@ -209,7 +209,7 @@ export function getCheckInStatus(
       isLate: true,
       isWaived: true,
       status: 'late_waived',
-      colorCls: 'text-purple-600 dark:text-purple-400 font-black',
+      colorCls: 'text-purple-600 font-black',
       printColor: '#9333ea',
       label: 'لێخۆشبوو'
     };
@@ -219,7 +219,7 @@ export function getCheckInStatus(
     isLate: true,
     isWaived: false,
     status: 'late_unexcused',
-    colorCls: 'text-rose-600 dark:text-rose-400 font-extrabold',
+    colorCls: 'text-rose-600 font-extrabold',
     printColor: '#dc2626',
     label: 'درەنگکەوتوو'
   };
@@ -245,7 +245,7 @@ export function getCheckOutStatus(
       isOvertime: false,
       isWaived: false,
       status: 'ongoing',
-      colorCls: 'text-slate-500 dark:text-slate-400 font-semibold',
+      colorCls: 'text-slate-500 font-semibold',
       printColor: '#64748b',
       label: 'بەردەوام'
     };
@@ -262,7 +262,7 @@ export function getCheckOutStatus(
         isOvertime: false,
         isWaived: true,
         status: 'early_waived',
-        colorCls: 'text-purple-600 dark:text-purple-400 font-black',
+        colorCls: 'text-purple-600 font-black',
         printColor: '#9333ea',
         label: 'لێخۆشبوو (زوو چوونەوە)'
       };
@@ -272,7 +272,7 @@ export function getCheckOutStatus(
       isOvertime: false,
       isWaived: false,
       status: 'early_unexcused',
-      colorCls: 'text-rose-600 dark:text-rose-400 font-extrabold',
+      colorCls: 'text-rose-600 font-extrabold',
       printColor: '#dc2626',
       label: 'زوو ڕۆیشتوو'
     };
@@ -285,7 +285,7 @@ export function getCheckOutStatus(
         isOvertime: true,
         isWaived: false,
         status: 'overtime_unexcused',
-        colorCls: 'text-rose-600 dark:text-rose-400 font-extrabold',
+        colorCls: 'text-rose-600 font-extrabold',
         printColor: '#dc2626',
         label: 'مانەوەی بێ مۆڵەت'
       };
@@ -296,7 +296,7 @@ export function getCheckOutStatus(
       isOvertime: true,
       isWaived: Boolean(isWaived),
       status: 'overtime_approved',
-      colorCls: isWaived ? 'text-purple-600 dark:text-purple-400 font-black' : 'text-slate-700 dark:text-slate-300 font-semibold',
+      colorCls: isWaived ? 'text-purple-600 font-black' : 'text-slate-700 font-semibold',
       printColor: isWaived ? '#9333ea' : '#334155',
       label: isWaived ? 'ئیزافەی پەسەندکراو' : 'درەنگ چوونەوە'
     };
@@ -308,7 +308,7 @@ export function getCheckOutStatus(
     isOvertime: false,
     isWaived: false,
     status: 'on_time',
-    colorCls: 'text-slate-700 dark:text-slate-300 font-semibold',
+    colorCls: 'text-slate-700 font-semibold',
     printColor: '#0f172a',
     label: 'لە کاتی خۆی'
   };

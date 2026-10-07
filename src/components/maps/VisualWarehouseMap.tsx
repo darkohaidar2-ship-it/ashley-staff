@@ -125,7 +125,7 @@ export function VisualWarehouseMap({
             )}
             {wm.halls.map(hall => (
                 <section key={hall.id} className="space-y-6">
-                    <div className="flex items-center gap-3 border-b border-black/5 dark:border-white/5 pb-4">
+                    <div className="flex items-center gap-3 border-b border-black/5 pb-4">
                         <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-lg">
                             <LayoutGrid className="w-5 h-5" />
                         </div>
@@ -137,7 +137,7 @@ export function VisualWarehouseMap({
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         {hall.floors.map(floor => (
-                            <div key={floor.id} className="bg-white/40 dark:bg-black/20 backdrop-blur-sm rounded-3xl border border-black/5 dark:border-white/5 p-6 shadow-sm">
+                            <div key={floor.id} className="bg-white/60 backdrop-blur-sm rounded-3xl border border-black/5 p-6 shadow-sm">
                                 <div className="flex items-center gap-3 mb-6">
                                     <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                                         <Rows className="w-4 h-4" />
@@ -171,8 +171,8 @@ export function VisualWarehouseMap({
                                                 onClick={() => onSectionClick?.(zone.id)}
                                                 className={cn(
                                                     "group relative h-24 rounded-2xl p-3 flex flex-col justify-between transition-all cursor-pointer border overflow-hidden",
-                                                    isHighlighted ? "scale-105 shadow-2xl z-10 ring-2 ring-primary ring-offset-2 dark:ring-offset-black" : "hover:scale-[1.03] hover:shadow-xl",
-                                                    isFuture ? "border-dashed border-2 border-sky-500 animate-pulse bg-sky-500/10" : "border-black/5 dark:border-white/5"
+                                                    isHighlighted ? "scale-105 shadow-2xl z-10 ring-2 ring-primary ring-offset-2" : "hover:scale-[1.03] hover:shadow-xl",
+                                                    isFuture ? "border-dashed border-2 border-sky-500 animate-pulse bg-sky-500/10" : "border-black/5"
                                                 )}
                                                 style={{ 
                                                     background: isFuture ? undefined : bgColor, 
@@ -182,7 +182,7 @@ export function VisualWarehouseMap({
                                                 {/* History Number Badge */}
                                                 {isHistory && (
                                                     <div className={cn(
-                                                        "absolute top-2 w-5 h-5 rounded-full bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 flex items-center justify-center text-[10px] font-black shadow-md z-10",
+                                                        "absolute top-2 w-5 h-5 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-black shadow-md z-10",
                                                         isRTL ? "left-2" : "right-2"
                                                     )}>
                                                         {historyIndex + 1}
@@ -245,7 +245,7 @@ export function VisualWarehouseMap({
                                 className={cn(
                                     "h-10 px-6 rounded-full text-[10px] font-black uppercase tracking-widest transition-all",
                                     "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xl",
-                                    "bg-white/50 dark:bg-white/5 border border-black/5 dark:border-white/5 backdrop-blur-sm shadow-sm"
+                                    "bg-white/80 border border-black/5 backdrop-blur-sm shadow-sm"
                                 )}
                             >
                                 <Warehouse className={cn("w-3.5 h-3.5", isRTL ? "ml-2" : "mr-2")} />

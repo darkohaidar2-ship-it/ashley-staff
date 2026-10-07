@@ -159,7 +159,7 @@ export function SchematicFlowMap({ warehouseMap, itemLocations, className }: Sch
     };
 
     return (
-        <div className={`flex flex-col items-center justify-center p-6 bg-white dark:bg-zinc-900 border border-slate-200/50 rounded-2xl ${className}`} dir="rtl">
+        <div className={`flex flex-col items-center justify-center p-6 bg-white border border-slate-200/50 rounded-2xl ${className}`} dir="rtl">
             <div className="flex items-center justify-between w-full mb-6 border-b pb-3 border-slate-100">
                 <div className="flex items-center gap-2">
                     <Compass className="w-5 h-5 text-primary" />
@@ -180,7 +180,7 @@ export function SchematicFlowMap({ warehouseMap, itemLocations, className }: Sch
             </div>
 
             {/* SVG Visual Layouts */}
-            <div className="relative w-full max-w-[400px] aspect-square flex items-center justify-center bg-slate-50/50 dark:bg-slate-950/20 rounded-xl p-4 border border-dashed">
+            <div className="relative w-full max-w-[400px] aspect-square flex items-center justify-center bg-slate-50/50 rounded-xl p-4 border border-dashed">
                 {shape === 'U' && (
                     <svg viewBox="0 0 500 350" className="w-full h-full">
                         <defs>
@@ -370,7 +370,7 @@ export function SchematicFlowMap({ warehouseMap, itemLocations, className }: Sch
             </div>
             
             {/* Guide Info */}
-            <div className="flex items-start gap-2 mt-4 bg-slate-50 dark:bg-slate-800/30 p-3 rounded-lg border w-full text-[10px] text-slate-500 leading-relaxed">
+            <div className="flex items-start gap-2 mt-4 bg-slate-50 p-3 rounded-lg border w-full text-[10px] text-slate-500 leading-relaxed">
                 <Info className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
                 <p>
                     ئەم هێڵکارییە نیشاندەری ڕێڕەوی ڕۆیشتنی کەلوپەلەکانە لە کۆگادا (وەرگرتن ← خەزنکردن ← ناردن). بەشە ڕەنگاوڕەنگە گەشەکان نیشاندەری لۆکەیشنی ئێستای کاڵاکەن.

@@ -112,21 +112,21 @@ export function SystemBroadcastBanner() {
       {/* Modal with Full Announcement Details */}
       {modalOpen && (
         <div 
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 print:hidden"
+          className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 print:hidden"
           dir="rtl"
           onClick={() => setModalOpen(false)}
         >
           <div 
-            className="bg-white dark:bg-[#1c1c1e] max-w-lg w-full rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-white/10 space-y-4 animate-scale-in"
+            className="bg-white max-w-lg w-full rounded-3xl p-6 shadow-xl border border-slate-200/90 space-y-4 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/10">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-200/60 text-blue-600 flex items-center justify-center shadow-xs">
                   <Megaphone className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                  <h3 className="text-sm font-black text-slate-900">
                     ئاگاداری فەرمی لە بەڕێوەبەرایەتی ئاشڵی
                   </h3>
                   <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
@@ -140,27 +140,27 @@ export function SystemBroadcastBanner() {
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-all cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-all cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-white/5 text-xs text-slate-700 dark:text-slate-300 font-bold">
-              <User className="w-4 h-4 text-[#007AFF]" />
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-700 font-bold">
+              <User className="w-4 h-4 text-blue-600" />
               <span>ئاگادارکردنەوە لەلایەن بەڕێز: <b>{latestAnnouncement.senderName}</b></span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#242426] border border-slate-200/60 dark:border-white/5 text-xs sm:text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
+            <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/60 text-xs sm:text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
               {latestAnnouncement.text}
             </div>
 
             {latestAnnouncement.photoUrl && (
-              <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10">
+              <div className="rounded-2xl overflow-hidden border border-slate-200">
                 <img 
                   src={latestAnnouncement.photoUrl} 
                   alt="وێنەی ئاگاداری" 
-                  className="w-full max-h-72 object-contain bg-black/5" 
+                  className="w-full max-h-72 object-contain bg-slate-50" 
                 />
               </div>
             )}
@@ -172,7 +172,7 @@ export function SystemBroadcastBanner() {
                   handleDismiss();
                   setModalOpen(false);
                 }}
-                className="px-5 py-2 rounded-2xl bg-[#007AFF] hover:bg-blue-600 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
               >
                 تێگەیشتم و داخستن
               </button>

@@ -21,7 +21,8 @@ import {
   ChevronUp,
   RefreshCw,
   Edit,
-  X
+  X,
+  Users
 } from 'lucide-react';
 import { format, getDaysInMonth, getDay } from 'date-fns';
 import { exportToPDF, exportToCSV, formatTime12H, type ExportTableColumn } from '@/lib/export-utils';
@@ -647,7 +648,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
 
       // Append prominent Grand Total row inside the table
       data.push({
-        name: '⭐ کۆی گشتی شایستەی ڕۆژ',
+        name: 'کۆی گشتی شایستەی ڕۆژ',
         role: `${dailyRecords.length} کارمەند`,
         checkOutTime: '—',
         hours: `${totalDailyHours.toFixed(1)} کاتژمێر`,
@@ -667,10 +668,10 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         orientation: 'portrait',
         documentCode: `ASH-OT-${selectedDate.replace(/-/g, '')}`,
         summaryCards: [
-          { label: 'کارمەندانی خاوەن ئیزافە', value: `${dailyRecords.length} کارمەند`, color: '#2563eb', icon: '👥' },
-          { label: 'کۆی کاتژمێری ئیزافە', value: `${totalDailyHours.toFixed(1)} کاتژمێر`, color: '#d97706', icon: '⚡' },
-          { label: 'کۆی شایستەی پارە', value: `${totalDailyCost.toLocaleString()} IQD`, color: '#059669', icon: '💰' },
-          { label: 'بەرواری ڕۆژ', value: selectedDate, color: '#475569', icon: '📅' },
+          { label: 'کارمەندانی خاوەن ئیزافە', value: `${dailyRecords.length} کارمەند`, color: '#2563eb' },
+          { label: 'کۆی کاتژمێری ئیزافە', value: `${totalDailyHours.toFixed(1)} کاتژمێر`, color: '#d97706' },
+          { label: 'کۆی شایستەی پارە', value: `${totalDailyCost.toLocaleString()} IQD`, color: '#059669' },
+          { label: 'بەرواری ڕۆژ', value: selectedDate, color: '#475569' },
         ],
         summaryText: `کۆی کارمەندانی خاوەن ئیزافە لەم بەروارەدا: ${dailyRecords.length} کارمەند • کۆی گشتی کاتژمێری ئیزافەی ڕۆژ: ${totalDailyHours.toFixed(1)} کاتژمێر • کۆی گشتی پارەی شایستەی ئیزافە بۆ خەرجکردن: ${totalDailyCost.toLocaleString()} دیناری عێراقی (IQD).`,
       });
@@ -690,7 +691,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
 
       // Append prominent Grand Total row inside the table
       data.push({
-        name: '⭐ کۆی گشتی شایستەی مانگ',
+        name: 'کۆی گشتی شایستەی مانگ',
         role: `${monthlySummary.length} کارمەند`,
         hours: `${totalMonthlyHours.toFixed(1)} کاتژمێر`,
         amount: `${totalMonthlyCost.toLocaleString()} IQD`,
@@ -708,10 +709,10 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         orientation: 'portrait',
         documentCode: `ASH-OTM-${selectedMonth.replace(/-/g, '')}`,
         summaryCards: [
-          { label: 'کارمەندانی خاوەن ئیزافە', value: `${monthlySummary.length} کارمەند`, color: '#2563eb', icon: '👥' },
-          { label: 'کۆی کاتژمێری مانگ', value: `${totalMonthlyHours.toFixed(1)} کاتژمێر`, color: '#d97706', icon: '⚡' },
-          { label: 'کۆی گشتی شایستەی ئیزافە', value: `${totalMonthlyCost.toLocaleString()} IQD`, color: '#059669', icon: '💰' },
-          { label: 'مانگی ژمێریاری', value: selectedMonth, color: '#475569', icon: '📅' },
+          { label: 'کارمەندانی خاوەن ئیزافە', value: `${monthlySummary.length} کارمەند`, color: '#2563eb' },
+          { label: 'کۆی کاتژمێری مانگ', value: `${totalMonthlyHours.toFixed(1)} کاتژمێر`, color: '#d97706' },
+          { label: 'کۆی گشتی شایستەی ئیزافە', value: `${totalMonthlyCost.toLocaleString()} IQD`, color: '#059669' },
+          { label: 'مانگی ژمێریاری', value: selectedMonth, color: '#475569' },
         ],
         summaryText: `کۆی کارمەندانی خاوەن ئیزافەی مانگ: ${monthlySummary.length} کارمەند • کۆی گشتی کاتژمێری زیادەی تۆمارکراو: ${totalMonthlyHours.toFixed(1)} کاتژمێر • کۆی گشتی پارەی شایستەی کاتی زیادەی مانگ: ${totalMonthlyCost.toLocaleString()} دیناری عێراقی (IQD).`,
       });
@@ -757,73 +758,77 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
   return (
     <div className="space-y-4 text-xs font-bold text-slate-900 dir-rtl" dir="rtl">
       
-      {/* 🏷️ LARGE PROMINENT SECTION TITLE (ACTIVE & SYNCED) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-orange-950 via-amber-950 to-slate-950 text-white rounded-xl shadow-lg border border-orange-700">
+      {/* 🏷️ EXECUTIVE LIGHT MODE HEADER */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-white rounded-2xl border border-slate-200/90 shadow-xs">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-orange-800/90 rounded-xl border border-orange-600 shadow-inner">
-            <Clock className="w-6 h-6 text-orange-200" />
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 border border-amber-500/20 flex items-center justify-center font-bold shadow-2xs shrink-0">
+            <Clock className="w-5 h-5 text-amber-600" />
           </div>
           <div>
-            <h2 className="text-base sm:text-lg font-black tracking-wide text-orange-50 flex items-center gap-2">
-              <span>لیستی کاتی زیادەی کارمەندان (Overtime Hub)</span>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/30 border border-emerald-400 text-emerald-200 font-mono font-black">
-                🟢 چالاک و پەیوەستکراو بە ئامادەبوون
+            <h2 className="text-base sm:text-lg font-black tracking-tight text-slate-900 flex items-center gap-2">
+              <span>تۆمار و ئاماری کاتی زیادە</span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>پەیوەستکراو بە ئامادەبوون</span>
               </span>
             </h2>
+            <p className="text-[11px] text-slate-500 font-medium">
+              ژماردنی ئۆتۆماتیکی کاتی زیادەی دەوام، تۆماری دەستی و خەرجکردنی پارەی شایستە
+            </p>
           </div>
         </div>
 
         {/* 🔄 ACTIONS & CLEAR BUTTONS */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handleClearAllOvertime}
-            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white border-rose-400 shadow-md cursor-pointer px-3 py-1.5 rounded-lg"
+            className="text-xs font-bold flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 shadow-2xs cursor-pointer px-3 py-1.5 rounded-xl transition-all active:scale-95"
             title="سڕینەوەی سەرجەم کاتی زیادە و تێبینیەکان"
           >
-            <Trash2 className="w-3.5 h-3.5 text-white" />
-            <span>🗑️ سڕینەوەی سەرجەم داتاکان (Clear All)</span>
+            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+            <span>سڕینەوەی سەرجەم داتاکان</span>
           </button>
 
           <button
             onClick={handleSyncGoogleSheet}
-            className="btn-classic text-xs font-black flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 border-amber-300 shadow-md cursor-pointer px-3 py-1.5 rounded-lg"
+            className="text-xs font-bold flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 shadow-2xs cursor-pointer px-3 py-1.5 rounded-xl transition-all active:scale-95"
             title="هەناردەکردنی کاتی زیادەی مانگانە و ڕۆژانە بۆ فایلی Google Sheets / Excel"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-slate-950" />
-            <span>📊 هەناردەکردن بۆ Google Sheets</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+            <span>هەناردەکردن بۆ Google Sheets</span>
           </button>
         </div>
       </div>
 
       {/* 🛠️ TOP CONTROLS & TIMEFRAME SELECTOR */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-100 border-2 border-slate-300 rounded-xl shadow-sm">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white border border-slate-200/90 rounded-2xl shadow-xs">
+        <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200/60">
           <button
             onClick={() => setViewMode('daily')}
-            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer font-black ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
               viewMode === 'daily' 
-                ? 'bg-orange-800 text-white shadow-md border border-orange-950 scale-102' 
-                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+                ? 'bg-white text-slate-900 shadow-2xs font-black' 
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Calendar className="w-3.5 h-3.5" />
-            <span>📅 تۆمار و ئاماری ڕۆژانە (Daily Calendar 1-31)</span>
+            <Calendar className={`w-3.5 h-3.5 ${viewMode === 'daily' ? 'text-amber-600' : 'text-slate-400'}`} />
+            <span>تۆمار و ئاماری ڕۆژانە (کالێندەری ١-٣١)</span>
           </button>
           <button
             onClick={() => setViewMode('monthly')}
-            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer font-black ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
               viewMode === 'monthly' 
-                ? 'bg-orange-800 text-white shadow-md border border-orange-950 scale-102' 
-                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+                ? 'bg-white text-slate-900 shadow-2xs font-black' 
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Clock className="w-3.5 h-3.5" />
-            <span>📊 ئاماری مانگانەی کاتی زیادە (تەنها کاتی زیادە و پارە)</span>
+            <Clock className={`w-3.5 h-3.5 ${viewMode === 'monthly' ? 'text-amber-600' : 'text-slate-400'}`} />
+            <span>ئاماری مانگانەی کاتی زیادە</span>
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 font-mono">
-          {/* ⚡ Quick Real-Time / Today button */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Quick Real-Time / Today button */}
           <button
             type="button"
             onClick={() => {
@@ -832,19 +837,19 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
               setSelectedMonth(curM);
               setSelectedDate(today);
             }}
-            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-black flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
+            className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 cursor-pointer"
             title="گەڕانەوە بۆ کاتی ئێستا و بەرواری ئەمڕۆ"
           >
-            <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-            <span>⏱️ کاتی ئێستا (ئەمڕۆ)</span>
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>ئەمڕۆ</span>
           </button>
 
-          {/* 📅 Clear Month Picker with Visible Label */}
+          {/* Month Picker */}
           <div 
-            className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-black shadow-2xs transition-all cursor-pointer"
+            className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50/80 hover:bg-blue-100/80 text-blue-700 border border-blue-200/80 text-xs font-bold shadow-2xs transition-all cursor-pointer"
             title={`دیاریکردنی مانگ (${selectedMonth})`}
           >
-            <Calendar className="w-4 h-4 text-blue-600" />
+            <Calendar className="w-3.5 h-3.5 text-blue-600" />
             <span>مانگی: {selectedMonth}</span>
             <input
               type="month"
@@ -867,31 +872,31 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
 
           <button
             onClick={handleExportPDF}
-            className="h-8 w-8 rounded-full flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-900 border border-red-300 shadow-2xs transition-all active:scale-90 cursor-pointer"
+            className="h-8 w-8 rounded-xl flex items-center justify-center bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 shadow-2xs transition-all active:scale-90 cursor-pointer"
             title="هەناردەی PDF / چاپکردن"
             aria-label="Export PDF"
           >
-            <Printer className="w-4 h-4 text-red-700" />
+            <Printer className="w-3.5 h-3.5 text-rose-600" />
           </button>
 
           <button
             onClick={handleExportCSV}
-            className="h-8 w-8 rounded-full flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs transition-all active:scale-90 cursor-pointer"
+            className="h-8 w-8 rounded-xl flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 shadow-2xs transition-all active:scale-90 cursor-pointer"
             title="هەناردەی CSV / ئێکسڵ"
             aria-label="Export CSV"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
           </button>
         </div>
       </div>
 
       {/* 📅 1-31 INTERACTIVE CALENDAR DAY SELECTOR BAR (FOR DAILY VIEW) */}
       {viewMode === 'daily' && (
-        <div className="bg-white border-2 border-orange-300/80 rounded-xl p-2.5 shadow-sm space-y-2">
-          <div className="flex flex-wrap items-center justify-between border-b border-orange-100 pb-1.5 gap-2">
-            <span className="text-xs font-black text-orange-950 flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-orange-600" />
-              <span>کالێندەری ۱ تا ۳۱ی مانگی ({selectedMonth}) - ڕۆژ دیاری بکە:</span>
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-2 gap-2">
+            <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <Calendar className="w-4 h-4 text-amber-600" />
+              <span>کالێندەری ۱ تا ۳۱ی مانگی ({selectedMonth}) — ڕۆژ دیاری بکە:</span>
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -902,18 +907,18 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                   setSelectedMonth(curM);
                   setSelectedDate(today);
                 }}
-                className="px-2 py-0.5 rounded text-[11px] font-black bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1 cursor-pointer shadow-2xs transition-all active:scale-95"
+                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1 cursor-pointer shadow-2xs transition-all active:scale-95"
                 title="ڕۆژی ئەمڕۆ لە کاتی ئێستا هەڵبژێرە"
               >
-                <span>⚡ ئەمڕۆ</span>
+                <span>ئەمڕۆ</span>
               </button>
-              <span className="text-[11px] font-mono font-bold bg-orange-100 text-orange-900 border border-orange-300 px-2 py-0.5 rounded">
+              <span className="text-xs font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 px-2.5 py-0.5 rounded-lg">
                 ڕۆژی هەڵبژێردراو: {selectedDate}
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-7 sm:grid-cols-10 md:grid-cols-16 lg:grid-cols-31 gap-1">
+          <div className="grid grid-cols-7 sm:grid-cols-10 md:grid-cols-16 lg:grid-cols-31 gap-1.5">
             {monthDaysList.map((day) => {
               const isSelected = selectedDate === day.dateStr;
               const hasOt = day.overtimeCount > 0;
@@ -923,14 +928,14 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                   key={day.dayNum}
                   type="button"
                   onClick={() => setSelectedDate(day.dateStr)}
-                  className={`relative p-1.5 rounded-lg border text-center transition-all flex flex-col items-center justify-center cursor-pointer ${
+                  className={`relative p-1.5 rounded-xl border text-center transition-all flex flex-col items-center justify-center cursor-pointer active:scale-95 ${
                     isSelected
-                      ? 'bg-orange-800 text-white border-orange-950 font-black shadow-md scale-105 z-10'
+                      ? 'bg-amber-500 text-white border-amber-600 font-black shadow-xs ring-2 ring-amber-500/20 scale-105 z-10'
                       : hasOt
-                      ? 'bg-amber-100/80 text-amber-950 border-amber-300 hover:bg-amber-200'
+                      ? 'bg-amber-50/90 text-amber-900 border-amber-200/90 hover:bg-amber-100/80'
                       : day.isFriday
-                      ? 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                      ? 'bg-slate-50 text-slate-400 border-slate-200/60 hover:bg-slate-100'
+                      : 'bg-white text-slate-700 border-slate-200/80 hover:bg-slate-50'
                   }`}
                   title={`${day.dateStr} - ${day.dayName} ${hasOt ? `(${day.overtimeCount} ئیزافە)` : ''}`}
                 >
@@ -940,7 +945,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                   </span>
                   {hasOt && (
                     <span className={`text-[8px] font-bold px-1 rounded-full mt-0.5 ${
-                      isSelected ? 'bg-amber-400 text-slate-950' : 'bg-amber-600 text-white'
+                      isSelected ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'
                     }`}>
                       {day.overtimeCount}
                     </span>
@@ -952,66 +957,87 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         </div>
       )}
 
-      {/* 📊 SUMMARY KPI BADGES */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-        <div className="panel-classic p-2.5 text-center bg-blue-50/80 border-2 border-blue-200 shadow-sm rounded-xl">
-          <span className="text-[10px] text-blue-900 block font-bold">
-            {viewMode === 'daily' ? 'کارمەندانی خاوەن ئیزافەی ئەمڕۆ' : 'کارمەندانی خاوەن ئیزافەی مانگ'}
-          </span>
-          <p className="text-base font-black text-blue-950 font-mono mt-0.5">
+      {/* 📊 SUMMARY KPI CARDS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500">
+              {viewMode === 'daily' ? 'کارمەندانی خاوەن ئیزافەی ئەمڕۆ' : 'کارمەندانی خاوەن ئیزافەی مانگ'}
+            </span>
+            <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center">
+              <Users className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <p className="text-lg font-black text-slate-900 font-mono mt-1">
             {viewMode === 'daily' ? `${dailyRecords.length} کارمەند` : `${monthlySummary.length} کارمەند`}
           </p>
         </div>
 
-        <div className="panel-classic p-2.5 text-center bg-amber-50/80 border-2 border-amber-200 shadow-sm rounded-xl">
-          <span className="text-[10px] text-amber-900 block font-bold">
-            {viewMode === 'daily' ? 'کۆی کاتژمێری ئیزافەی ئەمڕۆ' : 'کۆی کاتژمێری ئیزافەی مانگ'}
-          </span>
-          <p className="text-base font-black text-amber-950 font-mono mt-0.5">
-            {viewMode === 'daily' ? `${totalDailyHours.toFixed(1)} کاتژمێر` : `${totalMonthlyHours.toFixed(1)} کاتژمێر`}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500">
+              {viewMode === 'daily' ? 'کۆی کاتژمێری ئیزافەی ئەمڕۆ' : 'کۆی کاتژمێری ئیزافەی مانگ'}
+            </span>
+            <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center">
+              <Clock className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <p className="text-lg font-black text-amber-600 font-mono mt-1">
+            {viewMode === 'daily' ? `+${totalDailyHours.toFixed(1)} کاتژمێر` : `+${totalMonthlyHours.toFixed(1)} کاتژمێر`}
           </p>
         </div>
 
-        <div className="panel-classic p-2.5 text-center bg-emerald-50/80 border-2 border-emerald-200 shadow-sm rounded-xl">
-          <span className="text-[10px] text-emerald-900 block font-bold">
-            {viewMode === 'daily' ? 'کۆی شایستەی پارەی ئەمڕۆ' : 'کۆی گشتی پارەی مانگ'}
-          </span>
-          <p className="text-base font-black text-emerald-950 font-mono mt-0.5">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500">
+              {viewMode === 'daily' ? 'کۆی شایستەی پارەی ئەمڕۆ' : 'کۆی گشتی پارەی مانگ'}
+            </span>
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+              <DollarSign className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <p className="text-lg font-black text-emerald-600 font-mono mt-1">
             {viewMode === 'daily' ? `${totalDailyCost.toLocaleString()} IQD` : `${totalMonthlyCost.toLocaleString()} IQD`}
           </p>
         </div>
 
-        <div className="panel-classic p-2.5 text-center bg-purple-50/80 border-2 border-purple-200 shadow-sm rounded-xl">
-          <span className="text-[10px] text-purple-900 block font-bold">دۆخی سیستەم</span>
-          <p className="text-xs font-black text-purple-950 mt-1">
-            ✅ سیستەمی زیندوو
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500">دۆخی سیستەم</span>
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <p className="text-xs font-bold text-emerald-700 mt-2 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>سیستەمی زیندوو و هاوکات</span>
           </p>
         </div>
       </div>
 
       {/* 📝 MANUAL OVERTIME ENTRY FORM */}
-      <form onSubmit={handleAddManualOvertime} className="p-3 bg-gradient-to-r from-amber-50/90 via-orange-50/80 to-amber-50/90 border-2 border-amber-300 rounded-xl shadow-sm space-y-2">
-        <div className="flex items-center justify-between border-b border-amber-300/80 pb-1.5">
-          <div className="flex items-center gap-1.5">
-            <span className="p-1 bg-amber-600 text-white rounded">
+      <form onSubmit={handleAddManualOvertime} className="p-4 bg-white border border-slate-200/90 rounded-2xl shadow-xs space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center">
               <Plus className="w-3.5 h-3.5" />
-            </span>
-            <h3 className="text-xs font-black text-amber-950">
+            </div>
+            <h3 className="text-xs font-black text-slate-900">
               تۆمارکردنی کاتی زیادەی دەستی (Manual Overtime Entry)
             </h3>
           </div>
-          <span className="text-[10px] bg-amber-200 text-amber-900 border border-amber-400 px-2 py-0.5 rounded font-mono font-bold">
+          <span className="text-xs bg-slate-50 text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded-lg font-mono font-bold">
             بەرواری تۆمار: {selectedDate}
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
-            <label className="block text-amber-950 mb-1 text-[11px] font-bold">ناوی کارمەند:</label>
+            <label className="block text-slate-700 mb-1 text-[11px] font-bold">ناوی کارمەند:</label>
             <select
               value={selectedEmpId}
               onChange={(e) => setSelectedEmpId(e.target.value)}
-              className="input-classic w-full font-bold bg-white border-amber-300"
+              className="w-full text-xs font-bold bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all"
               required
             >
               <option value="">-- هەڵبژاردنی کارمەند --</option>
@@ -1024,7 +1050,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
           </div>
 
           <div>
-            <label className="block text-amber-950 mb-1 text-[11px] font-bold">ژمارەی کاتژمێر (Hours):</label>
+            <label className="block text-slate-700 mb-1 text-[11px] font-bold">ژمارەی کاتژمێر (Hours):</label>
             <input
               type="number"
               step="0.5"
@@ -1033,36 +1059,36 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
               value={manualHours}
               onChange={(e) => setManualHours(e.target.value)}
               placeholder="بۆ نموونە: 2"
-              className="input-classic w-full font-mono font-bold bg-white border-amber-300"
+              className="w-full text-xs font-mono font-bold bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all"
               required
             />
           </div>
 
           <div>
-            <label className="block text-amber-950 mb-1 text-[11px] font-bold">نرخی کاتژمێر (IQD):</label>
+            <label className="block text-slate-700 mb-1 text-[11px] font-bold">نرخی کاتژمێر (IQD):</label>
             <input
               type="number"
               step="500"
               value={manualRate}
               onChange={(e) => setManualRate(e.target.value)}
-              className="input-classic w-full font-mono font-bold bg-white border-amber-300"
+              className="w-full text-xs font-mono font-bold bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all"
             />
           </div>
 
           <div>
-            <label className="block text-amber-950 mb-1 text-[11px] font-bold">تێبینی، جۆری ئیش و هۆکار:</label>
+            <label className="block text-slate-700 mb-1 text-[11px] font-bold">تێبینی و جۆری ئیش:</label>
             <input
               type="text"
               value={manualNote}
               onChange={(e) => setManualNote(e.target.value)}
               placeholder="نقڵی ماڵان، چاککردنەوە، کارکردنی شەوان..."
-              className="input-classic w-full font-bold bg-white border-amber-300"
+              className="w-full text-xs font-bold bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all"
             />
           </div>
         </div>
 
         <div className="flex justify-end pt-1">
-          <button type="submit" className="btn-classic text-xs font-black flex items-center gap-1.5 bg-amber-700 hover:bg-amber-800 text-white border-amber-900 shadow-sm cursor-pointer px-4 py-1 rounded">
+          <button type="submit" className="text-xs font-bold flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white shadow-2xs cursor-pointer px-4 py-2 rounded-xl transition-all active:scale-95">
             <Plus className="w-3.5 h-3.5" />
             <span>تۆمارکردنی ئەم ئیزافەیە</span>
           </button>
@@ -1070,16 +1096,17 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
       </form>
 
       {/* 📋 ANALYTICS & DATA TABLE CONTAINER */}
-      <div className="border-2 border-slate-300 bg-white rounded-xl shadow-md overflow-hidden">
-        <div className="bg-slate-800 text-white p-2 px-3 flex items-center justify-between">
-          <h3 className="text-xs font-black flex items-center gap-2">
+      <div className="border border-slate-200/90 bg-white rounded-2xl shadow-xs overflow-hidden">
+        <div className="bg-slate-50/80 border-b border-slate-200/80 px-4 py-3 flex items-center justify-between">
+          <h3 className="text-xs font-black text-slate-900 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-amber-600" />
             <span>
-              📋 {viewMode === 'daily' 
-                ? `خشتەی کاتی زیادەی ڕۆژی (${selectedDate}) - لەگەڵ تێبینی و وردەکارییەکان` 
-                : `ئاماری مانگانەی کاتی زیادە (${selectedMonth}) - تەنها کاتی زیادە و بڕی پارە`}
+              {viewMode === 'daily' 
+                ? `خشتەی کاتی زیادەی ڕۆژی (${selectedDate}) — لەگەڵ تێبینی و وردەکارییەکان` 
+                : `ئاماری مانگانەی کاتی زیادە (${selectedMonth}) — تەنها کاتی زیادە و بڕی پارە`}
             </span>
           </h3>
-          <span className="text-[10px] font-mono text-slate-300">
+          <span className="text-xs font-mono font-bold text-slate-600 bg-white border border-slate-200 px-2.5 py-0.5 rounded-lg">
             {viewMode === 'daily' ? `${dailyRecords.length} کارمەند` : `${monthlySummary.length} کارمەند`}
           </span>
         </div>
@@ -1089,22 +1116,22 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
             /* 📅 DAILY OVERTIME TABLE WITH DIRECT EDIT & NOTES */
             <table className="w-full text-right text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-200 border-b-2 border-slate-300 text-slate-900 font-black">
-                  <th className="p-2.5 border-l border-slate-300 w-10 text-center">#</th>
-                  <th className="p-2.5 border-l border-slate-300">ناوی کارمەند</th>
-                  <th className="p-2.5 border-l border-slate-300">پۆست / ئەرک</th>
-                  <th className="p-2.5 border-l border-slate-300 text-center">کاتی دەرچوون</th>
-                  <th className="p-2.5 border-l border-slate-300 text-center">کاتی زیادەی کارکردن</th>
-                  <th className="p-2.5 border-l border-slate-300 text-center">بڕی شایستەی پارە (IQD)</th>
-                  <th className="p-2.5 border-l border-slate-300 bg-amber-50 text-amber-950">تێبینی و جۆری ئیش</th>
-                  <th className="p-2.5 border-l border-slate-300 text-center w-24">سەرچاوە</th>
-                  <th className="p-2.5 text-center w-24">کردارەکان</th>
+                <tr className="bg-slate-50/60 border-b border-slate-200 text-slate-600 font-bold">
+                  <th className="p-3 w-10 text-center">#</th>
+                  <th className="p-3">ناوی کارمەند</th>
+                  <th className="p-3">پۆست / ئەرک</th>
+                  <th className="p-3 text-center">کاتی دەرچوون</th>
+                  <th className="p-3 text-center">کاتی زیادەی کارکردن</th>
+                  <th className="p-3 text-center">بڕی شایستەی پارە (IQD)</th>
+                  <th className="p-3">تێبینی و جۆری ئیش</th>
+                  <th className="p-3 text-center w-24">سەرچاوە</th>
+                  <th className="p-3 text-center w-24">کردارەکان</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-slate-100 font-medium">
                 {dailyRecords.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="p-8 text-center text-slate-500 font-bold">
+                    <td colSpan={9} className="p-8 text-center text-slate-400 font-bold">
                       هیچ کاتێکی زیادە بۆ ئەم بەروارە ({selectedDate}) تۆمار نەکراوە.
                     </td>
                   </tr>
@@ -1116,53 +1143,57 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                       const savedNote = adminNotes[noteKey] || rec.note;
 
                       return (
-                        <tr key={rec.id} className="hover:bg-amber-50/40 font-bold transition-all">
-                          <td className="p-2.5 border-l border-slate-200 text-center font-mono text-slate-500">{idx + 1}</td>
-                          <td className="p-2.5 border-l border-slate-200 text-slate-950 font-black">{rec.employeeName}</td>
-                          <td className="p-2.5 border-l border-slate-200 text-slate-600">{rec.employeeRole}</td>
-                          <td className="p-2.5 border-l border-slate-200 text-center font-mono">
+                        <tr key={rec.id} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="p-3 text-center font-mono text-slate-400">{idx + 1}</td>
+                          <td className="p-3 text-slate-900 font-bold">{rec.employeeName}</td>
+                          <td className="p-3 text-slate-600">{rec.employeeRole}</td>
+                          <td className="p-3 text-center font-mono">
                             {rec.checkOutTime ? (
-                              <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 font-black">
-                                📤 {formatTime12H(rec.checkOutTime)}
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200/80 font-bold">
+                                {formatTime12H(rec.checkOutTime)}
                               </span>
                             ) : (
                               <span className="text-slate-400">-</span>
                             )}
                           </td>
-                          <td className="p-2.5 border-l border-slate-200 text-center font-mono text-blue-900 font-black">
-                            +{rec.hours} کاتژمێر
+                          <td className="p-3 text-center font-mono">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200/80 font-black">
+                              +{rec.hours} کاتژمێر
+                            </span>
                           </td>
-                          <td className="p-2.5 border-l border-slate-200 text-center font-mono text-emerald-900 font-black">
-                            +{rec.totalAmount.toLocaleString()} IQD
+                          <td className="p-3 text-center font-mono">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/80 font-black">
+                              +{rec.totalAmount.toLocaleString()} IQD
+                            </span>
                           </td>
-                          <td className="p-2.5 border-l border-slate-200 bg-amber-50/40">
+                          <td className="p-3">
                             {isEditingNote ? (
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1.5">
                                 <input
                                   type="text"
                                   placeholder="نووسینی هۆکار / تێبینی..."
                                   value={tempNoteText}
                                   onChange={(e) => setTempNoteText(e.target.value)}
-                                  className="input-classic flex-1 text-xs bg-white font-bold py-0.5"
+                                  className="flex-1 text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 font-bold outline-none focus:border-amber-500 focus:bg-white"
                                   autoFocus
                                 />
                                 <button
                                   onClick={() => handleSaveNote(noteKey)}
-                                  className="btn-classic-primary text-[10px] px-1.5 py-0.5 flex items-center gap-1"
+                                  className="text-[11px] font-bold px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-1 transition-all active:scale-95"
                                 >
-                                  <Save className="w-2.5 h-2.5" />
+                                  <Save className="w-3 h-3" />
                                   <span>پاشەکەوت</span>
                                 </button>
                                 <button
                                   onClick={() => setEditingNoteKey(null)}
-                                  className="btn-classic text-[10px] px-1.5 py-0.5"
+                                  className="text-[11px] font-bold px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg"
                                 >
                                   ✕
                                 </button>
                               </div>
                             ) : (
-                              <div className="flex items-center justify-between gap-1">
-                                <span className="text-slate-800 text-[11px]">
+                              <div className="flex items-center justify-between gap-1.5">
+                                <span className="text-slate-700 text-xs">
                                   {savedNote || <span className="text-slate-400 italic">بێ تێبینی</span>}
                                 </span>
                                 <button
@@ -1170,30 +1201,30 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                                     setEditingNoteKey(noteKey);
                                     setTempNoteText(savedNote || '');
                                   }}
-                                  className="text-amber-900 hover:text-amber-950 p-0.5 rounded text-[10px] font-black border border-amber-300 bg-amber-100 hover:bg-amber-200"
+                                  className="text-amber-800 hover:text-amber-900 px-2 py-0.5 rounded-lg text-[11px] font-bold border border-amber-200/80 bg-amber-50 hover:bg-amber-100 transition-all cursor-pointer"
                                 >
-                                  <Edit3 className="w-2.5 h-2.5 inline mr-0.5" />
+                                  <Edit3 className="w-3 h-3 inline mr-0.5" />
                                   <span>{savedNote ? 'دەستکاری' : 'نووسین'}</span>
                                 </button>
                               </div>
                             )}
                           </td>
-                          <td className="p-2.5 border-l border-slate-200 text-center">
+                          <td className="p-3 text-center">
                             {rec.source === 'attendance' ? (
-                              <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-900 border border-blue-200 text-[10px]">
-                                ⚡ سیستەم
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-50 text-sky-700 border border-sky-200/80 text-[10px] font-bold">
+                                سیستەم
                               </span>
                             ) : (
-                              <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-200 text-[10px]">
-                                ✍️ دەستی
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-50 text-purple-700 border border-purple-200/80 text-[10px] font-bold">
+                                دەستی
                               </span>
                             )}
                           </td>
-                          <td className="p-2.5 text-center">
+                          <td className="p-3 text-center">
                             <div className="flex items-center justify-center gap-1">
                               <button
                                 onClick={() => handleOpenEditModal(rec)}
-                                className="text-blue-700 hover:text-blue-950 p-1 hover:bg-blue-100 rounded transition-all"
+                                className="w-7 h-7 rounded-lg flex items-center justify-center text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition-all cursor-pointer"
                                 title="دەستکاریکردنی ژمارەی کاتژمێر و نرخ و تێبینی"
                               >
                                 <Edit className="w-3.5 h-3.5" />
@@ -1201,7 +1232,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                               {rec.source === 'manual' && (
                                 <button
                                   onClick={() => handleDelete(rec.id)}
-                                  className="text-rose-700 hover:text-rose-950 p-1 hover:bg-rose-100 rounded transition-all"
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-rose-600 hover:text-rose-800 hover:bg-rose-50 transition-all cursor-pointer"
                                   title="سڕینەوە"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
@@ -1214,17 +1245,17 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                     })}
 
                     {/* Grand Total Footer Row */}
-                    <tr className="bg-slate-200 border-t-2 border-slate-400 text-slate-950 font-black">
-                      <td colSpan={4} className="p-2.5 text-left border-l border-slate-300">
+                    <tr className="bg-slate-50 border-t-2 border-slate-200 text-slate-900 font-black">
+                      <td colSpan={4} className="p-3 text-left">
                         کۆی گشتی ئیزافەی ڕۆژی ({selectedDate}):
                       </td>
-                      <td className="p-2.5 border-l border-slate-300 text-center font-mono text-blue-950">
+                      <td className="p-3 text-center font-mono text-blue-700">
                         +{totalDailyHours.toFixed(1)} کاتژمێر
                       </td>
-                      <td className="p-2.5 border-l border-slate-300 text-center font-mono text-emerald-950">
+                      <td className="p-3 text-center font-mono text-emerald-700">
                         +{totalDailyCost.toLocaleString()} IQD
                       </td>
-                      <td colSpan={3} className="p-2.5 text-slate-600 font-normal">
+                      <td colSpan={3} className="p-3 text-slate-500 font-medium">
                         ({dailyRecords.length} کارمەندی خاوەن ئیزافە)
                       </td>
                     </tr>
@@ -1233,22 +1264,22 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
               </tbody>
             </table>
           ) : (
-            /* 📊 MONTHLY OVERTIME SUMMARY TABLE (OVERTIME HOURS & PAYOUT ONLY) */
+            /* 📊 MONTHLY OVERTIME SUMMARY TABLE */
             <table className="w-full text-right text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-200 border-b-2 border-slate-300 text-slate-900 font-black">
-                  <th className="p-2.5 border-l border-slate-300 w-10 text-center">#</th>
-                  <th className="p-2.5 border-l border-slate-300">ناوی کارمەند</th>
-                  <th className="p-2.5 border-l border-slate-300">پۆست / ئەرک</th>
-                  <th className="p-2.5 border-l border-slate-300 text-center bg-amber-50 text-amber-950">کاتی زیادەی کارکردن</th>
-                  <th className="p-2.5 border-l border-slate-300 text-center bg-emerald-50 text-emerald-950">کۆی شایستەی پارە (IQD)</th>
-                  <th className="p-2.5 text-center w-36">وردەکاری ڕۆژەکان</th>
+                <tr className="bg-slate-50/60 border-b border-slate-200 text-slate-600 font-bold">
+                  <th className="p-3 w-10 text-center">#</th>
+                  <th className="p-3">ناوی کارمەند</th>
+                  <th className="p-3">پۆست / ئەرک</th>
+                  <th className="p-3 text-center">کاتی زیادەی کارکردن</th>
+                  <th className="p-3 text-center">کۆی شایستەی پارە (IQD)</th>
+                  <th className="p-3 text-center w-36">وردەکاری ڕۆژەکان</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 font-bold">
+              <tbody className="divide-y divide-slate-100 font-medium">
                 {monthlySummary.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-500 font-bold">
+                    <td colSpan={6} className="p-8 text-center text-slate-400 font-bold">
                       هیچ کارمەندێک لە مانگی ({selectedMonth}) کاتی زیادەی نەبووە.
                     </td>
                   </tr>
@@ -1260,22 +1291,26 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                         <React.Fragment key={sum.empId}>
                           <tr 
                             onClick={() => setExpandedEmpId(isExpanded ? null : sum.empId)}
-                            className={`cursor-pointer transition-all ${isExpanded ? 'bg-orange-100/70' : 'hover:bg-slate-50'}`}
+                            className={`cursor-pointer transition-colors ${isExpanded ? 'bg-amber-50/60' : 'hover:bg-slate-50/70'}`}
                           >
-                            <td className="p-2.5 border-l border-slate-200 text-center font-mono text-slate-500">{idx + 1}</td>
-                            <td className="p-2.5 border-l border-slate-200 text-slate-950 font-black">{sum.name}</td>
-                            <td className="p-2.5 border-l border-slate-200 text-slate-600">{sum.role}</td>
-                            <td className="p-2.5 border-l border-slate-200 text-center font-mono text-blue-900 font-black bg-amber-50/40">
-                              +{sum.totalHours.toFixed(1)} کاتژمێر
+                            <td className="p-3 text-center font-mono text-slate-400">{idx + 1}</td>
+                            <td className="p-3 text-slate-900 font-bold">{sum.name}</td>
+                            <td className="p-3 text-slate-600">{sum.role}</td>
+                            <td className="p-3 text-center font-mono">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200/80 font-black">
+                                +{sum.totalHours.toFixed(1)} کاتژمێر
+                              </span>
                             </td>
-                            <td className="p-2.5 border-l border-slate-200 text-center font-mono text-emerald-900 font-black bg-emerald-50/40">
-                              +{sum.totalAmount.toLocaleString()} IQD
+                            <td className="p-3 text-center font-mono">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/80 font-black">
+                                +{sum.totalAmount.toLocaleString()} IQD
+                              </span>
                             </td>
-                            <td className="p-2.5 text-center">
-                              <span className={`px-2 py-0.5 rounded text-[11px] font-black border transition-all inline-flex items-center gap-1 ${
+                            <td className="p-3 text-center">
+                              <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all inline-flex items-center gap-1 ${
                                 isExpanded 
-                                  ? 'bg-orange-800 text-white border-orange-950 shadow-sm' 
-                                  : 'bg-orange-50 text-orange-900 border-orange-300 hover:bg-orange-100'
+                                  ? 'bg-amber-500 text-white border-amber-600 shadow-2xs' 
+                                  : 'bg-amber-50 text-amber-800 border-amber-200/80 hover:bg-amber-100'
                               }`}>
                                 {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                                 <span>{isExpanded ? 'داخستن' : 'ڕۆژەکان و نۆت'}</span>
@@ -1285,40 +1320,41 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
 
                           {/* 🔍 EXPANDED DAILY RECORDS FOR THIS EMPLOYEE */}
                           {isExpanded && (
-                            <tr className="bg-orange-50/50 border-y-2 border-orange-300">
-                              <td colSpan={6} className="p-3">
-                                <div className="bg-white border border-orange-200 rounded-lg p-3 shadow-inner space-y-2">
-                                  <h4 className="text-[11px] font-black text-orange-950 flex items-center gap-1.5 border-b border-orange-100 pb-1">
-                                    <span>📅 وردەکاری ڕۆژانی ئیزافەی ({sum.name}) بۆ مانگی ({selectedMonth}):</span>
+                            <tr className="bg-amber-50/30 border-y border-amber-200/60">
+                              <td colSpan={6} className="p-3.5">
+                                <div className="bg-white border border-amber-200/80 rounded-xl p-3.5 shadow-2xs space-y-2.5">
+                                  <h4 className="text-xs font-black text-amber-950 flex items-center gap-1.5 border-b border-amber-100 pb-1.5">
+                                    <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                                    <span>وردەکاری ڕۆژانی ئیزافەی ({sum.name}) بۆ مانگی ({selectedMonth}):</span>
                                   </h4>
-                                  <table className="w-full text-right text-xs border border-slate-200">
+                                  <table className="w-full text-right text-xs border border-slate-200 rounded-lg overflow-hidden">
                                     <thead>
-                                      <tr className="bg-slate-100 text-slate-800 font-black text-[11px]">
-                                        <th className="p-1.5 border-l border-slate-200 text-center">بەروار</th>
-                                        <th className="p-1.5 border-l border-slate-200 text-center">دەرچوون</th>
-                                        <th className="p-1.5 border-l border-slate-200 text-center">کاتی زیادەی کارکردن</th>
-                                        <th className="p-1.5 border-l border-slate-200 text-center">کۆی پارە</th>
-                                        <th className="p-1.5 border-l border-slate-200">تێبینی و جۆری ئیش</th>
-                                        <th className="p-1.5 text-center w-20">دەستکاری</th>
+                                      <tr className="bg-slate-50 text-slate-700 font-bold">
+                                        <th className="p-2 text-center">بەروار</th>
+                                        <th className="p-2 text-center">دەرچوون</th>
+                                        <th className="p-2 text-center">کاتی زیادەی کارکردن</th>
+                                        <th className="p-2 text-center">کۆی پارە</th>
+                                        <th className="p-2">تێبینی و جۆری ئیش</th>
+                                        <th className="p-2 text-center w-20">دەستکاری</th>
                                       </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-slate-100 font-bold">
+                                    <tbody className="divide-y divide-slate-100 font-medium">
                                       {sum.records.map((r) => (
-                                        <tr key={r.id} className="hover:bg-orange-50/30">
-                                          <td className="p-1.5 border-l border-slate-200 text-center font-mono text-slate-900">{r.date}</td>
-                                          <td className="p-1.5 border-l border-slate-200 text-center font-mono text-rose-800">{formatTime12H(r.checkOutTime)}</td>
-                                          <td className="p-1.5 border-l border-slate-200 text-center font-mono text-blue-900">+{r.hours} کاتژمێر</td>
-                                          <td className="p-1.5 border-l border-slate-200 text-center font-mono text-emerald-900">
+                                        <tr key={r.id} className="hover:bg-slate-50/70">
+                                          <td className="p-2 text-center font-mono text-slate-800">{r.date}</td>
+                                          <td className="p-2 text-center font-mono text-rose-700 font-bold">{formatTime12H(r.checkOutTime)}</td>
+                                          <td className="p-2 text-center font-mono text-blue-700 font-bold">+{r.hours} کاتژمێر</td>
+                                          <td className="p-2 text-center font-mono text-emerald-700 font-bold">
                                             +{r.totalAmount.toLocaleString()} IQD
                                           </td>
-                                          <td className="p-1.5 border-l border-slate-200 text-slate-800">{r.note || '-'}</td>
-                                          <td className="p-1.5 text-center">
+                                          <td className="p-2 text-slate-700">{r.note || '-'}</td>
+                                          <td className="p-2 text-center">
                                             <button
                                               onClick={(e) => {
                                                 e.stopPropagation();
                                                 handleOpenEditModal(r);
                                               }}
-                                              className="text-blue-700 hover:text-blue-900 p-0.5 rounded hover:bg-blue-100"
+                                              className="w-6 h-6 rounded-md inline-flex items-center justify-center text-blue-600 hover:text-blue-800 hover:bg-blue-50 cursor-pointer"
                                               title="دەستکاری"
                                             >
                                               <Edit className="w-3 h-3" />
@@ -1337,17 +1373,17 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                     })}
 
                     {/* Grand Total Footer Row */}
-                    <tr className="bg-slate-200 border-t-2 border-slate-400 text-slate-950 font-black">
-                      <td colSpan={3} className="p-2.5 text-left border-l border-slate-300">
+                    <tr className="bg-slate-50 border-t-2 border-slate-200 text-slate-900 font-black">
+                      <td colSpan={3} className="p-3 text-left">
                         کۆی گشتی مانگی ({selectedMonth}):
                       </td>
-                      <td className="p-2.5 border-l border-slate-300 text-center font-mono text-blue-950 bg-amber-100/50">
+                      <td className="p-3 text-center font-mono text-blue-700">
                         +{totalMonthlyHours.toFixed(1)} کاتژمێر
                       </td>
-                      <td className="p-2.5 border-l border-slate-300 text-center font-mono text-emerald-950 bg-emerald-100/50">
+                      <td className="p-3 text-center font-mono text-emerald-700">
                         +{totalMonthlyCost.toLocaleString()} IQD
                       </td>
-                      <td className="p-2.5 text-center text-slate-500 font-normal">
+                      <td className="p-3 text-center text-slate-500 font-medium">
                         ({monthlySummary.length} کارمەند)
                       </td>
                     </tr>
@@ -1361,16 +1397,16 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
 
       {/* ✏️ MODAL: EDIT OVERTIME RECORD */}
       {editingRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl border-2 border-orange-400 shadow-2xl max-w-md w-full p-5 space-y-4 text-right">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4 text-right">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                <Edit className="w-4 h-4 text-orange-600" />
+                <Edit className="w-4 h-4 text-amber-600" />
                 <span>دەستکاریکردنی تۆماری ئیزافە ({editingRecord.employeeName})</span>
               </h3>
               <button
                 onClick={() => setEditingRecord(null)}
-                className="text-slate-400 hover:text-slate-700 p-1"
+                className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1383,7 +1419,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                   type="text"
                   value={editingRecord.date}
                   disabled
-                  className="input-classic w-full bg-slate-100 font-mono text-xs"
+                  className="w-full bg-slate-100 text-slate-500 font-mono text-xs rounded-xl px-3 py-2 border border-slate-200 cursor-not-allowed"
                 />
               </div>
 
@@ -1396,7 +1432,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                   max="24"
                   value={editForm.hours}
                   onChange={(e) => setEditForm({ ...editForm, hours: e.target.value })}
-                  className="input-classic w-full font-mono font-bold text-xs bg-white border-orange-300"
+                  className="w-full font-mono font-bold text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all"
                   required
                 />
               </div>
@@ -1408,7 +1444,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                   step="500"
                   value={editForm.rate}
                   onChange={(e) => setEditForm({ ...editForm, rate: e.target.value })}
-                  className="input-classic w-full font-mono font-bold text-xs bg-white border-orange-300"
+                  className="w-full font-mono font-bold text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all"
                 />
               </div>
 
@@ -1419,21 +1455,21 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                   value={editForm.note}
                   onChange={(e) => setEditForm({ ...editForm, note: e.target.value })}
                   placeholder="جۆری ئیش، هۆکار، وردەکاری..."
-                  className="input-classic w-full text-xs font-bold bg-white border-orange-300"
+                  className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setEditingRecord(null)}
-                  className="btn-classic text-xs px-3 py-1.5"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer"
                 >
                   پاشگەزبوونەوە
                 </button>
                 <button
                   type="submit"
-                  className="btn-classic-primary text-xs px-4 py-1.5 flex items-center gap-1.5 bg-orange-700 hover:bg-orange-800 text-white"
+                  className="px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white shadow-2xs transition-all active:scale-95 cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" />
                   <span>پاشەکەوتکردنی گۆڕانکاری</span>
