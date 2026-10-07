@@ -31,81 +31,121 @@ function getTelegramButtonTheme(label: string) {
   const l = (label || '').toLowerCase();
   if (l.includes('هاتن') || l.includes('check in') || l.includes('دەوام')) {
     return {
-      bg: 'bg-gradient-to-b from-emerald-950/80 to-emerald-900/70 hover:from-emerald-900 hover:to-emerald-800',
-      border: 'border-emerald-500/40 hover:border-emerald-400',
-      text: 'text-emerald-200 hover:text-white',
-      shadow: 'shadow-emerald-950/30',
+      bg: 'bg-gradient-to-r from-emerald-500 via-emerald-600 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white',
+      border: 'border-emerald-300/40 ring-1 ring-emerald-400/30',
+      text: 'text-white font-black',
+      shadow: 'shadow-md shadow-emerald-500/30',
       icon: LogIn,
-      iconColor: 'text-emerald-400',
+      iconColor: 'text-white',
     };
   }
   if (l.includes('دەرچوون') || l.includes('check out') || l.includes('ڕۆیشتن')) {
     return {
-      bg: 'bg-gradient-to-b from-rose-950/80 to-rose-900/70 hover:from-rose-900 hover:to-rose-800',
-      border: 'border-rose-500/40 hover:border-rose-400',
-      text: 'text-rose-200 hover:text-white',
-      shadow: 'shadow-rose-950/30',
+      bg: 'bg-gradient-to-r from-rose-500 via-rose-600 to-red-600 hover:from-rose-600 hover:to-red-700 text-white',
+      border: 'border-rose-300/40 ring-1 ring-rose-400/30',
+      text: 'text-white font-black',
+      shadow: 'shadow-md shadow-rose-500/30',
       icon: LogOut,
-      iconColor: 'text-rose-400',
+      iconColor: 'text-white',
     };
   }
-  if (l.includes('زیادە') || l.includes('ئیزافە') || l.includes('overtime') || l.includes('کات')) {
+  if (l.includes('دۆخی دەوامی ئەمڕۆ') || l.includes('ئەمڕۆ')) {
     return {
-      bg: 'bg-gradient-to-b from-amber-950/80 to-amber-900/70 hover:from-amber-900 hover:to-amber-800',
-      border: 'border-amber-500/40 hover:border-amber-400',
-      text: 'text-amber-200 hover:text-white',
-      shadow: 'shadow-amber-950/30',
+      bg: 'bg-gradient-to-r from-sky-500 via-sky-600 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white',
+      border: 'border-sky-300/40 ring-1 ring-sky-400/30',
+      text: 'text-white font-black',
+      shadow: 'shadow-md shadow-sky-500/30',
       icon: Clock,
-      iconColor: 'text-amber-400',
+      iconColor: 'text-white',
+    };
+  }
+  if (l.includes('ئەم مانگەم') || l.includes('ڕاپۆرت') || l.includes('pdf')) {
+    return {
+      bg: 'bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white',
+      border: 'border-indigo-300/40 ring-1 ring-indigo-400/30',
+      text: 'text-white font-black',
+      shadow: 'shadow-md shadow-indigo-500/30',
+      icon: FileText,
+      iconColor: 'text-white',
+    };
+  }
+  if (l.includes('پرۆفایل') || l.includes('profile')) {
+    return {
+      bg: 'bg-gradient-to-r from-purple-500 via-violet-600 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white',
+      border: 'border-purple-300/40 ring-1 ring-purple-400/30',
+      text: 'text-white font-black',
+      shadow: 'shadow-md shadow-purple-500/30',
+      icon: User,
+      iconColor: 'text-white',
+    };
+  }
+  if (l.includes('شوێن') || l.includes('locations')) {
+    return {
+      bg: 'bg-gradient-to-r from-slate-600 via-slate-700 to-slate-800 hover:from-slate-700 hover:to-slate-900 text-white',
+      border: 'border-slate-400/40 ring-1 ring-slate-500/30',
+      text: 'text-white font-black',
+      shadow: 'shadow-md shadow-slate-600/30',
+      icon: Sparkles,
+      iconColor: 'text-white',
     };
   }
   if (l.includes('مۆڵەت') || l.includes('leave') || l.includes('پشوو')) {
     return {
-      bg: 'bg-gradient-to-b from-teal-950/80 to-teal-900/70 hover:from-teal-900 hover:to-teal-800',
-      border: 'border-teal-500/40 hover:border-teal-400',
-      text: 'text-teal-200 hover:text-white',
-      shadow: 'shadow-teal-950/30',
+      bg: 'bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white',
+      border: 'border-amber-300/40 ring-1 ring-amber-400/30',
+      text: 'text-white font-black',
+      shadow: 'shadow-md shadow-amber-500/30',
       icon: Palmtree,
-      iconColor: 'text-teal-400',
+      iconColor: 'text-white',
     };
   }
-  if (l.includes('خەرجی') || l.includes('پسوولە') || l.includes('پارە') || l.includes('مووچە') || l.includes('expense')) {
+  if (l.includes('مەسروفات') || l.includes('خەرجی') || l.includes('پارە') || l.includes('expense')) {
     return {
-      bg: 'bg-gradient-to-b from-purple-950/80 to-purple-900/70 hover:from-purple-900 hover:to-purple-800',
-      border: 'border-purple-500/40 hover:border-purple-400',
-      text: 'text-purple-200 hover:text-white',
-      shadow: 'shadow-purple-950/30',
+      bg: 'bg-gradient-to-r from-teal-500 via-emerald-600 to-teal-700 hover:from-teal-600 hover:to-teal-800 text-white',
+      border: 'border-teal-300/40 ring-1 ring-teal-400/30',
+      text: 'text-white font-black',
+      shadow: 'shadow-md shadow-teal-500/30',
       icon: Receipt,
-      iconColor: 'text-purple-400',
+      iconColor: 'text-white',
     };
   }
-  if (l.includes('ڕاپۆرت') || l.includes('report') || l.includes('ئامار')) {
+  if (l.includes('ئاگاداری') || l.includes('broadcast')) {
     return {
-      bg: 'bg-gradient-to-b from-blue-950/80 to-blue-900/70 hover:from-blue-900 hover:to-blue-800',
-      border: 'border-blue-500/40 hover:border-blue-400',
-      text: 'text-blue-200 hover:text-white',
-      shadow: 'shadow-blue-950/30',
-      icon: FileText,
-      iconColor: 'text-blue-400',
-    };
-  }
-  if (l.includes('ئاگاداری') || l.includes('دەسەڵات') || l.includes('پەیام')) {
-    return {
-      bg: 'bg-gradient-to-b from-indigo-950/80 to-indigo-900/70 hover:from-indigo-900 hover:to-indigo-800',
-      border: 'border-indigo-500/40 hover:border-indigo-400',
-      text: 'text-indigo-200 hover:text-white',
-      shadow: 'shadow-indigo-950/30',
+      bg: 'bg-gradient-to-r from-fuchsia-600 via-pink-600 to-rose-600 hover:from-fuchsia-700 hover:to-pink-700 text-white',
+      border: 'border-pink-300/40 ring-1 ring-pink-400/30',
+      text: 'text-white font-black',
+      shadow: 'shadow-md shadow-fuchsia-500/30',
       icon: Bell,
-      iconColor: 'text-indigo-400',
+      iconColor: 'text-white',
+    };
+  }
+  if (l.includes('غیاب') || l.includes('absence')) {
+    return {
+      bg: 'bg-gradient-to-r from-red-600 via-rose-700 to-red-800 hover:from-red-700 hover:to-rose-900 text-white',
+      border: 'border-red-400/40 ring-1 ring-red-500/30',
+      text: 'text-white font-black',
+      shadow: 'shadow-md shadow-red-600/30',
+      icon: X,
+      iconColor: 'text-white',
+    };
+  }
+  if (l.includes('خێرا') || l.includes('gps')) {
+    return {
+      bg: 'bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-500 hover:to-yellow-500 text-slate-950',
+      border: 'border-amber-300 ring-1 ring-amber-400',
+      text: 'text-slate-950 font-black',
+      shadow: 'shadow-md shadow-amber-500/30',
+      icon: Zap,
+      iconColor: 'text-slate-950',
     };
   }
   return {
-    bg: 'bg-gradient-to-b from-[#243547] to-[#1a2836] hover:from-[#2e4259] hover:to-[#223344]',
-    border: 'border-[#395068]/70 hover:border-sky-400/60',
-    text: 'text-sky-100 hover:text-white',
-    shadow: 'shadow-black/40',
+    bg: 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-white',
+    border: 'border-blue-400/40 ring-1 ring-blue-500/30',
+    text: 'text-white font-black',
+    shadow: 'shadow-md shadow-blue-600/30',
     icon: Sparkles,
-    iconColor: 'text-sky-400',
+    iconColor: 'text-white',
   };
 }
 

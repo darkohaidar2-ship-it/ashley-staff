@@ -54,6 +54,8 @@ import {
   Receipt,
   Wallet,
   BellOff,
+  LogIn,
+  LogOut,
 } from 'lucide-react';
 import { TelegramBotSimulatorModal } from '@/components/admin/TelegramBotSimulatorModal';
 
@@ -77,6 +79,8 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Zap,
   Receipt,
   Wallet,
+  LogIn,
+  LogOut,
 };
 
 // Map each task to its exact Telegram reply keyboard button label
@@ -101,6 +105,176 @@ const TELEGRAM_BUTTON_LABELS: Record<string, string> = {
   request_expense: '💸 داواکردنی مەسروفات',
   approve_expense: '💰 پەسەندکردنی مەسروفات',
 };
+
+// Rich color and visual styling for each Telegram button
+function getTelegramButtonDesign(taskId: string, buttonText: string) {
+  const t = taskId.toLowerCase();
+  const b = (buttonText || '').toLowerCase();
+  
+  if (t === 'self_checkin' || b.includes('هاتن')) {
+    return {
+      gradient: 'from-emerald-500 via-emerald-600 to-green-600 hover:from-emerald-600 hover:to-green-700',
+      textColor: 'text-white',
+      borderColor: 'border-emerald-300/60 ring-1 ring-emerald-400/40',
+      shadow: 'shadow-md shadow-emerald-500/30',
+      icon: LogIn,
+      iconColor: 'text-white',
+      badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-300',
+    };
+  }
+  if (b.includes('دەرچوون')) {
+    return {
+      gradient: 'from-rose-500 via-rose-600 to-red-600 hover:from-rose-600 hover:to-red-700',
+      textColor: 'text-white',
+      borderColor: 'border-rose-300/60 ring-1 ring-rose-400/40',
+      shadow: 'shadow-md shadow-rose-500/30',
+      icon: LogOut,
+      iconColor: 'text-white',
+      badgeBg: 'bg-rose-50 text-rose-800 border-rose-300',
+    };
+  }
+  if (t === 'today_status' || b.includes('ئەمڕۆ')) {
+    return {
+      gradient: 'from-sky-500 via-sky-600 to-blue-600 hover:from-sky-600 hover:to-blue-700',
+      textColor: 'text-white',
+      borderColor: 'border-sky-300/60 ring-1 ring-sky-400/40',
+      shadow: 'shadow-md shadow-sky-500/30',
+      icon: Clock,
+      iconColor: 'text-white',
+      badgeBg: 'bg-sky-50 text-sky-800 border-sky-300',
+    };
+  }
+  if (t === 'monthly_report' || b.includes('مانگ') || b.includes('ڕاپۆرت')) {
+    return {
+      gradient: 'from-indigo-500 via-indigo-600 to-purple-600 hover:from-indigo-600 hover:to-purple-700',
+      textColor: 'text-white',
+      borderColor: 'border-indigo-300/60 ring-1 ring-indigo-400/40',
+      shadow: 'shadow-md shadow-indigo-500/30',
+      icon: FileText,
+      iconColor: 'text-white',
+      badgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
+    };
+  }
+  if (t === 'view_profile' || b.includes('پرۆفایل')) {
+    return {
+      gradient: 'from-purple-500 via-violet-600 to-indigo-600 hover:from-purple-600 hover:to-indigo-700',
+      textColor: 'text-white',
+      borderColor: 'border-purple-300/60 ring-1 ring-purple-400/40',
+      shadow: 'shadow-md shadow-purple-500/30',
+      icon: User,
+      iconColor: 'text-white',
+      badgeBg: 'bg-purple-50 text-purple-800 border-purple-300',
+    };
+  }
+  if (t === 'work_locations' || b.includes('شوێن')) {
+    return {
+      gradient: 'from-slate-600 via-slate-700 to-slate-800 hover:from-slate-700 hover:to-slate-900',
+      textColor: 'text-white',
+      borderColor: 'border-slate-400/60 ring-1 ring-slate-500/40',
+      shadow: 'shadow-md shadow-slate-600/30',
+      icon: MapPin,
+      iconColor: 'text-white',
+      badgeBg: 'bg-slate-100 text-slate-800 border-slate-300',
+    };
+  }
+  if (t === 'request_leave' || b.includes('داواکردنی مۆڵەت')) {
+    return {
+      gradient: 'from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600',
+      textColor: 'text-white',
+      borderColor: 'border-amber-300/60 ring-1 ring-amber-400/40',
+      shadow: 'shadow-md shadow-amber-500/30',
+      icon: Palmtree,
+      iconColor: 'text-white',
+      badgeBg: 'bg-amber-50 text-amber-800 border-amber-300',
+    };
+  }
+  if (t === 'leave_approval' || b.includes('داواکارییەکانی مۆڵەت')) {
+    return {
+      gradient: 'from-teal-500 via-emerald-600 to-teal-700 hover:from-teal-600 hover:to-teal-800',
+      textColor: 'text-white',
+      borderColor: 'border-teal-300/60 ring-1 ring-teal-400/40',
+      shadow: 'shadow-md shadow-teal-500/30',
+      icon: CheckCircle2,
+      iconColor: 'text-white',
+      badgeBg: 'bg-teal-50 text-teal-800 border-teal-300',
+    };
+  }
+  if (t === 'broadcast_msg' || b.includes('ئاگاداری')) {
+    return {
+      gradient: 'from-fuchsia-600 via-pink-600 to-rose-600 hover:from-fuchsia-700 hover:to-pink-700',
+      textColor: 'text-white',
+      borderColor: 'border-pink-300/60 ring-1 ring-pink-400/40',
+      shadow: 'shadow-md shadow-fuchsia-500/30',
+      icon: Megaphone,
+      iconColor: 'text-white',
+      badgeBg: 'bg-fuchsia-50 text-fuchsia-800 border-fuchsia-300',
+    };
+  }
+  if (t === 'mark_absence' || b.includes('غیاب')) {
+    return {
+      gradient: 'from-red-600 via-rose-700 to-red-800 hover:from-red-700 hover:to-rose-900',
+      textColor: 'text-white',
+      borderColor: 'border-red-400/60 ring-1 ring-red-500/40',
+      shadow: 'shadow-md shadow-red-600/30',
+      icon: UserX,
+      iconColor: 'text-white',
+      badgeBg: 'bg-red-50 text-red-800 border-red-300',
+    };
+  }
+  if (t === 'set_holiday' || b.includes('پشوو')) {
+    return {
+      gradient: 'from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800',
+      textColor: 'text-white',
+      borderColor: 'border-emerald-400/60 ring-1 ring-emerald-500/40',
+      shadow: 'shadow-md shadow-emerald-600/30',
+      icon: CalendarOff,
+      iconColor: 'text-white',
+      badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-300',
+    };
+  }
+  if (t === 'quick_checkin_no_gps' || b.includes('خێرا')) {
+    return {
+      gradient: 'from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-500 hover:to-yellow-500',
+      textColor: 'text-slate-950',
+      borderColor: 'border-amber-300 ring-1 ring-amber-400',
+      shadow: 'shadow-md shadow-amber-500/30',
+      icon: Zap,
+      iconColor: 'text-slate-950',
+      badgeBg: 'bg-yellow-50 text-yellow-900 border-yellow-300',
+    };
+  }
+  if (t === 'request_expense' || b.includes('مەسروفات') || b.includes('خەرجی')) {
+    return {
+      gradient: 'from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-700 hover:to-emerald-800',
+      textColor: 'text-white',
+      borderColor: 'border-teal-300/60 ring-1 ring-teal-400/40',
+      shadow: 'shadow-md shadow-teal-500/30',
+      icon: Receipt,
+      iconColor: 'text-white',
+      badgeBg: 'bg-teal-50 text-teal-800 border-teal-300',
+    };
+  }
+  if (t === 'approve_expense' || b.includes('پەسەندکردنی مەسروفات')) {
+    return {
+      gradient: 'from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-600 hover:to-yellow-600',
+      textColor: 'text-slate-950',
+      borderColor: 'border-amber-400/60 ring-1 ring-amber-500/40',
+      shadow: 'shadow-md shadow-amber-500/30',
+      icon: Wallet,
+      iconColor: 'text-slate-950',
+      badgeBg: 'bg-amber-50 text-amber-900 border-amber-300',
+    };
+  }
+  return {
+    gradient: 'from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-700 hover:to-blue-700',
+    textColor: 'text-white',
+    borderColor: 'border-indigo-400/60 ring-1 ring-indigo-500/40',
+    shadow: 'shadow-md shadow-indigo-500/30',
+    icon: Sparkles,
+    iconColor: 'text-white',
+    badgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
+  };
+}
 
 export default function NotificationRoutingMatrix() {
   // State
@@ -329,6 +503,70 @@ export default function NotificationRoutingMatrix() {
   const getEmp = (id: string) => {
     return ASHLEY_OFFICIAL_EMPLOYEES.find(e => e.id === id || e.employeeId === id);
   };
+
+  // Preview employee for live Telegram keyboard
+  const previewEmpId = selectedEmployeeIds[0] || simulatorEmpId || 'emp-02';
+  const previewEmp = getEmp(previewEmpId);
+
+  // Compute active buttons for this employee
+  const employeeKeyboardButtons = useMemo(() => {
+    const isAssigned = (taskId: string) => {
+      const list = taskAssignments[taskId] || [];
+      const rawNum = previewEmpId.replace('emp-', '');
+      const cleanId = previewEmpId.startsWith('emp-') ? previewEmpId : `emp-${previewEmpId}`;
+      return list.some(id => 
+        id === previewEmpId || 
+        id === cleanId || 
+        id === rawNum || 
+        id === `emp-${rawNum}` || 
+        id === '*' || 
+        id === 'all'
+      );
+    };
+
+    const buttons: { taskId: string; label: string }[] = [];
+    if (isAssigned('self_checkin')) {
+      buttons.push({ taskId: 'self_checkin', label: '🟢 تۆمارکردنی هاتن' });
+      buttons.push({ taskId: 'self_checkin', label: '🔴 تۆمارکردنی دەرچوون' });
+    }
+    if (isAssigned('today_status')) {
+      buttons.push({ taskId: 'today_status', label: '📊 دۆخی دەوامی ئەمڕۆم' });
+    }
+    if (isAssigned('monthly_report')) {
+      buttons.push({ taskId: 'monthly_report', label: '📅 دۆخی دەوامی ئەم مانگەم' });
+    }
+    if (isAssigned('view_profile')) {
+      buttons.push({ taskId: 'view_profile', label: '👤 پرۆفایلی من' });
+    }
+    if (isAssigned('work_locations')) {
+      buttons.push({ taskId: 'work_locations', label: 'ℹ️ شوێنەکانی دەوام' });
+    }
+    if (isAssigned('request_leave')) {
+      buttons.push({ taskId: 'request_leave', label: '🏖️ داواکردنی مۆڵەت' });
+    }
+    if (isAssigned('leave_approval')) {
+      buttons.push({ taskId: 'leave_approval', label: '🏖️ داواکارییەکانی مۆڵەت' });
+    }
+    if (isAssigned('broadcast_msg')) {
+      buttons.push({ taskId: 'broadcast_msg', label: '📢 ناردنی ئاگاداری گشتی' });
+    }
+    if (isAssigned('mark_absence')) {
+      buttons.push({ taskId: 'mark_absence', label: '❌ تۆمارکردنی غیاب' });
+    }
+    if (isAssigned('set_holiday')) {
+      buttons.push({ taskId: 'set_holiday', label: '🌴 دیاریکردنی پشوو' });
+    }
+    if (isAssigned('quick_checkin_no_gps')) {
+      buttons.push({ taskId: 'quick_checkin_no_gps', label: '⚡ تۆمارکردنی خێرا' });
+    }
+    if (isAssigned('request_expense')) {
+      buttons.push({ taskId: 'request_expense', label: '💸 داواکردنی مەسروفات' });
+    }
+    if (isAssigned('approve_expense')) {
+      buttons.push({ taskId: 'approve_expense', label: '💰 پەسەندکردنی مەسروفات' });
+    }
+    return buttons;
+  }, [previewEmpId, taskAssignments]);
 
   return (
     <div className={`flex flex-col bg-[#f8fafc] rounded-2xl border border-slate-200 overflow-hidden shadow-sm transition-all duration-300 ${isFullscreen ? 'fixed inset-0 z-50 rounded-none' : 'w-full'}`} dir="rtl">
@@ -661,6 +899,73 @@ export default function NotificationRoutingMatrix() {
             />
           </div>
 
+          {/* Dynamic Live Telegram Keyboard Preview Widget */}
+          <div className="p-3.5 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-2xl border border-slate-800 text-white shadow-md space-y-2.5">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-400/30 shadow-xs">
+                  <Smartphone className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs font-black text-white">
+                      کیبۆردی بۆتی تەلەگرام (پێشبینینی ڕاستەوخۆ)
+                    </h4>
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+                      {employeeKeyboardButtons.length} دوگمە کارایە
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-300 mt-0.5">
+                    {previewEmp ? `پیشاندانی دوگمەکانی: ${previewEmp.name} (${previewEmp.role})` : 'دیزاینی تەواوی دوگمە ڕەنگاوڕەنگەکان'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSimulatorEmpId(previewEmpId);
+                  setSimulatorOpen(true);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-white text-[11px] font-black flex items-center gap-1.5 shadow-md shadow-sky-500/30 cursor-pointer active:scale-95 transition-all"
+              >
+                <Bot className="w-3.5 h-3.5" />
+                <span>تاقیگەی تەلەگرام</span>
+              </button>
+            </div>
+
+            {/* Keyboard Buttons Grid */}
+            <div className="p-2 bg-slate-950/60 rounded-xl border border-slate-800/80">
+              {employeeKeyboardButtons.length === 0 ? (
+                <div className="text-center py-2 text-xs text-slate-400">
+                  هیچ دوگمەیەک بۆ ئەم کارمەندە کارا نەکراوە — لە خشتەکەدا ئەرکی بۆ ڕابکێشە!
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                  {employeeKeyboardButtons.map((btn, idx) => {
+                    const design = getTelegramButtonDesign(btn.taskId, btn.label);
+                    const BtnIcon = design.icon;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setSimulatorEmpId(previewEmpId);
+                          setSimulatorOpen(true);
+                        }}
+                        className={`px-2.5 py-2 rounded-xl bg-gradient-to-r ${design.gradient} ${design.textColor} border ${design.borderColor} ${design.shadow} text-[11px] font-black flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 hover:scale-[1.02] transition-all select-none truncate`}
+                        title={`تاقیکردنەوەی ${btn.label} لە تەلەگرام`}
+                      >
+                        <BtnIcon className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{btn.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Task Category Tabs */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
             <button
@@ -746,13 +1051,63 @@ export default function NotificationRoutingMatrix() {
                           {task.description}
                         </p>
 
-                        {/* Telegram Button Badge */}
-                        <div className="flex items-center gap-1.5 mt-1.5">
-                          <span className="text-[10px] text-slate-400">دوگمەی تەلەگرام:</span>
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 text-indigo-700 border border-slate-200 flex items-center gap-1">
-                            <Send className="w-2.5 h-2.5 text-indigo-500" />
-                            {buttonText}
-                          </span>
+                        {/* Realistic Colorful Telegram Bot Buttons */}
+                        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] font-bold text-slate-400 shrink-0">دوگمەی تەلەگرام:</span>
+                          {task.id === 'self_checkin' ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSimulatorEmpId(assignedEmpIds[0] || selectedEmployeeIds[0] || 'emp-02');
+                                  setSimulatorOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white border border-emerald-300/60 ring-1 ring-emerald-400/40 shadow-sm shadow-emerald-500/25 text-xs font-black cursor-pointer hover:scale-105 active:scale-95 transition-all select-none"
+                                title="تاقیکردنەوەی تۆمارکردنی هاتن"
+                              >
+                                <LogIn className="w-3.5 h-3.5 text-white" />
+                                <span>🟢 تۆمارکردنی هاتن</span>
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-white/20 font-normal">تێست</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSimulatorEmpId(assignedEmpIds[0] || selectedEmployeeIds[0] || 'emp-02');
+                                  setSimulatorOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-500 via-rose-600 to-red-600 hover:from-rose-600 hover:to-red-700 text-white border border-rose-300/60 ring-1 ring-rose-400/40 shadow-sm shadow-rose-500/25 text-xs font-black cursor-pointer hover:scale-105 active:scale-95 transition-all select-none"
+                                title="تاقیکردنەوەی تۆمارکردنی دەرچوون"
+                              >
+                                <LogOut className="w-3.5 h-3.5 text-white" />
+                                <span>🔴 تۆمارکردنی دەرچوون</span>
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-white/20 font-normal">تێست</span>
+                              </button>
+                            </div>
+                          ) : (
+                            (() => {
+                              const btnDesign = getTelegramButtonDesign(task.id, buttonText);
+                              const BtnIcon = btnDesign.icon;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSimulatorEmpId(assignedEmpIds[0] || selectedEmployeeIds[0] || 'emp-02');
+                                    setSimulatorOpen(true);
+                                  }}
+                                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r ${btnDesign.gradient} ${btnDesign.textColor} border ${btnDesign.borderColor} shadow-sm ${btnDesign.shadow} text-xs font-black cursor-pointer hover:scale-105 active:scale-95 transition-all select-none`}
+                                  title={`تاقیکردنەوەی ${buttonText} لە بۆتی تەلەگرام`}
+                                >
+                                  <BtnIcon className={`w-3.5 h-3.5 ${btnDesign.iconColor}`} />
+                                  <span>{buttonText}</span>
+                                  <span className="text-[9px] px-1 py-0.2 rounded bg-white/20 font-normal">تێست</span>
+                                </button>
+                              );
+                            })()
+                          )}
                         </div>
                       </div>
                     </div>
