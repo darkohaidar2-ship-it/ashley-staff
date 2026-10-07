@@ -341,14 +341,11 @@ export default function NotificationRoutingMatrix() {
               <ArrowRightLeft className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                <span>ماتریسی دەسەڵات و دوگمەکانی تەلەگرام</span>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold">
-                  سیستەمی نوێی ٢ ستوون
-                </span>
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <span>دەسەڵاتەکانی تەلەگرام</span>
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                کارمەندان ڕابکێشە بۆ سەر هەر ئەرکێک تاوەکو ڕاستەوخۆ لە بۆتی تەلەگرام ئەو دوگمەیە ببینن.
+                دیاریکردنی ئەرک و دوگمەکانی کارمەندان لە بۆتی تەلەگرام
               </p>
             </div>
           </div>
@@ -359,11 +356,11 @@ export default function NotificationRoutingMatrix() {
           {/* Simulator Preview Button */}
           <button
             onClick={() => setSimulatorOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2 text-xs font-black rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white shadow-md shadow-sky-600/20 active:scale-95 transition-all cursor-pointer"
-            title="تاقیکردنەوەی ڕاستەوخۆی بۆتی تەلەگرام لەناو وێبسایتەکە"
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-sky-600 hover:bg-sky-700 text-white shadow-sm active:scale-95 transition-all cursor-pointer"
+            title="تاقیکردنەوەی ڕاستەوخۆی بۆتی تەلەگرام"
           >
-            <Bot className="w-4 h-4 text-sky-200" />
-            <span>تێست بۆت (Simulator)</span>
+            <Bot className="w-4 h-4 text-sky-100" />
+            <span>تاقیکردنەوە</span>
           </button>
 
           {/* Refresh Button */}

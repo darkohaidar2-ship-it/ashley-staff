@@ -812,7 +812,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
             }`}
           >
             <Calendar className={`w-3.5 h-3.5 ${viewMode === 'daily' ? 'text-amber-600' : 'text-slate-400'}`} />
-            <span>تۆمار و ئاماری ڕۆژانە (کالێندەری ١-٣١)</span>
+            <span>تۆماری ڕۆژانە</span>
           </button>
           <button
             onClick={() => setViewMode('monthly')}
@@ -823,7 +823,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
             }`}
           >
             <Clock className={`w-3.5 h-3.5 ${viewMode === 'monthly' ? 'text-amber-600' : 'text-slate-400'}`} />
-            <span>ئاماری مانگانەی کاتی زیادە</span>
+            <span>ئاماری مانگانە</span>
           </button>
         </div>
 
@@ -896,7 +896,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
           <div className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-2 gap-2">
             <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
               <Calendar className="w-4 h-4 text-amber-600" />
-              <span>کالێندەری ۱ تا ۳۱ی مانگی ({selectedMonth}) — ڕۆژ دیاری بکە:</span>
+              <span>ڕۆژانی مانگی ({selectedMonth}):</span>
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -913,7 +913,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                 <span>ئەمڕۆ</span>
               </button>
               <span className="text-xs font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 px-2.5 py-0.5 rounded-lg">
-                ڕۆژی هەڵبژێردراو: {selectedDate}
+                ڕۆژ: {selectedDate}
               </span>
             </div>
           </div>
@@ -1010,7 +1010,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
           </div>
           <p className="text-xs font-bold text-emerald-700 mt-2 flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>سیستەمی زیندوو و هاوکات</span>
+            <span>ئۆنلاین</span>
           </p>
         </div>
       </div>

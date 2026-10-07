@@ -78,14 +78,15 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                 <main className="flex-1 w-full max-w-[1920px] mx-auto px-3 md:px-6 py-4">
                   {children}
                 </main>
-                <footer className="w-full bg-white/80 backdrop-blur-md border-t border-slate-200/80 p-2 flex flex-wrap items-center justify-between text-xs font-mono text-slate-500 select-none print:hidden">
+                <footer className="w-full bg-white/80 backdrop-blur-md border-t border-slate-200/80 px-4 py-2 flex flex-wrap items-center justify-between text-xs font-sans text-slate-500 select-none print:hidden">
                   <div className="flex items-center gap-2">
-                    <span className="statusbar-segment text-emerald-700 font-bold">● SUPABASE ONLINE</span>
-                    <span className="statusbar-segment font-bold text-slate-700">ASHLEY ERP iOS ENGINE</span>
+                    <span className="text-emerald-700 font-bold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      <span>سیستەمی دەوامی ئاشڵی</span>
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="statusbar-segment">v2026.4 PRO</span>
-                    <span className="statusbar-segment text-slate-700 font-bold">SUPER ADMIN</span>
+                  <div className="flex items-center gap-2 font-mono text-slate-400 text-[11px]">
+                    <span>Ashley ERP 2027</span>
                   </div>
                 </footer>
               </div>

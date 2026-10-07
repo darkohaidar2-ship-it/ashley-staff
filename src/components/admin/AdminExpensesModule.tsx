@@ -2617,7 +2617,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(e.target.value)}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    title="هەڵبژاردنی مانگ لە کالێندەر"
+                    title="هەڵبژاردنی مانگ"
                   />
                 </div>
 
@@ -2642,14 +2642,14 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
 
             {/* Section-by-Section Direct Print and Excel Action Group */}
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-bold text-slate-500 ml-1">پرێنت:</span>
+              <Printer className="w-3.5 h-3.5 text-slate-400 ml-1" />
 
               {/* 1. Print Comprehensive Master Report */}
               <button
                 type="button"
                 onClick={handlePrintMonthlyAnalytics}
                 className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
-                title="چاپی تەواوی ڕاپۆرتی گشتگیری دارایی مانگانە (سێ بەشەکە پێکەوە)"
+                title="چاپی تەواوی ڕاپۆرتی گشتگیری دارایی مانگانە"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>چاپی گشتگیر</span>
@@ -3372,8 +3372,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-slate-700 flex items-center gap-1.5">
-                    <span>دابەشبوونی مەسروفات بەپێی پۆلێنەکان ({categories.length} پۆلێن):</span>
-                    <span className="text-[10px] text-slate-400 font-normal">(کلیک لە هەر پۆلێنێک بکە بۆ فلتەرکردن و وردبوونەوە لە تێبینییەکانی)</span>
+                    <span>دابەشبوونی مەسروفات بەپێی پۆلێنەکان ({categories.length} پۆلێن)</span>
                   </span>
                 </div>
 
@@ -4512,7 +4511,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(e.target.value)}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    title="هەڵبژاردنی مانگ لە کالێندەر"
+                    title="هەڵبژاردنی مانگ"
                   />
                 </div>
 

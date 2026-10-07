@@ -629,7 +629,7 @@ function EmployeesPage() {
                     <button 
                       onClick={handlePrint} 
                       className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-all active:scale-90 border border-slate-200/80 cursor-pointer shadow-2xs"
-                      title="چاپکردن (Print)"
+                      title="چاپکردن"
                       aria-label="Print"
                     >
                       <Printer className="h-4 w-4" />
@@ -639,7 +639,7 @@ function EmployeesPage() {
                     <button 
                       onClick={handleExportExcel} 
                       className="h-8 w-8 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center transition-all active:scale-90 border border-emerald-200/80 cursor-pointer shadow-2xs"
-                      title="داگرتن وەک ئێکسڵ (Excel)"
+                      title="داگرتنی ئێکسڵ"
                       aria-label="Export Excel"
                     >
                       <FileDown className="h-4 w-4 text-emerald-600" />
@@ -649,7 +649,7 @@ function EmployeesPage() {
                     <button 
                       onClick={() => { loadRegisteredFaces(); loadMatrixOverrides(); toast({ title: 'نوێکرایەوە', description: 'داتاکان نوێکرانەوە.' }); }} 
                       className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-all active:scale-90 border border-slate-200/80 cursor-pointer shadow-2xs"
-                      title="نوێکردنەوەی داتا (Refresh)"
+                      title="نوێکردنەوە"
                       aria-label="Refresh"
                     >
                       <RefreshCw className="h-3.5 w-3.5" />
