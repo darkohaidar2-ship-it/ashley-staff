@@ -32,6 +32,8 @@ let GLOBAL_SAVED_LOCATIONS = [
 let CACHED_FACE_REGISTRY: { data: Record<string, any>; timestamp: number } | null = null;
 let CACHED_DEVICE_REGISTRY: { data: Record<string, any>; timestamp: number } | null = null;
 let CACHED_ADMIN_REPORT: { data: any; timestamp: number } | null = null;
+let CACHED_ATTENDANCE_LOGS: { data: any[]; timestamp: number } | null = null;
+const ATTENDANCE_LOGS_TTL = 30000; // 30 seconds high-speed memory cache
 let GLOBAL_MANUAL_OVERRIDES_CACHE: Record<string, any> | null = null;
 
 function mergeManualOverridesWithMemory(dbOverrides: Record<string, any> = {}): Record<string, any> {
@@ -276,6 +278,11 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
   const path = params.path || [];
   const method = req.method;
   const pathStr = path.join('/');
+
+  if (method === 'POST' || method === 'PUT' || method === 'DELETE' || method === 'PATCH') {
+    CACHED_ATTENDANCE_LOGS = null;
+    CACHED_ADMIN_REPORT = null;
+  }
 
   const noCacheHeaders = {
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
@@ -2403,6 +2410,18 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
     // ----------------------------------------
     if (pathStr === 'logs' && method === 'GET') {
       try {
+        const urlObj = new URL(req.url);
+        const force = urlObj.searchParams.get('force') === 'true' || urlObj.searchParams.get('bypass_cache') === 'true';
+        const now = Date.now();
+        if (!force && CACHED_ATTENDANCE_LOGS && (now - CACHED_ATTENDANCE_LOGS.timestamp < ATTENDANCE_LOGS_TTL)) {
+          return NextResponse.json(CACHED_ATTENDANCE_LOGS.data, {
+            headers: {
+              'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=45',
+              'x-cache': 'HIT-MEMORY'
+            }
+          });
+        }
+
         const uniqueMap = new Map();
 
         // 0. Fetch manual overrides store to respect explicit deletion tombstones and admin status overrides
@@ -2703,7 +2722,13 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
         }
 
         const formatted = Array.from(uniqueMap.values());
-        return NextResponse.json(formatted, { headers: noCacheHeaders });
+        CACHED_ATTENDANCE_LOGS = { data: formatted, timestamp: Date.now() };
+        return NextResponse.json(formatted, {
+          headers: {
+            'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=45',
+            'x-cache': 'MISS'
+          }
+        });
       } catch (err) {
         logger.warn('Error fetching attendance logs:', err);
         return NextResponse.json([], { headers: noCacheHeaders });

@@ -4,6 +4,8 @@ import { logger } from '@/lib/logger';
 import React, { createContext, useContext, ReactNode, useMemo, useEffect, useState, useCallback } from 'react';
 import { 
     supabase, 
+    updateSupabaseMemoryCache,
+    fetchAllSupabaseWarehouseJson,
     fetchEmployees, 
     saveEmployees, 
     fetchOvertime, 
@@ -155,7 +157,7 @@ function useSupabaseCollection<T extends { id?: string }>(
         return initialFallback;
     });
 
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
 
     // Initial fetch from Supabase
     useEffect(() => {
@@ -426,11 +428,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         let isFetching = false;
-        const syncSupabaseAttendance = () => {
+        const syncSupabaseAttendance = (force = false) => {
             if (isFetching) return;
             if (typeof document !== 'undefined' && document.hidden) return;
             isFetching = true;
-            fetch(`/api/attendance/logs?t=${Date.now()}`, { cache: 'no-store' })
+            const url = force ? `/api/attendance/logs?force=true&t=${Date.now()}` : '/api/attendance/logs';
+            fetch(url, { cache: force ? 'no-store' : 'default' })
                 .then((res) => res.json())
                 .then((supabaseLogs) => {
                     if (Array.isArray(supabaseLogs)) {
@@ -447,8 +450,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 });
         };
 
-        // Initial Attendance Fetch
-        syncSupabaseAttendance();
+        // Defer initial Attendance Fetch slightly so critical UI renders instantly without network contention
+        const initAttendanceTimer = setTimeout(() => {
+            syncSupabaseAttendance(false);
+        }, 400);
 
         // Supabase Realtime WebSocket Subscription (<0.5s push updates)
         const channel = supabase
@@ -456,7 +461,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'attendance' },
-                () => syncSupabaseAttendance()
+                () => syncSupabaseAttendance(true)
             )
             .on(
                 'postgres_changes',
@@ -470,7 +475,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     const row = payload?.new;
                     if (!row?.id || !row?.qr_code) return;
                     try {
-                        const parsed = JSON.parse(row.qr_code);
+                        const parsed = typeof row.qr_code === 'string' ? JSON.parse(row.qr_code) : row.qr_code;
+                        updateSupabaseMemoryCache(row.id, parsed);
                         const eventMap: Record<string, string> = {
                             ashley_employees: 'employees',
                             ashley_overtime: 'overtime',
@@ -521,7 +527,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             .subscribe();
 
         function syncAttendanceImmediate() {
-            syncSupabaseAttendance();
+            syncSupabaseAttendance(true);
         }
 
         const handleVisibilityChange = () => {
@@ -566,20 +572,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }, 1200);
         };
 
+        const handleStorageSync = () => {
+            syncSupabaseAttendance(false);
+        };
+
         window.addEventListener('ashley_attendance_deleted', handleAttendanceDeleted);
         window.addEventListener('ashley_attendance_updated', handleAttendanceUpdated);
-        window.addEventListener('storage', syncSupabaseAttendance);
+        window.addEventListener('storage', handleStorageSync);
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
-        const interval = setInterval(syncSupabaseAttendance, 45000);
+        const interval = setInterval(() => syncSupabaseAttendance(false), 120000);
 
         return () => {
+            clearTimeout(initAttendanceTimer);
             supabase.removeChannel(channel);
             clearInterval(interval);
             if (updateDebounceTimer) clearTimeout(updateDebounceTimer);
             window.removeEventListener('ashley_attendance_deleted', handleAttendanceDeleted);
             window.removeEventListener('ashley_attendance_updated', handleAttendanceUpdated);
-            window.removeEventListener('storage', syncSupabaseAttendance);
+            window.removeEventListener('storage', handleStorageSync);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, []);
