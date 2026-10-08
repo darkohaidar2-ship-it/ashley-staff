@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase/client';
+import { supabase, fetchSupabaseJson, saveSupabaseJson } from '@/lib/supabase/client';
 import { logger } from '@/lib/logger';
 import { 
   getTelegramBindings, 
@@ -6,6 +6,83 @@ import {
   getDynamicEmployeeTelegramKeyboard 
 } from '@/lib/telegram/telegram-service';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
+
+export interface ShiftReminderTemplates {
+  morningMessage: string;
+  eveningMessage: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export const SHIFT_REMINDER_TEMPLATES_KEY = 'ashley_shift_reminder_templates';
+
+export const DEFAULT_SHIFT_REMINDER_TEMPLATES: ShiftReminderTemplates = {
+  morningMessage: 
+`☀️ <b>بەیانیت باش {name}ی خۆشەویست و بەڕێز!</b> 🌸
+
+هیوای ڕۆژێکی پڕ لە بەرەکەت، تەندروستی و دەستکەوتی نوێ بۆ تۆ لە خێزانی ئاشڵی دەخوازین.
+
+⏰ <b>تەنها ١٥ خولەکی ماوە</b> بۆ دەستپێکردنی دەوامی فەرمی (٠٨:٠٠).
+📍 کاتێک گەیشتیتە دەوام، لەبیرت نەچێت دوگمەی <b>[🟢 تۆمارکردنی هاتن]</b> لە خوارەوە دابگریت تاوەکو کاتەکەت بە دروستی و بەبێ دواکەوتن تۆمار بکرێت.
+
+💪 <i>دەستت خۆش بێت بۆ دڵسۆزی و ماندووبوونی بەردەوامت!</i>
+🏢 <b>کۆمپانیای ئاشڵی بۆ مۆبیلیات</b>`,
+
+  eveningMessage: 
+`🌇 <b>ماندوو نەبیت و دەستت خۆش بێت {name} گیان!</b> 🌟
+
+زۆر سوپاسی هەوڵ، دڵسۆزی و ماندووبوونی ئەمڕۆت دەکەین بۆ سەرخستنی کارەکان لە ئاشڵی.
+
+⏰ <b>دەوامی ئەمڕۆ بەرەو کۆتایی دەچێت (٠٥:٠٠).</b>
+📍 لە کاتی دەرچوون لە شوێنی دەوام، لەبیرت نەچێت دوگمەی <b>[🔴 تۆمارکردنی دەرچوون]</b> لە خوارەوە دابگریت تاوەکو ماف و کاتەکانت پارێزراو بێت.
+
+🏡 <i>هیوای ئێوارەیەکی شاد، ئارام و پڕ لە خۆشی بۆ تۆ و ماڵباتەکەت!</i>
+🏢 <b>کۆمپانیای ئاشڵی بۆ مۆبیلیات</b>`,
+};
+
+/**
+ * Fetch active reminder templates from Supabase with fallback to defaults
+ */
+export async function fetchShiftReminderTemplates(): Promise<ShiftReminderTemplates> {
+  try {
+    const data = await fetchSupabaseJson<ShiftReminderTemplates | null>(
+      SHIFT_REMINDER_TEMPLATES_KEY,
+      null
+    );
+    if (data && data.morningMessage && data.eveningMessage) {
+      return {
+        morningMessage: data.morningMessage,
+        eveningMessage: data.eveningMessage,
+        updatedAt: data.updatedAt,
+        updatedBy: data.updatedBy,
+      };
+    }
+  } catch (err) {
+    logger.warn('[ShiftReminder] Error fetching reminder templates:', err);
+  }
+  return { ...DEFAULT_SHIFT_REMINDER_TEMPLATES };
+}
+
+/**
+ * Save customized reminder templates to Supabase
+ */
+export async function saveShiftReminderTemplates(templates: ShiftReminderTemplates): Promise<boolean> {
+  try {
+    const payload: ShiftReminderTemplates = {
+      morningMessage: templates.morningMessage.trim(),
+      eveningMessage: templates.eveningMessage.trim(),
+      updatedAt: new Date().toISOString(),
+    };
+    return await saveSupabaseJson(
+      SHIFT_REMINDER_TEMPLATES_KEY,
+      'Ashley Shift Reminder Templates',
+      payload
+    );
+  } catch (err) {
+    logger.error('[ShiftReminder] Error saving reminder templates:', err);
+    return false;
+  }
+}
 
 export interface ShiftReminderResult {
   success: boolean;
@@ -208,31 +285,21 @@ export async function checkEmployeeTodayPunches(employeeId: string, dateStr: str
 }
 
 /**
- * Generates an inspiring, warm Kurdish reminder message
+ * Generates an inspiring, warm Kurdish reminder message using configured templates
  */
 export function buildReminderMessage(
   type: 'morning' | 'evening',
-  employeeName: string
+  employeeName: string,
+  customTemplates?: ShiftReminderTemplates
 ): string {
-  if (type === 'morning') {
-    return (
-      `☀️ <b>بەیانیت باش ${employeeName}ی خۆشەویست و بەڕێز!</b> 🌸\n\n` +
-      `هیوای ڕۆژێکی پڕ لە بەرەکەت، تەندروستی و دەستکەوتی نوێ بۆ تۆ لە خێزانی ئاشڵی دەخوازین.\n\n` +
-      `⏰ <b>تەنها ١٥ خولەکی ماوە</b> بۆ دەستپێکردنی دەوامی فەرمی (٠٨:٠٠).\n` +
-      `📍 کاتێک گەیشتیتە دەوام، لەبیرت نەچێت دوگمەی <b>[🟢 تۆمارکردنی هاتن]</b> لە خوارەوە دابگریت تاوەکو کاتەکەت بە دروستی و بەبێ دواکەوتن تۆمار بکرێت.\n\n` +
-      `💪 <i>دەستت خۆش بێت بۆ دڵسۆزی و ماندووبوونی بەردەوامت!</i>\n` +
-      `🏢 <b>کۆمپانیای ئاشڵی بۆ مۆبیلیات</b>`
-    );
-  }
+  const templates = customTemplates || DEFAULT_SHIFT_REMINDER_TEMPLATES;
+  const rawText = type === 'morning' ? templates.morningMessage : templates.eveningMessage;
 
-  return (
-    `🌇 <b>ماندوو نەبیت و دەستت خۆش بێت ${employeeName} گیان!</b> 🌟\n\n` +
-    `زۆر سوپاسی هەوڵ، دڵسۆزی و ماندووبوونی ئەمڕۆت دەکەین بۆ سەرخستنی کارەکان لە ئاشڵی.\n\n` +
-    `⏰ <b>دەوامی ئەمڕۆ بەرەو کۆتایی دەچێت (٠٥:٠٠).</b>\n` +
-    `📍 لە کاتی دەرچوون لە شوێنی دەوام، لەبیرت نەچێت دوگمەی <b>[🔴 تۆمارکردنی دەرچوون]</b> لە خوارەوە دابگریت تاوەکو ماف و کاتەکانت پارێزراو بێت.\n\n` +
-    `🏡 <i>هیوای ئێوارەیەکی شاد، ئارام و پڕ لە خۆشی بۆ تۆ و ماڵباتەکەت!</i>\n` +
-    `🏢 <b>کۆمپانیای ئاشڵی بۆ مۆبیلیات</b>`
-  );
+  const validText = (rawText && rawText.trim()) 
+    ? rawText 
+    : (type === 'morning' ? DEFAULT_SHIFT_REMINDER_TEMPLATES.morningMessage : DEFAULT_SHIFT_REMINDER_TEMPLATES.eveningMessage);
+
+  return validText.replace(/\{name\}/g, employeeName || 'کارمەندی بەڕێز');
 }
 
 /**
@@ -292,6 +359,9 @@ export async function dispatchShiftReminders(
     logger.warn('[ShiftReminder] No bound Telegram employees found.');
     return result;
   }
+
+  // 📝 4. Fetch active customized reminder templates
+  const templates = await fetchShiftReminderTemplates();
 
   // 🚀 4. Evaluate each employee individually
   for (const chatId of chatIds) {
@@ -354,7 +424,7 @@ export async function dispatchShiftReminders(
     }
 
     // Compose personalized message & get employee's dynamic keyboard
-    const msgText = buildReminderMessage(reminderType, empName);
+    const msgText = buildReminderMessage(reminderType, empName, templates);
     const keyboard = await getDynamicEmployeeTelegramKeyboard(empId);
 
     try {

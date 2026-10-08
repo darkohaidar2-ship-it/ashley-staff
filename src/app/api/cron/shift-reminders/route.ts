@@ -1,15 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { dispatchShiftReminders, getBaghdadShiftTime } from '@/lib/telegram/shift-reminder-service';
+import { 
+  dispatchShiftReminders, 
+  getBaghdadShiftTime,
+  fetchShiftReminderTemplates,
+  saveShiftReminderTemplates,
+  DEFAULT_SHIFT_REMINDER_TEMPLATES
+} from '@/lib/telegram/shift-reminder-service';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * GET: Invoked by Vercel Cron or browser diagnostic check
+ * GET: Invoked by Vercel Cron, browser diagnostic check, or template fetching
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const action = searchParams.get('action');
+
+    // 1. Fetch current reminder templates
+    if (action === 'templates') {
+      const templates = await fetchShiftReminderTemplates();
+      return NextResponse.json({
+        success: true,
+        templates,
+        defaultTemplates: DEFAULT_SHIFT_REMINDER_TEMPLATES,
+      });
+    }
+
     const typeParam = searchParams.get('type') as 'morning' | 'evening' | null;
     const testMode = searchParams.get('test') === 'true';
 
@@ -53,6 +71,35 @@ export async function POST(request: NextRequest) {
       body = {};
     }
 
+    // 1. Save custom templates
+    if (body.action === 'save_templates') {
+      if (!body.templates || !body.templates.morningMessage || !body.templates.eveningMessage) {
+        return NextResponse.json({ success: false, error: 'تکایە هەردوو دەقی بەیانیان و ئێواران دیاری بکە' }, { status: 400 });
+      }
+      const ok = await saveShiftReminderTemplates(body.templates);
+      if (!ok) {
+        return NextResponse.json({ success: false, error: 'هەڵە لە پاشەکەوتکردنی دەقەکان' }, { status: 500 });
+      }
+      return NextResponse.json({
+        success: true,
+        message: 'دەقەکانی ئاگاداری بە سەرکەوتوویی لە داتابەیس پاشەکەوت کران ✅',
+      });
+    }
+
+    // 2. Reset templates to system defaults
+    if (body.action === 'reset_templates') {
+      const ok = await saveShiftReminderTemplates(DEFAULT_SHIFT_REMINDER_TEMPLATES);
+      if (!ok) {
+        return NextResponse.json({ success: false, error: 'هەڵە لە گەڕاندنەوەی دەقەکان' }, { status: 500 });
+      }
+      return NextResponse.json({
+        success: true,
+        message: 'دەقەکان گەڕێنرانەوە بۆ شێوازی فەرمی سەرەتایی ✅',
+        templates: DEFAULT_SHIFT_REMINDER_TEMPLATES,
+      });
+    }
+
+    // 3. Dispatch reminders (manual / test)
     const reminderType = body.type === 'evening' ? 'evening' : 'morning';
     const testMode = Boolean(body.testMode || body.bypassSchedule);
 

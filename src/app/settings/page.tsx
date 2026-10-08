@@ -17,8 +17,11 @@ import {
   ShieldCheck,
   CheckCircle2,
   Clock,
-  Palette
+  Palette,
+  Bell,
+  Edit3
 } from 'lucide-react';
+import { SmartReminderModal } from '@/components/admin/SmartReminderModal';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { 
@@ -105,6 +108,7 @@ function SettingsPage() {
 
   const [draftSettings, setDraftSettings] = useState<AppSettings>(settings);
   const [isSaved, setIsSaved] = useState(false);
+  const [reminderModalOpen, setReminderModalOpen] = useState(false);
 
   useEffect(() => {
     setDraftSettings(settings);
@@ -640,6 +644,37 @@ function SettingsPage() {
                 </p>
               </div>
             </div>
+
+            {/* Telegram Smart Reminders Banner */}
+            <div className="pt-2">
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 border border-amber-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shrink-0 shadow-sm shadow-amber-500/20">
+                    <Bell className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-2">
+                      <span>ئاگاداریی زیرەکی تەلەگرام (پەیامەکانی بەیانیان و ئێواران)</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-200/80 text-amber-900 font-bold">
+                        خۆکار (07:45 & 04:45)
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                      دەتوانیت لەم وێبسایتەوە دەقی ئەو پەیامە هاندەرانە بگۆڕیت و دەستکاری بکەیت کە ڕۆژانە پێش دەوام دەچن بۆ کارمەندان.
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={() => setReminderModalOpen(true)}
+                  className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs shadow-xs cursor-pointer shrink-0"
+                >
+                  <Edit3 className="w-3.5 h-3.5 ml-1.5" />
+                  <span>دەستکاریکردنی دەقی پەیامەکان ✍️</span>
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -908,6 +943,12 @@ function SettingsPage() {
             )}
           </button>
         </div>
+
+        {/* Smart Shift Reminders Modal */}
+        <SmartReminderModal 
+          isOpen={reminderModalOpen} 
+          onClose={() => setReminderModalOpen(false)} 
+        />
 
       </div>
     </div>
