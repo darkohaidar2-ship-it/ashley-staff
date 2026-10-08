@@ -53,11 +53,13 @@ import {
   Zap,
   Receipt,
   Wallet,
+  Bell,
   BellOff,
   LogIn,
   LogOut,
 } from 'lucide-react';
 import { TelegramBotSimulatorModal } from '@/components/admin/TelegramBotSimulatorModal';
+import { SmartReminderModal } from '@/components/admin/SmartReminderModal';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Palmtree,
@@ -304,6 +306,9 @@ export default function NotificationRoutingMatrix() {
   // Telegram Simulator Modal
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [simulatorEmpId, setSimulatorEmpId] = useState<string>('emp-02');
+
+  // Smart Reminder Modal
+  const [reminderModalOpen, setReminderModalOpen] = useState(false);
 
   // 1. Load configuration from Supabase on mount
   const loadConfig = useCallback(async (force = false) => {
@@ -599,6 +604,16 @@ export default function NotificationRoutingMatrix() {
           >
             <Bot className="w-4 h-4 text-sky-100" />
             <span>تاقیکردنەوە</span>
+          </button>
+
+          {/* Smart Shift Reminders Button */}
+          <button
+            onClick={() => setReminderModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-sm shadow-amber-500/25 active:scale-95 transition-all cursor-pointer"
+            title="ئاگاداری زیرەکی بەیانیان (07:45 AM) و ئێواران (04:45 PM)"
+          >
+            <Bell className="w-4 h-4 text-amber-100" />
+            <span>ئاگاداری زیرەک ⏰</span>
           </button>
 
           {/* Refresh Button */}
@@ -1238,6 +1253,14 @@ export default function NotificationRoutingMatrix() {
         isOpen={simulatorOpen}
         onClose={() => setSimulatorOpen(false)}
         defaultEmployeeId={selectedEmployeeIds[0] || simulatorEmpId || 'emp-01'}
+      />
+
+      {/* ========================================================= */}
+      {/* 4. SMART MORNING & EVENING REMINDER MODAL                 */}
+      {/* ========================================================= */}
+      <SmartReminderModal
+        isOpen={reminderModalOpen}
+        onClose={() => setReminderModalOpen(false)}
       />
 
     </div>
