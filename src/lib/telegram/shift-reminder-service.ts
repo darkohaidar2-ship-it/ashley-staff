@@ -393,20 +393,113 @@ export async function dispatchShiftReminders(
   const dateStr = timeInfo.dateStr;
   const timeStr = timeInfo.timeStr;
 
+  const h = timeInfo.hour;
+  const m = timeInfo.minute;
+
+  // Strict minute windows for automated cron dispatches (target is xx:45, valid: 40 <= m <= 58)
+  const isMorningStartWindow = h === 7 && m >= 40 && m <= 58;
+  const isEveningStartWindow = h === 14 && m >= 40 && m <= 58;
+  const isMorningEndWindow = h === 16 && m >= 40 && m <= 58;
+  const isEveningEndWindow = h === 22 && m >= 40 && m <= 58;
+
   // Determine type automatically based on Baghdad local time if not forced
   let reminderType: ShiftReminderType = forcedType || 'morning_start';
+
   if (!forcedType) {
-    const h = timeInfo.hour;
-    if (h >= 6 && h <= 10) {
+    if (isMorningStartWindow) {
       reminderType = 'morning_start'; // ~07:45 AM
-    } else if (h >= 13 && h <= 15) {
+    } else if (isEveningStartWindow) {
       reminderType = 'evening_start'; // ~02:45 PM (14:45)
-    } else if (h >= 16 && h <= 18) {
+    } else if (isMorningEndWindow) {
       reminderType = 'morning_end';   // ~04:45 PM (16:45)
-    } else if (h >= 21 && h <= 23) {
+    } else if (isEveningEndWindow) {
       reminderType = 'evening_end';   // ~10:45 PM (22:45)
     } else {
+      if (!bypassScheduleChecks) {
+        logger.info(`[ShiftReminder] Ping at ${timeStr} is outside reminder windows (07:45, 14:45, 16:45, 22:45). Skipped.`);
+        return {
+          success: true,
+          type: 'morning_start',
+          dateStr,
+          timeStr,
+          isFriday: timeInfo.isFriday,
+          isHoliday: false,
+          holidayReason: `کاتژمێری ئێستا (${timeStr}) کاتی ئاگاداری فەرمی نییە (پێویستە لە دەوروبەری ٠٧:٤٥، ١٤:٤٥، ١٦:٤٥، یان ٢٢:٤٥ بێت).`,
+          totalBindings: 0,
+          sentCount: 0,
+          skippedCount: 0,
+          details: [],
+        };
+      }
       reminderType = h < 14 ? 'morning_start' : 'morning_end';
+    }
+  } else {
+    // If forcedType is provided by automated cron, enforce the minute window unless bypassScheduleChecks is true
+    if (!bypassScheduleChecks) {
+      let isWithinWindow = false;
+      let expectedWindowDesc = '';
+
+      if (forcedType === 'morning_start' || forcedType === 'morning') {
+        isWithinWindow = isMorningStartWindow;
+        expectedWindowDesc = '٠٧:٤٥ بەیانی';
+      } else if (forcedType === 'evening_start') {
+        isWithinWindow = isEveningStartWindow;
+        expectedWindowDesc = '٠٢:٤٥ پاشنیوەڕۆ (١٤:٤٥)';
+      } else if (forcedType === 'morning_end' || forcedType === 'evening') {
+        isWithinWindow = isMorningEndWindow;
+        expectedWindowDesc = '٠٤:٤٥ ئێوارە (١٦:٤٥)';
+      } else if (forcedType === 'evening_end') {
+        isWithinWindow = isEveningEndWindow;
+        expectedWindowDesc = '١٠:٤٥ شەو (٢٢:٤٥)';
+      }
+
+      if (!isWithinWindow) {
+        logger.info(`[ShiftReminder] Type '${forcedType}' invoked at ${timeStr}, but expected window is ${expectedWindowDesc}. Ignored.`);
+        return {
+          success: true,
+          type: forcedType,
+          dateStr,
+          timeStr,
+          isFriday: timeInfo.isFriday,
+          isHoliday: false,
+          holidayReason: `ئاگاداری '${forcedType}' تەنها لە دەوروبەری ${expectedWindowDesc} دەنێردرێت. کاتژمێری ئێستا: ${timeStr}.`,
+          totalBindings: 0,
+          sentCount: 0,
+          skippedCount: 0,
+          details: [],
+        };
+      }
+    }
+  }
+
+  // 🛑 0. Check duplicate automated execution on the same date for this checkpoint
+  if (!bypassScheduleChecks) {
+    try {
+      const logData = await fetchSupabaseJson<any>('ashley_shift_reminders_log', null);
+      const lastRun = logData?.lastRun;
+      if (
+        lastRun &&
+        lastRun.dateStr === dateStr &&
+        lastRun.type === reminderType &&
+        (lastRun.sentCount || 0) > 0
+      ) {
+        logger.info(`[ShiftReminder] ${reminderType} already dispatched today at ${lastRun.timeStr} (${lastRun.sentCount} sent). Skipping duplicate run.`);
+        return {
+          success: true,
+          type: reminderType,
+          dateStr,
+          timeStr,
+          isFriday: timeInfo.isFriday,
+          isHoliday: false,
+          holidayReason: `ئەم ئاگادارییە پێشتر ئەمڕۆ لە کاتژمێر ${lastRun.timeStr} بە سەرکەوتوویی بۆ کارمەندان نێردراوە (${lastRun.sentCount} نامە). دووبارە ناکرێتەوە.`,
+          totalBindings: lastRun.total || 0,
+          sentCount: 0,
+          skippedCount: 0,
+          details: [],
+        };
+      }
+    } catch (err) {
+      logger.warn('[ShiftReminder] Error checking previous run log:', err);
     }
   }
 
@@ -543,56 +636,11 @@ export async function dispatchShiftReminders(
       continue;
     }
 
-    // Check punch status
+    // Fetch punch status for context logging, but do NOT skip employees:
+    // Both morning and evening reminders are sent to ALL employees on the shift
+    // to maintain high morale and remind everyone to register their attendance.
     const punchCheck = await checkEmployeeTodayPunches(empId, dateStr);
-
-    // If starting reminder (morning or evening): skip if already punched in
-    if (
-      (reminderType === 'morning_start' || reminderType === 'morning' || reminderType === 'evening_start') &&
-      punchCheck.hasIn &&
-      !bypassScheduleChecks
-    ) {
-      result.skippedCount++;
-      result.details.push({
-        employeeId: empId,
-        employeeName: empName,
-        chatId,
-        status: 'skipped',
-        reason: 'پێشتر هاتنی تۆمارکردووە',
-      });
-      continue;
-    }
-
-    // If ending reminder (morning or evening): skip if already punched out, or if hasn't punched in at all
-    if (
-      reminderType === 'morning_end' ||
-      reminderType === 'evening' ||
-      reminderType === 'evening_end'
-    ) {
-      if (punchCheck.hasOut && !bypassScheduleChecks) {
-        result.skippedCount++;
-        result.details.push({
-          employeeId: empId,
-          employeeName: empName,
-          chatId,
-          status: 'skipped',
-          reason: 'پێشتر دەرچوونی تۆمارکردووە',
-        });
-        continue;
-      }
-
-      if (!punchCheck.hasIn && !bypassScheduleChecks) {
-        result.skippedCount++;
-        result.details.push({
-          employeeId: empId,
-          employeeName: empName,
-          chatId,
-          status: 'skipped',
-          reason: 'ئەمڕۆ دەوامی تۆمار نەکردووە (غایب یان پشوو)',
-        });
-        continue;
-      }
-    }
+    logger.info(`[ShiftReminder] Punch status for ${empName} (${empId}): in=${punchCheck.hasIn}, out=${punchCheck.hasOut}`);
 
     // Compose personalized message & attach employee dynamic reply keyboard
     const msgText = buildReminderMessage(reminderType, empName, templates);
