@@ -6,10 +6,27 @@ import {
   getDynamicEmployeeTelegramKeyboard 
 } from '@/lib/telegram/telegram-service';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
+import { 
+  fetchAllShiftSettings, 
+  getEmployeeShiftConfig, 
+  saveEmployeeShiftSettings, 
+  type EmployeeShiftConfig 
+} from '@/lib/attendance/shift-service';
+
+export type ShiftReminderType = 
+  | 'morning_start'       // 07:45 AM (Morning 8-5 Shift Check-in)
+  | 'morning_end'         // 04:45 PM (Morning 8-5 Shift Check-out)
+  | 'evening_start'       // 02:45 PM (Evening 3-11 Shift Check-in)
+  | 'evening_end'         // 10:45 PM (Evening 3-11 Shift Check-out)
+  | 'morning'             // Alias for morning_start
+  | 'evening';            // Alias for morning_end
 
 export interface ShiftReminderTemplates {
-  morningMessage: string;
-  eveningMessage: string;
+  morningMessage: string;            // 07:45 AM (8-5 Shift Start)
+  morningEndMessage: string;         // 04:45 PM (8-5 Shift End)
+  eveningMessage: string;            // Alias for morningEndMessage (Backward compat)
+  eveningShiftStartMessage: string;  // 02:45 PM (3-11 Evening Shift Welcome/Start)
+  eveningShiftEndMessage: string;    // 10:45 PM (3-11 Evening Shift End)
   updatedAt?: string;
   updatedBy?: string;
 }
@@ -17,15 +34,28 @@ export interface ShiftReminderTemplates {
 export const SHIFT_REMINDER_TEMPLATES_KEY = 'ashley_shift_reminder_templates';
 
 export const DEFAULT_SHIFT_REMINDER_TEMPLATES: ShiftReminderTemplates = {
+  // 1. Morning Shift (8-5) - Start at 07:45 AM
   morningMessage: 
 `☀️ <b>بەیانیت باش {name}ی خۆشەویست و بەڕێز!</b> 🌸
 
 هیوای ڕۆژێکی پڕ لە بەرەکەت، تەندروستی و دەستکەوتی نوێ بۆ تۆ لە خێزانی ئاشڵی دەخوازین.
 
-⏰ <b>تەنها ١٥ خولەکی ماوە</b> بۆ دەستپێکردنی دەوامی فەرمی (٠٨:٠٠).
+⏰ <b>تەنها ١٥ خولەکی ماوە</b> بۆ دەستپێکردنی دەوامی بەیانیان (٠٨:٠٠).
 📍 کاتێک گەیشتیتە دەوام، لەبیرت نەچێت دوگمەی <b>[🟢 تۆمارکردنی هاتن]</b> لە خوارەوە دابگریت تاوەکو کاتەکەت بە دروستی و بەبێ دواکەوتن تۆمار بکرێت.
 
 💪 <i>دەستت خۆش بێت بۆ دڵسۆزی و ماندووبوونی بەردەوامت!</i>
+🏢 <b>کۆمپانیای ئاشڵی بۆ مۆبیلیات</b>`,
+
+  // 2. Morning Shift (8-5) - End at 04:45 PM
+  morningEndMessage: 
+`🌇 <b>ماندوو نەبیت و دەستت خۆش بێت {name} گیان!</b> 🌟
+
+زۆر سوپاسی هەوڵ، دڵسۆزی و ماندووبوونی ئەمڕۆت دەکەین بۆ سەرخستنی کارەکان لە ئاشڵی.
+
+⏰ <b>دەوامی بەیانیان بەرەو کۆتایی دەچێت (٠٥:٠٠).</b>
+📍 لە کاتی دەرچوون لە شوێنی دەوام، لەبیرت نەچێت دوگمەی <b>[🔴 تۆمارکردنی دەرچوون]</b> لە خوارەوە دابگریت تاوەکو ماف و کاتەکانت پارێزراو بێت.
+
+🏡 <i>هیوای ئێوارەیەکی شاد، ئارام و پڕ لە خۆشی بۆ تۆ و ماڵباتەکەت!</i>
 🏢 <b>کۆمپانیای ئاشڵی بۆ مۆبیلیات</b>`,
 
   eveningMessage: 
@@ -33,10 +63,34 @@ export const DEFAULT_SHIFT_REMINDER_TEMPLATES: ShiftReminderTemplates = {
 
 زۆر سوپاسی هەوڵ، دڵسۆزی و ماندووبوونی ئەمڕۆت دەکەین بۆ سەرخستنی کارەکان لە ئاشڵی.
 
-⏰ <b>دەوامی ئەمڕۆ بەرەو کۆتایی دەچێت (٠٥:٠٠).</b>
+⏰ <b>دەوامی بەیانیان بەرەو کۆتایی دەچێت (٠٥:٠٠).</b>
 📍 لە کاتی دەرچوون لە شوێنی دەوام، لەبیرت نەچێت دوگمەی <b>[🔴 تۆمارکردنی دەرچوون]</b> لە خوارەوە دابگریت تاوەکو ماف و کاتەکانت پارێزراو بێت.
 
 🏡 <i>هیوای ئێوارەیەکی شاد، ئارام و پڕ لە خۆشی بۆ تۆ و ماڵباتەکەت!</i>
+🏢 <b>کۆمپانیای ئاشڵی بۆ مۆبیلیات</b>`,
+
+  // 3. Evening Shift (3-11) - Start at 02:45 PM (14:45)
+  eveningShiftStartMessage: 
+`☀️ <b>نیوەڕۆت باش و بەخێربێیت {name} گیان!</b> 🌸
+
+هیوای دەوامێکی پڕ لە سەرکەوتن و ئاسودەییت بۆ دەخوازین لە شفتـی ئێوارانی ئاشڵی (٣ بۆ ١١).
+
+⏰ <b>تەنها ١٥ خولەکی ماوە</b> بۆ دەستپێکردنی دەوامی ئێواران (٠٣:٠٠ پ.ن).
+📍 کاتێک گەیشتیتە شوێنی کار، لەبیرت نەچێت دوگمەی <b>[🟢 تۆمارکردنی هاتن]</b> لە خوارەوە دابگریت تاوەکو کاتەکەت بە ڕێکی تۆمار بکرێت.
+
+💪 <i>دەستخۆشیت لێ دەکەین بۆ هەوڵ و دڵسۆزیی بەردەوامت!</i>
+🏢 <b>کۆمپانیای ئاشڵی بۆ مۆبیلیات</b>`,
+
+  // 4. Evening Shift (3-11) - End at 10:45 PM (22:45)
+  eveningShiftEndMessage: 
+`🌙 <b>دەستت خۆش بێت و ماندوو نەبیت {name} گیان!</b> 🌟
+
+زۆر سوپاس بۆ ماندووبوون و دڵسۆزیت لە شفتـی ئێواراندا بۆ پێشخستنی پرۆژەکانی ئاشڵی.
+
+⏰ <b>دەوامی شفتـی ئێواران بەرەو کۆتایی دەچێت (١١:٠٠ شه‌و).</b>
+📍 پێش بەجێهێشتنی کار، لەبیرت نەچێت دوگمەی <b>[🔴 تۆمارکردنی دەرچوون]</b> لە خوارەوە دابگریت تا ماف و کاتەکانت پارێزراو بێت.
+
+🏡 <i>شەوێکی ئارام و پڕ لە خۆشیت بۆ دەخوازین!</i>
 🏢 <b>کۆمپانیای ئاشڵی بۆ مۆبیلیات</b>`,
 };
 
@@ -49,10 +103,13 @@ export async function fetchShiftReminderTemplates(): Promise<ShiftReminderTempla
       SHIFT_REMINDER_TEMPLATES_KEY,
       null
     );
-    if (data && data.morningMessage && data.eveningMessage) {
+    if (data) {
       return {
-        morningMessage: data.morningMessage,
-        eveningMessage: data.eveningMessage,
+        morningMessage: data.morningMessage || DEFAULT_SHIFT_REMINDER_TEMPLATES.morningMessage,
+        morningEndMessage: data.morningEndMessage || data.eveningMessage || DEFAULT_SHIFT_REMINDER_TEMPLATES.morningEndMessage,
+        eveningMessage: data.morningEndMessage || data.eveningMessage || DEFAULT_SHIFT_REMINDER_TEMPLATES.eveningMessage,
+        eveningShiftStartMessage: data.eveningShiftStartMessage || DEFAULT_SHIFT_REMINDER_TEMPLATES.eveningShiftStartMessage,
+        eveningShiftEndMessage: data.eveningShiftEndMessage || DEFAULT_SHIFT_REMINDER_TEMPLATES.eveningShiftEndMessage,
         updatedAt: data.updatedAt,
         updatedBy: data.updatedBy,
       };
@@ -66,11 +123,15 @@ export async function fetchShiftReminderTemplates(): Promise<ShiftReminderTempla
 /**
  * Save customized reminder templates to Supabase
  */
-export async function saveShiftReminderTemplates(templates: ShiftReminderTemplates): Promise<boolean> {
+export async function saveShiftReminderTemplates(templates: Partial<ShiftReminderTemplates>): Promise<boolean> {
   try {
+    const current = await fetchShiftReminderTemplates();
     const payload: ShiftReminderTemplates = {
-      morningMessage: templates.morningMessage.trim(),
-      eveningMessage: templates.eveningMessage.trim(),
+      morningMessage: (templates.morningMessage ?? current.morningMessage).trim(),
+      morningEndMessage: (templates.morningEndMessage ?? templates.eveningMessage ?? current.morningEndMessage).trim(),
+      eveningMessage: (templates.morningEndMessage ?? templates.eveningMessage ?? current.eveningMessage).trim(),
+      eveningShiftStartMessage: (templates.eveningShiftStartMessage ?? current.eveningShiftStartMessage).trim(),
+      eveningShiftEndMessage: (templates.eveningShiftEndMessage ?? current.eveningShiftEndMessage).trim(),
       updatedAt: new Date().toISOString(),
     };
     return await saveSupabaseJson(
@@ -86,7 +147,7 @@ export async function saveShiftReminderTemplates(templates: ShiftReminderTemplat
 
 export interface ShiftReminderResult {
   success: boolean;
-  type: 'morning' | 'evening';
+  type: ShiftReminderType;
   dateStr: string;
   timeStr: string;
   isFriday: boolean;
@@ -129,9 +190,8 @@ export function getBaghdadShiftTime() {
   const dateStr = `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
   const timeStr = `${hh}:${mm}`;
 
-  // Accurate day of week for Baghdad timezone
   const baghdadDateObj = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Baghdad' }));
-  const dayOfWeek = baghdadDateObj.getDay(); // 0 = Sunday, 1 = Monday, ..., 5 = Friday, 6 = Saturday
+  const dayOfWeek = baghdadDateObj.getDay();
   const isFriday = dayOfWeek === 5;
 
   return {
@@ -150,20 +210,17 @@ export function getBaghdadShiftTime() {
  */
 export async function checkIsCompanyHoliday(dateStr: string): Promise<{ isHoliday: boolean; reason?: string }> {
   try {
-    // 1. Check in attendance table for holiday status
     const { data: holRows } = await supabase
       .from('attendance')
-      .select('status, check_in_address, note')
+      .select('status, note')
       .eq('date', dateStr)
-      .in('status', ['Holiday', 'پشوو'])
+      .eq('status', 'Holiday')
       .limit(1);
 
     if (holRows && holRows.length > 0) {
-      const reason = holRows[0].check_in_address || holRows[0].note || 'پشووی فەرمی کۆمپانیا';
-      return { isHoliday: true, reason };
+      return { isHoliday: true, reason: holRows[0].note || 'پشووی فەرمی کۆمپانیا' };
     }
 
-    // 2. Check in manual attendance overrides in warehouses table
     const { data: whRow } = await supabase
       .from('warehouses')
       .select('qr_code')
@@ -194,7 +251,6 @@ export async function checkIsEmployeeOnLeave(employeeId: string, dateStr: string
   try {
     const cleanId = employeeId.replace('emp-', '');
 
-    // 1. Check direct attendance status
     const { data: attRows } = await supabase
       .from('attendance')
       .select('status, note')
@@ -209,7 +265,6 @@ export async function checkIsEmployeeOnLeave(employeeId: string, dateStr: string
       }
     }
 
-    // 2. Check leave requests store in warehouses
     const { data: reqRow } = await supabase
       .from('warehouses')
       .select('qr_code')
@@ -217,15 +272,16 @@ export async function checkIsEmployeeOnLeave(employeeId: string, dateStr: string
       .maybeSingle();
 
     if (reqRow?.qr_code) {
-      const allReqs = typeof reqRow.qr_code === 'string' ? JSON.parse(reqRow.qr_code) : reqRow.qr_code;
-      if (allReqs && typeof allReqs === 'object') {
-        for (const req of Object.values<any>(allReqs)) {
-          if (
-            (req.employeeId === employeeId || req.employeeId === `emp-${cleanId}` || req.employeeId === cleanId) &&
-            req.status === 'approved' &&
-            req.targetDate === dateStr
-          ) {
-            return { onLeave: true, reason: req.leaveType || 'مۆڵەتی پەسەندکراو' };
+      const requests = typeof reqRow.qr_code === 'string' ? JSON.parse(reqRow.qr_code) : reqRow.qr_code;
+      if (Array.isArray(requests)) {
+        for (const r of requests) {
+          const rId = String(r.employeeId || r.userId || '');
+          if ((rId === employeeId || rId.includes(cleanId)) && (r.status === 'Approved' || r.status === 'پەسەندکراو')) {
+            const start = String(r.startDate || r.date || '').slice(0, 10);
+            const end = String(r.endDate || r.date || start).slice(0, 10);
+            if (dateStr >= start && dateStr <= end) {
+              return { onLeave: true, reason: r.reason || 'مۆڵەتی پەسەندکراو' };
+            }
           }
         }
       }
@@ -238,13 +294,15 @@ export async function checkIsEmployeeOnLeave(employeeId: string, dateStr: string
 }
 
 /**
- * Checks if the employee already has recorded attendance for today
+ * Checks if employee has already punched in or out today
  */
-export async function checkEmployeeTodayPunches(employeeId: string, dateStr: string): Promise<{ hasIn: boolean; hasOut: boolean }> {
+export async function checkEmployeeTodayPunches(
+  employeeId: string, 
+  dateStr: string
+): Promise<{ hasIn: boolean; hasOut: boolean }> {
   try {
     const cleanId = employeeId.replace('emp-', '');
 
-    // 1. Check attendance row
     const { data: att } = await supabase
       .from('attendance')
       .select('check_in, check_in_time, check_out, check_out_time, status')
@@ -260,7 +318,6 @@ export async function checkEmployeeTodayPunches(employeeId: string, dateStr: str
       hasOut = Boolean(att.check_out || att.check_out_time);
     }
 
-    // 2. Also check today's attendance_logs for high precision
     if (!hasIn || !hasOut) {
       const { data: logs } = await supabase
         .from('attendance_logs')
@@ -288,34 +345,70 @@ export async function checkEmployeeTodayPunches(employeeId: string, dateStr: str
  * Generates an inspiring, warm Kurdish reminder message using configured templates
  */
 export function buildReminderMessage(
-  type: 'morning' | 'evening',
+  type: ShiftReminderType,
   employeeName: string,
   customTemplates?: ShiftReminderTemplates
 ): string {
   const templates = customTemplates || DEFAULT_SHIFT_REMINDER_TEMPLATES;
-  const rawText = type === 'morning' ? templates.morningMessage : templates.eveningMessage;
+  let rawText = '';
 
-  const validText = (rawText && rawText.trim()) 
-    ? rawText 
-    : (type === 'morning' ? DEFAULT_SHIFT_REMINDER_TEMPLATES.morningMessage : DEFAULT_SHIFT_REMINDER_TEMPLATES.eveningMessage);
+  switch (type) {
+    case 'morning_start':
+    case 'morning':
+      rawText = templates.morningMessage || DEFAULT_SHIFT_REMINDER_TEMPLATES.morningMessage;
+      break;
 
+    case 'morning_end':
+    case 'evening':
+      rawText = templates.morningEndMessage || templates.eveningMessage || DEFAULT_SHIFT_REMINDER_TEMPLATES.morningEndMessage;
+      break;
+
+    case 'evening_start':
+      rawText = templates.eveningShiftStartMessage || DEFAULT_SHIFT_REMINDER_TEMPLATES.eveningShiftStartMessage;
+      break;
+
+    case 'evening_end':
+      rawText = templates.eveningShiftEndMessage || DEFAULT_SHIFT_REMINDER_TEMPLATES.eveningShiftEndMessage;
+      break;
+
+    default:
+      rawText = templates.morningMessage;
+  }
+
+  const validText = (rawText && rawText.trim()) ? rawText : DEFAULT_SHIFT_REMINDER_TEMPLATES.morningMessage;
   return validText.replace(/\{name\}/g, employeeName || 'کارمەندی بەڕێز');
 }
 
 /**
  * Main Orchestrator: Dispatches smart morale-boosting shift reminders
+ * Handles:
+ * 1. Morning Shift (8-5): 07:45 AM start reminder & 04:45 PM end reminder
+ * 2. Evening Shift (3-11): 02:45 PM start reminder & 10:45 PM end reminder
  */
 export async function dispatchShiftReminders(
-  forcedType?: 'morning' | 'evening',
+  forcedType?: ShiftReminderType,
   bypassScheduleChecks: boolean = false
 ): Promise<ShiftReminderResult> {
   const timeInfo = getBaghdadShiftTime();
   const dateStr = timeInfo.dateStr;
   const timeStr = timeInfo.timeStr;
 
-  // Determine type automatically if not explicitly provided
-  const reminderType: 'morning' | 'evening' = 
-    forcedType || (timeInfo.hour < 12 ? 'morning' : 'evening');
+  // Determine type automatically based on Baghdad local time if not forced
+  let reminderType: ShiftReminderType = forcedType || 'morning_start';
+  if (!forcedType) {
+    const h = timeInfo.hour;
+    if (h >= 6 && h <= 10) {
+      reminderType = 'morning_start'; // ~07:45 AM
+    } else if (h >= 13 && h <= 15) {
+      reminderType = 'evening_start'; // ~02:45 PM (14:45)
+    } else if (h >= 16 && h <= 18) {
+      reminderType = 'morning_end';   // ~04:45 PM (16:45)
+    } else if (h >= 21 && h <= 23) {
+      reminderType = 'evening_end';   // ~10:45 PM (22:45)
+    } else {
+      reminderType = h < 14 ? 'morning_start' : 'morning_end';
+    }
+  }
 
   const result: ShiftReminderResult = {
     success: true,
@@ -363,11 +456,78 @@ export async function dispatchShiftReminders(
   // 📝 4. Fetch active customized reminder templates
   const templates = await fetchShiftReminderTemplates();
 
-  // 🚀 4. Evaluate each employee individually
+  // 🕒 5. Fetch all shift configurations to differentiate 8-5 from 3-11 employees
+  const shiftSettingsMap = await fetchAllShiftSettings();
+
+  // 🚀 6. Evaluate each employee individually
   for (const chatId of chatIds) {
     const bindInfo = bindings[chatId];
     const empId = bindInfo.employeeId;
     const empName = bindInfo.employeeName;
+
+    // Determine employee's shift (Morning 8-5 vs Evening 3-11)
+    const shiftCfg = getEmployeeShiftConfig(empId, shiftSettingsMap);
+    const isEveningShiftEmp = shiftCfg.shiftType === 'evening' || shiftCfg.startTime === '15:00';
+
+    // Filter A: Morning Shift Start (07:45 AM)
+    if (reminderType === 'morning_start' || reminderType === 'morning') {
+      if (isEveningShiftEmp && !bypassScheduleChecks) {
+        result.skippedCount++;
+        result.details.push({
+          employeeId: empId,
+          employeeName: empName,
+          chatId,
+          status: 'skipped',
+          reason: 'شفتـی ئێوارانە (٣ بۆ ١١) - پەیام لە کاتژمێر ٢:٤٥ بۆی دەچێت',
+        });
+        continue;
+      }
+    }
+
+    // Filter B: Evening Shift Start (02:45 PM / 14:45)
+    if (reminderType === 'evening_start') {
+      if (!isEveningShiftEmp && !bypassScheduleChecks) {
+        result.skippedCount++;
+        result.details.push({
+          employeeId: empId,
+          employeeName: empName,
+          chatId,
+          status: 'skipped',
+          reason: 'شفتـی بەیانیانە (٨ بۆ ٥)',
+        });
+        continue;
+      }
+    }
+
+    // Filter C: Morning Shift End (04:45 PM / 16:45)
+    if (reminderType === 'morning_end' || reminderType === 'evening') {
+      if (isEveningShiftEmp && !bypassScheduleChecks) {
+        result.skippedCount++;
+        result.details.push({
+          employeeId: empId,
+          employeeName: empName,
+          chatId,
+          status: 'skipped',
+          reason: 'شفتـی ئێوارانە (٣ بۆ ١١) - دەوامی لە ١١:٠٠ کۆتایی دێت',
+        });
+        continue;
+      }
+    }
+
+    // Filter D: Evening Shift End (10:45 PM / 22:45)
+    if (reminderType === 'evening_end') {
+      if (!isEveningShiftEmp && !bypassScheduleChecks) {
+        result.skippedCount++;
+        result.details.push({
+          employeeId: empId,
+          employeeName: empName,
+          chatId,
+          status: 'skipped',
+          reason: 'شفتـی بەیانیانە (٨ بۆ ٥)',
+        });
+        continue;
+      }
+    }
 
     // Check if on approved leave
     const leaveCheck = await checkIsEmployeeOnLeave(empId, dateStr);
@@ -386,7 +546,12 @@ export async function dispatchShiftReminders(
     // Check punch status
     const punchCheck = await checkEmployeeTodayPunches(empId, dateStr);
 
-    if (reminderType === 'morning' && punchCheck.hasIn && !bypassScheduleChecks) {
+    // If starting reminder (morning or evening): skip if already punched in
+    if (
+      (reminderType === 'morning_start' || reminderType === 'morning' || reminderType === 'evening_start') &&
+      punchCheck.hasIn &&
+      !bypassScheduleChecks
+    ) {
       result.skippedCount++;
       result.details.push({
         employeeId: empId,
@@ -398,7 +563,12 @@ export async function dispatchShiftReminders(
       continue;
     }
 
-    if (reminderType === 'evening') {
+    // If ending reminder (morning or evening): skip if already punched out, or if hasn't punched in at all
+    if (
+      reminderType === 'morning_end' ||
+      reminderType === 'evening' ||
+      reminderType === 'evening_end'
+    ) {
       if (punchCheck.hasOut && !bypassScheduleChecks) {
         result.skippedCount++;
         result.details.push({
@@ -410,6 +580,7 @@ export async function dispatchShiftReminders(
         });
         continue;
       }
+
       if (!punchCheck.hasIn && !bypassScheduleChecks) {
         result.skippedCount++;
         result.details.push({
@@ -423,7 +594,7 @@ export async function dispatchShiftReminders(
       }
     }
 
-    // Compose personalized message & get employee's dynamic keyboard
+    // Compose personalized message & attach employee dynamic reply keyboard
     const msgText = buildReminderMessage(reminderType, empName, templates);
     const keyboard = await getDynamicEmployeeTelegramKeyboard(empId);
 
@@ -454,35 +625,30 @@ export async function dispatchShiftReminders(
         employeeName: empName,
         chatId,
         status: 'failed',
-        reason: sendErr.message || 'پەیوەندی لەگەڵ تەلەگرام نەبەسترا',
+        reason: sendErr.message || 'شکستی پەیوەندی لەگەڵ تەلەگرام',
       });
     }
 
-    // Slight delay to stay well within Telegram API rate limits
-    await new Promise(r => setTimeout(r, 60));
+    // Anti-flood throttle (60ms between calls)
+    await new Promise((r) => setTimeout(r, 60));
   }
 
-  // 📝 5. Record dispatch history into Supabase
+  // Persist run log in Supabase
   try {
-    const logId = `reminder-${reminderType}-${dateStr}-${Date.now()}`;
-    await supabase.from('warehouses').upsert({
-      id: 'ashley_shift_reminders_log',
-      name: 'SHIFT_REMINDERS_AUDIT_LOG',
-      qr_code: JSON.stringify({
-        lastRun: {
-          id: logId,
-          type: reminderType,
-          dateStr,
-          timeStr,
-          sentCount: result.sentCount,
-          skippedCount: result.skippedCount,
-          total: result.totalBindings,
-          details: result.details,
-        }
-      }),
-    }, { onConflict: 'id' });
+    await saveSupabaseJson('ashley_shift_reminders_log', 'Shift Reminders Execution Log', {
+      lastRun: {
+        id: `reminder-${reminderType}-${dateStr}-${Date.now()}`,
+        type: reminderType,
+        dateStr,
+        timeStr,
+        sentCount: result.sentCount,
+        skippedCount: result.skippedCount,
+        total: result.totalBindings,
+        details: result.details,
+      },
+    });
   } catch (logErr) {
-    logger.warn('[ShiftReminder] Error saving reminder audit log:', logErr);
+    logger.warn('[ShiftReminder] Failed to write run log:', logErr);
   }
 
   return result;

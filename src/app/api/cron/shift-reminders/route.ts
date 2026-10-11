@@ -4,14 +4,22 @@ import {
   getBaghdadShiftTime,
   fetchShiftReminderTemplates,
   saveShiftReminderTemplates,
-  DEFAULT_SHIFT_REMINDER_TEMPLATES
+  DEFAULT_SHIFT_REMINDER_TEMPLATES,
+  type ShiftReminderType
 } from '@/lib/telegram/shift-reminder-service';
+import { 
+  fetchAllShiftSettings, 
+  getEmployeeShiftConfig, 
+  saveEmployeeShiftSettings 
+} from '@/lib/attendance/shift-service';
+import { getTelegramBindings } from '@/lib/telegram/telegram-service';
+import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * GET: Invoked by Vercel Cron, browser diagnostic check, or template fetching
+ * GET: Invoked by Vercel Cron, GitHub Actions, or admin dashboard for templates/employee shifts
  */
 export async function GET(request: NextRequest) {
   try {
@@ -28,7 +36,32 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const typeParam = searchParams.get('type') as 'morning' | 'evening' | null;
+    // 2. Fetch employee shift assignments (for admin modal)
+    if (action === 'employee_shifts') {
+      const bindings = await getTelegramBindings();
+      const shiftMap = await fetchAllShiftSettings();
+      
+      const employeeList = Object.entries(bindings).map(([chatId, info]) => {
+        const empId = info.employeeId;
+        const cfg = getEmployeeShiftConfig(empId, shiftMap);
+        const official = ASHLEY_OFFICIAL_EMPLOYEES.find(e => e.id === empId || e.id === `emp-${empId.replace('emp-', '')}`);
+        return {
+          employeeId: empId,
+          employeeName: info.employeeName || official?.name || empId,
+          chatId,
+          shiftType: cfg.shiftType || 'morning',
+          startTime: cfg.startTime || '08:00',
+          endTime: cfg.endTime || '17:00',
+        };
+      });
+
+      return NextResponse.json({
+        success: true,
+        employees: employeeList,
+      });
+    }
+
+    const typeParam = searchParams.get('type') as ShiftReminderType | null;
     const testMode = searchParams.get('test') === 'true';
 
     // Optional Vercel Cron Secret authorization verification
@@ -60,7 +93,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST: Invoked from Admin Dashboard to manually dispatch or test notifications
+ * POST: Invoked from Admin Dashboard to manually dispatch, edit templates, or update employee shift
  */
 export async function POST(request: NextRequest) {
   try {
@@ -73,8 +106,8 @@ export async function POST(request: NextRequest) {
 
     // 1. Save custom templates
     if (body.action === 'save_templates') {
-      if (!body.templates || !body.templates.morningMessage || !body.templates.eveningMessage) {
-        return NextResponse.json({ success: false, error: 'تکایە هەردوو دەقی بەیانیان و ئێواران دیاری بکە' }, { status: 400 });
+      if (!body.templates) {
+        return NextResponse.json({ success: false, error: 'تکایە دەقەکان دیاری بکە' }, { status: 400 });
       }
       const ok = await saveShiftReminderTemplates(body.templates);
       if (!ok) {
@@ -99,8 +132,34 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 3. Dispatch reminders (manual / test)
-    const reminderType = body.type === 'evening' ? 'evening' : 'morning';
+    // 3. Update employee shift (Morning 8-5 vs Evening 3-11)
+    if (body.action === 'set_employee_shift') {
+      const { employeeId, shiftType } = body;
+      if (!employeeId || !shiftType) {
+        return NextResponse.json({ success: false, error: 'کارمەند و جۆری شفت پێویستە' }, { status: 400 });
+      }
+
+      const isEvening = shiftType === 'evening';
+      const ok = await saveEmployeeShiftSettings(employeeId, {
+        shiftType: isEvening ? 'evening' : 'morning',
+        startTime: isEvening ? '15:00' : '08:00',
+        endTime: isEvening ? '23:00' : '17:00',
+        targetWorkHours: 8,
+        hasBreak: !isEvening,
+      });
+
+      if (!ok) {
+        return NextResponse.json({ success: false, error: 'هەڵە لە پاشەکەوتکردنی شفتی کارمەند' }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `شفتی کارمەند بە سەرکەوتوویی کرا بە ${isEvening ? 'ئێواران (٣ بۆ ١١)' : 'بەیانیان (٨ بۆ ٥)'} ✅`,
+      });
+    }
+
+    // 4. Dispatch reminders (manual / test)
+    const reminderType = (body.type || 'morning_start') as ShiftReminderType;
     const testMode = Boolean(body.testMode || body.bypassSchedule);
 
     logger.info(`[Admin:ShiftReminder] Manual trigger: ${reminderType}, testMode: ${testMode}`);

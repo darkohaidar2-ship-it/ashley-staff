@@ -3,12 +3,8 @@
   "regions": ["fra1"],
   "crons": [
     {
-      "path": "/api/cron/shift-reminders?type=morning",
-      "schedule": "45 4 * * *"
-    },
-    {
-      "path": "/api/cron/shift-reminders?type=evening",
-      "schedule": "45 13 * * *"
+      "path": "/api/cron/shift-reminders",
+      "schedule": "45 4,11,13,19 * * *"
     }
   ]
 }
