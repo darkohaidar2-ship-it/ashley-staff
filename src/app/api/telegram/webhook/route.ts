@@ -1753,21 +1753,21 @@ export async function POST(req: NextRequest) {
 
       const noteToSave = text === 'بەبێ تێبینی' ? 'مانەوەی زیادە بەبێ تێبینی' : text;
 
-      // 1. Update attendance table
+      // 1. Update attendance table with correct check_out_edit_note column
       try {
-        const { data: curAtt } = await supabase
-          .from('attendance')
-          .select('notes')
-          .eq('user_id', pendingOt.employeeId)
-          .eq('date', pendingOt.dateStr)
-          .maybeSingle();
-
-        const existingNotes = curAtt?.notes ? `${curAtt.notes} | ` : '';
         await supabase
           .from('attendance')
-          .update({ notes: `${existingNotes}هۆکاری ئیزافە: ${noteToSave}` })
+          .update({ check_out_edit_note: noteToSave })
           .eq('user_id', pendingOt.employeeId)
           .eq('date', pendingOt.dateStr);
+
+        // Also update attendance_logs for this checkout
+        await supabase
+          .from('attendance_logs')
+          .update({ edit_note: noteToSave })
+          .eq('employee_id', pendingOt.employeeId)
+          .eq('log_date', pendingOt.dateStr)
+          .eq('log_type', 'Check Out');
       } catch (err) {
         logger.error('Error updating overtime note in attendance:', err);
       }
@@ -1796,11 +1796,20 @@ export async function POST(req: NextRequest) {
         ];
 
         for (const k of allKeys) {
-          if (currentOverrides[k]) {
-            currentOverrides[k].adminNote = currentOverrides[k].adminNote 
-              ? `${currentOverrides[k].adminNote} | هۆکاری کاتی زیادە: ${noteToSave}`
-              : `هۆکاری کاتی زیادە: ${noteToSave}`;
+          if (!currentOverrides[k]) {
+            currentOverrides[k] = {
+              userId: pendingOt.employeeId,
+              userName: pendingOt.employeeName,
+              date: pendingOt.dateStr,
+              status: 'Present',
+            };
           }
+          currentOverrides[k].checkOutNote = noteToSave;
+          currentOverrides[k].adminCheckOutNote = noteToSave;
+          currentOverrides[k].note = noteToSave;
+          currentOverrides[k].adminNote = currentOverrides[k].adminNote 
+            ? `${currentOverrides[k].adminNote} | هۆکاری کاتی زیادە: ${noteToSave}`
+            : `هۆکاری کاتی زیادە: ${noteToSave}`;
         }
 
         await supabase.from('warehouses').upsert({

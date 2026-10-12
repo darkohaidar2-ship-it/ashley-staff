@@ -368,7 +368,48 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         if (resolved.status === 'Present' && resolved.workedHours > 8) {
           const otHours = parseFloat((resolved.workedHours - 8).toFixed(1));
           const noteKey = `${emp.id}_${dayDateStr}`;
-          const note = resolved.checkOutNote || resolved.checkInNote || resolved.adminNote || adminNotes[noteKey] || '';
+          
+          // Helper to extract genuine business reason, ignoring generic channel strings (e.g. "لەڕێگەی تەلەگرام")
+          const extractRealReason = (val?: string | null): string => {
+            if (!val || typeof val !== 'string') return '';
+            const t = val.trim();
+            if (
+              t === 'لەڕێگەی تەلەگرام' || 
+              t === 'لەڕێگەی واتس ئەپ' || 
+              t === 'لەڕێگەی سیستەم' || 
+              t === 'تەلەگرام' || 
+              t === 'واتس ئەپ' ||
+              t === 'سیستەم'
+            ) {
+              return '';
+            }
+            if (t.startsWith('هۆکاری کاتی زیادە: ')) return t.replace('هۆکاری کاتی زیادە: ', '').trim();
+            if (t.startsWith('هۆکاری ئیزافە: ')) return t.replace('هۆکاری ئیزافە: ', '').trim();
+            return t;
+          };
+
+          const possibleNotes = [
+            adminNotes[noteKey],
+            resolved.adminCheckOutNote,
+            resolved.checkOutNote,
+            resolved.adminNote,
+            resolved.note,
+            resolved.checkInNote,
+          ];
+
+          let note = '';
+          for (const cand of possibleNotes) {
+            const cleaned = extractRealReason(cand);
+            if (cleaned) {
+              note = cleaned;
+              break;
+            }
+          }
+
+          if (!note) {
+            note = 'دیاری نەکراوە (بەبێ هۆکار)';
+          }
+
           const recKey = `${emp.id}_${dayDateStr}`;
 
           recordsMap.set(recKey, {
