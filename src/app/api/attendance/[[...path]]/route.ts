@@ -4711,6 +4711,33 @@ async function handle(req: NextRequest, props: { params: Promise<{ path?: string
           await supabase.from('users').update(userUpdate).or(`id.eq.${cleanEmpId},id.eq.${rawNum},id.eq.emp-${rawNum}`);
         } catch (err) { logger.warn(err); }
 
+        // 4. Keep ashley_telegram_bindings in sync with the new name if employee is bound to Telegram
+        try {
+          const { data: bRow } = await supabase.from('warehouses').select('qr_code').eq('id', 'ashley_telegram_bindings').maybeSingle();
+          if (bRow?.qr_code && name) {
+            let bindingsMap = JSON.parse(bRow.qr_code);
+            let bChanged = false;
+            for (const tId of Object.keys(bindingsMap)) {
+              const bEmpId = String(bindingsMap[tId]?.employeeId || '');
+              if (bEmpId === cleanEmpId || bEmpId === `emp-${rawNum}` || bEmpId === rawNum) {
+                if (bindingsMap[tId].employeeName !== name) {
+                  bindingsMap[tId].employeeName = name;
+                  bChanged = true;
+                }
+              }
+            }
+            if (bChanged) {
+              await supabase.from('warehouses').upsert({
+                id: 'ashley_telegram_bindings',
+                name: 'TELEGRAM_USER_BINDINGS',
+                qr_code: JSON.stringify(bindingsMap),
+              });
+            }
+          }
+        } catch (bErr) {
+          logger.warn('Failed to sync telegram bindings:', bErr);
+        }
+
         return NextResponse.json({ success: true, photoUrl: finalPhotoUrl, message: 'پڕۆفایل و وێنە بە سەرکەوتوویی لە سوپابەیس نوێکرانەوە' });
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });

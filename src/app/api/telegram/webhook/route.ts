@@ -459,6 +459,13 @@ export async function POST(req: NextRequest) {
 
       const bindings = await getTelegramBindings();
       const binding = bindings[cqFromId];
+      if (binding) {
+        const allEmps = await getAllEmployees();
+        const liveEmp = allEmps.find(e => e.id === binding.employeeId || e.employeeId === binding.employeeId);
+        if (liveEmp && liveEmp.name) {
+          binding.employeeName = liveEmp.name;
+        }
+      }
       const cqRole: UserRole = binding ? resolveEmployeeRole(binding.employeeId, binding.employeeName) : 'employee';
       const isManager = cqRole === 'founder' || cqRole === 'warehouse_manager' || cqRole === 'general_manager' || cqRole === 'transport_manager' || cqRole === 'administration';
 
@@ -1464,6 +1471,12 @@ export async function POST(req: NextRequest) {
     const bindings = await getTelegramBindings();
     const currentBinding = bindings[fromId];
     const allEmployees = await getAllEmployees();
+    if (currentBinding) {
+      const liveEmp = allEmployees.find(e => e.id === currentBinding.employeeId || e.employeeId === currentBinding.employeeId);
+      if (liveEmp && liveEmp.name) {
+        currentBinding.employeeName = liveEmp.name;
+      }
+    }
     const userRole: UserRole = currentBinding ? resolveEmployeeRole(currentBinding.employeeId, currentBinding.employeeName) : 'employee';
     const isManager = userRole === 'founder' || userRole === 'warehouse_manager' || userRole === 'general_manager' || userRole === 'transport_manager' || userRole === 'administration';
 
