@@ -28,6 +28,39 @@ import { format, getDaysInMonth, getDay } from 'date-fns';
 import { exportToPDF, exportToCSV, formatTime12H, type ExportTableColumn } from '@/lib/export-utils';
 import { resolveEmployeeDayAttendance } from '@/lib/attendance-helpers';
 
+/**
+ * Helper to clean and deduplicate overtime reason notes
+ * Strips redundant prefixes like "هۆکاری کاتی زیادە: " or generic channel strings like "لەڕێگەی تەلەگرام"
+ * and deduplicates repeated phrases.
+ */
+export function cleanOvertimeReason(raw?: string | null): string {
+  if (!raw || typeof raw !== 'string') return '';
+  let t = raw.trim();
+  if (
+    t === 'لەڕێگەی تەلەگرام' || 
+    t === 'لەڕێگەی واتس ئەپ' || 
+    t === 'لەڕێگەی سیستەم' || 
+    t === 'تەلەگرام' || 
+    t === 'واتس ئەپ' ||
+    t === 'سیستەم'
+  ) {
+    return '';
+  }
+
+  // Remove redundant prefixes globally
+  t = t.replace(/هۆکاری کاتی زیادە:\s*/g, '');
+  t = t.replace(/هۆکاری ئیزافە:\s*/g, '');
+  t = t.replace(/تێبینی:\s*/g, '');
+
+  // Split by '|' or '•' and deduplicate identical parts
+  const segments = t.split(/[|•]/)
+    .map(p => p.trim())
+    .filter(p => p && p !== 'لەڕێگەی تەلەگرام' && p !== 'تەلەگرام' && p !== 'واتس ئەپ' && p !== 'سیستەم');
+
+  const unique = Array.from(new Set(segments));
+  return unique.join(' • ');
+}
+
 interface AdminOvertimeModuleProps {
   employees: Employee[];
 }
@@ -369,29 +402,10 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
           const otHours = parseFloat((resolved.workedHours - 8).toFixed(1));
           const noteKey = `${emp.id}_${dayDateStr}`;
           
-          // Helper to extract genuine business reason, ignoring generic channel strings (e.g. "لەڕێگەی تەلەگرام")
-          const extractRealReason = (val?: string | null): string => {
-            if (!val || typeof val !== 'string') return '';
-            const t = val.trim();
-            if (
-              t === 'لەڕێگەی تەلەگرام' || 
-              t === 'لەڕێگەی واتس ئەپ' || 
-              t === 'لەڕێگەی سیستەم' || 
-              t === 'تەلەگرام' || 
-              t === 'واتس ئەپ' ||
-              t === 'سیستەم'
-            ) {
-              return '';
-            }
-            if (t.startsWith('هۆکاری کاتی زیادە: ')) return t.replace('هۆکاری کاتی زیادە: ', '').trim();
-            if (t.startsWith('هۆکاری ئیزافە: ')) return t.replace('هۆکاری ئیزافە: ', '').trim();
-            return t;
-          };
-
           const possibleNotes = [
             adminNotes[noteKey],
-            resolved.adminCheckOutNote,
             resolved.checkOutNote,
+            resolved.adminCheckOutNote,
             resolved.adminNote,
             resolved.note,
             resolved.checkInNote,
@@ -399,7 +413,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
 
           let note = '';
           for (const cand of possibleNotes) {
-            const cleaned = extractRealReason(cand);
+            const cleaned = cleanOvertimeReason(cand);
             if (cleaned) {
               note = cleaned;
               break;
@@ -684,7 +698,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         checkOutTime: formatTime12H(r.checkOutTime),
         hours: `${r.hours} کاتژمێر`,
         amount: `${r.totalAmount.toLocaleString()} IQD`,
-        note: r.note || '-',
+        note: cleanOvertimeReason(r.note) || r.note || '-',
       }));
 
       // Append prominent Grand Total row inside the table
@@ -776,7 +790,7 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
         checkOutTime: r.checkOutTime || '-',
         hours: r.hours,
         amount: r.totalAmount,
-        note: r.note || '-',
+        note: cleanOvertimeReason(r.note) || r.note || '-',
       }));
       exportToCSV(cols, data, `Ashley_Daily_Overtime_${selectedDate}`);
     } else {
@@ -1181,7 +1195,8 @@ export function AdminOvertimeModule({ employees }: AdminOvertimeModuleProps) {
                     {dailyRecords.map((rec, idx) => {
                       const noteKey = `${rec.employeeId}_${rec.date}`;
                       const isEditingNote = editingNoteKey === noteKey;
-                      const savedNote = adminNotes[noteKey] || rec.note;
+                      const rawNote = adminNotes[noteKey] || rec.note;
+                      const savedNote = cleanOvertimeReason(rawNote) || rawNote;
 
                       return (
                         <tr key={rec.id} className="hover:bg-slate-50/70 transition-colors">

@@ -1807,9 +1807,7 @@ export async function POST(req: NextRequest) {
           currentOverrides[k].checkOutNote = noteToSave;
           currentOverrides[k].adminCheckOutNote = noteToSave;
           currentOverrides[k].note = noteToSave;
-          currentOverrides[k].adminNote = currentOverrides[k].adminNote 
-            ? `${currentOverrides[k].adminNote} | هۆکاری کاتی زیادە: ${noteToSave}`
-            : `هۆکاری کاتی زیادە: ${noteToSave}`;
+          currentOverrides[k].adminNote = noteToSave;
         }
 
         await supabase.from('warehouses').upsert({
