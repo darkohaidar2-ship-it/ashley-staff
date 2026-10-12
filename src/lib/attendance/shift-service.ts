@@ -181,7 +181,8 @@ export function getEmployeeShiftConfig(
 export function calculateNetWorkedAndOvertime(
   inTimeStr: string | null | undefined,
   outTimeStr: string | null | undefined,
-  config: EmployeeShiftConfig
+  config: EmployeeShiftConfig,
+  options?: { isCheckInWaived?: boolean; isPenalized?: boolean }
 ): {
   rawMinutes: number;
   breakDeductedMinutes: number;
@@ -229,7 +230,36 @@ export function calculateNetWorkedAndOvertime(
     };
   }
 
-  const rawMinutes = outM - inM;
+  // 🧠 Check-In Normalization Rule:
+  // 1. Arrival between shift start and grace period (or earlier): automatically normalized to shift start (08:00)
+  // 2. Arrival late after grace period, but excused/waived by admin: normalized to shift start (08:00)
+  // 3. Otherwise: keep actual inM to deduct late minutes
+  const shiftStartM = timeToMinutes(config.startTime) ?? (8 * 60);
+  const shiftGraceM = shiftStartM + 15;
+  const isExcused = Boolean(options?.isCheckInWaived && !options?.isPenalized);
+
+  let effectiveInM = inM;
+  if (inM <= shiftGraceM) {
+    effectiveInM = shiftStartM;
+  } else if (isExcused) {
+    effectiveInM = shiftStartM;
+  }
+
+  if (outM <= effectiveInM) {
+    return {
+      rawMinutes: 0,
+      breakDeductedMinutes: 0,
+      netWorkedMinutes: 0,
+      netWorkedHours: 0,
+      overtimeMinutes: 0,
+      lateMinutes: 0,
+      earlyLeaveMinutes: 0,
+      isOvertime: false,
+      isLate: false,
+    };
+  }
+
+  const rawMinutes = outM - effectiveInM;
 
   // 1. Calculate Break Deduction
   let breakDeductedMinutes = 0;
@@ -237,13 +267,13 @@ export function calculateNetWorkedAndOvertime(
     const breakStartM = timeToMinutes(config.breakStart) ?? (12 * 60);
     const breakEndM = timeToMinutes(config.breakEnd) ?? (13 * 60);
 
-    // Precise overlap between [inM, outM] and [breakStartM, breakEndM]
-    if (outM > breakStartM && inM < breakEndM) {
-      const overlapStart = Math.max(inM, breakStartM);
+    // Precise overlap between [effectiveInM, outM] and [breakStartM, breakEndM]
+    if (outM > breakStartM && effectiveInM < breakEndM) {
+      const overlapStart = Math.max(effectiveInM, breakStartM);
       const overlapEnd = Math.min(outM, breakEndM);
       const overlap = Math.max(0, overlapEnd - overlapStart);
       breakDeductedMinutes = Math.min(config.breakMinutes, overlap);
-    } else if (rawMinutes >= 360 && inM <= breakStartM && outM >= breakEndM) {
+    } else if (rawMinutes >= 360 && effectiveInM <= breakStartM && outM >= breakEndM) {
       // Fallback for long full day punch spanning midday
       breakDeductedMinutes = config.breakMinutes;
     }
@@ -254,12 +284,11 @@ export function calculateNetWorkedAndOvertime(
   const netWorkedHours = Math.round((netWorkedMinutes / 60) * 10) / 10;
 
   // 2. Late Minutes Calculation (Shift start + 15 min grace)
-  const shiftStartM = timeToMinutes(config.startTime) ?? (8 * 60);
   let lateMinutes = 0;
   let isLate = false;
-  if (inM > shiftStartM + 15) {
-    lateMinutes = inM - shiftStartM;
+  if (inM > shiftGraceM) {
     isLate = true;
+    lateMinutes = isExcused ? 0 : (inM - shiftStartM);
   }
 
   // 3. Early Leave & Overtime Calculation

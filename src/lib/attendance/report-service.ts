@@ -125,9 +125,22 @@ export async function getMonthlyAttendanceStats(
     } else if (inTime || outTime) {
       presentDays++;
 
+      const isCheckInWaived = Boolean(
+        r.checkInWaived ??
+        r.isCheckInWaived ??
+        (r.adminCheckInDecision === 'waived' ? true : undefined) ??
+        (r.adminDecision === 'waived' ? true : undefined) ??
+        r.isWaived
+      );
+      const isPenalized = Boolean(
+        r.adminDecision === 'penalized' ||
+        r.adminCheckInDecision === 'penalized' ||
+        r.adminCheckOutDecision === 'penalized'
+      );
+
       if (inTime && outTime) {
         // 🧮 Pure Net Working Time Rule (Lunch break automatically deducted!)
-        const calc = calculateNetWorkedAndOvertime(inTime, outTime, shiftConfig);
+        const calc = calculateNetWorkedAndOvertime(inTime, outTime, shiftConfig, { isCheckInWaived, isPenalized });
         durationMins = calc.netWorkedMinutes;
         lateMins = calc.lateMinutes;
         otMins = calc.overtimeMinutes;
@@ -138,7 +151,7 @@ export async function getMonthlyAttendanceStats(
       } else if (inTime && !outTime && d === getBaghdadNow().dateStr) {
         // ⏱️ Real-time calculation for employee currently at work today!
         const curTimeStr = getBaghdadNow().timeStr;
-        const calc = calculateNetWorkedAndOvertime(inTime, curTimeStr, shiftConfig);
+        const calc = calculateNetWorkedAndOvertime(inTime, curTimeStr, shiftConfig, { isCheckInWaived, isPenalized });
         durationMins = calc.netWorkedMinutes;
         lateMins = calc.lateMinutes;
         otMins = calc.overtimeMinutes;

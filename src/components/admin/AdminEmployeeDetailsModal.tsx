@@ -171,7 +171,19 @@ export function AdminEmployeeDetailsModal({
       let dayOtHours = 0;
 
       if (inTime && outTime) {
-        const calc = calculateNetWorkedAndOvertime(inTime, outTime, empShiftCfg);
+        const isCheckInWaived = Boolean(
+          (inLog as any)?.checkInWaived ??
+          (inLog as any)?.isCheckInWaived ??
+          ((inLog as any)?.adminCheckInDecision === 'waived' ? true : undefined) ??
+          ((inLog as any)?.adminDecision === 'waived' ? true : undefined) ??
+          (inLog as any)?.isWaived
+        );
+        const isPenalized = Boolean(
+          (inLog as any)?.adminDecision === 'penalized' ||
+          (inLog as any)?.adminCheckInDecision === 'penalized' ||
+          (inLog as any)?.adminCheckOutDecision === 'penalized'
+        );
+        const calc = calculateNetWorkedAndOvertime(inTime, outTime, empShiftCfg, { isCheckInWaived, isPenalized });
         dayWorked = calc.netWorkedHours;
         dayLate = calc.lateMinutes;
         dayEarly = calc.earlyLeaveMinutes;

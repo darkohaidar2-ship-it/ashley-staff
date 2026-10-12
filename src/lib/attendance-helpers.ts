@@ -50,6 +50,34 @@ function addMinutesToTimeStr(hm: string, deltaMinutes: number): string {
   return `${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}`;
 }
 
+/**
+ * ⏱️ Normalizes check-in time for backend worked-hours and overtime calculation:
+ * 1. Check-in between shift start and grace period (or earlier): automatically normalized to shift start (08:00).
+ * 2. Late check-in after grace period:
+ *    - If waived/excused by admin and not penalized: normalized to shift start (08:00).
+ *    - If unexcused, penalized, or no waiver: preserves actual late check-in time to deduct late minutes.
+ */
+export function getEffectiveCheckInMinutes(
+  inTotal: number,
+  shiftStartMins: number,
+  graceEndMins: number,
+  isCheckInExcused: boolean
+): number {
+  if (isNaN(inTotal) || inTotal <= 0) return shiftStartMins;
+  // 1. If arrival is within grace period (or early arrival before shift start):
+  // Automatically excused (ئۆتۆماتیکی لێخۆشبوون) -> normalized to shift start (08:00)
+  if (inTotal <= graceEndMins) {
+    return shiftStartMins;
+  }
+  // 2. If arrival is late (after grace period):
+  // If admin marked as waived/excused and not penalized -> normalized to shift start (08:00)
+  if (isCheckInExcused) {
+    return shiftStartMins;
+  }
+  // 3. Otherwise (unexcused or penalized) -> maintain actual late check-in time
+  return inTotal;
+}
+
 export function getSavedEmployeeShiftOverride(empId?: string | null): {
   shiftType?: 'auto' | 'morning' | 'evening' | 'custom';
   customShiftStart?: string;
@@ -609,19 +637,29 @@ export function resolveEmployeeDayAttendance(
 
       let workedHours = 0;
       if (effectiveStatus === 'Present') {
+        const [shiftStartH, shiftStartM] = (shiftRules.startTime || '08:00').split(':').map(Number);
+        const [shiftGraceH, shiftGraceM] = (shiftRules.graceTime || '08:15').split(':').map(Number);
+        const shiftStartTotal = shiftStartH * 60 + (shiftStartM || 0);
+        const shiftGraceTotal = shiftGraceH * 60 + (shiftGraceM || 0);
+        const isCheckInExcused = isCheckInWaived && !isPenalized;
+
         if (cIn && cOut && cIn.includes(':') && cOut.includes(':') && cOut !== 'بەردەوام') {
           const [inH, inM] = cIn.split(':').map(Number);
           const [outH, outM] = cOut.split(':').map(Number);
           const inTotal = inH * 60 + (inM || 0);
           let outTotal = outH * 60 + (outM || 0);
           if (outTotal < inTotal) outTotal += 1440;
-          if (outTotal > inTotal) {
-            const gross = outTotal - inTotal;
+
+          // 🧠 Normalize check-in time for backend calculation (grace period & waived lateness)
+          const effectiveInTotal = getEffectiveCheckInMinutes(inTotal, shiftStartTotal, shiftGraceTotal, isCheckInExcused);
+
+          if (outTotal > effectiveInTotal) {
+            const gross = outTotal - effectiveInTotal;
             let overlap = 0;
             if (shiftRules.hasLunchBreak) {
               const breakStart = 12 * 60;
               const breakEnd = 13 * 60;
-              overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
+              overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(effectiveInTotal, breakStart));
             }
             workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
           }
@@ -639,13 +677,16 @@ export function resolveEmployeeDayAttendance(
           const [inH, inM] = cIn.split(':').map(Number);
           const inTotal = inH * 60 + (inM || 0);
           const nowTotal = curH * 60 + curM;
-          if (nowTotal > inTotal) {
-            const gross = nowTotal - inTotal;
+
+          const effectiveInTotal = getEffectiveCheckInMinutes(inTotal, shiftStartTotal, shiftGraceTotal, isCheckInExcused);
+
+          if (nowTotal > effectiveInTotal) {
+            const gross = nowTotal - effectiveInTotal;
             let overlap = 0;
             if (shiftRules.hasLunchBreak) {
               const breakStart = 12 * 60;
               const breakEnd = 13 * 60;
-              overlap = Math.max(0, Math.min(nowTotal, breakEnd) - Math.max(inTotal, breakStart));
+              overlap = Math.max(0, Math.min(nowTotal, breakEnd) - Math.max(effectiveInTotal, breakStart));
             }
             workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
           } else {
@@ -894,6 +935,17 @@ export function resolveEmployeeDayAttendance(
     status = 'Absent';
   }
 
+  const isPenalized = adminDecision === 'penalized' || adminCheckInDecision === 'penalized' || adminCheckOutDecision === 'penalized';
+  const resolvedCheckInWaived = Boolean(isCheckInWaived || adminCheckInDecision === 'waived' || (adminDecision === 'waived' && checkInTime > shiftRules.graceTime) || (isWaived && checkInTime > shiftRules.graceTime));
+  const resolvedCheckOutWaived = Boolean(isCheckOutWaived || adminCheckOutDecision === 'waived' || (adminDecision === 'waived' && checkOutTime && checkOutTime < shiftRules.earlyThreshold) || (isWaived && checkOutTime && checkOutTime < shiftRules.earlyThreshold));
+  const resolvedWaived = resolvedCheckInWaived || resolvedCheckOutWaived || isWaived || adminDecision === 'waived';
+  const isCheckInExcused = resolvedCheckInWaived && !isPenalized;
+
+  const [shiftStartH, shiftStartM] = (shiftRules.startTime || '08:00').split(':').map(Number);
+  const [shiftGraceH, shiftGraceM] = (shiftRules.graceTime || '08:15').split(':').map(Number);
+  const shiftStartTotal = shiftStartH * 60 + (shiftStartM || 0);
+  const shiftGraceTotal = shiftGraceH * 60 + (shiftGraceM || 0);
+
   let workedHours = 0;
   if (checkInTime && checkOutTime && checkInTime.includes(':') && checkOutTime.includes(':') && checkOutTime !== 'بەردەوام') {
     const [inH, inM] = checkInTime.split(':').map(Number);
@@ -901,13 +953,17 @@ export function resolveEmployeeDayAttendance(
     const inTotal = inH * 60 + (inM || 0);
     let outTotal = outH * 60 + (outM || 0);
     if (outTotal < inTotal) outTotal += 1440;
-    if (outTotal > inTotal) {
-      const gross = outTotal - inTotal;
+
+    // 🧠 Normalize check-in time for backend calculation (grace period & waived lateness)
+    const effectiveInTotal = getEffectiveCheckInMinutes(inTotal, shiftStartTotal, shiftGraceTotal, isCheckInExcused);
+
+    if (outTotal > effectiveInTotal) {
+      const gross = outTotal - effectiveInTotal;
       let overlap = 0;
       if (shiftRules.hasLunchBreak) {
         const breakStart = 12 * 60;
         const breakEnd = 13 * 60;
-        overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(inTotal, breakStart));
+        overlap = Math.max(0, Math.min(outTotal, breakEnd) - Math.max(effectiveInTotal, breakStart));
       }
       workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
     }
@@ -925,13 +981,16 @@ export function resolveEmployeeDayAttendance(
     const [inH, inM] = checkInTime.split(':').map(Number);
     const inTotal = inH * 60 + (inM || 0);
     const nowTotal = curH * 60 + curM;
-    if (nowTotal > inTotal) {
-      const gross = nowTotal - inTotal;
+
+    const effectiveInTotal = getEffectiveCheckInMinutes(inTotal, shiftStartTotal, shiftGraceTotal, isCheckInExcused);
+
+    if (nowTotal > effectiveInTotal) {
+      const gross = nowTotal - effectiveInTotal;
       let overlap = 0;
       if (shiftRules.hasLunchBreak) {
         const breakStart = 12 * 60;
         const breakEnd = 13 * 60;
-        overlap = Math.max(0, Math.min(nowTotal, breakEnd) - Math.max(inTotal, breakStart));
+        overlap = Math.max(0, Math.min(nowTotal, breakEnd) - Math.max(effectiveInTotal, breakStart));
       }
       workedHours = parseFloat((Math.max(0, gross - overlap) / 60).toFixed(1));
     } else {
@@ -941,18 +1000,13 @@ export function resolveEmployeeDayAttendance(
     workedHours = 8;
   }
 
-  const isPenalized = adminDecision === 'penalized' || adminCheckInDecision === 'penalized' || adminCheckOutDecision === 'penalized';
-  const resolvedCheckInWaived = Boolean(isCheckInWaived || adminCheckInDecision === 'waived' || (adminDecision === 'waived' && checkInTime > shiftRules.graceTime) || (isWaived && checkInTime > shiftRules.graceTime));
-  const resolvedCheckOutWaived = Boolean(isCheckOutWaived || adminCheckOutDecision === 'waived' || (adminDecision === 'waived' && checkOutTime && checkOutTime < shiftRules.earlyThreshold) || (isWaived && checkOutTime && checkOutTime < shiftRules.earlyThreshold));
-  const resolvedWaived = resolvedCheckInWaived || resolvedCheckOutWaived || isWaived || adminDecision === 'waived';
-
   const checkInStatus = getCheckInStatus(checkInTime, resolvedCheckInWaived, isPenalized, shiftRules.graceTime);
   const checkOutStatus = getCheckOutStatus(checkOutTime, resolvedCheckOutWaived, isPenalized, isToday, shiftRules.earlyThreshold, shiftRules.overtimeThreshold, shiftRules.endTime);
 
   return {
     hasRecord,
-    isFriday: false,
-    isFuture: false,
+    isFriday,
+    isFuture,
     isToday,
     status,
     checkInTime,
