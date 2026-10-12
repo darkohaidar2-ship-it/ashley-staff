@@ -53,6 +53,21 @@ import * as XLSX from 'xlsx';
 
 const ASHLEY_DEFAULT_EMPLOYEES = ASHLEY_OFFICIAL_EMPLOYEES;
 
+function getSafeDateString(val: any, fallback: string = ''): string {
+  if (!val) return fallback;
+  if (typeof val === 'string') return val.trim().slice(0, 10);
+  if (val instanceof Date && !isNaN(val.getTime())) return val.toISOString().slice(0, 10);
+  if (typeof val === 'number') {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  try {
+    const s = String(val);
+    if (s && s !== '[object Object]') return s.slice(0, 10);
+  } catch {}
+  return fallback;
+}
+
 function EmployeeDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -129,7 +144,7 @@ function EmployeeDetailPage() {
       setEditFullName3Part((selectedEmployee as any).fullName3Part || selectedEmployee.name || '');
       setEditRole(selectedEmployee.role || 'Staff');
       setEditPhone(selectedEmployee.phone || '');
-      setEditStartDate((selectedEmployee as any).startDate || selectedEmployee.employmentStartDate?.slice(0, 10) || '');
+      setEditStartDate(getSafeDateString((selectedEmployee as any).startDate || selectedEmployee.employmentStartDate));
       setEditPhotoUrl(selectedEmployee.photoUrl || '');
       setEmpPin((selectedEmployee as any).password || (selectedEmployee as any).pin || '1234');
       setIsDeviceBound(employeeId === 'emp-02' ? true : Boolean((selectedEmployee as any)?.deviceBound));
@@ -314,30 +329,48 @@ function EmployeeDetailPage() {
   // Save Profile Edits (Permanently synced to Supabase)
   const handleSaveProfile = async () => {
     if (!selectedEmployee) return;
+    const finalStartDate = getSafeDateString(
+      editStartDate || (selectedEmployee as any).startDate || selectedEmployee.employmentStartDate,
+      '2025-01-01'
+    );
+    const targetName = (editFullName3Part || editName || selectedEmployee.name || '').trim();
+
     const updated = {
       ...selectedEmployee,
-      name: editName || editFullName3Part,
-      fullName3Part: editFullName3Part || editName,
-      role: editRole,
-      phone: editPhone,
-      startDate: editStartDate,
-      photoUrl: editPhotoUrl,
+      name: targetName,
+      fullName3Part: targetName,
+      kurdishName: targetName,
+      role: editRole || selectedEmployee.role || 'Staff',
+      phone: editPhone || selectedEmployee.phone || '',
+      startDate: finalStartDate,
+      employmentStartDate: finalStartDate,
+      photoUrl: editPhotoUrl || selectedEmployee.photoUrl || '',
     };
-    setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? (updated as any) : e));
+
+    setEditName(targetName);
+    setEditFullName3Part(targetName);
+    setEditStartDate(finalStartDate);
     setIsEditing(false);
 
     try {
-      await fetch('/api/attendance/profile', {
+      setEmployees(prev => (prev || []).map(e => e.id === selectedEmployee.id ? (updated as any) : e));
+    } catch (stateErr) {
+      console.warn('Failed to update employee context:', stateErr);
+    }
+
+    try {
+      const res = await fetch('/api/attendance/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: selectedEmployee.id,
-          name: editFullName3Part || editName,
-          phone: editPhone,
-          hireDate: editStartDate,
-          photoUrl: editPhotoUrl,
+          name: targetName,
+          phone: editPhone || selectedEmployee.phone || '',
+          hireDate: finalStartDate,
+          photoUrl: editPhotoUrl || selectedEmployee.photoUrl || '',
         }),
       });
+      if (!res.ok) throw new Error('Failed to update on server');
       toast({
         title: '✅ زانیارییەکان نوێکرانەوە',
         description: 'گۆڕانکارییەکان لە پرۆفایلی کارمەند بە سەرکەوتوویی لە تەواوی سێرڤەر و وێبسایت پاشەکەوت کران.'
@@ -602,7 +635,7 @@ function EmployeeDetailPage() {
                   <span>ژمارەی مۆبایل: <strong className="font-mono text-slate-900">{selectedEmployee.phone || '0770 000 0000'}</strong></span>
                 </div>
                 <div className="flex items-center gap-3 text-xs font-bold text-slate-500">
-                  <span>دەستپێکی کارکردن: <strong className="font-mono text-slate-700">{(selectedEmployee as any).startDate || selectedEmployee.employmentStartDate?.slice(0, 10) || '2025-01-01'}</strong></span>
+                  <span>دەستپێکی کارکردن: <strong className="font-mono text-slate-700">{getSafeDateString((selectedEmployee as any).startDate || selectedEmployee.employmentStartDate, '2025-01-01')}</strong></span>
                   <span>•</span>
                   <span>دۆخی دەوام: <strong className={selectedEmployee.status === 'resigned' ? 'text-rose-600' : 'text-emerald-700'}>{selectedEmployee.status === 'resigned' ? 'وازهێناو' : 'چالاک'}</strong></span>
                 </div>
@@ -810,7 +843,7 @@ function EmployeeDetailPage() {
               <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300 font-mono pt-1">
                 <span>📞 {selectedEmployee.phone || '0770 000 0000'}</span>
                 <span>•</span>
-                <span>📅 دەستپێک: {(selectedEmployee as any).startDate || selectedEmployee.employmentStartDate?.slice(0, 10) || '2025-01-01'}</span>
+                <span>📅 دەستپێک: {getSafeDateString((selectedEmployee as any).startDate || selectedEmployee.employmentStartDate, '2025-01-01')}</span>
                 <span>•</span>
                 <span>📍 لۆکەیشن: کۆمپانیای سەرەکی ئاشڵی</span>
               </div>
@@ -861,7 +894,7 @@ function EmployeeDetailPage() {
             <button onClick={() => setIsEditing(false)} className="text-xs text-slate-500 font-bold hover:text-black">✕ داخستن</button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-700">ناوی سێ قۆڵی:</label>
               <input
@@ -886,6 +919,15 @@ function EmployeeDetailPage() {
                 type="text"
                 value={editPhone}
                 onChange={e => setEditPhone(e.target.value)}
+                className="w-full text-xs font-bold p-2 bg-white border border-slate-300 outline-none font-mono"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-700">دەستپێکی کارکردن:</label>
+              <input
+                type="date"
+                value={editStartDate}
+                onChange={e => setEditStartDate(e.target.value)}
                 className="w-full text-xs font-bold p-2 bg-white border border-slate-300 outline-none font-mono"
               />
             </div>

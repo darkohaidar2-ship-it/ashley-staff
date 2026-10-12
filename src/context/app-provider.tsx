@@ -192,8 +192,12 @@ function useSupabaseCollection<T extends { id?: string }>(
             if (custom.detail && Array.isArray(custom.detail)) {
                 setLocalData(custom.detail);
                 if (typeof window !== 'undefined') {
-                    localStorage.setItem(`ashley_sb_${key}`, JSON.stringify(custom.detail));
-                    localStorage.setItem(`ashley_local_${key}`, JSON.stringify(custom.detail));
+                    try {
+                        localStorage.setItem(`ashley_sb_${key}`, JSON.stringify(custom.detail));
+                        localStorage.setItem(`ashley_local_${key}`, JSON.stringify(custom.detail));
+                    } catch (storageErr) {
+                        logger.warn(`[Storage] Remote sync failed to write to localStorage for ${key}:`, storageErr);
+                    }
                 }
             }
         };
@@ -212,14 +216,22 @@ function useSupabaseCollection<T extends { id?: string }>(
                 : newDataOrFn;
 
             if (typeof window !== 'undefined') {
-                localStorage.setItem(`ashley_sb_${key}`, JSON.stringify(next));
-                localStorage.setItem(`ashley_local_${key}`, JSON.stringify(next));
+                try {
+                    localStorage.setItem(`ashley_sb_${key}`, JSON.stringify(next));
+                    localStorage.setItem(`ashley_local_${key}`, JSON.stringify(next));
+                } catch (storageErr) {
+                    logger.warn(`[Storage] Failed to cache ${key} in localStorage:`, storageErr);
+                }
             }
 
             // Asynchronously save to Supabase
-            saveFn(next).catch((err) => {
-                logger.error(`[Supabase] Error saving ${key}:`, err);
-            });
+            try {
+                saveFn(next).catch((err) => {
+                    logger.error(`[Supabase] Error saving ${key}:`, err);
+                });
+            } catch (saveErr) {
+                logger.error(`[Supabase] Synchronous error initiating save for ${key}:`, saveErr);
+            }
 
             return next;
         });

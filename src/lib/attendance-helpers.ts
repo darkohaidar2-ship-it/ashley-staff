@@ -113,8 +113,8 @@ export function resolveShiftRulesForDay(
   const worksOnFriday = Boolean(localCfg?.worksOnFriday ?? emp?.worksOnFriday ?? false);
 
   if (configuredMode === 'custom') {
-    const startTime = (localCfg?.customShiftStart || emp?.customShiftStart || '08:00').slice(0, 5);
-    const endTime = (localCfg?.customShiftEnd || emp?.customShiftEnd || '17:00').slice(0, 5);
+    const startTime = String(localCfg?.customShiftStart || emp?.customShiftStart || '08:00').slice(0, 5);
+    const endTime = String(localCfg?.customShiftEnd || emp?.customShiftEnd || '17:00').slice(0, 5);
     return {
       shiftType: 'custom',
       shiftLabel: `تایبەت (${startTime}-${endTime})`,
@@ -912,7 +912,14 @@ export function resolveEmployeeDayAttendance(
 
   const shiftRules = resolveShiftRulesForDay(checkInTime, emp);
   const hasRecord = Boolean(checkInTime || checkOutTime || explicitNonWorkingStatus);
-  const empStart = (emp.startDate || emp.employmentStartDate || '').slice(0, 10);
+  const rawEmpStart = emp?.startDate || emp?.employmentStartDate || '';
+  const empStart = (typeof rawEmpStart === 'string'
+    ? rawEmpStart
+    : (rawEmpStart instanceof Date && !isNaN(rawEmpStart.getTime())
+      ? rawEmpStart.toISOString()
+      : (typeof rawEmpStart === 'number'
+        ? new Date(rawEmpStart).toISOString()
+        : String(rawEmpStart || '')))).slice(0, 10);
   const isBeforeHire = Boolean(empStart && empStart.length === 10 && dateStr < empStart);
 
   // Determine working status:

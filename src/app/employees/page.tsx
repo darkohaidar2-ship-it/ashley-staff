@@ -56,6 +56,21 @@ import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import { resolveEmployeeDayAttendance } from '@/lib/attendance-helpers';
 import { useRouter } from 'next/navigation';
 
+function getSafeDateString(val: any, fallback: string = ''): string {
+  if (!val) return fallback;
+  if (typeof val === 'string') return val.trim().slice(0, 10);
+  if (val instanceof Date && !isNaN(val.getTime())) return val.toISOString().slice(0, 10);
+  if (typeof val === 'number') {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  try {
+    const s = String(val);
+    if (s && s !== '[object Object]') return s.slice(0, 10);
+  } catch {}
+  return fallback;
+}
+
 const employeeRoles = [
   'super_manager', 
   'manager', 
@@ -431,7 +446,7 @@ function EmployeesPage() {
         'مۆبایلی بەستراوە': isBound ? 'بەستراوەتەوە' : 'نەبەستراوە',
         'ناسنامەی دەموچاو': hasFace ? 'ناسراوە (Face ID)' : 'تۆمارنەکراوە',
         'کۆدی PIN': (emp as any).password || (emp as any).pin || '1001',
-        'دەستبەکاربوون': (emp as any).startDate || emp.employmentStartDate?.slice(0, 10) || '2024-01-01',
+        'دەستبەکاربوون': getSafeDateString((emp as any).startDate || emp.employmentStartDate, '2024-01-01'),
         'ڕێژەی پابەندبوون': `%${stats.rate}`,
         'ڕۆژانی ئامادەبوون': `${stats.presentDays} ڕۆژ`,
         'لێخۆشبوون لە دەوام': `${stats.waivedCount || 0} جار`,
@@ -727,7 +742,7 @@ function EmployeesPage() {
                           (emp.employeeId && registeredDevices.has(emp.employeeId.toLowerCase()))
                         );
                         const hasFace = registeredFaces.has(emp.id.toLowerCase());
-                        const startDate = (emp as any).startDate || emp.employmentStartDate?.slice(0, 10) || '2024-01-01';
+                        const startDate = getSafeDateString((emp as any).startDate || emp.employmentStartDate, '2024-01-01');
                         const stats = employeeComplianceMap[emp.id] || { presentDays: 20, rate: 95, waivedCount: 0 };
                         const isResigned = emp.status === 'resigned' || emp.isActive === false;
 
