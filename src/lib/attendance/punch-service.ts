@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase/client';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import { DEFAULT_COMPANY_LOCATIONS } from '@/lib/geo-constants';
 import { logger } from '@/lib/logger';
-import { getBaghdadNow, getDistanceMeters } from '@/lib/telegram/telegram-service';
+import { getBaghdadNow, getDistanceMeters, sendGeofenceViolationAlert } from '@/lib/telegram/telegram-service';
 import { getEmployeeShiftConfig, calculateNetWorkedAndOvertime } from '@/lib/attendance/shift-service';
 
 export interface PunchRequest {
@@ -14,6 +14,7 @@ export interface PunchRequest {
   lng?: number;
   forceBypassLocation?: boolean;
   isManager?: boolean;
+  chatId?: string | number;
 }
 
 export interface PunchResponse {
@@ -49,11 +50,11 @@ export async function evaluateAndRecordAttendance(req: PunchRequest): Promise<Pu
     empName = found?.name || req.employeeId;
   }
 
-  const isManager = Boolean(
-    req.isManager || 
+  const isFounder = Boolean(
     req.employeeId === 'emp-02' || 
     (empName && empName.includes('دارکۆ'))
   );
+  const isManager = Boolean(req.isManager || isFounder);
 
   try {
     // 2. Query today's attendance record
@@ -77,7 +78,7 @@ export async function evaluateAndRecordAttendance(req: PunchRequest): Promise<Pu
         targetPunch = 'check_out';
       } else {
         // Both check-in and check-out are already recorded for today
-        if (!isManager) {
+        if (!isFounder) {
           return {
             success: false,
             reason: 'ALREADY_CHECKED_OUT',
@@ -91,7 +92,7 @@ export async function evaluateAndRecordAttendance(req: PunchRequest): Promise<Pu
     }
 
     // 4. Duplicate Check
-    if (targetPunch === 'check_in' && existing?.check_in_time && !isManager) {
+    if (targetPunch === 'check_in' && existing?.check_in_time && !isFounder) {
       return {
         success: false,
         reason: 'ALREADY_CHECKED_IN',
@@ -102,7 +103,7 @@ export async function evaluateAndRecordAttendance(req: PunchRequest): Promise<Pu
       };
     }
 
-    if (targetPunch === 'check_out' && existing?.check_out_time && !isManager) {
+    if (targetPunch === 'check_out' && existing?.check_out_time && !isFounder) {
       return {
         success: false,
         reason: 'ALREADY_CHECKED_OUT',
@@ -118,14 +119,14 @@ export async function evaluateAndRecordAttendance(req: PunchRequest): Promise<Pu
     let distanceMeters = 0;
 
     if (req.forceBypassLocation) {
-      if (!isManager) {
+      if (!isFounder) {
         return {
           success: false,
           reason: 'LOCATION_REQUIRED',
-          message: `⛔ <b>نەخێر، تۆمار نەکرا!</b>\n\nناردنی لۆکەیشنی GPS بۆ هەموو کارمەندان ئیجبارییە. تکایە لۆکەیشنی خۆت بنێرە لە شوێنی دەوام.`
+          message: `⛔ <b>نەخێر، تۆمار نەکرا!</b>\n\nناردنی لۆکەیشنی GPS بۆ هەموو کارمەندان ئیجبارییە. تکایە دوگمەی [📍 ناردنی لۆکەیشنی دەوام (GPS)] دابگرە لە ناو شوێنی دەوام.`
         };
       }
-      locationName = 'کۆمپانیای سەرەکی ئاشڵی (تۆماری خێرای بەڕێوەبەر)';
+      locationName = 'کۆمپانیای سەرەکی ئاشڵی (تۆماری دەستی بەڕێوەبەر)';
     } else if (typeof req.lat === 'number' && typeof req.lng === 'number') {
       let closestLoc = DEFAULT_COMPANY_LOCATIONS[0];
       let minDistance = getDistanceMeters(req.lat, req.lng, closestLoc.lat, closestLoc.lng);
@@ -141,24 +142,70 @@ export async function evaluateAndRecordAttendance(req: PunchRequest): Promise<Pu
       distanceMeters = minDistance;
       const isInside = minDistance <= closestLoc.radiusMeters;
 
-      if (!isInside && !isManager) {
+      if (!isInside) {
+        const punchLabel = targetPunch === 'check_in' ? 'هاتن' : 'دەرچوون';
+        const distFormatted = Math.round(minDistance).toLocaleString('en-US');
+
+        // 1. Audit log in attendance_logs
+        try {
+          await supabase.from('attendance_logs').insert({
+            id: `violation-${req.source}-${req.employeeId}-${Date.now()}`,
+            employee_id: req.employeeId,
+            employee_name: empName,
+            log_type: `Rejected (${targetPunch === 'check_in' ? 'Check In' : 'Check Out'})`,
+            log_date: dateStr,
+            log_time_str: timeStr,
+            location_address: `${closestLoc.name} (دەرەوەی سنوور: ${distFormatted} مەتر)`,
+            created_at: nowIso,
+            edit_note: `هەوڵی تۆمارکردن لە دوورەوە (${distFormatted} مەتر) - سیستەم دەوامەکەی تۆمار نەکرد و ڕێگری لێکرا`,
+          });
+        } catch (logErr) {
+          logger.warn('[PunchService] Failed to log geofence violation:', logErr);
+        }
+
+        // 2. Dispatch instant alert to Admin/Managers via Telegram
+        try {
+          await sendGeofenceViolationAlert({
+            employeeId: req.employeeId,
+            employeeName: empName,
+            punchType: targetPunch,
+            dateStr,
+            timeStr,
+            distanceMeters: minDistance,
+            locationName: closestLoc.name,
+            allowedRadiusMeters: closestLoc.radiusMeters,
+            userChatId: req.chatId,
+          });
+        } catch (alertErr) {
+          logger.warn('[PunchService] Failed to send geofence alert:', alertErr);
+        }
+
         return {
           success: false,
           reason: 'OUTSIDE_GEOFENCE',
+          punchType: targetPunch,
+          dateStr,
+          timeStr,
           distanceMeters: minDistance,
           locationName: closestLoc.name,
-          message: `⛔ <b>نەخێر، تۆمار نەکرا!</b>\n\nتۆ لە دەرەوەی سنوری ڕێگەپێدراوی دەوامیت.\n🏢 نزیکترین شوێن: <b>${closestLoc.name}</b>\n📍 مەودای ئێستات: <b>${minDistance} مەتر</b>\n📏 مەودای ڕێگەپێدراو: <b>${closestLoc.radiusMeters} مەتر</b>\n\nتکایە کاتێک گەیشتیتە ناو کۆمپانیا دووبارە تاقی بکەرەوە.`
+          message: 
+            `⚠️ <b>تۆمارکردنی ${punchLabel} ئەنجام نەدرا!</b>\n\n` +
+            `🚫 <b>ناتوانم تۆماری ${punchLabel} بکەم</b>، چونکە تۆ لە دەرەوەی سنووری دیاریکراوی کۆمپانیایت.\n\n` +
+            `🏢 شوێنی دیاریکراو: <b>${closestLoc.name}</b>\n` +
+            `📍 دووری ئێستات لە کۆمپانیا: <b>${distFormatted} مەتر</b>\n` +
+            `📏 مەودای ڕێگەپێدراو: <b>${closestLoc.radiusMeters} مەتر</b>\n\n` +
+            `❌ <i>دەوامەکەت تۆمار نەکرا. تکایە کاتێک دەگەیتە ناو کۆمپانیا دووبارە لۆکەیشن بنێرە تاوەکو دەوامەکەت تۆمار بکرێت.</i>`
         };
       }
 
-      locationName = isInside ? closestLoc.name : `${closestLoc.name} (بەڕێوەبەر - دەرەوەی سنور)`;
+      locationName = closestLoc.name;
     } else {
       // No coordinates provided
-      if (!isManager) {
+      if (!isFounder) {
         return {
           success: false,
           reason: 'LOCATION_REQUIRED',
-          message: `📍 تکایە دوگمەی [ 📍 ناردنی لۆکەیشنی دەوام (GPS) ] دابگرە تا شوێنەکەت بسەلمێنرێت.`
+          message: `📍 تکایە دوگمەی [ 📍 ناردنی لۆکەیشنی دەوام (GPS) ] دابگرە تا شوێنەکەت لە ناو کۆمپانیا بسەلمێنرێت.`
         };
       }
       locationName = 'کۆمپانیای سەرەکی ئاشڵی (بەڕێوەبەر)';

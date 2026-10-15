@@ -2556,3 +2556,92 @@ export function getLeaveConfirmKeyboard() {
   };
 }
 
+// Cooldown map to avoid spamming admin if employee clicks multiple times in a minute
+const GEOFENCE_ALERT_COOLDOWN = new Map<string, number>();
+
+/**
+ * 🚨 Send Instant Geofence Violation Alert to Admin / Managers
+ * Triggered when any employee attempts to check in or check out outside the company perimeter.
+ */
+export async function sendGeofenceViolationAlert(params: {
+  employeeId: string;
+  employeeName: string;
+  punchType: 'check_in' | 'check_out';
+  dateStr: string;
+  timeStr: string;
+  distanceMeters: number;
+  locationName: string;
+  allowedRadiusMeters: number;
+  userChatId?: string | number;
+}) {
+  try {
+    const cooldownKey = `${params.employeeId}-${params.punchType}`;
+    const nowMs = Date.now();
+    const lastAlertTime = GEOFENCE_ALERT_COOLDOWN.get(cooldownKey) || 0;
+
+    // Debounce to at most 1 alert every 30 seconds per employee for the same punch type
+    if (nowMs - lastAlertTime < 30000) {
+      logger.info(`[GeofenceAlert] Suppressing duplicate alert for ${cooldownKey} (cooldown active)`);
+      return;
+    }
+    GEOFENCE_ALERT_COOLDOWN.set(cooldownKey, nowMs);
+
+    const bindings = await getTelegramBindings();
+    const punchLabel = params.punchType === 'check_in' ? 'هاتن' : 'دەرچوون';
+    const distFormatted = Math.round(params.distanceMeters).toLocaleString('en-US');
+
+    const targetChatIds = new Set<string>();
+
+    // 1. Always include Founder (کاک دارکۆ حەیدەر - emp-02)
+    for (const [chatId, info] of Object.entries(bindings)) {
+      const cleanId = (info.employeeId || '').toLowerCase().trim();
+      const name = (info.employeeName || '').toLowerCase().trim();
+      if (cleanId === 'emp-02' || cleanId === '02' || name.includes('دارکۆ')) {
+        targetChatIds.add(chatId);
+      }
+    }
+
+    // 2. Also include managers wired to late_alerts or admin authorities
+    try {
+      const approvers = await getActionRecipients('late_alerts', bindings);
+      for (const app of approvers) {
+        if (app.chatId) targetChatIds.add(String(app.chatId));
+      }
+    } catch (e) {
+      logger.warn('[GeofenceAlert] Error getting alert recipients:', e);
+    }
+
+    // 3. Fallback: if no founder chatId was found, check for founder / general_manager roles
+    if (targetChatIds.size === 0) {
+      for (const [chatId, info] of Object.entries(bindings)) {
+        const role = resolveEmployeeRole(info.employeeId, info.employeeName);
+        if (role === 'founder' || role === 'general_manager') {
+          targetChatIds.add(chatId);
+        }
+      }
+    }
+
+    if (targetChatIds.size === 0) {
+      logger.warn('[GeofenceAlert] No admin/founder Telegram chat found to send alert');
+      return;
+    }
+
+    const alertMsg = 
+      `🚨 <b>ئاگاداری دەوام: هەوڵدان بۆ تۆمارکردن لە دوورەوە!</b>\n\n` +
+      `👤 <b>کارمەند:</b> <b>${params.employeeName}</b> (کۆد: <code>${params.employeeId}</code>)\n` +
+      `📌 <b>جۆری هەوڵ:</b> تۆمارکردنی <b>${punchLabel}</b>\n` +
+      `⏰ <b>کات و بەروار:</b> <b>${params.timeStr}</b> | ${params.dateStr}\n` +
+      `🏢 <b>نزیکترین شوێن:</b> ${params.locationName}\n` +
+      `📍 <b>دووری لە کۆمپانیا:</b> <b>${distFormatted} مەتر</b>\n` +
+      `📏 <b>سنووری ڕێگەپێدراو:</b> ${params.allowedRadiusMeters} مەتر\n\n` +
+      `⛔ <b>دەرەنجامی بۆت:</b> <i>سیستەم دەوامەکەی تۆمار نەکرد و ڕێگری لێکرا، و بە کارمەندەکە ڕاگەیەندرا کە ناتوانرێت دەوام لە دەرەوەی کۆمپانیا تۆمار بکرێت.</i>`;
+
+    for (const targetChatId of targetChatIds) {
+      await sendTelegramMessage(targetChatId, alertMsg);
+    }
+  } catch (err) {
+    logger.error('[GeofenceAlert] Failed to dispatch geofence alert:', err);
+  }
+}
+
+
