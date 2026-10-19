@@ -13,7 +13,11 @@ import {
   ShieldAlert,
   ChevronRight,
   Building,
-  UserCheck
+  UserCheck,
+  Compass,
+  ExternalLink,
+  HelpCircle,
+  X
 } from 'lucide-react';
 import { MobileAuthUser, TodayAttendanceInfo, GeofenceStatus } from './types';
 import { DEFAULT_COMPANY_LOCATIONS } from '@/lib/geo-constants';
@@ -64,6 +68,19 @@ export function AttendanceTab({
 
   // Punch Action State
   const [punching, setPunching] = useState<'check_in' | 'check_out' | null>(null);
+
+  // Active Interactive Location & Punch Step Modal
+  const [punchingStep, setPunchingStep] = useState<{
+    active: boolean;
+    type: 'check_in' | 'check_out';
+    status: 'locating' | 'permission_denied' | 'submitting' | 'outside' | 'error';
+    lat?: number;
+    lng?: number;
+    distanceMeters?: number;
+    locationName?: string;
+    errorMessage?: string;
+  } | null>(null);
+
   const [modalFeedback, setModalFeedback] = useState<{
     show: boolean;
     type: 'success' | 'outside' | 'error';
@@ -98,62 +115,115 @@ export function AttendanceTab({
     return () => clearInterval(timer);
   }, []);
 
-  // Check Current Geolocation
-  const refreshLocation = useCallback(() => {
-    if (!navigator.geolocation) {
+  // Multi-stage Robust Location Getter (Handles iOS Safari, Android, Weak GPS & Indoors)
+  const getRobustLocation = useCallback((): Promise<{ lat: number; lng: number; accuracy: number }> => {
+    return new Promise((resolve, reject) => {
+      if (typeof window === 'undefined' || !navigator.geolocation) {
+        return reject(new Error('مۆبایلەکەت پشتگیری لۆکەیشن ناکات.'));
+      }
+
+      let resolved = false;
+
+      const successHandler = (pos: GeolocationPosition) => {
+        if (resolved) return;
+        resolved = true;
+        resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy || 0,
+        });
+      };
+
+      // Stage 1: Try GPS high accuracy (12s timeout)
+      navigator.geolocation.getCurrentPosition(
+        successHandler,
+        (highErr) => {
+          // If user explicitly denied permission (code 1), stop immediately and throw so we show the guide
+          if (highErr.code === 1) {
+            if (resolved) return;
+            resolved = true;
+            return reject(highErr);
+          }
+
+          // Stage 2: Fallback to Network/Wi-Fi positioning (fast & reliable indoors!)
+          navigator.geolocation.getCurrentPosition(
+            successHandler,
+            (lowErr) => {
+              if (resolved) return;
+              resolved = true;
+              // Stage 3: If session already cached valid lat/lng, fallback to it
+              if (geoStatus.lat && geoStatus.lng) {
+                return resolve({
+                  lat: geoStatus.lat,
+                  lng: geoStatus.lng,
+                  accuracy: 50,
+                });
+              }
+              reject(lowErr);
+            },
+            {
+              enableHighAccuracy: false,
+              timeout: 15000,
+              maximumAge: 60000,
+            }
+          );
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 12000,
+          maximumAge: 20000,
+        }
+      );
+    });
+  }, [geoStatus.lat, geoStatus.lng]);
+
+  // Check / Refresh Geolocation
+  const refreshLocation = useCallback(async () => {
+    setGeoStatus(prev => ({ ...prev, isChecking: true, error: undefined }));
+
+    try {
+      const { lat, lng, accuracy } = await getRobustLocation();
+
+      let closest = DEFAULT_COMPANY_LOCATIONS[0];
+      let minDist = calculateDistance(lat, lng, closest.lat, closest.lng);
+
+      for (const loc of DEFAULT_COMPANY_LOCATIONS) {
+        const d = calculateDistance(lat, lng, loc.lat, loc.lng);
+        if (d < minDist) {
+          minDist = d;
+          closest = loc;
+        }
+      }
+
+      const tolerance = Math.min(Math.round(accuracy || 0), 80);
+      const isInside = minDist <= closest.radiusMeters || (minDist - tolerance) <= closest.radiusMeters;
+
+      setGeoStatus({
+        isChecking: false,
+        isInside,
+        distanceMeters: Math.round(minDist),
+        closestLocationName: closest.name,
+        allowedRadiusMeters: closest.radiusMeters,
+        lat,
+        lng,
+      });
+    } catch (err: any) {
+      console.warn('[AttendanceTab] Geolocation error:', err);
+      let errMsg = 'تکایە دەسەڵاتی لۆکەیشن (Location Permission) لە مۆبایلەکەت کارا بکە.';
+      if (err.code === 1) {
+        errMsg = '⚠️ دەسەڵاتی لۆکەیشن داخراوە لە وێبگەڕەکەتدا.';
+      } else if (err.code === 2) {
+        errMsg = '⚠️ دیاریکردنی لۆکەیشن لە مۆبایلەکەت ناچالاکە.';
+      } else if (err.code === 3) {
+        errMsg = '⚠️ کاتی وەرگرتنی لۆکەیشن بەسەرچوو، دووبارە تاقیبکەرەوە.';
+      }
       setGeoStatus(prev => ({
         ...prev,
         isChecking: false,
-        error: 'مۆبایلەکەت پشتگیری لۆکەیشن (GPS) ناکات.',
+        error: errMsg,
       }));
-      return;
     }
-
-    setGeoStatus(prev => ({ ...prev, isChecking: true, error: undefined }));
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const userLat = pos.coords.latitude;
-        const userLng = pos.coords.longitude;
-
-        let closest = DEFAULT_COMPANY_LOCATIONS[0];
-        let minDist = calculateDistance(userLat, userLng, closest.lat, closest.lng);
-
-        for (const loc of DEFAULT_COMPANY_LOCATIONS) {
-          const d = calculateDistance(userLat, userLng, loc.lat, loc.lng);
-          if (d < minDist) {
-            minDist = d;
-            closest = loc;
-          }
-        }
-
-        const isInside = minDist <= closest.radiusMeters;
-
-        setGeoStatus({
-          isChecking: false,
-          isInside,
-          distanceMeters: Math.round(minDist),
-          closestLocationName: closest.name,
-          allowedRadiusMeters: closest.radiusMeters,
-          lat: userLat,
-          lng: userLng,
-        });
-      },
-      (err) => {
-        console.warn('[AttendanceTab] Geolocation error:', err);
-        setGeoStatus(prev => ({
-          ...prev,
-          isChecking: false,
-          error: 'تکایە دەسەڵاتی لۆکەیشن (Location Permission) لە مۆبایلەکەت کارا بکە.',
-        }));
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
-    );
-  }, []);
+  }, [getRobustLocation]);
 
   // Initial Location Check
   useEffect(() => {
@@ -191,93 +261,122 @@ export function AttendanceTab({
   // Perform Punch Check-In / Check-Out
   const handlePunch = async (punchType: 'check_in' | 'check_out') => {
     setPunching(punchType);
+    setPunchingStep({
+      active: true,
+      type: punchType,
+      status: 'locating',
+    });
 
-    // Get fresh position
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
+    try {
+      const { lat, lng, accuracy } = await getRobustLocation();
 
-        try {
-          const res = await fetch('/api/mobile/punch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              employeeId: user.employeeId,
-              employeeName: user.employeeName,
-              punchType,
-              lat,
-              lng,
-              isManager: user.isFounder,
-            }),
+      let closest = DEFAULT_COMPANY_LOCATIONS[0];
+      let minDist = calculateDistance(lat, lng, closest.lat, closest.lng);
+
+      for (const loc of DEFAULT_COMPANY_LOCATIONS) {
+        const d = calculateDistance(lat, lng, loc.lat, loc.lng);
+        if (d < minDist) {
+          minDist = d;
+          closest = loc;
+        }
+      }
+
+      const tolerance = Math.min(Math.round(accuracy || 0), 80);
+      const isInside = minDist <= closest.radiusMeters || (minDist - tolerance) <= closest.radiusMeters;
+
+      setPunchingStep({
+        active: true,
+        type: punchType,
+        status: 'submitting',
+        lat,
+        lng,
+        distanceMeters: Math.round(minDist),
+        locationName: closest.name,
+      });
+
+      const res = await fetch('/api/mobile/punch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: user.employeeId,
+          employeeName: user.employeeName,
+          punchType,
+          lat,
+          lng,
+          isManager: user.isFounder,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setPunchingStep(null);
+        playChime(true);
+        onRefreshToday();
+
+        setModalFeedback({
+          show: true,
+          type: 'success',
+          title: punchType === 'check_in' ? '✅ هاتن تۆمارکرا' : '✅ دەرچوون تۆمارکرا',
+          message: data.message || `دەوامەکەت لە کاتژمێر ${data.timeStr} بە سەرکەوتوویی تۆمارکرا.`,
+        });
+
+        // If check out and overtime detected:
+        if (punchType === 'check_out' && data.hasOvertime && (data.overtimeMinutes || 0) > 0) {
+          setOvertimeModal({
+            show: true,
+            overtimeMinutes: data.overtimeMinutes,
+            selectedReason: 'کارکردنی شەوان لەعرض',
+            customNote: '',
+            saving: false,
           });
-
-          const data = await res.json();
-
-          if (data.success) {
-            playChime(true);
-            onRefreshToday();
-
-            setModalFeedback({
-              show: true,
-              type: 'success',
-              title: punchType === 'check_in' ? '✅ هاتن تۆمارکرا' : '✅ دەرچوون تۆمارکرا',
-              message: data.message || `دەوامەکەت لە کاتژمێر ${data.timeStr} بە سەرکەوتوویی تۆمارکرا.`,
-            });
-
-            // If check out and overtime detected:
-            if (punchType === 'check_out' && data.hasOvertime && (data.overtimeMinutes || 0) > 0) {
-              setOvertimeModal({
-                show: true,
-                overtimeMinutes: data.overtimeMinutes,
-                selectedReason: 'کارکردنی شەوان لەعرض',
-                customNote: '',
-                saving: false,
-              });
-            }
-          } else {
-            playChime(false);
-            if (data.reason === 'OUTSIDE_GEOFENCE') {
-              setModalFeedback({
-                show: true,
-                type: 'outside',
-                title: '⛔ تۆمار نەکرا (دەرەوەی سنوور)',
-                message: data.message || 'تۆ لە دەرەوەی سنوری کۆمپانیایت! ڕێگری لە تۆمارکردن کرا و ئاگاداری درا بە بەڕێوەبەر.',
-              });
-            } else {
-              setModalFeedback({
-                show: true,
-                type: 'error',
-                title: '⚠️ کێشەیەک ڕوویدا',
-                message: data.message || 'نەتوانرا دەوام تۆمار بکرێت.',
-              });
-            }
-          }
-        } catch (err: any) {
-          playChime(false);
+        }
+      } else {
+        playChime(false);
+        if (data.reason === 'OUTSIDE_GEOFENCE') {
+          setPunchingStep({
+            active: true,
+            type: punchType,
+            status: 'outside',
+            lat,
+            lng,
+            distanceMeters: Math.round(minDist),
+            locationName: closest.name,
+            errorMessage: data.message,
+          });
+        } else {
+          setPunchingStep(null);
           setModalFeedback({
             show: true,
             type: 'error',
-            title: 'هەڵەی پەیوەندی',
-            message: 'کێشە لە پەیوەندی سێرڤەردا هەیە. تکایە پشکنینی خەتەکەت بکە.',
+            title: '⚠️ کێشەیەک ڕوویدا',
+            message: data.message || 'نەتوانرا دەوام تۆمار بکرێت.',
           });
-        } finally {
-          setPunching(null);
-          refreshLocation();
         }
-      },
-      (geoErr) => {
-        setPunching(null);
-        playChime(false);
-        setModalFeedback({
-          show: true,
-          type: 'error',
-          title: 'لۆکەیشن وەرنەگیرا',
-          message: 'تکایە دڵنیابەرەوە لە کارابوونی GPSی مۆبایلەکەت پێش داگرتنی دوگمەکە.',
+      }
+    } catch (err: any) {
+      playChime(false);
+      console.warn('[handlePunch] Location/Punch error:', err);
+      if (err.code === 1) {
+        // Permission Denied!
+        setPunchingStep({
+          active: true,
+          type: punchType,
+          status: 'permission_denied',
+          errorMessage: 'دەسەڵاتی لۆکەیشن (GPS) لە وێبگەڕی مۆبایلەکەتدا ڕێگری لێکراوە.',
         });
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
+      } else {
+        setPunchingStep({
+          active: true,
+          type: punchType,
+          status: 'error',
+          errorMessage: 'نەتوانرا لۆکەیشن وەربگیرێت. دڵنیابەرەوە لە هەڵکردنی GPSی مۆبایلەکەت.',
+        });
+      }
+    } finally {
+      setPunching(null);
+      refreshLocation();
+    }
   };
 
   // Submit Overtime Reason
@@ -380,7 +479,16 @@ export function AttendanceTab({
             {geoStatus.isChecking ? (
               <span className={`text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>پشکنینی مەودای GPS...</span>
             ) : geoStatus.error ? (
-              <span className="text-rose-600 text-xs font-bold">{geoStatus.error}</span>
+              <div className="flex flex-col">
+                <span className="text-rose-600 text-xs font-bold leading-tight">{geoStatus.error}</span>
+                <button
+                  type="button"
+                  onClick={refreshLocation}
+                  className="text-[11px] text-amber-600 font-bold underline text-right cursor-pointer mt-0.5"
+                >
+                  📍 کلیک لێرە بکە بۆ پشکنینی لۆکەیشن
+                </button>
+              </div>
             ) : geoStatus.isInside ? (
               <span className="text-emerald-700 dark:text-emerald-400 font-bold text-xs">
                 لە ناو سنووریت: <b>{geoStatus.distanceMeters} مەتر</b> لە {geoStatus.closestLocationName}
@@ -392,19 +500,36 @@ export function AttendanceTab({
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={refreshLocation}
-            disabled={geoStatus.isChecking}
-            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
-              isDark 
-                ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' 
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-            }`}
-            title="نوێکردنەوەی لۆکەیشن"
-          >
-            <RefreshCw className={`w-4 h-4 ${geoStatus.isChecking ? 'animate-spin text-amber-500' : ''}`} />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {geoStatus.lat && geoStatus.lng && (
+              <a
+                href={`https://www.google.com/maps?q=${geoStatus.lat},${geoStatus.lng}`}
+                target="_blank"
+                rel="noreferrer"
+                className={`h-9 px-2.5 rounded-xl flex items-center gap-1 text-[11px] font-bold border transition-colors ${
+                  isDark ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+                title="کردنەوە لە گووگڵ ماپس"
+              >
+                <Compass className="w-3.5 h-3.5 text-amber-500" />
+                <span>نەخشە</span>
+              </a>
+            )}
+
+            <button
+              type="button"
+              onClick={refreshLocation}
+              disabled={geoStatus.isChecking}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+                isDark 
+                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' 
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+              }`}
+              title="نوێکردنەوەی لۆکەیشن"
+            >
+              <RefreshCw className={`w-4 h-4 ${geoStatus.isChecking ? 'animate-spin text-amber-500' : ''}`} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -544,6 +669,230 @@ export function AttendanceTab({
           <span className="text-xs font-bold">ئاماری مانگ</span>
         </button>
       </div>
+
+      {/* Interactive Location & Punch Step Modal («لۆکەیشن ناکرێتەوە با بکرێتەوە کە داوای هاتن و چون ئەکەم») */}
+      {punchingStep?.active && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`w-full max-w-sm rounded-3xl p-6 shadow-2xl text-center border animate-in fade-in zoom-in-95 duration-200 ${
+            isDark 
+              ? 'bg-slate-900 border-slate-800 text-white' 
+              : 'bg-white border-slate-200 text-slate-900'
+          }`}>
+            
+            {/* Step 1: Locating / Requesting Location */}
+            {punchingStep.status === 'locating' && (
+              <div className="py-2">
+                <div className="relative w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                  <span className="w-full h-full rounded-full bg-amber-500/20 absolute inset-0 animate-ping opacity-75" />
+                  <span className="w-16 h-16 rounded-full bg-amber-500/30 absolute inset-2" />
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center shadow-lg relative z-10">
+                    <Navigation className="w-6 h-6 animate-pulse" />
+                  </div>
+                </div>
+
+                <h3 className="text-base font-black mb-1.5">
+                  📍 دیاریکردنی لۆکەیشنی GPS...
+                </h3>
+                <p className={`text-xs leading-relaxed mb-4 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                  سیستەم لە وەرگرتنی شوێنی جوگرافییە بۆ تۆمارکردنی {punchingStep.type === 'check_in' ? 'هاتن' : 'دەرچوون'}.
+                </p>
+
+                <div className={`p-3 rounded-2xl text-[11px] mb-5 border text-right ${
+                  isDark ? 'bg-amber-500/10 border-amber-500/20 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-900'
+                }`}>
+                  <p className="font-bold flex items-center gap-1.5 mb-0.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span>تکایە پەنجە بنێ بە Allow (ڕێگەدان):</span>
+                  </p>
+                  <p className="text-[11px] opacity-90 leading-tight">
+                    ئەگەر لەسەر شاشەی مۆبایلەکەت پرسیاری شوێنت لێکرا، پەنجە بنێ بە <b>Allow / لەکاتی بەکارهێنان</b>.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPunchingStep(null);
+                    setPunching(null);
+                  }}
+                  className={`w-full h-11 font-bold rounded-xl text-xs transition-colors cursor-pointer ${
+                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  هەڵوەشاندنەوە
+                </button>
+              </div>
+            )}
+
+            {/* Step 2: Submitting Punch */}
+            {punchingStep.status === 'submitting' && (
+              <div className="py-2">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center mx-auto mb-4 shadow-md">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+
+                <h3 className="text-base font-black mb-1 text-emerald-700 dark:text-emerald-400">
+                  ✅ لۆکەیشن وەرگیرا!
+                </h3>
+                <p className={`text-xs mb-1 font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                  {punchingStep.locationName}
+                </p>
+                <p className={`text-[11px] mb-5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  دووری لە ناوەند: <b>{punchingStep.distanceMeters} مەتر</b>
+                </p>
+
+                <div className="flex items-center justify-center gap-2 text-xs font-bold text-amber-600 dark:text-amber-400 py-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>تۆمارکردنی {punchingStep.type === 'check_in' ? 'هاتن' : 'دەرچوون'} لە سێرڤەر...</span>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Permission Denied Help Guide */}
+            {punchingStep.status === 'permission_denied' && (
+              <div className="py-2">
+                <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center mx-auto mb-3 shadow-md">
+                  <ShieldAlert className="w-8 h-8" />
+                </div>
+
+                <h3 className="text-base font-black mb-1 text-rose-600">
+                  دەسەڵاتی لۆکەیشن ڕێگری لێکراوە
+                </h3>
+                <p className={`text-xs leading-relaxed mb-4 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                  بۆ ئەوەی بتوانیت دەوام تۆمار بکەیت، پێویستە دەسەڵاتی شوێن (Location) لە وێبگەڕەکەت کارا بکەیت:
+                </p>
+
+                {/* Instructions Box */}
+                <div className={`p-3.5 rounded-2xl text-[11px] mb-4 text-right space-y-2.5 border ${
+                  isDark ? 'bg-slate-800/80 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800'
+                }`}>
+                  <div>
+                    <span className="font-black block text-amber-600 mb-0.5">🍏 بۆ بەکارهێنەرانی ئایفۆن (Safari):</span>
+                    <p className="leading-relaxed">
+                      ١. لە بەشی سەرەوەی شاشە لە تەنیشت ناونیشان کلیک لەسەر دوگمەی <b>aA</b> یان ئایکۆنی قفڵ بکە.<br/>
+                      ٢. هەڵبژاردنی <b>Website Settings</b>.<br/>
+                      ٣. بەشی <b>Location</b> بکە بە <b>Allow</b>.
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <span className="font-black block text-blue-600 mb-0.5">🤖 بۆ بەکارهێنەرانی ئەندرۆید (Chrome):</span>
+                    <p className="leading-relaxed">
+                      ١. لە تەنیشت ناونیشانی وێبسایتەکە کلیک لەسەر ئایکۆنی <b>ڕێکخستنەکان</b> (تەنیشت قفڵەکە) بکە.<br/>
+                      ٢. هەڵبژاردنی <b>Permissions</b>.<br/>
+                      ٣. دەسەڵاتی <b>Location</b> کارا بکە.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handlePunch(punchingStep.type)}
+                    className="w-full h-12 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>دووبارە کردنەوە و پشکنینی لۆکەیشن</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPunchingStep(null);
+                      setPunching(null);
+                    }}
+                    className={`w-full h-11 font-bold rounded-xl text-xs transition-colors cursor-pointer ${
+                      isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    داخستن
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: Outside Geofence */}
+            {punchingStep.status === 'outside' && (
+              <div className="py-2">
+                <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center mx-auto mb-3 shadow-md">
+                  <ShieldAlert className="w-8 h-8" />
+                </div>
+
+                <h3 className="text-base font-black mb-1 text-rose-600">
+                  ⛔ دەرەوەی سنوری کۆمپانیا
+                </h3>
+                <p className={`text-xs leading-relaxed mb-4 whitespace-pre-line ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                  {punchingStep.errorMessage || `تۆ لە دەرەوەی سنوری ڕێگەپێدراوی کۆمپانیایت (${punchingStep.distanceMeters} مەتر دووریت).`}
+                </p>
+
+                {punchingStep.lat && punchingStep.lng && (
+                  <a
+                    href={`https://www.google.com/maps?q=${punchingStep.lat},${punchingStep.lng}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs text-amber-600 font-bold underline mb-4"
+                  >
+                    <Compass className="w-4 h-4" />
+                    <span>پیشاندانی شوێنی ئێستام لەسەر نەخشە</span>
+                  </a>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPunchingStep(null);
+                    setPunching(null);
+                  }}
+                  className="w-full h-11 bg-slate-800 text-white font-bold rounded-xl text-xs cursor-pointer"
+                >
+                  تێگەیشتم و داخستن
+                </button>
+              </div>
+            )}
+
+            {/* Step 5: Generic Error */}
+            {punchingStep.status === 'error' && (
+              <div className="py-2">
+                <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto mb-3 shadow-md">
+                  <AlertCircle className="w-8 h-8" />
+                </div>
+
+                <h3 className="text-base font-black mb-1">
+                  کێشەیەک ڕوویدا
+                </h3>
+                <p className={`text-xs leading-relaxed mb-5 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                  {punchingStep.errorMessage || 'نەتوانرا شوێنی جوگرافی دیاریبکرێت.'}
+                </p>
+
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handlePunch(punchingStep.type)}
+                    className="w-full h-12 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>دووبارە هەوڵبدەرەوە</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPunchingStep(null);
+                      setPunching(null);
+                    }}
+                    className={`w-full h-11 font-bold rounded-xl text-xs cursor-pointer ${
+                      isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    داخستن
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
 
       {/* Feedback Modal (Outside Geofence / Success) */}
       {modalFeedback?.show && (
