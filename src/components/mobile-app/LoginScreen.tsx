@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building2, 
   Sparkles, 
@@ -16,6 +16,7 @@ import {
   Search,
   Users
 } from 'lucide-react';
+import { supabaseAuth } from '@/lib/supabase/client';
 import { MobileAuthUser } from './types';
 import { ASHLEY_OFFICIAL_EMPLOYEES, AshleyOfficialEmployee, OFFICIAL_PIN_MAP } from '@/lib/ashley-employees';
 
@@ -34,6 +35,7 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
   const [isEmailBound, setIsEmailBound] = useState(false);
   const [boundEmployeeData, setBoundEmployeeData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Mode 2: Direct Staff Selection State
@@ -43,7 +45,118 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
   const [staffEmail, setStaffEmail] = useState('');
 
   // -------------------------------------------------------------
-  // 1. Google Email Check & Login (via Supabase Backend)
+  // 0. Listen for Supabase OAuth Callback on Page Mount
+  // -------------------------------------------------------------
+  useEffect(() => {
+    let isMounted = true;
+
+    const processSupabaseUser = async (user: any) => {
+      if (!user?.email || !isMounted) return;
+      const email = user.email.trim().toLowerCase();
+      setGoogleLoading(true);
+
+      try {
+        const checkRes = await fetch(`/api/auth/google-binding?email=${encodeURIComponent(email)}`);
+        const checkData = await checkRes.json();
+
+        if (checkData.success && checkData.bound && checkData.binding && checkData.employee) {
+          const boundUser: MobileAuthUser = {
+            email,
+            employeeId: checkData.binding.employeeId,
+            employeeName: checkData.employee.fullName3Part || checkData.employee.name,
+            role: checkData.employee.role || 'Employee',
+            photoUrl: checkData.binding.photoUrl || user.user_metadata?.avatar_url || user.user_metadata?.picture || checkData.employee.photoUrl || undefined,
+            googleUid: user.id,
+            phone: checkData.employee.phone,
+            loginTime: new Date().toISOString(),
+            isFounder: Boolean(
+              checkData.binding.employeeId === 'emp-02' || 
+              checkData.employee.name?.includes('دارکۆ')
+            ),
+          };
+
+          localStorage.setItem('ashley_mobile_auth', JSON.stringify(boundUser));
+          onLoginSuccess(boundUser);
+        } else {
+          onNeedsBinding({
+            email,
+            displayName: user.user_metadata?.full_name || user.user_metadata?.name || email.split('@')[0],
+            photoUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture || undefined,
+            uid: user.id,
+          });
+        }
+      } catch (e: any) {
+        console.error('[LoginScreen] Error processing Supabase Google user:', e);
+        setErrorMsg('هەڵەیەک ڕوویدا لە خوێندنەوەی زانیارییەکانی Google لە Supabase');
+      } finally {
+        if (isMounted) setGoogleLoading(false);
+      }
+    };
+
+    // Check existing Supabase session
+    supabaseAuth.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user && isMounted) {
+        processSupabaseUser(session.user);
+      }
+    });
+
+    // Listen for auth state change (e.g. after Google OAuth redirects back)
+    const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange(async (event, session) => {
+      if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user && isMounted) {
+        processSupabaseUser(session.user);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [onLoginSuccess, onNeedsBinding]);
+
+  // -------------------------------------------------------------
+  // 1. One-Click Official Google Login via Supabase OAuth
+  // -------------------------------------------------------------
+  const handleSupabaseGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    setErrorMsg(null);
+
+    try {
+      const redirectUrl = typeof window !== 'undefined' 
+        ? `${window.location.origin}/` 
+        : 'https://ashley-staff.vercel.app/';
+
+      const { error } = await supabaseAuth.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          },
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+    } catch (err: any) {
+      console.error('[LoginScreen] Supabase Google Login Error:', err);
+      if (err.message?.includes('provider is not enabled') || err.message?.includes('Unsupported provider')) {
+        setErrorMsg(
+          '⚠️ خزمەتگوزاری Google لە ناو داشبۆردی Supabase هێشتا چالاک (Enable) نەکراوە.\n' +
+          'لە Supabase بڕۆ بۆ: Authentication -> Providers -> Google و چالاکی بکە.\n' +
+          'یاخود دەتوانیت لە خوارەوە ڕاستەوخۆ ئیمەیڵەکەت یان ناوی خۆت بنووسیت و دەستبەجێ بچیتە ژوورەوە.'
+        );
+      } else {
+        setErrorMsg(err.message || 'هەڵەیەک ڕوویدا لە پەیوەندیکردن بە سێرڤەری Supabase');
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // 2. Google Email Direct Check & Login (via Supabase)
   // -------------------------------------------------------------
   const handleCheckEmail = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,7 +227,7 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
   };
 
   // -------------------------------------------------------------
-  // 2. Direct Staff Pick & Login
+  // 3. Direct Staff Pick & Login
   // -------------------------------------------------------------
   const handleStaffLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,10 +292,10 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-5 dir-rtl font-sans select-none max-w-md mx-auto" dir="rtl">
       {/* Top Branding */}
-      <div className="pt-6 flex flex-col items-center text-center">
-        <div className="w-20 h-20 bg-gradient-to-tr from-amber-500 to-amber-300 rounded-3xl p-1 shadow-2xl shadow-amber-500/20 mb-3.5 flex items-center justify-center">
+      <div className="pt-5 flex flex-col items-center text-center">
+        <div className="w-18 h-18 bg-gradient-to-tr from-amber-500 to-amber-300 rounded-3xl p-1 shadow-2xl shadow-amber-500/20 mb-3 flex items-center justify-center">
           <div className="w-full h-full bg-slate-900 rounded-[22px] flex items-center justify-center">
-            <Building2 className="w-10 h-10 text-amber-400" />
+            <Building2 className="w-9 h-9 text-amber-400" />
           </div>
         </div>
 
@@ -201,6 +314,47 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
 
       {/* Main Container */}
       <div className="my-auto py-3 space-y-3">
+        {/* Official Supabase Google OAuth Button */}
+        <button
+          type="button"
+          onClick={handleSupabaseGoogleSignIn}
+          disabled={googleLoading}
+          className="w-full h-13 bg-white hover:bg-slate-100 active:scale-[0.98] transition-all text-slate-900 rounded-2xl font-bold text-xs flex items-center justify-center gap-2.5 shadow-xl shadow-white/5 py-3.5 disabled:opacity-50"
+        >
+          {googleLoading ? (
+            <Loader2 className="w-5 h-5 animate-spin text-slate-900" />
+          ) : (
+            <>
+              <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                />
+              </svg>
+              <span>چوونەژوورەوە بە گووگڵ لە ڕێی Supabase</span>
+            </>
+          )}
+        </button>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 my-1.5">
+          <div className="h-px bg-slate-800 flex-1" />
+          <span className="text-[11px] text-slate-500 font-medium">یان ڕاستەوخۆ بەم دوو شێوازەی Supabase</span>
+          <div className="h-px bg-slate-800 flex-1" />
+        </div>
+
         {/* Mode Switcher Tabs */}
         <div className="grid grid-cols-2 gap-1.5 bg-slate-900/90 border border-slate-800 p-1.5 rounded-2xl shadow-lg">
           <button
@@ -216,27 +370,8 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <div className="w-4 h-4 shrink-0 flex items-center justify-center">
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
-                <path
-                  fill={loginMode === 'email' ? '#0f172a' : '#4285F4'}
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill={loginMode === 'email' ? '#0f172a' : '#34A853'}
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill={loginMode === 'email' ? '#0f172a' : '#FBBC05'}
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                />
-                <path
-                  fill={loginMode === 'email' ? '#0f172a' : '#EA4335'}
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                />
-              </svg>
-            </div>
-            <span>ئیمەیڵی گووگڵ (Gmail)</span>
+            <Mail className="w-4 h-4 shrink-0" />
+            <span>نوسینی ئیمەیڵ (Gmail)</span>
           </button>
 
           <button

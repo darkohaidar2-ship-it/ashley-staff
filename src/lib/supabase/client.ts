@@ -20,6 +20,19 @@ export const supabase = createClient(
   }
 );
 
+// Dedicated client for browser authentication with session persistence & URL token detection
+export const supabaseAuth = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseKey || 'placeholder-anon-key',
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  }
+);
+
 // In-Memory Fast Cache for all warehouse records to eliminate 25x waterfall calls
 let WAREHOUSE_CACHE: Record<string, any> = {};
 let WAREHOUSE_CACHE_LOADED = false;
