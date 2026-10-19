@@ -1,7 +1,7 @@
 'use client';
 
-import MobileAttendanceOneTap from './attendance/mobile/page';
+import AshleyMobileApp from '@/components/mobile-app/AshleyMobileApp';
 
 export default function RootPage() {
-  return <MobileAttendanceOneTap />;
+  return <AshleyMobileApp />;
 }
