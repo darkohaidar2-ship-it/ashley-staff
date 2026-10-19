@@ -17,7 +17,7 @@ import {
   Users
 } from 'lucide-react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
 import { MobileAuthUser } from './types';
 import { ASHLEY_OFFICIAL_EMPLOYEES, AshleyOfficialEmployee, OFFICIAL_PIN_MAP } from '@/lib/ashley-employees';
@@ -47,6 +47,68 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
   const [staffEmail, setStaffEmail] = useState('');
 
   // -------------------------------------------------------------
+  // -------------------------------------------------------------
+  // 0. Handle Redirect Result on Mount (Mobile & Fallback)
+  // -------------------------------------------------------------
+  React.useEffect(() => {
+    let isMounted = true;
+
+    const checkRedirect = async () => {
+      try {
+        const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const result = await getRedirectResult(auth);
+
+        if (result && result.user && isMounted) {
+          const googleUser = result.user;
+          const email = googleUser.email?.trim().toLowerCase();
+          if (!email) return;
+
+          setGoogleLoading(true);
+          const checkRes = await fetch(`/api/auth/google-binding?email=${encodeURIComponent(email)}`);
+          const checkData = await checkRes.json();
+
+          if (checkData.success && checkData.bound && checkData.binding && checkData.employee) {
+            const boundUser: MobileAuthUser = {
+              email,
+              employeeId: checkData.binding.employeeId,
+              employeeName: checkData.employee.fullName3Part || checkData.employee.name,
+              role: checkData.employee.role || 'Employee',
+              photoUrl: checkData.binding.photoUrl || googleUser.photoURL || checkData.employee.photoUrl || undefined,
+              googleUid: googleUser.uid,
+              phone: checkData.employee.phone,
+              loginTime: new Date().toISOString(),
+              isFounder: Boolean(
+                checkData.binding.employeeId === 'emp-02' || 
+                checkData.employee.name?.includes('دارکۆ')
+              ),
+            };
+
+            localStorage.setItem('ashley_mobile_auth', JSON.stringify(boundUser));
+            onLoginSuccess(boundUser);
+          } else {
+            onNeedsBinding({
+              email,
+              displayName: googleUser.displayName || undefined,
+              photoUrl: googleUser.photoURL || undefined,
+              uid: googleUser.uid,
+            });
+          }
+        }
+      } catch (err: any) {
+        console.error('[LoginScreen] Redirect check error:', err);
+      } finally {
+        if (isMounted) setGoogleLoading(false);
+      }
+    };
+
+    checkRedirect();
+    return () => {
+      isMounted = false;
+    };
+  }, [onLoginSuccess, onNeedsBinding]);
+
+  // -------------------------------------------------------------
   // 0. Official Google One-Click Sign-In
   // -------------------------------------------------------------
   const handleOfficialGoogleSignIn = async () => {
@@ -63,18 +125,41 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
       try {
         userCred = await signInWithPopup(auth, provider);
       } catch (popupErr: any) {
+        console.warn('[LoginScreen] Popup failed with code:', popupErr.code, popupErr.message);
+
         if (popupErr.code === 'auth/unauthorized-domain') {
           setErrorMsg(
-            '⚠️ دۆمەینی ئێستا (ashley-staff.vercel.app) لە ناو کۆنسۆڵی Firebase تۆمار نەکراوە.\n' +
-            'دەتوانیت لە ڕێگەی console.firebase.google.com بەشی Authentication -> Settings -> Authorized Domains زیادی بکەیت.\n' +
-            'یاخود دەتوانیت لە خوارەوە ڕاستەوخۆ ئیمەیڵەکەت بنووسیت و داخڵ ببیت.'
+            '⚠️ دۆمەینی ئێستا لە Firebase تۆمار نەکراوە.\n' +
+            'تکایە لە Firebase Console بەشی Authentication -> Settings -> Authorized Domains ناونیشانی ashley-staff.vercel.app زیاد بکە.'
           );
           return;
         }
-        if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/popup-closed-by-user') {
-          await signInWithRedirect(auth, provider);
+
+        if (popupErr.code === 'auth/operation-not-allowed') {
+          setErrorMsg(
+            '⚠️ خزمەتگوزاری چوونەژوورەوەی گووگڵ لە ناو Firebase چالاک نەکراوە!\n' +
+            'تکایە لە Firebase Console بڕۆ بەشی Authentication -> Sign-in method و دوگمەی Google بکە بە Enable.'
+          );
           return;
         }
+
+        if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/popup-closed-by-user') {
+          // On mobile browsers or pop-up blockers, fallback to redirect or friendly notice
+          const isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+          if (isMobile) {
+            // Attempt redirect on mobile
+            await signInWithRedirect(auth, provider);
+            return;
+          }
+
+          setErrorMsg(
+            'پەنجەرەی گووگڵ داخرایەوە یان لەلایەن مۆبایل/براوسەرەوە بلۆک کرا.\n' +
+            'تکایە ئەگەر لە ناو تەلەگرامیت، لینکەکە لە Safari یان Chrome بکەرەوە.\n' +
+            'یان دەتوانیت لە خوارەوە بە ئاسانی ئیمەیڵەکەت بنووسیت و بەبێ هیچ کێشەیەک بچیتە ژوورەوە.'
+          );
+          return;
+        }
+
         throw popupErr;
       }
 
@@ -117,7 +202,13 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
       }
     } catch (err: any) {
       console.error('[LoginScreen] Google Auth Error:', err);
-      setErrorMsg(err.message || 'هەڵەیەک ڕوویدا لە چوونەژوورەوەی گووگڵدا');
+      if (err.code === 'auth/operation-not-allowed') {
+        setErrorMsg(
+          '⚠️ خزمەتگوزاری Google لە ناو Firebase Authentication -> Sign-in method چالاک (Enable) نەکراوە.'
+        );
+      } else {
+        setErrorMsg(err.message || 'هەڵەیەک ڕوویدا لە چوونەژوورەوەی گووگڵدا');
+      }
     } finally {
       setGoogleLoading(false);
     }
