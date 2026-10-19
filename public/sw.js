@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ashley-staff-v35-supabase';
+const CACHE_NAME = 'ashley-staff-v36-lightmode';
 
 const PRECACHE_URLS = [
   '/',

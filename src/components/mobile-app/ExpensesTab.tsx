@@ -19,6 +19,7 @@ import { MobileAuthUser } from './types';
 
 interface ExpensesTabProps {
   user: MobileAuthUser;
+  isDark?: boolean;
 }
 
 interface ExpenseItem {
@@ -42,7 +43,7 @@ const CATEGORY_CHIPS = [
   { label: 'گشتی', icon: '📁' },
 ];
 
-export function ExpensesTab({ user }: ExpensesTabProps) {
+export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -163,14 +164,16 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
   };
 
   return (
-    <div className="space-y-4 pb-20">
+    <div className="space-y-3.5 pb-20">
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
+          <h2 className={`text-base font-black flex items-center gap-2 ${
+            isDark ? 'text-white' : 'text-slate-900'
+          }`}>
             <span>💸</span> داواکردنی مەسروفات
           </h2>
-          <p className="text-[11px] text-slate-400">
+          <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
             تۆمارکردنی خەرجی و پسوڵەکانی تایبەت بە کار
           </p>
         </div>
@@ -181,7 +184,7 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
             setShowCreateForm(!showCreateForm);
             setFeedback(null);
           }}
-          className="h-10 px-3.5 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold rounded-2xl text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/10 transition-all"
+          className="h-10 px-3.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>داواکاری نوێ</span>
@@ -189,15 +192,15 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
       </div>
 
       {feedback && (
-        <div className={`p-3.5 rounded-2xl text-xs flex items-start gap-2.5 ${
+        <div className={`p-3 rounded-2xl text-xs flex items-start gap-2 border ${
           feedback.type === 'success'
-            ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
-            : 'bg-rose-500/15 border border-rose-500/30 text-rose-300'
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            : 'bg-rose-50 border-rose-200 text-rose-800'
         }`}>
           {feedback.type === 'success' ? (
-            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
           ) : (
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
           )}
           <span>{feedback.message}</span>
         </div>
@@ -205,16 +208,20 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
 
       {/* Expense Submission Form */}
       {showCreateForm && (
-        <form onSubmit={handleSubmitExpense} className="bg-slate-800/90 border border-slate-700/80 rounded-3xl p-5 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-700/60 pb-3">
-            <h3 className="text-xs font-bold text-white flex items-center gap-2">
-              <Receipt className="w-4 h-4 text-amber-400" />
+        <form onSubmit={handleSubmitExpense} className={`border rounded-3xl p-4 sm:p-5 shadow-xs space-y-3.5 ${
+          isDark 
+            ? 'bg-slate-900/90 border-slate-800 text-white' 
+            : 'bg-white border-slate-200/90 text-slate-900'
+        }`}>
+          <div className="flex items-center justify-between border-b pb-3 border-slate-200/80 dark:border-slate-800">
+            <h3 className="text-xs font-black flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-amber-500" />
               تۆمارکردنی پسوڵە و خەرجی نوێ
             </h3>
             <button
               type="button"
               onClick={() => setShowCreateForm(false)}
-              className="text-slate-400 hover:text-white"
+              className="text-slate-400 hover:text-slate-600 cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -222,7 +229,7 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
 
           {/* Amount Input */}
           <div>
-            <label className="block text-[11px] text-slate-300 font-medium mb-1.5">
+            <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               بڕی پارە (دیناری عێراقی):
             </label>
             <div className="relative">
@@ -240,10 +247,14 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
                   }
                 }}
                 placeholder="25,000"
-                className="w-full h-12 bg-slate-900 border border-slate-700 rounded-2xl px-4 text-left font-mono text-base font-bold text-white focus:outline-none focus:border-amber-400"
+                className={`w-full h-11 border rounded-xl px-4 text-left font-mono text-base font-bold outline-none transition-colors ${
+                  isDark 
+                    ? 'bg-slate-950 border-slate-700 text-white focus:border-amber-400' 
+                    : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-amber-500'
+                }`}
                 required
               />
-              <span className="absolute right-3.5 top-3.5 text-xs text-slate-400 font-sans">
+              <span className={`absolute right-3.5 top-3 text-xs font-sans font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 د.ع
               </span>
             </div>
@@ -251,7 +262,7 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
 
           {/* Category Chips */}
           <div>
-            <label className="block text-[11px] text-slate-300 font-medium mb-1.5">
+            <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               جۆری مەسروفات:
             </label>
             <div className="flex flex-wrap gap-1.5">
@@ -260,10 +271,12 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
                   key={cat.label}
                   type="button"
                   onClick={() => setSelectedCategory(cat.label)}
-                  className={`text-[11px] px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1 ${
+                  className={`text-[11px] px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1 cursor-pointer ${
                     selectedCategory === cat.label
-                      ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow-md'
-                      : 'bg-slate-900/80 text-slate-300 border-slate-700 hover:bg-slate-700'
+                      ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-xs'
+                      : isDark 
+                        ? 'bg-slate-950 text-slate-300 border-slate-700 hover:bg-slate-800' 
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
                   <span>{cat.icon}</span>
@@ -275,7 +288,7 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
 
           {/* Note Input */}
           <div>
-            <label className="block text-[11px] text-slate-300 font-medium mb-1.5">
+            <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               هۆکار و تێبینی:
             </label>
             <textarea
@@ -283,13 +296,17 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
               value={noteInput}
               onChange={(e) => setNoteInput(e.target.value)}
               placeholder="بۆ نموونە: کڕینی بەنزین بۆ ئۆتۆمبێلی کۆگا لە گەشتی هەولێر..."
-              className="w-full bg-slate-900 border border-slate-700 rounded-2xl p-3 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
+              className={`w-full border rounded-xl p-3 text-xs outline-none transition-colors ${
+                isDark 
+                  ? 'bg-slate-950 border-slate-700 text-white focus:border-amber-400 placeholder:text-slate-600' 
+                  : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-amber-500 placeholder:text-slate-400'
+              }`}
             />
           </div>
 
           {/* Receipt Photo Upload */}
           <div>
-            <label className="block text-[11px] text-slate-300 font-medium mb-1.5">
+            <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               وێنەی پسوڵە (وەسڵ):
             </label>
 
@@ -303,7 +320,7 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
             />
 
             {receiptBase64 ? (
-              <div className="relative rounded-2xl overflow-hidden border border-slate-700 w-full h-36 bg-slate-950 flex items-center justify-center">
+              <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 w-full h-36 bg-slate-900 flex items-center justify-center">
                 <img
                   src={receiptBase64}
                   alt="Receipt Preview"
@@ -312,7 +329,7 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
                 <button
                   type="button"
                   onClick={() => setReceiptBase64(null)}
-                  className="absolute top-2 left-2 p-1.5 bg-black/70 hover:bg-black text-rose-400 rounded-xl"
+                  className="absolute top-2 left-2 p-1.5 bg-black/70 hover:bg-black text-rose-400 rounded-xl cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -321,10 +338,14 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full h-20 border-2 border-dashed border-slate-700 hover:border-amber-500/50 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-slate-400 hover:text-amber-400 transition-colors bg-slate-900/50"
+                className={`w-full h-20 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                  isDark 
+                    ? 'border-slate-700 hover:border-amber-500/50 text-slate-400 hover:text-amber-400 bg-slate-950/40' 
+                    : 'border-slate-300 hover:border-amber-500 text-slate-500 hover:text-amber-600 bg-slate-50'
+                }`}
               >
                 <Camera className="w-5 h-5" />
-                <span className="text-[11px] font-medium">گرتنی وێنەی پسوڵە لە کامێرا یان گەلەری</span>
+                <span className="text-[11px] font-bold">گرتنی وێنەی پسوڵە لە کامێرا یان گەلەری</span>
               </button>
             )}
           </div>
@@ -334,7 +355,7 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 h-12 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 disabled:opacity-50"
+              className="flex-1 h-11 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs disabled:opacity-50 cursor-pointer"
             >
               {submitting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -348,7 +369,9 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
             <button
               type="button"
               onClick={() => setShowCreateForm(false)}
-              className="px-4 h-12 bg-slate-700 text-slate-300 rounded-2xl text-xs font-medium"
+              className={`px-4 h-11 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
+                isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
             >
               داخستن
             </button>
@@ -358,52 +381,66 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
 
       {/* Expenses History List */}
       <div className="space-y-2">
-        <h3 className="text-xs font-bold text-slate-400 px-1">
+        <h3 className={`text-xs font-bold px-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
           مێژووی داواکارییەکانی مەسروفات
         </h3>
 
         {loading ? (
-          <div className="py-12 flex flex-col items-center justify-center text-slate-500 gap-2">
+          <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-2">
             <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
-            <span className="text-xs">بارکردنی مەسروفاتەکان...</span>
+            <span className="text-xs font-bold">بارکردنی مەسروفاتەکان...</span>
           </div>
         ) : expenses.length === 0 ? (
-          <div className="py-12 bg-slate-800/40 border border-slate-800 rounded-3xl text-center text-slate-500 text-xs">
+          <div className={`py-12 border rounded-3xl text-center text-xs ${
+            isDark 
+              ? 'bg-slate-900/40 border-slate-800 text-slate-500' 
+              : 'bg-white border-slate-200 text-slate-400'
+          }`}>
             هیچ مەسروفاتێک تۆمار نەکراوە تا ئێستا.
           </div>
         ) : (
           expenses.map((exp) => (
             <div
               key={exp.id}
-              className="p-4 bg-slate-800/80 border border-slate-700/60 rounded-2xl shadow-sm flex items-center justify-between gap-3"
+              className={`p-3.5 border rounded-2xl shadow-xs flex items-center justify-between gap-3 ${
+                isDark 
+                  ? 'bg-slate-900/90 border-slate-800 text-white' 
+                  : 'bg-white border-slate-200/90 text-slate-900'
+              }`}
             >
               <div className="flex items-center gap-3">
                 {exp.receiptPhotoUrl ? (
                   <div
                     onClick={() => setPreviewPhoto(exp.receiptPhotoUrl!)}
-                    className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-700 overflow-hidden cursor-pointer hover:opacity-80 shrink-0"
+                    className="w-11 h-11 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden cursor-pointer hover:opacity-80 shrink-0"
                   >
                     <img src={exp.receiptPhotoUrl} alt="Receipt" className="w-full h-full object-cover" />
                   </div>
                 ) : (
-                  <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-700/60 flex items-center justify-center text-slate-500 shrink-0">
-                    <Receipt className="w-6 h-6 text-slate-400" />
+                  <div className={`w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 ${
+                    isDark 
+                      ? 'bg-slate-950 border-slate-800 text-slate-400' 
+                      : 'bg-slate-100 border-slate-200 text-slate-500'
+                  }`}>
+                    <Receipt className="w-5 h-5" />
                   </div>
                 )}
 
                 <div>
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-sm font-bold font-mono text-white">
+                    <span className="text-xs font-black font-mono" dir="ltr">
                       {Number(exp.amount).toLocaleString('en-US')} د.ع
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-700/60 text-slate-300 font-medium">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                      isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'
+                    }`}>
                       {exp.category}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 line-clamp-1">
+                  <p className={`text-[11px] line-clamp-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     {exp.note || 'بێ تێبینی'}
                   </p>
-                  <span className="text-[10px] text-slate-500 font-mono">
+                  <span className="text-[10px] text-slate-400 font-mono" dir="ltr">
                     {exp.dateStr}
                   </span>
                 </div>
@@ -411,17 +448,17 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
 
               <div>
                 {exp.status === 'approved' ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-xl">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-xl">
                     <CheckCircle2 className="w-3 h-3" />
                     پەسەندکراو
                   </span>
                 ) : exp.status === 'rejected' ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-xl">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-1 rounded-xl">
                     <X className="w-3 h-3" />
                     ڕەتکراوە
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-xl">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-1 rounded-xl">
                     <Clock className="w-3 h-3" />
                     چاوەڕوان
                   </span>
@@ -442,7 +479,7 @@ export function ExpensesTab({ user }: ExpensesTabProps) {
             <img src={previewPhoto} alt="Full Receipt" className="rounded-2xl max-h-[85vh] object-contain shadow-2xl" />
             <button
               onClick={() => setPreviewPhoto(null)}
-              className="absolute top-2 left-2 p-2 bg-black/70 text-white rounded-full"
+              className="absolute top-2 left-2 p-2 bg-black/70 text-white rounded-full cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>

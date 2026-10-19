@@ -5,16 +5,18 @@ import {
   Building2, 
   Sparkles, 
   Mail, 
-  Lock, 
-  User, 
   KeyRound, 
   ArrowRight, 
   Loader2, 
   AlertCircle, 
   CheckCircle2, 
-  ShieldCheck,
-  Search,
-  Users
+  ShieldCheck, 
+  Search, 
+  Users,
+  Sun,
+  Moon,
+  ChevronDown,
+  UserCheck
 } from 'lucide-react';
 import { supabaseAuth } from '@/lib/supabase/client';
 import { MobileAuthUser } from './types';
@@ -26,23 +28,36 @@ interface LoginScreenProps {
 }
 
 export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps) {
-  // Tabs: 'email' (Google Email) | 'staff' (Direct Staff Select)
-  const [loginMode, setLoginMode] = useState<'email' | 'staff'>('email');
+  // Theme state: 'light' by default per user request
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ashley_theme');
+      return saved === 'dark';
+    }
+    return false;
+  });
 
-  // Mode 1: Email Input State
-  const [emailInput, setEmailInput] = useState('');
-  const [emailPinInput, setEmailPinInput] = useState('');
-  const [isEmailBound, setIsEmailBound] = useState(false);
-  const [boundEmployeeData, setBoundEmployeeData] = useState<any>(null);
+  const toggleTheme = () => {
+    const next = !isDark;
+    setIsDark(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ashley_theme', next ? 'dark' : 'light');
+    }
+  };
+
+  // Login view mode: 'google' | 'pin'
+  const [activeMode, setActiveMode] = useState<'google' | 'pin'>('google');
+
+  // PIN Login States
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('');
+  const [enteredPin, setEnteredPin] = useState<string>('');
+  const [staffSearch, setStaffSearch] = useState<string>('');
+  const [showStaffPicker, setShowStaffPicker] = useState<boolean>(false);
+
+  // Status & loading
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // Mode 2: Direct Staff Selection State
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStaff, setSelectedStaff] = useState<AshleyOfficialEmployee | null>(null);
-  const [staffPin, setStaffPin] = useState('');
-  const [staffEmail, setStaffEmail] = useState('');
 
   // -------------------------------------------------------------
   // 0. Listen for Supabase OAuth Callback on Page Mount
@@ -87,7 +102,7 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
         }
       } catch (e: any) {
         console.error('[LoginScreen] Error processing Supabase Google user:', e);
-        setErrorMsg('هەڵەیەک ڕوویدا لە خوێندنەوەی زانیارییەکانی Google لە Supabase');
+        setErrorMsg('هەڵەیەک ڕوویدا لە پەیوەندیکردن بە سێرڤەر');
       } finally {
         if (isMounted) setGoogleLoading(false);
       }
@@ -100,7 +115,7 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
       }
     });
 
-    // Listen for auth state change (e.g. after Google OAuth redirects back)
+    // Listen for auth state change
     const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange(async (event, session) => {
       if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user && isMounted) {
         processSupabaseUser(session.user);
@@ -114,9 +129,9 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
   }, [onLoginSuccess, onNeedsBinding]);
 
   // -------------------------------------------------------------
-  // 1. One-Click Official Google Login via Supabase OAuth
+  // 1. One-Click Google OAuth Sign-In via Supabase
   // -------------------------------------------------------------
-  const handleSupabaseGoogleSignIn = async () => {
+  const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     setErrorMsg(null);
 
@@ -141,102 +156,28 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
       }
     } catch (err: any) {
       console.error('[LoginScreen] Supabase Google Login Error:', err);
-      if (err.message?.includes('provider is not enabled') || err.message?.includes('Unsupported provider')) {
-        setErrorMsg(
-          '⚠️ خزمەتگوزاری Google لە ناو داشبۆردی Supabase هێشتا چالاک (Enable) نەکراوە.\n' +
-          'لە Supabase بڕۆ بۆ: Authentication -> Providers -> Google و چالاکی بکە.\n' +
-          'یاخود دەتوانیت لە خوارەوە ڕاستەوخۆ ئیمەیڵەکەت یان ناوی خۆت بنووسیت و دەستبەجێ بچیتە ژوورەوە.'
-        );
-      } else {
-        setErrorMsg(err.message || 'هەڵەیەک ڕوویدا لە پەیوەندیکردن بە سێرڤەری Supabase');
-      }
-    } finally {
+      setErrorMsg(err.message || 'هەڵەیەک ڕوویدا لە چوونەژوورەوە بە Google');
       setGoogleLoading(false);
     }
   };
 
   // -------------------------------------------------------------
-  // 2. Google Email Direct Check & Login (via Supabase)
+  // 2. Direct Staff PIN Login
   // -------------------------------------------------------------
-  const handleCheckEmail = async (e: React.FormEvent) => {
+  const handleStaffPinLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanEmail = emailInput.trim().toLowerCase();
-
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setErrorMsg('تکایە ئیمەیڵێکی دروست بنووسە (نموونە: name@gmail.com)');
+    if (!selectedStaffId) {
+      setErrorMsg('تکایە ناوی کارمەند هەڵبژێرە');
       return;
     }
 
-    setLoading(true);
-    setErrorMsg(null);
+    const selectedEmp = ASHLEY_OFFICIAL_EMPLOYEES.find(e => e.id === selectedStaffId);
+    if (!selectedEmp) return;
 
-    try {
-      const res = await fetch(`/api/auth/google-binding?email=${encodeURIComponent(cleanEmail)}`);
-      const data = await res.json();
+    const expectedPin = OFFICIAL_PIN_MAP[selectedEmp.id] || '';
+    const cleanPin = enteredPin.trim();
 
-      if (data.success && data.bound && data.binding && data.employee) {
-        setIsEmailBound(true);
-        setBoundEmployeeData({
-          binding: data.binding,
-          employee: data.employee,
-          email: cleanEmail,
-        });
-      } else {
-        // Needs initial binding to an official Ashley employee profile
-        onNeedsBinding({
-          email: cleanEmail,
-          displayName: cleanEmail.split('@')[0],
-        });
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'هەڵەیەک ڕوویدا لە پەیوەندیکردن بە سیستەمی Supabase');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Confirm PIN for Bound Email
-  const handleConfirmEmailPin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!boundEmployeeData) return;
-
-    const expectedPin = OFFICIAL_PIN_MAP[boundEmployeeData.binding.employeeId] || '';
-    const enteredPin = emailPinInput.trim();
-
-    if (expectedPin && enteredPin !== expectedPin && enteredPin !== '12355321') {
-      setErrorMsg('کۆدی نهێنی (PIN) هەڵەیە! تکایە پەیوەندی بە کاک دارکۆ بکە.');
-      return;
-    }
-
-    const authUser: MobileAuthUser = {
-      email: boundEmployeeData.email,
-      employeeId: boundEmployeeData.binding.employeeId,
-      employeeName: boundEmployeeData.employee.fullName3Part || boundEmployeeData.employee.name,
-      role: boundEmployeeData.employee.role || 'Employee',
-      photoUrl: boundEmployeeData.binding.photoUrl || boundEmployeeData.employee.photoUrl || undefined,
-      phone: boundEmployeeData.employee.phone || undefined,
-      loginTime: new Date().toISOString(),
-      isFounder: Boolean(
-        boundEmployeeData.binding.employeeId === 'emp-02' || 
-        boundEmployeeData.employee.name?.includes('دارکۆ')
-      ),
-    };
-
-    localStorage.setItem('ashley_mobile_auth', JSON.stringify(authUser));
-    onLoginSuccess(authUser);
-  };
-
-  // -------------------------------------------------------------
-  // 3. Direct Staff Pick & Login
-  // -------------------------------------------------------------
-  const handleStaffLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedStaff) return;
-
-    const expectedPin = OFFICIAL_PIN_MAP[selectedStaff.id] || '';
-    const enteredPin = staffPin.trim();
-
-    if (expectedPin && enteredPin !== expectedPin && enteredPin !== '12355321') {
+    if (expectedPin && cleanPin !== expectedPin && cleanPin !== '12355321') {
       setErrorMsg('کۆدی نهێنی (PIN) هەڵەیە!');
       return;
     }
@@ -245,31 +186,19 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
     setErrorMsg(null);
 
     try {
-      const emailToUse = (staffEmail.trim() || `${selectedStaff.id}@ashley.com`).toLowerCase();
-
-      if (staffEmail.trim()) {
-        await fetch('/api/auth/google-binding', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: emailToUse,
-            employeeId: selectedStaff.id,
-            pin: enteredPin,
-          }),
-        });
-      }
+      const emailToUse = `${selectedEmp.id}@ashley.com`;
 
       const authUser: MobileAuthUser = {
         email: emailToUse,
-        employeeId: selectedStaff.id,
-        employeeName: selectedStaff.fullName3Part || selectedStaff.name,
-        role: selectedStaff.role || 'Employee',
-        photoUrl: selectedStaff.photoUrl || undefined,
-        phone: selectedStaff.phone || undefined,
+        employeeId: selectedEmp.id,
+        employeeName: selectedEmp.fullName3Part || selectedEmp.name,
+        role: selectedEmp.role || 'Employee',
+        photoUrl: selectedEmp.photoUrl || undefined,
+        phone: selectedEmp.phone || undefined,
         loginTime: new Date().toISOString(),
         isFounder: Boolean(
-          selectedStaff.id === 'emp-02' || 
-          selectedStaff.name.includes('دارکۆ')
+          selectedEmp.id === 'emp-02' || 
+          selectedEmp.name.includes('دارکۆ')
         ),
       };
 
@@ -282,291 +211,238 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
     }
   };
 
-  const filteredStaff = ASHLEY_OFFICIAL_EMPLOYEES.filter(emp => {
-    if (!searchTerm.trim()) return true;
-    const term = searchTerm.toLowerCase();
+  const selectedEmployeeObj = ASHLEY_OFFICIAL_EMPLOYEES.find(e => e.id === selectedStaffId);
+
+  const filteredStaffList = ASHLEY_OFFICIAL_EMPLOYEES.filter(emp => {
+    if (!staffSearch.trim()) return true;
+    const term = staffSearch.toLowerCase();
     const name = (emp.fullName3Part || emp.name).toLowerCase();
     return name.includes(term) || emp.id.toLowerCase().includes(term);
   });
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-5 dir-rtl font-sans select-none max-w-md mx-auto" dir="rtl">
-      {/* Top Branding */}
-      <div className="pt-5 flex flex-col items-center text-center">
-        <div className="w-18 h-18 bg-gradient-to-tr from-amber-500 to-amber-300 rounded-3xl p-1 shadow-2xl shadow-amber-500/20 mb-3 flex items-center justify-center">
-          <div className="w-full h-full bg-slate-900 rounded-[22px] flex items-center justify-center">
-            <Building2 className="w-9 h-9 text-amber-400" />
+    <div className={`min-h-[100dvh] w-full transition-colors duration-200 select-none font-sans ${
+      isDark ? 'bg-slate-950 text-white' : 'bg-slate-100/70 text-slate-900'
+    }`} dir="rtl">
+      
+      {/* 📱 STRICT MOBILE FRAME CONTAINER (Apple-grade mobile proportion) */}
+      <div className={`w-full max-w-[430px] min-h-[100dvh] mx-auto flex flex-col justify-between p-4 sm:p-5 sm:shadow-2xl transition-colors ${
+        isDark ? 'bg-slate-950 text-white sm:border-x sm:border-slate-800' : 'bg-[#f8fafc] text-slate-900 sm:border-x sm:border-slate-200/90'
+      }`}>
+        
+        {/* 1. TOP HEADER & THEME TOGGLE */}
+        <div className="pt-2 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${
+              isDark 
+                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' 
+                : 'bg-amber-50 text-amber-800 border border-amber-200'
+            }`}>
+              <Sparkles className="w-3 h-3 text-amber-500" />
+              <span>دەوامی فەرمی ئاشڵی</span>
+            </span>
           </div>
-        </div>
 
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-2">
-          <Sparkles className="w-3.5 h-3.5" />
-          سیستەمی فەرمی دەوامی ئاشڵی
-        </span>
-
-        <h1 className="text-xl font-bold tracking-tight text-white mb-1">
-          ئاشڵی هۆم ستۆر
-        </h1>
-        <p className="text-xs text-slate-400 max-w-xs">
-          تۆمارکردنی کاتی دەوام، داواکردنی مەسروفات، و مۆڵەتەکان
-        </p>
-      </div>
-
-      {/* Main Container */}
-      <div className="my-auto py-3 space-y-3">
-        {/* Official Supabase Google OAuth Button */}
-        <button
-          type="button"
-          onClick={handleSupabaseGoogleSignIn}
-          disabled={googleLoading}
-          className="w-full h-13 bg-white hover:bg-slate-100 active:scale-[0.98] transition-all text-slate-900 rounded-2xl font-bold text-xs flex items-center justify-center gap-2.5 shadow-xl shadow-white/5 py-3.5 disabled:opacity-50"
-        >
-          {googleLoading ? (
-            <Loader2 className="w-5 h-5 animate-spin text-slate-900" />
-          ) : (
-            <>
-              <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                />
-              </svg>
-              <span>چوونەژوورەوە بە گووگڵ لە ڕێی Supabase</span>
-            </>
-          )}
-        </button>
-
-        {/* Divider */}
-        <div className="flex items-center gap-3 my-1.5">
-          <div className="h-px bg-slate-800 flex-1" />
-          <span className="text-[11px] text-slate-500 font-medium">یان ڕاستەوخۆ بەم دوو شێوازەی Supabase</span>
-          <div className="h-px bg-slate-800 flex-1" />
-        </div>
-
-        {/* Mode Switcher Tabs */}
-        <div className="grid grid-cols-2 gap-1.5 bg-slate-900/90 border border-slate-800 p-1.5 rounded-2xl shadow-lg">
+          {/* Quick Theme Switcher */}
           <button
             type="button"
-            onClick={() => {
-              setLoginMode('email');
-              setErrorMsg(null);
-              setIsEmailBound(false);
-            }}
-            className={`h-11 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-              loginMode === 'email'
-                ? 'bg-amber-500 text-slate-950 shadow-md scale-[1.02]'
-                : 'text-slate-400 hover:text-white'
+            onClick={toggleTheme}
+            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+              isDark 
+                ? 'bg-slate-900 border border-slate-800 text-amber-400 hover:bg-slate-800' 
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-xs'
             }`}
+            title={isDark ? 'گۆڕین بۆ لایت مۆد' : 'گۆڕین بۆ دارک مۆد'}
           >
-            <Mail className="w-4 h-4 shrink-0" />
-            <span>نوسینی ئیمەیڵ (Gmail)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setLoginMode('staff');
-              setErrorMsg(null);
-            }}
-            className={`h-11 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-              loginMode === 'staff'
-                ? 'bg-amber-500 text-slate-950 shadow-md scale-[1.02]'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Users className="w-4 h-4 shrink-0" />
-            <span>هەڵبژاردنی کارمەند</span>
+            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
         </div>
 
-        {/* Main Card */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-2xl">
+        {/* 2. BRANDING IDENTITY */}
+        <div className="my-auto py-4 flex flex-col items-center text-center">
+          {/* Logo Badge */}
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 p-0.5 shadow-lg shadow-amber-500/20 mb-3 flex items-center justify-center">
+            <div className={`w-full h-full rounded-[14px] flex items-center justify-center ${
+              isDark ? 'bg-slate-900' : 'bg-white'
+            }`}>
+              <Building2 className="w-8 h-8 text-amber-500" />
+            </div>
+          </div>
+
+          <h1 className={`text-xl font-black tracking-tight mb-0.5 ${
+            isDark ? 'text-white' : 'text-slate-900'
+          }`}>
+            ئاشڵی هۆم ستۆر
+          </h1>
+          <p className={`text-xs max-w-xs ${
+            isDark ? 'text-slate-400' : 'text-slate-500 font-medium'
+          }`}>
+            تۆمارکردنی کاتی دەوام • داواکاری مەسروفات و مۆڵەت
+          </p>
+
+          {/* Error Message */}
           {errorMsg && (
-            <div className="mb-4 p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs leading-relaxed whitespace-pre-line flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{errorMsg}</span>
+            <div className="w-full mt-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2 text-right">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+              <span className="leading-relaxed">{errorMsg}</span>
             </div>
           )}
 
-          {/* MODE 1: GOOGLE EMAIL LOGIN */}
-          {loginMode === 'email' && (
-            <>
-              {!isEmailBound ? (
-                <form onSubmit={handleCheckEmail} className="space-y-4">
-                  <div>
-                    <label className="block text-xs text-slate-300 font-medium mb-1.5">
-                      ئیمەیڵی گووگڵت بنووسە (Gmail):
-                    </label>
-                    <div className="relative">
-                      <Mail className="w-5 h-5 absolute right-3.5 top-3.5 text-slate-400" />
-                      <input
-                        type="email"
-                        dir="ltr"
-                        value={emailInput}
-                        onChange={(e) => setEmailInput(e.target.value)}
-                        placeholder="yourname@gmail.com"
-                        className="w-full h-12 bg-slate-950 border border-slate-700/80 rounded-2xl pr-11 pl-4 text-xs font-mono text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
-                        required
-                        autoFocus
+          {/* 3. MAIN LOGIN CARD */}
+          <div className={`w-full mt-5 rounded-3xl p-5 border transition-all ${
+            isDark 
+              ? 'bg-slate-900/90 border-slate-800 shadow-2xl' 
+              : 'bg-white border-slate-200/90 shadow-xl shadow-slate-200/60'
+          }`}>
+            
+            {/* ACTION 1: GOOGLE ONE-CLICK SIGN-IN (PRIMARY PROMINENT) */}
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={googleLoading}
+                className={`w-full h-12.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-3 transition-all cursor-pointer active:scale-[0.98] shadow-xs disabled:opacity-50 ${
+                  isDark
+                    ? 'bg-white text-slate-900 hover:bg-slate-100'
+                    : 'bg-white text-slate-800 border border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                }`}
+              >
+                {googleLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                ) : (
+                  <>
+                    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                       />
-                    </div>
-                    <div className="mt-2.5 p-3 rounded-2xl bg-slate-950/60 border border-slate-800 text-[11px] text-slate-400 leading-relaxed flex items-start gap-2">
-                      <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                      <span>
-                        ئەگەر یەکەم جار بێت، ناوی خۆت لە ستاف هەڵدەبژێریت و کۆدەکەت لێدەدەیت تا ئەم ئیمەیڵە بە هەمیشەیی بەستراوە بێت بە هەژمارت لە Supabase.
-                      </span>
-                    </div>
-                  </div>
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                      />
+                    </svg>
+                    <span className="font-bold text-[13px]">چوونەژوورەوە لە ڕێگەی Google</span>
+                  </>
+                )}
+              </button>
 
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full h-12 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 transition-all disabled:opacity-50"
-                  >
-                    {loading ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                    ) : (
-                      <>
-                        <span>بەردەوامبوون بە هەژماری Google</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
-                </form>
+              <div className="flex items-center gap-2 pt-1">
+                <div className={`h-px flex-1 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                <span className={`text-[11px] font-medium px-1 ${
+                  isDark ? 'text-slate-500' : 'text-slate-400'
+                }`}>
+                  یان لە ڕێگەی کۆدی نهێنی
+                </span>
+                <div className={`h-px flex-1 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+              </div>
+
+              {/* ACTION 2: DIRECT STAFF PIN LOGIN (SIMPLE & COMPACT) */}
+              {activeMode === 'google' ? (
+                <button
+                  type="button"
+                  onClick={() => setActiveMode('pin')}
+                  className={`w-full h-11 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    isDark
+                      ? 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  <KeyRound className="w-4 h-4 text-amber-500" />
+                  <span>داخڵبوون بە هەڵبژاردنی کارمەند و PIN</span>
+                </button>
               ) : (
-                /* Email already bound -> Enter PIN */
-                <form onSubmit={handleConfirmEmailPin} className="space-y-4">
-                  <div className="text-center p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl mb-2">
-                    <span className="text-xs text-emerald-300 block font-medium">هەژمار دۆزرایەوە لە Supabase:</span>
-                    <span className="text-sm font-bold text-white block mt-0.5">
-                      {boundEmployeeData?.employee?.fullName3Part || boundEmployeeData?.employee?.name}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-mono" dir="ltr">
-                      {boundEmployeeData?.email}
-                    </span>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-slate-300 font-medium mb-1.5">
-                      کۆدی نهێنی (PIN) بنووسە:
-                    </label>
-                    <div className="relative">
-                      <KeyRound className="w-5 h-5 absolute right-3.5 top-3.5 text-slate-400" />
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        maxLength={6}
-                        value={emailPinInput}
-                        onChange={(e) => setEmailPinInput(e.target.value)}
-                        placeholder="••••"
-                        className="w-full h-12 bg-slate-950 border border-slate-700 rounded-2xl pr-11 pl-4 text-center font-mono text-xl tracking-widest text-white focus:outline-none focus:border-amber-400"
-                        autoFocus
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      type="submit"
-                      className="flex-1 h-12 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-transform"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>چوونەژوورەوە</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsEmailBound(false)}
-                      className="px-4 h-12 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-medium"
-                    >
-                      گۆڕین
-                    </button>
-                  </div>
-                </form>
-              )}
-            </>
-          )}
-
-          {/* MODE 2: DIRECT STAFF SELECTION */}
-          {loginMode === 'staff' && (
-            <div className="space-y-3.5">
-              {!selectedStaff ? (
-                <>
+                /* PIN Login Form */
+                <form onSubmit={handleStaffPinLogin} className="space-y-3 pt-1 text-right">
+                  {/* Select Employee Trigger */}
                   <div className="relative">
-                    <Search className="w-4 h-4 absolute right-3.5 top-3.5 text-slate-400" />
-                    <input
-                      type="text"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="گەڕان بەپێی ناو یان ژمارە..."
-                      className="w-full h-11 bg-slate-950 border border-slate-700/80 rounded-2xl pr-10 pl-3 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
-                    />
-                  </div>
-
-                  <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-800">
-                    {filteredStaff.map((emp) => (
-                      <button
-                        key={emp.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedStaff(emp);
-                          setErrorMsg(null);
-                        }}
-                        className="w-full p-2.5 bg-slate-950/60 hover:bg-slate-800/80 active:scale-[0.99] border border-slate-800 hover:border-slate-700 rounded-2xl flex items-center justify-between text-right transition-all"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-amber-400">
-                            {(emp.fullName3Part || emp.name).slice(0, 1)}
-                          </div>
-                          <div>
-                            <span className="text-xs font-semibold text-white block">
-                              {emp.fullName3Part || emp.name}
-                            </span>
-                            <span className="text-[10px] text-slate-400">
-                              {emp.role || 'کارمەند'}
-                            </span>
-                          </div>
-                        </div>
-                        <span className="text-[10px] text-slate-500 font-mono" dir="ltr">
-                          {emp.id}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                /* Selected Staff PIN & Optional Email Form */
-                <form onSubmit={handleStaffLogin} className="space-y-3.5">
-                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] text-amber-400 font-medium block">کارمەندی هەڵبژێردراو:</span>
-                      <span className="text-xs font-bold text-white block">
-                        {selectedStaff.fullName3Part || selectedStaff.name}
-                      </span>
-                    </div>
+                    <label className={`block text-[11px] font-bold mb-1 ${
+                      isDark ? 'text-slate-300' : 'text-slate-700'
+                    }`}>
+                      ناوی کارمەند هەڵبژێرە:
+                    </label>
                     <button
                       type="button"
-                      onClick={() => setSelectedStaff(null)}
-                      className="text-xs text-slate-400 hover:text-white underline"
+                      onClick={() => setShowStaffPicker(!showStaffPicker)}
+                      className={`w-full h-11 px-3.5 rounded-xl border flex items-center justify-between text-xs transition-colors cursor-pointer ${
+                        isDark
+                          ? 'bg-slate-950 border-slate-700 text-white'
+                          : 'bg-white border-slate-300 text-slate-900'
+                      }`}
                     >
-                      گۆڕین
+                      <div className="flex items-center gap-2 truncate">
+                        <Users className="w-4 h-4 text-amber-500 shrink-0" />
+                        <span className="font-bold truncate">
+                          {selectedEmployeeObj 
+                            ? (selectedEmployeeObj.fullName3Part || selectedEmployeeObj.name)
+                            : 'ناوی خۆت هەڵبژێرە لە لیستەکە...'}
+                        </span>
+                      </div>
+                      <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
                     </button>
+
+                    {/* Popover Staff List */}
+                    {showStaffPicker && (
+                      <div className={`absolute top-full mt-1.5 right-0 left-0 z-30 rounded-2xl border p-2 shadow-2xl max-h-52 overflow-y-auto ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-700 text-white'
+                          : 'bg-white border-slate-200 text-slate-900 shadow-slate-200/80'
+                      }`}>
+                        <div className="relative mb-2">
+                          <Search className="w-3.5 h-3.5 absolute right-3 top-2.5 text-slate-400" />
+                          <input
+                            type="text"
+                            value={staffSearch}
+                            onChange={(e) => setStaffSearch(e.target.value)}
+                            placeholder="گەڕان بەپێی ناو..."
+                            className={`w-full h-8 text-[11px] pr-8 pl-2 rounded-lg border outline-none ${
+                              isDark
+                                ? 'bg-slate-950 border-slate-700 text-white'
+                                : 'bg-slate-50 border-slate-200 text-slate-900'
+                            }`}
+                            autoFocus
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          {filteredStaffList.map((emp) => (
+                            <button
+                              key={emp.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedStaffId(emp.id);
+                                setShowStaffPicker(false);
+                                setStaffSearch('');
+                              }}
+                              className={`w-full p-2 rounded-xl text-right text-xs font-bold flex items-center justify-between transition-colors ${
+                                selectedStaffId === emp.id
+                                  ? 'bg-amber-500 text-slate-950'
+                                  : isDark
+                                  ? 'hover:bg-slate-800 text-slate-200'
+                                  : 'hover:bg-slate-100 text-slate-800'
+                              }`}
+                            >
+                              <span>{emp.fullName3Part || emp.name}</span>
+                              <span className="text-[10px] font-mono opacity-60" dir="ltr">{emp.id}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
+                  {/* PIN Input */}
                   <div>
-                    <label className="block text-xs text-slate-300 font-medium mb-1">
+                    <label className={`block text-[11px] font-bold mb-1 ${
+                      isDark ? 'text-slate-300' : 'text-slate-700'
+                    }`}>
                       کۆدی نهێنی (PIN):
                     </label>
                     <div className="relative">
@@ -575,60 +451,68 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
                         type="password"
                         inputMode="numeric"
                         maxLength={6}
-                        value={staffPin}
-                        onChange={(e) => setStaffPin(e.target.value)}
+                        value={enteredPin}
+                        onChange={(e) => setEnteredPin(e.target.value)}
                         placeholder="••••"
-                        className="w-full h-11 bg-slate-950 border border-slate-700 rounded-2xl pr-10 pl-3 text-center font-mono text-lg tracking-widest text-white focus:outline-none focus:border-amber-400"
-                        autoFocus
+                        className={`w-full h-11 rounded-xl border pr-10 pl-3 text-center font-mono text-lg tracking-widest outline-none transition-colors ${
+                          isDark
+                            ? 'bg-slate-950 border-slate-700 text-white focus:border-amber-400'
+                            : 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
+                        }`}
                         required
                       />
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">
-                      ئیمەیڵی گووگڵت بنووسە (ئیختیاری بۆ بەستنەوە):
-                    </label>
-                    <div className="relative">
-                      <Mail className="w-4 h-4 absolute right-3.5 top-3.5 text-slate-500" />
-                      <input
-                        type="email"
-                        dir="ltr"
-                        value={staffEmail}
-                        onChange={(e) => setStaffEmail(e.target.value)}
-                        placeholder="yourname@gmail.com"
-                        className="w-full h-10 bg-slate-950/60 border border-slate-800 rounded-2xl pr-10 pl-3 text-xs font-mono text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-400"
-                      />
-                    </div>
-                  </div>
+                  {/* Buttons */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="submit"
+                      disabled={loading || !selectedStaffId || !enteredPin}
+                      className="flex-1 h-11 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      {loading ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                      ) : (
+                        <>
+                          <ShieldCheck className="w-4 h-4" />
+                          <span>چوونەژوورەوە</span>
+                        </>
+                      )}
+                    </button>
 
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full h-12 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/10 transition-all disabled:opacity-50"
-                  >
-                    {loading ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                    ) : (
-                      <>
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>چوونەژوورەوە</span>
-                      </>
-                    )}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveMode('google');
+                        setErrorMsg(null);
+                      }}
+                      className={`px-3.5 h-11 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                        isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      پاشگەزبوونەوە
+                    </button>
+                  </div>
                 </form>
               )}
+
             </div>
-          )}
+
+          </div>
         </div>
+
+        {/* 4. FOOTER INFO */}
+        <div className="pb-2 text-center">
+          <p className={`text-[10px] leading-relaxed ${
+            isDark ? 'text-slate-500' : 'text-slate-400'
+          }`}>
+            کۆمپانیای ئاشڵی هۆم ستۆر • سیستەمی دیوان ٢٠٢٦
+          </p>
+        </div>
+
       </div>
 
-      {/* Footer Info */}
-      <div className="pb-4 text-center">
-        <p className="text-[10px] text-slate-500 leading-relaxed">
-          ئەم سیستەمە تایبەتە بە کۆمپانیای ئاشڵی هۆم ستۆر • پارێزراوە لەسەر بنکەدراوەی فەرمیی Supabase
-        </p>
-      </div>
     </div>
   );
 }

@@ -103,7 +103,7 @@ export function AccountBindingScreen({
 
       if (!res.ok || !data.success) {
         if (data.error === 'INVALID_PIN') {
-          setPinError('کۆدی نهێنی (PIN) هەڵەیە! تکایە پەیوەندی بە بەڕێوەبەر (کاک دارکۆ) بکە ئەگەر کۆدەکەت بیرچووە.');
+          setPinError('کۆدی نهێنی (PIN) هەڵەیە! تکایە پەیوەندی بە کاک دارکۆ بکە ئەگەر کۆدەکەت بیرچووە.');
         } else if (data.error?.startsWith('ALREADY_BOUND')) {
           setPinError('ئەم کارمەندە پێشتر بەستراوەتەوە بە ئیمەیڵێکی تر!');
         } else {
@@ -138,19 +138,19 @@ export function AccountBindingScreen({
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col p-4 dir-rtl font-sans" dir="rtl">
+    <div className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-[#f8fafc] text-slate-900 flex flex-col p-4 sm:p-5 dir-rtl font-sans select-none sm:shadow-2xl sm:border-x sm:border-slate-200/90" dir="rtl">
       {/* Header */}
-      <div className="pt-4 pb-3 flex items-center justify-between border-b border-slate-800">
+      <div className="pt-2 pb-3 flex items-center justify-between border-b border-slate-200">
         <button
           type="button"
           onClick={onCancel}
-          className="p-2 -mr-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          className="p-2 -mr-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="text-center">
-          <h2 className="text-base font-bold text-white">هەڵبژاردنی ناوی کارمەند</h2>
-          <p className="text-xs text-amber-400/90 font-mono" dir="ltr">
+          <h2 className="text-sm font-black text-slate-900">هەڵبژاردنی ناوی کارمەند</h2>
+          <p className="text-xs text-amber-600 font-mono font-bold" dir="ltr">
             {googleProfile.email}
           </p>
         </div>
@@ -158,8 +158,8 @@ export function AccountBindingScreen({
       </div>
 
       {/* Info notice */}
-      <div className="my-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-300 leading-relaxed flex items-start gap-2">
-        <Sparkles className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+      <div className="my-3 p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-800 leading-relaxed flex items-start gap-2">
+        <Sparkles className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
         <span>
           تکایە <b>ناوی خۆت لە لیستەکە هەڵبژێرە</b> تاوەکو ئەم ئیمەیڵەی گووگڵ تەنها بۆ هەژماری دەوامی تۆ قوفڵ بکرێت.
         </span>
@@ -173,12 +173,12 @@ export function AccountBindingScreen({
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="گەڕان بەدوای ناوی کارمەند..."
-          className="w-full h-11 bg-slate-800/90 border border-slate-700/80 rounded-xl pr-10 pl-3 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
+          className="w-full h-11 bg-white border border-slate-300 rounded-xl pr-10 pl-3 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-amber-500 shadow-xs"
         />
         {searchTerm && (
           <button
             onClick={() => setSearchTerm('')}
-            className="absolute left-3 top-3 text-slate-400 hover:text-white"
+            className="absolute left-3 top-3 text-slate-400 hover:text-slate-700"
           >
             <X className="w-4 h-4" />
           </button>
@@ -188,12 +188,12 @@ export function AccountBindingScreen({
       {/* Employees List */}
       <div className="flex-1 overflow-y-auto space-y-2 pr-0.5 pb-6">
         {loadingBindings ? (
-          <div className="py-12 flex flex-col items-center justify-center text-slate-500 gap-2">
+          <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-2">
             <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
-            <span className="text-xs">پشکنینی دۆخی کارمەندان...</span>
+            <span className="text-xs font-bold">پشکنینی دۆخی کارمەندان...</span>
           </div>
         ) : filteredEmployees.length === 0 ? (
-          <div className="py-12 text-center text-slate-500 text-xs">
+          <div className="py-12 text-center text-slate-400 text-xs">
             هیچ کارمەندێک نەدۆزرایەوە بەم ناوە.
           </div>
         ) : (
@@ -211,43 +211,34 @@ export function AccountBindingScreen({
                     setPinError(null);
                   }
                 }}
-                className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between ${
+                className={`p-3 rounded-2xl border transition-all flex items-center justify-between ${
                   isBoundToAnother
-                    ? 'bg-slate-900/60 border-slate-800/80 opacity-50 cursor-not-allowed'
-                    : 'bg-slate-800/70 hover:bg-slate-800 active:scale-[0.99] border-slate-700/60 cursor-pointer hover:border-amber-500/40 shadow-sm'
+                    ? 'bg-slate-100/70 border-slate-200 opacity-60 cursor-not-allowed'
+                    : 'bg-white hover:bg-slate-50 active:scale-[0.99] border-slate-200/90 cursor-pointer hover:border-amber-400 shadow-xs'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-700/80 border border-slate-600 flex items-center justify-center font-bold text-xs text-amber-400 overflow-hidden">
-                    {emp.photoUrl ? (
-                      <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
-                    ) : (
-                      emp.name.charAt(0)
-                    )}
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0">
+                    {(emp.fullName3Part || emp.name).slice(0, 1)}
                   </div>
                   <div>
-                    <h3 className="text-xs font-bold text-white mb-0.5">
+                    <span className="text-xs font-bold text-slate-900 block">
                       {emp.fullName3Part || emp.name}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-slate-400 font-mono">
-                        کۆد: {emp.id}
-                      </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-700/60 text-slate-300">
-                        {emp.role || 'کارمەند'}
-                      </span>
-                    </div>
+                    </span>
+                    <span className="text-[10px] text-slate-500 block">
+                      {emp.role || 'کارمەند'}
+                    </span>
                   </div>
                 </div>
 
                 <div>
                   {isBoundToAnother ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-rose-400 bg-rose-500/10 px-2 py-1 rounded-lg border border-rose-500/20">
+                    <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 bg-slate-200 px-2 py-0.5 rounded-lg font-medium">
                       <Lock className="w-3 h-3" />
-                      قوفڵکراوە
+                      <span>قوفڵکراوە</span>
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 font-medium">
+                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 font-bold">
                       هەڵبژاردن
                     </span>
                   )}
@@ -260,32 +251,32 @@ export function AccountBindingScreen({
 
       {/* PIN Verification Modal */}
       {selectedEmp && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-3xl p-5 shadow-2xl relative">
+        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-5 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
             <button
               onClick={() => setSelectedEmp(null)}
-              className="absolute left-4 top-4 p-1.5 text-slate-400 hover:text-white rounded-xl bg-slate-800"
+              className="absolute left-4 top-4 p-1.5 text-slate-400 hover:text-slate-700 rounded-xl bg-slate-100 cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
 
             <div className="text-center pt-2 pb-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-3 border border-amber-200">
                 <KeyRound className="w-6 h-6" />
               </div>
-              <h3 className="text-sm font-bold text-white mb-1">
+              <h3 className="text-sm font-black text-slate-900 mb-1">
                 تەئکیدکردنەوەی ناسنامە
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-600">
                 بەستنەوەی <b>{selectedEmp.fullName3Part || selectedEmp.name}</b> بەم ئیمەیڵە:
               </p>
-              <p className="text-xs text-amber-400 font-mono mt-1" dir="ltr">
+              <p className="text-xs text-amber-600 font-mono font-bold mt-1" dir="ltr">
                 {googleProfile.email}
               </p>
             </div>
 
             {pinError && (
-              <div className="mb-4 p-3 bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs rounded-xl flex items-start gap-2">
+              <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{pinError}</span>
               </div>
@@ -293,7 +284,7 @@ export function AccountBindingScreen({
 
             <form onSubmit={handleConfirmBinding} className="space-y-4">
               <div>
-                <label className="block text-xs text-slate-300 mb-1.5 font-medium">
+                <label className="block text-xs text-slate-700 mb-1.5 font-bold">
                   کۆدی نهێنی (PIN)ی ٤ ژمارەیی بنووسە:
                 </label>
                 <input
@@ -304,7 +295,7 @@ export function AccountBindingScreen({
                   onChange={(e) => setPinInput(e.target.value)}
                   placeholder="••••"
                   autoFocus
-                  className="w-full h-12 bg-slate-800 border border-slate-700 rounded-xl text-center text-xl tracking-widest text-white font-mono focus:outline-none focus:border-amber-400"
+                  className="w-full h-12 bg-slate-50 border border-slate-300 rounded-xl text-center text-xl tracking-widest text-slate-900 font-mono focus:outline-none focus:border-amber-500"
                 />
               </div>
 
@@ -312,7 +303,7 @@ export function AccountBindingScreen({
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  className="flex-1 h-12 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer shadow-xs"
                 >
                   {submitting ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -326,7 +317,7 @@ export function AccountBindingScreen({
                 <button
                   type="button"
                   onClick={() => setSelectedEmp(null)}
-                  className="px-4 h-12 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium"
+                  className="px-4 h-12 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
                 >
                   پەشیمانبوونەوە
                 </button>
