@@ -243,7 +243,7 @@ export default function AshleyMobileApp() {
             https://ashley-staff.vercel.app
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-3 w-full">
+          <div className="w-full max-w-xs">
             <button
               type="button"
               onClick={() => {
@@ -251,18 +251,11 @@ export default function AshleyMobileApp() {
                 setCopiedLink(true);
                 setTimeout(() => setCopiedLink(false), 2000);
               }}
-              className="flex-1 h-12 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+              className="w-full h-12 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
             >
               {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <ExternalLink className="w-4 h-4" />}
               <span>{copiedLink ? 'لینکەکە کۆپی کرا!' : 'کۆپیکردنی لینک'}</span>
             </button>
-
-            <a
-              href="/adm1n_pan0l"
-              className="flex-1 h-12 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
-            >
-              <span>داشبۆردی ئەدمین (کۆمپیوتەر)</span>
-            </a>
           </div>
 
           <button
