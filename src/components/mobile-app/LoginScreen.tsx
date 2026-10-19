@@ -136,6 +136,13 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
     setErrorMsg(null);
 
     try {
+      // Sign out any active or stale Supabase session first so Google OAuth always prompts for account choice
+      try {
+        await supabaseAuth.auth.signOut();
+      } catch (e) {
+        // ignore sign out errors
+      }
+
       const redirectUrl = typeof window !== 'undefined' 
         ? `${window.location.origin}/` 
         : 'https://ashley-staff.vercel.app/';

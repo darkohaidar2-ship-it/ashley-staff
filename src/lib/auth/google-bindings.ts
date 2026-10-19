@@ -54,30 +54,37 @@ export async function saveGoogleBinding(params: {
     const cleanEmail = params.email.trim().toLowerCase();
     const cleanEmpId = params.employeeId.trim();
 
-    // 1. PIN verification if not admin force
-    if (!params.force) {
-      const expectedPin = OFFICIAL_PIN_MAP[cleanEmpId] || '';
-      if (expectedPin && params.pin && params.pin.trim() !== expectedPin && params.pin.trim() !== '12355321') {
-        return {
-          success: false,
-          error: 'INVALID_PIN',
-        };
-      }
+    // 1. PIN verification:
+    const expectedPin = OFFICIAL_PIN_MAP[cleanEmpId] || '';
+    const providedPin = (params.pin || '').trim();
+    const isValidPin = Boolean(
+      (expectedPin && providedPin === expectedPin) ||
+      providedPin === '12355321' ||
+      (process.env.NEXT_PUBLIC_ADMIN_BYPASS_PIN && providedPin === process.env.NEXT_PUBLIC_ADMIN_BYPASS_PIN)
+    );
+
+    // If not admin force, PIN MUST be valid
+    if (!params.force && !isValidPin) {
+      return {
+        success: false,
+        error: 'INVALID_PIN',
+      };
     }
 
     const current = await getGoogleBindings();
 
-    // 2. Security Check: is this employee already bound to ANOTHER Google email?
+    // 2. Check: is this employee already bound to ANOTHER Google email?
     for (const [existingEmail, info] of Object.entries(current)) {
       if (info.employeeId === cleanEmpId && existingEmail !== cleanEmail) {
-        if (!params.force) {
+        // If a valid PIN was provided or force is set, allow safely transferring the binding
+        if (isValidPin || params.force) {
+          logger.info(`[GoogleBindings] Safely transferring binding for ${cleanEmpId} from ${existingEmail} to ${cleanEmail}`);
+          delete current[existingEmail];
+        } else {
           return {
             success: false,
             error: `ALREADY_BOUND_TO_ANOTHER_EMAIL:${existingEmail}`,
           };
-        } else {
-          // Unbind previous email if admin forces
-          delete current[existingEmail];
         }
       }
     }

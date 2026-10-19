@@ -26,6 +26,7 @@ import { ExpensesTab } from './ExpensesTab';
 import { LeavesTab } from './LeavesTab';
 import { MonthlyReportTab } from './MonthlyReportTab';
 import { SpecialSectionsTab } from './SpecialSectionsTab';
+import { supabaseAuth } from '@/lib/supabase/client';
 
 export default function AshleyMobileApp() {
   // Theme state: default 'light' per user specification
@@ -132,13 +133,27 @@ export default function AshleyMobileApp() {
   }, [user?.employeeId, loadStatusData]);
 
   // Handle Logout
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (confirm('ئایا دڵنیایت لە چوونەدەرەوە لە ئەپڵیکەیشنەکە؟')) {
+      try {
+        await supabaseAuth.auth.signOut();
+      } catch (e) {}
       localStorage.removeItem('ashley_mobile_auth');
       setUser(null);
       setNeedsBindingProfile(null);
       setActiveTab('attendance');
     }
+  };
+
+  // Handle Cancel of Google Account Binding
+  const handleCancelBinding = async () => {
+    try {
+      await supabaseAuth.auth.signOut();
+    } catch (e) {
+      console.warn('Error signing out on cancel binding:', e);
+    }
+    localStorage.removeItem('ashley_mobile_auth');
+    setNeedsBindingProfile(null);
   };
 
   // Handle PWA Install
@@ -186,7 +201,7 @@ export default function AshleyMobileApp() {
             setNeedsBindingProfile(null);
             setUser(newUser);
           }}
-          onCancel={() => setNeedsBindingProfile(null)}
+          onCancel={handleCancelBinding}
         />
       </div>
     );

@@ -12,9 +12,12 @@ import {
   AlertCircle, 
   CheckCircle2, 
   X,
-  Sparkles
+  Sparkles,
+  LogOut,
+  Mail
 } from 'lucide-react';
 import { ASHLEY_OFFICIAL_EMPLOYEES, AshleyOfficialEmployee } from '@/lib/ashley-employees';
+import { supabaseAuth } from '@/lib/supabase/client';
 import { MobileAuthUser } from './types';
 
 interface AccountBindingScreenProps {
@@ -42,6 +45,19 @@ export function AccountBindingScreen({
   const [pinInput, setPinInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
+
+  // Explicitly sign out from Supabase and cancel binding
+  const handleSwitchAccount = async () => {
+    try {
+      await supabaseAuth.auth.signOut();
+    } catch (e) {
+      console.warn('Sign out error:', e);
+    }
+    try {
+      localStorage.removeItem('ashley_mobile_auth');
+    } catch (e) {}
+    onCancel();
+  };
 
   // Fetch already bound employees
   useEffect(() => {
@@ -74,6 +90,13 @@ export function AccountBindingScreen({
     });
   }, [searchTerm]);
 
+  // Is selected employee bound to another email?
+  const isSelectedEmpBoundToAnother = useMemo(() => {
+    if (!selectedEmp) return false;
+    const boundEmail = boundEmployeeMap[selectedEmp.id];
+    return Boolean(boundEmail && boundEmail.toLowerCase() !== googleProfile.email.toLowerCase());
+  }, [selectedEmp, boundEmployeeMap, googleProfile.email]);
+
   // Submit Binding with PIN
   const handleConfirmBinding = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,6 +119,7 @@ export function AccountBindingScreen({
           pin: pinInput.trim(),
           googleUid: googleProfile.uid,
           photoUrl: googleProfile.photoUrl || selectedEmp.photoUrl,
+          force: isSelectedEmpBoundToAnother,
         }),
       });
 
@@ -103,7 +127,7 @@ export function AccountBindingScreen({
 
       if (!res.ok || !data.success) {
         if (data.error === 'INVALID_PIN') {
-          setPinError('کۆدی نهێنی (PIN) هەڵەیە! تکایە پەیوەندی بە کاک دارکۆ بکە ئەگەر کۆدەکەت بیرچووە.');
+          setPinError('کۆدی نهێنی (PIN) هەڵەیە! تکایە پەیوەندی بە بەڕێوەبەر بکە ئەگەر کۆدەکەت بیرچووە.');
         } else if (data.error?.startsWith('ALREADY_BOUND')) {
           setPinError('ئەم کارمەندە پێشتر بەستراوەتەوە بە ئیمەیڵێکی تر!');
         } else {
@@ -143,26 +167,54 @@ export function AccountBindingScreen({
       <div className="pt-2 pb-3 flex items-center justify-between border-b border-slate-200">
         <button
           type="button"
-          onClick={onCancel}
-          className="p-2 -mr-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+          onClick={handleSwitchAccount}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-4 h-4" />
+          <span>گەڕانەوە</span>
         </button>
+
         <div className="text-center">
-          <h2 className="text-sm font-black text-slate-900">هەڵبژاردنی ناوی کارمەند</h2>
-          <p className="text-xs text-amber-600 font-mono font-bold" dir="ltr">
-            {googleProfile.email}
-          </p>
+          <h2 className="text-sm font-black text-slate-900">دیاریکردنی کارمەند</h2>
+          <span className="text-[10px] text-slate-500 font-medium">قوفڵکردنی هەژمار بە PIN</span>
         </div>
-        <div className="w-7" />
+
+        <button
+          type="button"
+          onClick={handleSwitchAccount}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+          title="دەرچوون لەم ئیمەیڵە"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span>دەرچوون</span>
+        </button>
       </div>
 
-      {/* Info notice */}
-      <div className="my-3 p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-800 leading-relaxed flex items-start gap-2">
-        <Sparkles className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
-        <span>
-          تکایە <b>ناوی خۆت لە لیستەکە هەڵبژێرە</b> تاوەکو ئەم ئیمەیڵەی گووگڵ تەنها بۆ هەژماری دەوامی تۆ قوفڵ بکرێت.
-        </span>
+      {/* Account Info & Switch Button Banner */}
+      <div className="my-3 p-3 bg-white border border-slate-200/90 rounded-2xl shadow-xs">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-[11px] text-slate-500 block font-medium">ئیمەیڵی هەڵبژێردراو:</span>
+            <span className="text-xs font-bold font-mono text-slate-900 truncate block mt-0.5" dir="ltr">
+              {googleProfile.email}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleSwitchAccount}
+            className="shrink-0 px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-xs"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>گۆڕینی جیمەیڵ</span>
+          </button>
+        </div>
+
+        <div className="mt-2.5 pt-2 border-t border-slate-100 text-[11px] text-slate-600 leading-relaxed flex items-start gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+          <span>
+            ئەگەر بە هەڵە ئەم ئیمەیڵەت هەڵبژاردووە، کلیک لە <b>گۆڕینی جیمەیڵ</b> بکە. تا ناوی خۆت هەڵنەبژێریت و کۆدی نهێنی (PIN) نەنووسیت، هیچ زانیارییەک لە سیستەمدا تۆمار نابێت.
+          </span>
+        </div>
       </div>
 
       {/* Search Input */}
@@ -205,17 +257,11 @@ export function AccountBindingScreen({
               <div
                 key={emp.id}
                 onClick={() => {
-                  if (!isBoundToAnother) {
-                    setSelectedEmp(emp);
-                    setPinInput('');
-                    setPinError(null);
-                  }
+                  setSelectedEmp(emp);
+                  setPinInput('');
+                  setPinError(null);
                 }}
-                className={`p-3 rounded-2xl border transition-all flex items-center justify-between ${
-                  isBoundToAnother
-                    ? 'bg-slate-100/70 border-slate-200 opacity-60 cursor-not-allowed'
-                    : 'bg-white hover:bg-slate-50 active:scale-[0.99] border-slate-200/90 cursor-pointer hover:border-amber-400 shadow-xs'
-                }`}
+                className="p-3 rounded-2xl border transition-all flex items-center justify-between bg-white hover:bg-slate-50 active:scale-[0.99] border-slate-200/90 cursor-pointer hover:border-amber-400 shadow-xs"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0">
@@ -233,9 +279,9 @@ export function AccountBindingScreen({
 
                 <div>
                   {isBoundToAnother ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 bg-slate-200 px-2 py-0.5 rounded-lg font-medium">
-                      <Lock className="w-3 h-3" />
-                      <span>قوفڵکراوە</span>
+                    <span className="inline-flex items-center gap-1 text-[10px] text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 font-bold">
+                      <Lock className="w-3 h-3 text-amber-600" />
+                      <span>گواستنەوە بە PIN</span>
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 font-bold">
@@ -260,7 +306,7 @@ export function AccountBindingScreen({
               <X className="w-4 h-4" />
             </button>
 
-            <div className="text-center pt-2 pb-4">
+            <div className="text-center pt-2 pb-3">
               <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-3 border border-amber-200">
                 <KeyRound className="w-6 h-6" />
               </div>
@@ -268,12 +314,21 @@ export function AccountBindingScreen({
                 تەئکیدکردنەوەی ناسنامە
               </h3>
               <p className="text-xs text-slate-600">
-                بەستنەوەی <b>{selectedEmp.fullName3Part || selectedEmp.name}</b> بەم ئیمەیڵە:
+                بەستنەوەی <b>{selectedEmp.fullName3Part || selectedEmp.name}</b> بە:
               </p>
-              <p className="text-xs text-amber-600 font-mono font-bold mt-1" dir="ltr">
+              <p className="text-xs text-amber-600 font-mono font-bold mt-0.5" dir="ltr">
                 {googleProfile.email}
               </p>
             </div>
+
+            {isSelectedEmpBoundToAnother && (
+              <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded-xl flex items-start gap-2 text-right">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                <span className="leading-relaxed">
+                  ئەم کارمەندە پێشتر بە ئیمەیڵی <span className="font-mono font-bold" dir="ltr">{boundEmployeeMap[selectedEmp.id]}</span> قوفڵکراوە. بە نووسینی PIN، قوفڵەکەی دەگوازرێتەوە بۆ ئەم جیمەیڵە نوێیە.
+                </span>
+              </div>
+            )}
 
             {pinError && (
               <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-start gap-2">
