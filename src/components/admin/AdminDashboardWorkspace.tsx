@@ -13,6 +13,7 @@ import { AdminFaceEnrollModal } from '@/components/attendance/AdminFaceEnrollMod
 import { AdminEmployeeDetailsModal } from '@/components/admin/AdminEmployeeDetailsModal';
 import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChangeModal';
 import NotificationRoutingMatrix from '@/components/admin/NotificationRoutingMatrix';
+import { AdminGoogleBindingsManager } from '@/components/admin/AdminGoogleBindingsManager';
 import { format } from 'date-fns';
 import { 
   Building2, 
@@ -27,7 +28,8 @@ import {
   Settings, 
   RefreshCw,
   Clock,
-  Sparkles
+  Sparkles,
+  Mail
 } from 'lucide-react';
 
 export function AdminDashboardWorkspace() {
@@ -37,8 +39,8 @@ export function AdminDashboardWorkspace() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   
-  // Default directly to the weekly/monthly attendance matrix table per user preference
-  const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools' | 'workflow'>('matrix');
+  // Segmented views in Admin Workspace
+  const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools' | 'workflow' | 'google'>('matrix');
 
   // Live Desktop Clock for ERP Admin
   const [currentTimeStr, setCurrentTimeStr] = useState('');
@@ -345,6 +347,20 @@ export function AdminDashboardWorkspace() {
               <span className="hidden sm:inline">ئاگادارییەکان</span>
             </button>
 
+            <button
+              type="button"
+              onClick={() => setAdminView('google')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                adminView === 'google'
+                  ? 'bg-white text-blue-600 shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
+              title="بەڕێوەبردنی هەژمارەکانی Google"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>هەژمارەکانی Google</span>
+            </button>
+
           </div>
 
           {/* Password Modal Button */}
@@ -508,6 +524,15 @@ export function AdminDashboardWorkspace() {
       {adminView === 'workflow' && (
         <section className="w-full transition-opacity duration-300">
           <NotificationRoutingMatrix />
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 📧 VIEW 5: GOOGLE ACCOUNT BINDINGS MANAGER */}
+      {/* ========================================================================= */}
+      {adminView === 'google' && (
+        <section className="w-full transition-opacity duration-300">
+          <AdminGoogleBindingsManager />
         </section>
       )}
 
