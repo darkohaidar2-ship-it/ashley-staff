@@ -123,7 +123,7 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
   };
 
   return (
-    <div className="space-y-3.5 pb-20">
+    <div className="space-y-4 pb-28">
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -132,7 +132,7 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
           }`}>
             <span>🌴</span> داواکردنی مۆڵەت
           </h2>
-          <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+          <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500 font-semibold'}`}>
             تۆمارکردنی مۆڵەتی کاتژمێری یان ڕۆژانە
           </p>
         </div>
@@ -143,7 +143,7 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
             setShowCreateForm(!showCreateForm);
             setFeedback(null);
           }}
-          className="h-10 px-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+          className="h-11 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black rounded-2xl text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>مۆڵەتی نوێ</span>
@@ -151,7 +151,7 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
       </div>
 
       {feedback && (
-        <div className={`p-3 rounded-2xl text-xs flex items-start gap-2 border ${
+        <div className={`p-3.5 rounded-2xl text-xs flex items-start gap-2.5 border ${
           feedback.type === 'success'
             ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
             : 'bg-rose-50 border-rose-200 text-rose-800'
@@ -161,13 +161,13 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
           ) : (
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
           )}
-          <span>{feedback.message}</span>
+          <span className="font-medium">{feedback.message}</span>
         </div>
       )}
 
       {/* Leave Creation Form */}
       {showCreateForm && (
-        <form onSubmit={handleSubmitLeave} className={`border rounded-3xl p-4 sm:p-5 shadow-xs space-y-3.5 ${
+        <form onSubmit={handleSubmitLeave} className={`border rounded-3xl p-4 sm:p-5 shadow-xs space-y-4 ${
           isDark 
             ? 'bg-slate-900/90 border-slate-800 text-white' 
             : 'bg-white border-slate-200/90 text-slate-900'
@@ -180,7 +180,7 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
             <button
               type="button"
               onClick={() => setShowCreateForm(false)}
-              className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              className="text-slate-400 hover:text-slate-600 cursor-pointer p-1"
             >
               <X className="w-4 h-4" />
             </button>
@@ -188,18 +188,18 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
 
           {/* Leave Type Selector */}
           <div>
-            <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+            <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               جۆری مۆڵەت:
             </label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setLeaveType('daily')}
-                className={`h-11 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                className={`h-13 rounded-2xl text-xs font-black border transition-all cursor-pointer ${
                   leaveType === 'daily'
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                     : isDark 
-                      ? 'bg-slate-950 text-slate-300 border-slate-700' 
+                      ? 'bg-slate-950 text-slate-300 border-slate-700 hover:bg-slate-800' 
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`}
               >
@@ -208,11 +208,11 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
               <button
                 type="button"
                 onClick={() => setLeaveType('hourly')}
-                className={`h-11 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                className={`h-13 rounded-2xl text-xs font-black border transition-all cursor-pointer ${
                   leaveType === 'hourly'
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                     : isDark 
-                      ? 'bg-slate-950 text-slate-300 border-slate-700' 
+                      ? 'bg-slate-950 text-slate-300 border-slate-700 hover:bg-slate-800' 
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`}
               >
@@ -223,18 +223,18 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
 
           {/* Target Date Selector */}
           <div>
-            <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+            <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               بەرواری مۆڵەت:
             </label>
-            <div className="grid grid-cols-3 gap-1.5 mb-2">
+            <div className="grid grid-cols-3 gap-2 mb-2">
               <button
                 type="button"
                 onClick={() => setDateChoice('today')}
-                className={`h-9 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                className={`h-11 rounded-2xl text-xs font-bold border transition-all cursor-pointer ${
                   dateChoice === 'today'
-                    ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
+                    ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-sm'
                     : isDark 
-                      ? 'bg-slate-950 text-slate-300 border-slate-700' 
+                      ? 'bg-slate-950 text-slate-300 border-slate-700 hover:bg-slate-800' 
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`}
               >
@@ -243,11 +243,11 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
               <button
                 type="button"
                 onClick={() => setDateChoice('tomorrow')}
-                className={`h-9 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                className={`h-11 rounded-2xl text-xs font-bold border transition-all cursor-pointer ${
                   dateChoice === 'tomorrow'
-                    ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
+                    ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-sm'
                     : isDark 
-                      ? 'bg-slate-950 text-slate-300 border-slate-700' 
+                      ? 'bg-slate-950 text-slate-300 border-slate-700 hover:bg-slate-800' 
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`}
               >
@@ -256,11 +256,11 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
               <button
                 type="button"
                 onClick={() => setDateChoice('custom')}
-                className={`h-9 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                className={`h-11 rounded-2xl text-xs font-bold border transition-all cursor-pointer ${
                   dateChoice === 'custom'
-                    ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
+                    ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-sm'
                     : isDark 
-                      ? 'bg-slate-950 text-slate-300 border-slate-700' 
+                      ? 'bg-slate-950 text-slate-300 border-slate-700 hover:bg-slate-800' 
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`}
               >
@@ -273,7 +273,7 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
                 type="date"
                 value={customDate}
                 onChange={(e) => setCustomDate(e.target.value)}
-                className={`w-full h-11 border rounded-xl px-3 text-xs font-mono outline-none transition-colors ${
+                className={`w-full h-13 border rounded-2xl px-4 text-sm font-mono outline-none transition-colors ${
                   isDark 
                     ? 'bg-slate-950 border-slate-700 text-white focus:border-emerald-400' 
                     : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-emerald-500'
@@ -285,18 +285,18 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
 
           {/* Reason Chips */}
           <div>
-            <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+            <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               هۆکاری سەرەکی:
             </label>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {LEAVE_REASONS.map((r) => (
                 <button
                   key={r}
                   type="button"
                   onClick={() => setSelectedReason(r)}
-                  className={`text-[11px] px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer ${
+                  className={`text-xs px-3.5 py-2.5 rounded-2xl border transition-all cursor-pointer font-bold ${
                     selectedReason === r
-                      ? 'bg-emerald-600 text-white font-bold border-emerald-600 shadow-xs'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                       : isDark 
                         ? 'bg-slate-950 text-slate-300 border-slate-700 hover:bg-slate-800' 
                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -310,15 +310,15 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
 
           {/* Additional Notes */}
           <div>
-            <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+            <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               تێبینی و ڕوونکردنەوەی زیاتر:
             </label>
             <textarea
-              rows={2}
+              rows={3}
               value={notesInput}
               onChange={(e) => setNotesInput(e.target.value)}
               placeholder="بۆ نموونە: لە کاتژمێر ٢ تا ٤ پاشنیوەڕۆ بۆ سەردانی پزیشک..."
-              className={`w-full border rounded-xl p-3 text-xs outline-none transition-colors ${
+              className={`w-full border rounded-2xl p-3.5 text-sm outline-none transition-colors ${
                 isDark 
                   ? 'bg-slate-950 border-slate-700 text-white focus:border-emerald-400 placeholder:text-slate-600' 
                   : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-emerald-500 placeholder:text-slate-400'
@@ -331,13 +331,13 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 h-11 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs disabled:opacity-50 cursor-pointer"
+              className="flex-1 h-13 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 cursor-pointer"
             >
               {submitting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>
-                  <Send className="w-4 h-4" />
+                  <Send className="w-5 h-5" />
                   <span>ناردنی داواکاری مۆڵەت</span>
                 </>
               )}
@@ -345,7 +345,7 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
             <button
               type="button"
               onClick={() => setShowCreateForm(false)}
-              className={`px-4 h-11 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
+              className={`px-5 h-13 rounded-2xl text-xs font-bold cursor-pointer transition-colors ${
                 isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >

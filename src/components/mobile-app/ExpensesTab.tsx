@@ -164,7 +164,7 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
   };
 
   return (
-    <div className="space-y-3.5 pb-20">
+    <div className="space-y-4 pb-28">
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -173,7 +173,7 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
           }`}>
             <span>💸</span> داواکردنی مەسروفات
           </h2>
-          <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+          <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500 font-semibold'}`}>
             تۆمارکردنی خەرجی و پسوڵەکانی تایبەت بە کار
           </p>
         </div>
@@ -184,7 +184,7 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
             setShowCreateForm(!showCreateForm);
             setFeedback(null);
           }}
-          className="h-10 px-3.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+          className="h-11 px-4 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-2xl text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>داواکاری نوێ</span>
@@ -229,7 +229,7 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
 
           {/* Amount Input */}
           <div>
-            <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+            <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               بڕی پارە (دیناری عێراقی):
             </label>
             <div className="relative">
@@ -247,14 +247,14 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
                   }
                 }}
                 placeholder="25,000"
-                className={`w-full h-11 border rounded-xl px-4 text-left font-mono text-base font-bold outline-none transition-colors ${
+                className={`w-full h-13 border rounded-2xl px-4 text-left font-mono text-lg font-black outline-none transition-colors ${
                   isDark 
                     ? 'bg-slate-950 border-slate-700 text-white focus:border-amber-400' 
                     : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-amber-500'
                 }`}
                 required
               />
-              <span className={`absolute right-3.5 top-3 text-xs font-sans font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              <span className={`absolute right-3.5 top-3.5 text-xs font-sans font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 د.ع
               </span>
             </div>
@@ -262,24 +262,24 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
 
           {/* Category Chips */}
           <div>
-            <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+            <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               جۆری مەسروفات:
             </label>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {CATEGORY_CHIPS.map((cat) => (
                 <button
                   key={cat.label}
                   type="button"
                   onClick={() => setSelectedCategory(cat.label)}
-                  className={`text-[11px] px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1 cursor-pointer ${
+                  className={`text-xs px-3.5 py-2.5 rounded-2xl border transition-all flex items-center gap-1.5 cursor-pointer font-bold ${
                     selectedCategory === cat.label
-                      ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-xs'
+                      ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-sm'
                       : isDark 
                         ? 'bg-slate-950 text-slate-300 border-slate-700 hover:bg-slate-800' 
                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
-                  <span>{cat.icon}</span>
+                  <span className="text-sm">{cat.icon}</span>
                   <span>{cat.label}</span>
                 </button>
               ))}
@@ -288,15 +288,15 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
 
           {/* Note Input */}
           <div>
-            <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+            <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               هۆکار و تێبینی:
             </label>
             <textarea
-              rows={2}
+              rows={3}
               value={noteInput}
               onChange={(e) => setNoteInput(e.target.value)}
               placeholder="بۆ نموونە: کڕینی بەنزین بۆ ئۆتۆمبێلی کۆگا لە گەشتی هەولێر..."
-              className={`w-full border rounded-xl p-3 text-xs outline-none transition-colors ${
+              className={`w-full border rounded-2xl p-3.5 text-sm outline-none transition-colors ${
                 isDark 
                   ? 'bg-slate-950 border-slate-700 text-white focus:border-amber-400 placeholder:text-slate-600' 
                   : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-amber-500 placeholder:text-slate-400'
@@ -306,7 +306,7 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
 
           {/* Receipt Photo Upload */}
           <div>
-            <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+            <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               وێنەی پسوڵە (وەسڵ):
             </label>
 
@@ -320,7 +320,7 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
             />
 
             {receiptBase64 ? (
-              <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 w-full h-36 bg-slate-900 flex items-center justify-center">
+              <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 w-full h-40 bg-slate-900 flex items-center justify-center">
                 <img
                   src={receiptBase64}
                   alt="Receipt Preview"
@@ -329,23 +329,23 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
                 <button
                   type="button"
                   onClick={() => setReceiptBase64(null)}
-                  className="absolute top-2 left-2 p-1.5 bg-black/70 hover:bg-black text-rose-400 rounded-xl cursor-pointer"
+                  className="absolute top-2 left-2 p-2 bg-black/70 hover:bg-black text-rose-400 rounded-xl cursor-pointer"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             ) : (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className={`w-full h-20 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                className={`w-full h-24 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-2 transition-colors cursor-pointer ${
                   isDark 
                     ? 'border-slate-700 hover:border-amber-500/50 text-slate-400 hover:text-amber-400 bg-slate-950/40' 
                     : 'border-slate-300 hover:border-amber-500 text-slate-500 hover:text-amber-600 bg-slate-50'
                 }`}
               >
-                <Camera className="w-5 h-5" />
-                <span className="text-[11px] font-bold">گرتنی وێنەی پسوڵە لە کامێرا یان گەلەری</span>
+                <Camera className="w-6 h-6" />
+                <span className="text-xs font-bold">گرتنی وێنەی پسوڵە لە کامێرا یان گەلەری</span>
               </button>
             )}
           </div>
@@ -355,13 +355,13 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 h-11 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs disabled:opacity-50 cursor-pointer"
+              className="flex-1 h-13 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 cursor-pointer"
             >
               {submitting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-5 h-5" />
                   <span>ناردنی داواکاری مەسروفات</span>
                 </>
               )}
@@ -369,7 +369,7 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
             <button
               type="button"
               onClick={() => setShowCreateForm(false)}
-              className={`px-4 h-11 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
+              className={`px-5 h-13 rounded-2xl text-xs font-bold cursor-pointer transition-colors ${
                 isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >

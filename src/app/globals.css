@@ -90,7 +90,7 @@
   body {
     background: #ffffff !important;
     color: #1c1c1e;
-    font-size: 13px;
+    font-size: 14px;
     font-family: 'NRT', 'Vazirmatn', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
     margin: 0;
     padding: 0;
@@ -111,6 +111,21 @@
   [dir="rtl"] .font-black, .dir-rtl .font-black {
     font-weight: 800 !important;
     letter-spacing: -0.012em;
+  }
+
+  /* 📱 MOBILE VIEWPORT & SAFE AREA HELPERS */
+  .pt-safe {
+    padding-top: max(env(safe-area-inset-top, 0px), 12px);
+  }
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+  }
+
+  /* Prevent iOS Safari unwanted auto-zoom on form inputs */
+  @media screen and (max-width: 768px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
   }
 }
 

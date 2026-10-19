@@ -22,7 +22,7 @@ export function MonthlyReportTab({ user, stats, isDark = false }: MonthlyReportT
   const records = stats?.records || [];
 
   return (
-    <div className="space-y-3.5 pb-20">
+    <div className="space-y-4 pb-28">
       {/* Header */}
       <div>
         <h2 className={`text-base font-black flex items-center gap-2 ${
@@ -30,47 +30,47 @@ export function MonthlyReportTab({ user, stats, isDark = false }: MonthlyReportT
         }`}>
           <span>📊</span> ڕاپۆرتی دەوامی مانگانە
         </h2>
-        <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+        <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500 font-semibold'}`}>
           ئاماری ئامادەبوون و کاتی زیادەی مانگی {stats?.month || 'ئەم مانگە'}
         </p>
       </div>
 
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-3 gap-2.5">
-        <div className={`p-3.5 border rounded-2xl text-center shadow-xs ${
+        <div className={`p-4 border rounded-2xl text-center shadow-xs ${
           isDark 
             ? 'bg-slate-900/90 border-slate-800 text-white' 
             : 'bg-white border-slate-200/90 text-slate-900'
         }`}>
-          <span className={`text-[10px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>ڕۆژانی ئامادەبوو</span>
-          <span className="text-xl font-black font-mono text-emerald-600 dark:text-emerald-400">
+          <span className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>ڕۆژانی دەوام</span>
+          <span className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
             {stats?.presentDays || 0}
           </span>
-          <span className="text-[10px] text-slate-400 block mt-0.5">ڕۆژ</span>
+          <span className="text-[11px] text-slate-400 block mt-0.5 font-bold">ڕۆژ</span>
         </div>
 
-        <div className={`p-3.5 border rounded-2xl text-center shadow-xs ${
+        <div className={`p-4 border rounded-2xl text-center shadow-xs ${
           isDark 
             ? 'bg-slate-900/90 border-slate-800 text-white' 
             : 'bg-white border-slate-200/90 text-slate-900'
         }`}>
-          <span className={`text-[10px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>کاتی زیادە</span>
-          <span className="text-xl font-black font-mono text-amber-600 dark:text-amber-400">
+          <span className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>کاتی زیادە</span>
+          <span className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400">
             {stats?.totalOvertimeMinutes ? Math.round(stats.totalOvertimeMinutes / 60) : 0}
           </span>
-          <span className="text-[10px] text-slate-400 block mt-0.5">کاتژمێر</span>
+          <span className="text-[11px] text-slate-400 block mt-0.5 font-bold">کاتژمێر</span>
         </div>
 
-        <div className={`p-3.5 border rounded-2xl text-center shadow-xs ${
+        <div className={`p-4 border rounded-2xl text-center shadow-xs ${
           isDark 
             ? 'bg-slate-900/90 border-slate-800 text-white' 
             : 'bg-white border-slate-200/90 text-slate-900'
         }`}>
-          <span className={`text-[10px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>تەئخیربوون</span>
-          <span className="text-xl font-black font-mono text-rose-600 dark:text-rose-400">
+          <span className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>تەئخیربوون</span>
+          <span className="text-2xl font-black font-mono text-rose-600 dark:text-rose-400">
             {stats?.totalLateMinutes || 0}
           </span>
-          <span className="text-[10px] text-slate-400 block mt-0.5">خولەک</span>
+          <span className="text-[11px] text-slate-400 block mt-0.5 font-bold">خولەک</span>
         </div>
       </div>
 

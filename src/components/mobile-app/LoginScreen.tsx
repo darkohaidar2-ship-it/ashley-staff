@@ -229,23 +229,23 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
 
   return (
     <div className={`min-h-[100dvh] w-full transition-colors duration-200 select-none font-sans ${
-      isDark ? 'bg-slate-950 text-white' : 'bg-slate-100/70 text-slate-900'
+      isDark ? 'bg-slate-950 text-white' : 'bg-[#f8fafc] text-slate-900'
     }`} dir="rtl">
       
-      {/* 📱 STRICT MOBILE FRAME CONTAINER (Apple-grade mobile proportion) */}
-      <div className={`w-full max-w-[430px] min-h-[100dvh] mx-auto flex flex-col justify-between p-4 sm:p-5 sm:shadow-2xl transition-colors ${
-        isDark ? 'bg-slate-950 text-white sm:border-x sm:border-slate-800' : 'bg-[#f8fafc] text-slate-900 sm:border-x sm:border-slate-200/90'
+      {/* 📱 STRICT MOBILE FRAME CONTAINER (Full width on phones, 440px on tablet/desktop) */}
+      <div className={`w-full max-w-[440px] min-h-[100dvh] mx-auto flex flex-col justify-between p-5 pt-safe pb-safe transition-colors ${
+        isDark ? 'bg-slate-950 text-white sm:shadow-2xl sm:border-x sm:border-slate-800' : 'bg-[#f8fafc] text-slate-900 sm:shadow-2xl sm:border-x sm:border-slate-200/90'
       }`}>
         
         {/* 1. TOP HEADER & THEME TOGGLE */}
         <div className="pt-2 flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${
               isDark 
                 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' 
                 : 'bg-amber-50 text-amber-800 border border-amber-200'
             }`}>
-              <Sparkles className="w-3 h-3 text-amber-500" />
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
               <span>دەوامی فەرمی ئاشڵی</span>
             </span>
           </div>
@@ -254,71 +254,71 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
           <button
             type="button"
             onClick={toggleTheme}
-            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+            className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
               isDark 
                 ? 'bg-slate-900 border border-slate-800 text-amber-400 hover:bg-slate-800' 
                 : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-xs'
             }`}
             title={isDark ? 'گۆڕین بۆ لایت مۆد' : 'گۆڕین بۆ دارک مۆد'}
           >
-            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
         </div>
 
         {/* 2. BRANDING IDENTITY */}
-        <div className="my-auto py-4 flex flex-col items-center text-center">
+        <div className="my-auto py-6 flex flex-col items-center text-center">
           {/* Logo Badge */}
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 p-0.5 shadow-lg shadow-amber-500/20 mb-3 flex items-center justify-center">
-            <div className={`w-full h-full rounded-[14px] flex items-center justify-center ${
+          <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-amber-500 to-amber-400 p-0.5 shadow-xl shadow-amber-500/20 mb-3 flex items-center justify-center">
+            <div className={`w-full h-full rounded-[22px] flex items-center justify-center ${
               isDark ? 'bg-slate-900' : 'bg-white'
             }`}>
-              <Building2 className="w-8 h-8 text-amber-500" />
+              <Building2 className="w-10 h-10 text-amber-500" />
             </div>
           </div>
 
-          <h1 className={`text-xl font-black tracking-tight mb-0.5 ${
+          <h1 className={`text-2xl font-black tracking-tight mb-1 ${
             isDark ? 'text-white' : 'text-slate-900'
           }`}>
             ئاشڵی هۆم ستۆر
           </h1>
-          <p className={`text-xs max-w-xs ${
-            isDark ? 'text-slate-400' : 'text-slate-500 font-medium'
+          <p className={`text-sm max-w-xs ${
+            isDark ? 'text-slate-400' : 'text-slate-500 font-semibold'
           }`}>
             تۆمارکردنی کاتی دەوام • داواکاری مەسروفات و مۆڵەت
           </p>
 
           {/* Error Message */}
           {errorMsg && (
-            <div className="w-full mt-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2 text-right">
+            <div className="w-full mt-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2 text-right">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
-              <span className="leading-relaxed">{errorMsg}</span>
+              <span className="leading-relaxed font-bold">{errorMsg}</span>
             </div>
           )}
 
           {/* 3. MAIN LOGIN CARD */}
-          <div className={`w-full mt-5 rounded-3xl p-5 border transition-all ${
+          <div className={`w-full mt-6 rounded-3xl p-6 border transition-all ${
             isDark 
               ? 'bg-slate-900/90 border-slate-800 shadow-2xl' 
-              : 'bg-white border-slate-200/90 shadow-xl shadow-slate-200/60'
+              : 'bg-white border-slate-200/90 shadow-xl shadow-slate-200/50'
           }`}>
             
             {/* ACTION 1: GOOGLE ONE-CLICK SIGN-IN (PRIMARY PROMINENT) */}
-            <div className="space-y-3">
+            <div className="space-y-4">
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={googleLoading}
-                className={`w-full h-12.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-3 transition-all cursor-pointer active:scale-[0.98] shadow-xs disabled:opacity-50 ${
+                className={`w-full h-14 rounded-2xl font-black text-base flex items-center justify-center gap-3 transition-all cursor-pointer active:scale-[0.98] shadow-xs disabled:opacity-50 ${
                   isDark
                     ? 'bg-white text-slate-900 hover:bg-slate-100'
-                    : 'bg-white text-slate-800 border border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                    : 'bg-white text-slate-800 border-2 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
                 }`}
               >
                 {googleLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
                 ) : (
                   <>
-                    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                    <svg className="w-6 h-6 shrink-0" viewBox="0 0 24 24">
                       <path
                         fill="#4285F4"
                         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -336,41 +336,41 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
                         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                       />
                     </svg>
-                    <span className="font-bold text-[13px]">چوونەژوورەوە لە ڕێگەی Google</span>
+                    <span>چوونەژوورەوە لە ڕێگەی Google</span>
                   </>
                 )}
               </button>
 
               <div className="flex items-center gap-2 pt-1">
                 <div className={`h-px flex-1 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
-                <span className={`text-[11px] font-medium px-1 ${
+                <span className={`text-xs font-semibold px-2 ${
                   isDark ? 'text-slate-500' : 'text-slate-400'
                 }`}>
-                  یان لە ڕێگەی کۆدی نهێنی
+                  یان لە ڕێگەی کۆدی نهێنی (PIN)
                 </span>
                 <div className={`h-px flex-1 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
               </div>
 
-              {/* ACTION 2: DIRECT STAFF PIN LOGIN (SIMPLE & COMPACT) */}
+              {/* ACTION 2: DIRECT STAFF PIN LOGIN */}
               {activeMode === 'google' ? (
                 <button
                   type="button"
                   onClick={() => setActiveMode('pin')}
-                  className={`w-full h-11 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  className={`w-full h-13 rounded-2xl font-bold text-sm flex items-center justify-center gap-2.5 transition-all cursor-pointer ${
                     isDark
                       ? 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80'
                       : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
                   }`}
                 >
-                  <KeyRound className="w-4 h-4 text-amber-500" />
-                  <span>داخڵبوون بە هەڵبژاردنی کارمەند و PIN</span>
+                  <KeyRound className="w-4.5 h-4.5 text-amber-500" />
+                  <span>داخڵبوون بە ناوی کارمەند و PIN</span>
                 </button>
               ) : (
                 /* PIN Login Form */
-                <form onSubmit={handleStaffPinLogin} className="space-y-3 pt-1 text-right">
+                <form onSubmit={handleStaffPinLogin} className="space-y-4 pt-1 text-right">
                   {/* Select Employee Trigger */}
                   <div className="relative">
-                    <label className={`block text-[11px] font-bold mb-1 ${
+                    <label className={`block text-xs font-bold mb-1.5 ${
                       isDark ? 'text-slate-300' : 'text-slate-700'
                     }`}>
                       ناوی کارمەند هەڵبژێرە:
@@ -378,38 +378,38 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
                     <button
                       type="button"
                       onClick={() => setShowStaffPicker(!showStaffPicker)}
-                      className={`w-full h-11 px-3.5 rounded-xl border flex items-center justify-between text-xs transition-colors cursor-pointer ${
+                      className={`w-full h-13 px-4 rounded-2xl border flex items-center justify-between text-sm transition-colors cursor-pointer ${
                         isDark
                           ? 'bg-slate-950 border-slate-700 text-white'
-                          : 'bg-white border-slate-300 text-slate-900'
+                          : 'bg-white border-slate-300 text-slate-900 shadow-2xs'
                       }`}
                     >
-                      <div className="flex items-center gap-2 truncate">
-                        <Users className="w-4 h-4 text-amber-500 shrink-0" />
+                      <div className="flex items-center gap-2.5 truncate">
+                        <Users className="w-5 h-5 text-amber-500 shrink-0" />
                         <span className="font-bold truncate">
                           {selectedEmployeeObj 
                             ? (selectedEmployeeObj.fullName3Part || selectedEmployeeObj.name)
                             : 'ناوی خۆت هەڵبژێرە لە لیستەکە...'}
                         </span>
                       </div>
-                      <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                      <ChevronDown className="w-4.5 h-4.5 text-slate-400 shrink-0" />
                     </button>
 
                     {/* Popover Staff List */}
                     {showStaffPicker && (
-                      <div className={`absolute top-full mt-1.5 right-0 left-0 z-30 rounded-2xl border p-2 shadow-2xl max-h-52 overflow-y-auto ${
+                      <div className={`absolute top-full mt-2 right-0 left-0 z-30 rounded-2xl border p-2.5 shadow-2xl max-h-60 overflow-y-auto ${
                         isDark
                           ? 'bg-slate-900 border-slate-700 text-white'
                           : 'bg-white border-slate-200 text-slate-900 shadow-slate-200/80'
                       }`}>
                         <div className="relative mb-2">
-                          <Search className="w-3.5 h-3.5 absolute right-3 top-2.5 text-slate-400" />
+                          <Search className="w-4 h-4 absolute right-3 top-3 text-slate-400" />
                           <input
                             type="text"
                             value={staffSearch}
                             onChange={(e) => setStaffSearch(e.target.value)}
-                            placeholder="گەڕان بەپێی ناو..."
-                            className={`w-full h-8 text-[11px] pr-8 pl-2 rounded-lg border outline-none ${
+                            placeholder="گەڕان بەپێی ناوی کارمەند..."
+                            className={`w-full h-10 text-xs pr-9 pl-3 rounded-xl border outline-none ${
                               isDark
                                 ? 'bg-slate-950 border-slate-700 text-white'
                                 : 'bg-slate-50 border-slate-200 text-slate-900'
@@ -428,7 +428,7 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
                                 setShowStaffPicker(false);
                                 setStaffSearch('');
                               }}
-                              className={`w-full p-2 rounded-xl text-right text-xs font-bold flex items-center justify-between transition-colors ${
+                              className={`w-full p-3 rounded-xl text-right text-xs font-bold flex items-center justify-between transition-colors ${
                                 selectedStaffId === emp.id
                                   ? 'bg-amber-500 text-slate-950'
                                   : isDark
@@ -437,7 +437,7 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
                               }`}
                             >
                               <span>{emp.fullName3Part || emp.name}</span>
-                              <span className="text-[10px] font-mono opacity-60" dir="ltr">{emp.id}</span>
+                              <span className="text-[11px] font-mono opacity-60" dir="ltr">{emp.id}</span>
                             </button>
                           ))}
                         </div>
@@ -447,13 +447,13 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
 
                   {/* PIN Input */}
                   <div>
-                    <label className={`block text-[11px] font-bold mb-1 ${
+                    <label className={`block text-xs font-bold mb-1.5 ${
                       isDark ? 'text-slate-300' : 'text-slate-700'
                     }`}>
-                      کۆدی نهێنی (PIN):
+                      کۆدی نهێنی (PIN)ی ٤ ژمارەیی:
                     </label>
                     <div className="relative">
-                      <KeyRound className="w-4 h-4 absolute right-3.5 top-3.5 text-slate-400" />
+                      <KeyRound className="w-5 h-5 absolute right-4 top-4 text-slate-400" />
                       <input
                         type="password"
                         inputMode="numeric"
@@ -461,10 +461,10 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
                         value={enteredPin}
                         onChange={(e) => setEnteredPin(e.target.value)}
                         placeholder="••••"
-                        className={`w-full h-11 rounded-xl border pr-10 pl-3 text-center font-mono text-lg tracking-widest outline-none transition-colors ${
+                        className={`w-full h-14 rounded-2xl border pr-12 pl-4 text-center font-mono text-2xl tracking-widest font-black outline-none transition-colors ${
                           isDark
                             ? 'bg-slate-950 border-slate-700 text-white focus:border-amber-400'
-                            : 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
+                            : 'bg-white border-slate-300 text-slate-900 focus:border-amber-500 shadow-2xs'
                         }`}
                         required
                       />
@@ -472,17 +472,17 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
                   </div>
 
                   {/* Buttons */}
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex items-center gap-2 pt-2">
                     <button
                       type="submit"
                       disabled={loading || !selectedStaffId || !enteredPin}
-                      className="flex-1 h-11 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                      className="flex-1 h-13 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-2xl text-sm flex items-center justify-center gap-2 shadow-xs transition-all disabled:opacity-50 cursor-pointer"
                     >
                       {loading ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                        <Loader2 className="w-5 h-5 animate-spin text-slate-950" />
                       ) : (
                         <>
-                          <ShieldCheck className="w-4 h-4" />
+                          <ShieldCheck className="w-5 h-5" />
                           <span>چوونەژوورەوە</span>
                         </>
                       )}
@@ -494,7 +494,7 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
                         setActiveMode('google');
                         setErrorMsg(null);
                       }}
-                      className={`px-3.5 h-11 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                      className={`px-4 h-13 rounded-2xl text-xs font-bold transition-colors cursor-pointer ${
                         isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'
                       }`}
                     >
@@ -511,7 +511,7 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
 
         {/* 4. FOOTER INFO */}
         <div className="pb-2 text-center">
-          <p className={`text-[10px] leading-relaxed ${
+          <p className={`text-xs font-medium leading-relaxed ${
             isDark ? 'text-slate-500' : 'text-slate-400'
           }`}>
             کۆمپانیای ئاشڵی هۆم ستۆر • سیستەمی دیوان ٢٠٢٦

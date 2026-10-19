@@ -318,7 +318,7 @@ export function AttendanceTab({
   ];
 
   return (
-    <div className="space-y-3.5 pb-20">
+    <div className="space-y-4 pb-28">
       {/* Employee Greeting & Live Time */}
       <div className={`border rounded-3xl p-4 sm:p-5 transition-all shadow-xs ${
         isDark 
@@ -327,7 +327,7 @@ export function AttendanceTab({
       }`}>
         <div className="flex items-center justify-between mb-3.5">
           <div className="flex items-center gap-3">
-            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-base overflow-hidden border ${
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg overflow-hidden border shrink-0 ${
               isDark 
                 ? 'bg-amber-500/20 border-amber-500/30 text-amber-400' 
                 : 'bg-amber-50 border-amber-200 text-amber-700'
@@ -340,10 +340,10 @@ export function AttendanceTab({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-black">
+                <h2 className="text-base font-black">
                   {user.employeeName}
                 </h2>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold border ${
                   isDark 
                     ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
                     : 'bg-amber-50 text-amber-800 border-amber-200'
@@ -351,18 +351,18 @@ export function AttendanceTab({
                   {user.role}
                 </span>
               </div>
-              <p className={`text-[11px] mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500 font-medium'}`}>
+              <p className={`text-xs mt-0.5 font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 کۆد: <span className="font-mono font-bold" dir="ltr">{user.employeeId}</span>
               </p>
             </div>
           </div>
 
-          <div className="text-left font-mono">
-            <div className="text-xl font-black tracking-tight" dir="ltr">
+          <div className="text-left font-mono shrink-0">
+            <div className="text-2xl font-black tracking-tight text-slate-900 dark:text-white" dir="ltr">
               {clockStr || '00:00:00'}
             </div>
-            <div className={`text-[10px] font-bold ${isDark ? 'text-slate-400' : 'text-amber-600'}`}>
-              کاتی بەغداد
+            <div className={`text-xs font-bold text-left ${isDark ? 'text-slate-400' : 'text-amber-600'}`}>
+              کاتی هەولێر
             </div>
           </div>
         </div>
@@ -371,22 +371,22 @@ export function AttendanceTab({
         <div className={`pt-3 border-t flex items-center justify-between text-xs ${
           isDark ? 'border-slate-800' : 'border-slate-100'
         }`}>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <div className="relative">
-              <span className={`w-2.5 h-2.5 rounded-full block ${geoStatus.isInside ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-              <span className={`w-2.5 h-2.5 rounded-full block absolute inset-0 animate-ping opacity-75 ${geoStatus.isInside ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              <span className={`w-3 h-3 rounded-full block ${geoStatus.isInside ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              <span className={`w-3 h-3 rounded-full block absolute inset-0 animate-ping opacity-75 ${geoStatus.isInside ? 'bg-emerald-500' : 'bg-amber-500'}`} />
             </div>
 
             {geoStatus.isChecking ? (
-              <span className={`text-[11px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>پشکنینی مەودای GPS...</span>
+              <span className={`text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>پشکنینی مەودای GPS...</span>
             ) : geoStatus.error ? (
-              <span className="text-rose-600 text-[11px] font-bold">{geoStatus.error}</span>
+              <span className="text-rose-600 text-xs font-bold">{geoStatus.error}</span>
             ) : geoStatus.isInside ? (
-              <span className="text-emerald-700 dark:text-emerald-400 font-bold text-[11px]">
+              <span className="text-emerald-700 dark:text-emerald-400 font-bold text-xs">
                 لە ناو سنووریت: <b>{geoStatus.distanceMeters} مەتر</b> لە {geoStatus.closestLocationName}
               </span>
             ) : (
-              <span className="text-amber-700 dark:text-amber-400 font-bold text-[11px]">
+              <span className="text-amber-700 dark:text-amber-400 font-bold text-xs">
                 دەرەوەی سنوور: <b>{geoStatus.distanceMeters} مەتر</b> لە {geoStatus.closestLocationName}
               </span>
             )}
@@ -396,37 +396,37 @@ export function AttendanceTab({
             type="button"
             onClick={refreshLocation}
             disabled={geoStatus.isChecking}
-            className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
               isDark 
                 ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' 
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
             }`}
             title="نوێکردنەوەی لۆکەیشن"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${geoStatus.isChecking ? 'animate-spin text-amber-500' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${geoStatus.isChecking ? 'animate-spin text-amber-500' : ''}`} />
           </button>
         </div>
       </div>
 
-      {/* Main Punch Big Buttons */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Main Punch Big Tactile Buttons */}
+      <div className="grid grid-cols-2 gap-3.5">
         {/* Check In Button */}
         <button
           type="button"
           onClick={() => handlePunch('check_in')}
           disabled={Boolean(punching)}
-          className="relative overflow-hidden group bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 active:scale-[0.98] text-white rounded-3xl p-4.5 flex flex-col items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 cursor-pointer"
+          className="relative overflow-hidden group bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 active:scale-[0.98] text-white rounded-3xl h-28 sm:h-32 p-4 flex flex-col items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-50 cursor-pointer"
         >
-          <div className="w-13 h-13 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
+          <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-xs">
             {punching === 'check_in' ? (
-              <Loader2 className="w-6 h-6 animate-spin text-white" />
+              <Loader2 className="w-7 h-7 animate-spin text-white" />
             ) : (
-              <UserCheck className="w-6 h-6 text-white" />
+              <UserCheck className="w-7 h-7 text-white" />
             )}
           </div>
           <div className="text-center">
-            <span className="text-sm font-black block">تۆمارکردنی هاتن</span>
-            <span className="text-[10px] text-emerald-100 font-medium">چێک ئینی دەوام</span>
+            <span className="text-base font-black block leading-tight">تۆمارکردنی هاتن</span>
+            <span className="text-xs text-emerald-100 font-medium">چێک ئینی دەوام</span>
           </div>
         </button>
 
@@ -435,18 +435,18 @@ export function AttendanceTab({
           type="button"
           onClick={() => handlePunch('check_out')}
           disabled={Boolean(punching)}
-          className="relative overflow-hidden group bg-gradient-to-b from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 active:scale-[0.98] text-white rounded-3xl p-4.5 flex flex-col items-center justify-center gap-2 shadow-lg shadow-rose-500/20 transition-all disabled:opacity-50 cursor-pointer"
+          className="relative overflow-hidden group bg-gradient-to-b from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 active:scale-[0.98] text-white rounded-3xl h-28 sm:h-32 p-4 flex flex-col items-center justify-center gap-2 shadow-lg shadow-rose-500/25 transition-all disabled:opacity-50 cursor-pointer"
         >
-          <div className="w-13 h-13 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
+          <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-xs">
             {punching === 'check_out' ? (
-              <Loader2 className="w-6 h-6 animate-spin text-white" />
+              <Loader2 className="w-7 h-7 animate-spin text-white" />
             ) : (
-              <Clock className="w-6 h-6 text-white" />
+              <Clock className="w-7 h-7 text-white" />
             )}
           </div>
           <div className="text-center">
-            <span className="text-sm font-black block">تۆمارکردنی دەرچوون</span>
-            <span className="text-[10px] text-rose-100 font-medium">چێک ئاوتی دەوام</span>
+            <span className="text-base font-black block leading-tight">تۆمارکردنی دەرچوون</span>
+            <span className="text-xs text-rose-100 font-medium">چێک ئاوتی دەوام</span>
           </div>
         </button>
       </div>
@@ -460,39 +460,39 @@ export function AttendanceTab({
         <div className="flex items-center justify-between mb-3.5">
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-            <h3 className="text-xs font-black">دۆخی دەوامی ئەمڕۆ</h3>
+            <h3 className="text-sm font-black">دۆخی دەوامی ئەمڕۆ</h3>
           </div>
-          <span className={`text-[11px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+          <span className={`text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
             {todayInfo?.date || dateStr}
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5 mb-2.5">
-          <div className={`p-3 rounded-2xl border ${
+        <div className="grid grid-cols-2 gap-3 mb-2.5">
+          <div className={`p-3.5 rounded-2xl border ${
             isDark 
               ? 'bg-slate-950/60 border-slate-800' 
               : 'bg-slate-50 border-slate-200/70'
           }`}>
-            <span className={`text-[10px] font-medium block mb-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>کاتی هاتن</span>
-            <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400" dir="ltr">
+            <span className={`text-xs font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>کاتی هاتن</span>
+            <span className="text-lg font-black font-mono text-emerald-600 dark:text-emerald-400 block" dir="ltr">
               {todayInfo?.checkInTime || 'تۆمار نەکراوە'}
             </span>
           </div>
 
-          <div className={`p-3 rounded-2xl border ${
+          <div className={`p-3.5 rounded-2xl border ${
             isDark 
               ? 'bg-slate-950/60 border-slate-800' 
               : 'bg-slate-50 border-slate-200/70'
           }`}>
-            <span className={`text-[10px] font-medium block mb-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>کاتی دەرچوون</span>
-            <span className="text-base font-black font-mono text-rose-600 dark:text-rose-400" dir="ltr">
+            <span className={`text-xs font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>کاتی دەرچوون</span>
+            <span className="text-lg font-black font-mono text-rose-600 dark:text-rose-400 block" dir="ltr">
               {todayInfo?.checkOutTime || 'تۆمار نەکراوە'}
             </span>
           </div>
         </div>
 
         {todayInfo?.overtimeNote && (
-          <div className={`p-3 rounded-xl text-xs border ${
+          <div className={`p-3.5 rounded-2xl text-xs border ${
             isDark 
               ? 'bg-amber-500/10 border-amber-500/20 text-amber-300' 
               : 'bg-amber-50 border-amber-200 text-amber-800'
@@ -504,44 +504,44 @@ export function AttendanceTab({
       </div>
 
       {/* Quick Action Cards Grid */}
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-3 gap-3">
         <button
           type="button"
           onClick={() => onNavigateTab('expenses')}
-          className={`p-3 rounded-2xl text-center flex flex-col items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer border ${
+          className={`p-3.5 rounded-2xl text-center flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer border ${
             isDark 
               ? 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-white' 
               : 'bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-xs'
           }`}
         >
-          <span className="text-lg">💸</span>
-          <span className="text-[11px] font-bold">مەسروفات</span>
+          <span className="text-2xl">💸</span>
+          <span className="text-xs font-bold">مەسروفات</span>
         </button>
 
         <button
           type="button"
           onClick={() => onNavigateTab('leaves')}
-          className={`p-3 rounded-2xl text-center flex flex-col items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer border ${
+          className={`p-3.5 rounded-2xl text-center flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer border ${
             isDark 
               ? 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-white' 
               : 'bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-xs'
           }`}
         >
-          <span className="text-lg">🌴</span>
-          <span className="text-[11px] font-bold">مۆڵەت</span>
+          <span className="text-2xl">🌴</span>
+          <span className="text-xs font-bold">مۆڵەت</span>
         </button>
 
         <button
           type="button"
           onClick={() => onNavigateTab('reports')}
-          className={`p-3 rounded-2xl text-center flex flex-col items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer border ${
+          className={`p-3.5 rounded-2xl text-center flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer border ${
             isDark 
               ? 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-white' 
               : 'bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-xs'
           }`}
         >
-          <span className="text-lg">📊</span>
-          <span className="text-[11px] font-bold">ئاماری مانگ</span>
+          <span className="text-2xl">📊</span>
+          <span className="text-xs font-bold">ئاماری مانگ</span>
         </button>
       </div>
 

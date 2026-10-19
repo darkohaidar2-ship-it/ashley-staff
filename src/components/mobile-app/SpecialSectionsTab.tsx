@@ -85,7 +85,7 @@ export function SpecialSectionsTab({
   };
 
   return (
-    <div className="space-y-3.5 pb-20">
+    <div className="space-y-4 pb-28">
       {/* Header */}
       <div>
         <h2 className={`text-base font-black flex items-center gap-2 ${
@@ -93,19 +93,19 @@ export function SpecialSectionsTab({
         }`}>
           <span>⚙️</span> پڕۆفایل و بەشە تایبەتەکان
         </h2>
-        <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+        <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500 font-semibold'}`}>
           زانیاری هەژمار و دەسەڵاتەکانی بەشەکەت
         </p>
       </div>
 
       {/* User Profile Card */}
-      <div className={`border rounded-3xl p-4 sm:p-5 shadow-xs space-y-3 ${
+      <div className={`border rounded-3xl p-4 sm:p-5 shadow-xs space-y-3.5 ${
         isDark 
           ? 'bg-slate-900/90 border-slate-800 text-white' 
           : 'bg-white border-slate-200/90 text-slate-900'
       }`}>
         <div className="flex items-center gap-3">
-          <div className={`w-13 h-13 rounded-2xl flex items-center justify-center font-bold text-xl overflow-hidden shrink-0 border ${
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-xl overflow-hidden shrink-0 border ${
             isDark 
               ? 'bg-amber-500/20 border-amber-500/30 text-amber-400' 
               : 'bg-amber-50 border-amber-200 text-amber-800'
@@ -117,9 +117,9 @@ export function SpecialSectionsTab({
             )}
           </div>
           <div>
-            <h3 className="text-sm font-black">{user.employeeName}</h3>
+            <h3 className="text-base font-black">{user.employeeName}</h3>
             <p className="text-xs text-amber-600 font-bold">{user.role}</p>
-            <p className={`text-[10px] font-mono ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+            <p className={`text-xs font-mono mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
               کۆدی کارمەند: <span className="font-bold">{user.employeeId}</span>
             </p>
           </div>
@@ -129,20 +129,20 @@ export function SpecialSectionsTab({
           isDark ? 'border-slate-800' : 'border-slate-100'
         }`}>
           <div className="flex items-center justify-between">
-            <span className={`flex items-center gap-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              <Mail className="w-3.5 h-3.5" /> ئیمەیڵی بەستراو:
+            <span className={`flex items-center gap-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500 font-medium'}`}>
+              <Mail className="w-4 h-4" /> ئیمەیڵی بەستراو:
             </span>
-            <span className="font-mono text-[11px] font-bold text-amber-600" dir="ltr">
+            <span className="font-mono text-xs font-bold text-amber-600" dir="ltr">
               {user.email}
             </span>
           </div>
 
           {user.phone && (
             <div className="flex items-center justify-between">
-              <span className={`flex items-center gap-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                <Phone className="w-3.5 h-3.5" /> تەلەفۆن:
+              <span className={`flex items-center gap-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500 font-medium'}`}>
+                <Phone className="w-4 h-4" /> تەلەفۆن:
               </span>
-              <span className={`font-mono text-[11px] font-bold ${isDark ? 'text-white' : 'text-slate-800'}`} dir="ltr">
+              <span className={`font-mono text-xs font-bold ${isDark ? 'text-white' : 'text-slate-800'}`} dir="ltr">
                 {user.phone}
               </span>
             </div>
@@ -152,7 +152,7 @@ export function SpecialSectionsTab({
         <button
           type="button"
           onClick={onLogout}
-          className="w-full h-11 mt-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-rose-200 transition-all cursor-pointer"
+          className="w-full h-13 mt-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-black rounded-2xl text-xs flex items-center justify-center gap-2 border border-rose-200 transition-all cursor-pointer"
         >
           <LogOut className="w-4 h-4" />
           <span>چوونەدەرەوە لە ئەپ (Sign Out)</span>
