@@ -15,6 +15,7 @@ export interface PunchRequest {
   forceBypassLocation?: boolean;
   isManager?: boolean;
   chatId?: string | number;
+  offlineRecordedAt?: string;
 }
 
 export interface PunchResponse {
@@ -40,7 +41,20 @@ export interface PunchResponse {
  * 3. ashley_manual_attendance_records (Authoritative overrides store for instant website rendering)
  */
 export async function evaluateAndRecordAttendance(req: PunchRequest): Promise<PunchResponse> {
-  const { dateStr, timeStr } = getBaghdadNow();
+  let { dateStr, timeStr } = getBaghdadNow();
+  if (req.offlineRecordedAt) {
+    try {
+      const offlineDate = new Date(req.offlineRecordedAt);
+      if (!isNaN(offlineDate.getTime())) {
+        const baghdadOffset = 3 * 60; // UTC+3
+        const localMinutes = offlineDate.getUTCMinutes() + offlineDate.getUTCHours() * 60 + baghdadOffset;
+        const h = Math.floor((localMinutes / 60) % 24);
+        const m = localMinutes % 60;
+        timeStr = `${h < 10 ? '0' : ''}${h}:${m < 10 ? '0' : ''}${m}`;
+        dateStr = offlineDate.toISOString().slice(0, 10);
+      }
+    } catch (e) {}
+  }
   const nowIso = new Date().toISOString();
 
   // 1. Resolve Employee Info

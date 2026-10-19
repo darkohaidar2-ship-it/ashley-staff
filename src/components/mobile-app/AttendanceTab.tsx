@@ -17,10 +17,12 @@ import {
   Compass,
   ExternalLink,
   HelpCircle,
-  X
+  X,
+  WifiOff
 } from 'lucide-react';
 import { MobileAuthUser, TodayAttendanceInfo, GeofenceStatus } from './types';
 import { DEFAULT_COMPANY_LOCATIONS } from '@/lib/geo-constants';
+import { queueOfflinePunch } from '@/lib/offline-sync-manager';
 
 interface AttendanceTabProps {
   user: MobileAuthUser;
@@ -294,22 +296,64 @@ export function AttendanceTab({
         locationName: closest.name,
       });
 
-      const res = await fetch('/api/mobile/punch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // Check offline status or network availability
+      const isNetworkOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      let data: any = null;
+      let networkFailed = false;
+
+      if (!isNetworkOffline) {
+        try {
+          const res = await fetch('/api/mobile/punch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employeeId: user.employeeId,
+              employeeName: user.employeeName,
+              punchType,
+              lat,
+              lng,
+              isManager: user.isFounder,
+            }),
+          });
+          data = await res.json();
+        } catch (fetchErr) {
+          networkFailed = true;
+        }
+      }
+
+      // If offline or network dropped: QUEUE FOR BACKGROUND SYNC
+      if (isNetworkOffline || networkFailed) {
+        const now = new Date();
+        const timeNowStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        const dateNowStr = now.toISOString().slice(0, 10);
+
+        queueOfflinePunch({
+          id: `offline-${user.employeeId}-${punchType}-${Date.now()}`,
           employeeId: user.employeeId,
           employeeName: user.employeeName,
           punchType,
           lat,
           lng,
-          isManager: user.isFounder,
-        }),
-      });
+          distanceMeters: Math.round(minDist),
+          locationName: closest.name,
+          offlineRecordedAt: now.toISOString(),
+          timeStr: timeNowStr,
+          dateStr: dateNowStr,
+        });
 
-      const data = await res.json();
+        setPunchingStep(null);
+        playChime(true);
 
-      if (data.success) {
+        setModalFeedback({
+          show: true,
+          type: 'success',
+          title: punchType === 'check_in' ? '📶 هاتن بە ئۆفلاین تۆمارکرا' : '📶 دەرچوون بە ئۆفلاین تۆمارکرا',
+          message: `دەوامەکەت لە کاتژمێر <b>${timeNowStr}</b> لە مۆبایلەکەتدا پارێزرا.\n\nبەهۆی نەبوونی هێڵی ئینتەرنێت، سیستەم هەرکات پەیوەست بوویتەوە خۆکارانە دەوامەکەت هاوکات (Sync) دەکات بۆ سێرڤەری سەرەکی.`,
+        });
+        return;
+      }
+
+      if (data && data.success) {
         setPunchingStep(null);
         playChime(true);
         onRefreshToday();

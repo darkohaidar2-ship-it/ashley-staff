@@ -1,22 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { 
-  ShieldCheck, 
   Users, 
   Package, 
   Truck, 
-  Lock, 
-  Unlock, 
   LogOut, 
-  User, 
   Mail, 
-  Phone, 
-  KeyRound, 
-  Loader2, 
-  CheckCircle2, 
-  AlertCircle, 
-  RefreshCw 
+  Phone 
 } from 'lucide-react';
 import { MobileAuthUser } from './types';
 
@@ -40,49 +31,6 @@ export function SpecialSectionsTab({
   onLogout,
   isDark = false,
 }: SpecialSectionsTabProps) {
-  // Google Bindings Manager (Admin Only)
-  const [bindings, setBindings] = useState<Record<string, any>>({});
-  const [loadingBindings, setLoadingBindings] = useState(false);
-  const [unbindingEmail, setUnbindingEmail] = useState<string | null>(null);
-
-  const loadBindings = async () => {
-    if (!user.isFounder) return;
-    setLoadingBindings(true);
-    try {
-      const res = await fetch('/api/auth/google-binding');
-      const data = await res.json();
-      if (data.success && data.allBindings) {
-        setBindings(data.allBindings);
-      }
-    } catch (e) {
-      console.error('[SpecialSectionsTab] Failed to load bindings:', e);
-    } finally {
-      setLoadingBindings(false);
-    }
-  };
-
-  useEffect(() => {
-    loadBindings();
-  }, [user.isFounder]);
-
-  const handleUnbind = async (email: string) => {
-    if (!confirm(`ئایا دڵنیایت لە کردنەوەی قوفڵی ئەم ئەکاونتە؟\n${email}`)) return;
-
-    setUnbindingEmail(email);
-    try {
-      const res = await fetch(`/api/auth/google-binding?email=${encodeURIComponent(email)}`, {
-        method: 'DELETE',
-      });
-      const data = await res.json();
-      if (data.success) {
-        loadBindings();
-      }
-    } catch (e) {
-      alert('هەڵەیەک ڕوویدا لە کردنەوەی قوفڵ');
-    } finally {
-      setUnbindingEmail(null);
-    }
-  };
 
   return (
     <div className="space-y-4 pb-28">
@@ -222,74 +170,6 @@ export function SpecialSectionsTab({
             }`}
             dangerouslySetInnerHTML={{ __html: specialSections.generalSummary }}
           />
-        </div>
-      )}
-
-      {/* Admin Google Bindings Management (Darko Only) */}
-      {user.isFounder && (
-        <div className={`border rounded-3xl p-4 sm:p-5 shadow-xs ${
-          isDark 
-            ? 'bg-slate-900/90 border-slate-800 text-white' 
-            : 'bg-white border-slate-200/90 text-slate-900'
-        }`}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-amber-500" />
-              <h3 className="text-xs font-black">بەڕێوەبردنی ئەکاونتەکانی گووگڵ</h3>
-            </div>
-            <button
-              onClick={loadBindings}
-              disabled={loadingBindings}
-              className={`p-1.5 rounded-lg cursor-pointer ${
-                isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loadingBindings ? 'animate-spin text-amber-500' : ''}`} />
-            </button>
-          </div>
-
-          <p className={`text-[11px] mb-3 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-            لێرەوە دەتوانیت ببینی کام کارمەند کام گووگڵ ئەکاونتەی بەستووە، و دەتوانیت قوفڵەکەی بکەیتەوە ئەگەر مۆبایلی گۆڕی:
-          </p>
-
-          <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
-            {Object.keys(bindings).length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-4">هیچ ئەکاونتێکی بەستراو نییە</p>
-            ) : (
-              Object.entries(bindings).map(([email, info]) => (
-                <div
-                  key={email}
-                  className={`p-3 border rounded-xl flex items-center justify-between gap-2 ${
-                    isDark 
-                      ? 'bg-slate-950/70 border-slate-800' 
-                      : 'bg-slate-50 border-slate-200'
-                  }`}
-                >
-                  <div>
-                    <h4 className="text-xs font-black">{info.employeeName}</h4>
-                    <p className="text-[10px] text-amber-600 font-mono font-bold" dir="ltr">{email}</p>
-                    <span className="text-[9px] text-slate-400 font-mono">کۆد: {info.employeeId}</span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleUnbind(email)}
-                    disabled={unbindingEmail === email}
-                    className="h-8 px-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
-                  >
-                    {unbindingEmail === email ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <>
-                        <Unlock className="w-3 h-3" />
-                        <span>کردنەوەی قوفڵ</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
         </div>
       )}
     </div>

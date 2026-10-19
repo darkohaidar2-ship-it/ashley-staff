@@ -13,6 +13,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { MobileAuthUser } from './types';
+import { queueOfflineLeave } from '@/lib/offline-sync-manager';
 
 interface LeavesTabProps {
   user: MobileAuthUser;
@@ -91,6 +92,26 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
     setSubmitting(true);
     setFeedback(null);
 
+    // If offline, queue for background sync
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      queueOfflineLeave({
+        id: `offline-leave-${user.employeeId}-${Date.now()}`,
+        employeeId: user.employeeId,
+        employeeName: user.employeeName,
+        leaveType,
+        targetDate,
+        reason: selectedReason,
+        notes: notesInput.trim(),
+        offlineRecordedAt: new Date().toISOString(),
+      });
+
+      setFeedback({ type: 'success', message: '📶 داواکاری مۆڵەت بە ئۆفلاین تۆمارکرا و لەگەڵ پەیدابوونی خەت خۆکارانە هاوکات (Sync) دەبێت.' });
+      setNotesInput('');
+      setShowCreateForm(false);
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/mobile/leave', {
         method: 'POST',
@@ -116,7 +137,20 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
         setFeedback({ type: 'error', message: data.error || 'هەڵەیەک ڕوویدا لە تۆمارکردنی مۆڵەت' });
       }
     } catch (err: any) {
-      setFeedback({ type: 'error', message: err.message || 'هەڵەی پەیوەندی بە سێرڤەر' });
+      // If network fetch failed, queue offline
+      queueOfflineLeave({
+        id: `offline-leave-${user.employeeId}-${Date.now()}`,
+        employeeId: user.employeeId,
+        employeeName: user.employeeName,
+        leaveType,
+        targetDate,
+        reason: selectedReason,
+        notes: notesInput.trim(),
+        offlineRecordedAt: new Date().toISOString(),
+      });
+      setFeedback({ type: 'success', message: '📶 داواکاری مۆڵەت بە ئۆفلاین تۆمارکرا و لەگەڵ پەیدابوونی خەت خۆکارانە هاوکات (Sync) دەبێت.' });
+      setNotesInput('');
+      setShowCreateForm(false);
     } finally {
       setSubmitting(false);
     }

@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { employeeId, employeeName, punchType, lat, lng, forceBypassLocation, isManager } = body;
+    const { employeeId, employeeName, punchType, lat, lng, forceBypassLocation, isManager, offlineRecordedAt } = body;
 
     if (!employeeId) {
       return NextResponse.json({ success: false, message: 'کۆدی کارمەند دیاری نەکراوە' }, { status: 400 });
@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
       lng: typeof lng === 'number' ? lng : undefined,
       forceBypassLocation: Boolean(forceBypassLocation),
       isManager: Boolean(isManager),
+      offlineRecordedAt: typeof offlineRecordedAt === 'string' ? offlineRecordedAt : undefined,
     });
 
     return NextResponse.json(result);

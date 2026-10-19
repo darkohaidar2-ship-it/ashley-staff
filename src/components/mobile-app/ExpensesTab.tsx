@@ -16,6 +16,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { MobileAuthUser } from './types';
+import { queueOfflineExpense } from '@/lib/offline-sync-manager';
 
 interface ExpensesTabProps {
   user: MobileAuthUser;
@@ -130,6 +131,28 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
     setSubmitting(true);
     setFeedback(null);
 
+    // If offline, queue for background sync
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      queueOfflineExpense({
+        id: `offline-exp-${user.employeeId}-${Date.now()}`,
+        employeeId: user.employeeId,
+        employeeName: user.employeeName,
+        amount: rawAmount,
+        category: selectedCategory,
+        note: noteInput.trim(),
+        receiptPhotoUrl: receiptBase64 || undefined,
+        offlineRecordedAt: new Date().toISOString(),
+      });
+
+      setFeedback({ type: 'success', message: '📶 داواکاری مەسروفات بە ئۆفلاین تۆمارکرا و لەگەڵ پەیدابوونی خەت خۆکارانە هاوکات (Sync) دەبێت.' });
+      setAmountInput('');
+      setNoteInput('');
+      setReceiptBase64(null);
+      setShowCreateForm(false);
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/mobile/expense', {
         method: 'POST',
@@ -157,7 +180,22 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
         setFeedback({ type: 'error', message: data.error || 'هەڵەیەک ڕوویدا لە تۆمارکردنی مەسروفات' });
       }
     } catch (err: any) {
-      setFeedback({ type: 'error', message: err.message || 'هەڵەی پەیوەندی بە سێرڤەر' });
+      // If network fetch failed, queue offline
+      queueOfflineExpense({
+        id: `offline-exp-${user.employeeId}-${Date.now()}`,
+        employeeId: user.employeeId,
+        employeeName: user.employeeName,
+        amount: rawAmount,
+        category: selectedCategory,
+        note: noteInput.trim(),
+        receiptPhotoUrl: receiptBase64 || undefined,
+        offlineRecordedAt: new Date().toISOString(),
+      });
+      setFeedback({ type: 'success', message: '📶 داواکاری مەسروفات بە ئۆفلاین تۆمارکرا و لەگەڵ پەیدابوونی خەت خۆکارانە هاوکات (Sync) دەبێت.' });
+      setAmountInput('');
+      setNoteInput('');
+      setReceiptBase64(null);
+      setShowCreateForm(false);
     } finally {
       setSubmitting(false);
     }

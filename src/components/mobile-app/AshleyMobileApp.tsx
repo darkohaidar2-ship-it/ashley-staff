@@ -19,7 +19,10 @@ import {
   LogOut,
   Smartphone,
   ExternalLink,
-  Check
+  Check,
+  CloudUpload,
+  RefreshCw,
+  CheckCircle2
 } from 'lucide-react';
 import { MobileAuthUser, TodayAttendanceInfo, MonthStatsInfo } from './types';
 import { LoginScreen } from './LoginScreen';
@@ -30,6 +33,7 @@ import { LeavesTab } from './LeavesTab';
 import { MonthlyReportTab } from './MonthlyReportTab';
 import { SpecialSectionsTab } from './SpecialSectionsTab';
 import { supabaseAuth } from '@/lib/supabase/client';
+import { syncAllOfflineData, getPendingOfflineCount } from '@/lib/offline-sync-manager';
 
 export default function AshleyMobileApp() {
   // Theme state: default 'light' per user specification
@@ -73,9 +77,61 @@ export default function AshleyMobileApp() {
   const [specialSectionsData, setSpecialSectionsData] = useState<any>({});
   const [isOnline, setIsOnline] = useState(true);
 
+  // Offline Sync State («با ئەپەکە ئۆفلاین بێت کە خەت هەبوو سایجیکی بکات .. دتاکان رەوانە بکات»)
+  const [pendingOfflineCount, setPendingOfflineCount] = useState<number>(0);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
+
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallPill, setShowInstallPill] = useState(false);
+
+  // Refresh pending count
+  const refreshPendingCount = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      setPendingOfflineCount(getPendingOfflineCount());
+    }
+  }, []);
+
+  // Fetch status and attendance data whenever user is logged in
+  const loadStatusData = useCallback(async () => {
+    if (!user?.employeeId) return;
+    try {
+      const res = await fetch(`/api/mobile/status?employeeId=${encodeURIComponent(user.employeeId)}`);
+      const data = await res.json();
+      if (data.success) {
+        if (data.today) setTodayInfo(data.today);
+        if (data.monthStats) setMonthStats(data.monthStats);
+        if (data.specialSections) setSpecialSectionsData(data.specialSections);
+      }
+    } catch (err) {
+      console.error('[AshleyMobileApp] Error loading status data:', err);
+    }
+  }, [user?.employeeId]);
+
+  // Execute Auto-Sync of Queued Offline Records
+  const runSync = useCallback(async () => {
+    if (typeof window === 'undefined' || !navigator.onLine) return;
+    const count = getPendingOfflineCount();
+    if (count === 0) return;
+
+    setIsSyncing(true);
+    try {
+      const res = await syncAllOfflineData();
+      if (res.totalSynced > 0) {
+        setSyncNotice(`✅ ${res.totalSynced} تۆماری ئۆفلاین بە سەرکەوتوویی هاوکات (Sync) کران.`);
+        setTimeout(() => setSyncNotice(null), 4000);
+        if (res.punchesSynced > 0) {
+          loadStatusData();
+        }
+      }
+    } catch (err) {
+      console.warn('[AshleyMobileApp] Sync error:', err);
+    } finally {
+      setIsSyncing(false);
+      refreshPendingCount();
+    }
+  }, [loadStatusData, refreshPendingCount]);
 
   // Detect Desktop Screen on Mount
   useEffect(() => {
@@ -88,14 +144,38 @@ export default function AshleyMobileApp() {
     return () => window.removeEventListener('resize', checkIsDesktop);
   }, []);
 
-  // Check stored session on mount
+  // Check stored session & offline event listeners on mount
   useEffect(() => {
     let isMounted = true;
 
-    // Online / Offline listener
-    const updateOnline = () => setIsOnline(navigator.onLine);
-    window.addEventListener('online', updateOnline);
-    window.addEventListener('offline', updateOnline);
+    // Online / Offline listener & Auto-sync trigger
+    const handleOnline = () => {
+      if (isMounted) setIsOnline(true);
+      refreshPendingCount();
+      runSync();
+    };
+
+    const handleOffline = () => {
+      if (isMounted) setIsOnline(false);
+      refreshPendingCount();
+    };
+
+    const handleQueueChange = () => {
+      refreshPendingCount();
+      if (navigator.onLine) {
+        runSync();
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('ashley_offline_changed', handleQueueChange);
+
+    // Initial check
+    refreshPendingCount();
+    if (navigator.onLine) {
+      runSync();
+    }
 
     // PWA install prompt capture
     const handleBeforeInstall = (e: any) => {
@@ -119,29 +199,23 @@ export default function AshleyMobileApp() {
       if (isMounted) setInitLoading(false);
     }
 
+    // Periodic sync check every 20 seconds
+    const syncInterval = setInterval(() => {
+      refreshPendingCount();
+      if (navigator.onLine && getPendingOfflineCount() > 0 && !isSyncing) {
+        runSync();
+      }
+    }, 20000);
+
     return () => {
       isMounted = false;
-      window.removeEventListener('online', updateOnline);
-      window.removeEventListener('offline', updateOnline);
+      clearInterval(syncInterval);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('ashley_offline_changed', handleQueueChange);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
     };
-  }, []);
-
-  // Fetch status and attendance data whenever user is logged in
-  const loadStatusData = useCallback(async () => {
-    if (!user?.employeeId) return;
-    try {
-      const res = await fetch(`/api/mobile/status?employeeId=${encodeURIComponent(user.employeeId)}`);
-      const data = await res.json();
-      if (data.success) {
-        if (data.today) setTodayInfo(data.today);
-        if (data.monthStats) setMonthStats(data.monthStats);
-        if (data.specialSections) setSpecialSectionsData(data.specialSections);
-      }
-    } catch (err) {
-      console.error('[AshleyMobileApp] Error loading status data:', err);
-    }
-  }, [user?.employeeId]);
+  }, [refreshPendingCount, runSync, isSyncing]);
 
   useEffect(() => {
     if (user?.employeeId) {
@@ -315,11 +389,47 @@ export default function AshleyMobileApp() {
           : 'bg-[#f8fafc] text-slate-900 sm:shadow-2xl sm:border-x sm:border-slate-200/90'
       }`}>
         
-        {/* Offline Warning Banner */}
+        {/* Offline & Auto-Sync Status Notification Banners */}
         {!isOnline && (
-          <div className="bg-amber-500 text-slate-950 px-4 py-2.5 text-xs font-bold flex items-center justify-center gap-2 sticky top-0 z-50 shadow-md">
-            <WifiOff className="w-4 h-4 shrink-0" />
-            <span>پەیوەندی ئینتەرنێت پچڕاوە. تکایە پەیوەندی بکە بە وایفای ئاشڵی.</span>
+          <div className="bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 px-4 py-2.5 text-xs font-bold flex items-center justify-between sticky top-0 z-50 shadow-md">
+            <div className="flex items-center gap-2">
+              <WifiOff className="w-4 h-4 shrink-0" />
+              <span>دۆخی ئۆفلاین • دەتوانیت دەوام تۆمار بکەیت</span>
+            </div>
+            {pendingOfflineCount > 0 && (
+              <span className="bg-slate-950/20 text-slate-950 px-2 py-0.5 rounded-full text-[10px] font-mono font-black">
+                {pendingOfflineCount} لە چاوەڕوانیدا
+              </span>
+            )}
+          </div>
+        )}
+
+        {isSyncing && (
+          <div className="bg-sky-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-center gap-2 sticky top-0 z-50 shadow-md animate-pulse">
+            <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+            <span>لە هاوکاتکردنی داتاکانی ئۆفلاین (Syncing)...</span>
+          </div>
+        )}
+
+        {syncNotice && (
+          <div className="bg-emerald-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-center gap-2 sticky top-0 z-50 shadow-md animate-in fade-in duration-200">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{syncNotice}</span>
+          </div>
+        )}
+
+        {isOnline && pendingOfflineCount > 0 && !isSyncing && (
+          <div 
+            onClick={runSync}
+            className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2 text-xs font-bold flex items-center justify-between cursor-pointer sticky top-0 z-50 shadow-xs hover:bg-amber-100 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <CloudUpload className="w-4 h-4 text-amber-600 animate-bounce" />
+              <span>{pendingOfflineCount} داتای تۆمارکراوی ئۆفلاین ئامادەیە بۆ ناردن</span>
+            </div>
+            <span className="text-[11px] bg-amber-600 text-white px-2 py-0.5 rounded-lg shadow-2xs font-bold">
+              هاوکات بکە (Sync)
+            </span>
           </div>
         )}
 
