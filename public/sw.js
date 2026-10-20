@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ashley-staff-v36-lightmode';
+const CACHE_NAME = 'ashley-apple-v37-ios';
 
 const PRECACHE_URLS = [
   '/',
