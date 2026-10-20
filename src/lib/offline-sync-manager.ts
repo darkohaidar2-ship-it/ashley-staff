@@ -270,3 +270,134 @@ export async function syncAllOfflineData(): Promise<{
     totalSynced: punchesSynced + expensesSynced + leavesSynced,
   };
 }
+
+// -------------------------------------------------------------
+// 6. LOCALSTORAGE CACHE HELPERS (Offline Mode)
+// -------------------------------------------------------------
+const CACHE_KEYS = {
+  TODAY: (empId: string) => `ashley_cache_today_${empId}`,
+  STATS: (empId: string) => `ashley_cache_stats_${empId}`,
+  SECTIONS: (empId: string) => `ashley_cache_sections_${empId}`,
+  EXPENSES: (empId: string) => `ashley_cache_expenses_${empId}`,
+  LEAVES: (empId: string) => `ashley_cache_leaves_${empId}`,
+};
+
+export function getCachedTodayInfo(empId: string): any | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(CACHE_KEYS.TODAY(empId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setCachedTodayInfo(empId: string, data: any): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CACHE_KEYS.TODAY(empId), JSON.stringify({
+      ...data,
+      _cachedAt: Date.now(),
+    }));
+  } catch {}
+}
+
+export function getCachedMonthStats(empId: string): any | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(CACHE_KEYS.STATS(empId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setCachedMonthStats(empId: string, data: any): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CACHE_KEYS.STATS(empId), JSON.stringify({
+      ...data,
+      _cachedAt: Date.now(),
+    }));
+  } catch {}
+}
+
+export function getCachedSpecialSections(empId: string): any {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(CACHE_KEYS.SECTIONS(empId));
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function setCachedSpecialSections(empId: string, data: any): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CACHE_KEYS.SECTIONS(empId), JSON.stringify(data));
+  } catch {}
+}
+
+export function getCachedExpenses(empId: string): any[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(CACHE_KEYS.EXPENSES(empId));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setCachedExpenses(empId: string, items: any[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CACHE_KEYS.EXPENSES(empId), JSON.stringify(items));
+  } catch {}
+}
+
+export function getCachedLeaves(empId: string): any[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(CACHE_KEYS.LEAVES(empId));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setCachedLeaves(empId: string, items: any[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CACHE_KEYS.LEAVES(empId), JSON.stringify(items));
+  } catch {}
+}
+
+// -------------------------------------------------------------
+// 7. APPLE HAPTIC FEEDBACK (WWDC Design Foundation)
+// -------------------------------------------------------------
+export function triggerHaptic(type: 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error' = 'light'): void {
+  if (typeof window === 'undefined' || !('vibrate' in navigator)) return;
+  try {
+    switch (type) {
+      case 'light':
+        navigator.vibrate(10);
+        break;
+      case 'medium':
+        navigator.vibrate(18);
+        break;
+      case 'heavy':
+        navigator.vibrate(30);
+        break;
+      case 'success':
+        navigator.vibrate([15, 50, 25]);
+        break;
+      case 'warning':
+        navigator.vibrate([25, 60, 25]);
+        break;
+      case 'error':
+        navigator.vibrate([40, 50, 40, 50, 40]);
+        break;
+    }
+  } catch {}
+}

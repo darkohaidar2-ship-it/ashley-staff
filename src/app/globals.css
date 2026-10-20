@@ -87,6 +87,14 @@
     background: #3b82f6;
   }
 
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button, a, input, select, textarea {
+    touch-action: manipulation;
+  }
+
   body {
     background: #ffffff !important;
     color: #1c1c1e;
@@ -162,6 +170,18 @@
     font-size: 13px !important;
     padding: 12px 18px !important;
     border-radius: 24px 24px 0 0 !important;
+  }
+
+  .ios-spring {
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.25s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .ios-press:active {
+    transform: scale(0.96) !important;
+    transition: transform 0.1s ease-out !important;
+  }
+  .ios-blur-chrome {
+    backdrop-filter: blur(24px) saturate(190%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
   }
 
   /* ==========================================================================

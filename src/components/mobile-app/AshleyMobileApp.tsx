@@ -33,7 +33,17 @@ import { LeavesTab } from './LeavesTab';
 import { MonthlyReportTab } from './MonthlyReportTab';
 import { SpecialSectionsTab } from './SpecialSectionsTab';
 import { supabaseAuth } from '@/lib/supabase/client';
-import { syncAllOfflineData, getPendingOfflineCount } from '@/lib/offline-sync-manager';
+import { 
+  syncAllOfflineData, 
+  getPendingOfflineCount,
+  getCachedTodayInfo,
+  setCachedTodayInfo,
+  getCachedMonthStats,
+  setCachedMonthStats,
+  getCachedSpecialSections,
+  setCachedSpecialSections,
+  triggerHaptic
+} from '@/lib/offline-sync-manager';
 
 export default function AshleyMobileApp() {
   // Theme state: default 'light' per user specification
@@ -46,10 +56,19 @@ export default function AshleyMobileApp() {
   });
 
   const toggleTheme = () => {
+    triggerHaptic('light');
     const next = !isDark;
     setIsDark(next);
     if (typeof window !== 'undefined') {
       localStorage.setItem('ashley_theme', next ? 'dark' : 'light');
+    }
+  };
+
+  // Tab switch with Apple haptic feedback
+  const handleTabSwitch = (tab: 'attendance' | 'expenses' | 'leaves' | 'reports' | 'profile') => {
+    if (tab !== activeTab) {
+      triggerHaptic('light');
+      setActiveTab(tab);
     }
   };
 
@@ -100,12 +119,21 @@ export default function AshleyMobileApp() {
       const res = await fetch(`/api/mobile/status?employeeId=${encodeURIComponent(user.employeeId)}`);
       const data = await res.json();
       if (data.success) {
-        if (data.today) setTodayInfo(data.today);
-        if (data.monthStats) setMonthStats(data.monthStats);
-        if (data.specialSections) setSpecialSectionsData(data.specialSections);
+        if (data.today) {
+          setTodayInfo(data.today);
+          setCachedTodayInfo(user.employeeId, data.today);
+        }
+        if (data.monthStats) {
+          setMonthStats(data.monthStats);
+          setCachedMonthStats(user.employeeId, data.monthStats);
+        }
+        if (data.specialSections) {
+          setSpecialSectionsData(data.specialSections);
+          setCachedSpecialSections(user.employeeId, data.specialSections);
+        }
       }
     } catch (err) {
-      console.error('[AshleyMobileApp] Error loading status data:', err);
+      console.warn('[AshleyMobileApp] Error loading status data (offline):', err);
     }
   }, [user?.employeeId]);
 
@@ -116,9 +144,11 @@ export default function AshleyMobileApp() {
     if (count === 0) return;
 
     setIsSyncing(true);
+    triggerHaptic('medium');
     try {
       const res = await syncAllOfflineData();
       if (res.totalSynced > 0) {
+        triggerHaptic('success');
         setSyncNotice(`✅ ${res.totalSynced} تۆماری ئۆفلاین بە سەرکەوتوویی هاوکات (Sync) کران.`);
         setTimeout(() => setSyncNotice(null), 4000);
         if (res.punchesSynced > 0) {
@@ -219,8 +249,24 @@ export default function AshleyMobileApp() {
 
   useEffect(() => {
     if (user?.employeeId) {
-      loadStatusData();
-      const interval = setInterval(loadStatusData, 60000);
+      // 🚀 IMMEDIATE LOCAL CACHE HYDRATION (Zero blank delay offline)
+      const cachedToday = getCachedTodayInfo(user.employeeId);
+      if (cachedToday) setTodayInfo(cachedToday);
+
+      const cachedStats = getCachedMonthStats(user.employeeId);
+      if (cachedStats) setMonthStats(cachedStats);
+
+      const cachedSections = getCachedSpecialSections(user.employeeId);
+      if (cachedSections && Object.keys(cachedSections).length > 0) {
+        setSpecialSectionsData(cachedSections);
+      }
+
+      if (navigator.onLine) {
+        loadStatusData();
+      }
+      const interval = setInterval(() => {
+        if (navigator.onLine) loadStatusData();
+      }, 60000);
       return () => clearInterval(interval);
     }
   }, [user?.employeeId, loadStatusData]);
@@ -389,55 +435,64 @@ export default function AshleyMobileApp() {
           : 'bg-[#f8fafc] text-slate-900 sm:shadow-2xl sm:border-x sm:border-slate-200/90'
       }`}>
         
-        {/* Offline & Auto-Sync Status Notification Banners */}
-        {!isOnline && (
-          <div className="bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 px-4 py-2.5 text-xs font-bold flex items-center justify-between sticky top-0 z-50 shadow-md">
-            <div className="flex items-center gap-2">
-              <WifiOff className="w-4 h-4 shrink-0" />
-              <span>دۆخی ئۆفلاین • دەتوانیت دەوام تۆمار بکەیت</span>
-            </div>
-            {pendingOfflineCount > 0 && (
-              <span className="bg-slate-950/20 text-slate-950 px-2 py-0.5 rounded-full text-[10px] font-mono font-black">
-                {pendingOfflineCount} لە چاوەڕوانیدا
-              </span>
+        {/* 🍏 APPLE DYNAMIC ISLAND STATUS CAPSULE */}
+        {(!isOnline || isSyncing || syncNotice || (isOnline && pendingOfflineCount > 0)) && (
+          <div className="sticky top-2 z-50 px-4 pt-1 pb-1 flex justify-center pointer-events-none">
+            {/* 1. Offline Capsule */}
+            {!isOnline && (
+              <div className="pointer-events-auto bg-slate-950/90 dark:bg-slate-900/95 text-white py-2 px-4 rounded-full border border-white/15 shadow-xl flex items-center justify-between gap-3 max-w-[390px] w-full ios-spring">
+                <div className="flex items-center gap-2 text-xs font-bold">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+                  <span>دۆخی ئۆفلاین • دەوام لە مۆبایلدا پارێزراوە</span>
+                </div>
+                {pendingOfflineCount > 0 && (
+                  <span className="bg-amber-500/25 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full text-[10px] font-mono font-black shrink-0">
+                    {pendingOfflineCount} چاوەڕوان
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* 2. Syncing Capsule */}
+            {isOnline && isSyncing && (
+              <div className="pointer-events-auto bg-sky-950/90 text-white py-2 px-4 rounded-full border border-sky-400/30 shadow-xl flex items-center justify-center gap-2 text-xs font-bold max-w-[340px] w-full animate-pulse ios-spring">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-400 shrink-0" />
+                <span>لە هاوکاتکردنی داتاکاندا (Syncing)...</span>
+              </div>
+            )}
+
+            {/* 3. Sync Success Capsule */}
+            {isOnline && !isSyncing && syncNotice && (
+              <div className="pointer-events-auto bg-emerald-950/90 text-white py-2 px-4 rounded-full border border-emerald-400/30 shadow-xl flex items-center justify-center gap-2 text-xs font-bold max-w-[340px] w-full ios-spring animate-in fade-in zoom-in-95 duration-200">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{syncNotice}</span>
+              </div>
+            )}
+
+            {/* 4. Ready to Sync Capsule */}
+            {isOnline && !isSyncing && !syncNotice && pendingOfflineCount > 0 && (
+              <button
+                type="button"
+                onClick={runSync}
+                className="pointer-events-auto bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 py-2 px-4 rounded-full shadow-xl flex items-center justify-between gap-3 text-xs font-black max-w-[390px] w-full cursor-pointer ios-press ios-spring"
+              >
+                <div className="flex items-center gap-2">
+                  <CloudUpload className="w-4 h-4 animate-bounce" />
+                  <span>{pendingOfflineCount} تۆماری ئۆفلاین ئامادەیە</span>
+                </div>
+                <span className="bg-slate-950 text-white px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                  هاوکات بکە (Sync)
+                </span>
+              </button>
             )}
           </div>
         )}
 
-        {isSyncing && (
-          <div className="bg-sky-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-center gap-2 sticky top-0 z-50 shadow-md animate-pulse">
-            <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-            <span>لە هاوکاتکردنی داتاکانی ئۆفلاین (Syncing)...</span>
-          </div>
-        )}
-
-        {syncNotice && (
-          <div className="bg-emerald-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-center gap-2 sticky top-0 z-50 shadow-md animate-in fade-in duration-200">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <span>{syncNotice}</span>
-          </div>
-        )}
-
-        {isOnline && pendingOfflineCount > 0 && !isSyncing && (
-          <div 
-            onClick={runSync}
-            className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2 text-xs font-bold flex items-center justify-between cursor-pointer sticky top-0 z-50 shadow-xs hover:bg-amber-100 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <CloudUpload className="w-4 h-4 text-amber-600 animate-bounce" />
-              <span>{pendingOfflineCount} داتای تۆمارکراوی ئۆفلاین ئامادەیە بۆ ناردن</span>
-            </div>
-            <span className="text-[11px] bg-amber-600 text-white px-2 py-0.5 rounded-lg shadow-2xs font-bold">
-              هاوکات بکە (Sync)
-            </span>
-          </div>
-        )}
-
-        {/* Top App Header with Safe Area */}
-        <header className={`sticky top-0 z-40 backdrop-blur-xl px-4 pt-safe pb-3 flex items-center justify-between border-b transition-colors ${
+        {/* 🍏 APPLE iOS FROSTED NAVIGATION BAR */}
+        <header className={`sticky top-0 z-40 ios-blur-chrome px-4 pt-safe pb-3 flex items-center justify-between border-b transition-colors ${
           isDark 
-            ? 'bg-slate-900/90 border-slate-800 text-white' 
-            : 'bg-white/95 border-slate-200/90 text-slate-900 shadow-xs'
+            ? 'bg-slate-950/80 border-slate-800/80 text-white' 
+            : 'bg-white/80 border-slate-200/80 text-slate-900 shadow-xs'
         }`}>
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 p-0.5 shadow-md shadow-amber-500/10 flex items-center justify-center shrink-0">
@@ -451,8 +506,8 @@ export default function AshleyMobileApp() {
               <h1 className="text-sm font-black tracking-tight leading-none mb-0.5">
                 ئاشڵی دەوام
               </h1>
-              <p className={`text-xs leading-none ${isDark ? 'text-slate-400' : 'text-slate-500 font-semibold'}`}>
-                Ashley Staff
+              <p className={`text-[11px] font-semibold leading-none ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                Ashley Staff • مۆبایل
               </p>
             </div>
           </div>
@@ -462,7 +517,7 @@ export default function AshleyMobileApp() {
               <button
                 type="button"
                 onClick={triggerInstall}
-                className={`h-9 px-3 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                className={`h-9 px-3 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ios-press ${
                   isDark 
                     ? 'bg-amber-500/15 border border-amber-500/30 text-amber-300' 
                     : 'bg-amber-50 border border-amber-200 text-amber-800'
@@ -477,10 +532,10 @@ export default function AshleyMobileApp() {
             <button
               type="button"
               onClick={toggleTheme}
-              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors cursor-pointer ios-press ${
                 isDark 
-                  ? 'bg-slate-800 border border-slate-700 text-amber-400 hover:bg-slate-700' 
-                  : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 shadow-xs'
+                  ? 'bg-slate-800/80 border border-slate-700/60 text-amber-400 hover:bg-slate-700' 
+                  : 'bg-slate-100/80 border border-slate-200/80 text-slate-700 hover:bg-slate-200 shadow-2xs'
               }`}
               title={isDark ? 'گۆڕین بۆ لایت مۆد' : 'گۆڕین بۆ دارک مۆد'}
             >
@@ -489,11 +544,11 @@ export default function AshleyMobileApp() {
 
             {/* User Profile Avatar Pill */}
             <div
-              onClick={() => setActiveTab('profile')}
-              className={`w-9 h-9 rounded-full border flex items-center justify-center text-sm font-black overflow-hidden cursor-pointer transition-colors ${
+              onClick={() => handleTabSwitch('profile')}
+              className={`w-9 h-9 rounded-full border-2 flex items-center justify-center text-sm font-black overflow-hidden cursor-pointer ios-press transition-colors ${
                 isDark 
-                  ? 'bg-slate-800 border-slate-700 text-amber-400' 
-                  : 'bg-amber-100 border-amber-300 text-amber-800'
+                  ? 'bg-slate-800 border-amber-500/40 text-amber-400' 
+                  : 'bg-amber-100 border-amber-400 text-amber-800'
               }`}
               title={user.employeeName}
             >
@@ -513,7 +568,7 @@ export default function AshleyMobileApp() {
               user={user}
               todayInfo={todayInfo}
               onRefreshToday={loadStatusData}
-              onNavigateTab={(tab) => setActiveTab(tab as any)}
+              onNavigateTab={(tab) => handleTabSwitch(tab as any)}
               isDark={isDark}
             />
           )}
@@ -540,86 +595,39 @@ export default function AshleyMobileApp() {
           )}
         </main>
 
-        {/* Floating Bottom Navigation Bar (iOS Tab Bar with Safe Area) */}
-        <nav className={`fixed bottom-0 left-0 right-0 max-w-[440px] mx-auto z-40 backdrop-blur-2xl border-t px-2 pt-2 pb-safe flex items-center justify-around transition-colors ${
+        {/* 🍏 APPLE iOS FLOATING TAB BAR */}
+        <nav className={`fixed bottom-0 left-0 right-0 max-w-[440px] mx-auto z-40 ios-blur-chrome border-t px-2 pt-1.5 pb-safe flex items-center justify-around transition-colors ${
           isDark 
-            ? 'bg-slate-900/95 border-slate-800 text-slate-400 shadow-2xl' 
-            : 'bg-white/95 border-slate-200/90 text-slate-500 shadow-[0_-4px_25px_rgba(0,0,0,0.06)]'
+            ? 'bg-slate-950/85 border-slate-800/80 text-slate-400 shadow-2xl' 
+            : 'bg-white/85 border-slate-200/80 text-slate-500 shadow-[0_-8px_30px_rgba(0,0,0,0.04)]'
         }`}>
-          <button
-            type="button"
-            onClick={() => setActiveTab('attendance')}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 min-h-[48px] py-1 px-1 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'attendance'
-                ? isDark 
-                  ? 'text-amber-400 font-black bg-amber-500/15' 
-                  : 'text-amber-800 font-black bg-amber-50 border border-amber-200 shadow-2xs'
-                : isDark ? 'hover:text-slate-200' : 'hover:text-slate-800'
-            }`}
-          >
-            <MapPin className={`w-5 h-5 ${activeTab === 'attendance' ? (isDark ? 'text-amber-400' : 'text-amber-600') : ''}`} />
-            <span className="text-[11px] font-bold">دەوام</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('expenses')}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 min-h-[48px] py-1 px-1 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'expenses'
-                ? isDark 
-                  ? 'text-amber-400 font-black bg-amber-500/15' 
-                  : 'text-amber-800 font-black bg-amber-50 border border-amber-200 shadow-2xs'
-                : isDark ? 'hover:text-slate-200' : 'hover:text-slate-800'
-            }`}
-          >
-            <Receipt className={`w-5 h-5 ${activeTab === 'expenses' ? (isDark ? 'text-amber-400' : 'text-amber-600') : ''}`} />
-            <span className="text-[11px] font-bold">مەسروفات</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('leaves')}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 min-h-[48px] py-1 px-1 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'leaves'
-                ? isDark 
-                  ? 'text-amber-400 font-black bg-amber-500/15' 
-                  : 'text-amber-800 font-black bg-amber-50 border border-amber-200 shadow-2xs'
-                : isDark ? 'hover:text-slate-200' : 'hover:text-slate-800'
-            }`}
-          >
-            <Calendar className={`w-5 h-5 ${activeTab === 'leaves' ? (isDark ? 'text-amber-400' : 'text-amber-600') : ''}`} />
-            <span className="text-[11px] font-bold">مۆڵەت</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('reports')}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 min-h-[48px] py-1 px-1 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'reports'
-                ? isDark 
-                  ? 'text-amber-400 font-black bg-amber-500/15' 
-                  : 'text-amber-800 font-black bg-amber-50 border border-amber-200 shadow-2xs'
-                : isDark ? 'hover:text-slate-200' : 'hover:text-slate-800'
-            }`}
-          >
-            <BarChart3 className={`w-5 h-5 ${activeTab === 'reports' ? (isDark ? 'text-amber-400' : 'text-amber-600') : ''}`} />
-            <span className="text-[11px] font-bold">ڕاپۆرت</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('profile')}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 min-h-[48px] py-1 px-1 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'profile'
-                ? isDark 
-                  ? 'text-amber-400 font-black bg-amber-500/15' 
-                  : 'text-amber-800 font-black bg-amber-50 border border-amber-200 shadow-2xs'
-                : isDark ? 'hover:text-slate-200' : 'hover:text-slate-800'
-            }`}
-          >
-            <Settings className={`w-5 h-5 ${activeTab === 'profile' ? (isDark ? 'text-amber-400' : 'text-amber-600') : ''}`} />
-            <span className="text-[11px] font-bold">بەشەکان</span>
-          </button>
+          {[
+            { id: 'attendance', label: 'دەوام', icon: MapPin },
+            { id: 'expenses', label: 'مەسروفات', icon: Receipt },
+            { id: 'leaves', label: 'مۆڵەت', icon: Calendar },
+            { id: 'reports', label: 'ڕاپۆرت', icon: BarChart3 },
+            { id: 'profile', label: 'بەشەکان', icon: Settings },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => handleTabSwitch(tab.id as any)}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 min-h-[48px] py-1 px-1 rounded-2xl cursor-pointer ios-press ios-spring ${
+                  isActive
+                    ? isDark 
+                      ? 'text-amber-400 font-black bg-amber-500/15 scale-100' 
+                      : 'text-amber-800 font-black bg-amber-50/90 border border-amber-200/80 shadow-2xs scale-100'
+                    : isDark ? 'hover:text-slate-200 scale-95' : 'hover:text-slate-800 scale-95'
+                }`}
+              >
+                <Icon className={`w-5 h-5 transition-transform ${isActive ? (isDark ? 'text-amber-400 scale-110' : 'text-amber-600 scale-110') : ''}`} />
+                <span className="text-[11px] font-bold tracking-tight">{tab.label}</span>
+              </button>
+            );
+          })}
         </nav>
       </div>
 

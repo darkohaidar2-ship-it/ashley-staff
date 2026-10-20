@@ -21,6 +21,7 @@ import {
 import { supabaseAuth } from '@/lib/supabase/client';
 import { MobileAuthUser } from './types';
 import { ASHLEY_OFFICIAL_EMPLOYEES, AshleyOfficialEmployee, OFFICIAL_PIN_MAP } from '@/lib/ashley-employees';
+import { triggerHaptic } from '@/lib/offline-sync-manager';
 
 interface LoginScreenProps {
   onLoginSuccess: (user: MobileAuthUser) => void;
@@ -38,6 +39,7 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding }: LoginScreenProps
   });
 
   const toggleTheme = () => {
+    triggerHaptic('light');
     const next = !isDark;
     setIsDark(next);
     if (typeof window !== 'undefined') {

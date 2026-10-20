@@ -35,12 +35,12 @@ export function MonthlyReportTab({ user, stats, isDark = false }: MonthlyReportT
         </p>
       </div>
 
-      {/* KPI Stats Grid */}
+      {/* 🍏 APPLE KPI STATS INSET GRID */}
       <div className="grid grid-cols-3 gap-2.5">
-        <div className={`p-4 border rounded-2xl text-center shadow-xs ${
+        <div className={`p-4 border rounded-[22px] text-center shadow-[0_2px_12px_rgba(0,0,0,0.02)] ios-spring ${
           isDark 
-            ? 'bg-slate-900/90 border-slate-800 text-white' 
-            : 'bg-white border-slate-200/90 text-slate-900'
+            ? 'bg-slate-900/90 border-white/[0.08] text-white' 
+            : 'bg-white/95 border-black/[0.05] text-slate-900'
         }`}>
           <span className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>ڕۆژانی دەوام</span>
           <span className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
@@ -49,10 +49,10 @@ export function MonthlyReportTab({ user, stats, isDark = false }: MonthlyReportT
           <span className="text-[11px] text-slate-400 block mt-0.5 font-bold">ڕۆژ</span>
         </div>
 
-        <div className={`p-4 border rounded-2xl text-center shadow-xs ${
+        <div className={`p-4 border rounded-[22px] text-center shadow-[0_2px_12px_rgba(0,0,0,0.02)] ios-spring ${
           isDark 
-            ? 'bg-slate-900/90 border-slate-800 text-white' 
-            : 'bg-white border-slate-200/90 text-slate-900'
+            ? 'bg-slate-900/90 border-white/[0.08] text-white' 
+            : 'bg-white/95 border-black/[0.05] text-slate-900'
         }`}>
           <span className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>کاتی زیادە</span>
           <span className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400">
@@ -61,10 +61,10 @@ export function MonthlyReportTab({ user, stats, isDark = false }: MonthlyReportT
           <span className="text-[11px] text-slate-400 block mt-0.5 font-bold">کاتژمێر</span>
         </div>
 
-        <div className={`p-4 border rounded-2xl text-center shadow-xs ${
+        <div className={`p-4 border rounded-[22px] text-center shadow-[0_2px_12px_rgba(0,0,0,0.02)] ios-spring ${
           isDark 
-            ? 'bg-slate-900/90 border-slate-800 text-white' 
-            : 'bg-white border-slate-200/90 text-slate-900'
+            ? 'bg-slate-900/90 border-white/[0.08] text-white' 
+            : 'bg-white/95 border-black/[0.05] text-slate-900'
         }`}>
           <span className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>تەئخیربوون</span>
           <span className="text-2xl font-black font-mono text-rose-600 dark:text-rose-400">
@@ -74,17 +74,17 @@ export function MonthlyReportTab({ user, stats, isDark = false }: MonthlyReportT
         </div>
       </div>
 
-      {/* Detailed Day-by-Day List */}
+      {/* 🍏 APPLE DETAILED INSET GROUPED RECORD LIST */}
       <div className="space-y-2">
         <h3 className={`text-xs font-bold px-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
           خشتەی ڕۆژانەی ئەم مانگە
         </h3>
 
         {records.length === 0 ? (
-          <div className={`py-12 border rounded-3xl text-center text-xs ${
+          <div className={`py-12 border rounded-[26px] text-center text-xs ${
             isDark 
-              ? 'bg-slate-900/40 border-slate-800 text-slate-500' 
-              : 'bg-white border-slate-200 text-slate-400'
+              ? 'bg-slate-900/40 border-white/[0.06] text-slate-500' 
+              : 'bg-white border-black/[0.05] text-slate-400'
           }`}>
             هیچ دەوامێک تۆمار نەکراوە لەم مانگەدا.
           </div>
@@ -92,10 +92,10 @@ export function MonthlyReportTab({ user, stats, isDark = false }: MonthlyReportT
           records.map((rec, idx) => (
             <div
               key={`${rec.date}-${idx}`}
-              className={`p-3.5 border rounded-2xl flex items-center justify-between gap-3 shadow-xs ${
+              className={`p-3.5 border rounded-[20px] flex items-center justify-between gap-3 shadow-2xs ios-spring ${
                 isDark 
-                  ? 'bg-slate-900/90 border-slate-800 text-white' 
-                  : 'bg-white border-slate-200/90 text-slate-900'
+                  ? 'bg-slate-900/90 border-white/[0.06] text-white' 
+                  : 'bg-white/95 border-black/[0.05] text-slate-900'
               }`}
             >
               <div className="flex items-center gap-3">

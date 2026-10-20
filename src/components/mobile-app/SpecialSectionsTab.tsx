@@ -46,14 +46,14 @@ export function SpecialSectionsTab({
         </p>
       </div>
 
-      {/* User Profile Card */}
-      <div className={`border rounded-3xl p-4 sm:p-5 shadow-xs space-y-3.5 ${
+      {/* 🍏 APPLE USER PROFILE INSET GROUPED CARD */}
+      <div className={`border rounded-[28px] p-5 shadow-[0_4px_24px_rgba(0,0,0,0.03)] space-y-3.5 ios-spring ${
         isDark 
-          ? 'bg-slate-900/90 border-slate-800 text-white' 
-          : 'bg-white border-slate-200/90 text-slate-900'
+          ? 'bg-slate-900/90 border-white/[0.08] text-white' 
+          : 'bg-white/95 border-black/[0.05] text-slate-900'
       }`}>
-        <div className="flex items-center gap-3">
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-xl overflow-hidden shrink-0 border ${
+        <div className="flex items-center gap-3.5">
+          <div className={`w-14 h-14 rounded-[20px] flex items-center justify-center font-bold text-xl overflow-hidden shrink-0 border shadow-xs ${
             isDark 
               ? 'bg-amber-500/20 border-amber-500/30 text-amber-400' 
               : 'bg-amber-50 border-amber-200 text-amber-800'
@@ -65,7 +65,7 @@ export function SpecialSectionsTab({
             )}
           </div>
           <div>
-            <h3 className="text-base font-black">{user.employeeName}</h3>
+            <h3 className="text-base font-black tracking-tight">{user.employeeName}</h3>
             <p className="text-xs text-amber-600 font-bold">{user.role}</p>
             <p className={`text-xs font-mono mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
               کۆدی کارمەند: <span className="font-bold">{user.employeeId}</span>
@@ -100,7 +100,7 @@ export function SpecialSectionsTab({
         <button
           type="button"
           onClick={onLogout}
-          className="w-full h-13 mt-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-black rounded-2xl text-xs flex items-center justify-center gap-2 border border-rose-200 transition-all cursor-pointer"
+          className="w-full h-12 mt-2 bg-rose-50 hover:bg-rose-100 active:scale-[0.98] text-rose-700 font-black rounded-2xl text-xs flex items-center justify-center gap-2 border border-rose-200/80 transition-all cursor-pointer ios-press ios-spring"
         >
           <LogOut className="w-4 h-4" />
           <span>چوونەدەرەوە لە ئەپ (Sign Out)</span>
@@ -109,10 +109,10 @@ export function SpecialSectionsTab({
 
       {/* Role-Specific Sections: Warehouse Attendance */}
       {specialSections.canViewWarehouse && specialSections.warehouseSummary && (
-        <div className={`border rounded-3xl p-4 sm:p-5 shadow-xs ${
+        <div className={`border rounded-[26px] p-4.5 sm:p-5 shadow-xs ios-spring ${
           isDark 
-            ? 'bg-slate-900/90 border-slate-800 text-white' 
-            : 'bg-white border-slate-200/90 text-slate-900'
+            ? 'bg-slate-900/90 border-white/[0.08] text-white' 
+            : 'bg-white/95 border-black/[0.05] text-slate-900'
         }`}>
           <div className="flex items-center gap-2 mb-3">
             <Package className="w-4 h-4 text-amber-500" />

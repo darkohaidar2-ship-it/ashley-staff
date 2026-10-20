@@ -13,7 +13,12 @@ import {
   Sparkles
 } from 'lucide-react';
 import { MobileAuthUser } from './types';
-import { queueOfflineLeave } from '@/lib/offline-sync-manager';
+import { 
+  queueOfflineLeave, 
+  getCachedLeaves, 
+  setCachedLeaves, 
+  triggerHaptic 
+} from '@/lib/offline-sync-manager';
 
 interface LeavesTabProps {
   user: MobileAuthUser;
@@ -38,8 +43,9 @@ const LEAVE_REASONS = [
 ];
 
 export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
-  const [leaves, setLeaves] = useState<LeaveItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // 🚀 Initialize immediately from localStorage cache for instant offline view
+  const [leaves, setLeaves] = useState<LeaveItem[]>(() => getCachedLeaves(user.employeeId));
+  const [loading, setLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   // Form State
@@ -53,14 +59,15 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
 
   const loadLeaves = async () => {
     try {
-      setLoading(true);
+      if (navigator.onLine) setLoading(true);
       const res = await fetch(`/api/mobile/leave?employeeId=${encodeURIComponent(user.employeeId)}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.leaves)) {
         setLeaves(data.leaves);
+        setCachedLeaves(user.employeeId, data.leaves);
       }
     } catch (err) {
-      console.error('[LeavesTab] Error loading leaves:', err);
+      console.warn('[LeavesTab] Offline or error loading leaves, using cached items:', err);
     } finally {
       setLoading(false);
     }
@@ -92,10 +99,11 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
     setSubmitting(true);
     setFeedback(null);
 
-    // If offline, queue for background sync
+    // If offline, queue for background sync & optimistically update local view
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const offlineId = `offline-leave-${user.employeeId}-${Date.now()}`;
       queueOfflineLeave({
-        id: `offline-leave-${user.employeeId}-${Date.now()}`,
+        id: offlineId,
         employeeId: user.employeeId,
         employeeName: user.employeeName,
         leaveType,
@@ -105,7 +113,19 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
         offlineRecordedAt: new Date().toISOString(),
       });
 
-      setFeedback({ type: 'success', message: '📶 داواکاری مۆڵەت بە ئۆفلاین تۆمارکرا و لەگەڵ پەیدابوونی خەت خۆکارانە هاوکات (Sync) دەبێت.' });
+      const optimisticItem: LeaveItem = {
+        id: offlineId,
+        details: `${leaveType === 'hourly' ? 'مۆڵەتی کاتژمێری' : 'مۆڵەتی ڕۆژانە'} - ${selectedReason} (📶 ئۆفلاین)`,
+        targetDate,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+      const updatedLeaves = [optimisticItem, ...leaves];
+      setLeaves(updatedLeaves);
+      setCachedLeaves(user.employeeId, updatedLeaves);
+
+      triggerHaptic('success');
+      setFeedback({ type: 'success', message: '📶 داواکاری مۆڵەت بە ئۆفلاین لە مۆبایلدا پاشەکەوت کرا و لەگەڵ پەیدابوونی خەت خۆکارانە هاوکات (Sync) دەبێت.' });
       setNotesInput('');
       setShowCreateForm(false);
       setSubmitting(false);
@@ -129,17 +149,20 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
       const data = await res.json();
 
       if (data.success) {
+        triggerHaptic('success');
         setFeedback({ type: 'success', message: 'داواکاری مۆڵەتەکەت بە سەرکەوتوویی نێردرا بۆ بەڕێوەبەرایەتی.' });
         setNotesInput('');
         setShowCreateForm(false);
         loadLeaves();
       } else {
+        triggerHaptic('error');
         setFeedback({ type: 'error', message: data.error || 'هەڵەیەک ڕوویدا لە تۆمارکردنی مۆڵەت' });
       }
     } catch (err: any) {
       // If network fetch failed, queue offline
+      const offlineId = `offline-leave-${user.employeeId}-${Date.now()}`;
       queueOfflineLeave({
-        id: `offline-leave-${user.employeeId}-${Date.now()}`,
+        id: offlineId,
         employeeId: user.employeeId,
         employeeName: user.employeeName,
         leaveType,
@@ -148,7 +171,20 @@ export function LeavesTab({ user, isDark = false }: LeavesTabProps) {
         notes: notesInput.trim(),
         offlineRecordedAt: new Date().toISOString(),
       });
-      setFeedback({ type: 'success', message: '📶 داواکاری مۆڵەت بە ئۆفلاین تۆمارکرا و لەگەڵ پەیدابوونی خەت خۆکارانە هاوکات (Sync) دەبێت.' });
+
+      const optimisticItem: LeaveItem = {
+        id: offlineId,
+        details: `${leaveType === 'hourly' ? 'مۆڵەتی کاتژمێری' : 'مۆڵەتی ڕۆژانە'} - ${selectedReason} (📶 ئۆفلاین)`,
+        targetDate,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+      const updatedLeaves = [optimisticItem, ...leaves];
+      setLeaves(updatedLeaves);
+      setCachedLeaves(user.employeeId, updatedLeaves);
+
+      triggerHaptic('success');
+      setFeedback({ type: 'success', message: '📶 داواکاری مۆڵەت بە ئۆفلاین تۆمارکرا و لەگەڵ پەیدابوونی خەت خۆکارانە هاوکات دەبێت.' });
       setNotesInput('');
       setShowCreateForm(false);
     } finally {

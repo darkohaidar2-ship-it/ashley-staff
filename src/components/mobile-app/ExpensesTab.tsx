@@ -16,7 +16,12 @@ import {
   DollarSign
 } from 'lucide-react';
 import { MobileAuthUser } from './types';
-import { queueOfflineExpense } from '@/lib/offline-sync-manager';
+import { 
+  queueOfflineExpense, 
+  getCachedExpenses, 
+  setCachedExpenses, 
+  triggerHaptic 
+} from '@/lib/offline-sync-manager';
 
 interface ExpensesTabProps {
   user: MobileAuthUser;
@@ -45,8 +50,9 @@ const CATEGORY_CHIPS = [
 ];
 
 export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
-  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // 🚀 Initialize immediately from localStorage cache for instant offline view
+  const [expenses, setExpenses] = useState<ExpenseItem[]>(() => getCachedExpenses(user.employeeId));
+  const [loading, setLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   // Form State
@@ -65,14 +71,15 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
   // Fetch user expenses
   const loadExpenses = async () => {
     try {
-      setLoading(true);
+      if (navigator.onLine) setLoading(true);
       const res = await fetch(`/api/mobile/expense?employeeId=${encodeURIComponent(user.employeeId)}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.expenses)) {
         setExpenses(data.expenses);
+        setCachedExpenses(user.employeeId, data.expenses);
       }
     } catch (err) {
-      console.error('[ExpensesTab] Error loading expenses:', err);
+      console.warn('[ExpensesTab] Offline or error loading expenses, using cached items:', err);
     } finally {
       setLoading(false);
     }
@@ -131,10 +138,11 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
     setSubmitting(true);
     setFeedback(null);
 
-    // If offline, queue for background sync
+    // If offline, queue for background sync & optimistically update local view
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const offlineId = `offline-exp-${user.employeeId}-${Date.now()}`;
       queueOfflineExpense({
-        id: `offline-exp-${user.employeeId}-${Date.now()}`,
+        id: offlineId,
         employeeId: user.employeeId,
         employeeName: user.employeeName,
         amount: rawAmount,
@@ -144,7 +152,23 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
         offlineRecordedAt: new Date().toISOString(),
       });
 
-      setFeedback({ type: 'success', message: '📶 داواکاری مەسروفات بە ئۆفلاین تۆمارکرا و لەگەڵ پەیدابوونی خەت خۆکارانە هاوکات (Sync) دەبێت.' });
+      // Optimistic item in list
+      const optimisticItem: ExpenseItem = {
+        id: offlineId,
+        amount: rawAmount,
+        category: selectedCategory,
+        note: noteInput.trim() ? `${noteInput.trim()} (📶 ئۆفلاین)` : '📶 ئۆفلاین (لە چاوەڕوانی خەتدا)',
+        dateStr: new Date().toLocaleDateString('ku-IQ'),
+        status: 'pending',
+        receiptPhotoUrl: receiptBase64 || undefined,
+        createdAt: new Date().toISOString(),
+      };
+      const updatedExpenses = [optimisticItem, ...expenses];
+      setExpenses(updatedExpenses);
+      setCachedExpenses(user.employeeId, updatedExpenses);
+
+      triggerHaptic('success');
+      setFeedback({ type: 'success', message: '📶 داواکاری مەسروفات بە ئۆفلاین لە مۆبایلدا پاشەکەوت کرا و لەگەڵ پەیدابوونی خەت خۆکارانە هاوکات (Sync) دەبێت.' });
       setAmountInput('');
       setNoteInput('');
       setReceiptBase64(null);
@@ -170,6 +194,7 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
       const data = await res.json();
 
       if (data.success) {
+        triggerHaptic('success');
         setFeedback({ type: 'success', message: 'داواکاری مەسروفاتەکەت تۆمارکرا و ڕەوانەی بەڕێوەبەرایەتی کرا.' });
         setAmountInput('');
         setNoteInput('');
@@ -177,12 +202,14 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
         setShowCreateForm(false);
         loadExpenses();
       } else {
+        triggerHaptic('error');
         setFeedback({ type: 'error', message: data.error || 'هەڵەیەک ڕوویدا لە تۆمارکردنی مەسروفات' });
       }
     } catch (err: any) {
       // If network fetch failed, queue offline
+      const offlineId = `offline-exp-${user.employeeId}-${Date.now()}`;
       queueOfflineExpense({
-        id: `offline-exp-${user.employeeId}-${Date.now()}`,
+        id: offlineId,
         employeeId: user.employeeId,
         employeeName: user.employeeName,
         amount: rawAmount,
@@ -191,7 +218,23 @@ export function ExpensesTab({ user, isDark = false }: ExpensesTabProps) {
         receiptPhotoUrl: receiptBase64 || undefined,
         offlineRecordedAt: new Date().toISOString(),
       });
-      setFeedback({ type: 'success', message: '📶 داواکاری مەسروفات بە ئۆفلاین تۆمارکرا و لەگەڵ پەیدابوونی خەت خۆکارانە هاوکات (Sync) دەبێت.' });
+
+      const optimisticItem: ExpenseItem = {
+        id: offlineId,
+        amount: rawAmount,
+        category: selectedCategory,
+        note: noteInput.trim() ? `${noteInput.trim()} (📶 ئۆفلاین)` : '📶 ئۆفلاین',
+        dateStr: new Date().toLocaleDateString('ku-IQ'),
+        status: 'pending',
+        receiptPhotoUrl: receiptBase64 || undefined,
+        createdAt: new Date().toISOString(),
+      };
+      const updatedExpenses = [optimisticItem, ...expenses];
+      setExpenses(updatedExpenses);
+      setCachedExpenses(user.employeeId, updatedExpenses);
+
+      triggerHaptic('success');
+      setFeedback({ type: 'success', message: '📶 داواکاری مەسروفات بە ئۆفلاین تۆمارکرا و لەگەڵ پەیدابوونی خەت خۆکارانە هاوکات دەبێت.' });
       setAmountInput('');
       setNoteInput('');
       setReceiptBase64(null);

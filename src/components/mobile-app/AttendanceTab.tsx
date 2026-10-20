@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { MobileAuthUser, TodayAttendanceInfo, GeofenceStatus } from './types';
 import { DEFAULT_COMPANY_LOCATIONS } from '@/lib/geo-constants';
-import { queueOfflinePunch } from '@/lib/offline-sync-manager';
+import { queueOfflinePunch, setCachedTodayInfo, triggerHaptic } from '@/lib/offline-sync-manager';
 
 interface AttendanceTabProps {
   user: MobileAuthUser;
@@ -262,6 +262,7 @@ export function AttendanceTab({
 
   // Perform Punch Check-In / Check-Out
   const handlePunch = async (punchType: 'check_in' | 'check_out') => {
+    triggerHaptic('medium');
     setPunching(punchType);
     setPunchingStep({
       active: true,
@@ -341,8 +342,20 @@ export function AttendanceTab({
           dateStr: dateNowStr,
         });
 
+        // 🚀 Optimistically cache today's attendance so offline UI updates immediately
+        const optimisticToday: TodayAttendanceInfo = {
+          date: dateNowStr,
+          checkInTime: punchType === 'check_in' ? timeNowStr : (todayInfo?.checkInTime || null),
+          checkOutTime: punchType === 'check_out' ? timeNowStr : (todayInfo?.checkOutTime || null),
+          status: punchType === 'check_in' ? 'present' : (todayInfo?.status || 'present'),
+          overtimeNote: todayInfo?.overtimeNote || null,
+        };
+        setCachedTodayInfo(user.employeeId, optimisticToday);
+        onRefreshToday();
+
         setPunchingStep(null);
         playChime(true);
+        triggerHaptic('success');
 
         setModalFeedback({
           show: true,
@@ -356,6 +369,7 @@ export function AttendanceTab({
       if (data && data.success) {
         setPunchingStep(null);
         playChime(true);
+        triggerHaptic('success');
         onRefreshToday();
 
         setModalFeedback({
@@ -462,15 +476,15 @@ export function AttendanceTab({
 
   return (
     <div className="space-y-4 pb-28">
-      {/* Employee Greeting & Live Time */}
-      <div className={`border rounded-3xl p-4 sm:p-5 transition-all shadow-xs ${
+      {/* 🍏 APPLE LIVE ACTIVITY CARD: Employee Info & Live Baghdad Clock */}
+      <div className={`rounded-[28px] p-4.5 sm:p-5 transition-all border shadow-[0_4px_24px_rgba(0,0,0,0.03)] ios-spring ${
         isDark 
-          ? 'bg-slate-900/90 border-slate-800 text-white' 
-          : 'bg-white border-slate-200/90 text-slate-900 shadow-slate-200/50'
+          ? 'bg-slate-900/90 border-white/[0.08] text-white' 
+          : 'bg-white/95 border-black/[0.05] text-slate-900'
       }`}>
         <div className="flex items-center justify-between mb-3.5">
           <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg overflow-hidden border shrink-0 ${
+            <div className={`w-12 h-12 rounded-[18px] flex items-center justify-center font-black text-lg overflow-hidden border shrink-0 shadow-xs ${
               isDark 
                 ? 'bg-amber-500/20 border-amber-500/30 text-amber-400' 
                 : 'bg-amber-50 border-amber-200 text-amber-700'
@@ -483,10 +497,10 @@ export function AttendanceTab({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-black">
+                <h2 className="text-base font-black tracking-tight">
                   {user.employeeName}
                 </h2>
-                <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold border ${
+                <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold border ${
                   isDark 
                     ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
                     : 'bg-amber-50 text-amber-800 border-amber-200'
@@ -495,7 +509,7 @@ export function AttendanceTab({
                 </span>
               </div>
               <p className={`text-xs mt-0.5 font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                کۆد: <span className="font-mono font-bold" dir="ltr">{user.employeeId}</span>
+                کۆدی کارمەند: <span className="font-mono font-bold" dir="ltr">{user.employeeId}</span>
               </p>
             </div>
           </div>
@@ -504,13 +518,13 @@ export function AttendanceTab({
             <div className="text-2xl font-black tracking-tight text-slate-900 dark:text-white" dir="ltr">
               {clockStr || '00:00:00'}
             </div>
-            <div className={`text-xs font-bold text-left ${isDark ? 'text-slate-400' : 'text-amber-600'}`}>
-              کاتی هەولێر
+            <div className={`text-[11px] font-bold text-left ${isDark ? 'text-slate-400' : 'text-amber-600'}`}>
+              کاتی هەولێر (UTC+3)
             </div>
           </div>
         </div>
 
-        {/* GPS Radar Strip */}
+        {/* GPS Radar Strip (Apple Location Pill) */}
         <div className={`pt-3 border-t flex items-center justify-between text-xs ${
           isDark ? 'border-slate-800' : 'border-slate-100'
         }`}>
@@ -527,10 +541,13 @@ export function AttendanceTab({
                 <span className="text-rose-600 text-xs font-bold leading-tight">{geoStatus.error}</span>
                 <button
                   type="button"
-                  onClick={refreshLocation}
+                  onClick={() => {
+                    triggerHaptic('light');
+                    refreshLocation();
+                  }}
                   className="text-[11px] text-amber-600 font-bold underline text-right cursor-pointer mt-0.5"
                 >
-                  📍 کلیک لێرە بکە بۆ پشکنینی لۆکەیشن
+                  📍 نوێکردنەوەی لۆکەیشن
                 </button>
               </div>
             ) : geoStatus.isInside ? (
@@ -550,7 +567,8 @@ export function AttendanceTab({
                 href={`https://www.google.com/maps?q=${geoStatus.lat},${geoStatus.lng}`}
                 target="_blank"
                 rel="noreferrer"
-                className={`h-9 px-2.5 rounded-xl flex items-center gap-1 text-[11px] font-bold border transition-colors ${
+                onClick={() => triggerHaptic('light')}
+                className={`h-9 px-2.5 rounded-full flex items-center gap-1 text-[11px] font-bold border transition-all cursor-pointer ios-press ${
                   isDark ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                 }`}
                 title="کردنەوە لە گووگڵ ماپس"
@@ -562,9 +580,12 @@ export function AttendanceTab({
 
             <button
               type="button"
-              onClick={refreshLocation}
+              onClick={() => {
+                triggerHaptic('light');
+                refreshLocation();
+              }}
               disabled={geoStatus.isChecking}
-              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer shrink-0 ios-press ${
                 isDark 
                   ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' 
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
@@ -577,14 +598,14 @@ export function AttendanceTab({
         </div>
       </div>
 
-      {/* Main Punch Big Tactile Buttons */}
+      {/* 🍏 APPLE TACTILE PUNCH BUTTONS (Spring Physics & Haptic Feel) */}
       <div className="grid grid-cols-2 gap-3.5">
         {/* Check In Button */}
         <button
           type="button"
           onClick={() => handlePunch('check_in')}
           disabled={Boolean(punching)}
-          className="relative overflow-hidden group bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 active:scale-[0.98] text-white rounded-3xl h-28 sm:h-32 p-4 flex flex-col items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-50 cursor-pointer"
+          className="relative overflow-hidden group bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-[26px] h-32 p-4 flex flex-col items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50 cursor-pointer ios-press ios-spring"
         >
           <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-xs">
             {punching === 'check_in' ? (
@@ -604,7 +625,7 @@ export function AttendanceTab({
           type="button"
           onClick={() => handlePunch('check_out')}
           disabled={Boolean(punching)}
-          className="relative overflow-hidden group bg-gradient-to-b from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 active:scale-[0.98] text-white rounded-3xl h-28 sm:h-32 p-4 flex flex-col items-center justify-center gap-2 shadow-lg shadow-rose-500/25 transition-all disabled:opacity-50 cursor-pointer"
+          className="relative overflow-hidden group bg-gradient-to-b from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white rounded-[26px] h-32 p-4 flex flex-col items-center justify-center gap-2 shadow-lg shadow-rose-500/20 disabled:opacity-50 cursor-pointer ios-press ios-spring"
         >
           <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-xs">
             {punching === 'check_out' ? (
@@ -620,11 +641,11 @@ export function AttendanceTab({
         </button>
       </div>
 
-      {/* Today Attendance Summary Card */}
-      <div className={`border rounded-3xl p-4 sm:p-5 transition-all shadow-xs ${
+      {/* 🍏 APPLE TODAY ATTENDANCE INSET GROUPED CARD */}
+      <div className={`rounded-[28px] p-4.5 sm:p-5 transition-all border shadow-[0_4px_24px_rgba(0,0,0,0.03)] ios-spring ${
         isDark 
-          ? 'bg-slate-900/90 border-slate-800 text-white' 
-          : 'bg-white border-slate-200/90 text-slate-900 shadow-slate-200/50'
+          ? 'bg-slate-900/90 border-white/[0.08] text-white' 
+          : 'bg-white/95 border-black/[0.05] text-slate-900'
       }`}>
         <div className="flex items-center justify-between mb-3.5">
           <div className="flex items-center gap-2">
@@ -672,15 +693,18 @@ export function AttendanceTab({
         )}
       </div>
 
-      {/* Quick Action Cards Grid */}
+      {/* 🍏 APPLE QUICK ACTION CARDS GRID (Squircle Widgets) */}
       <div className="grid grid-cols-3 gap-3">
         <button
           type="button"
-          onClick={() => onNavigateTab('expenses')}
-          className={`p-3.5 rounded-2xl text-center flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer border ${
+          onClick={() => {
+            triggerHaptic('light');
+            onNavigateTab('expenses');
+          }}
+          className={`p-3.5 rounded-[22px] text-center flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer border ios-press ios-spring ${
             isDark 
-              ? 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-white' 
-              : 'bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-xs'
+              ? 'bg-slate-900/90 hover:bg-slate-800 border-white/[0.08] text-white' 
+              : 'bg-white hover:bg-slate-50 border-black/[0.05] text-slate-800 shadow-xs'
           }`}
         >
           <span className="text-2xl">💸</span>
@@ -689,11 +713,14 @@ export function AttendanceTab({
 
         <button
           type="button"
-          onClick={() => onNavigateTab('leaves')}
-          className={`p-3.5 rounded-2xl text-center flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer border ${
+          onClick={() => {
+            triggerHaptic('light');
+            onNavigateTab('leaves');
+          }}
+          className={`p-3.5 rounded-[22px] text-center flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer border ios-press ios-spring ${
             isDark 
-              ? 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-white' 
-              : 'bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-xs'
+              ? 'bg-slate-900/90 hover:bg-slate-800 border-white/[0.08] text-white' 
+              : 'bg-white hover:bg-slate-50 border-black/[0.05] text-slate-800 shadow-xs'
           }`}
         >
           <span className="text-2xl">🌴</span>
@@ -702,11 +729,14 @@ export function AttendanceTab({
 
         <button
           type="button"
-          onClick={() => onNavigateTab('reports')}
-          className={`p-3.5 rounded-2xl text-center flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer border ${
+          onClick={() => {
+            triggerHaptic('light');
+            onNavigateTab('reports');
+          }}
+          className={`p-3.5 rounded-[22px] text-center flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer border ios-press ios-spring ${
             isDark 
-              ? 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-white' 
-              : 'bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-xs'
+              ? 'bg-slate-900/90 hover:bg-slate-800 border-white/[0.08] text-white' 
+              : 'bg-white hover:bg-slate-50 border-black/[0.05] text-slate-800 shadow-xs'
           }`}
         >
           <span className="text-2xl">📊</span>
