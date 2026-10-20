@@ -4,6 +4,7 @@ import { getBaghdadNow } from '@/lib/telegram/telegram-service';
 import { getWarehouseAttendanceSummary, getTodayAttendanceSummary } from '@/lib/telegram/telegram-service';
 import { resolveEmployeeRole, hasActionPermission } from '@/lib/workflow/workflow-service';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
+import { getMonthlyAttendanceStats } from '@/lib/attendance/report-service';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -67,23 +68,36 @@ export async function GET(req: NextRequest) {
     const effectiveStatus = overrideToday?.status || (effectiveCheckIn ? 'Present' : 'NotCheckedIn');
     const overtimeNote = overrideToday?.checkOutNote || overrideToday?.note || todayRecord?.check_out_note || null;
 
-    // 3. Fetch Month Records for this employee
-    const { data: monthRecords } = await supabase
-      .from('attendance')
-      .select('date, check_in_time, check_out_time, status, overtime_minutes, late_minutes, check_out_note')
-      .eq('user_id', employeeId)
-      .gte('date', `${currentMonth}-01`)
-      .lte('date', `${currentMonth}-31`)
-      .order('date', { ascending: false });
-
-    const totalDaysPresent = (monthRecords || []).filter(r => r.check_in_time).length;
-    const totalOvertimeMins = (monthRecords || []).reduce((acc, r) => acc + (r.overtime_minutes || 0), 0);
-    const totalLateMins = (monthRecords || []).reduce((acc, r) => acc + (r.late_minutes || 0), 0);
-
-    // 4. Role & Permissions for Special Tabs
+    // 3. Resolve Employee Info
     const matchedEmp = ASHLEY_OFFICIAL_EMPLOYEES.find(e => e.id === employeeId);
     const empName = matchedEmp?.fullName3Part || matchedEmp?.name || employeeId;
     const role = resolveEmployeeRole(employeeId, empName);
+
+    // 4. Fetch Full Authoritative Month Records using report-service (Includes ashley_manual_attendance_records & attendance)
+    let monthlyStatsData = null;
+    try {
+      monthlyStatsData = await getMonthlyAttendanceStats(employeeId, empName, currentMonth);
+    } catch (statErr) {
+      logger.warn('[MobileStatus API] Error getting monthly stats:', statErr);
+    }
+
+    const totalDaysPresent = monthlyStatsData?.presentDays ?? 0;
+    const totalOvertimeMins = monthlyStatsData?.totalOvertimeMinutes ?? 0;
+    const totalLateMins = monthlyStatsData?.totalLateMinutes ?? 0;
+    const formattedRecords = (monthlyStatsData?.records || []).map(r => ({
+      date: r.date,
+      dayName: r.dayName,
+      check_in_time: r.checkIn,
+      check_out_time: r.checkOut,
+      status: r.status,
+      duration_minutes: r.durationMinutes,
+      duration_str: r.durationStr,
+      overtime_minutes: r.overtimeMinutes,
+      late_minutes: r.lateMinutes,
+      location_name: r.locationName,
+    }));
+
+    // 5. Role & Permissions for Special Tabs
 
     const canViewWarehouse = await hasActionPermission(employeeId, 'warehouse_attendance');
     const canViewTransport = await hasActionPermission(employeeId, 'transport_attendance');
@@ -124,9 +138,18 @@ export async function GET(req: NextRequest) {
       monthStats: {
         month: currentMonth,
         presentDays: totalDaysPresent,
+        absentDays: monthlyStatsData?.absentDays ?? 0,
+        leaveDays: monthlyStatsData?.leaveDays ?? 0,
+        holidayDays: monthlyStatsData?.holidayDays ?? 0,
+        totalWorkMinutes: monthlyStatsData?.totalWorkMinutes ?? 0,
+        totalWorkHoursStr: monthlyStatsData?.totalWorkHoursStr ?? '',
         totalOvertimeMinutes: totalOvertimeMins,
+        totalOvertimeStr: monthlyStatsData?.totalOvertimeStr ?? '',
         totalLateMinutes: totalLateMins,
-        records: monthRecords || [],
+        totalLateStr: monthlyStatsData?.totalLateStr ?? '',
+        targetWorkingDays: monthlyStatsData?.targetWorkingDays ?? 0,
+        attendancePercent: monthlyStatsData?.attendancePercent ?? 0,
+        records: formattedRecords,
       },
       specialSections: {
         canViewWarehouse,

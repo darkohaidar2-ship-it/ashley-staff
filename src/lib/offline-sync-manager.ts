@@ -302,20 +302,22 @@ export function setCachedTodayInfo(empId: string, data: any): void {
   } catch {}
 }
 
-export function getCachedMonthStats(empId: string): any | null {
+export function getCachedMonthStats(empId: string, month?: string): any | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(CACHE_KEYS.STATS(empId));
+    const key = month ? `ashley_month_stats_${empId}_${month}` : CACHE_KEYS.STATS(empId);
+    const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
-export function setCachedMonthStats(empId: string, data: any): void {
+export function setCachedMonthStats(empId: string, data: any, month?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(CACHE_KEYS.STATS(empId), JSON.stringify({
+    const key = month ? `ashley_month_stats_${empId}_${month}` : CACHE_KEYS.STATS(empId);
+    localStorage.setItem(key, JSON.stringify({
       ...data,
       _cachedAt: Date.now(),
     }));
