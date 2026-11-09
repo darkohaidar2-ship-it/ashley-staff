@@ -38,7 +38,10 @@ import {
   Upload,
   Clipboard,
   Camera,
-  Bot
+  Bot,
+  MapPin,
+  MessageSquareHeart,
+  ArrowRight
 } from 'lucide-react';
 import { triggerHaptic } from '@/lib/offline-sync-manager';
 import { OfficialPrintHeader, OfficialPrintSignatures } from '@/components/reports/OfficialPrintHeader';
@@ -46,7 +49,17 @@ import { SheetsAuditItem, SheetsAuditSession } from '@/app/api/warehouse/sheets-
 import { SmartCameraCartonScanner } from '@/components/admin/warehouse/SmartCameraCartonScanner';
 import * as XLSX from 'xlsx';
 
-export function GoogleSheetsWarehouseAudit() {
+export interface GoogleSheetsWarehouseAuditProps {
+  onBackToMobileApp?: () => void;
+  onSwitchPortal?: (portal: 'attendance' | 'feedback' | 'warehouse') => void;
+  isMobileEmbedded?: boolean;
+}
+
+export function GoogleSheetsWarehouseAudit({
+  onBackToMobileApp,
+  onSwitchPortal,
+  isMobileEmbedded = false
+}: GoogleSheetsWarehouseAuditProps = {}) {
   // All Sessions
   const [sessions, setSessions] = useState<SheetsAuditSession[]>([]);
   const [currentSession, setCurrentSession] = useState<SheetsAuditSession | null>(null);
@@ -615,8 +628,63 @@ export function GoogleSheetsWarehouseAudit() {
   };
 
   return (
-    <div className="space-y-5 text-slate-900 font-sans" dir="rtl">
+    <div className="space-y-4 text-slate-900 font-sans" dir="rtl">
       
+      {/* 📱 Mobile Portal Quick Switcher (When opened inside Mobile App) */}
+      {(isMobileEmbedded || onBackToMobileApp || onSwitchPortal) && (
+        <div className="bg-slate-900 text-white rounded-2xl p-2.5 sm:p-3 flex items-center justify-between shadow-md border border-slate-800">
+          <div className="flex items-center gap-2">
+            {onBackToMobileApp && (
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  onBackToMobileApp();
+                }}
+                className="h-8 sm:h-9 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+              >
+                <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+                <span>گەڕانەوە بۆ دەوام</span>
+              </button>
+            )}
+            <span className="text-xs font-bold text-slate-300 hidden xs:inline">
+              📦 پشکنینی باری کۆگا و کانتینەر
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {onSwitchPortal && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('light');
+                    onSwitchPortal('attendance');
+                  }}
+                  className="h-8 px-2.5 rounded-xl bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                  title="چوون بۆ تۆمارکردنی دەوام"
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>دەوام</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('light');
+                    onSwitchPortal('feedback');
+                  }}
+                  className="h-8 px-2.5 rounded-xl bg-pink-500/20 text-pink-300 hover:bg-pink-500/30 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                  title="چوون بۆ فیدباک"
+                >
+                  <MessageSquareHeart className="w-3.5 h-3.5" />
+                  <span>فیدباک</span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* 🌟 1. TOP HEADER & WORKSPACE COMMAND BAR */}
       {/* ========================================================================= */}

@@ -24,17 +24,27 @@ import {
   Delete,
   Monitor,
   Tablet,
-  Smartphone
+  Smartphone,
+  MapPin,
+  Boxes,
+  ArrowRight
 } from 'lucide-react';
 import { triggerHaptic } from '@/lib/offline-sync-manager';
 import { TARGET_SALES_CASHIER_STAFF } from '@/lib/feedback/feedback-service';
 
-interface FeedbackPortalProps {
+export interface FeedbackPortalProps {
   initialPin?: string;
   isDark?: boolean;
+  onSwitchPortal?: (portal: 'attendance' | 'feedback' | 'warehouse') => void;
+  onBackToMobileApp?: () => void;
 }
 
-export function FeedbackPortal({ initialPin = '', isDark: initialDark = false }: FeedbackPortalProps) {
+export function FeedbackPortal({ 
+  initialPin = '', 
+  isDark: initialDark = false,
+  onSwitchPortal,
+  onBackToMobileApp
+}: FeedbackPortalProps) {
   // Theme state
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -445,7 +455,49 @@ export function FeedbackPortal({ initialPin = '', isDark: initialDark = false }:
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Quick Switch to Attendance or Warehouse */}
+            {(onSwitchPortal || onBackToMobileApp) && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('light');
+                    if (onBackToMobileApp) onBackToMobileApp();
+                    else if (onSwitchPortal) onSwitchPortal('attendance');
+                  }}
+                  className={`h-9 px-2.5 sm:px-3 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-2xs ${
+                    isDark 
+                      ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700' 
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                  }`}
+                  title="گەڕانەوە بۆ دەوامی مۆبایل"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="hidden xs:inline">دەوام</span>
+                </button>
+
+                {onSwitchPortal && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('light');
+                      onSwitchPortal('warehouse');
+                    }}
+                    className={`h-9 px-2.5 sm:px-3 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-2xs ${
+                      isDark 
+                        ? 'bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/30' 
+                        : 'bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200'
+                    }`}
+                    title="چوون بۆ جەرد و بار داگرتن"
+                  >
+                    <Boxes className="w-3.5 h-3.5 text-blue-500" />
+                    <span className="hidden xs:inline">جەردەکە</span>
+                  </button>
+                )}
+              </div>
+            )}
+
             {step === 'questionnaire' && (
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-200/80 dark:bg-neutral-800 text-slate-700 dark:text-neutral-300 text-[11px] sm:text-xs font-mono font-bold shadow-2xs">
                 <Lock className="w-3.5 h-3.5 text-emerald-500" />

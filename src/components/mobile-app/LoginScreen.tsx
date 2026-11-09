@@ -20,7 +20,8 @@ import {
   Lock,
   Delete,
   Fingerprint,
-  MessageSquareHeart
+  MessageSquareHeart,
+  Boxes
 } from 'lucide-react';
 import { supabaseAuth } from '@/lib/supabase/client';
 import { MobileAuthUser } from './types';
@@ -31,9 +32,10 @@ interface LoginScreenProps {
   onLoginSuccess: (user: MobileAuthUser) => void;
   onNeedsBinding: (googleProfile: { email: string; displayName?: string; photoUrl?: string; uid?: string }) => void;
   onSwitchToFeedback?: () => void;
+  onSwitchToWarehouse?: () => void;
 }
 
-export function LoginScreen({ onLoginSuccess, onNeedsBinding, onSwitchToFeedback }: LoginScreenProps) {
+export function LoginScreen({ onLoginSuccess, onNeedsBinding, onSwitchToFeedback, onSwitchToWarehouse }: LoginScreenProps) {
   // Theme state: 'light' by default per user request
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -558,43 +560,86 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding, onSwitchToFeedback
 
           </div>
 
-          {/* 💬 FEEDBACK PORTAL SWITCHER BUTTON */}
-          {onSwitchToFeedback && (
-            <div className="w-full mt-4 pt-3 border-t border-slate-200/80 dark:border-neutral-800">
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('light');
-                  onSwitchToFeedback();
-                }}
-                className={`w-full p-3.5 rounded-2xl border flex items-center justify-between transition-all cursor-pointer active:scale-98 ${
-                  isDark 
-                    ? 'bg-neutral-900/80 hover:bg-neutral-900 border-amber-500/20 text-neutral-200 shadow-sm' 
-                    : 'bg-white hover:bg-amber-50/40 border-amber-200/80 text-slate-800 shadow-xs'
-                }`}
-              >
-                <div className="flex items-center gap-2.5 text-right">
-                  <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-500 flex items-center justify-center shrink-0">
-                    <MessageSquareHeart className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
-                      <span>فیدباک و هەڵسەنگاندنی ئاشڵی</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 font-mono font-bold">
-                        PIN
-                      </span>
+          {/* 🚀 QUICK ACCESS HUBS: WAREHOUSE & FEEDBACK */}
+          {(onSwitchToWarehouse || onSwitchToFeedback) && (
+            <div className="w-full mt-4 pt-3 border-t border-slate-200/80 dark:border-neutral-800 space-y-2">
+              
+              {/* 1. Warehouse Stocktake & Container Unloading */}
+              {onSwitchToWarehouse && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    onSwitchToWarehouse();
+                  }}
+                  className={`w-full p-3.5 rounded-2xl border flex items-center justify-between transition-all cursor-pointer active:scale-98 ${
+                    isDark 
+                      ? 'bg-neutral-900/80 hover:bg-neutral-900 border-blue-500/20 text-neutral-200 shadow-sm' 
+                      : 'bg-white hover:bg-blue-50/40 border-blue-200/80 text-slate-800 shadow-xs'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 text-right">
+                    <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-500 flex items-center justify-center shrink-0">
+                      <Boxes className="w-5 h-5" />
                     </div>
-                    <div className="text-[10px] font-medium text-slate-500 dark:text-neutral-400 mt-0.5">
-                      پێویستی بە کۆدی تایبەتە کە لە ئەدمینەوە وەرگیراوە
+                    <div>
+                      <div className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span>جەرد و بار داگرتنی کۆگا</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400 font-mono font-bold">
+                          Google Sheets
+                        </span>
+                      </div>
+                      <div className="text-[10px] font-medium text-slate-500 dark:text-neutral-400 mt-0.5">
+                        داگرتنی کانتینەر و ژماردنی پاکەت بە کامێرا
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-1 text-amber-500 text-xs font-black">
-                  <span>کردنەوە</span>
-                  <ChevronLeft className="w-4 h-4" />
-                </div>
-              </button>
+                  <div className="flex items-center gap-1 text-blue-500 text-xs font-black">
+                    <span>کردنەوە</span>
+                    <ChevronLeft className="w-4 h-4" />
+                  </div>
+                </button>
+              )}
+
+              {/* 2. Staff Feedback Portal */}
+              {onSwitchToFeedback && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    onSwitchToFeedback();
+                  }}
+                  className={`w-full p-3.5 rounded-2xl border flex items-center justify-between transition-all cursor-pointer active:scale-98 ${
+                    isDark 
+                      ? 'bg-neutral-900/80 hover:bg-neutral-900 border-amber-500/20 text-neutral-200 shadow-sm' 
+                      : 'bg-white hover:bg-amber-50/40 border-amber-200/80 text-slate-800 shadow-xs'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 text-right">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-500 flex items-center justify-center shrink-0">
+                      <MessageSquareHeart className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span>فیدباک و هەڵسەنگاندنی ئاشڵی</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 font-mono font-bold">
+                          PIN
+                        </span>
+                      </div>
+                      <div className="text-[10px] font-medium text-slate-500 dark:text-neutral-400 mt-0.5">
+                        پێویستی بە کۆدی چوار ژمارەییە
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-amber-500 text-xs font-black">
+                    <span>کردنەوە</span>
+                    <ChevronLeft className="w-4 h-4" />
+                  </div>
+                </button>
+              )}
+
             </div>
           )}
 

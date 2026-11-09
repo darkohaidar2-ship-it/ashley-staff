@@ -18,7 +18,10 @@ import {
   ExternalLink,
   HelpCircle,
   X,
-  WifiOff
+  WifiOff,
+  Boxes,
+  MessageSquareHeart,
+  ChevronLeft
 } from 'lucide-react';
 import { MobileAuthUser, TodayAttendanceInfo, GeofenceStatus } from './types';
 import { DEFAULT_COMPANY_LOCATIONS } from '@/lib/geo-constants';
@@ -29,6 +32,8 @@ interface AttendanceTabProps {
   todayInfo: TodayAttendanceInfo | null;
   onRefreshToday: () => void;
   onNavigateTab: (tabId: string) => void;
+  onSwitchToWarehouse?: () => void;
+  onSwitchToFeedback?: () => void;
   isDark?: boolean;
 }
 
@@ -53,6 +58,8 @@ export function AttendanceTab({
   todayInfo,
   onRefreshToday,
   onNavigateTab,
+  onSwitchToWarehouse,
+  onSwitchToFeedback,
   isDark = false,
 }: AttendanceTabProps) {
   // Live Clock
@@ -691,6 +698,77 @@ export function AttendanceTab({
             <span>{todayInfo.overtimeNote}</span>
           </div>
         )}
+      </div>
+
+      {/* 🌟 2 HIGH-PRIORITY ACTION CARDS: WAREHOUSE STOCKTAKE & FEEDBACK */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Card 1: Warehouse Stocktake & Container Unloading */}
+        <button
+          type="button"
+          onClick={() => {
+            triggerHaptic('medium');
+            onSwitchToWarehouse?.();
+          }}
+          className={`p-4 rounded-[26px] text-right flex items-center justify-between border transition-all cursor-pointer ios-press ios-spring ${
+            isDark 
+              ? 'bg-gradient-to-br from-blue-950/40 to-slate-900 border-blue-500/30 text-white hover:border-blue-500/50' 
+              : 'bg-gradient-to-br from-blue-50/90 to-white border-blue-200/90 text-slate-900 hover:border-blue-400 shadow-xs'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${
+              isDark ? 'bg-blue-500/20 border-blue-400/30 text-blue-400' : 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+            }`}>
+              <Boxes className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-black">جەرد و بار داگرتن</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25">
+                  🎥 کامێرای زیرەک
+                </span>
+              </div>
+              <p className={`text-[11px] font-medium mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                پشکنینی Google Sheets و ژماردنی پاکەت بە دەنگ
+              </p>
+            </div>
+          </div>
+          <ChevronLeft className="w-5 h-5 text-blue-500 shrink-0" />
+        </button>
+
+        {/* Card 2: Staff Feedback & Evaluation */}
+        <button
+          type="button"
+          onClick={() => {
+            triggerHaptic('medium');
+            onSwitchToFeedback?.();
+          }}
+          className={`p-4 rounded-[26px] text-right flex items-center justify-between border transition-all cursor-pointer ios-press ios-spring ${
+            isDark 
+              ? 'bg-gradient-to-br from-amber-950/40 to-slate-900 border-amber-500/30 text-white hover:border-amber-500/50' 
+              : 'bg-gradient-to-br from-amber-50/90 to-white border-amber-200/90 text-slate-900 hover:border-amber-400 shadow-xs'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${
+              isDark ? 'bg-amber-500/20 border-amber-400/30 text-amber-400' : 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+            }`}>
+              <MessageSquareHeart className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-black">فیدباک و هەڵسەنگاندن</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/25">
+                  🔐 بە PIN
+                </span>
+              </div>
+              <p className={`text-[11px] font-medium mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                ڕاپرسی فەرمی ستافی فرۆشیار و کاشێر
+              </p>
+            </div>
+          </div>
+          <ChevronLeft className="w-5 h-5 text-amber-500 shrink-0" />
+        </button>
       </div>
 
       {/* 🍏 APPLE QUICK ACTION CARDS GRID (Squircle Widgets) */}

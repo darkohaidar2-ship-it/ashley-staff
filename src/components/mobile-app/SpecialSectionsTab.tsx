@@ -7,9 +7,13 @@ import {
   Truck, 
   LogOut, 
   Mail, 
-  Phone 
+  Phone,
+  Boxes,
+  MessageSquareHeart,
+  ChevronLeft
 } from 'lucide-react';
 import { MobileAuthUser } from './types';
+import { triggerHaptic } from '@/lib/offline-sync-manager';
 
 interface SpecialSectionsTabProps {
   user: MobileAuthUser;
@@ -22,6 +26,8 @@ interface SpecialSectionsTabProps {
     generalSummary?: string | null;
   };
   onLogout: () => void;
+  onSwitchToWarehouse?: () => void;
+  onSwitchToFeedback?: () => void;
   isDark?: boolean;
 }
 
@@ -29,6 +35,8 @@ export function SpecialSectionsTab({
   user,
   specialSections,
   onLogout,
+  onSwitchToWarehouse,
+  onSwitchToFeedback,
   isDark = false,
 }: SpecialSectionsTabProps) {
 
@@ -104,6 +112,81 @@ export function SpecialSectionsTab({
         >
           <LogOut className="w-4 h-4" />
           <span>چوونەدەرەوە لە ئەپ (Sign Out)</span>
+        </button>
+      </div>
+
+      {/* 🚀 QUICK ACCESS TO OTHER PORTALS: WAREHOUSE & FEEDBACK */}
+      <div className="space-y-2.5">
+        <h3 className={`text-xs font-black px-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+          بەشە سەرەکییەکانی تر
+        </h3>
+
+        {/* 1. Warehouse Live Stocktake & Unloading */}
+        <button
+          type="button"
+          onClick={() => {
+            triggerHaptic('medium');
+            onSwitchToWarehouse?.();
+          }}
+          className={`w-full p-4 rounded-[24px] text-right flex items-center justify-between border transition-all cursor-pointer ios-press ios-spring ${
+            isDark 
+              ? 'bg-slate-900/90 border-blue-500/30 hover:border-blue-500 text-white' 
+              : 'bg-white border-blue-200/80 hover:border-blue-400 text-slate-900 shadow-xs'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${
+              isDark ? 'bg-blue-500/20 border-blue-400/30 text-blue-400' : 'bg-blue-600 text-white shadow-xs'
+            }`}>
+              <Boxes className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-black">جەرد و بار داگرتنی کۆگا</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25">
+                  Google Sheets
+                </span>
+              </div>
+              <p className={`text-[11px] font-medium mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                چێککردنەوەی کانتینەر و ژماردنی پاکەت بە کامێرای مۆبایل
+              </p>
+            </div>
+          </div>
+          <ChevronLeft className="w-4 h-4 text-blue-500 shrink-0" />
+        </button>
+
+        {/* 2. Staff Feedback & Evaluation */}
+        <button
+          type="button"
+          onClick={() => {
+            triggerHaptic('medium');
+            onSwitchToFeedback?.();
+          }}
+          className={`w-full p-4 rounded-[24px] text-right flex items-center justify-between border transition-all cursor-pointer ios-press ios-spring ${
+            isDark 
+              ? 'bg-slate-900/90 border-amber-500/30 hover:border-amber-500 text-white' 
+              : 'bg-white border-amber-200/80 hover:border-amber-400 text-slate-900 shadow-xs'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${
+              isDark ? 'bg-amber-500/20 border-amber-400/30 text-amber-400' : 'bg-amber-500 text-slate-950 shadow-xs'
+            }`}>
+              <MessageSquareHeart className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-black">فیدباک و هەڵسەنگاندنی ستاف</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/25">
+                  PIN
+                </span>
+              </div>
+              <p className={`text-[11px] font-medium mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                هەڵسەنگاندنی فەرمی فرۆشیاران و کاشێر
+              </p>
+            </div>
+          </div>
+          <ChevronLeft className="w-4 h-4 text-amber-500 shrink-0" />
         </button>
       </div>
 

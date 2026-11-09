@@ -23,7 +23,8 @@ import {
   CloudUpload,
   RefreshCw,
   CheckCircle2,
-  MessageSquareHeart
+  MessageSquareHeart,
+  Boxes
 } from 'lucide-react';
 import { MobileAuthUser, TodayAttendanceInfo, MonthStatsInfo } from './types';
 import { LoginScreen } from './LoginScreen';
@@ -48,9 +49,15 @@ import {
 
 export interface AshleyMobileAppProps {
   onSwitchToFeedback?: () => void;
+  onSwitchToWarehouse?: () => void;
+  onSwitchPortal?: (portal: 'attendance' | 'feedback' | 'warehouse') => void;
 }
 
-export default function AshleyMobileApp({ onSwitchToFeedback }: AshleyMobileAppProps = {}) {
+export default function AshleyMobileApp({ 
+  onSwitchToFeedback,
+  onSwitchToWarehouse,
+  onSwitchPortal 
+}: AshleyMobileAppProps = {}) {
   // Theme state: default 'light' per user specification
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -382,11 +389,29 @@ export default function AshleyMobileApp({ onSwitchToFeedback }: AshleyMobileAppP
               <span>{copiedLink ? 'لینکەکە کۆپی کرا!' : 'کۆپیکردنی لینک'}</span>
             </button>
 
-            {/* Direct button to Feedback Portal on Computer */}
-            {onSwitchToFeedback && (
+            {/* Direct button to Warehouse Sheets Audit on Computer */}
+            {(onSwitchToWarehouse || onSwitchPortal) && (
               <button
                 type="button"
-                onClick={() => onSwitchToFeedback()}
+                onClick={() => {
+                  if (onSwitchToWarehouse) onSwitchToWarehouse();
+                  else if (onSwitchPortal) onSwitchPortal('warehouse');
+                }}
+                className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+              >
+                <Boxes className="w-4.5 h-4.5 text-white" />
+                <span>پشکنینی باری کۆگا و جەرد (Google Sheets)</span>
+              </button>
+            )}
+
+            {/* Direct button to Feedback Portal on Computer */}
+            {(onSwitchToFeedback || onSwitchPortal) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (onSwitchToFeedback) onSwitchToFeedback();
+                  else if (onSwitchPortal) onSwitchPortal('feedback');
+                }}
                 className="w-full h-12 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
               >
                 <MessageSquareHeart className="w-4.5 h-4.5 text-slate-950" />
@@ -434,7 +459,8 @@ export default function AshleyMobileApp({ onSwitchToFeedback }: AshleyMobileAppP
         <LoginScreen
           onLoginSuccess={(authedUser) => setUser(authedUser)}
           onNeedsBinding={(profile) => setNeedsBindingProfile(profile)}
-          onSwitchToFeedback={onSwitchToFeedback}
+          onSwitchToFeedback={onSwitchToFeedback || (() => onSwitchPortal?.('feedback'))}
+          onSwitchToWarehouse={onSwitchToWarehouse || (() => onSwitchPortal?.('warehouse'))}
         />
       </div>
     );
@@ -546,13 +572,34 @@ export default function AshleyMobileApp({ onSwitchToFeedback }: AshleyMobileAppP
               </button>
             )}
 
-            {/* Quick Feedback Portal Switcher */}
-            {onSwitchToFeedback && (
+            {/* Quick Warehouse Switcher */}
+            {(onSwitchToWarehouse || onSwitchPortal) && (
               <button
                 type="button"
                 onClick={() => {
                   triggerHaptic('light');
-                  onSwitchToFeedback();
+                  if (onSwitchToWarehouse) onSwitchToWarehouse();
+                  else if (onSwitchPortal) onSwitchPortal('warehouse');
+                }}
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors cursor-pointer ios-press ${
+                  isDark 
+                    ? 'bg-blue-500/15 border border-blue-500/30 text-blue-400 hover:bg-blue-500/25' 
+                    : 'bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 shadow-2xs'
+                }`}
+                title="جەرد و بار داگرتن (Google Sheets)"
+              >
+                <Boxes className="w-4.5 h-4.5" />
+              </button>
+            )}
+
+            {/* Quick Feedback Portal Switcher */}
+            {(onSwitchToFeedback || onSwitchPortal) && (
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  if (onSwitchToFeedback) onSwitchToFeedback();
+                  else if (onSwitchPortal) onSwitchPortal('feedback');
                 }}
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors cursor-pointer ios-press ${
                   isDark 
@@ -598,6 +645,60 @@ export default function AshleyMobileApp({ onSwitchToFeedback }: AshleyMobileAppP
           </div>
         </header>
 
+        {/* 📱 3-WAY MOBILE PORTAL SWITCHER (ئامادەبوون • جەردەکە • فیدباک) */}
+        <div className="px-4 pt-3 pb-1">
+          <div className={`p-1 rounded-2xl flex items-center gap-1 border shadow-xs transition-colors ${
+            isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100/95 border-slate-200/90'
+          }`}>
+            <button
+              type="button"
+              onClick={() => handleTabSwitch('attendance')}
+              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+                activeTab === 'attendance'
+                  ? isDark ? 'bg-amber-500 text-slate-950 shadow-sm' : 'bg-white text-slate-900 shadow-xs'
+                  : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <MapPin className="w-3.5 h-3.5 text-amber-500" />
+              <span>ئامادەبوون</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic('light');
+                if (onSwitchToWarehouse) onSwitchToWarehouse();
+                else if (onSwitchPortal) onSwitchPortal('warehouse');
+              }}
+              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+                isDark 
+                  ? 'bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/30' 
+                  : 'bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs'
+              }`}
+            >
+              <Boxes className="w-3.5 h-3.5 text-blue-500" />
+              <span>جەردەکە</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic('light');
+                if (onSwitchToFeedback) onSwitchToFeedback();
+                else if (onSwitchPortal) onSwitchPortal('feedback');
+              }}
+              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+                isDark 
+                  ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30' 
+                  : 'bg-white hover:bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs'
+              }`}
+            >
+              <MessageSquareHeart className="w-3.5 h-3.5 text-amber-500" />
+              <span>فیدباک</span>
+            </button>
+          </div>
+        </div>
+
         {/* Scrollable Content Area */}
         <main className="flex-1 p-4 pb-28 overflow-y-auto">
           {activeTab === 'attendance' && (
@@ -606,6 +707,8 @@ export default function AshleyMobileApp({ onSwitchToFeedback }: AshleyMobileAppP
               todayInfo={todayInfo}
               onRefreshToday={loadStatusData}
               onNavigateTab={(tab) => handleTabSwitch(tab as any)}
+              onSwitchToWarehouse={onSwitchToWarehouse || (() => onSwitchPortal?.('warehouse'))}
+              onSwitchToFeedback={onSwitchToFeedback || (() => onSwitchPortal?.('feedback'))}
               isDark={isDark}
             />
           )}
@@ -627,6 +730,8 @@ export default function AshleyMobileApp({ onSwitchToFeedback }: AshleyMobileAppP
               user={user}
               specialSections={specialSectionsData}
               onLogout={handleLogout}
+              onSwitchToWarehouse={onSwitchToWarehouse || (() => onSwitchPortal?.('warehouse'))}
+              onSwitchToFeedback={onSwitchToFeedback || (() => onSwitchPortal?.('feedback'))}
               isDark={isDark}
             />
           )}
@@ -640,9 +745,9 @@ export default function AshleyMobileApp({ onSwitchToFeedback }: AshleyMobileAppP
         }`}>
           {[
             { id: 'attendance', label: 'دەوام', icon: MapPin },
+            { id: 'warehouse', label: 'جەرد و بار', icon: Boxes },
+            { id: 'feedback', label: 'فیدباک', icon: MessageSquareHeart },
             { id: 'expenses', label: 'مەسروفات', icon: Receipt },
-            { id: 'leaves', label: 'مۆڵەت', icon: Calendar },
-            { id: 'reports', label: 'ڕاپۆرت', icon: BarChart3 },
             { id: 'profile', label: 'بەشەکان', icon: Settings },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -651,7 +756,19 @@ export default function AshleyMobileApp({ onSwitchToFeedback }: AshleyMobileAppP
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => handleTabSwitch(tab.id as any)}
+                onClick={() => {
+                  if (tab.id === 'warehouse') {
+                    triggerHaptic('light');
+                    if (onSwitchToWarehouse) onSwitchToWarehouse();
+                    else if (onSwitchPortal) onSwitchPortal('warehouse');
+                  } else if (tab.id === 'feedback') {
+                    triggerHaptic('light');
+                    if (onSwitchToFeedback) onSwitchToFeedback();
+                    else if (onSwitchPortal) onSwitchPortal('feedback');
+                  } else {
+                    handleTabSwitch(tab.id as any);
+                  }
+                }}
                 className={`flex-1 flex flex-col items-center justify-center gap-1 min-h-[48px] py-1 px-1 rounded-2xl cursor-pointer ios-press ios-spring ${
                   isActive
                     ? isDark 
