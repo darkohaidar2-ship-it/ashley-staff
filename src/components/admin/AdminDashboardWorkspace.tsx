@@ -14,6 +14,7 @@ import { AdminEmployeeDetailsModal } from '@/components/admin/AdminEmployeeDetai
 import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChangeModal';
 import NotificationRoutingMatrix from '@/components/admin/NotificationRoutingMatrix';
 import { AdminGoogleBindingsManager } from '@/components/admin/AdminGoogleBindingsManager';
+import { AdminFeedbackDashboard } from '@/components/admin/AdminFeedbackDashboard';
 import { format } from 'date-fns';
 import { 
   Building2, 
@@ -29,7 +30,8 @@ import {
   RefreshCw,
   Clock,
   Sparkles,
-  Mail
+  Mail,
+  MessageSquareHeart
 } from 'lucide-react';
 
 export function AdminDashboardWorkspace() {
@@ -40,7 +42,7 @@ export function AdminDashboardWorkspace() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   
   // Segmented views in Admin Workspace
-  const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools' | 'workflow' | 'google'>('matrix');
+  const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback'>('matrix');
 
   // Live Desktop Clock for ERP Admin
   const [currentTimeStr, setCurrentTimeStr] = useState('');
@@ -361,6 +363,20 @@ export function AdminDashboardWorkspace() {
               <span>هەژمارەکانی Google</span>
             </button>
 
+            <button
+              type="button"
+              onClick={() => setAdminView('feedback')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                adminView === 'feedback'
+                  ? 'bg-white text-blue-600 shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
+              title="بەڕێوەبردنی فیدباک، PIN، و ڕاپۆرتەکان"
+            >
+              <MessageSquareHeart className="w-3.5 h-3.5 text-amber-500" />
+              <span>بەشی فیدباک</span>
+            </button>
+
           </div>
 
           {/* Password Modal Button */}
@@ -533,6 +549,15 @@ export function AdminDashboardWorkspace() {
       {adminView === 'google' && (
         <section className="w-full transition-opacity duration-300">
           <AdminGoogleBindingsManager />
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 💬 VIEW 6: FEEDBACK & SURVEY MANAGEMENT DASHBOARD */}
+      {/* ========================================================================= */}
+      {adminView === 'feedback' && (
+        <section className="w-full transition-opacity duration-300">
+          <AdminFeedbackDashboard />
         </section>
       )}
 

@@ -22,7 +22,8 @@ import {
   Check,
   CloudUpload,
   RefreshCw,
-  CheckCircle2
+  CheckCircle2,
+  MessageSquareHeart
 } from 'lucide-react';
 import { MobileAuthUser, TodayAttendanceInfo, MonthStatsInfo } from './types';
 import { LoginScreen } from './LoginScreen';
@@ -45,7 +46,11 @@ import {
   triggerHaptic
 } from '@/lib/offline-sync-manager';
 
-export default function AshleyMobileApp() {
+export interface AshleyMobileAppProps {
+  onSwitchToFeedback?: () => void;
+}
+
+export default function AshleyMobileApp({ onSwitchToFeedback }: AshleyMobileAppProps = {}) {
   // Theme state: default 'light' per user specification
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -417,6 +422,7 @@ export default function AshleyMobileApp() {
         <LoginScreen
           onLoginSuccess={(authedUser) => setUser(authedUser)}
           onNeedsBinding={(profile) => setNeedsBindingProfile(profile)}
+          onSwitchToFeedback={onSwitchToFeedback}
         />
       </div>
     );
@@ -525,6 +531,25 @@ export default function AshleyMobileApp() {
               >
                 <Download className="w-4 h-4" />
                 <span>دابەزاندن</span>
+              </button>
+            )}
+
+            {/* Quick Feedback Portal Switcher */}
+            {onSwitchToFeedback && (
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  onSwitchToFeedback();
+                }}
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors cursor-pointer ios-press ${
+                  isDark 
+                    ? 'bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25' 
+                    : 'bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 shadow-2xs'
+                }`}
+                title="فیدباک و ڕاپرسی (PIN)"
+              >
+                <MessageSquareHeart className="w-4.5 h-4.5" />
               </button>
             )}
 
