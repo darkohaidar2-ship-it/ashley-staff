@@ -368,7 +368,7 @@ export default function AshleyMobileApp({ onSwitchToFeedback }: AshleyMobileAppP
             https://ashley-staff.vercel.app
           </p>
 
-          <div className="w-full max-w-xs">
+          <div className="w-full max-w-xs space-y-2.5">
             <button
               type="button"
               onClick={() => {
@@ -381,6 +381,18 @@ export default function AshleyMobileApp({ onSwitchToFeedback }: AshleyMobileAppP
               {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <ExternalLink className="w-4 h-4" />}
               <span>{copiedLink ? 'لینکەکە کۆپی کرا!' : 'کۆپیکردنی لینک'}</span>
             </button>
+
+            {/* Direct button to Feedback Portal on Computer */}
+            {onSwitchToFeedback && (
+              <button
+                type="button"
+                onClick={() => onSwitchToFeedback()}
+                className="w-full h-12 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+              >
+                <MessageSquareHeart className="w-4.5 h-4.5 text-slate-950" />
+                <span>پەرەی فیدباک و هەڵسەنگاندن (کۆمپیوتەر و تابلێت)</span>
+              </button>
+            )}
           </div>
 
           <button
