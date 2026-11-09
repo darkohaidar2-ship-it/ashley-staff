@@ -588,7 +588,7 @@ export function MonthlyReportTab({ user, stats: initialStats, isDark = false }: 
       {/* 📱 6. APPLE DETAIL BOTTOM SHEET (WHEN A DAY RECORD IS TAPPED) */}
       {selectedDayRecord && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className={`w-full max-w-[440px] max-h-[85vh] rounded-t-[32px] sm:rounded-[32px] p-6 border transition-all ${
+          <div className={`w-full max-w-md sm:max-w-xl md:max-w-2xl max-h-[85vh] rounded-t-[32px] sm:rounded-[32px] p-6 border transition-all ${
             isDark 
               ? 'bg-neutral-900 border-neutral-800 text-white' 
               : 'bg-white border-slate-200 text-slate-900 shadow-2xl'

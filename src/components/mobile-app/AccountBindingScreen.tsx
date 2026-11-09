@@ -162,7 +162,7 @@ export function AccountBindingScreen({
   };
 
   return (
-    <div className="min-h-[100dvh] w-full max-w-[440px] mx-auto bg-[#f8fafc] text-slate-900 flex flex-col p-5 pt-safe pb-safe dir-rtl font-sans select-none sm:shadow-2xl sm:border-x sm:border-slate-200/90" dir="rtl">
+    <div className="min-h-[100dvh] w-full max-w-md sm:max-w-xl md:max-w-2xl mx-auto bg-[#f8fafc] text-slate-900 flex flex-col p-5 pt-safe pb-safe dir-rtl font-sans select-none sm:shadow-2xl sm:border-x sm:border-slate-200/90" dir="rtl">
       {/* Header */}
       <div className="pt-2 pb-3.5 flex items-center justify-between border-b border-slate-200">
         <button

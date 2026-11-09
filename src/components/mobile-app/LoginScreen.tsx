@@ -275,8 +275,8 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding, onSwitchToFeedback
       isDark ? 'bg-black text-white' : 'bg-[#f2f2f7] text-slate-900'
     }`} dir="rtl">
       
-      {/* 📱 STRICT APPLE iOS CONTAINER (440px on tablet/desktop, 100% on phones) */}
-      <div className={`w-full max-w-[440px] min-h-[100dvh] mx-auto flex flex-col justify-between p-5 pt-safe pb-safe transition-colors ${
+      {/* 📱💻 RESPONSIVE CONTAINER (Mobile, Tablet, Desktop) */}
+      <div className={`w-full max-w-md sm:max-w-xl md:max-w-2xl min-h-[100dvh] mx-auto flex flex-col justify-between p-5 pt-safe pb-safe transition-colors ${
         isDark ? 'bg-black text-white sm:border-x sm:border-neutral-900 sm:shadow-2xl' : 'bg-[#f2f2f7] text-slate-900 sm:border-x sm:border-slate-200/80 sm:shadow-2xl'
       }`}>
         
@@ -614,7 +614,7 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding, onSwitchToFeedback
       {/* 📱 APPLE SHEET MODAL: STAFF SELECTOR */}
       {showStaffPicker && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className={`w-full max-w-[440px] max-h-[85vh] rounded-t-[32px] sm:rounded-[32px] flex flex-col p-5 border transition-all ${
+          <div className={`w-full max-w-md sm:max-w-xl md:max-w-2xl max-h-[85vh] rounded-t-[32px] sm:rounded-[32px] flex flex-col p-5 border transition-all ${
             isDark 
               ? 'bg-neutral-900 border-neutral-800 text-white' 
               : 'bg-white border-slate-200 text-slate-900 shadow-2xl'

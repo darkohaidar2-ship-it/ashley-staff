@@ -446,8 +446,8 @@ export default function AshleyMobileApp({ onSwitchToFeedback }: AshleyMobileAppP
       isDark ? 'bg-slate-950 text-white' : 'bg-[#f8fafc] text-slate-900'
     }`} dir="rtl">
       
-      {/* 📱 STRICT MOBILE FRAME (Edge-to-edge on phones, 440px centered frame on desktop preview) */}
-      <div className={`w-full max-w-[440px] min-h-[100dvh] mx-auto relative flex flex-col justify-between overflow-x-hidden transition-colors duration-200 ${
+      {/* 📱💻 RESPONSIVE ADAPTIVE CONTAINER (Phones edge-to-edge, tablet & desktop wide container) */}
+      <div className={`w-full max-w-lg md:max-w-3xl lg:max-w-5xl min-h-[100dvh] mx-auto relative flex flex-col justify-between overflow-x-hidden transition-colors duration-200 ${
         isDark 
           ? 'bg-slate-950 text-white sm:shadow-2xl sm:border-x sm:border-slate-800' 
           : 'bg-[#f8fafc] text-slate-900 sm:shadow-2xl sm:border-x sm:border-slate-200/90'
@@ -633,7 +633,7 @@ export default function AshleyMobileApp({ onSwitchToFeedback }: AshleyMobileAppP
         </main>
 
         {/* 🍏 APPLE iOS FLOATING TAB BAR */}
-        <nav className={`fixed bottom-0 left-0 right-0 max-w-[440px] mx-auto z-40 ios-blur-chrome border-t px-2 pt-1.5 pb-safe flex items-center justify-around transition-colors ${
+        <nav className={`fixed bottom-0 left-0 right-0 max-w-lg md:max-w-3xl lg:max-w-5xl mx-auto z-40 ios-blur-chrome border-t px-2 pt-1.5 pb-safe flex items-center justify-around transition-colors ${
           isDark 
             ? 'bg-slate-950/85 border-slate-800/80 text-slate-400 shadow-2xl' 
             : 'bg-white/85 border-slate-200/80 text-slate-500 shadow-[0_-8px_30px_rgba(0,0,0,0.04)]'

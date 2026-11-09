@@ -423,31 +423,31 @@ export function FeedbackPortal({ initialPin = '', isDark: initialDark = false }:
       isDark ? 'bg-black text-white' : 'bg-[#f2f2f7] text-slate-900'
     }`} dir="rtl">
       
-      {/* 📱💻 FULLY RESPONSIVE CONTAINER (Mobile, Tablet, Computer) */}
-      <div className="w-full max-w-5xl min-h-[100dvh] mx-auto flex flex-col justify-between p-3.5 sm:p-6 lg:p-8 pt-safe pb-safe transition-all">
+      {/* 📱💻 FULL-SCREEN ADAPTIVE CONTAINER (Mobile, Tablet, Desktop) */}
+      <div className="w-full min-h-[100dvh] flex flex-col justify-between p-3.5 sm:p-6 lg:p-8 xl:p-10 2xl:px-14 pt-safe pb-safe transition-all">
 
-        {/* 1. TOP HEADER (Pure & Clean • NO admin strips, NO section bars) */}
-        <header className="pt-2 pb-3 flex items-center justify-between border-b border-black/5 dark:border-white/10">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 p-0.5 shadow-md flex items-center justify-center shrink-0">
+        {/* 1. TOP HEADER (Pure & Clean • Full-width) */}
+        <header className="w-full pt-2 pb-3.5 flex items-center justify-between border-b border-black/5 dark:border-white/10">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 p-0.5 shadow-md flex items-center justify-center shrink-0">
               <div className={`w-full h-full rounded-[14px] flex items-center justify-center ${isDark ? 'bg-black' : 'bg-white'}`}>
-                <MessageSquareHeart className="w-5 h-5 text-amber-500" />
+                <MessageSquareHeart className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500" />
               </div>
             </div>
 
             <div>
-              <h1 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white tracking-tight">
+              <h1 className="text-sm sm:text-base lg:text-lg font-black text-slate-900 dark:text-white tracking-tight">
                 فیدباک و هەڵسەنگاندنی ئاشڵی
               </h1>
-              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-neutral-400 font-medium">
-                هەڵسەنگاندنی کارمەندانی فرۆشیار و کاشێر
+              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-neutral-400 font-medium">
+                هەڵسەنگاندنی فەرمی سەرجەم کارمەندانی فرۆشیار و کاشێر
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
             {step === 'questionnaire' && (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-200/80 dark:bg-neutral-800 text-slate-700 dark:text-neutral-300 text-[11px] font-mono font-bold shadow-2xs">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-200/80 dark:bg-neutral-800 text-slate-700 dark:text-neutral-300 text-[11px] sm:text-xs font-mono font-bold shadow-2xs">
                 <Lock className="w-3.5 h-3.5 text-emerald-500" />
                 <span>PIN: {pin}</span>
               </div>
@@ -469,169 +469,212 @@ export function FeedbackPortal({ initialPin = '', isDark: initialDark = false }:
         </header>
 
         {/* ===================================================================== */}
-        {/* 🔒 SCREEN 1: 4-DIGIT PIN GATE (Mobile, Tablet, Computer) */}
+        {/* 🔒 SCREEN 1: 4-DIGIT PIN GATE (FULL-SCREEN ADAPTIVE) */}
         {/* ===================================================================== */}
         {step === 'pin_gate' && (
-          <div className="my-auto py-8 flex flex-col items-center text-center">
-            
-            {/* Apple Icon */}
-            <div className="relative mb-4">
-              <div className="w-20 h-20 rounded-[28px] bg-gradient-to-tr from-amber-500 via-amber-400 to-amber-300 p-0.5 shadow-xl shadow-amber-500/20 flex items-center justify-center">
-                <div className={`w-full h-full rounded-[26px] flex items-center justify-center ${
-                  isDark ? 'bg-neutral-950' : 'bg-white'
-                }`}>
-                  <MessageSquareHeart className="w-10 h-10 text-amber-500" />
+          <div className="my-auto py-6 sm:py-10 flex flex-col items-center justify-center w-full">
+            <div className={`w-full max-w-4xl lg:max-w-5xl p-6 sm:p-10 lg:p-12 rounded-[36px] border shadow-2xl backdrop-blur-2xl transition-all ${
+              isDark 
+                ? 'bg-neutral-900/80 border-neutral-800 shadow-black/60' 
+                : 'bg-white/90 border-slate-200/90 shadow-slate-200/60'
+            }`}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 items-center">
+                
+                {/* RIGHT COLUMN (RTL): BRANDING & INSTRUCTIONS */}
+                <div className="flex flex-col items-center md:items-start text-center md:text-right space-y-4">
+                  <div className="relative">
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-[30px] bg-gradient-to-tr from-amber-500 via-amber-400 to-amber-300 p-0.5 shadow-xl shadow-amber-500/20 flex items-center justify-center">
+                      <div className={`w-full h-full rounded-[28px] flex items-center justify-center ${
+                        isDark ? 'bg-neutral-950' : 'bg-white'
+                      }`}>
+                        <MessageSquareHeart className="w-10 h-10 sm:w-12 sm:h-12 text-amber-500" />
+                      </div>
+                    </div>
+                    <div className="absolute -bottom-1 -left-1 w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
+                      <KeyRound className="w-4.5 h-4.5" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/25 mb-2">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>فیدباکی فەرمی ئاشڵی هۆم ستۆر</span>
+                    </span>
+                    <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight ${
+                      isDark ? 'text-white' : 'text-slate-900'
+                    }`}>
+                      داخڵبوونی فیدباک بە کۆدی PIN
+                    </h2>
+                    <p className={`text-xs sm:text-sm font-semibold leading-relaxed mt-2 ${
+                      isDark ? 'text-neutral-400' : 'text-slate-600'
+                    }`}>
+                      تکایە کۆدی ٤ ژمارەیی بنووسە بۆ دەستپێکردنی هەڵسەنگاندنی سەرجەم کارمەندانی فرۆشیار و کاشێر.
+                    </p>
+                  </div>
+
+                  {/* Feature Highlights */}
+                  <div className="w-full space-y-2.5 pt-2">
+                    <div className={`p-3 rounded-2xl border text-xs font-bold flex items-center gap-2.5 ${
+                      isDark ? 'bg-neutral-950/60 border-neutral-800 text-neutral-300' : 'bg-slate-50 border-slate-200/80 text-slate-700'
+                    }`}>
+                      <Users className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <span>هەڵسەنگاندنی سەرجەم ٨ کارمەندی فرۆشیار و کاشێر بە ٤ پێوەر</span>
+                    </div>
+                    <div className={`p-3 rounded-2xl border text-xs font-bold flex items-center gap-2.5 ${
+                      isDark ? 'bg-neutral-950/60 border-neutral-800 text-neutral-300' : 'bg-slate-50 border-slate-200/80 text-slate-700'
+                    }`}>
+                      <Lock className="w-4 h-4 text-amber-500 shrink-0" />
+                      <span>وەڵامەکان ١٠٠٪ نهێنین و ناوت بە ئارەزووی خۆتە</span>
+                    </div>
+                    <div className={`p-3 rounded-2xl border text-xs font-bold flex items-center gap-2.5 ${
+                      isDark ? 'bg-neutral-950/60 border-neutral-800 text-neutral-300' : 'bg-slate-50 border-slate-200/80 text-slate-700'
+                    }`}>
+                      <Monitor className="w-4 h-4 text-blue-500 shrink-0" />
+                      <span>لە کۆمپیوتەر دەتوانیت بە ژمارەکانی کیبۆرد (0-9) و Enter بنووسیت</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="absolute -bottom-1 -left-1 w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
-                <KeyRound className="w-4 h-4" />
+
+                {/* LEFT COLUMN (LTR KEYPAD): PASSCODE DOTS & NUMPAD */}
+                <div className="flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 rounded-3xl bg-slate-50/70 dark:bg-neutral-950/60 border border-black/5 dark:border-white/5">
+                  
+                  {/* Apple Passcode Dots Indicator */}
+                  <div className="flex items-center justify-center gap-4 mb-6" dir="ltr">
+                    {[0, 1, 2, 3].map((index) => {
+                      const filled = index < pin.length;
+                      return (
+                        <div
+                          key={index}
+                          className={`w-5 h-5 rounded-full transition-all duration-200 ${
+                            filled
+                              ? 'bg-amber-500 scale-110 shadow-lg shadow-amber-500/50'
+                              : isDark
+                              ? 'border-2 border-neutral-700 bg-neutral-900'
+                              : 'border-2 border-slate-300 bg-white shadow-inner'
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {/* Error Message Pill */}
+                  {pinError && (
+                    <div className="w-full max-w-xs mb-4 p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2 justify-center font-bold animate-shake">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{pinError}</span>
+                    </div>
+                  )}
+
+                  {pinVerifying && (
+                    <div className="flex items-center gap-2 text-xs font-bold text-amber-500 mb-4 animate-pulse">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>پشکنینی کۆدی PIN...</span>
+                    </div>
+                  )}
+
+                  {/* Keypad */}
+                  <div className="w-full max-w-xs sm:max-w-sm grid grid-cols-3 gap-2.5 sm:gap-3.5 my-2" dir="ltr">
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                      <button
+                        key={digit}
+                        type="button"
+                        onClick={() => handleKeypadPress(digit)}
+                        className={`h-14 sm:h-16 rounded-2xl text-xl sm:text-2xl font-black font-mono flex items-center justify-center transition-all cursor-pointer active:scale-90 active:bg-amber-500 active:text-slate-950 shadow-xs ${
+                          isDark
+                            ? 'bg-neutral-900/90 text-white hover:bg-neutral-800 border border-neutral-800'
+                            : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-200/90'
+                        }`}
+                      >
+                        {digit}
+                      </button>
+                    ))}
+
+                    {/* Clear / Delete */}
+                    <button
+                      type="button"
+                      onClick={handleKeypadDelete}
+                      className={`h-14 sm:h-16 rounded-2xl text-xs font-bold flex items-center justify-center transition-all cursor-pointer active:scale-90 shadow-2xs ${
+                        isDark
+                          ? 'bg-neutral-900/40 text-neutral-400 hover:bg-neutral-800 border border-neutral-800'
+                          : 'bg-white/60 text-slate-500 hover:bg-slate-100 border border-slate-200/70'
+                      }`}
+                      title="سڕینەوەی یەک ژمارە (یان Backspace لە کیبۆرد)"
+                    >
+                      <Delete className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </button>
+
+                    {/* Digit 0 */}
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('0')}
+                      className={`h-14 sm:h-16 rounded-2xl text-xl sm:text-2xl font-black font-mono flex items-center justify-center transition-all cursor-pointer active:scale-90 active:bg-amber-500 active:text-slate-950 shadow-xs ${
+                        isDark
+                          ? 'bg-neutral-900/90 text-white hover:bg-neutral-800 border border-neutral-800'
+                          : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-200/90'
+                      }`}
+                    >
+                      0
+                    </button>
+
+                    {/* Submit / Check PIN */}
+                    <button
+                      type="button"
+                      disabled={pinVerifying || pin.length !== 4}
+                      onClick={() => handleVerifyPin()}
+                      className="h-14 sm:h-16 rounded-2xl text-xs font-bold flex items-center justify-center bg-amber-500 text-slate-950 hover:bg-amber-600 transition-all cursor-pointer active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
+                      title="داخڵبوون (یان Enter لە کیبۆرد)"
+                    >
+                      {pinVerifying ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-6 h-6" />}
+                    </button>
+                  </div>
+
+                  <p className={`text-[11px] font-medium mt-4 text-center ${isDark ? 'text-neutral-400' : 'text-slate-500'}`}>
+                    دەتوانیت بە ژمارەکانی کیبۆرد بنووسیت (Enter = داخڵبوون)
+                  </p>
+                </div>
+
               </div>
             </div>
-
-            <h2 className={`text-xl sm:text-2xl font-black tracking-tight mb-1.5 ${
-              isDark ? 'text-white' : 'text-slate-900'
-            }`}>
-              داخڵبوونی فیدباک بە کۆدی PIN
-            </h2>
-            <p className={`text-xs sm:text-sm max-w-sm font-semibold leading-relaxed mb-6 ${
-              isDark ? 'text-neutral-400' : 'text-slate-500'
-            }`}>
-              تکایە کۆدی ٤ ژمارەیی بنووسە یان لەسەر کیبۆردەکەت لێیبدە بۆ دەستپێکردنی هەڵسەنگاندن
-            </p>
-
-            {/* Apple Passcode Dots Indicator */}
-            <div className="flex items-center justify-center gap-3.5 mb-6" dir="ltr">
-              {[0, 1, 2, 3].map((index) => {
-                const filled = index < pin.length;
-                return (
-                  <div
-                    key={index}
-                    className={`w-4 h-4 rounded-full transition-all duration-200 ${
-                      filled
-                        ? 'bg-amber-500 scale-110 shadow-md shadow-amber-500/40'
-                        : isDark
-                        ? 'border-2 border-neutral-700 bg-neutral-900'
-                        : 'border-2 border-slate-300 bg-white'
-                    }`}
-                  />
-                );
-              })}
-            </div>
-
-            {/* Error Message Pill */}
-            {pinError && (
-              <div className="w-full max-w-xs mb-4 p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2 justify-center font-bold animate-shake">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{pinError}</span>
-              </div>
-            )}
-
-            {pinVerifying && (
-              <div className="flex items-center gap-2 text-xs font-bold text-amber-500 mb-4 animate-pulse">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>پشکنینی کۆدی PIN...</span>
-              </div>
-            )}
-
-            {/* iOS Keypad (Touch on Mobile/Tablet • Mouse on Desktop) */}
-            <div className="w-full max-w-xs grid grid-cols-3 gap-2.5 sm:gap-3 my-2" dir="ltr">
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
-                <button
-                  key={digit}
-                  type="button"
-                  onClick={() => handleKeypadPress(digit)}
-                  className={`h-14 rounded-2xl text-xl font-black font-mono flex items-center justify-center transition-all cursor-pointer active:scale-90 active:bg-amber-500 active:text-slate-950 ${
-                    isDark
-                      ? 'bg-neutral-900/90 text-white hover:bg-neutral-800 border border-neutral-800'
-                      : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-200/80 shadow-xs'
-                  }`}
-                >
-                  {digit}
-                </button>
-              ))}
-
-              {/* Clear / Delete */}
-              <button
-                type="button"
-                onClick={handleKeypadDelete}
-                className={`h-14 rounded-2xl text-xs font-bold flex items-center justify-center transition-all cursor-pointer active:scale-90 ${
-                  isDark
-                    ? 'bg-neutral-900/40 text-neutral-400 hover:bg-neutral-800 border border-neutral-800'
-                    : 'bg-white/60 text-slate-500 hover:bg-slate-100 border border-slate-200/60 shadow-2xs'
-                }`}
-                title="سڕینەوەی یەک ژمارە (یان Backspace لە کیبۆرد)"
-              >
-                <Delete className="w-5 h-5" />
-              </button>
-
-              {/* Digit 0 */}
-              <button
-                type="button"
-                onClick={() => handleKeypadPress('0')}
-                className={`h-14 rounded-2xl text-xl font-black font-mono flex items-center justify-center transition-all cursor-pointer active:scale-90 active:bg-amber-500 active:text-slate-950 ${
-                  isDark
-                    ? 'bg-neutral-900/90 text-white hover:bg-neutral-800 border border-neutral-800'
-                    : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-200/80 shadow-xs'
-                }`}
-              >
-                0
-              </button>
-
-              {/* Submit / Check PIN */}
-              <button
-                type="button"
-                disabled={pinVerifying || pin.length !== 4}
-                onClick={() => handleVerifyPin()}
-                className="h-14 rounded-2xl text-xs font-bold flex items-center justify-center bg-amber-500 text-slate-950 hover:bg-amber-600 transition-all cursor-pointer active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
-                title="داخڵبوون (یان Enter لە کیبۆرد)"
-              >
-                {pinVerifying ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-              </button>
-            </div>
-
-            <p className={`text-[11px] font-medium mt-6 max-w-xs ${isDark ? 'text-neutral-500' : 'text-slate-400'}`}>
-              دەتوانیت بە پەنجە لێیبدەیت لە مۆبایل و تابلێت، یان بە ژمارەکانی کیبۆرد بنووسیت لەسەر کۆمپیوتەر
-            </p>
           </div>
         )}
 
         {/* ===================================================================== */}
-        {/* 📝 SCREEN 2: SALES & CASHIERS QUESTIONNAIRE (RESPONSIVE GRID) */}
+        {/* 📝 SCREEN 2: SALES & CASHIERS QUESTIONNAIRE (FULL-SCREEN RESPONSIVE GRID) */}
         {/* ===================================================================== */}
         {step === 'questionnaire' && (
-          <div className="flex-1 py-4 sm:py-6 space-y-5">
+          <div className="flex-1 py-4 sm:py-6 space-y-5 w-full">
             
-            {/* Top Progress & Info Banner (NO section strip) */}
-            <div className={`p-4 sm:p-5 rounded-3xl border shadow-xs transition-all ${
+            {/* Top Progress & Info Banner (Full-Width) */}
+            <div className={`w-full p-4 sm:p-6 rounded-3xl border shadow-xs transition-all ${
               isDark ? 'bg-neutral-900/90 border-neutral-800' : 'bg-white border-slate-200/90'
             }`}>
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-2.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
-                    <Users className="w-5 h-5" />
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                    <Users className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
                   <div>
-                    <h2 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+                    <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
                       هەڵسەنگاندنی سەرجەم ٨ کارمەندانی فرۆشیار و کاشێر
                     </h2>
-                    <p className="text-[11px] text-slate-500 dark:text-neutral-400">
+                    <p className="text-xs text-slate-500 dark:text-neutral-400">
                       پێویستە هەموو کارمەندەکان هەڵبسەنگێندرێن پێش ناردن
                     </p>
                   </div>
                 </div>
 
                 <div className="text-left sm:text-right">
-                  <span className={`text-xs sm:text-sm font-mono font-black ${isAllComplete ? 'text-emerald-500' : 'text-amber-500'}`}>
+                  <span className={`text-sm sm:text-base font-mono font-black ${isAllComplete ? 'text-emerald-500' : 'text-amber-500'}`}>
                     {completedCount} لە {totalEmployeesCount} تەواوە
                   </span>
-                  <span className="text-[10px] text-slate-400 block font-bold">
+                  <span className="text-[11px] text-slate-400 block font-bold">
                     {progressPercent}٪ تەواوکراوە
                   </span>
                 </div>
               </div>
 
               {/* Progress bar */}
-              <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-neutral-800 overflow-hidden">
+              <div className="w-full h-3 rounded-full bg-slate-100 dark:bg-neutral-800 overflow-hidden">
                 <div 
                   className={`h-full transition-all duration-300 rounded-full ${
                     isAllComplete ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-500 to-amber-400'
@@ -641,43 +684,66 @@ export function FeedbackPortal({ initialPin = '', isDark: initialDark = false }:
               </div>
 
               {/* Status Notice */}
-              <div className="mt-2.5 text-[11px] font-bold flex items-center gap-1.5">
+              <div className="mt-3 text-xs font-bold flex items-center gap-2">
                 {isAllComplete ? (
-                  <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4" />
                     <span>دەستت خۆش! سەرجەم کارمەندەکان وەڵام درانەوە، ئێستا دەتوانیت فیدباک بنێریت.</span>
                   </span>
                 ) : (
-                  <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>هێشتا {totalEmployeesCount - completedCount} کارمەند ماوە. دەست بنێ بە ئەستێرەکاندا بۆ هەڵبژاردن.</span>
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Submitter Name (Optional) */}
-            <div className={`p-4 sm:p-5 rounded-3xl border ${
-              isDark ? 'bg-neutral-900/60 border-neutral-800' : 'bg-white border-slate-200/80 shadow-xs'
-            }`}>
-              <label className="block text-xs font-black text-slate-800 dark:text-neutral-200 mb-1.5">
-                ناوی بەشداربوو / هەڵسەنگێنەر (ئارەزوومەندانە):
-              </label>
-              <input
-                type="text"
-                value={respondentName}
-                onChange={(e) => setRespondentName(e.target.value)}
-                placeholder="ناوت بنووسە ئەگەر پێت باشە لەگەڵ فیدباکەکەدا بێت..."
-                className={`w-full max-w-md h-11 px-3.5 text-xs rounded-2xl border outline-none transition-all ${
-                  isDark 
-                    ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500' 
-                    : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-amber-500'
-                }`}
-              />
+            {/* Submitter Name & Suggestions (Adaptive 2-Column Grid on Large Screens) */}
+            <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+              {/* Submitter Name (Optional) */}
+              <div className={`p-4 sm:p-5 rounded-3xl border ${
+                isDark ? 'bg-neutral-900/60 border-neutral-800' : 'bg-white border-slate-200/80 shadow-xs'
+              }`}>
+                <label className="block text-xs font-black text-slate-800 dark:text-neutral-200 mb-1.5">
+                  ناوی بەشداربوو / هەڵسەنگێنەر (ئارەزوومەندانە):
+                </label>
+                <input
+                  type="text"
+                  value={respondentName}
+                  onChange={(e) => setRespondentName(e.target.value)}
+                  placeholder="ناوت بنووسە ئەگەر پێت باشە لەگەڵ فیدباکەکەدا بێت..."
+                  className={`w-full h-11 px-3.5 text-xs rounded-2xl border outline-none transition-all ${
+                    isDark 
+                      ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500' 
+                      : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-amber-500'
+                  }`}
+                />
+              </div>
+
+              {/* General Store Remarks (Optional) */}
+              <div className={`p-4 sm:p-5 rounded-3xl border ${
+                isDark ? 'bg-neutral-900/60 border-neutral-800' : 'bg-white border-slate-200/80 shadow-xs'
+              }`}>
+                <label className="block text-xs font-black text-slate-800 dark:text-neutral-200 mb-1.5">
+                  سەرنج یان پێشنیاری گشتی بۆ ئیدارەی ئاشڵی (ئارەزوومەندانە):
+                </label>
+                <input
+                  type="text"
+                  value={generalSuggestions}
+                  onChange={(e) => setGeneralSuggestions(e.target.value)}
+                  placeholder="هەر پێشنیارێک یان سەرنجێکی ترت هەیە لێرەدا دەتوانیت بنووسیت..."
+                  className={`w-full h-11 px-3.5 text-xs rounded-2xl border outline-none transition-all ${
+                    isDark 
+                      ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500' 
+                      : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-amber-500'
+                  }`}
+                />
+              </div>
             </div>
 
-            {/* 🌟 RESPONSIVE GRID: 1 COL ON MOBILE, 2 COLS ON TABLET & COMPUTER */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+            {/* 🌟 4-COLUMN FULL-SCREEN GRID: 1 COL ON MOBILE, 2 COLS ON TABLET, 3-4 COLS ON DESKTOP */}
+            <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 lg:gap-6">
               {TARGET_SALES_CASHIER_STAFF.map((emp, index) => {
                 const ratings = employeeRatings[emp.employeeId] || {
                   serviceRating: 0,
@@ -699,8 +765,8 @@ export function FeedbackPortal({ initialPin = '', isDark: initialDark = false }:
                       isHighlighted
                         ? 'ring-3 ring-amber-500 border-amber-500 scale-[1.01]'
                         : complete
-                        ? isDark ? 'bg-neutral-900/90 border-emerald-500/30' : 'bg-white border-emerald-500/30 shadow-xs'
-                        : isDark ? 'bg-neutral-900/70 border-neutral-800' : 'bg-white border-slate-200/90 shadow-xs'
+                        ? isDark ? 'bg-neutral-900/90 border-emerald-500/30 shadow-md' : 'bg-white border-emerald-500/30 shadow-md'
+                        : isDark ? 'bg-neutral-900/70 border-neutral-800 shadow-xs' : 'bg-white border-slate-200/90 shadow-xs'
                     }`}
                   >
                     <div>
@@ -803,26 +869,6 @@ export function FeedbackPortal({ initialPin = '', isDark: initialDark = false }:
               })}
             </div>
 
-            {/* General Store Remarks (Optional) */}
-            <div className={`p-4 sm:p-5 rounded-3xl border ${
-              isDark ? 'bg-neutral-900/60 border-neutral-800' : 'bg-white border-slate-200/80 shadow-xs'
-            }`}>
-              <label className="block text-xs font-black text-slate-800 dark:text-neutral-200 mb-1.5">
-                سەرنج یان پێشنیاری گشتی بۆ ئیدارەی ئاشڵی (ئارەزوومەندانە):
-              </label>
-              <textarea
-                value={generalSuggestions}
-                onChange={(e) => setGeneralSuggestions(e.target.value)}
-                rows={3}
-                placeholder="هەر پێشنیارێک یان سەرنجێکی ترت هەیە لێرەدا دەتوانیت بنووسیت..."
-                className={`w-full p-3.5 text-xs rounded-2xl border outline-none resize-none transition-all ${
-                  isDark 
-                    ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500' 
-                    : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-amber-500'
-                }`}
-              />
-            </div>
-
             {/* Error Message */}
             {submitError && (
               <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2 font-bold animate-shake">
@@ -832,73 +878,78 @@ export function FeedbackPortal({ initialPin = '', isDark: initialDark = false }:
             )}
 
             {/* Submit Button (Centered, Floating & Responsive) */}
-            <div className="sticky bottom-4 z-30 pt-3 pb-1 flex justify-center">
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={handleSubmitFeedback}
-                className={`w-full max-w-md h-14 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 shadow-xl ${
-                  isAllComplete
-                    ? 'bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 ring-2 ring-amber-400/50'
-                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 opacity-90'
-                }`}
-              >
-                {submitting ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : isAllComplete ? (
-                  <>
-                    <CheckCircle2 className="w-5 h-5 text-slate-950" />
-                    <span>ناردنی فیدباک (سەرجەم ٨ کارمەندەکە تەواو بوو)</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    <span>تەواوکردنی وەڵامەکان ({completedCount} لە {totalEmployeesCount} کارمەند)</span>
-                  </>
-                )}
-              </button>
+            <div className="sticky bottom-4 z-30 pt-3 pb-1 flex justify-center w-full px-2">
+              <div className="w-full max-w-2xl bg-white/85 dark:bg-neutral-900/85 backdrop-blur-xl p-2 rounded-3xl border border-slate-200/90 dark:border-neutral-800 shadow-2xl flex items-center justify-center">
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={handleSubmitFeedback}
+                  className={`w-full h-14 rounded-2xl font-black text-xs sm:text-base flex items-center justify-center gap-2.5 transition-all cursor-pointer active:scale-[0.98] shadow-lg ${
+                    isAllComplete
+                      ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-slate-950 ring-2 ring-amber-400/50'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 opacity-90'
+                  }`}
+                >
+                  {submitting ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : isAllComplete ? (
+                    <>
+                      <CheckCircle2 className="w-5 h-5 text-slate-950" />
+                      <span>ناردنی فیدباک (سەرجەم ٨ کارمەندەکە تەواو بوو)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>تەواوکردنی وەڵامەکان ({completedCount} لە {totalEmployeesCount} کارمەند)</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
           </div>
         )}
 
         {/* ===================================================================== */}
-        {/* 🎉 SCREEN 3: SUCCESS CONFIRMATION (RESPONSIVE) */}
+        {/* 🎉 SCREEN 3: SUCCESS CONFIRMATION (FULL-SCREEN RESPONSIVE) */}
         {/* ===================================================================== */}
         {step === 'success' && (
-          <div className="my-auto py-10 flex flex-col items-center text-center">
-            
-            <div className="w-20 h-20 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 flex items-center justify-center mb-4 shadow-xl animate-bounce">
-              <CheckCircle2 className="w-10 h-10" />
+          <div className="my-auto py-10 flex flex-col items-center justify-center w-full">
+            <div className={`w-full max-w-2xl p-8 sm:p-12 rounded-[36px] border text-center shadow-2xl backdrop-blur-2xl transition-all ${
+              isDark ? 'bg-neutral-900/80 border-neutral-800' : 'bg-white/90 border-slate-200/90 shadow-slate-200/60'
+            }`}>
+              <div className="w-20 h-20 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 flex items-center justify-center mx-auto mb-4 shadow-xl animate-bounce">
+                <CheckCircle2 className="w-10 h-10" />
+              </div>
+
+              <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 mb-3">
+                🎉 فیدباکەکەت بە سەرکەوتوویی تۆمار کرا
+              </span>
+
+              <h2 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white mb-2">
+                دەستت خۆش بێت بۆ هەڵسەنگاندنەکە!
+              </h2>
+
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-neutral-400 max-w-lg mx-auto leading-relaxed mb-6 font-medium">
+                فیدباکەکەت بۆ سەرجەم ٨ کارمەندانی فرۆشیار و کاشێری ئاشڵی بە وردی لە سیستەمدا خەزن کرا و ڕاستەوخۆ دەگاتە دەستی بەڕێوەبەرایەتی.
+              </p>
+
+              <div className="w-full max-w-sm mx-auto p-4 rounded-2xl bg-slate-50 dark:bg-neutral-950 border border-slate-200/80 dark:border-neutral-800 text-xs text-slate-500 dark:text-neutral-400 mb-6 font-mono font-bold">
+                کۆدی بەکارهاتوو: {pin} • بە سەرکەوتوویی بەکارهات
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStep('pin_gate');
+                  setPin('');
+                }}
+                className="h-12 px-8 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs sm:text-sm inline-flex items-center gap-2 cursor-pointer transition-all active:scale-95 shadow-md"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>پڕکردنەوەی فیدباک بە PINی تر</span>
+              </button>
             </div>
-
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 mb-3">
-              🎉 فیدباکەکەت بە سەرکەوتوویی تۆمار کرا
-            </span>
-
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mb-2">
-              دەستت خۆش بێت بۆ هەڵسەنگاندنەکە!
-            </h2>
-
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-neutral-400 max-w-md leading-relaxed mb-6 font-medium">
-              فیدباکەکەت بۆ سەرجەم ٨ کارمەندانی فرۆشیار و کاشێری ئاشڵی بە وردی لە سیستەمدا خەزن کرا و ڕاستەوخۆ دەگاتە دەستی ئیدارە.
-            </p>
-
-            <div className="w-full max-w-xs p-4 rounded-3xl bg-slate-50 dark:bg-neutral-900 border border-slate-200/80 dark:border-neutral-800 text-xs text-slate-500 dark:text-neutral-400 mb-6 font-mono">
-              کۆدی بەکارهاتوو: {pin} • بە سەرکەوتوویی بەکارهات
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setStep('pin_gate');
-                setPin('');
-              }}
-              className="h-12 px-6 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center gap-2 cursor-pointer transition-all active:scale-95 shadow-md"
-            >
-              <KeyRound className="w-4 h-4" />
-              <span>پڕکردنەوەی فیدباک بە PINی تر</span>
-            </button>
           </div>
         )}
 
