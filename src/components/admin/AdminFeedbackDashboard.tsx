@@ -29,10 +29,11 @@ import {
   PieChart, 
   TrendingUp, 
   Eye, 
-  X,
-  Share2,
-  Users,
-  Award
+  X, 
+  Share2, 
+  Users, 
+  Award,
+  RotateCcw
 } from 'lucide-react';
 import { 
   FeedbackPin, 
@@ -89,10 +90,11 @@ export function AdminFeedbackDashboard() {
     setLoading(true);
     setError(null);
     try {
+      // Use GET with no-cache so latest PINs & submissions are fetched instantly
       const res = await fetch('/api/feedback/admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'get_all' }),
+        method: 'GET',
+        headers: { 'Cache-Control': 'no-cache' },
+        cache: 'no-store',
       });
 
       const data = await res.json();
@@ -177,7 +179,7 @@ export function AdminFeedbackDashboard() {
 
   // Delete PIN
   const handleDeletePin = async (pinToDelete: string) => {
-    if (!confirm(`ئایا دڵنیایت لە سڕینەوەی ئەم کۆدە (${pinToDelete})؟`)) return;
+    if (!confirm(`ئایا دڵنیایت لە سڕینەوەی ئەم کۆدە (${pinToDelete})؟ ئەم کردارە کۆدەکە و وەڵامەکانی دەسڕێتەوە.`)) return;
     try {
       const res = await fetch('/api/feedback/admin', {
         method: 'POST',
@@ -192,6 +194,48 @@ export function AdminFeedbackDashboard() {
       }
     } catch {
       alert('هەڵە لە سڕینەوە');
+    }
+  };
+
+  // 🔄 Reset PIN for re-testing
+  const handleResetPin = async (pinToReset: string) => {
+    if (!confirm(`ئایا دڵنیایت لە پاککردنەوەی داتای ئەم کۆدە (${pinToReset})؟\n\nئەم کردارە وەڵامەکانی تێستی ئەم کۆدە دەسڕێتەوە و کۆدەکە چالاک دەکاتەوە بۆ تێست یان بەکارهێنانی دووبارە.`)) return;
+    try {
+      const res = await fetch('/api/feedback/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset_pin', pin: pinToReset }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchData();
+        alert(`کۆدی PIN (${pinToReset}) پاککرایەوە و چالاک بووەوە بۆ تێست.`);
+      } else {
+        alert(data.error || 'نەتوانرا ڕیسێت بکرێت');
+      }
+    } catch {
+      alert('هەڵە لە پەیوەندیکردن بە سێرڤەر');
+    }
+  };
+
+  // 🧹 Clear All Test Submissions
+  const handleClearAllSubmissions = async () => {
+    if (!confirm('⚠️ ئایا دڵنیایت لە سڕینەوەی سەرجەم وەڵام و فیدباکەکانی تێست؟\n\nئەم کردارە هەموو فیدباکەکان پاک دەکاتەوە و هەموو کۆدەکانی PIN دەکاتەوە بە چالاک.')) return;
+    try {
+      const res = await fetch('/api/feedback/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clear_all_submissions' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchData();
+        alert('سەرجەم داتاکانی تێست بە سەرکەوتوویی سڕدرانەوە.');
+      } else {
+        alert(data.error || 'نەتوانرا پاکبکرێتەوە');
+      }
+    } catch {
+      alert('هەڵە لە سڕینەوەی داتاکان');
     }
   };
 
@@ -449,6 +493,19 @@ export function AdminFeedbackDashboard() {
             <span>ڕاپۆرتی PDF</span>
           </button>
 
+          {/* Wipe Test Data button */}
+          {submissions.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearAllSubmissions}
+              className="h-10 px-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+              title="سڕینەوەی گشت فیدباکەکانی تێست و چالاککردنەوەی هەموو PINەکان"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>سڕینەوەی داتای تێست</span>
+            </button>
+          )}
+
           {/* Refresh */}
           <button
             type="button"
@@ -578,6 +635,18 @@ export function AdminFeedbackDashboard() {
                 <option value="2">⭐⭐ (٢ ئەستێرە)</option>
                 <option value="1">⭐ (١ ئەستێرە)</option>
               </select>
+
+              {submissions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearAllSubmissions}
+                  className="h-10 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                  title="سڕینەوەی سەرجەم وەڵامەکانی تێست لە سیستەم"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>سڕینەوەی داتای تێست</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -876,7 +945,7 @@ export function AdminFeedbackDashboard() {
                       <th className="p-3.5">بەرواری دروستکردن</th>
                       <th className="p-3.5">بەرواری پڕکردنەوە</th>
                       <th className="p-3.5 text-center">کۆپیکردن</th>
-                      <th className="p-3.5 text-center">سڕینەوە</th>
+                      <th className="p-3.5 text-center">کردارەکان (ڕیسێت / سڕینەوە)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-semibold">
@@ -957,14 +1026,28 @@ export function AdminFeedbackDashboard() {
                           </td>
 
                           <td className="p-3.5 text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleDeletePin(p.pin)}
-                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer transition-all active:scale-95"
-                              title="سڕینەوەی ئەم PINە"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center justify-center gap-1.5">
+                              {/* Reset for Testing */}
+                              <button
+                                type="button"
+                                onClick={() => handleResetPin(p.pin)}
+                                className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/80 text-[11px] font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
+                                title="پاککردنەوەی داتای تێستی ئەم کۆدە و چالاککردنەوەی بۆ بەکارهێنانی دووبارە"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>ڕیسێت بۆ تێست</span>
+                              </button>
+
+                              {/* Delete PIN */}
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePin(p.pin)}
+                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60 cursor-pointer transition-all active:scale-95"
+                                title="سڕینەوەی ئەم PINە و گشت داتاکانی"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

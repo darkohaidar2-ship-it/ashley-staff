@@ -369,18 +369,72 @@ export async function verifyFeedbackPin(pin: string): Promise<{ valid: boolean; 
 }
 
 /**
- * 🗑️ Delete a Feedback PIN
+ * 🗑️ Delete a Feedback PIN & its associated submissions
  */
 export async function deleteFeedbackPin(pin: string): Promise<{ success: boolean; error?: string }> {
   try {
     const currentPins = await getAllFeedbackPins();
-    if (!currentPins[pin]) {
-      return { success: true };
+    if (currentPins[pin]) {
+      delete currentPins[pin];
+      await saveFeedbackPins(currentPins);
     }
 
-    delete currentPins[pin];
-    const ok = await saveFeedbackPins(currentPins);
-    return { success: ok, error: ok ? undefined : 'هەڵە لە سڕینەوە' };
+    // Also remove any submissions associated with this deleted PIN
+    const submissions = await getAllFeedbackSubmissions();
+    const filtered = submissions.filter(s => s.pin !== pin);
+    if (filtered.length !== submissions.length) {
+      await saveFeedbackSubmissions(filtered);
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * 🔄 Reset a Feedback PIN and delete its test submissions
+ * Allows the admin to test again with the exact same PIN!
+ */
+export async function resetFeedbackPin(pin: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const currentPins = await getAllFeedbackPins();
+    if (currentPins[pin]) {
+      currentPins[pin].isUsed = false;
+      delete currentPins[pin].usedAt;
+      await saveFeedbackPins(currentPins);
+    }
+
+    // Delete any test submissions made by this PIN
+    const submissions = await getAllFeedbackSubmissions();
+    const filtered = submissions.filter(s => s.pin !== pin);
+    if (filtered.length !== submissions.length) {
+      await saveFeedbackSubmissions(filtered);
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * 🧹 Clear all test feedback submissions and reset all PINs to unused
+ */
+export async function clearAllFeedbackSubmissions(): Promise<{ success: boolean; error?: string }> {
+  try {
+    // 1. Wipe submissions array
+    await saveFeedbackSubmissions([]);
+
+    // 2. Reset all PINs to isUsed = false
+    const currentPins = await getAllFeedbackPins();
+    Object.keys(currentPins).forEach((k) => {
+      currentPins[k].isUsed = false;
+      delete currentPins[k].usedAt;
+    });
+    await saveFeedbackPins(currentPins);
+
+    return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
