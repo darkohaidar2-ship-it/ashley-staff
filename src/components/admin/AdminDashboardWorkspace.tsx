@@ -3,7 +3,7 @@
 import { logger } from '@/lib/logger';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useAppContext } from '@/context/app-provider';
 import type { Employee, AttendanceRecord } from '@/lib/types';
@@ -36,13 +36,30 @@ import {
 
 export function AdminDashboardWorkspace() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading, logout } = useAuth();
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   
-  // Segmented views in Admin Workspace
+  // Segmented views in Admin Workspace (Synced with URL)
   const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback'>('matrix');
+
+  useEffect(() => {
+    const viewParam = searchParams.get('view');
+    if (viewParam && ['matrix', 'daily', 'tools', 'workflow', 'google', 'feedback'].includes(viewParam)) {
+      setAdminView(viewParam as any);
+    }
+  }, [searchParams]);
+
+  const handleViewChange = (newView: 'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback') => {
+    setAdminView(newView);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('view', newView);
+      window.history.pushState(null, '', url.toString());
+    }
+  };
 
   // Live Desktop Clock for ERP Admin
   const [currentTimeStr, setCurrentTimeStr] = useState('');
@@ -297,7 +314,7 @@ export function AdminDashboardWorkspace() {
             
             <button
               type="button"
-              onClick={() => setAdminView('matrix')}
+              onClick={() => handleViewChange('matrix')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 adminView === 'matrix'
                   ? 'bg-white text-blue-600 shadow-xs font-black'
@@ -310,7 +327,7 @@ export function AdminDashboardWorkspace() {
 
             <button
               type="button"
-              onClick={() => setAdminView('daily')}
+              onClick={() => handleViewChange('daily')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 adminView === 'daily'
                   ? 'bg-white text-blue-600 shadow-xs font-black'
@@ -323,7 +340,7 @@ export function AdminDashboardWorkspace() {
 
             <button
               type="button"
-              onClick={() => setAdminView('tools')}
+              onClick={() => handleViewChange('tools')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 adminView === 'tools'
                   ? 'bg-white text-blue-600 shadow-xs font-black'
@@ -337,7 +354,7 @@ export function AdminDashboardWorkspace() {
 
             <button
               type="button"
-              onClick={() => setAdminView('workflow')}
+              onClick={() => handleViewChange('workflow')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 adminView === 'workflow'
                   ? 'bg-white text-blue-600 shadow-xs font-black'
@@ -351,7 +368,7 @@ export function AdminDashboardWorkspace() {
 
             <button
               type="button"
-              onClick={() => setAdminView('google')}
+              onClick={() => handleViewChange('google')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 adminView === 'google'
                   ? 'bg-white text-blue-600 shadow-xs font-black'
@@ -365,7 +382,7 @@ export function AdminDashboardWorkspace() {
 
             <button
               type="button"
-              onClick={() => setAdminView('feedback')}
+              onClick={() => handleViewChange('feedback')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 adminView === 'feedback'
                   ? 'bg-white text-blue-600 shadow-xs font-black'

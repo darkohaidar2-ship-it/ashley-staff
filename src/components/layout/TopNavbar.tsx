@@ -72,12 +72,13 @@ export function TopNavbar() {
   const pathname = usePathname();
   const { settings } = useAppContext();
 
-  // 🚫 شریتی سەرەوە لە مۆبایل و کیۆسکی دەموچاو دەشاردرێتەوە - تەنها بۆ بەشەکانی ئەدمین کارایە
+  // 🚫 شریتی سەرەوە لە مۆبایل، کیۆسک، و بەشی فیدباک بە تەواوی دەشاردرێتەوە
   const isMobileOrKiosk = 
     pathname === '/' || 
     pathname === '/attendance/mobile' || 
     pathname === '/attendance/checkin' || 
     pathname?.startsWith('/attendance') || 
+    pathname?.startsWith('/feedback') ||
     pathname === '/login';
 
   if (isMobileOrKiosk) {

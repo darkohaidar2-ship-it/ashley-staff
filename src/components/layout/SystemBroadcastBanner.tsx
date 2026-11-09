@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Megaphone, X, Clock, User, CheckCircle2 } from 'lucide-react';
 
@@ -58,7 +59,17 @@ export function SystemBroadcastBanner() {
     return () => clearInterval(interval);
   }, []);
 
-  if (!latestAnnouncement || latestAnnouncement.id === dismissedId) {
+  const pathname = usePathname();
+
+  // 🚫 شریتی ڕاگەیاندن لە پەڕەی فیدباک، کیۆسک، و مۆبایل نیشان نادرێت
+  if (
+    pathname === '/' ||
+    pathname?.startsWith('/feedback') ||
+    pathname?.startsWith('/attendance') ||
+    pathname === '/login' ||
+    !latestAnnouncement || 
+    latestAnnouncement.id === dismissedId
+  ) {
     return null;
   }
 

@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { 
   MessageSquareHeart, 
   Sparkles, 
@@ -31,7 +33,11 @@ import {
   Printer,
   ChevronRight,
   TrendingUp,
-  ShieldCheck
+  ShieldCheck,
+  ExternalLink,
+  Layers,
+  HelpCircle,
+  Hash
 } from 'lucide-react';
 import { 
   FeedbackPin, 
@@ -42,14 +48,34 @@ import { OfficialPrintHeader, OfficialPrintSignatures } from '@/components/repor
 import * as XLSX from 'xlsx';
 
 export function AdminFeedbackDashboard() {
+  const searchParams = useSearchParams();
+
   const [pins, setPins] = useState<Record<string, FeedbackPin>>({});
   const [submissions, setSubmissions] = useState<FeedbackSubmission[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   // Active view: 'dashboard' | 'submissions' | 'pins'
-  // Defaults to 'dashboard' as requested by the user
+  // Defaults to 'dashboard' or URL searchParam 'tab'
   const [activeTab, setActiveTab] = useState<'dashboard' | 'submissions' | 'pins'>('dashboard');
+
+  // Synchronize activeTab with URL (?tab=dashboard | ?tab=submissions | ?tab=pins)
+  useEffect(() => {
+    const tabParam = searchParams?.get('tab');
+    if (tabParam && ['dashboard', 'submissions', 'pins'].includes(tabParam)) {
+      setActiveTab(tabParam as any);
+    }
+  }, [searchParams]);
+
+  // Tab switch handler that updates browser URL without full page reload
+  const handleTabChange = (newTab: 'dashboard' | 'submissions' | 'pins') => {
+    setActiveTab(newTab);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', newTab);
+      window.history.pushState(null, '', url.toString());
+    }
+  };
 
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -485,18 +511,28 @@ export function AdminFeedbackDashboard() {
             </span>
           </div>
           <p className="text-xs text-slate-500 font-medium">
-            شیکاری نمرەی سەرجەم ٨ کارمەندەکە، هێڵکارییەکان، خەڵاتی زێڕین، بەڕێوەبردنی PIN، و داگرتنی ڕاپۆرتی فەرمی PDF و Excel
+            بەڕێوەبردنی تەواوی سیستەمی فیدباک لەڕێگەی بەستەری ناونیشانەکان (URL Links)، گرافە تایبەتەکان، و ڕاپۆرتی فەرمی PDF
           </p>
         </div>
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Direct Link to Standalone Feedback Admin Page */}
+          <Link
+            href="/feedback/admin"
+            className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all"
+            title="کردنەوەی ئەم بەشە لە پەڕەی سەربەخۆی /feedback/admin"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+            <span>پەڕەی /feedback/admin</span>
+          </Link>
+
           {/* Official PDF Report button */}
           <button
             type="button"
             onClick={() => setShowPrintModal(true)}
             className="h-10 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 font-black text-xs flex items-center gap-2 cursor-pointer active:scale-95 shadow-xs transition-all"
-            title="بینین و چاپکردنی ڕاپۆرتی فەرمی بە لۆگۆی دیوان و ئاشڵی"
+            title="بینین و چاپکردنی ڕاپۆرتی فەرمی گشتگیر بە لۆگۆی دیوان و ئاشڵی"
           >
             <Printer className="w-4 h-4 text-amber-400" />
             <span>ڕاپۆرتی فەرمی PDF</span>
@@ -600,12 +636,14 @@ export function AdminFeedbackDashboard() {
         </div>
       </div>
 
-      {/* 🧭 3. TABS NAVIGATION (Dashboard First) */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+      {/* 🧭 3. TABS NAVIGATION (URL Addressable Pages / Tabs) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-2">
         <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+          
+          {/* Tab 1: Dashboard Link */}
           <button
             type="button"
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => handleTabChange('dashboard')}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'dashboard'
                 ? 'bg-white text-slate-900 shadow-xs'
@@ -613,12 +651,13 @@ export function AdminFeedbackDashboard() {
             }`}
           >
             <BarChart3 className="w-4 h-4 text-amber-500" />
-            <span>داشبۆردی فیدباک (شیکاری و هێڵکارییەکان)</span>
+            <span>داشبۆردی فیدباک (گرافەکان)</span>
           </button>
 
+          {/* Tab 2: Submissions Link */}
           <button
             type="button"
-            onClick={() => setActiveTab('submissions')}
+            onClick={() => handleTabChange('submissions')}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'submissions'
                 ? 'bg-white text-slate-900 shadow-xs'
@@ -629,9 +668,10 @@ export function AdminFeedbackDashboard() {
             <span>فیدباکە وەرگیراوەکان ({submissions.length})</span>
           </button>
 
+          {/* Tab 3: PINs Link */}
           <button
             type="button"
-            onClick={() => setActiveTab('pins')}
+            onClick={() => handleTabChange('pins')}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'pins'
                 ? 'bg-white text-slate-900 shadow-xs'
@@ -643,12 +683,29 @@ export function AdminFeedbackDashboard() {
           </button>
         </div>
 
-        {copiedText && (
-          <div className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold flex items-center gap-1.5 animate-in fade-in">
-            <Check className="w-3.5 h-3.5" />
-            <span>{copiedText} بە سەرکەوتوویی کۆپی کرا!</span>
-          </div>
-        )}
+        {/* Copy current page link button */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                handleCopy(window.location.href, 'لینکی ئەم بەشە');
+              }
+            }}
+            className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all"
+            title="کۆپیکردنی بەستەری ئەم پەیجە بۆ ئاسان دەستپێڕاگەیشتن"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>کۆپیکردنی لینکی بەشەکە</span>
+          </button>
+
+          {copiedText && (
+            <div className="px-3 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold flex items-center gap-1.5 animate-in fade-in">
+              <Check className="w-3.5 h-3.5" />
+              <span>{copiedText} کۆپی کرا!</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ========================================================================= */}
@@ -1637,21 +1694,24 @@ export function AdminFeedbackDashboard() {
 
       {/* ========================================================================= */}
       {/* 🖨️ MODAL: OFFICIAL PDF PRINT REPORT (Diwan & Ashley Letterhead) */}
+      {/* 1. کورتەی گشتگیر • 2. بۆ هەر پرسیارێک گرافێک • 3. فیدباکەکان و PIN ەکانیان */}
       {/* ========================================================================= */}
       {showPrintModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-          <div className="w-full max-w-4xl max-h-[92vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-5xl max-h-[94vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             
             {/* Top Modal Controls Bar (Hidden during Print) */}
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-900 text-white shrink-0 no-print">
-              <div className="flex items-center gap-2">
-                <Printer className="w-5 h-5 text-amber-400" />
+            <div className="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-900 text-white shrink-0 no-print">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
+                  <Printer className="w-5 h-5 text-slate-950" />
+                </div>
                 <div>
                   <h3 className="text-sm font-black text-white">
-                    پێشبینینی ڕاپۆرتی فەرمی (PDF و چاپکردن)
+                    پێشبینینی ڕاپۆرتی فەرمی گشتگیر (PDF و چاپکردن)
                   </h3>
                   <span className="text-[11px] text-slate-300">
-                    ئەم پەڕەیە ئامادەیە بۆ خەزنکردن وەک PDF یان چاپکردن بە لۆگۆی فەرمی دیوان و ئاشڵی
+                    بەشی ١: کورتەی گشتگیر • بەشی ٢: گراف بۆ هەر پرسیارێک • بەشی ٣: فیدباکەکان و PINەکان
                   </span>
                 </div>
               </div>
@@ -1677,99 +1737,296 @@ export function AdminFeedbackDashboard() {
             </div>
 
             {/* Printable Document Area */}
-            <div className="p-6 sm:p-8 overflow-y-auto space-y-6 text-slate-900" id="official-feedback-print-area">
+            <div className="p-6 sm:p-8 overflow-y-auto space-y-8 text-slate-900 font-sans" id="official-feedback-print-area">
               
-              {/* 1. Official Letterhead Header */}
-              <OfficialPrintHeader
-                title="ڕاپۆرتی شیکاری فیدباک و هەڵسەنگاندنی کارمەندانی فرۆشیار و کاشێر"
-                subtitle="پوختەی هەڵسەنگاندنی کڕیاران، شیکاری پێوانەیی، و پێشنیارەکانی پەرەپێدان"
-                documentCode="ASH-DGP-FB-2026"
-              />
+              {/* ========================================================================= */}
+              {/* 📑 PART 1: COMPREHENSIVE EXECUTIVE OVERVIEW (بەشی ١: ڕاپۆرتی گشتگیر) */}
+              {/* ========================================================================= */}
+              <div className="space-y-5">
+                
+                {/* 1.1 Official Letterhead Header */}
+                <OfficialPrintHeader
+                  title="ڕاپۆرتی شیکاری فیدباک و هەڵسەنگاندنی کارمەندانی فرۆشیار و کاشێر"
+                  subtitle="پوختەی هەڵسەنگاندنی کڕیاران، شیکاری پێوانەیی، و پێشنیارەکانی پەرەپێدان"
+                  documentCode="ASH-DGP-FB-2026"
+                />
 
-              {/* 2. Executive KPI Summary Cards */}
-              <div className="grid grid-cols-4 gap-3">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-300 text-center">
-                  <span className="text-[10px] font-bold text-slate-500 block">کۆی فیدباکەکان</span>
-                  <span className="text-xl font-black font-mono text-slate-900">{metrics.totalSubmissions}</span>
+                {/* 1.2 Executive KPI Summary Cards */}
+                <div className="grid grid-cols-4 gap-3 break-inside-avoid">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-300 text-center">
+                    <span className="text-[10px] font-bold text-slate-500 block">کۆی فیدباکەکان</span>
+                    <span className="text-xl font-black font-mono text-slate-900">{metrics.totalSubmissions}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-300 text-center">
+                    <span className="text-[10px] font-bold text-slate-500 block">تێکڕای نمرەی پێشانگا</span>
+                    <span className="text-xl font-black font-mono text-amber-600">⭐ {metrics.avgOverall} / 5</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-300 text-center">
+                    <span className="text-[10px] font-bold text-amber-800 block">ئەستێرەی زێڕینی مانگ</span>
+                    <span className="text-xs font-black text-amber-950 truncate block mt-1">
+                      👑 {topPerformer?.emp.fullName || 'دیاری نەکراوە'}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-300 text-center">
+                    <span className="text-[10px] font-bold text-slate-500 block">ڕێژەی بەشداری PIN</span>
+                    <span className="text-xl font-black font-mono text-blue-700">
+                      {metrics.usedPinsCount} / {metrics.totalPins}
+                    </span>
+                  </div>
                 </div>
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-300 text-center">
-                  <span className="text-[10px] font-bold text-slate-500 block">تێکڕای نمرەی پێشانگا</span>
-                  <span className="text-xl font-black font-mono text-amber-600">⭐ {metrics.avgOverall} / 5</span>
+
+                {/* 1.3 Golden Top Performer Box (Printable Version) */}
+                {topPerformer && (
+                  <div className="p-4 rounded-2xl bg-amber-50/60 border-2 border-amber-400 flex items-center justify-between gap-4 break-inside-avoid">
+                    <div className="flex items-center gap-3">
+                      <div className="w-14 h-14 rounded-2xl bg-amber-200 border-2 border-amber-400 overflow-hidden flex items-center justify-center font-black text-amber-900 shrink-0">
+                        {topPerformer.emp.photoUrl ? (
+                          <img 
+                            src={topPerformer.emp.photoUrl} 
+                            alt={topPerformer.emp.name} 
+                            className="w-full h-full object-cover"
+                            onError={(e) => { (e.target as any).style.display = 'none'; }}
+                          />
+                        ) : null}
+                        <span>{topPerformer.emp.name.slice(0, 1)}</span>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 font-black text-[10px]">
+                            👑 پلەی یەکەم • ئەستێرەی زێڕینی ئاشڵی
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-black text-slate-950 mt-1">{topPerformer.emp.fullName}</h4>
+                        <p className="text-[10px] text-slate-600 font-bold mt-0.5">
+                          {topPerformer.emp.role} • خاوەنی بەرزترین ئاستی ڕەزامەندی کڕیاران ({topPerformer.count} دەنگ)
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-left font-mono font-black shrink-0">
+                      <span className="text-2xl text-amber-600 block">⭐ {topPerformer.avgOverall} / 5</span>
+                      <span className="text-[9px] text-slate-500 font-sans font-bold">تێکڕای خاڵی بەدەستهاتوو</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 1.4 Comprehensive 8-Staff Evaluation Table */}
+                <div className="break-inside-avoid">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-black text-slate-900">
+                      خشتەی نمرەی سەرجەم ٨ کارمەندی فرۆشیار و کاشێر:
+                    </h4>
+                    <span className="text-[10px] text-slate-500 font-bold">پێوەری فەرمی ٥ ئەستێرە</span>
+                  </div>
+
+                  <table className="w-full text-right text-[11px] border-collapse border border-slate-300">
+                    <thead className="bg-slate-100 text-slate-800 font-black">
+                      <tr>
+                        <th className="p-2 border border-slate-300 text-center">پلە</th>
+                        <th className="p-2 border border-slate-300">ناوی کارمەند</th>
+                        <th className="p-2 border border-slate-300 text-center">ڕۆڵ</th>
+                        <th className="p-2 border border-slate-300 text-center">ژمارەی دەنگ</th>
+                        <th className="p-2 border border-slate-300 text-center">مامەڵە لەگەڵ کڕیار</th>
+                        <th className="p-2 border border-slate-300 text-center">چالاکی فرۆشتن</th>
+                        <th className="p-2 border border-slate-300 text-center">پابەندبوون بە دەوام</th>
+                        <th className="p-2 border border-slate-300 text-center">تێکڕای گشتی</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 font-semibold">
+                      {staffLeaderboard.map((item, index) => (
+                        <tr key={item.emp.employeeId} className={index === 0 && item.count > 0 ? 'bg-amber-50/60 font-bold' : ''}>
+                          <td className="p-2 border border-slate-300 text-center font-black">
+                            {index === 0 && item.count > 0 ? '🥇 ١' : index === 1 && item.count > 0 ? '🥈 ٢' : index === 2 && item.count > 0 ? '🥉 ٣' : `#${index + 1}`}
+                          </td>
+                          <td className="p-2 border border-slate-300 font-black text-slate-950">
+                            {item.emp.fullName}
+                          </td>
+                          <td className="p-2 border border-slate-300 text-center">
+                            {item.emp.role}
+                          </td>
+                          <td className="p-2 border border-slate-300 text-center font-mono font-bold">
+                            {item.count}
+                          </td>
+                          <td className="p-2 border border-slate-300 text-center font-mono">
+                            {item.avgService > 0 ? `⭐ ${item.avgService}` : '--'}
+                          </td>
+                          <td className="p-2 border border-slate-300 text-center font-mono">
+                            {item.avgPerf > 0 ? `⭐ ${item.avgPerf}` : '--'}
+                          </td>
+                          <td className="p-2 border border-slate-300 text-center font-mono">
+                            {item.avgDisc > 0 ? `⭐ ${item.avgDisc}` : '--'}
+                          </td>
+                          <td className="p-2 border border-slate-300 text-center font-mono font-black text-amber-700">
+                            {item.avgOverall > 0 ? `⭐ ${item.avgOverall} / 5` : '--'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-300 text-center">
-                  <span className="text-[10px] font-bold text-amber-800 block">ئەستێرەی زێڕینی مانگ</span>
-                  <span className="text-xs font-black text-amber-950 truncate block mt-1">
-                    👑 {topPerformer?.emp.fullName || 'دیاری نەکراوە'}
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-300 text-center">
-                  <span className="text-[10px] font-bold text-slate-500 block">ڕێژەی بەشداری PIN</span>
-                  <span className="text-xl font-black font-mono text-blue-700">
-                    {metrics.usedPinsCount} / {metrics.totalPins}
-                  </span>
-                </div>
+
               </div>
 
-              {/* 3. Golden Top Performer Box (Printable Version) */}
-              {topPerformer && (
-                <div className="p-4 rounded-2xl bg-amber-50/60 border-2 border-amber-400 flex items-center justify-between gap-4 break-inside-avoid">
-                  <div className="flex items-center gap-3">
-                    <div className="w-14 h-14 rounded-2xl bg-amber-200 border-2 border-amber-400 overflow-hidden flex items-center justify-center font-black text-amber-900 shrink-0">
-                      {topPerformer.emp.photoUrl ? (
-                        <img 
-                          src={topPerformer.emp.photoUrl} 
-                          alt={topPerformer.emp.name} 
-                          className="w-full h-full object-cover"
-                          onError={(e) => { (e.target as any).style.display = 'none'; }}
-                        />
-                      ) : null}
-                      <span>{topPerformer.emp.name.slice(0, 1)}</span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 font-black text-[10px]">
-                          👑 پلەی یەکەم • ئەستێرەی زێڕینی ئاشڵی
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-black text-slate-950 mt-1">{topPerformer.emp.fullName}</h4>
-                      <p className="text-[10px] text-slate-600 font-bold mt-0.5">
-                        {topPerformer.emp.role} • خاوەنی بەرزترین ئاستی ڕەزامەندی کڕیاران ({topPerformer.count} دەنگ)
-                      </p>
-                    </div>
+              {/* ========================================================================= */}
+              {/* 📊 PART 2: DEDICATED GRAPHS FOR EACH QUESTION (بۆ هەر پرسیارێک گرافێک) */}
+              {/* ========================================================================= */}
+              <div className="space-y-6 pt-4 border-t-2 border-slate-300">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-amber-500" />
+                    <h3 className="text-sm font-black text-slate-900">
+                      بەشی دووەم: هێڵکاری و شیکاری گرافیکی بۆ هەر پرسیارێک
+                    </h3>
                   </div>
-
-                  <div className="text-left font-mono font-black shrink-0">
-                    <span className="text-2xl text-amber-600 block">⭐ {topPerformer.avgOverall} / 5</span>
-                    <span className="text-[9px] text-slate-500 font-sans font-bold">تێکڕای خاڵی بەدەستهاتوو</span>
-                  </div>
-                </div>
-              )}
-
-              {/* 4. Comparative Bar Graph (Print-friendly Vector) */}
-              <div className="break-inside-avoid">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-black text-slate-900">
-                    هێڵکاری بەراوردکاری نمرەی گشتی سەرجەم ٨ کارمەندەکە:
-                  </h4>
-                  <span className="text-[10px] text-slate-500 font-bold">پێوەری ٥ ئەستێرە</span>
+                  <span className="text-[11px] font-bold text-slate-500">
+                    بەراوردی نمرەی ٨ کارمەندەکە لەسەر ئاستی پرسیارەکان
+                  </span>
                 </div>
 
-                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                  <div className="flex items-end justify-between gap-2 h-36 px-2 pb-1 border-b border-slate-300">
+                {/* 2.1 Graph Question 1: Customer Service (مامەڵە و ڕەفتار لەگەڵ کڕیار) */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 break-inside-avoid">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black text-xs">١</span>
+                      <h4 className="text-xs font-black text-slate-900">
+                        پرسیاری ١: مامەڵە و ڕەفتار لەگەڵ کڕیار (خزمەتگوزاری و پێشوازی)
+                      </h4>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                      تێکڕا: ⭐ {storeAnalytics.avgService} / 5
+                    </span>
+                  </div>
+
+                  {/* 8-Column Bar Chart for Question 1 */}
+                  <div className="flex items-end justify-between gap-2 h-32 px-2 pb-1 border-b border-slate-300">
+                    {staffLeaderboard.map((item, index) => {
+                      const percent = (item.avgService / 5) * 100;
+                      const h = item.count === 0 ? 8 : Math.max(12, percent);
+
+                      return (
+                        <div key={item.emp.employeeId} className="flex-1 flex flex-col items-center justify-end h-full">
+                          <span className="text-[9px] font-mono font-black mb-1 text-emerald-700">
+                            {item.avgService > 0 ? item.avgService : '٠'}
+                          </span>
+                          <div 
+                            className="w-full max-w-[34px] rounded-t-md bg-emerald-500"
+                            style={{ height: `${h}%` }}
+                          />
+                          <span className="text-[9px] font-black text-slate-900 mt-1 truncate max-w-[48px] block">
+                            {item.emp.name}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2.2 Graph Question 2: Sales Performance & Agility (چالاکی و لێهاتوویی فرۆشتن و کاش) */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 break-inside-avoid">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-xs">٢</span>
+                      <h4 className="text-xs font-black text-slate-900">
+                        پرسیاری ٢: چالاکی، زانیاری و لێهاتوویی لە فرۆشتن و کاش
+                      </h4>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                      تێکڕا: ⭐ {storeAnalytics.avgPerf} / 5
+                    </span>
+                  </div>
+
+                  {/* 8-Column Bar Chart for Question 2 */}
+                  <div className="flex items-end justify-between gap-2 h-32 px-2 pb-1 border-b border-slate-300">
+                    {staffLeaderboard.map((item) => {
+                      const percent = (item.avgPerf / 5) * 100;
+                      const h = item.count === 0 ? 8 : Math.max(12, percent);
+
+                      return (
+                        <div key={item.emp.employeeId} className="flex-1 flex flex-col items-center justify-end h-full">
+                          <span className="text-[9px] font-mono font-black mb-1 text-blue-700">
+                            {item.avgPerf > 0 ? item.avgPerf : '٠'}
+                          </span>
+                          <div 
+                            className="w-full max-w-[34px] rounded-t-md bg-blue-600"
+                            style={{ height: `${h}%` }}
+                          />
+                          <span className="text-[9px] font-black text-slate-900 mt-1 truncate max-w-[48px] block">
+                            {item.emp.name}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2.3 Graph Question 3: Discipline & Punctuality (پابەندبوون بە دەوام و کات) */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 break-inside-avoid">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-purple-600 text-white flex items-center justify-center font-black text-xs">٣</span>
+                      <h4 className="text-xs font-black text-slate-900">
+                        پرسیاری ٣: پابەندبوون بە دەوام، کات، و ڕێنماییەکانی پێشانگا
+                      </h4>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-md">
+                      تێکڕا: ⭐ {storeAnalytics.avgDisc} / 5
+                    </span>
+                  </div>
+
+                  {/* 8-Column Bar Chart for Question 3 */}
+                  <div className="flex items-end justify-between gap-2 h-32 px-2 pb-1 border-b border-slate-300">
+                    {staffLeaderboard.map((item) => {
+                      const percent = (item.avgDisc / 5) * 100;
+                      const h = item.count === 0 ? 8 : Math.max(12, percent);
+
+                      return (
+                        <div key={item.emp.employeeId} className="flex-1 flex flex-col items-center justify-end h-full">
+                          <span className="text-[9px] font-mono font-black mb-1 text-purple-700">
+                            {item.avgDisc > 0 ? item.avgDisc : '٠'}
+                          </span>
+                          <div 
+                            className="w-full max-w-[34px] rounded-t-md bg-purple-600"
+                            style={{ height: `${h}%` }}
+                          />
+                          <span className="text-[9px] font-black text-slate-900 mt-1 truncate max-w-[48px] block">
+                            {item.emp.name}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2.4 Graph Question 4: Overall Rating & Winner Podium (تێکڕای نمرەی گشتی) */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 break-inside-avoid">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xs">٤</span>
+                      <h4 className="text-xs font-black text-slate-900">
+                        پرسیاری ٤: نمرەی گشتی و بەراوردی کۆتایی سەرجەم کارمەندان
+                      </h4>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold text-amber-900 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-md">
+                      تێکڕا: ⭐ {metrics.avgOverall} / 5
+                    </span>
+                  </div>
+
+                  {/* 8-Column Bar Chart for Question 4 (Gold, Silver, Bronze highlights) */}
+                  <div className="flex items-end justify-between gap-2 h-32 px-2 pb-1 border-b border-slate-300">
                     {staffLeaderboard.map((item, index) => {
                       const percent = (item.avgOverall / 5) * 100;
-                      const h = item.count === 0 ? 10 : Math.max(14, percent);
+                      const h = item.count === 0 ? 8 : Math.max(12, percent);
                       const isFirst = index === 0 && item.count > 0;
                       const isSecond = index === 1 && item.count > 0;
                       const isThird = index === 2 && item.count > 0;
 
                       return (
                         <div key={item.emp.employeeId} className="flex-1 flex flex-col items-center justify-end h-full">
-                          <span className="text-[9px] font-mono font-black mb-1 text-slate-800">
+                          <span className={`text-[9px] font-mono font-black mb-1 ${isFirst ? 'text-amber-600' : 'text-slate-800'}`}>
                             {item.avgOverall > 0 ? item.avgOverall : '٠'}
                           </span>
                           <div 
-                            className={`w-full max-w-[32px] rounded-t-md ${
+                            className={`w-full max-w-[34px] rounded-t-md ${
                               isFirst ? 'bg-amber-400' : isSecond ? 'bg-slate-400' : isThird ? 'bg-amber-700' : 'bg-blue-600'
                             }`}
                             style={{ height: `${h}%` }}
@@ -1782,90 +2039,182 @@ export function AdminFeedbackDashboard() {
                     })}
                   </div>
                 </div>
+
+                {/* 2.5 General Store Dimensions & Rating Distribution */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 break-inside-avoid">
+                  
+                  {/* Store Dimensions */}
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2">
+                    <span className="font-black text-slate-900 block pb-1 border-b border-slate-200">
+                      پوختەی ڕەزامەندی لەسەر تەوەرە سەرەکییەکان:
+                    </span>
+                    <div className="flex items-center justify-between">
+                      <span>• خزمەتگوزاری کڕیار:</span>
+                      <span className="font-mono text-emerald-700 font-black">⭐ {storeAnalytics.avgService} / 5</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>• لێهاتوویی فرۆشتن:</span>
+                      <span className="font-mono text-blue-700 font-black">⭐ {storeAnalytics.avgPerf} / 5</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>• دەوام و دیسیپلین:</span>
+                      <span className="font-mono text-purple-700 font-black">⭐ {storeAnalytics.avgDisc} / 5</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>• ڕەزامەندی گشتی:</span>
+                      <span className="font-mono text-amber-600 font-black">⭐ {metrics.avgOverall} / 5</span>
+                    </div>
+                  </div>
+
+                  {/* Distribution 5-Star to 1-Star */}
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2">
+                    <span className="font-black text-slate-900 block pb-1 border-b border-slate-200">
+                      دابەشبوونی نمرەکان (١ بۆ ٥ ئەستێرە):
+                    </span>
+                    {[5, 4, 3, 2, 1].map((s) => {
+                      const c = storeAnalytics.distribution[s] || 0;
+                      const p = metrics.totalSubmissions > 0 ? Math.round((c / metrics.totalSubmissions) * 100) : 0;
+                      return (
+                        <div key={s} className="flex items-center justify-between text-[11px]">
+                          <span>{s} ئەستێرە:</span>
+                          <span className="font-mono font-bold text-slate-700">{c} جار ({p}%)</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                </div>
+
               </div>
 
-              {/* 5. Comprehensive 8-Staff Evaluation Table */}
-              <div className="break-inside-avoid">
-                <h4 className="text-xs font-black text-slate-900 mb-2">
-                  خشتەی نمرەی سەرجەم ٨ کارمەندی فرۆشیار و کاشێر:
-                </h4>
-                <table className="w-full text-right text-[11px] border-collapse border border-slate-300">
-                  <thead className="bg-slate-100 text-slate-800 font-black">
-                    <tr>
-                      <th className="p-2 border border-slate-300 text-center">پلە</th>
-                      <th className="p-2 border border-slate-300">ناوی کارمەند</th>
-                      <th className="p-2 border border-slate-300 text-center">ڕۆڵ</th>
-                      <th className="p-2 border border-slate-300 text-center">ژمارەی دەنگ</th>
-                      <th className="p-2 border border-slate-300 text-center">مامەڵە لەگەڵ کڕیار</th>
-                      <th className="p-2 border border-slate-300 text-center">چالاکی فرۆشتن</th>
-                      <th className="p-2 border border-slate-300 text-center">پابەندبوون بە دەوام</th>
-                      <th className="p-2 border border-slate-300 text-center">تێکڕای گشتی</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 font-semibold">
-                    {staffLeaderboard.map((item, index) => (
-                      <tr key={item.emp.employeeId} className={index === 0 && item.count > 0 ? 'bg-amber-50/60 font-bold' : ''}>
-                        <td className="p-2 border border-slate-300 text-center font-black">
-                          {index === 0 && item.count > 0 ? '🥇 ١' : index === 1 && item.count > 0 ? '🥈 ٢' : index === 2 && item.count > 0 ? '🥉 ٣' : `#${index + 1}`}
-                        </td>
-                        <td className="p-2 border border-slate-300 font-black text-slate-950">
-                          {item.emp.fullName}
-                        </td>
-                        <td className="p-2 border border-slate-300 text-center">
-                          {item.emp.role}
-                        </td>
-                        <td className="p-2 border border-slate-300 text-center font-mono font-bold">
-                          {item.count}
-                        </td>
-                        <td className="p-2 border border-slate-300 text-center font-mono">
-                          {item.avgService > 0 ? `⭐ ${item.avgService}` : '--'}
-                        </td>
-                        <td className="p-2 border border-slate-300 text-center font-mono">
-                          {item.avgPerf > 0 ? `⭐ ${item.avgPerf}` : '--'}
-                        </td>
-                        <td className="p-2 border border-slate-300 text-center font-mono">
-                          {item.avgDisc > 0 ? `⭐ ${item.avgDisc}` : '--'}
-                        </td>
-                        <td className="p-2 border border-slate-300 text-center font-mono font-black text-amber-700">
-                          {item.avgOverall > 0 ? `⭐ ${item.avgOverall} / 5` : '--'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {/* ========================================================================= */}
+              {/* 📑 PART 3: SUBMISSIONS & PINS REGISTRY (فیدباکەکان و PIN ەکانیان) */}
+              {/* ========================================================================= */}
+              <div className="space-y-6 pt-4 border-t-2 border-slate-300">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <Table className="w-5 h-5 text-blue-600" />
+                    <h3 className="text-sm font-black text-slate-900">
+                      بەشی سێیەم: تۆماری تەواوی فیدباکە وەرگیراوەکان و کۆدەکانی PIN
+                    </h3>
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-500">
+                    {submissions.length} فیدباکی نێردراو • {Object.keys(pins).length} کۆدی PIN
+                  </span>
+                </div>
 
-              {/* 6. Customer Suggestions and Feedback Highlights */}
-              {submissions.filter(s => s.suggestionsForManagement).length > 0 && (
+                {/* 3.1 All Feedback Submissions Table */}
                 <div className="break-inside-avoid">
                   <h4 className="text-xs font-black text-slate-900 mb-2">
-                    سەرنج و پێشنیارە دیارەکانی کڕیاران بۆ بەڕێوەبەرایەتی:
+                    خشتەی فیدباکە وەرگیراوەکان ({submissions.length} فیدباک):
                   </h4>
-                  <div className="space-y-1.5">
-                    {submissions
-                      .filter(s => s.suggestionsForManagement)
-                      .slice(0, 5)
-                      .map((s, idx) => (
-                        <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono mb-0.5">
-                            <span>کۆدی PIN: {s.pin} • {s.respondentName || s.targetName || 'بەشداربوو'}</span>
-                            <span>{s.baghdadDate}</span>
-                          </div>
-                          <p className="text-slate-800 font-medium">«{s.suggestionsForManagement}»</p>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
 
-              {/* 7. Official Signatures Section */}
-              <OfficialPrintSignatures
-                roles={[
-                  'سەرپەرشتیاری تیمی فرۆش و کاشێر',
-                  'بەڕێوەبەری سەرچاوە مرۆییەکان',
-                  'بەڕێوەبەری گشتی مۆبیلیاتی ئاشڵی'
-                ]}
-              />
+                  {submissions.length === 0 ? (
+                    <div className="p-4 rounded-xl bg-slate-50 text-center text-xs text-slate-500">
+                      هیچ فیدباکێک تۆمار نەکراوە.
+                    </div>
+                  ) : (
+                    <table className="w-full text-right text-[10.5px] border-collapse border border-slate-300">
+                      <thead className="bg-slate-100 text-slate-800 font-black">
+                        <tr>
+                          <th className="p-2 border border-slate-300 text-center">کۆدی PIN</th>
+                          <th className="p-2 border border-slate-300">بەشداربوو / مۆبایل</th>
+                          <th className="p-2 border border-slate-300 text-center">بەروار و کات</th>
+                          <th className="p-2 border border-slate-300 text-center">تێکڕای نمرە</th>
+                          <th className="p-2 border border-slate-300">سەرنج و پێشنیار بۆ بەڕێوەبەرایەتی</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 font-semibold">
+                        {submissions.map((s) => (
+                          <tr key={s.id}>
+                            <td className="p-2 border border-slate-300 text-center font-mono font-black text-slate-900" dir="ltr">
+                              {s.pin}
+                            </td>
+                            <td className="p-2 border border-slate-300">
+                              <span className="font-bold text-slate-950 block">{s.respondentName || s.targetName || 'نهێنی'}</span>
+                              {s.targetPhone && <span className="font-mono text-[9.5px] text-slate-500" dir="ltr">{s.targetPhone}</span>}
+                            </td>
+                            <td className="p-2 border border-slate-300 text-center font-mono text-[10px]" dir="ltr">
+                              {s.baghdadDate} {s.baghdadTime}
+                            </td>
+                            <td className="p-2 border border-slate-300 text-center font-mono font-black text-amber-600">
+                              ⭐ {s.overallSatisfaction} / 5
+                            </td>
+                            <td className="p-2 border border-slate-300 text-[10px] text-slate-700">
+                              {s.suggestionsForManagement || s.positiveHighlights || '--'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                {/* 3.2 All Generated PINs Table */}
+                <div className="break-inside-avoid">
+                  <h4 className="text-xs font-black text-slate-900 mb-2">
+                    خشتەی تۆماری سەرجەم کۆدەکانی PIN ({Object.keys(pins).length} کۆد):
+                  </h4>
+
+                  {Object.keys(pins).length === 0 ? (
+                    <div className="p-4 rounded-xl bg-slate-50 text-center text-xs text-slate-500">
+                      هیچ PINێک تۆمار نەکراوە.
+                    </div>
+                  ) : (
+                    <table className="w-full text-right text-[10.5px] border-collapse border border-slate-300">
+                      <thead className="bg-slate-100 text-slate-800 font-black">
+                        <tr>
+                          <th className="p-2 border border-slate-300 text-center">کۆدی PIN</th>
+                          <th className="p-2 border border-slate-300">ناوی وەرگر / مۆبایل</th>
+                          <th className="p-2 border border-slate-300 text-center">جۆری بەکارهێنان</th>
+                          <th className="p-2 border border-slate-300 text-center">دۆخی ئێستا</th>
+                          <th className="p-2 border border-slate-300 text-center">بەرواری دروستکردن</th>
+                          <th className="p-2 border border-slate-300 text-center">کاتی پڕکردنەوە</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 font-semibold">
+                        {Object.values(pins).map((p) => (
+                          <tr key={p.pin}>
+                            <td className="p-2 border border-slate-300 text-center font-mono font-black text-slate-900" dir="ltr">
+                              {p.pin}
+                            </td>
+                            <td className="p-2 border border-slate-300">
+                              <span className="font-bold text-slate-950 block">{p.targetName || 'گشتی'}</span>
+                              {p.targetPhone && <span className="font-mono text-[9.5px] text-slate-500" dir="ltr">{p.targetPhone}</span>}
+                            </td>
+                            <td className="p-2 border border-slate-300 text-center">
+                              {p.isSingleUse ? 'یەکجار' : 'فرە جار'}
+                            </td>
+                            <td className="p-2 border border-slate-300 text-center">
+                              {p.isUsed ? (
+                                <span className="text-emerald-700 font-bold">پڕکراوەتەوە ✅</span>
+                              ) : (
+                                <span className="text-amber-600 font-bold">چالاک و چاوەڕوان ⏳</span>
+                              )}
+                            </td>
+                            <td className="p-2 border border-slate-300 text-center font-mono text-[10px]" dir="ltr">
+                              {p.createdAt ? p.createdAt.slice(0, 10) : '--'}
+                            </td>
+                            <td className="p-2 border border-slate-300 text-center font-mono text-[10px]" dir="ltr">
+                              {p.usedAt ? p.usedAt.replace('T', ' ').slice(0, 16) : '--'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                {/* 3.3 Official Signatures Section */}
+                <OfficialPrintSignatures
+                  roles={[
+                    'سەرپەرشتیاری تیمی فرۆش و کاشێر',
+                    'بەڕێوەبەری سەرچاوە مرۆییەکان',
+                    'بەڕێوەبەری گشتی مۆبیلیاتی ئاشڵی'
+                  ]}
+                />
+
+              </div>
 
             </div>
           </div>
@@ -2280,7 +2629,7 @@ export function AdminFeedbackDashboard() {
             top: 0 !important;
             width: 100% !important;
             margin: 0 !important;
-            padding: 10mm !important;
+            padding: 8mm !important;
             background: white !important;
             box-shadow: none !important;
             border: none !important;
@@ -2293,7 +2642,7 @@ export function AdminFeedbackDashboard() {
           }
           @page {
             size: A4 portrait;
-            margin: 8mm;
+            margin: 6mm;
           }
         }
       `}} />
