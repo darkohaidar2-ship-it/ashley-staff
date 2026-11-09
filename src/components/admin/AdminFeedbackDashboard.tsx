@@ -30,9 +30,15 @@ import {
   TrendingUp, 
   Eye, 
   X,
-  Share2
+  Share2,
+  Users,
+  Award
 } from 'lucide-react';
-import { FeedbackPin, FeedbackSubmission } from '@/lib/feedback/feedback-service';
+import { 
+  FeedbackPin, 
+  FeedbackSubmission, 
+  TARGET_SALES_CASHIER_STAFF 
+} from '@/lib/feedback/feedback-service';
 import * as XLSX from 'xlsx';
 
 export function AdminFeedbackDashboard() {
@@ -46,7 +52,6 @@ export function AdminFeedbackDashboard() {
 
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [deptFilter, setDeptFilter] = useState<string>('all');
   const [ratingFilter, setRatingFilter] = useState<string>('all');
 
   // Selected Submission for Detailed View Modal
@@ -60,23 +65,36 @@ export function AdminFeedbackDashboard() {
   const [newCustomPin, setNewCustomPin] = useState<string>('');
   const [newTargetPhone, setNewTargetPhone] = useState<string>('');
   const [newTargetName, setNewTargetName] = useState<string>('');
-  const [newNotes, setNewNotes] = useState<string>('');
   const [isSingleUse, setIsSingleUse] = useState<boolean>(true);
   const [creatingPin, setCreatingPin] = useState<boolean>(false);
   const [createPinResult, setCreatePinResult] = useState<FeedbackPin | null>(null);
-  const [copiedText, setCopiedText] = useState<string | null>(null);
 
-  // Batch form state
+  // Batch PIN state
   const [batchCount, setBatchCount] = useState<number>(5);
   const [batchCreating, setBatchCreating] = useState<boolean>(false);
   const [batchCreatedPins, setBatchCreatedPins] = useState<FeedbackPin[]>([]);
 
-  // Fetch data
+  // Copy notification state
+  const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  // Copy helper
+  const handleCopy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedText(label);
+    setTimeout(() => setCopiedText(null), 2500);
+  };
+
+  // Fetch all feedback data
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/feedback/admin');
+      const res = await fetch('/api/feedback/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_all' }),
+      });
+
       const data = await res.json();
       if (data.success) {
         setPins(data.pins || {});
@@ -85,7 +103,7 @@ export function AdminFeedbackDashboard() {
         setError(data.error || 'نەتوانرا داتاکان باربکرێن');
       }
     } catch (err: any) {
-      setError('هەڵە لە پەیوەندیکردن بە سێرڤەر');
+      setError('هەڵە لە پەیوەندی کردن بە سێرڤەر');
     } finally {
       setLoading(false);
     }
@@ -95,31 +113,19 @@ export function AdminFeedbackDashboard() {
     fetchData();
   }, [fetchData]);
 
-  // Copy helper
-  const handleCopy = (text: string, label: string) => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(text);
-      setCopiedText(label);
-      setTimeout(() => setCopiedText(null), 2500);
-    }
-  };
-
-  // Create PIN
+  // Create single PIN
   const handleCreatePin = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreatingPin(true);
-    setError(null);
-
     try {
       const res = await fetch('/api/feedback/admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'create_pin',
-          customPin: newCustomPin.trim() || undefined,
-          targetPhone: newTargetPhone.trim() || undefined,
-          targetName: newTargetName.trim() || undefined,
-          notes: newNotes.trim() || undefined,
+          customPin: newCustomPin,
+          targetPhone: newTargetPhone,
+          targetName: newTargetName,
           isSingleUse,
         }),
       });
@@ -130,13 +136,12 @@ export function AdminFeedbackDashboard() {
         setNewCustomPin('');
         setNewTargetPhone('');
         setNewTargetName('');
-        setNewNotes('');
         fetchData();
       } else {
-        alert(data.error || 'نەتوانرا PIN دروستبکرێت');
+        alert(data.error || 'نەتوانرا دروستبکرێت');
       }
-    } catch (err: any) {
-      alert('هەڵەیەک ڕوویدا لە دروستکردنی PIN');
+    } catch {
+      alert('هەڵە لە دروستکردنی PIN');
     } finally {
       setCreatingPin(false);
     }
@@ -220,70 +225,86 @@ export function AdminFeedbackDashboard() {
         (s.targetPhone && s.targetPhone.includes(searchTerm.trim())) ||
         (s.targetName && s.targetName.toLowerCase().includes(searchTerm.toLowerCase().trim())) ||
         (s.respondentName && s.respondentName.toLowerCase().includes(searchTerm.toLowerCase().trim())) ||
-        (s.department && s.department.toLowerCase().includes(searchTerm.toLowerCase().trim())) ||
-        (s.positiveHighlights && s.positiveHighlights.toLowerCase().includes(searchTerm.toLowerCase().trim())) ||
-        (s.workplaceChallenges && s.workplaceChallenges.toLowerCase().includes(searchTerm.toLowerCase().trim())) ||
         (s.suggestionsForManagement && s.suggestionsForManagement.toLowerCase().includes(searchTerm.toLowerCase().trim()));
 
-      const matchesDept = deptFilter === 'all' || s.department === deptFilter;
-      const matchesRating = ratingFilter === 'all' || s.overallSatisfaction.toString() === ratingFilter;
+      const matchesRating = ratingFilter === 'all' || Math.round(s.overallSatisfaction).toString() === ratingFilter;
 
-      return matchesSearch && matchesDept && matchesRating;
+      return matchesSearch && matchesRating;
     });
-  }, [submissions, searchTerm, deptFilter, ratingFilter]);
+  }, [submissions, searchTerm, ratingFilter]);
 
-  // Analytics Metrics
+  // 🌟 SALES & CASHIERS LEADERBOARD STATS
+  const staffLeaderboard = useMemo(() => {
+    const map: Record<string, {
+      emp: typeof TARGET_SALES_CASHIER_STAFF[0];
+      count: number;
+      sumService: number;
+      sumPerf: number;
+      sumDisc: number;
+      sumOverall: number;
+    }> = {};
+
+    TARGET_SALES_CASHIER_STAFF.forEach((emp) => {
+      map[emp.employeeId] = {
+        emp,
+        count: 0,
+        sumService: 0,
+        sumPerf: 0,
+        sumDisc: 0,
+        sumOverall: 0,
+      };
+    });
+
+    submissions.forEach((sub) => {
+      if (sub.employeeRatings) {
+        Object.entries(sub.employeeRatings).forEach(([empId, r]: [string, any]) => {
+          if (map[empId] && r) {
+            map[empId].count++;
+            map[empId].sumService += r.serviceRating || 0;
+            map[empId].sumPerf += r.performanceRating || 0;
+            map[empId].sumDisc += r.disciplineRating || 0;
+            map[empId].sumOverall += r.overallRating || 0;
+          }
+        });
+      }
+    });
+
+    return Object.values(map)
+      .map((item) => ({
+        ...item,
+        avgOverall: item.count > 0 ? Number((item.sumOverall / item.count).toFixed(1)) : 0,
+        avgService: item.count > 0 ? Number((item.sumService / item.count).toFixed(1)) : 0,
+        avgPerf: item.count > 0 ? Number((item.sumPerf / item.count).toFixed(1)) : 0,
+        avgDisc: item.count > 0 ? Number((item.sumDisc / item.count).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => b.avgOverall - a.avgOverall);
+  }, [submissions]);
+
+  // Overall General Metrics
   const metrics = useMemo(() => {
     const total = submissions.length;
     if (total === 0) {
       return {
         totalSubmissions: 0,
         avgOverall: 0,
-        avgWorkEnv: 0,
-        avgTeamCoop: 0,
-        avgManagement: 0,
-        avgTools: 0,
         totalPins: Object.keys(pins).length,
         usedPinsCount: Object.values(pins).filter(p => p.isUsed).length,
         activePinsCount: Object.values(pins).filter(p => !p.isUsed).length,
-        deptBreakdown: {},
-        satisfactionBreakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
       };
     }
 
     let sumOverall = 0;
-    let sumWorkEnv = 0;
-    let sumTeam = 0;
-    let sumMgmt = 0;
-    let sumTools = 0;
-    const depts: Record<string, number> = {};
-    const satCounts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-
     submissions.forEach((s) => {
       sumOverall += s.overallSatisfaction || 0;
-      sumWorkEnv += s.workEnvironmentRating || 0;
-      sumTeam += s.teamCooperationRating || 0;
-      sumMgmt += s.managementFairnessRating || 0;
-      sumTools += s.toolsAndEquipmentRating || 0;
-
-      depts[s.department] = (depts[s.department] || 0) + 1;
-      const rounded = Math.round(s.overallSatisfaction);
-      if (satCounts[rounded] !== undefined) satCounts[rounded]++;
     });
 
     const pinValues = Object.values(pins);
     return {
       totalSubmissions: total,
       avgOverall: Number((sumOverall / total).toFixed(1)),
-      avgWorkEnv: Number((sumWorkEnv / total).toFixed(1)),
-      avgTeamCoop: Number((sumTeam / total).toFixed(1)),
-      avgManagement: Number((sumMgmt / total).toFixed(1)),
-      avgTools: Number((sumTools / total).toFixed(1)),
       totalPins: pinValues.length,
       usedPinsCount: pinValues.filter(p => p.isUsed).length,
       activePinsCount: pinValues.filter(p => !p.isUsed).length,
-      deptBreakdown: depts,
-      satisfactionBreakdown: satCounts,
     };
   }, [submissions, pins]);
 
@@ -294,74 +315,60 @@ export function AdminFeedbackDashboard() {
       return;
     }
 
-    const headers = [
+    const baseHeaders = [
       'کۆدی PIN',
       'ژمارەی مۆبایل',
       'ناوی کارمەند لە PIN',
-      'ناوی نووسراوی بەشداربوو',
-      'بەش',
+      'ناوی بەشداربوو',
       'بەرواری ناردن',
       'کاتی ناردن',
-      'نمرەی گشتی (1-5)',
-      'ژینگەی کار (1-5)',
-      'هاوکاری تیم (1-5)',
-      'دادپەروەری ئیدارە (1-5)',
-      'کەرەستە و کەلوپەل (1-5)',
-      'گونجاوی دەوام',
-      'بەشی پێویست بە چاکسازی',
-      'ئەزموونی ئەپڵیکەیشن',
-      'خاڵە ئەرێنییەکان',
-      'کێشە و ئاستەنگەکان',
-      'پێشنیار بۆ ئیدارە',
+      'تێکڕای گشتی (1-5)',
     ];
 
-    const rows = submissions.map((s) => [
-      s.pin,
-      s.targetPhone || '--',
-      s.targetName || '--',
-      s.respondentName || '--',
-      s.department,
-      s.baghdadDate,
-      s.baghdadTime,
-      s.overallSatisfaction,
-      s.workEnvironmentRating,
-      s.teamCooperationRating,
-      s.managementFairnessRating,
-      s.toolsAndEquipmentRating,
-      s.shiftHoursSuitability,
-      s.departmentNeedingImprovement,
-      s.appExperienceRating,
-      s.positiveHighlights || '--',
-      s.workplaceChallenges || '--',
-      s.suggestionsForManagement || '--',
-    ]);
+    const employeeHeaders: string[] = [];
+    TARGET_SALES_CASHIER_STAFF.forEach((emp) => {
+      employeeHeaders.push(`${emp.name} (${emp.role}) - گشتی`);
+      employeeHeaders.push(`${emp.name} - مامەڵە لەگەڵ کڕیار`);
+      employeeHeaders.push(`${emp.name} - چالاکی و کار`);
+      employeeHeaders.push(`${emp.name} - پابەندبوون بە دەوام`);
+      employeeHeaders.push(`${emp.name} - تێبینی`);
+    });
+
+    const headers = [...baseHeaders, ...employeeHeaders, 'پێشنیاری گشتی بۆ ئیدارە'];
+
+    const rows = submissions.map((s) => {
+      const baseRow = [
+        s.pin,
+        s.targetPhone || '--',
+        s.targetName || '--',
+        s.respondentName || '--',
+        s.baghdadDate,
+        s.baghdadTime,
+        s.overallSatisfaction,
+      ];
+
+      const empCols: any[] = [];
+      TARGET_SALES_CASHIER_STAFF.forEach((emp) => {
+        const er = s.employeeRatings ? s.employeeRatings[emp.employeeId] : null;
+        if (er) {
+          empCols.push(er.overallRating || '--');
+          empCols.push(er.serviceRating || '--');
+          empCols.push(er.performanceRating || '--');
+          empCols.push(er.disciplineRating || '--');
+          empCols.push(er.comment || '--');
+        } else {
+          empCols.push('--', '--', '--', '--', '--');
+        }
+      });
+
+      return [...baseRow, ...empCols, s.suggestionsForManagement || '--'];
+    });
 
     const data = [headers, ...rows];
     const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = [
-      { wch: 12 },
-      { wch: 16 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 14 },
-      { wch: 12 },
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 16 },
-      { wch: 16 },
-      { wch: 20 },
-      { wch: 24 },
-      { wch: 18 },
-      { wch: 35 },
-      { wch: 35 },
-      { wch: 35 },
-    ];
-
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'فیدباکی کارمەندان');
-    XLSX.writeFile(wb, `Ashley_Staff_Feedback_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, 'هەڵسەنگاندنی فرۆشیار و کاشێر');
+    XLSX.writeFile(wb, `Ashley_Sales_Cashier_Evaluation_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   // Export to Print / PDF
@@ -380,14 +387,14 @@ export function AdminFeedbackDashboard() {
               <MessageSquareHeart className="w-5 h-5 text-amber-500" />
             </div>
             <h2 className="text-base font-black text-slate-900">
-              داشبۆردی فیدباک و ڕاپرسییەکانی ئاشڵی
+              داشبۆردی فیدباک و هەڵسەنگاندنی فرۆشیار و کاشێرەکان
             </h2>
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
               {submissions.length} فیدباکی تۆمارکراو
             </span>
           </div>
           <p className="text-xs text-slate-500 font-medium">
-            بەڕێوەبردنی کۆدەکانی PIN، شیکاری سەرنج و پێشنیاری کارمەندان، و ڕاپۆرتی ئێکسڵ و PDF
+            بەڕێوەبردنی کۆدەکانی PIN، شیکاری نمرەی سەرجەم ٨ کارمەندانی فرۆشیار و کاشێر، داگرتنی Excel و PDF
           </p>
         </div>
 
@@ -420,107 +427,82 @@ export function AdminFeedbackDashboard() {
             <span>دروستکردنی بەکۆمەڵ</span>
           </button>
 
-          {/* Excel Export */}
+          {/* Export Excel */}
           <button
             type="button"
             onClick={handleExportExcel}
-            className="h-10 px-3.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-2xs"
-            title="داگرتنی داتاکان بە فۆرماتی ئێکسڵ"
+            className="h-10 px-3.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+            title="داگرتنی تەواوی داتاکان بە فۆرماتی Excel"
           >
-            <Download className="w-3.5 h-3.5 text-emerald-600" />
-            <span>داگرتنی ئێکسڵ (.xlsx)</span>
+            <Download className="w-3.5 h-3.5" />
+            <span>داگرتنی Excel</span>
           </button>
 
-          {/* PDF / Print */}
+          {/* Print / PDF */}
           <button
             type="button"
             onClick={handlePrintReport}
-            className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-2xs"
-            title="چاپکردن یان داگرتنی PDF"
+            className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+            title="چاپکردن یان خەزنکردن بە شێوەی PDF"
           >
-            <FileText className="w-3.5 h-3.5 text-slate-600" />
-            <span>چاپکردن / PDF</span>
+            <FileText className="w-3.5 h-3.5" />
+            <span>ڕاپۆرتی PDF</span>
           </button>
 
           {/* Refresh */}
           <button
             type="button"
             onClick={fetchData}
-            disabled={loading}
-            className="w-10 h-10 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 flex items-center justify-center cursor-pointer active:scale-95 transition-all"
-            title="نوێکردنەوە"
+            className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer active:scale-95 transition-all"
+            title="نوێکردنەوەی داتاکان"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-500' : ''}`} />
           </button>
         </div>
       </div>
 
-      {/* 🌟 2. 4-METRIC STATS OVERVIEW TILES */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* 📊 2. TOP METRIC TILES */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-bold text-slate-500">کۆی فیدباکەکان</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-              <MessageSquareHeart className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-1.5">
+          <span className="text-[11px] font-bold text-slate-500 block mb-1">کۆی فیدباکەکان</span>
+          <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black font-mono text-slate-900">{metrics.totalSubmissions}</span>
-            <span className="text-xs text-slate-400 font-bold">وەڵام</span>
+            <span className="text-[10px] text-slate-400 font-bold">وەڵام</span>
           </div>
-          <span className="text-[11px] text-slate-400 font-medium mt-1 block">تەواوی فیدباکە نێردراوەکان</span>
         </div>
 
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-bold text-slate-500">تێکڕای ڕازیبوون</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-              <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
-            </div>
+          <span className="text-[11px] font-bold text-slate-500 block mb-1">تێکڕای نمرەی کارمەندان</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-black font-mono text-amber-500">⭐ {metrics.avgOverall}</span>
+            <span className="text-[10px] text-slate-400 font-bold">لە ٥</span>
           </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl font-black font-mono text-amber-500">{metrics.avgOverall}</span>
-            <span className="text-xs text-slate-400 font-bold">لە ٥</span>
-          </div>
-          <span className="text-[11px] text-slate-400 font-medium mt-1 block">ڕێژەی ڕازیبوونی گشتی کارمەندان</span>
         </div>
 
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-bold text-slate-500">PINە بەکارهێنراوەکان</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-1.5">
+          <span className="text-[11px] font-bold text-slate-500 block mb-1">کۆدە بەکارهاتووەکان</span>
+          <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black font-mono text-emerald-600">{metrics.usedPinsCount}</span>
-            <span className="text-xs text-slate-400 font-bold">لە {metrics.totalPins}</span>
+            <span className="text-[10px] text-slate-400 font-bold">PIN</span>
           </div>
-          <span className="text-[11px] text-slate-400 font-medium mt-1 block">ئەو کارمەندانەی فۆڕمەکەیان پڕکردۆتەوە</span>
         </div>
 
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-bold text-slate-500">PINە چالاکەکان</span>
-            <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
-              <KeyRound className="w-4 h-4" />
-            </div>
+          <span className="text-[11px] font-bold text-slate-500 block mb-1">PINە چالاکە بەردەستەکان</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-black font-mono text-blue-600">{metrics.activePinsCount}</span>
+            <span className="text-[10px] text-slate-400 font-bold">چاوەڕوان</span>
           </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl font-black font-mono text-purple-600">{metrics.activePinsCount}</span>
-            <span className="text-xs text-slate-400 font-bold">کۆد</span>
-          </div>
-          <span className="text-[11px] text-slate-400 font-medium mt-1 block">ئامادەن بۆ ناردن و پڕکردنەوە</span>
         </div>
       </div>
 
-      {/* 🌟 3. SEGMENTED TABS: SUBMISSIONS | PINS | ANALYTICS */}
-      <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-2">
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+      {/* 🧭 3. TABS NAVIGATION */}
+      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
           <button
             type="button"
             onClick={() => setActiveTab('submissions')}
-            className={`px-4 py-2 rounded-lg text-xs font-black flex items-center gap-2 cursor-pointer transition-all ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'submissions'
                 ? 'bg-white text-slate-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
@@ -532,46 +514,45 @@ export function AdminFeedbackDashboard() {
 
           <button
             type="button"
-            onClick={() => setActiveTab('pins')}
-            className={`px-4 py-2 rounded-lg text-xs font-black flex items-center gap-2 cursor-pointer transition-all ${
-              activeTab === 'pins'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <KeyRound className="w-4 h-4 text-amber-500" />
-            <span>بەڕێوەبردنی PINەکان ({Object.keys(pins).length})</span>
-          </button>
-
-          <button
-            type="button"
             onClick={() => setActiveTab('analytics')}
-            className={`px-4 py-2 rounded-lg text-xs font-black flex items-center gap-2 cursor-pointer transition-all ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'analytics'
                 ? 'bg-white text-slate-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <BarChart3 className="w-4 h-4 text-emerald-600" />
-            <span>شیکاری ورد و چارتەکان</span>
+            <Award className="w-4 h-4 text-amber-500" />
+            <span>نمرە و شیکاری ٨ کارمەندەکە</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('pins')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'pins'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <KeyRound className="w-4 h-4 text-amber-600" />
+            <span>کۆدەکانی PIN ({Object.keys(pins).length})</span>
           </button>
         </div>
 
-        {/* Quick link status banner */}
         {copiedText && (
           <div className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold flex items-center gap-1.5 animate-in fade-in">
             <Check className="w-3.5 h-3.5" />
-            <span>{copiedText} بە سەرکەوتوویی لەبەرگیرایەوە!</span>
+            <span>{copiedText} بە سەرکەوتوویی کۆپی کرا!</span>
           </div>
         )}
       </div>
 
       {/* ========================================================================= */}
-      {/* 📑 VIEW 1: SUBMISSIONS TABLE (کە ئەدمین ئەزانێت چ PIN چی پڕکردۆتەوە) */}
+      {/* 📑 VIEW 1: SUBMISSIONS TABLE */}
       {/* ========================================================================= */}
       {activeTab === 'submissions' && (
         <div className="space-y-3">
-          {/* Search & Filters Bar */}
+          {/* Search Bar */}
           <div className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-xs flex flex-wrap items-center justify-between gap-3">
             <div className="relative flex-1 min-w-[240px]">
               <Search className="w-4 h-4 absolute right-3.5 top-3 text-slate-400" />
@@ -579,26 +560,12 @@ export function AdminFeedbackDashboard() {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="گەڕان بەپێی PIN، ژمارەی مۆبایل، ناو، بەش، یان پێشنیارەکان..."
+                placeholder="گەڕان بەپێی PIN، ژمارەی مۆبایل، ناو، یان سەرنجەکان..."
                 className="w-full h-10 pr-10 pl-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold outline-none focus:bg-white focus:border-blue-400"
               />
             </div>
 
             <div className="flex items-center gap-2">
-              <select
-                value={deptFilter}
-                onChange={(e) => setDeptFilter(e.target.value)}
-                className="h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold outline-none cursor-pointer"
-              >
-                <option value="all">هەموو بەشەکان</option>
-                <option value="شۆڕووم و پێشانگا">شۆڕووم و پێشانگا</option>
-                <option value="کۆگاکان و گواستنەوە">کۆگاکان و گواستنەوە</option>
-                <option value="بەشی فرۆشتن">بەشی فرۆشتن</option>
-                <option value="بەشی ژمێریاری و ئیدارە">بەشی ژمێریاری و ئیدارە</option>
-                <option value="تەکنەلۆژیا و IT">تەکنەلۆژیا و IT</option>
-                <option value="بەشەکانی تر">بەشەکانی تر</option>
-              </select>
-
               <select
                 value={ratingFilter}
                 onChange={(e) => setRatingFilter(e.target.value)}
@@ -632,98 +599,90 @@ export function AdminFeedbackDashboard() {
                     <tr>
                       <th className="p-3.5">کۆدی PIN</th>
                       <th className="p-3.5">بەشداربوو / مۆبایل</th>
-                      <th className="p-3.5">بەش</th>
-                      <th className="p-3.5 text-center">ڕازیبوونی گشتی</th>
-                      <th className="p-3.5">گونجاوی دەوام</th>
-                      <th className="p-3.5">پوختەی سەرنجەکان</th>
+                      <th className="p-3.5 text-center">تێکڕای نمرە</th>
+                      <th className="p-3.5 text-center">کارمەندانی هەڵسەنگێندراو</th>
+                      <th className="p-3.5">پێشنیاری گشتی</th>
                       <th className="p-3.5">بەروار و کات</th>
                       <th className="p-3.5 text-center">کردارەکان</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-semibold">
-                    {filteredSubmissions.map((s) => (
-                      <tr 
-                        key={s.id} 
-                        className="hover:bg-slate-50/80 transition-colors"
-                      >
-                        {/* PIN */}
-                        <td className="p-3.5">
-                          <span className="font-mono font-black text-xs px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 inline-block" dir="ltr">
-                            {s.pin}
-                          </span>
-                        </td>
+                    {filteredSubmissions.map((s) => {
+                      const empEvaluationsCount = s.employeeRatings ? Object.keys(s.employeeRatings).length : 0;
+                      return (
+                        <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
+                          {/* PIN */}
+                          <td className="p-3.5">
+                            <span className="font-mono font-black text-xs px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 inline-block" dir="ltr">
+                              {s.pin}
+                            </span>
+                          </td>
 
-                        {/* Respondent / Phone */}
-                        <td className="p-3.5">
-                          <div className="font-bold text-slate-900">
-                            {s.respondentName || s.targetName || 'نەناسراو (نهێنی)'}
-                          </div>
-                          {s.targetPhone && (
-                            <div className="text-[11px] font-mono text-slate-400" dir="ltr">
-                              {s.targetPhone}
+                          {/* Respondent / Phone */}
+                          <td className="p-3.5">
+                            <div className="font-bold text-slate-900">
+                              {s.respondentName || s.targetName || 'نهێنی (ناونیشان نەکراو)'}
                             </div>
-                          )}
-                        </td>
+                            {s.targetPhone && (
+                              <div className="text-[11px] font-mono text-slate-400" dir="ltr">
+                                {s.targetPhone}
+                              </div>
+                            )}
+                          </td>
 
-                        {/* Department */}
-                        <td className="p-3.5">
-                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold">
-                            {s.department}
-                          </span>
-                        </td>
+                          {/* Overall Rating */}
+                          <td className="p-3.5 text-center">
+                            <div className="inline-flex items-center gap-1 font-mono font-black text-amber-500 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-lg">
+                              <Star className="w-3.5 h-3.5 fill-amber-500" />
+                              <span>{s.overallSatisfaction} / 5</span>
+                            </div>
+                          </td>
 
-                        {/* Overall Rating */}
-                        <td className="p-3.5 text-center">
-                          <div className="inline-flex items-center gap-1 font-mono font-black text-amber-500 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md">
-                            <Star className="w-3.5 h-3.5 fill-amber-500" />
-                            <span>{s.overallSatisfaction} / 5</span>
-                          </div>
-                        </td>
+                          {/* Employee count badge */}
+                          <td className="p-3.5 text-center">
+                            <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-bold">
+                              {empEvaluationsCount > 0 ? `${empEvaluationsCount} کارمەند` : 'گشتی'}
+                            </span>
+                          </td>
 
-                        {/* Shift hours */}
-                        <td className="p-3.5 text-slate-600">
-                          {s.shiftHoursSuitability}
-                        </td>
+                          {/* Snippet */}
+                          <td className="p-3.5 max-w-[200px]">
+                            <p className="text-[11px] text-slate-500 truncate">
+                              {s.suggestionsForManagement || s.positiveHighlights || 'بێ تێبینی نووسراو'}
+                            </p>
+                          </td>
 
-                        {/* Snippet */}
-                        <td className="p-3.5 max-w-[200px]">
-                          <p className="text-[11px] text-slate-500 truncate">
-                            {s.positiveHighlights || s.workplaceChallenges || s.suggestionsForManagement || 'بێ تێبینی نووسراو'}
-                          </p>
-                        </td>
+                          {/* Date & Time */}
+                          <td className="p-3.5 text-[11px] font-mono text-slate-500" dir="ltr">
+                            {s.baghdadDate} {s.baghdadTime}
+                          </td>
 
-                        {/* Date & Time */}
-                        <td className="p-3.5 text-[11px] font-mono text-slate-500" dir="ltr">
-                          {s.baghdadDate} {s.baghdadTime}
-                        </td>
+                          {/* Actions */}
+                          <td className="p-3.5 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedSubmission(s)}
+                                className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                                title="بینینی تەواوی هەڵسەنگاندنەکان"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>وردەکاری</span>
+                              </button>
 
-                        {/* Actions */}
-                        <td className="p-3.5 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {/* View Details */}
-                            <button
-                              type="button"
-                              onClick={() => setSelectedSubmission(s)}
-                              className="px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95"
-                              title="بینینی تەواوی وەڵامەکان"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>وردەکاری</span>
-                            </button>
-
-                            {/* Delete */}
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteSubmission(s.id)}
-                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer transition-all active:scale-95"
-                              title="سڕینەوە"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSubmission(s.id)}
+                                className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer transition-all active:scale-95"
+                                title="سڕینەوە"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -733,7 +692,127 @@ export function AdminFeedbackDashboard() {
       )}
 
       {/* ========================================================================= */}
-      {/* 🔑 VIEW 2: PIN MANAGEMENT (لیستی تەواوی PINەکان و دروستکردنی نوێ) */}
+      {/* 🏆 VIEW 2: LEADERBOARD & EMPLOYEE ANALYTICS */}
+      {/* ========================================================================= */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-4">
+          
+          {/* Header Card */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs">
+            <div className="flex items-center gap-2 mb-2">
+              <Award className="w-5 h-5 text-amber-500" />
+              <h3 className="text-sm font-black text-slate-900">
+                ڕیزبەندی و تێکڕای نمرەی سەرجەم ٨ کارمەندانی فرۆشیار و کاشێر
+              </h3>
+            </div>
+            <p className="text-xs text-slate-500 font-medium">
+              ئەم خشتەیە بەپێی نمرەی گشتی فیدباکەکان ڕیزکراوە، تێیدا وردەکاری مامەڵە لەگەڵ کڕیار، چالاکی لە کار و پابەندبوون بە دەوام دەردەکەوێت.
+            </p>
+          </div>
+
+          {/* Cards for each employee */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {staffLeaderboard.map((item, index) => {
+              const rankIcon = index === 0 ? '🥇 یەکەم' : index === 1 ? '🥈 دووەم' : index === 2 ? '🥉 سێیەم' : `#${index + 1}`;
+              return (
+                <div 
+                  key={item.emp.employeeId}
+                  className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col justify-between hover:border-amber-400 transition-all"
+                >
+                  <div>
+                    {/* Top line: photo, name, rank */}
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center font-black text-amber-700 shrink-0 overflow-hidden">
+                          {item.emp.photoUrl ? (
+                            <img 
+                              src={item.emp.photoUrl} 
+                              alt={item.emp.name} 
+                              className="w-full h-full object-cover"
+                              onError={(e) => { (e.target as any).style.display = 'none'; }}
+                            />
+                          ) : null}
+                          <span>{item.emp.name.slice(0, 1)}</span>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-black text-slate-900">{item.emp.fullName}</h4>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] font-bold px-2 py-0.2 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+                              {item.emp.role}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {item.count} جار هەڵسەنگێندراوە
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-left shrink-0">
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-xl ${
+                          index === 0 
+                            ? 'bg-amber-500 text-slate-950 font-black shadow-xs' 
+                            : 'bg-slate-100 text-slate-700 font-bold'
+                        }`}>
+                          {rankIcon}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Overall score large */}
+                    <div className="flex items-center justify-between bg-amber-50/60 border border-amber-200/80 p-2.5 rounded-xl mb-3">
+                      <span className="text-xs font-black text-amber-900">تێکڕای نمرەی گشتی:</span>
+                      <div className="flex items-baseline gap-1 font-mono font-black text-amber-600 text-lg">
+                        <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
+                        <span>{item.avgOverall}</span>
+                        <span className="text-xs text-amber-800 font-normal">/ 5</span>
+                      </div>
+                    </div>
+
+                    {/* Criteria progress bars */}
+                    <div className="space-y-2 text-xs">
+                      <div>
+                        <div className="flex items-center justify-between font-bold mb-1">
+                          <span className="text-slate-600">• مامەڵە و ڕەفتار لەگەڵ کڕیار:</span>
+                          <span className="font-mono text-emerald-600 font-black">{item.avgService} / 5</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(item.avgService / 5) * 100}%` }} />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between font-bold mb-1">
+                          <span className="text-slate-600">• چالاکی و لێهاتوویی لە کار:</span>
+                          <span className="font-mono text-blue-600 font-black">{item.avgPerf} / 5</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(item.avgPerf / 5) * 100}%` }} />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between font-bold mb-1">
+                          <span className="text-slate-600">• پابەندبوون بە دەوام و کات:</span>
+                          <span className="font-mono text-purple-600 font-black">{item.avgDisc} / 5</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-full bg-purple-500 rounded-full" style={{ width: `${(item.avgDisc / 5) * 100}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🔑 VIEW 3: PIN MANAGEMENT */}
       {/* ========================================================================= */}
       {activeTab === 'pins' && (
         <div className="space-y-3">
@@ -743,7 +822,7 @@ export function AdminFeedbackDashboard() {
                 بەڕێوەبردنی کۆدەکانی PIN بۆ چوونەژوورەوەی فیدباک
               </h3>
               <p className="text-xs text-slate-500 font-medium">
-                دەتوانیت PINی چوار ژمارەیی تایبەت بە هەر ژمارەیەک دروست بکەیت، یان بەکۆمەڵ دروستیان بکەیت و بیاندەیت بە کارمەندان.
+                دەتوانیت PINی چوار ژمارەیی دروست بکەیت و لینکی ڕاستەوخۆ بنێریت بۆ هەر کەسێک کە پێت باشە فیدباک پڕبکاتەوە.
               </p>
             </div>
 
@@ -754,10 +833,10 @@ export function AdminFeedbackDashboard() {
                   setCreatePinResult(null);
                   setShowCreatePinModal(true);
                 }}
-                className="h-9 px-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-xs"
+                className="h-9 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
               >
                 <Plus className="w-4 h-4" />
-                <span>دروستکردنی PINی نوێ</span>
+                <span>PINی نوێ</span>
               </button>
 
               <button
@@ -774,10 +853,15 @@ export function AdminFeedbackDashboard() {
             </div>
           </div>
 
-          {/* PINs Table */}
-          {Object.keys(pins).length === 0 ? (
+          {/* Table */}
+          {loading ? (
+            <div className="py-20 text-center bg-white rounded-2xl border border-slate-200">
+              <Loader2 className="w-8 h-8 animate-spin text-amber-500 mx-auto mb-2" />
+              <p className="text-xs font-bold text-slate-500">بارکردنی PINەکان...</p>
+            </div>
+          ) : Object.keys(pins).length === 0 ? (
             <div className="py-16 text-center bg-white rounded-2xl border border-slate-200 text-xs font-bold text-slate-500">
-              هیچ PINێک دروست نەکراوە. کلیک لە [ دروستکردنی PINی نوێ ] بکە تا دەستپێبکەیت.
+              هیچ PINێک تۆمار نەکراوە. کلیک لە دوگمەی سەرەوە بکە بۆ دروستکردن.
             </div>
           ) : (
             <div className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs">
@@ -786,55 +870,46 @@ export function AdminFeedbackDashboard() {
                   <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-black">
                     <tr>
                       <th className="p-3.5">کۆدی PIN</th>
-                      <th className="p-3.5">ژمارەی مۆبایل / ناوی پەیوەستکراو</th>
-                      <th className="p-3.5">جۆری PIN</th>
-                      <th className="p-3.5">دۆخی بەکارهێنان</th>
+                      <th className="p-3.5">بۆ کێیە / مۆبایل</th>
+                      <th className="p-3.5">جۆری بەکارهێنان</th>
+                      <th className="p-3.5">دۆخ</th>
                       <th className="p-3.5">بەرواری دروستکردن</th>
-                      <th className="p-3.5">کاتی پڕکردنەوە</th>
-                      <th className="p-3.5 text-center">لینکی ڕاستەوخۆ و کۆپی</th>
+                      <th className="p-3.5">بەرواری پڕکردنەوە</th>
+                      <th className="p-3.5 text-center">کۆپیکردن</th>
                       <th className="p-3.5 text-center">سڕینەوە</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-semibold">
-                    {Object.values(pins).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).map((p) => {
+                    {Object.values(pins).map((p) => {
                       const directUrl = typeof window !== 'undefined'
                         ? `${window.location.origin}/feedback?pin=${p.pin}`
                         : `https://ashley-staff.vercel.app/feedback?pin=${p.pin}`;
 
                       return (
                         <tr key={p.pin} className="hover:bg-slate-50/80 transition-colors">
-                          {/* PIN */}
                           <td className="p-3.5">
                             <span className="font-mono font-black text-sm px-3 py-1 rounded-xl bg-slate-900 text-amber-400 inline-block tracking-wider" dir="ltr">
                               {p.pin}
                             </span>
                           </td>
 
-                          {/* Target Phone / Name */}
                           <td className="p-3.5">
                             <div className="font-bold text-slate-900">
-                              {p.targetName || 'گشتی (هەمووان)'}
+                              {p.targetName || 'گشتی'}
                             </div>
                             {p.targetPhone && (
                               <div className="text-[11px] font-mono text-slate-400" dir="ltr">
                                 {p.targetPhone}
                               </div>
                             )}
-                            {p.notes && (
-                              <div className="text-[10px] text-slate-400 mt-0.5">
-                                {p.notes}
-                              </div>
-                            )}
                           </td>
 
-                          {/* Type */}
                           <td className="p-3.5">
                             <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
                               {p.isSingleUse ? 'یەکجار بەکارهێنان' : 'فرە بەکارهێنان'}
                             </span>
                           </td>
 
-                          {/* Status */}
                           <td className="p-3.5">
                             {p.isUsed ? (
                               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
@@ -849,20 +924,16 @@ export function AdminFeedbackDashboard() {
                             )}
                           </td>
 
-                          {/* Created At */}
                           <td className="p-3.5 font-mono text-[11px] text-slate-500" dir="ltr">
                             {p.createdAt ? p.createdAt.slice(0, 10) : '--'}
                           </td>
 
-                          {/* Used At */}
                           <td className="p-3.5 font-mono text-[11px] text-slate-500" dir="ltr">
                             {p.usedAt ? p.usedAt.replace('T', ' ').slice(0, 16) : '--'}
                           </td>
 
-                          {/* Copy PIN & Link */}
                           <td className="p-3.5 text-center">
                             <div className="flex items-center justify-center gap-1.5">
-                              {/* Copy PIN */}
                               <button
                                 type="button"
                                 onClick={() => handleCopy(p.pin, `PIN (${p.pin})`)}
@@ -870,23 +941,21 @@ export function AdminFeedbackDashboard() {
                                 title="کۆپیکردنی PIN"
                               >
                                 <Copy className="w-3 h-3" />
-                                <span>کۆدی PIN</span>
+                                <span>کۆد</span>
                               </button>
 
-                              {/* Copy Direct Link */}
                               <button
                                 type="button"
-                                onClick={() => handleCopy(directUrl, `لینکی PIN (${p.pin})`)}
+                                onClick={() => handleCopy(directUrl, `لینکی فیدباک`)}
                                 className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center gap-1 cursor-pointer active:scale-95"
-                                title="کۆپیکردنی لینکی ڕاستەوخۆ بۆ بەشداربوو"
+                                title="کۆپیکردنی لینکی فیدباک"
                               >
                                 <Share2 className="w-3 h-3" />
-                                <span>کۆپی لینک</span>
+                                <span>لینک</span>
                               </button>
                             </div>
                           </td>
 
-                          {/* Delete */}
                           <td className="p-3.5 text-center">
                             <button
                               type="button"
@@ -909,110 +978,11 @@ export function AdminFeedbackDashboard() {
       )}
 
       {/* ========================================================================= */}
-      {/* 📊 VIEW 3: COMPREHENSIVE ANALYTICS & INSIGHTS */}
-      {/* ========================================================================= */}
-      {activeTab === 'analytics' && (
-        <div className="space-y-4">
-          {/* Detailed 5-criteria breakdown */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-4">
-            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-blue-600" />
-              <span>ئاستی پێوەرەکانی هەڵسەنگاندن (تێکڕای نمرە لە ٥)</span>
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-              {[
-                { title: 'ڕازیبوونی گشتی', score: metrics.avgOverall, color: 'bg-amber-500' },
-                { title: 'ژینگەی کارکردن', score: metrics.avgWorkEnv, color: 'bg-emerald-500' },
-                { title: 'هاوکاری تیمەکان', score: metrics.avgTeamCoop, color: 'bg-blue-500' },
-                { title: 'دادپەروەری ئیدارە', score: metrics.avgManagement, color: 'bg-purple-500' },
-                { title: 'کەرەستە و کەلوپەل', score: metrics.avgTools, color: 'bg-indigo-500' },
-              ].map((item) => (
-                <div key={item.title} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
-                  <span className="text-xs font-bold text-slate-600 block mb-1.5">{item.title}</span>
-                  <div className="flex items-baseline gap-1.5 mb-2">
-                    <span className="text-2xl font-black font-mono text-slate-900">{item.score}</span>
-                    <span className="text-xs text-slate-400 font-bold">/ 5</span>
-                  </div>
-                  {/* Progress bar */}
-                  <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full ${item.color}`}
-                      style={{ width: `${(item.score / 5) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Department breakdown & Star distribution */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Department stats */}
-            <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-3">
-              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-amber-500" />
-                <span>دابەشبوونی بەشداربووان بەپێی بەشەکان</span>
-              </h3>
-              <div className="space-y-2">
-                {Object.entries(metrics.deptBreakdown).length === 0 ? (
-                  <p className="text-xs text-slate-400 py-6 text-center">هیچ داتایەک بەردەست نییە</p>
-                ) : (
-                  Object.entries(metrics.deptBreakdown).map(([dept, count]) => {
-                    const pct = metrics.totalSubmissions > 0 ? Math.round((count / metrics.totalSubmissions) * 100) : 0;
-                    return (
-                      <div key={dept} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs font-bold">
-                          <span className="text-slate-700">{dept}</span>
-                          <span className="font-mono text-slate-500">{count} بەشداربوو ({pct}%)</span>
-                        </div>
-                        <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                          <div className="h-full bg-amber-500 rounded-full" style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            {/* Star satisfaction breakdown */}
-            <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-3">
-              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-                <span>دابەشبوونی ئەستێرەکانی ڕازیبوون</span>
-              </h3>
-              <div className="space-y-2">
-                {[5, 4, 3, 2, 1].map((stars) => {
-                  const count = metrics.satisfactionBreakdown[stars as keyof typeof metrics.satisfactionBreakdown] || 0;
-                  const pct = metrics.totalSubmissions > 0 ? Math.round((count / metrics.totalSubmissions) * 100) : 0;
-                  return (
-                    <div key={stars} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs font-bold">
-                        <div className="flex items-center gap-1 text-amber-500">
-                          <span>{stars} ئەستێرە</span>
-                          <span>{'⭐'.repeat(stars)}</span>
-                        </div>
-                        <span className="font-mono text-slate-500">{count} دەنگ ({pct}%)</span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
       {/* 🔍 MODAL: FULL SUBMISSION DETAIL MODAL */}
       {/* ========================================================================= */}
       {selectedSubmission && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-xl max-h-[90vh] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-2xl max-h-[90vh] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
               <div className="flex items-center gap-3">
@@ -1045,7 +1015,7 @@ export function AdminFeedbackDashboard() {
                 <div>
                   <span className="text-slate-400 font-bold block mb-0.5">بەشداربوو / ناو:</span>
                   <span className="font-bold text-slate-900">
-                    {selectedSubmission.respondentName || selectedSubmission.targetName || 'نهێنی (ناونیشان نەکراو)'}
+                    {selectedSubmission.respondentName || selectedSubmission.targetName || 'نهێنی'}
                   </span>
                 </div>
                 <div>
@@ -1055,92 +1025,72 @@ export function AdminFeedbackDashboard() {
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 font-bold block mb-0.5">بەش:</span>
-                  <span className="font-bold text-slate-900">
-                    {selectedSubmission.department}
-                  </span>
+                  <span className="text-slate-400 font-bold block mb-0.5">تێکڕای گشتی:</span>
+                  <span className="font-black font-mono text-amber-500">⭐ {selectedSubmission.overallSatisfaction} / 5</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 font-bold block mb-0.5">کۆدی ناسنامە:</span>
-                  <span className="font-mono text-slate-700">{selectedSubmission.id}</span>
+                  <span className="text-slate-400 font-bold block mb-0.5">کاتی تۆمارکردن:</span>
+                  <span className="font-mono text-slate-700">{selectedSubmission.baghdadDate} {selectedSubmission.baghdadTime}</span>
                 </div>
               </div>
 
-              {/* 5-Criteria Ratings */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
-                <h4 className="font-black text-slate-900">هەڵسەنگاندنەکان (لە ٥):</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200/80">
-                    <span>ڕازیبوونی گشتی:</span>
-                    <span className="font-black font-mono text-amber-500">⭐ {selectedSubmission.overallSatisfaction} / 5</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200/80">
-                    <span>ژینگەی کارکردن:</span>
-                    <span className="font-black font-mono text-emerald-600">⭐ {selectedSubmission.workEnvironmentRating} / 5</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200/80">
-                    <span>هاوکاری تیمەکان:</span>
-                    <span className="font-black font-mono text-blue-600">⭐ {selectedSubmission.teamCooperationRating} / 5</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200/80">
-                    <span>دادپەروەری ئیدارە:</span>
-                    <span className="font-black font-mono text-purple-600">⭐ {selectedSubmission.managementFairnessRating} / 5</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200/80 col-span-1 sm:col-span-2">
-                    <span>کەرەستە و کەلوپەل:</span>
-                    <span className="font-black font-mono text-indigo-600">⭐ {selectedSubmission.toolsAndEquipmentRating} / 5</span>
+              {/* 🌟 8 EMPLOYEES DETAILED EVALUATION CARDS */}
+              {selectedSubmission.employeeRatings && Object.keys(selectedSubmission.employeeRatings).length > 0 ? (
+                <div className="space-y-3">
+                  <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-amber-500" />
+                    <span>هەڵسەنگاندنی کارمەندانی فرۆشیار و کاشێر:</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {Object.values(selectedSubmission.employeeRatings).map((er: any) => (
+                      <div key={er.employeeId} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+                        <div className="flex items-center justify-between border-b pb-2 border-slate-200">
+                          <span className="font-black text-slate-900">{er.fullName || er.name}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-bold">
+                            {er.role}
+                          </span>
+                        </div>
+
+                        <div className="space-y-1 text-[11px] text-slate-700 font-semibold">
+                          <div className="flex items-center justify-between">
+                            <span>• مامەڵە لەگەڵ کڕیار:</span>
+                            <span className="font-mono text-emerald-600 font-bold">⭐ {er.serviceRating} / 5</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>• چالاکی و کار:</span>
+                            <span className="font-mono text-blue-600 font-bold">⭐ {er.performanceRating} / 5</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>• پابەندبوون بە دەوام:</span>
+                            <span className="font-mono text-purple-600 font-bold">⭐ {er.disciplineRating} / 5</span>
+                          </div>
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-200">
+                            <span className="font-black">نمرەی گشتی:</span>
+                            <span className="font-mono text-amber-600 font-black text-xs">⭐ {er.overallRating} / 5</span>
+                          </div>
+                        </div>
+
+                        {er.comment && (
+                          <div className="p-2 rounded-xl bg-white border border-slate-200 text-[11px] text-slate-800 mt-1">
+                            💬 <span className="font-bold">سەرنج:</span> {er.comment}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
+              ) : null}
 
-              {/* Multiple Choice Answers */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <h4 className="font-black text-slate-900">وەڵامی پرسیارەکان:</h4>
-                <div className="space-y-1.5 text-xs">
-                  <div>
-                    <span className="text-slate-500 font-bold block">• ئایا کاتەکانی دەوام گونجاون؟</span>
-                    <span className="font-bold text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-200/80 inline-block mt-0.5">
-                      {selectedSubmission.shiftHoursSuitability}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 font-bold block">• کام بەشە پێویستی بە چاکسازی هەیە؟</span>
-                    <span className="font-bold text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-200/80 inline-block mt-0.5">
-                      {selectedSubmission.departmentNeedingImprovement}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 font-bold block">• ئەزموونی ئەپڵیکەیشن:</span>
-                    <span className="font-bold text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-200/80 inline-block mt-0.5">
-                      {selectedSubmission.appExperienceRating}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Written Feedback Comments */}
-              <div className="space-y-3">
-                <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-200/80 space-y-1">
-                  <span className="font-black text-emerald-800 block">خاڵە ئەرێنی و بەهێزەکان:</span>
-                  <p className="text-slate-800 leading-relaxed">
-                    {selectedSubmission.positiveHighlights || 'هیچ نەنووسراوە'}
+              {/* General Suggestions */}
+              {selectedSubmission.suggestionsForManagement && (
+                <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-1">
+                  <span className="font-black text-blue-900 block">پێشنیاری گشتی بۆ بەڕێوەبەرایەتی:</span>
+                  <p className="text-slate-800 leading-relaxed font-semibold">
+                    {selectedSubmission.suggestionsForManagement}
                   </p>
                 </div>
-
-                <div className="p-3.5 rounded-2xl bg-rose-50/60 border border-rose-200/80 space-y-1">
-                  <span className="font-black text-rose-800 block">کێشە و ئاستەنگەکان:</span>
-                  <p className="text-slate-800 leading-relaxed">
-                    {selectedSubmission.workplaceChallenges || 'هیچ نەنووسراوە'}
-                  </p>
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-blue-50/60 border border-blue-200/80 space-y-1">
-                  <span className="font-black text-blue-800 block">پێشنیار بۆ بەڕێوەبەرایەتی:</span>
-                  <p className="text-slate-800 leading-relaxed">
-                    {selectedSubmission.suggestionsForManagement || 'هیچ نەنووسراوە'}
-                  </p>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Footer */}
@@ -1196,7 +1146,7 @@ export function AdminFeedbackDashboard() {
                 <div className="flex items-center justify-between">
                   <span className="font-bold flex items-center gap-1.5 text-emerald-700">
                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    <span>کۆدی PIN بە سەرکەوتوویی دروستکرا!</span>
+                    <span>کۆدی PIN دروستکرا!</span>
                   </span>
                   <span className="font-mono font-black text-lg bg-slate-900 text-amber-400 px-3 py-0.5 rounded-lg" dir="ltr">
                     {createPinResult.pin}
@@ -1219,7 +1169,7 @@ export function AdminFeedbackDashboard() {
                     }}
                     className="flex-1 py-1.5 rounded-lg bg-emerald-600 text-white font-bold text-center text-[11px] cursor-pointer active:scale-95 shadow-xs"
                   >
-                    کۆپیکردنی لینکی فیدباک
+                    کۆپیکردنی لینک
                   </button>
                 </div>
               </div>
@@ -1228,14 +1178,14 @@ export function AdminFeedbackDashboard() {
             <form onSubmit={handleCreatePin} className="space-y-3.5 text-xs">
               <div>
                 <label className="block text-slate-700 font-bold mb-1">
-                  کۆدی PIN (ئارەزوومەندانە - ئەگەر بەتاڵ بێت بە ئۆتۆماتیک ٤ ژمارە دروست دەبێت):
+                  کۆدی PIN (ئارەزوومەندانە - ئەگەر بەتاڵ بێت ٤ ژمارە بە ئۆتۆماتیک دروست دەبێت):
                 </label>
                 <input
                   type="text"
                   maxLength={4}
                   value={newCustomPin}
                   onChange={(e) => setNewCustomPin(e.target.value.replace(/\D/g, ''))}
-                  placeholder="بۆ نموونە: 4821 (بەتاڵی جێبێڵە بۆ دروستبوونی خۆکار)"
+                  placeholder="بۆ نموونە: 4821 (بەتاڵی جێبێڵە بۆ خۆکار)"
                   className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-mono font-bold outline-none focus:border-amber-500"
                   dir="ltr"
                 />
@@ -1257,13 +1207,13 @@ export function AdminFeedbackDashboard() {
 
               <div>
                 <label className="block text-slate-700 font-bold mb-1">
-                  ناوی کارمەند یان تێبینی بۆ کێیە:
+                  ناوی کارمەند یان کەسی هەڵسەنگێنەر:
                 </label>
                 <input
                   type="text"
                   value={newTargetName}
                   onChange={(e) => setNewTargetName(e.target.value)}
-                  placeholder="بۆ نموونە: کارمەندی شۆڕووم / محەمەد"
+                  placeholder="بۆ نموونە: کڕیار یان کارمەند"
                   className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-amber-500"
                 />
               </div>
@@ -1305,18 +1255,18 @@ export function AdminFeedbackDashboard() {
       )}
 
       {/* ========================================================================= */}
-      {/* 🎲 MODAL: BATCH CREATE PINS */}
+      {/* 📦 MODAL: CREATE BATCH PINS */}
       {/* ========================================================================= */}
       {showBatchModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-black">
-                  <KeyRound className="w-4 h-4 text-purple-500" />
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black">
+                  <KeyRound className="w-4 h-4 text-blue-500" />
                 </div>
                 <h3 className="text-sm font-black text-slate-900">
-                  دروستکردنی بەکۆمەڵی PINەکان
+                  دروستکردنی بەکۆمەڵی PIN
                 </h3>
               </div>
               <button
@@ -1330,75 +1280,80 @@ export function AdminFeedbackDashboard() {
 
             {batchCreatedPins.length > 0 ? (
               <div className="space-y-3">
-                <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-between">
-                  <span>{batchCreatedPins.length} کۆدی نوێ دروستکرا:</span>
+                <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs">
+                  <span className="font-bold block mb-1">
+                    ✅ {batchCreatedPins.length} کۆدی PIN بە سەرکەوتوویی دروستکران:
+                  </span>
+                  <div className="max-h-48 overflow-y-auto space-y-1 font-mono text-xs pt-1">
+                    {batchCreatedPins.map((p) => (
+                      <div key={p.pin} className="flex items-center justify-between p-1.5 rounded-lg bg-white border border-emerald-200">
+                        <span className="font-bold text-slate-900" dir="ltr">{p.pin}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(`${window.location.origin}/feedback?pin=${p.pin}`, `لینک (${p.pin})`)}
+                          className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
+                        >
+                          کۆپی لینک
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
-                      const all = batchCreatedPins.map(p => `${p.pin}: https://ashley-staff.vercel.app/feedback?pin=${p.pin}`).join('\n');
-                      handleCopy(all, 'سەرجەم PINەکان لەگەڵ لینک');
+                      const allText = batchCreatedPins.map(p => `${p.pin}: ${window.location.origin}/feedback?pin=${p.pin}`).join('\n');
+                      handleCopy(allText, 'سەرجەم PINەکان');
                     }}
-                    className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold cursor-pointer active:scale-95"
+                    className="flex-1 h-10 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                   >
-                    کۆپیکردنی هەمووی پێکەوە
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>کۆپیکردنی هەموو کۆدەکان</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowBatchModal(false)}
+                    className="px-4 h-10 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs cursor-pointer"
+                  >
+                    تەواو
                   </button>
                 </div>
-
-                <div className="max-h-48 overflow-y-auto space-y-1.5 font-mono text-xs" dir="ltr">
-                  {batchCreatedPins.map((p) => (
-                    <div key={p.pin} className="p-2 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-                      <span className="font-black text-amber-600">{p.pin}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(`https://ashley-staff.vercel.app/feedback?pin=${p.pin}`, `لینک ${p.pin}`)}
-                        className="text-[11px] text-blue-600 hover:underline cursor-pointer font-sans"
-                      >
-                        کۆپی لینک
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowBatchModal(false)}
-                  className="w-full h-11 rounded-xl bg-slate-900 text-white font-bold text-xs cursor-pointer mt-2"
-                >
-                  تەواو بوو
-                </button>
               </div>
             ) : (
               <div className="space-y-4 text-xs">
-                <p className="text-slate-600 font-medium">
-                  ژمارەی ئەو PINانە هەڵبژێرە کە دەتەوێت لە یەک کاتدا دروست بکرێن (هەریەکەیان ٤ ژمارەی جیاواز دەبێت):
+                <p className="text-slate-600 leading-relaxed font-semibold">
+                  ژمارەی ئەو PINانە دیاریبکە کە دەتەوێت دروستبکرێن بە یەک کلیک:
                 </p>
 
                 <div className="flex items-center gap-2">
-                  {[3, 5, 10, 20].map((num) => (
+                  {[5, 10, 15, 20].map((num) => (
                     <button
                       key={num}
                       type="button"
                       onClick={() => setBatchCount(num)}
-                      className={`flex-1 py-2.5 rounded-xl border text-xs font-black cursor-pointer transition-all ${
+                      className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
                         batchCount === num
-                          ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
-                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                          ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                     >
-                      {num} دانە
+                      {num} کۆد
                     </button>
                   ))}
                 </div>
 
-                <div className="flex items-center gap-2 pt-2">
+                <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
                   <button
                     type="button"
                     disabled={batchCreating}
                     onClick={handleCreateBatch}
-                    className="flex-1 h-11 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-xs disabled:opacity-50"
+                    className="flex-1 h-11 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-xs disabled:opacity-50"
                   >
-                    {batchCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-                    <span>دروستکردنی {batchCount} PIN پێکەوە</span>
+                    {batchCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    <span>دروستکردنی {batchCount} PIN</span>
                   </button>
 
                   <button
@@ -1406,7 +1361,7 @@ export function AdminFeedbackDashboard() {
                     onClick={() => setShowBatchModal(false)}
                     className="px-4 h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs cursor-pointer"
                   >
-                    پاشگەزبوونەوە
+                    داخستن
                   </button>
                 </div>
               </div>
