@@ -79,6 +79,7 @@ export function TopNavbar() {
     pathname === '/attendance/checkin' || 
     pathname?.startsWith('/attendance') || 
     pathname?.startsWith('/feedback') ||
+    pathname?.startsWith('/warehouse') ||
     pathname === '/login';
 
   if (isMobileOrKiosk) {

@@ -15,6 +15,7 @@ import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChange
 import NotificationRoutingMatrix from '@/components/admin/NotificationRoutingMatrix';
 import { AdminGoogleBindingsManager } from '@/components/admin/AdminGoogleBindingsManager';
 import { AdminFeedbackDashboard } from '@/components/admin/AdminFeedbackDashboard';
+import { GoogleSheetsWarehouseAudit } from '@/components/admin/warehouse/GoogleSheetsWarehouseAudit';
 import { format } from 'date-fns';
 import { 
   Building2, 
@@ -31,7 +32,8 @@ import {
   Clock,
   Sparkles,
   Mail,
-  MessageSquareHeart
+  MessageSquareHeart,
+  Boxes
 } from 'lucide-react';
 
 export function AdminDashboardWorkspace() {
@@ -43,16 +45,16 @@ export function AdminDashboardWorkspace() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   
   // Segmented views in Admin Workspace (Synced with URL)
-  const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback'>('matrix');
+  const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback' | 'sheets_warehouse'>('matrix');
 
   useEffect(() => {
     const viewParam = searchParams.get('view');
-    if (viewParam && ['matrix', 'daily', 'tools', 'workflow', 'google', 'feedback'].includes(viewParam)) {
+    if (viewParam && ['matrix', 'daily', 'tools', 'workflow', 'google', 'feedback', 'sheets_warehouse'].includes(viewParam)) {
       setAdminView(viewParam as any);
     }
   }, [searchParams]);
 
-  const handleViewChange = (newView: 'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback') => {
+  const handleViewChange = (newView: 'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback' | 'sheets_warehouse') => {
     setAdminView(newView);
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
@@ -394,6 +396,20 @@ export function AdminDashboardWorkspace() {
               <span>بەشی فیدباک</span>
             </button>
 
+            <button
+              type="button"
+              onClick={() => handleViewChange('sheets_warehouse')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                adminView === 'sheets_warehouse'
+                  ? 'bg-white text-blue-600 shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
+              title="پشکنینی باری نوێ و جەردی کۆگا بە Google Sheets"
+            >
+              <Boxes className="w-3.5 h-3.5 text-blue-600" />
+              <span>پشکنینی بار و جەرد (شیت)</span>
+            </button>
+
           </div>
 
           {/* Password Modal Button */}
@@ -575,6 +591,15 @@ export function AdminDashboardWorkspace() {
       {adminView === 'feedback' && (
         <section className="w-full transition-opacity duration-300">
           <AdminFeedbackDashboard />
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 📦 VIEW 7: GOOGLE SHEETS WAREHOUSE AUDIT & STOCKTAKING */}
+      {/* ========================================================================= */}
+      {adminView === 'sheets_warehouse' && (
+        <section className="w-full transition-opacity duration-300">
+          <GoogleSheetsWarehouseAudit />
         </section>
       )}
 

@@ -65,6 +65,7 @@ export function SystemBroadcastBanner() {
   if (
     pathname === '/' ||
     pathname?.startsWith('/feedback') ||
+    pathname?.startsWith('/warehouse') ||
     pathname?.startsWith('/attendance') ||
     pathname === '/login' ||
     !latestAnnouncement || 
