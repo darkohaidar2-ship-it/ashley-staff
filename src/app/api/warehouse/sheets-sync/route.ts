@@ -28,7 +28,7 @@ export interface SheetsAuditSession {
   id: string;
   title: string;
   mode: 'shipment_receiving' | 'inventory_stocktake';
-  googleSheetUrl: string;
+  googleSheetUrl?: string;
   spreadsheetId?: string;
   webhookUrl?: string;
   sheetName?: string;
@@ -46,30 +46,70 @@ export interface SheetsAuditSession {
 }
 
 /**
- * 🔍 Extracts Google Spreadsheet ID and GID from any Google Sheets link
+ * 🔍 Extracts Google Spreadsheet candidate export URLs from any Google Sheets link
  */
-function extractSheetDetails(url: string) {
+function extractSheetCandidates(url: string): { candidateUrls: string[]; spreadsheetId: string | null; gid: string } {
   const cleanUrl = url.trim();
-  
-  // Direct CSV export URL or published link
-  if (cleanUrl.includes('/pub?output=csv') || cleanUrl.includes('/export?format=csv')) {
-    return { csvUrl: cleanUrl, spreadsheetId: null, gid: '0' };
+
+  // 1. Published to Web links (/spreadsheets/d/e/2PACX-...)
+  if (cleanUrl.includes('/spreadsheets/d/e/2PACX-') || cleanUrl.includes('/2PACX-')) {
+    const pubMatch = cleanUrl.match(/(2PACX-[a-zA-Z0-9-_]+)/);
+    const pubId = pubMatch ? pubMatch[1] : '';
+    const gidMatch = cleanUrl.match(/[#&?]gid=([0-9]+)/);
+    const gid = gidMatch ? gidMatch[1] : '0';
+    
+    let base = cleanUrl.split('?')[0].split('#')[0];
+    if (base.endsWith('/pubhtml') || base.endsWith('/pub')) {
+      base = base.replace(/\/pub(html)?$/, '/pub');
+    }
+    
+    const candidateUrls = [
+      `${base}?output=csv${gid !== '0' ? `&gid=${gid}` : ''}`,
+      `${base}?output=tsv${gid !== '0' ? `&gid=${gid}` : ''}`,
+      `${base}?output=csv`,
+    ];
+    return { candidateUrls, spreadsheetId: pubId || null, gid };
   }
 
-  // Matches /spreadsheets/d/([a-zA-Z0-9-_]+)
-  const idMatch = cleanUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  const spreadsheetId = idMatch ? idMatch[1] : (cleanUrl.length > 20 && !cleanUrl.includes('/') ? cleanUrl : null);
+  // 2. Direct CSV / TSV / Export links
+  if (cleanUrl.includes('/pub?output=csv') || cleanUrl.includes('/export?format=csv') || cleanUrl.includes('/gviz/tq?tqx=out:csv')) {
+    return { candidateUrls: [cleanUrl], spreadsheetId: null, gid: '0' };
+  }
 
-  // Matches gid=([0-9]+)
+  // 3. Standard Google Sheets ID (/spreadsheets/d/{ID} or /file/d/{ID} or ?id={ID})
+  let spreadsheetId: string | null = null;
+  const dMatch = cleanUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]{15,})/);
+  if (dMatch) spreadsheetId = dMatch[1];
+
+  if (!spreadsheetId) {
+    const fileMatch = cleanUrl.match(/\/file\/d\/([a-zA-Z0-9-_]{15,})/);
+    if (fileMatch) spreadsheetId = fileMatch[1];
+  }
+
+  if (!spreadsheetId) {
+    const idParam = cleanUrl.match(/[?&]id=([a-zA-Z0-9-_]{15,})/);
+    if (idParam) spreadsheetId = idParam[1];
+  }
+
   const gidMatch = cleanUrl.match(/[#&?]gid=([0-9]+)/);
   const gid = gidMatch ? gidMatch[1] : '0';
 
-  if (!spreadsheetId) {
-    return { csvUrl: cleanUrl, spreadsheetId: null, gid: '0' };
+  if (spreadsheetId) {
+    const candidateUrls = [
+      // Primary: Google Visualization API (Direct, bypasses cookie redirect)
+      `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&gid=${gid}`,
+      // Secondary: Standard Export CSV
+      `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`,
+      // Tertiary: Export TSV
+      `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=tsv&gid=${gid}`,
+      // Fallback without GID
+      `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv`,
+      `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`,
+    ];
+    return { candidateUrls, spreadsheetId, gid };
   }
 
-  const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`;
-  return { csvUrl, spreadsheetId, gid };
+  return { candidateUrls: [cleanUrl], spreadsheetId: null, gid: '0' };
 }
 
 /**
@@ -156,6 +196,97 @@ function identifyColumns(headerRow: string[]) {
 }
 
 /**
+ * 📦 Converts parsed matrix rows into structured audit items
+ */
+function convertRowsToAuditItems(rawData: any[][]): { 
+  items: SheetsAuditItem[]; 
+  totalExpected: number; 
+  totalAudited: number; 
+  headerRow: string[] 
+} {
+  let headerRowIndex = 0;
+  for (let i = 0; i < Math.min(5, rawData.length); i++) {
+    const nonEmp = (rawData[i] || []).filter((v: any) => String(v).trim().length > 0).length;
+    if (nonEmp >= 2) {
+      headerRowIndex = i;
+      break;
+    }
+  }
+
+  const headerRow = (rawData[headerRowIndex] || []).map((v: any) => String(v || '').trim());
+  const colMap = identifyColumns(headerRow);
+
+  const items: SheetsAuditItem[] = [];
+  let totalExpected = 0;
+  let totalAudited = 0;
+
+  for (let r = headerRowIndex + 1; r < rawData.length; r++) {
+    const row = rawData[r];
+    if (!row || row.length === 0) continue;
+
+    const model = String(row[colMap.modelIdx] || '').trim();
+    const name = colMap.nameIdx !== -1 ? String(row[colMap.nameIdx] || '').trim() : '';
+
+    // Skip empty rows
+    if (!model && !name) continue;
+
+    // Parse expected qty
+    let expectedQty = 0;
+    if (colMap.expectedQtyIdx !== -1) {
+      const rawExp = String(row[colMap.expectedQtyIdx] || '').replace(/[^\d.-]/g, '');
+      expectedQty = parseFloat(rawExp) || 0;
+    }
+
+    // Parse checked qty
+    let checkedQty = 0;
+    if (colMap.checkedQtyIdx !== -1 && colMap.checkedQtyIdx !== colMap.expectedQtyIdx) {
+      const rawChk = String(row[colMap.checkedQtyIdx] || '').replace(/[^\d.-]/g, '');
+      checkedQty = parseFloat(rawChk) || 0;
+    }
+
+    const conditionRaw = colMap.conditionIdx !== -1 ? String(row[colMap.conditionIdx] || '').trim() : '';
+    let condition: SheetsAuditItem['condition'] = 'Packaged';
+    if (conditionRaw.includes('تێکچوو') || conditionRaw.includes('شکاو') || conditionRaw.toLowerCase().includes('damage')) {
+      condition = 'Damaged';
+    } else if (conditionRaw.includes('لەف') || conditionRaw.toLowerCase().includes('wrap')) {
+      condition = 'Wrapped';
+    }
+
+    const rackLocation = colMap.locationIdx !== -1 ? String(row[colMap.locationIdx] || '').trim() : '';
+    const notes = colMap.notesIdx !== -1 ? String(row[colMap.notesIdx] || '').trim() : '';
+
+    const variance = checkedQty - expectedQty;
+    let auditStatus: SheetsAuditItem['auditStatus'] = 'pending';
+    if (checkedQty > 0) {
+      if (variance === 0) auditStatus = 'verified';
+      else if (variance < 0) auditStatus = 'deficit';
+      else if (variance > 0) auditStatus = 'excess';
+    }
+    if (condition === 'Damaged') auditStatus = 'damaged';
+
+    totalExpected += expectedQty;
+    totalAudited += checkedQty;
+
+    items.push({
+      id: `item_${r}_${model || Math.random().toString(36).slice(2, 7)}`,
+      rowIndex: r,
+      model: model || `ROW-${r}`,
+      name: name || model,
+      expectedQty,
+      checkedQty,
+      variance,
+      condition,
+      auditStatus,
+      rackLocation,
+      notes,
+      lastAuditedAt: checkedQty > 0 ? new Date().toISOString() : undefined,
+    });
+  }
+
+  return { items, totalExpected, totalAudited, headerRow };
+}
+
+/**
  * 📥 Fetch All Sessions from Supabase
  */
 async function getStoredSessions(): Promise<Record<string, SheetsAuditSession>> {
@@ -233,28 +364,62 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'تکایە لینکی دروستی Google Sheet بنووسە' }, { status: 400 });
       }
 
-      const { csvUrl, spreadsheetId, gid } = extractSheetDetails(sheetUrl);
+      const { candidateUrls, spreadsheetId } = extractSheetCandidates(sheetUrl);
 
-      // Fetch the CSV export
       let csvContent = '';
-      try {
-        const fetchRes = await fetch(csvUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/csv,text/plain,*/*',
-          },
-          cache: 'no-store',
-        });
+      let fetchErrorDetails = '';
+      let isHtmlLogin = false;
 
-        if (!fetchRes.ok) {
-          throw new Error(`Google Sheets returned status ${fetchRes.status}. Make sure the sheet is shared with 'Anyone with the link' or published to web.`);
+      for (const targetUrl of candidateUrls) {
+        try {
+          const fetchRes = await fetch(targetUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+              'Accept': 'text/csv,text/tab-separated-values,text/plain,*/*',
+            },
+            cache: 'no-store',
+            redirect: 'follow',
+          });
+
+          if (!fetchRes.ok) {
+            fetchErrorDetails = `Google Sheets returned HTTP ${fetchRes.status}: ${fetchRes.statusText}`;
+            continue;
+          }
+
+          const text = await fetchRes.text();
+          // Check if Google returned an HTML login page or consent screen
+          if (text.includes('accounts.google.com') || text.includes('Sign in - Google Accounts') || (text.includes('<html') && (text.includes('password') || text.includes('ServiceLogin')))) {
+            isHtmlLogin = true;
+            fetchErrorDetails = 'Google requires authentication (Sign in). General Access must be set to "Anyone with the link".';
+            continue;
+          }
+
+          // If text is suspiciously pure HTML without tabular content
+          if (text.trim().startsWith('<!DOCTYPE html>') || (text.trim().startsWith('<html') && !text.includes(',') && !text.includes('\t'))) {
+            fetchErrorDetails = 'Google returned HTML page instead of tabular data.';
+            continue;
+          }
+
+          if (text.trim().length > 0) {
+            csvContent = text;
+            break;
+          }
+        } catch (fetchErr: any) {
+          fetchErrorDetails = fetchErr.message;
+        }
+      }
+
+      if (!csvContent) {
+        if (isHtmlLogin) {
+          return NextResponse.json({ 
+            success: false, 
+            error: 'ئەم شیتە تایبەتە و پێویستی بە داخڵبوونی ئەکاونتی گۆگڵ هەیە (Google Sign-in).\n\nچۆن چارەسەری دەکەیت:\n١. لە ناو Google Sheet کلیک لەسەر دوگمەی سەوزی Share بکە.\n٢. لە بەشی General Access بپشکنە کە "Anyone with the link" (هەر کەسێک بەم بەستەرە) هەڵبژێردراوە نەک تەنها دۆمەینێکی تایبەت.\n٣. دەتوانیت بە ئاسانی هەمان داتا لێرە بە فایل (.xlsx) دابنێیت یان ڕیزەکان ڕاستەوخۆ Copy & Paste بکەیت.' 
+          }, { status: 400 });
         }
 
-        csvContent = await fetchRes.text();
-      } catch (fetchErr: any) {
         return NextResponse.json({ 
           success: false, 
-          error: `نەتوانرا گۆگڵ شیتەکە بخوێندرێتەوە: دڵنیابە لینکی گۆگڵ شیتەکە گشتییە (Anyone with the link can view) یان وەک CSV بڵاوکراوەتەوە.\nوردەکاری: ${fetchErr.message}` 
+          error: `نەتوانرا گۆگڵ شیتەکە بخوێندرێتەوە: ${fetchErrorDetails || 'تکایە دڵنیابە لە دروستی بەستەرەکە'}\n\nتێبینی: دەتوانیت بە ئاسانی هەمان فایل وەک Excel (.xlsx) داببەزێنیت و لێرە بەرزبکەیتەوە، یان ڕیزەکان کۆپی و پێست بکەیت.` 
         }, { status: 400 });
       }
 
@@ -265,7 +430,7 @@ export async function POST(req: NextRequest) {
         const firstSheetName = wb.SheetNames[0];
         const ws = wb.Sheets[firstSheetName];
         rawData = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '' });
-      } catch (parseErr: any) {
+      } catch {
         return NextResponse.json({ success: false, error: 'هەڵە لە شرۆڤەکردنی خشتەی گۆگڵ شیت' }, { status: 400 });
       }
 
@@ -273,84 +438,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'خشتەی گۆگڵ شیتەکە بەتاڵە' }, { status: 400 });
       }
 
-      // Identify header row (first row with at least 2 non-empty values)
-      let headerRowIndex = 0;
-      for (let i = 0; i < Math.min(5, rawData.length); i++) {
-        const nonEmp = rawData[i].filter((v: any) => String(v).trim().length > 0).length;
-        if (nonEmp >= 2) {
-          headerRowIndex = i;
-          break;
-        }
-      }
+      const { items, totalExpected, totalAudited, headerRow } = convertRowsToAuditItems(rawData);
 
-      const headerRow = rawData[headerRowIndex].map((v: any) => String(v || '').trim());
-      const colMap = identifyColumns(headerRow);
-
-      const items: SheetsAuditItem[] = [];
-      let totalExpected = 0;
-      let totalAudited = 0;
-
-      for (let r = headerRowIndex + 1; r < rawData.length; r++) {
-        const row = rawData[r];
-        if (!row || row.length === 0) continue;
-
-        const model = String(row[colMap.modelIdx] || '').trim();
-        const name = colMap.nameIdx !== -1 ? String(row[colMap.nameIdx] || '').trim() : '';
-
-        // Skip completely empty rows
-        if (!model && !name) continue;
-
-        // Parse expected qty
-        let expectedQty = 0;
-        if (colMap.expectedQtyIdx !== -1) {
-          const rawExp = String(row[colMap.expectedQtyIdx] || '').replace(/[^\d.-]/g, '');
-          expectedQty = parseFloat(rawExp) || 0;
-        }
-
-        // Parse checked qty if sheet already has it
-        let checkedQty = 0;
-        if (colMap.checkedQtyIdx !== -1 && colMap.checkedQtyIdx !== colMap.expectedQtyIdx) {
-          const rawChk = String(row[colMap.checkedQtyIdx] || '').replace(/[^\d.-]/g, '');
-          checkedQty = parseFloat(rawChk) || 0;
-        }
-
-        const conditionRaw = colMap.conditionIdx !== -1 ? String(row[colMap.conditionIdx] || '').trim() : '';
-        let condition: SheetsAuditItem['condition'] = 'Packaged';
-        if (conditionRaw.includes('تێکچوو') || conditionRaw.includes('شکاو') || conditionRaw.toLowerCase().includes('damage')) {
-          condition = 'Damaged';
-        } else if (conditionRaw.includes('لەف') || conditionRaw.toLowerCase().includes('wrap')) {
-          condition = 'Wrapped';
-        }
-
-        const rackLocation = colMap.locationIdx !== -1 ? String(row[colMap.locationIdx] || '').trim() : '';
-        const notes = colMap.notesIdx !== -1 ? String(row[colMap.notesIdx] || '').trim() : '';
-
-        const variance = checkedQty - expectedQty;
-        let auditStatus: SheetsAuditItem['auditStatus'] = 'pending';
-        if (checkedQty > 0) {
-          if (variance === 0) auditStatus = 'verified';
-          else if (variance < 0) auditStatus = 'deficit';
-          else if (variance > 0) auditStatus = 'excess';
-        }
-        if (condition === 'Damaged') auditStatus = 'damaged';
-
-        totalExpected += expectedQty;
-        totalAudited += checkedQty;
-
-        items.push({
-          id: `item_${r}_${model || Math.random().toString(36).slice(2, 7)}`,
-          rowIndex: r,
-          model: model || `ROW-${r}`,
-          name: name || model,
-          expectedQty,
-          checkedQty,
-          variance,
-          condition,
-          auditStatus,
-          rackLocation,
-          notes,
-          lastAuditedAt: checkedQty > 0 ? new Date().toISOString() : undefined,
-        });
+      if (items.length === 0) {
+        return NextResponse.json({ success: false, error: 'هیچ کاڵایەک لە ناو خشتەکە نەدۆزرایەوە. دڵنیابە ناوی مۆدێل و بڕ لە خشتەکەدا هەیە.' }, { status: 400 });
       }
 
       // Create new audit session
@@ -381,6 +472,69 @@ export async function POST(req: NextRequest) {
       };
 
       // Save to Supabase
+      const allSessions = await getStoredSessions();
+      allSessions[sessionId] = session;
+      await saveStoredSessions(allSessions);
+
+      return NextResponse.json({
+        success: true,
+        session,
+        headersDetected: headerRow,
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // ACTION 1.5: PARSE RAW TEXT / TSV / CSV (DIRECT COPY-PASTE)
+    // -------------------------------------------------------------------------
+    if (action === 'parse_raw') {
+      const { rawText, mode = 'shipment_receiving', title } = body;
+      if (!rawText || typeof rawText !== 'string' || !rawText.trim()) {
+        return NextResponse.json({ success: false, error: 'تکایە داتای خشتەکە پێست بکە' }, { status: 400 });
+      }
+
+      let rawData: any[][] = [];
+      try {
+        const wb = XLSX.read(rawText, { type: 'string' });
+        const firstSheetName = wb.SheetNames[0];
+        const ws = wb.Sheets[firstSheetName];
+        rawData = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '' });
+      } catch {
+        return NextResponse.json({ success: false, error: 'هەڵە لە شرۆڤەکردنی داتای پێستکراو' }, { status: 400 });
+      }
+
+      if (!rawData || rawData.length === 0) {
+        return NextResponse.json({ success: false, error: 'داتای پێستکراو بەتاڵە' }, { status: 400 });
+      }
+
+      const { items, totalExpected, totalAudited, headerRow } = convertRowsToAuditItems(rawData);
+
+      if (items.length === 0) {
+        return NextResponse.json({ success: false, error: 'هیچ کاڵایەک لە ناو خشتەکە نەدۆزرایەوە. دڵنیابە ستوونی مۆدێل و بڕ لە دەقەکەدا هەیە.' }, { status: 400 });
+      }
+
+      const nowIso = new Date().toISOString();
+      const sessionId = `audit_${Date.now()}`;
+      const defaultTitle = title || (mode === 'shipment_receiving' 
+        ? `پشکنینی باری نوێ (${items.length} کاڵا)` 
+        : `جەردی کۆگا (${items.length} کاڵا)`);
+
+      const session: SheetsAuditSession = {
+        id: sessionId,
+        title: defaultTitle,
+        mode,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        auditedBy: 'Admin',
+        totalItemsCount: items.length,
+        totalExpectedUnits: totalExpected,
+        totalAuditedUnits: totalAudited,
+        matchedCount: items.filter(i => i.auditStatus === 'verified').length,
+        discrepantCount: items.filter(i => i.auditStatus === 'deficit' || i.auditStatus === 'excess').length,
+        damagedCount: items.filter(i => i.auditStatus === 'damaged').length,
+        status: 'active',
+        items,
+      };
+
       const allSessions = await getStoredSessions();
       allSessions[sessionId] = session;
       await saveStoredSessions(allSessions);

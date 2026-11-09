@@ -34,7 +34,9 @@ import {
   FileSpreadsheet, 
   ShieldCheck, 
   Save, 
-  Link as LinkIcon 
+  Link as LinkIcon,
+  Upload,
+  Clipboard
 } from 'lucide-react';
 import { triggerHaptic } from '@/lib/offline-sync-manager';
 import { OfficialPrintHeader, OfficialPrintSignatures } from '@/components/reports/OfficialPrintHeader';
@@ -67,7 +69,9 @@ export function GoogleSheetsWarehouseAudit() {
   const [showHelpScriptModal, setShowHelpScriptModal] = useState<boolean>(false);
 
   // Connect Google Sheet Form State
+  const [importTab, setImportTab] = useState<'url' | 'file' | 'paste'>('url');
   const [inputSheetUrl, setInputSheetUrl] = useState<string>('');
+  const [inputRawPaste, setInputRawPaste] = useState<string>('');
   const [inputSessionTitle, setInputSessionTitle] = useState<string>('');
   const [inputMode, setInputMode] = useState<'shipment_receiving' | 'inventory_stocktake'>('shipment_receiving');
   const [inputWebhookUrl, setInputWebhookUrl] = useState<string>('');
@@ -151,6 +155,111 @@ export function GoogleSheetsWarehouseAudit() {
         triggerHaptic('success');
       } else {
         setConnectError(data.error || 'نەتوانرا گۆگڵ شیتەکە لۆد بکرێت.');
+      }
+    } catch {
+      setConnectError('هەڵە لە پەیوەندیکردن بە سێرڤەر.');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  // 2b. Import via File Upload (.xlsx, .xls, .csv)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setConnecting(true);
+    setConnectError(null);
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const firstSheetName = wb.SheetNames[0];
+        const ws = wb.Sheets[firstSheetName];
+        const csvText = XLSX.utils.sheet_to_csv(ws);
+
+        const res = await fetch('/api/warehouse/sheets-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'parse_raw',
+            rawText: csvText,
+            mode: inputMode,
+            title: inputSessionTitle.trim() || file.name.replace(/\.[^/.]+$/, ''),
+          }),
+        });
+
+        const data = await res.json();
+        if (data.success && data.session) {
+          const finalSession = {
+            ...data.session,
+            webhookUrl: inputWebhookUrl.trim() || undefined,
+          };
+          if (inputWebhookUrl.trim()) {
+            await fetch('/api/warehouse/sheets-sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'save_session', session: finalSession }),
+            });
+          }
+          setCurrentSession(finalSession);
+          setSessions(prev => [finalSession, ...prev.filter(s => s.id !== finalSession.id)]);
+          setShowConnectModal(false);
+          triggerHaptic('success');
+        } else {
+          setConnectError(data.error || 'نەتوانرا فایلی ئێکسڵەکە بخوێندرێتەوە.');
+        }
+      } catch (err: any) {
+        setConnectError('هەڵە لە خوێندنەوەی فایلی ئێکسڵ: ' + (err.message || ''));
+      } finally {
+        setConnecting(false);
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  // 2c. Import via Direct Copy & Paste
+  const handleDirectPasteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputRawPaste.trim()) return;
+
+    setConnecting(true);
+    setConnectError(null);
+
+    try {
+      const res = await fetch('/api/warehouse/sheets-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'parse_raw',
+          rawText: inputRawPaste.trim(),
+          mode: inputMode,
+          title: inputSessionTitle.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.session) {
+        const finalSession = {
+          ...data.session,
+          webhookUrl: inputWebhookUrl.trim() || undefined,
+        };
+        if (inputWebhookUrl.trim()) {
+          await fetch('/api/warehouse/sheets-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'save_session', session: finalSession }),
+          });
+        }
+        setCurrentSession(finalSession);
+        setSessions(prev => [finalSession, ...prev.filter(s => s.id !== finalSession.id)]);
+        setShowConnectModal(false);
+        setInputRawPaste('');
+        triggerHaptic('success');
+      } else {
+        setConnectError(data.error || 'نەتوانرا داتاکە لۆد بکرێت.');
       }
     } catch {
       setConnectError('هەڵە لە پەیوەندیکردن بە سێرڤەر.');
@@ -1057,124 +1166,343 @@ export function GoogleSheetsWarehouseAudit() {
               </button>
             </div>
 
+            {/* Import Source Tabs */}
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100/90 rounded-2xl mb-4 border border-slate-200/70">
+              <button
+                type="button"
+                onClick={() => { setImportTab('url'); setConnectError(null); }}
+                className={`py-2 px-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  importTab === 'url'
+                    ? 'bg-white text-blue-600 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <LinkIcon className="w-3.5 h-3.5" />
+                <span>بەستەری شیت</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setImportTab('file'); setConnectError(null); }}
+                className={`py-2 px-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  importTab === 'file'
+                    ? 'bg-white text-blue-600 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>فایلی ئێکسڵ</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setImportTab('paste'); setConnectError(null); }}
+                className={`py-2 px-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  importTab === 'paste'
+                    ? 'bg-white text-blue-600 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Clipboard className="w-3.5 h-3.5" />
+                <span>پێستکردن (Paste)</span>
+              </button>
+            </div>
+
             {connectError && (
-              <div className="mb-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>{connectError}</span>
+              <div className="mb-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div className="whitespace-pre-line leading-relaxed font-sans">{connectError}</div>
               </div>
             )}
 
-            <form onSubmit={handleConnectSheet} className="space-y-4 text-xs">
-              
-              {/* Google Sheet URL */}
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  لینکی Google Sheet (دڵنیابە بە شێوەی Anyone with the link هاوبەش کراوە):
-                </label>
-                <input
-                  type="url"
-                  required
-                  value={inputSheetUrl}
-                  onChange={(e) => setInputSheetUrl(e.target.value)}
-                  placeholder="https://docs.google.com/spreadsheets/d/1BxiMVs.../edit"
-                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-mono font-bold outline-none focus:border-blue-500"
-                  dir="ltr"
-                />
-              </div>
-
-              {/* Mode Selection */}
-              <div>
-                <label className="block text-slate-700 font-bold mb-1.5">
-                  جۆری پشکنین (کردارەکە):
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setInputMode('shipment_receiving')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                      inputMode === 'shipment_receiving'
-                        ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Truck className="w-4 h-4" />
-                    <span>داگرتنی باری نوێ</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setInputMode('inventory_stocktake')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                      inputMode === 'inventory_stocktake'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <ClipboardCheck className="w-4 h-4" />
-                    <span>جەردی کۆگا</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Session Title */}
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  ناوی بار / سێشن (ئارەزوومەندانە):
-                </label>
-                <input
-                  type="text"
-                  value={inputSessionTitle}
-                  onChange={(e) => setInputSessionTitle(e.target.value)}
-                  placeholder="بۆ نموونە: کانتینەری ژمارە ٤٨ - تورکیا یان جەردی هۆڵی ١"
-                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-blue-500"
-                />
-              </div>
-
-              {/* Optional Webhook URL */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-slate-700 font-bold">
-                    لینکی Google Apps Script Webhook (بۆ هاوکاتکردنەوەی خۆکار):
+            {/* TAB 1: GOOGLE SHEETS LINK */}
+            {importTab === 'url' && (
+              <form onSubmit={handleConnectSheet} className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    لینکی Google Sheet (بەستەری ئاسایی یان Publish to web):
                   </label>
+                  <input
+                    type="url"
+                    required
+                    value={inputSheetUrl}
+                    onChange={(e) => setInputSheetUrl(e.target.value)}
+                    placeholder="https://docs.google.com/spreadsheets/d/1BxiMVs.../edit"
+                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-mono font-bold outline-none focus:border-blue-500"
+                    dir="ltr"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                    پشتیوانی بەستەری بڵاوکراوە لە وێب (pubhtml) و بەستەری هاوبەشکراو (Anyone with the link) دەکات.
+                  </p>
+                </div>
+
+                {/* Mode Selection */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1.5">
+                    جۆری پشکنین (کردارەکە):
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInputMode('shipment_receiving')}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        inputMode === 'shipment_receiving'
+                          ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <Truck className="w-4 h-4" />
+                      <span>داگرتنی باری نوێ</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setInputMode('inventory_stocktake')}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        inputMode === 'inventory_stocktake'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <ClipboardCheck className="w-4 h-4" />
+                      <span>جەردی کۆگا</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Session Title */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    ناوی بار / سێشن (ئارەزوومەندانە):
+                  </label>
+                  <input
+                    type="text"
+                    value={inputSessionTitle}
+                    onChange={(e) => setInputSessionTitle(e.target.value)}
+                    placeholder="بۆ نموونە: کانتینەری ژمارە ٤٨ - تورکیا یان جەردی هۆڵی ١"
+                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Optional Webhook URL */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-slate-700 font-bold">
+                      لینکی Google Apps Script Webhook (بۆ هاوکاتکردنەوەی خۆکار):
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowHelpScriptModal(true)}
+                      className="text-[10px] text-blue-600 font-bold hover:underline"
+                    >
+                      سکریپتەکە چۆن دابنێم؟
+                    </button>
+                  </div>
+                  <input
+                    type="url"
+                    value={inputWebhookUrl}
+                    onChange={(e) => setInputWebhookUrl(e.target.value)}
+                    placeholder="https://script.google.com/macros/s/.../exec (ئارەزوومەندانە)"
+                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-mono outline-none focus:border-blue-500"
+                    dir="ltr"
+                  />
+                </div>
+
+                {/* Submit Buttons */}
+                <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="submit"
+                    disabled={connecting}
+                    className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-md disabled:opacity-50"
+                  >
+                    {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    <span>لۆدکردن و دەستپێکردنی پشکنین</span>
+                  </button>
+
                   <button
                     type="button"
-                    onClick={() => setShowHelpScriptModal(true)}
-                    className="text-[10px] text-blue-600 font-bold hover:underline"
+                    onClick={() => setShowConnectModal(false)}
+                    className="px-4 h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs cursor-pointer"
                   >
-                    سکریپتەکە چۆن دابنێم؟
+                    داخستن
                   </button>
                 </div>
-                <input
-                  type="url"
-                  value={inputWebhookUrl}
-                  onChange={(e) => setInputWebhookUrl(e.target.value)}
-                  placeholder="https://script.google.com/macros/s/.../exec (ئارەزوومەندانە)"
-                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-mono outline-none focus:border-blue-500"
-                  dir="ltr"
-                />
+              </form>
+            )}
+
+            {/* TAB 2: EXCEL FILE UPLOAD */}
+            {importTab === 'file' && (
+              <div className="space-y-4 text-xs">
+                {/* File Drop Area */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1.5">
+                    فایلی ئێکسڵ دیاری بکە (.xlsx, .xls, .csv):
+                  </label>
+                  <label className="border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/40 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer transition-all hover:bg-blue-50/70">
+                    <Upload className="w-8 h-8 text-blue-600 mb-2 animate-bounce" />
+                    <span className="text-xs font-black text-slate-800">کلیک بکە بۆ دیاریکردنی فایلی ئێکسڵ</span>
+                    <span className="text-[11px] text-slate-500 mt-1">یان فایلەکە ڕابکێشە ئێرە (Drag & Drop)</span>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      disabled={connecting}
+                    />
+                  </label>
+                </div>
+
+                {/* Mode Selection */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1.5">
+                    جۆری پشکنین (کردارەکە):
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInputMode('shipment_receiving')}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        inputMode === 'shipment_receiving'
+                          ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <Truck className="w-4 h-4" />
+                      <span>داگرتنی باری نوێ</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setInputMode('inventory_stocktake')}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        inputMode === 'inventory_stocktake'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <ClipboardCheck className="w-4 h-4" />
+                      <span>جەردی کۆگا</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Session Title */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    ناوی سێشن (ئارەزوومەندانە):
+                  </label>
+                  <input
+                    type="text"
+                    value={inputSessionTitle}
+                    onChange={(e) => setInputSessionTitle(e.target.value)}
+                    placeholder="بۆ نموونە: باری گەیشتووی ئەمڕۆ"
+                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowConnectModal(false)}
+                    className="w-full h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs cursor-pointer"
+                  >
+                    داخستن
+                  </button>
+                </div>
               </div>
+            )}
 
-              {/* Submit Buttons */}
-              <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="submit"
-                  disabled={connecting}
-                  className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-md disabled:opacity-50"
-                >
-                  {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  <span>لۆدکردن و دەستپێکردنی پشکنین</span>
-                </button>
+            {/* TAB 3: DIRECT COPY-PASTE */}
+            {importTab === 'paste' && (
+              <form onSubmit={handleDirectPasteSubmit} className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    خانەکانی خشتەکە لە Google Sheet کۆپی بکە (Ctrl+C) و لێرە Paste (Ctrl+V)ی بکە:
+                  </label>
+                  <textarea
+                    rows={6}
+                    required
+                    value={inputRawPaste}
+                    onChange={(e) => setInputRawPaste(e.target.value)}
+                    placeholder="مۆدێل	ناو	بڕ	شوێنی ڕەفە&#10;KB-901	مێزی نانخواردن	12	A-04&#10;SOF-200	قەنەفەی سێ نەفەری	6	B-12"
+                    className="w-full p-3 rounded-xl border border-slate-200 text-xs font-mono font-medium outline-none focus:border-blue-500"
+                    dir="auto"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                    دەتوانیت هەر خشتەیەک لە ئێکسڵ یان گۆگڵ شیت ڕاستەوخۆ دەستنیشان بکەیت و بیهێنیتە ئێرە.
+                  </p>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowConnectModal(false)}
-                  className="px-4 h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs cursor-pointer"
-                >
-                  داخستن
-                </button>
-              </div>
+                {/* Mode Selection */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1.5">
+                    جۆری پشکنین (کردارەکە):
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInputMode('shipment_receiving')}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        inputMode === 'shipment_receiving'
+                          ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <Truck className="w-4 h-4" />
+                      <span>داگرتنی باری نوێ</span>
+                    </button>
 
-            </form>
+                    <button
+                      type="button"
+                      onClick={() => setInputMode('inventory_stocktake')}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        inputMode === 'inventory_stocktake'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <ClipboardCheck className="w-4 h-4" />
+                      <span>جەردی کۆگا</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Session Title */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    ناوی سێشن (ئارەزوومەندانە):
+                  </label>
+                  <input
+                    type="text"
+                    value={inputSessionTitle}
+                    onChange={(e) => setInputSessionTitle(e.target.value)}
+                    placeholder="بۆ نموونە: باری پێستکراوی کۆنتێنەر"
+                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Submit Buttons */}
+                <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="submit"
+                    disabled={connecting}
+                    className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-md disabled:opacity-50"
+                  >
+                    {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    <span>لۆدکردنی داتای پێستکراو</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowConnectModal(false)}
+                    className="px-4 h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs cursor-pointer"
+                  >
+                    داخستن
+                  </button>
+                </div>
+              </form>
+            )}
+
           </div>
         </div>
       )}
