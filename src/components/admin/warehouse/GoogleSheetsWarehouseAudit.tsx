@@ -373,6 +373,9 @@ export function GoogleSheetsWarehouseAudit({
       if (item.id === itemId) {
         const nextQty = Math.max(0, (item.checkedQty || 0) + delta);
         const variance = nextQty - item.expectedQty;
+        const pcs = item.pcsPerCarton || 1;
+        const nextCartons = Math.floor(nextQty / pcs);
+        const scannedCartonNumbers = Array.from({ length: nextCartons }, (_, i) => i + 1);
         
         let auditStatus: SheetsAuditItem['auditStatus'] = 'pending';
         if (nextQty > 0) {
@@ -385,9 +388,12 @@ export function GoogleSheetsWarehouseAudit({
         return {
           ...item,
           checkedQty: nextQty,
+          checkedCartons: nextCartons,
+          scannedCartonNumbers,
           variance,
           auditStatus,
-          lastAuditedAt: new Date().toLocaleTimeString('en-US', { hour12: false }),
+          auditedBy: currentSession.auditedBy || 'Admin',
+          lastAuditedAt: new Date().toISOString(),
         };
       }
       return item;
@@ -401,11 +407,15 @@ export function GoogleSheetsWarehouseAudit({
   // Set Direct Quantity
   const handleSetDirectQty = (itemId: string, newQtyStr: string) => {
     if (!currentSession) return;
-    const qty = parseFloat(newQtyStr) || 0;
+    const qty = Math.max(0, parseFloat(newQtyStr) || 0);
 
     const updatedItems = currentSession.items.map(item => {
       if (item.id === itemId) {
         const variance = qty - item.expectedQty;
+        const pcs = item.pcsPerCarton || 1;
+        const nextCartons = Math.floor(qty / pcs);
+        const scannedCartonNumbers = Array.from({ length: nextCartons }, (_, i) => i + 1);
+
         let auditStatus: SheetsAuditItem['auditStatus'] = 'pending';
         if (qty > 0) {
           if (variance === 0) auditStatus = 'verified';
@@ -417,9 +427,12 @@ export function GoogleSheetsWarehouseAudit({
         return {
           ...item,
           checkedQty: qty,
+          checkedCartons: nextCartons,
+          scannedCartonNumbers,
           variance,
           auditStatus,
-          lastAuditedAt: new Date().toLocaleTimeString('en-US', { hour12: false }),
+          auditedBy: currentSession.auditedBy || 'Admin',
+          lastAuditedAt: new Date().toISOString(),
         };
       }
       return item;
@@ -442,7 +455,13 @@ export function GoogleSheetsWarehouseAudit({
         else if (item.checkedQty > 0) {
           auditStatus = item.variance === 0 ? 'verified' : item.variance < 0 ? 'deficit' : 'excess';
         }
-        return { ...item, condition, auditStatus };
+        return { 
+          ...item, 
+          condition, 
+          auditStatus, 
+          auditedBy: currentSession.auditedBy || 'Admin',
+          lastAuditedAt: new Date().toISOString() 
+        };
       }
       return item;
     });
@@ -456,7 +475,12 @@ export function GoogleSheetsWarehouseAudit({
   const handleUpdateNotes = (itemId: string, notes: string) => {
     if (!currentSession) return;
     const updatedItems = currentSession.items.map(item => {
-      if (item.id === itemId) return { ...item, notes };
+      if (item.id === itemId) return { 
+        ...item, 
+        notes, 
+        auditedBy: currentSession.auditedBy || 'Admin',
+        lastAuditedAt: new Date().toISOString() 
+      };
       return item;
     });
     const updatedSession = { ...currentSession, items: updatedItems };
@@ -587,7 +611,7 @@ export function GoogleSheetsWarehouseAudit({
     };
   }, [currentSession]);
 
-  // Export to Excel
+  // Export to Excel (All 15 Detailed Audit & Change Tracking Columns)
   const handleExportExcel = () => {
     if (!currentSession || currentSession.items.length === 0) {
       alert('هیچ کاڵایەک نییە بۆ هەناردەکردن.');
@@ -597,28 +621,62 @@ export function GoogleSheetsWarehouseAudit({
     const headers = [
       'کۆدی مۆدێل (Model)',
       'ناوی کاڵا (Item Description)',
-      'بڕی تۆمارکراو / بارکراو (Expected Qty)',
+      'بڕی بارکراو / خشتە (Expected Qty)',
       'بڕی ژمێردراو / داگیراو (Audited Qty)',
-      'جیاوازی (Variance)',
-      'دۆخی کارتۆن و کاڵا (Condition)',
+      'جیاوازی دانە (Qty Variance)',
+      'کۆی کارتۆن (Total Cartons)',
+      'کارتۆنی داگیراو (Checked Cartons)',
+      'کارتۆنە لێدراوەکان (Scanned Box #)',
+      'دانە لە کارتۆن (Pcs/Carton)',
       'دۆخی پشکنین (Audit Status)',
-      'شوێن لە کۆگا (Rack Location)',
-      'تێبینی (Notes)',
-      'کاتی چێککردن'
+      'دۆخی فیزیکی (Condition)',
+      'شوێن لە کۆگا (Rack/Location)',
+      'پشکێنەر (Audited By)',
+      'دواین کاتی گۆڕانکاری (Last Modified)',
+      'تێبینی (Audit Notes)'
     ];
 
-    const rows = currentSession.items.map(i => [
-      i.model,
-      i.name,
-      i.expectedQty,
-      i.checkedQty,
-      i.variance,
-      i.condition,
-      i.auditStatus === 'verified' ? 'هاوتا و تەواو' : i.auditStatus === 'deficit' ? 'کەمی هەیە' : i.auditStatus === 'excess' ? 'زیادەیە' : i.auditStatus === 'damaged' ? 'زیانلێکەوتوو' : 'چاوەڕوان',
-      i.rackLocation || '--',
-      i.notes || '--',
-      i.lastAuditedAt || '--'
-    ]);
+    const rows = currentSession.items.map(i => {
+      const totalCtn = i.cartonCount || (i.pcsPerCarton && i.expectedQty ? Math.ceil(i.expectedQty / i.pcsPerCarton) : i.expectedQty) || 1;
+      const checkedCtn = i.checkedCartons ?? (i.scannedCartonNumbers?.length ?? (i.pcsPerCarton ? Math.floor(i.checkedQty / i.pcsPerCarton) : i.checkedQty));
+      const scannedBoxesStr = Array.isArray(i.scannedCartonNumbers) && i.scannedCartonNumbers.length > 0 
+        ? i.scannedCartonNumbers.join(', ') 
+        : checkedCtn > 0 ? `1-${checkedCtn}` : '-';
+      
+      let statusKurdish = 'چاوەڕوان';
+      if (i.auditStatus === 'verified') statusKurdish = '✅ هاوتا و تەواو';
+      else if (i.auditStatus === 'deficit') statusKurdish = `⚠️ کەمی هەیە (${i.variance})`;
+      else if (i.auditStatus === 'excess') statusKurdish = `➕ زیادەیە (+${i.variance})`;
+      else if (i.auditStatus === 'damaged') statusKurdish = '❌ شکاو / زیانلێکەوتوو';
+
+      let conditionKurdish = 'پاکەتکراو';
+      if (i.condition === 'Wrapped') conditionKurdish = 'لەفکراو';
+      else if (i.condition === 'Damaged') conditionKurdish = 'تێکچوو/شکاو';
+      else if (i.condition === 'Need Wrapped') conditionKurdish = 'پێویستی بە لەفە';
+      else if (i.condition === 'Normal') conditionKurdish = 'ئاسایی';
+
+      const lastModifiedStr = i.lastAuditedAt 
+        ? new Date(i.lastAuditedAt).toLocaleString('en-GB', { hour12: false }) 
+        : '-';
+
+      return [
+        i.model,
+        i.name,
+        i.expectedQty,
+        i.checkedQty,
+        i.variance,
+        totalCtn,
+        checkedCtn,
+        scannedBoxesStr,
+        i.pcsPerCarton || 1,
+        statusKurdish,
+        conditionKurdish,
+        i.rackLocation || '',
+        i.auditedBy || currentSession.auditedBy || 'Admin',
+        lastModifiedStr,
+        i.notes || ''
+      ];
+    });
 
     const data = [headers, ...rows];
     const ws = XLSX.utils.aoa_to_sheet(data);
@@ -1089,6 +1147,7 @@ export function GoogleSheetsWarehouseAudit({
                     <th className="p-3.5 min-w-[140px]">کۆدی مۆدێل</th>
                     <th className="p-3.5 min-w-[180px]">ناوی کاڵا</th>
                     <th className="p-3.5 text-center min-w-[130px]">کارتۆن (داگیراو / گشتی)</th>
+                    <th className="p-3.5 text-center min-w-[130px]">کارتۆنە لێدراوەکان</th>
                     <th className="p-3.5 text-center">شوێن لە کۆگا</th>
                     <th className="p-3.5 text-center">
                       {currentSession.mode === 'shipment_receiving' ? 'بڕی بارکراو' : 'بڕی تۆمارکراو'}
@@ -1099,13 +1158,14 @@ export function GoogleSheetsWarehouseAudit({
                     <th className="p-3.5 text-center">جیاوازی</th>
                     <th className="p-3.5 text-center">دۆخی کارتۆن</th>
                     <th className="p-3.5 text-center">دۆخی چێک</th>
+                    <th className="p-3.5 text-center min-w-[130px]">دواین گۆڕانکاری</th>
                     <th className="p-3.5 min-w-[180px]">تێبینی</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-semibold">
                   {filteredItems.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="py-16 text-center text-slate-400 font-bold">
+                      <td colSpan={13} className="py-16 text-center text-slate-400 font-bold">
                         هیچ کاڵایەک نەدۆزرایەوە بەپێی ئەم فلتەرە.
                       </td>
                     </tr>
@@ -1173,6 +1233,21 @@ export function GoogleSheetsWarehouseAudit({
                               </div>
                             ) : (
                               <span className="text-slate-400 font-mono text-[11px]">--</span>
+                            )}
+                          </td>
+
+                          {/* Scanned Cartons Badges */}
+                          <td className="p-3.5 text-center">
+                            {Array.isArray(item.scannedCartonNumbers) && item.scannedCartonNumbers.length > 0 ? (
+                              <div className="flex flex-wrap items-center justify-center gap-1 max-w-[130px] mx-auto">
+                                {item.scannedCartonNumbers.map(n => (
+                                  <span key={n} className="px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-mono font-black" title={`کارتۆنی ژمارە ${n} داگیراوە`}>
+                                    #{n}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 font-mono text-[10px]">--</span>
                             )}
                           </td>
 
@@ -1285,6 +1360,22 @@ export function GoogleSheetsWarehouseAudit({
                               <span className="text-slate-400 text-[11px] font-bold">
                                 چاوەڕوان ⏳
                               </span>
+                            )}
+                          </td>
+
+                          {/* Last Modified & Audited By */}
+                          <td className="p-3.5 text-center">
+                            {item.lastAuditedAt ? (
+                              <div className="font-mono text-[10.5px]">
+                                <span className="text-slate-700 font-bold block" dir="ltr">
+                                  {new Date(item.lastAuditedAt).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                <span className="text-[9.5px] text-slate-400 font-bold block">
+                                  {item.auditedBy || currentSession.auditedBy || 'Admin'}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 text-[10px]">--</span>
                             )}
                           </td>
 
@@ -1917,9 +2008,24 @@ export function GoogleSheetsWarehouseAudit({
       sheet.clear();
       var output = [data.headers];
       data.rows.forEach(function(r) { output.push(r); });
-      sheet.getRange(1, 1, output.length, data.headers.length).setValues(output);
-      sheet.getRange(1, 1, 1, data.headers.length).setFontWeight("bold").setBackground("#e2e8f0");
-      sheet.autoResizeColumns(1, data.headers.length);
+      var numRows = output.length;
+      var numCols = data.headers.length;
+      var range = sheet.getRange(1, 1, numRows, numCols);
+      range.setValues(output);
+      
+      // Header styling
+      var headerRange = sheet.getRange(1, 1, 1, numCols);
+      headerRange.setFontWeight("bold")
+                 .setBackground("#0f172a")
+                 .setFontColor("#ffffff")
+                 .setHorizontalAlignment("center");
+                 
+      // Data rows styling
+      if (numRows > 1) {
+        var dataRange = sheet.getRange(2, 1, numRows - 1, numCols);
+        dataRange.setFontFamily("Arial").setFontSize(10).setHorizontalAlignment("center");
+      }
+      sheet.autoResizeColumns(1, numCols);
       return ContentService.createTextOutput(JSON.stringify({success: true, count: data.rows.length})).setMimeType(ContentService.MimeType.JSON);
     }
     return ContentService.createTextOutput(JSON.stringify({success: false, error: "No data"})).setMimeType(ContentService.MimeType.JSON);
@@ -1944,10 +2050,24 @@ export function GoogleSheetsWarehouseAudit({
       sheet.clear();
       var output = [data.headers];
       data.rows.forEach(function(r) { output.push(r); });
-      sheet.getRange(1, 1, output.length, data.headers.length).setValues(output);
-      sheet.getRange(1, 1, 1, data.headers.length).setFontWeight("bold").setBackground("#e2e8f0");
-      sheet.autoResizeColumns(1, data.headers.length);
-      return ContentService.createTextOutput(JSON.stringify({success: true})).setMimeType(ContentService.MimeType.JSON);
+      var numRows = output.length;
+      var numCols = data.headers.length;
+      var range = sheet.getRange(1, 1, numRows, numCols);
+      range.setValues(output);
+      
+      // Header styling (Ashley Slate Theme)
+      var headerRange = sheet.getRange(1, 1, 1, numCols);
+      headerRange.setFontWeight("bold")
+                 .setBackground("#0f172a")
+                 .setFontColor("#ffffff")
+                 .setHorizontalAlignment("center");
+                 
+      if (numRows > 1) {
+        var dataRange = sheet.getRange(2, 1, numRows - 1, numCols);
+        dataRange.setFontFamily("Arial").setFontSize(10).setHorizontalAlignment("center");
+      }
+      sheet.autoResizeColumns(1, numCols);
+      return ContentService.createTextOutput(JSON.stringify({success: true, count: data.rows.length})).setMimeType(ContentService.MimeType.JSON);
     }
   } catch(err) {
     return ContentService.createTextOutput(JSON.stringify({error: err.toString()})).setMimeType(ContentService.MimeType.JSON);
@@ -2036,32 +2156,56 @@ export function GoogleSheetsWarehouseAudit({
                       <th className="p-2 border border-slate-300 text-center">#</th>
                       <th className="p-2 border border-slate-300">کۆدی مۆدێل</th>
                       <th className="p-2 border border-slate-300">ناوی کاڵا</th>
-                      <th className="p-2 border border-slate-300 text-center">شوێن لە کۆگا</th>
+                      <th className="p-2 border border-slate-300 text-center">کارتۆن (داگیراو/گشتی)</th>
+                      <th className="p-2 border border-slate-300 text-center">کارتۆنەکان</th>
+                      <th className="p-2 border border-slate-300 text-center">شوێن</th>
                       <th className="p-2 border border-slate-300 text-center">بڕی بارکراو</th>
                       <th className="p-2 border border-slate-300 text-center">بڕی داگیراو</th>
                       <th className="p-2 border border-slate-300 text-center">جیاوازی</th>
                       <th className="p-2 border border-slate-300 text-center">دۆخ</th>
+                      <th className="p-2 border border-slate-300 text-center">دواین گۆڕانکاری</th>
                       <th className="p-2 border border-slate-300">تێبینی</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 font-semibold">
-                    {currentSession.items.map((i, idx) => (
-                      <tr key={i.id} className={i.variance !== 0 ? 'bg-amber-50/50' : i.condition === 'Damaged' ? 'bg-rose-50/50' : ''}>
-                        <td className="p-2 border border-slate-300 text-center font-mono">{idx + 1}</td>
-                        <td className="p-2 border border-slate-300 font-mono font-black" dir="ltr">{i.model}</td>
-                        <td className="p-2 border border-slate-300 font-black">{i.name}</td>
-                        <td className="p-2 border border-slate-300 text-center font-mono">{i.rackLocation || '--'}</td>
-                        <td className="p-2 border border-slate-300 text-center font-mono">{i.expectedQty}</td>
-                        <td className="p-2 border border-slate-300 text-center font-mono font-black">{i.checkedQty}</td>
-                        <td className="p-2 border border-slate-300 text-center font-mono font-black" dir="ltr">
-                          {i.variance === 0 ? '0' : i.variance > 0 ? `+${i.variance}` : i.variance}
-                        </td>
-                        <td className="p-2 border border-slate-300 text-center">
-                          {i.condition === 'Damaged' ? 'شکاو ❌' : i.condition === 'Wrapped' ? 'لەفکراو' : 'ساغ ✅'}
-                        </td>
-                        <td className="p-2 border border-slate-300 text-[10px] text-slate-600">{i.notes || '--'}</td>
-                      </tr>
-                    ))}
+                    {currentSession.items.map((i, idx) => {
+                      const pcs = i.pcsPerCarton || 1;
+                      const expCartons = Math.ceil(i.expectedQty / pcs);
+                      const chkCartons = i.checkedCartons !== undefined ? i.checkedCartons : Math.floor(i.checkedQty / pcs);
+                      const scannedBoxesStr = Array.isArray(i.scannedCartonNumbers) && i.scannedCartonNumbers.length > 0
+                        ? i.scannedCartonNumbers.map(n => `#${n}`).join(', ')
+                        : '--';
+                      const lastAuditStr = i.lastAuditedAt
+                        ? `${new Date(i.lastAuditedAt).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })} (${i.auditedBy || 'Admin'})`
+                        : '--';
+
+                      return (
+                        <tr key={i.id} className={i.variance !== 0 ? 'bg-amber-50/50' : i.condition === 'Damaged' ? 'bg-rose-50/50' : ''}>
+                          <td className="p-2 border border-slate-300 text-center font-mono">{idx + 1}</td>
+                          <td className="p-2 border border-slate-300 font-mono font-black" dir="ltr">{i.model}</td>
+                          <td className="p-2 border border-slate-300 font-black">{i.name}</td>
+                          <td className="p-2 border border-slate-300 text-center font-mono font-bold" dir="ltr">
+                            {chkCartons} / {expCartons}
+                          </td>
+                          <td className="p-2 border border-slate-300 text-center font-mono text-[9px]">
+                            {scannedBoxesStr}
+                          </td>
+                          <td className="p-2 border border-slate-300 text-center font-mono">{i.rackLocation || '--'}</td>
+                          <td className="p-2 border border-slate-300 text-center font-mono">{i.expectedQty}</td>
+                          <td className="p-2 border border-slate-300 text-center font-mono font-black">{i.checkedQty}</td>
+                          <td className="p-2 border border-slate-300 text-center font-mono font-black" dir="ltr">
+                            {i.variance === 0 ? '0' : i.variance > 0 ? `+${i.variance}` : i.variance}
+                          </td>
+                          <td className="p-2 border border-slate-300 text-center">
+                            {i.condition === 'Damaged' ? 'شکاو ❌' : i.condition === 'Wrapped' ? 'لەفکراو' : 'ساغ ✅'}
+                          </td>
+                          <td className="p-2 border border-slate-300 text-center font-mono text-[9.5px]">
+                            {lastAuditStr}
+                          </td>
+                          <td className="p-2 border border-slate-300 text-[10px] text-slate-600">{i.notes || '--'}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

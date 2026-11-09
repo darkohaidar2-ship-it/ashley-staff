@@ -737,29 +737,63 @@ export async function POST(req: NextRequest) {
       const items: SheetsAuditItem[] = session.items || [];
       const headers = [
         'کۆدی مۆدێل (Model)',
-        'ناوی کاڵا (Item Name)',
-        'بڕی تۆمارکراو / بارکراو (Expected Qty)',
+        'ناوی کاڵا (Item Description)',
+        'بڕی بارکراو / خشتە (Expected Qty)',
         'بڕی ژمێردراو / داگیراو (Audited Qty)',
-        'جیاوازی (Variance)',
-        'دۆخی کاڵا (Condition)',
-        'دۆخی چێک (Audit Status)',
+        'جیاوازی دانە (Qty Variance)',
+        'کۆی کارتۆن (Total Cartons)',
+        'کارتۆنی داگیراو (Checked Cartons)',
+        'کارتۆنە لێدراوەکان (Scanned Box #)',
+        'دانە لە کارتۆن (Pcs/Carton)',
+        'دۆخی پشکنین (Audit Status)',
+        'دۆخی فیزیکی (Condition)',
         'شوێن لە کۆگا (Rack/Location)',
-        'تێبینی (Notes)',
-        'کاتی چێککردن (Audit Timestamp)'
+        'پشکێنەر (Audited By)',
+        'دواین کاتی گۆڕانکاری (Last Modified)',
+        'تێبینی (Audit Notes)'
       ];
 
-      const rows = items.map(i => [
-        i.model,
-        i.name,
-        i.expectedQty,
-        i.checkedQty,
-        i.variance,
-        i.condition,
-        i.auditStatus === 'verified' ? 'هاوتا و تەواو' : i.auditStatus === 'deficit' ? 'کەمی هەیە' : i.auditStatus === 'excess' ? 'زیادەیە' : i.auditStatus === 'damaged' ? 'زیانلێکەوتوو' : 'چاوەڕوان',
-        i.rackLocation || '',
-        i.notes || '',
-        i.lastAuditedAt || ''
-      ]);
+      const rows = items.map(i => {
+        const totalCtn = i.cartonCount || (i.pcsPerCarton && i.expectedQty ? Math.ceil(i.expectedQty / i.pcsPerCarton) : i.expectedQty) || 1;
+        const checkedCtn = i.checkedCartons ?? (i.scannedCartonNumbers?.length ?? (i.pcsPerCarton ? Math.floor(i.checkedQty / i.pcsPerCarton) : i.checkedQty));
+        const scannedBoxesStr = Array.isArray(i.scannedCartonNumbers) && i.scannedCartonNumbers.length > 0 
+          ? i.scannedCartonNumbers.join(', ') 
+          : checkedCtn > 0 ? `1-${checkedCtn}` : '-';
+        
+        let statusKurdish = 'چاوەڕوان';
+        if (i.auditStatus === 'verified') statusKurdish = '✅ هاوتا و تەواو';
+        else if (i.auditStatus === 'deficit') statusKurdish = `⚠️ کەمی هەیە (${i.variance})`;
+        else if (i.auditStatus === 'excess') statusKurdish = `➕ زیادەیە (+${i.variance})`;
+        else if (i.auditStatus === 'damaged') statusKurdish = '❌ شکاو / زیانلێکەوتوو';
+
+        let conditionKurdish = 'پاکەتکراو';
+        if (i.condition === 'Wrapped') conditionKurdish = 'لەفکراو';
+        else if (i.condition === 'Damaged') conditionKurdish = 'تێکچوو/شکاو';
+        else if (i.condition === 'Need Wrapped') conditionKurdish = 'پێویستی بە لەفە';
+        else if (i.condition === 'Normal') conditionKurdish = 'ئاسایی';
+
+        const lastModifiedStr = i.lastAuditedAt 
+          ? new Date(i.lastAuditedAt).toLocaleString('en-GB', { hour12: false }) 
+          : '-';
+
+        return [
+          i.model,
+          i.name,
+          i.expectedQty,
+          i.checkedQty,
+          i.variance,
+          totalCtn,
+          checkedCtn,
+          scannedBoxesStr,
+          i.pcsPerCarton || 1,
+          statusKurdish,
+          conditionKurdish,
+          i.rackLocation || '',
+          i.auditedBy || session.auditedBy || 'Admin',
+          lastModifiedStr,
+          i.notes || ''
+        ];
+      });
 
       const postRes = await fetch(webhookUrl, {
         method: 'POST',
