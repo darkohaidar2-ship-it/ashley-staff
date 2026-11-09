@@ -12,8 +12,8 @@ export interface SheetsAuditItem {
   rowIndex: number;
   model: string;
   name: string;
-  expectedQty: number;
-  checkedQty: number;
+  expectedQty: number; // total units / pieces
+  checkedQty: number; // total checked units / pieces
   variance: number; // checkedQty - expectedQty
   condition: 'Packaged' | 'Wrapped' | 'Damaged' | 'Need Wrapped' | 'Normal';
   auditStatus: 'pending' | 'verified' | 'deficit' | 'excess' | 'damaged';
@@ -22,6 +22,12 @@ export interface SheetsAuditItem {
   lastAuditedAt?: string;
   auditedBy?: string;
   rawColumns?: Record<string, any>;
+
+  // 📦 Smart Container & Carton Unloading
+  cartonCount?: number;          // Total expected cartons (ژمارەی کارتۆن / پاکەت)
+  pcsPerCarton?: number;         // Pieces per carton (دانە لە هەر کارتۆنێکدا)
+  checkedCartons?: number;       // Checked cartons so far (کارتۆنە داگیراوەکان)
+  scannedCartonNumbers?: number[]; // Exact box numbers scanned so far, e.g. [1, 2, 4]
 }
 
 export interface SheetsAuditSession {
@@ -38,6 +44,8 @@ export interface SheetsAuditSession {
   totalItemsCount: number;
   totalExpectedUnits: number;
   totalAuditedUnits: number;
+  totalCartonsCount?: number;    // Total cartons across all items
+  totalAuditedCartons?: number;  // Audited cartons so far
   matchedCount: number;
   discrepantCount: number;
   damagedCount: number;
@@ -124,6 +132,8 @@ function identifyColumns(headerRow: string[]) {
     conditionIdx: -1,
     locationIdx: -1,
     notesIdx: -1,
+    cartonCountIdx: -1,
+    pcsPerCartonIdx: -1,
   };
 
   headerRow.forEach((h, idx) => {
@@ -132,7 +142,7 @@ function identifyColumns(headerRow: string[]) {
     // Model / Code
     if (cols.modelIdx === -1 && (
       text.includes('model') || text.includes('code') || text.includes('barcode') || 
-      text.includes('مۆدێل') || text.includes('کۆد') || text.includes('کود') || text.includes('رمز')
+      text.includes('مۆدێل') || text.includes('کۆد') || text.includes('کود') || text.includes('رمز') || text.includes('art')
     )) {
       cols.modelIdx = idx;
     }
@@ -140,16 +150,34 @@ function identifyColumns(headerRow: string[]) {
     // Name / Description
     if (cols.nameIdx === -1 && (
       text.includes('name') || text.includes('desc') || text.includes('item') || text.includes('title') ||
-      text.includes('ناو') || text.includes('وەسف') || text.includes('المادة') || text.includes('کاڵا')
+      text.includes('ناو') || text.includes('وەسف') || text.includes('المادة') || text.includes('کاڵا') || text.includes('tanım')
     )) {
       cols.nameIdx = idx;
     }
 
-    // Expected / Book Qty
+    // Carton Count / Boxes (ژمارەی کارتۆن)
+    if (cols.cartonCountIdx === -1 && (
+      text.includes('carton') || text.includes('ctn') || text.includes('box') || text.includes('boxes') ||
+      text.includes('کارتۆن') || text.includes('پاکەت') || text.includes('صندوق') || text.includes('طرد') ||
+      text.includes('koli') || text.includes('paket')
+    ) && !text.includes('pcs') && !text.includes('/') && !text.includes('per')) {
+      cols.cartonCountIdx = idx;
+    }
+
+    // Pieces Per Carton (دانە لە هەر کارتۆنێکدا)
+    if (cols.pcsPerCartonIdx === -1 && (
+      text.includes('pcs/ctn') || text.includes('qty/ctn') || text.includes('pcs/box') || text.includes('pcs/koli') ||
+      text.includes('per carton') || text.includes('per box') || text.includes('دانە لە کارتۆن') || text.includes('قطع بالكرتون')
+    )) {
+      cols.pcsPerCartonIdx = idx;
+    }
+
+    // Expected / Book Qty (Total pieces)
     if (cols.expectedQtyIdx === -1 && (
       text.includes('expected') || text.includes('book') || text.includes('system') || text.includes('shipment') ||
       text.includes('بارکراو') || text.includes('چاوەڕوان') || text.includes('تۆمارکراو') || text.includes('کۆگا') ||
-      text === 'qty' || text === 'quantity' || text === 'بڕ' || text === 'عدد' || text === 'ژمارە'
+      text.includes('total qty') || text.includes('total pcs') || text.includes('کۆی گشتی') || text.includes('مجموع') ||
+      text === 'qty' || text === 'quantity' || text === 'بڕ' || text === 'عدد' || text === 'ژمارە' || text === 'adet'
     )) {
       cols.expectedQtyIdx = idx;
     }
@@ -196,12 +224,14 @@ function identifyColumns(headerRow: string[]) {
 }
 
 /**
- * 📦 Converts parsed matrix rows into structured audit items
+ * 📦 Converts parsed matrix rows into structured audit items with Carton Intelligence
  */
 function convertRowsToAuditItems(rawData: any[][]): { 
   items: SheetsAuditItem[]; 
   totalExpected: number; 
   totalAudited: number; 
+  totalCartons: number;
+  totalAuditedCartons: number;
   headerRow: string[] 
 } {
   let headerRowIndex = 0;
@@ -219,6 +249,8 @@ function convertRowsToAuditItems(rawData: any[][]): {
   const items: SheetsAuditItem[] = [];
   let totalExpected = 0;
   let totalAudited = 0;
+  let totalCartons = 0;
+  let totalAuditedCartons = 0;
 
   for (let r = headerRowIndex + 1; r < rawData.length; r++) {
     const row = rawData[r];
@@ -230,11 +262,39 @@ function convertRowsToAuditItems(rawData: any[][]): {
     // Skip empty rows
     if (!model && !name) continue;
 
-    // Parse expected qty
+    // Parse cartons & pieces per carton
+    let cartonCount = 0;
+    if (colMap.cartonCountIdx !== -1) {
+      const rawCtn = String(row[colMap.cartonCountIdx] || '').replace(/[^\d.-]/g, '');
+      cartonCount = parseFloat(rawCtn) || 0;
+    }
+
+    let pcsPerCarton = 1;
+    if (colMap.pcsPerCartonIdx !== -1) {
+      const rawPcs = String(row[colMap.pcsPerCartonIdx] || '').replace(/[^\d.-]/g, '');
+      pcsPerCarton = parseFloat(rawPcs) || 1;
+    }
+
+    // Parse expected total qty
     let expectedQty = 0;
     if (colMap.expectedQtyIdx !== -1) {
       const rawExp = String(row[colMap.expectedQtyIdx] || '').replace(/[^\d.-]/g, '');
       expectedQty = parseFloat(rawExp) || 0;
+    }
+
+    // Cross-compute cartons and quantities intelligently
+    if (expectedQty === 0 && cartonCount > 0) {
+      expectedQty = cartonCount * (pcsPerCarton || 1);
+    } else if (expectedQty > 0 && cartonCount === 0) {
+      cartonCount = pcsPerCarton > 1 ? Math.ceil(expectedQty / pcsPerCarton) : expectedQty;
+    } else if (cartonCount > 0 && expectedQty > 0 && colMap.pcsPerCartonIdx === -1) {
+      pcsPerCarton = Math.max(1, Math.round(expectedQty / cartonCount));
+    }
+
+    if (cartonCount === 0 && expectedQty === 0) {
+      expectedQty = 1;
+      cartonCount = 1;
+      pcsPerCarton = 1;
     }
 
     // Parse checked qty
@@ -243,6 +303,8 @@ function convertRowsToAuditItems(rawData: any[][]): {
       const rawChk = String(row[colMap.checkedQtyIdx] || '').replace(/[^\d.-]/g, '');
       checkedQty = parseFloat(rawChk) || 0;
     }
+
+    const checkedCartons = Math.floor(checkedQty / (pcsPerCarton || 1));
 
     const conditionRaw = colMap.conditionIdx !== -1 ? String(row[colMap.conditionIdx] || '').trim() : '';
     let condition: SheetsAuditItem['condition'] = 'Packaged';
@@ -266,6 +328,8 @@ function convertRowsToAuditItems(rawData: any[][]): {
 
     totalExpected += expectedQty;
     totalAudited += checkedQty;
+    totalCartons += cartonCount;
+    totalAuditedCartons += checkedCartons;
 
     items.push({
       id: `item_${r}_${model || Math.random().toString(36).slice(2, 7)}`,
@@ -274,6 +338,10 @@ function convertRowsToAuditItems(rawData: any[][]): {
       name: name || model,
       expectedQty,
       checkedQty,
+      cartonCount,
+      pcsPerCarton,
+      checkedCartons,
+      scannedCartonNumbers: [],
       variance,
       condition,
       auditStatus,
@@ -283,7 +351,7 @@ function convertRowsToAuditItems(rawData: any[][]): {
     });
   }
 
-  return { items, totalExpected, totalAudited, headerRow };
+  return { items, totalExpected, totalAudited, totalCartons, totalAuditedCartons, headerRow };
 }
 
 /**
@@ -438,7 +506,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'خشتەی گۆگڵ شیتەکە بەتاڵە' }, { status: 400 });
       }
 
-      const { items, totalExpected, totalAudited, headerRow } = convertRowsToAuditItems(rawData);
+      const { items, totalExpected, totalAudited, totalCartons, totalAuditedCartons, headerRow } = convertRowsToAuditItems(rawData);
 
       if (items.length === 0) {
         return NextResponse.json({ success: false, error: 'هیچ کاڵایەک لە ناو خشتەکە نەدۆزرایەوە. دڵنیابە ناوی مۆدێل و بڕ لە خشتەکەدا هەیە.' }, { status: 400 });
@@ -464,6 +532,8 @@ export async function POST(req: NextRequest) {
         totalItemsCount: items.length,
         totalExpectedUnits: totalExpected,
         totalAuditedUnits: totalAudited,
+        totalCartonsCount: totalCartons,
+        totalAuditedCartons: totalAuditedCartons,
         matchedCount: items.filter(i => i.auditStatus === 'verified').length,
         discrepantCount: items.filter(i => i.auditStatus === 'deficit' || i.auditStatus === 'excess').length,
         damagedCount: items.filter(i => i.auditStatus === 'damaged').length,
@@ -506,7 +576,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'داتای پێستکراو بەتاڵە' }, { status: 400 });
       }
 
-      const { items, totalExpected, totalAudited, headerRow } = convertRowsToAuditItems(rawData);
+      const { items, totalExpected, totalAudited, totalCartons, totalAuditedCartons, headerRow } = convertRowsToAuditItems(rawData);
 
       if (items.length === 0) {
         return NextResponse.json({ success: false, error: 'هیچ کاڵایەک لە ناو خشتەکە نەدۆزرایەوە. دڵنیابە ستوونی مۆدێل و بڕ لە دەقەکەدا هەیە.' }, { status: 400 });
@@ -528,6 +598,8 @@ export async function POST(req: NextRequest) {
         totalItemsCount: items.length,
         totalExpectedUnits: totalExpected,
         totalAuditedUnits: totalAudited,
+        totalCartonsCount: totalCartons,
+        totalAuditedCartons: totalAuditedCartons,
         matchedCount: items.filter(i => i.auditStatus === 'verified').length,
         discrepantCount: items.filter(i => i.auditStatus === 'deficit' || i.auditStatus === 'excess').length,
         damagedCount: items.filter(i => i.auditStatus === 'damaged').length,

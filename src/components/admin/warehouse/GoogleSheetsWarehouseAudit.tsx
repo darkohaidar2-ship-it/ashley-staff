@@ -36,11 +36,14 @@ import {
   Save, 
   Link as LinkIcon,
   Upload,
-  Clipboard
+  Clipboard,
+  Camera,
+  Bot
 } from 'lucide-react';
 import { triggerHaptic } from '@/lib/offline-sync-manager';
 import { OfficialPrintHeader, OfficialPrintSignatures } from '@/components/reports/OfficialPrintHeader';
 import { SheetsAuditItem, SheetsAuditSession } from '@/app/api/warehouse/sheets-sync/route';
+import { SmartCameraCartonScanner } from '@/components/admin/warehouse/SmartCameraCartonScanner';
 import * as XLSX from 'xlsx';
 
 export function GoogleSheetsWarehouseAudit() {
@@ -67,9 +70,11 @@ export function GoogleSheetsWarehouseAudit() {
   const [showSessionsModal, setShowSessionsModal] = useState<boolean>(false);
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
   const [showHelpScriptModal, setShowHelpScriptModal] = useState<boolean>(false);
+  const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
+  const [isAiParsing, setIsAiParsing] = useState<boolean>(false);
 
   // Connect Google Sheet Form State
-  const [importTab, setImportTab] = useState<'url' | 'file' | 'paste'>('url');
+  const [importTab, setImportTab] = useState<'url' | 'file' | 'paste' | 'ai'>('url');
   const [inputSheetUrl, setInputSheetUrl] = useState<string>('');
   const [inputRawPaste, setInputRawPaste] = useState<string>('');
   const [inputSessionTitle, setInputSessionTitle] = useState<string>('');
@@ -159,6 +164,55 @@ export function GoogleSheetsWarehouseAudit() {
     } catch {
       setConnectError('هەڵە لە پەیوەندیکردن بە سێرڤەر.');
     } finally {
+      setConnecting(false);
+    }
+  };
+
+  // 2d. Import via AI Smart Manifest & Packing List Extraction
+  const handleAiSmartParseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputRawPaste.trim()) return;
+
+    setIsAiParsing(true);
+    setConnecting(true);
+    setConnectError(null);
+
+    try {
+      const res = await fetch('/api/warehouse/ai-parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: inputRawPaste.trim(),
+          mode: inputMode,
+          title: inputSessionTitle.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.session) {
+        const finalSession = {
+          ...data.session,
+          webhookUrl: inputWebhookUrl.trim() || undefined,
+        };
+        if (inputWebhookUrl.trim()) {
+          await fetch('/api/warehouse/sheets-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'save_session', session: finalSession }),
+          });
+        }
+        setCurrentSession(finalSession);
+        setSessions(prev => [finalSession, ...prev.filter(s => s.id !== finalSession.id)]);
+        setShowConnectModal(false);
+        setInputRawPaste('');
+        triggerHaptic('success');
+      } else {
+        setConnectError(data.error || 'نەتوانرا داتاکە بە زیرەکی دەستکرد شیبکرێتەوە.');
+      }
+    } catch {
+      setConnectError('هەڵە لە پەیوەندیکردن بە سێرڤەری زیرەکی دەستکرد.');
+    } finally {
+      setIsAiParsing(false);
       setConnecting(false);
     }
   };
@@ -591,6 +645,22 @@ export function GoogleSheetsWarehouseAudit() {
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2">
           
+          {/* 🎥 Smart Mobile Camera Carton Scanner Button */}
+          {currentSession && (
+            <button
+              type="button"
+              onClick={() => setShowCameraScanner(true)}
+              className="h-10 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-xs flex items-center gap-2 cursor-pointer active:scale-95 shadow-lg shadow-amber-500/25 transition-all border border-amber-400/50"
+              title="کردنەوەی کامێرای مۆبایل بۆ ژماردنی هۆشمەندی کارتۆنەکان بە دەنگ و ئاگادارکردنەوە"
+            >
+              <Camera className="w-4 h-4 text-slate-950" />
+              <span>ژماردنی زیرەک بە کامێرا</span>
+              <span className="px-2 py-0.5 rounded-full bg-slate-950 text-amber-400 text-[10px] font-mono font-bold">
+                {currentSession.items.reduce((acc, it) => acc + (it.checkedCartons || it.scannedCartonNumbers?.length || 0), 0)} / {currentSession.totalCartonsCount || currentSession.items.reduce((acc, it) => acc + (it.cartonCount || it.expectedQty || 1), 0)}
+              </span>
+            </button>
+          )}
+
           {/* Connect New Google Sheet */}
           <button
             type="button"
@@ -868,6 +938,16 @@ export function GoogleSheetsWarehouseAudit() {
               <Scan className="w-4 h-4 text-amber-400" />
               <span>چێککردن (+١)</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setShowCameraScanner(true)}
+              className="h-11 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-md shadow-amber-500/20 transition-all shrink-0"
+              title="کردنەوەی کامێرای مۆبایل بۆ لێدانی لیبڵ و بارکۆد بە دەنگ و ئاگادارکردنەوە"
+            >
+              <Camera className="w-4 h-4" />
+              <span>کامێرا</span>
+            </button>
           </form>
 
           {/* Scanned Notification Alert */}
@@ -940,6 +1020,7 @@ export function GoogleSheetsWarehouseAudit() {
                     <th className="p-3.5 text-center w-12">#</th>
                     <th className="p-3.5 min-w-[140px]">کۆدی مۆدێل</th>
                     <th className="p-3.5 min-w-[180px]">ناوی کاڵا</th>
+                    <th className="p-3.5 text-center min-w-[130px]">کارتۆن (داگیراو / گشتی)</th>
                     <th className="p-3.5 text-center">شوێن لە کۆگا</th>
                     <th className="p-3.5 text-center">
                       {currentSession.mode === 'shipment_receiving' ? 'بڕی بارکراو' : 'بڕی تۆمارکراو'}
@@ -956,7 +1037,7 @@ export function GoogleSheetsWarehouseAudit() {
                 <tbody className="divide-y divide-slate-100 font-semibold">
                   {filteredItems.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-16 text-center text-slate-400 font-bold">
+                      <td colSpan={11} className="py-16 text-center text-slate-400 font-bold">
                         هیچ کاڵایەک نەدۆزرایەوە بەپێی ئەم فلتەرە.
                       </td>
                     </tr>
@@ -1001,6 +1082,30 @@ export function GoogleSheetsWarehouseAudit() {
                             <span className="truncate block" title={item.name}>
                               {item.name || '--'}
                             </span>
+                          </td>
+
+                          {/* Cartons Count & Progress */}
+                          <td className="p-3.5 text-center">
+                            {item.cartonCount ? (
+                              <div className="inline-flex flex-col items-center gap-1">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black font-mono border ${
+                                  (item.checkedCartons || (item.scannedCartonNumbers?.length || 0)) >= item.cartonCount
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : (item.checkedCartons || (item.scannedCartonNumbers?.length || 0)) > 0
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-slate-100 text-slate-600 border-slate-200'
+                                }`}>
+                                  {item.checkedCartons || (item.scannedCartonNumbers?.length || 0)} / {item.cartonCount} ctn
+                                </span>
+                                {item.pcsPerCarton && item.pcsPerCarton > 1 && (
+                                  <span className="text-[10px] text-slate-400 font-bold">
+                                    ({item.pcsPerCarton} دانە/کارتۆن)
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 font-mono text-[11px]">--</span>
+                            )}
                           </td>
 
                           {/* Rack Location */}
@@ -1167,44 +1272,57 @@ export function GoogleSheetsWarehouseAudit() {
             </div>
 
             {/* Import Source Tabs */}
-            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100/90 rounded-2xl mb-4 border border-slate-200/70">
+            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100/90 rounded-2xl mb-4 border border-slate-200/70">
               <button
                 type="button"
                 onClick={() => { setImportTab('url'); setConnectError(null); }}
-                className={`py-2 px-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`py-2 px-1.5 rounded-xl text-[11px] font-black transition-all cursor-pointer flex items-center justify-center gap-1 ${
                   importTab === 'url'
                     ? 'bg-white text-blue-600 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <LinkIcon className="w-3.5 h-3.5" />
-                <span>بەستەری شیت</span>
+                <span>بەستەر</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => { setImportTab('file'); setConnectError(null); }}
-                className={`py-2 px-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`py-2 px-1.5 rounded-xl text-[11px] font-black transition-all cursor-pointer flex items-center justify-center gap-1 ${
                   importTab === 'file'
                     ? 'bg-white text-blue-600 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <Upload className="w-3.5 h-3.5" />
-                <span>فایلی ئێکسڵ</span>
+                <span>ئێکسڵ</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => { setImportTab('paste'); setConnectError(null); }}
-                className={`py-2 px-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`py-2 px-1.5 rounded-xl text-[11px] font-black transition-all cursor-pointer flex items-center justify-center gap-1 ${
                   importTab === 'paste'
                     ? 'bg-white text-blue-600 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <Clipboard className="w-3.5 h-3.5" />
-                <span>پێستکردن (Paste)</span>
+                <span>پێستکردن</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setImportTab('ai'); setConnectError(null); }}
+                className={`py-2 px-1.5 rounded-xl text-[11px] font-black transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                  importTab === 'ai'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                    : 'text-amber-800 hover:text-amber-950 bg-amber-500/10'
+                }`}
+              >
+                <Bot className="w-3.5 h-3.5 text-amber-600" />
+                <span>شرۆڤەی AI</span>
               </button>
             </div>
 
@@ -1490,6 +1608,100 @@ export function GoogleSheetsWarehouseAudit() {
                   >
                     {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                     <span>لۆدکردنی داتای پێستکراو</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowConnectModal(false)}
+                    className="px-4 h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs cursor-pointer"
+                  >
+                    داخستن
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* TAB 4: AI SMART EXTRACTION */}
+            {importTab === 'ai' && (
+              <form onSubmit={handleAiSmartParseSubmit} className="space-y-4 text-xs">
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    <label className="text-slate-800 font-black">
+                      شیکردنەوەی دەقی بار و مانیفێست بە زیرەکی دەستکرد:
+                    </label>
+                  </div>
+                  <textarea
+                    rows={6}
+                    required
+                    value={inputRawPaste}
+                    onChange={(e) => setInputRawPaste(e.target.value)}
+                    placeholder="دەقی بارنامە، پکینگ لیست یان وەسڵ لێرە دابنێ (تەنانەت ئەگەر ستوونی زۆر و بە زمانی تورکی، عەرەبی یان ئینگلیزیش بێت)... زیرەکی دەستکرد تەنها کۆدی مۆدێل، ژمارەی کارتۆن، و پارچەی ناو کارتۆن دەردەهێنێت."
+                    className="w-full p-3 rounded-xl border border-amber-300 bg-amber-50/20 text-xs font-mono font-medium outline-none focus:border-amber-500"
+                    dir="auto"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1 font-medium leading-relaxed">
+                    💡 زیرەکی دەستکرد هەموو زانیارییە ناپێویستەکان فڕێ دەدات و تەنها ٤ شت وەردەگرێت: مۆدێل، ناو، ژمارەی کارتۆن، و بڕی گشتی.
+                  </p>
+                </div>
+
+                {/* Mode Selection */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1.5">
+                    جۆری پشکنین (کردارەکە):
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInputMode('shipment_receiving')}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        inputMode === 'shipment_receiving'
+                          ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <Truck className="w-4 h-4" />
+                      <span>داگرتنی باری نوێ</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setInputMode('inventory_stocktake')}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        inputMode === 'inventory_stocktake'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <ClipboardCheck className="w-4 h-4" />
+                      <span>جەردی کۆگا</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Session Title */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    ناوی سێشن (ئارەزوومەندانە):
+                  </label>
+                  <input
+                    type="text"
+                    value={inputSessionTitle}
+                    onChange={(e) => setInputSessionTitle(e.target.value)}
+                    placeholder="بۆ نموونە: کانتینەری ژمارە ٥٠ (شرۆڤەی AI)"
+                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Submit Buttons */}
+                <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="submit"
+                    disabled={connecting || isAiParsing}
+                    className="flex-1 h-11 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-md shadow-amber-500/20 disabled:opacity-50"
+                  >
+                    {isAiParsing ? <Loader2 className="w-4 h-4 animate-spin text-slate-950" /> : <Bot className="w-4 h-4 text-slate-950" />}
+                    <span>{isAiParsing ? 'زیرەکی دەستکرد شییدەکاتەوە...' : 'شیکردنەوە و دروستکردنی بار بە AI'}</span>
                   </button>
 
                   <button
@@ -1798,6 +2010,18 @@ export function GoogleSheetsWarehouseAudit() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🎥 SMART MOBILE CAMERA CARTON SCANNER (FULL SCREEN) */}
+      {/* ========================================================================= */}
+      {currentSession && (
+        <SmartCameraCartonScanner
+          session={currentSession}
+          isOpen={showCameraScanner}
+          onClose={() => setShowCameraScanner(false)}
+          onUpdateSession={async (upd) => persistSession(upd)}
+        />
       )}
 
       {/* Global Print Styling */}
