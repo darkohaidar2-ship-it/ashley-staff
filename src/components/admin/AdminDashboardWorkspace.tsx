@@ -16,6 +16,7 @@ import NotificationRoutingMatrix from '@/components/admin/NotificationRoutingMat
 import { AdminGoogleBindingsManager } from '@/components/admin/AdminGoogleBindingsManager';
 import { AdminFeedbackDashboard } from '@/components/admin/AdminFeedbackDashboard';
 import { GoogleSheetsWarehouseAudit } from '@/components/admin/warehouse/GoogleSheetsWarehouseAudit';
+import { AdminUniversalPinsManager } from '@/components/admin/pins/AdminUniversalPinsManager';
 import { format } from 'date-fns';
 import { 
   Building2, 
@@ -45,16 +46,16 @@ export function AdminDashboardWorkspace() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   
   // Segmented views in Admin Workspace (Synced with URL)
-  const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback' | 'sheets_warehouse'>('matrix');
+  const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback' | 'sheets_warehouse' | 'pins'>('matrix');
 
   useEffect(() => {
     const viewParam = searchParams.get('view');
-    if (viewParam && ['matrix', 'daily', 'tools', 'workflow', 'google', 'feedback', 'sheets_warehouse'].includes(viewParam)) {
+    if (viewParam && ['matrix', 'daily', 'tools', 'workflow', 'google', 'feedback', 'sheets_warehouse', 'pins'].includes(viewParam)) {
       setAdminView(viewParam as any);
     }
   }, [searchParams]);
 
-  const handleViewChange = (newView: 'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback' | 'sheets_warehouse') => {
+  const handleViewChange = (newView: 'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback' | 'sheets_warehouse' | 'pins') => {
     setAdminView(newView);
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
@@ -410,6 +411,20 @@ export function AdminDashboardWorkspace() {
               <span>پشکنینی بار و جەرد (شیت)</span>
             </button>
 
+            <button
+              type="button"
+              onClick={() => handleViewChange('pins')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                adminView === 'pins'
+                  ? 'bg-white text-amber-600 shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
+              title="کۆگای گشتی بەڕێوەبردنی کۆدەکانی PIN (فیدباک، کۆگا، دەوام)"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+              <span>کۆدەکانی PIN</span>
+            </button>
+
           </div>
 
           {/* Password Modal Button */}
@@ -600,6 +615,15 @@ export function AdminDashboardWorkspace() {
       {adminView === 'sheets_warehouse' && (
         <section className="w-full transition-opacity duration-300">
           <GoogleSheetsWarehouseAudit />
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🔑 VIEW 8: UNIVERSAL PIN MANAGEMENT HUB (MANAGER, STAFF, WAREHOUSE, ATTENDANCE) */}
+      {/* ========================================================================= */}
+      {adminView === 'pins' && (
+        <section className="w-full transition-opacity duration-300">
+          <AdminUniversalPinsManager />
         </section>
       )}
 
