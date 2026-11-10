@@ -1,11 +1,232 @@
 'use client';
 
-import React, { Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { AdminFeedbackDashboard } from '@/components/admin/AdminFeedbackDashboard';
-import { Loader2, ArrowRight, ShieldCheck, Home } from 'lucide-react';
+import { Loader2, ArrowRight, ShieldCheck, Home, Lock, KeyRound, AlertCircle, Delete } from 'lucide-react';
 import Link from 'next/link';
 
 function FeedbackAdminContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pinParam = searchParams.get('pin') || '';
+
+  const [authed, setAuthed] = useState<boolean>(false);
+  const [checking, setChecking] = useState<boolean>(true);
+  const [pinInput, setPinInput] = useState<string>('');
+  const [verifying, setVerifying] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Check existing session or URL pin
+  useEffect(() => {
+    async function checkAuth() {
+      if (typeof window !== 'undefined') {
+        const stored = sessionStorage.getItem('ashley_manager_auth_pin');
+        if (stored && /^\d{4}$/.test(stored)) {
+          const val = parseInt(stored, 10);
+          if (val >= 0 && val <= 5999) {
+            setAuthed(true);
+            setChecking(false);
+            return;
+          }
+        }
+      }
+
+      if (pinParam && /^\d{4}$/.test(pinParam)) {
+        const val = parseInt(pinParam, 10);
+        if (val >= 0 && val <= 5999) {
+          try {
+            const res = await fetch('/api/feedback/verify-pin', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pin: pinParam, expectedScope: 'manager_feedback' }),
+            });
+            const data = await res.json();
+            if (data.valid) {
+              if (typeof window !== 'undefined') {
+                sessionStorage.setItem('ashley_manager_auth_pin', pinParam);
+              }
+              setAuthed(true);
+              setChecking(false);
+              return;
+            }
+          } catch {}
+        }
+      }
+
+      setChecking(false);
+    }
+
+    checkAuth();
+  }, [pinParam]);
+
+  const handleVerify = async (pinCandidate: string) => {
+    if (pinCandidate.length !== 4) return;
+    setVerifying(true);
+    setErrorMsg(null);
+
+    try {
+      const res = await fetch('/api/feedback/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinCandidate, expectedScope: 'manager_feedback' }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('ashley_manager_auth_pin', pinCandidate);
+        }
+        setAuthed(true);
+      } else {
+        setErrorMsg(data.error || 'کۆدی PIN هەڵەیە (دەبێت لە نێوان 0000 بۆ 5999 بێت).');
+        setPinInput('');
+      }
+    } catch {
+      setErrorMsg('هەڵە لە پەیوەندیکردن بە سێرڤەر.');
+      setPinInput('');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleKeypadPress = (digit: string) => {
+    if (verifying || pinInput.length >= 4) return;
+    const next = pinInput + digit;
+    setPinInput(next);
+    setErrorMsg(null);
+    if (next.length === 4) {
+      setTimeout(() => handleVerify(next), 120);
+    }
+  };
+
+  const handleLock = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('ashley_manager_auth_pin');
+    }
+    setAuthed(false);
+    setPinInput('');
+    router.replace('/');
+  };
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white" dir="rtl">
+        <Loader2 className="w-8 h-8 animate-spin text-amber-500 mb-2" />
+      </div>
+    );
+  }
+
+  // 🔒 PIN Gate Screen
+  if (!authed) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white font-sans flex flex-col justify-between" dir="rtl">
+        <header className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+          <Link
+            href="/"
+            className="h-9 px-3.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold flex items-center gap-1.5"
+          >
+            <Home className="w-4 h-4 text-amber-400" />
+            <span>پەڕەی سەرەکی</span>
+          </Link>
+          <span className="text-xs font-bold text-amber-400 font-mono">گروپی دیوان</span>
+        </header>
+
+        <main className="flex-1 flex flex-col items-center justify-center p-4 max-w-sm mx-auto w-full">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-3">
+            <Lock className="w-8 h-8 text-amber-400" />
+          </div>
+
+          <span className="px-3 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono text-xs font-bold border border-amber-500/30 mb-2" dir="ltr">
+            0000 - 5999
+          </span>
+
+          <h2 className="text-xl font-black text-white text-center mb-1">
+            داشبۆردی بەڕێوەبەر
+          </h2>
+          <p className="text-xs text-slate-400 text-center mb-5 max-w-xs">
+            تکایە کۆدی نهێنی ٤ ژمارەیی بەڕێوەبەر بنووسە بۆ بینینی داتاکان:
+          </p>
+
+          {/* Dots Indicator */}
+          <div className="flex items-center justify-center gap-3 mb-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${
+                  i < pinInput.length
+                    ? 'bg-amber-400 border-amber-300 shadow-md shadow-amber-400/50 scale-110'
+                    : 'border-slate-700 bg-slate-800'
+                }`}
+              />
+            ))}
+          </div>
+
+          {verifying ? (
+            <div className="h-6 flex items-center justify-center gap-1.5 text-xs text-amber-400 font-bold mb-3">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>پشکنینی کۆد...</span>
+            </div>
+          ) : errorMsg ? (
+            <div className="h-6 flex items-center justify-center gap-1 text-[11px] text-rose-400 font-bold mb-3">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          ) : (
+            <div className="h-6 text-[11px] text-slate-500 font-medium mb-3">
+              {4 - pinInput.length > 0 ? `${4 - pinInput.length} ژمارە ماوە` : 'کۆد پڕکرایەوە'}
+            </div>
+          )}
+
+          {/* Keypad */}
+          <div className="grid grid-cols-3 gap-2.5 w-full max-w-[260px] text-lg font-mono font-bold select-none">
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+              <button
+                key={digit}
+                type="button"
+                disabled={verifying}
+                onClick={() => handleKeypadPress(digit)}
+                className="h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white border border-slate-800 active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-sm"
+              >
+                {digit}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              disabled={verifying || pinInput.length === 0}
+              onClick={() => setPinInput('')}
+              className="h-14 rounded-2xl bg-slate-900/50 hover:bg-slate-800 text-slate-400 text-xs font-bold font-sans border border-slate-800/80 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+            >
+              پاککردن
+            </button>
+
+            <button
+              type="button"
+              disabled={verifying}
+              onClick={() => handleKeypadPress('0')}
+              className="h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white border border-slate-800 active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-sm"
+            >
+              0
+            </button>
+
+            <button
+              type="button"
+              disabled={verifying || pinInput.length === 0}
+              onClick={() => setPinInput((prev) => prev.slice(0, -1))}
+              className="h-14 rounded-2xl bg-slate-900/50 hover:bg-slate-800 text-rose-400 border border-slate-800/80 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+            >
+              <Delete className="w-5 h-5" />
+            </button>
+          </div>
+        </main>
+
+        <footer className="text-center pb-4 text-[11px] text-slate-600">
+          کۆمپانیای مۆبیلیاتی ئاشڵی • گروپی دیوان ٢٠٢٦
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans p-3 sm:p-6" dir="rtl">
       {/* Top Breadcrumb Header for Direct Access */}
@@ -20,23 +241,33 @@ function FeedbackAdminContent() {
                 سیستەمی بەڕێوەبردنی فیدباک و هەڵسەنگاندن
               </h1>
               <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
-                داشبۆردی سەربەخۆ
+                داشبۆردی بەڕێوەبەر (0000 - 5999)
               </span>
             </div>
             <p className="text-[11px] text-slate-500 font-medium">
-              پەڕەی سەربەخۆی بەڕێوەبردن • بەستراوە بە هەردوو ناونیشانی /feedback/admin و /adm1n_pan0l
+              شیکاری ورد، گراف و نمرەی ٨ کارمەندەکە • چاپکردنی فەرمی PDF
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleLock}
+            className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+            title="دەرچوون و قفڵکردنی داشبۆردی بەڕێوەبەر"
+          >
+            <Lock className="w-3.5 h-3.5 text-rose-600" />
+            <span>قفڵکردن</span>
+          </button>
+
           <Link
-            href="/adm1n_pan0l"
+            href="/"
             className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all"
-            title="گەڕانەوە بۆ کۆنتڕۆڵ پانێڵی سەرەکی"
+            title="گەڕانەوە بۆ پەڕەی سەرەکی"
           >
             <Home className="w-3.5 h-3.5" />
-            <span>کۆنتڕۆڵ پانێڵ</span>
+            <span>پەڕەی سەرەکی</span>
           </Link>
 
           <Link

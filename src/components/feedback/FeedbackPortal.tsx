@@ -35,7 +35,7 @@ import { TARGET_SALES_CASHIER_STAFF } from '@/lib/feedback/feedback-service';
 export interface FeedbackPortalProps {
   initialPin?: string;
   isDark?: boolean;
-  onSwitchPortal?: (portal: 'attendance' | 'feedback' | 'warehouse') => void;
+  onSwitchPortal?: (portal: 'attendance' | 'feedback' | 'warehouse' | 'feedback_admin') => void;
   onBackToMobileApp?: () => void;
 }
 
@@ -194,6 +194,21 @@ export function FeedbackPortal({
 
       const data = await res.json();
       if (data.valid && data.pinData) {
+        // 👑 If this is a Manager PIN (0000 - 5999), route to Manager Dashboard
+        if (data.scope === 'manager_feedback') {
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('ashley_manager_auth_pin', pinToTest);
+          }
+          triggerHaptic('success');
+          playAudioChime(true);
+          if (onSwitchPortal) {
+            onSwitchPortal('feedback_admin');
+          } else if (typeof window !== 'undefined') {
+            window.location.href = `/feedback/admin?pin=${pinToTest}`;
+          }
+          return;
+        }
+
         setVerifiedPinData(data.pinData);
         if (data.pinData.targetName) {
           setRespondentName(data.pinData.targetName);

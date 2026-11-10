@@ -42,7 +42,10 @@ import {
 import { 
   FeedbackPin, 
   FeedbackSubmission, 
-  TARGET_SALES_CASHIER_STAFF 
+  TARGET_SALES_CASHIER_STAFF,
+  PinScope,
+  generatePinForScope,
+  determinePinScope
 } from '@/lib/feedback/feedback-service';
 import { OfficialPrintHeader, OfficialPrintSignatures } from '@/components/reports/OfficialPrintHeader';
 import * as XLSX from 'xlsx';
@@ -102,6 +105,11 @@ export function AdminFeedbackDashboard() {
   const [batchCreating, setBatchCreating] = useState<boolean>(false);
   const [batchCreatedPins, setBatchCreatedPins] = useState<FeedbackPin[]>([]);
 
+  // 🎯 PIN Scope filtering & creation states
+  const [selectedScopeFilter, setSelectedScopeFilter] = useState<'all' | 'manager_feedback' | 'staff_feedback' | 'warehouse'>('all');
+  const [newPinScope, setNewPinScope] = useState<PinScope>('staff_feedback');
+  const [batchScope, setBatchScope] = useState<PinScope>('staff_feedback');
+
   // Copy notification state
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
@@ -152,6 +160,7 @@ export function AdminFeedbackDashboard() {
         body: JSON.stringify({
           action: 'create_pin',
           customPin: newCustomPin,
+          scope: newPinScope,
           targetPhone: newTargetPhone,
           targetName: newTargetName,
           isSingleUse,
@@ -185,7 +194,8 @@ export function AdminFeedbackDashboard() {
         body: JSON.stringify({
           action: 'batch_pins',
           count: batchCount,
-          isSingleUse: true,
+          scope: batchScope,
+          isSingleUse: batchScope === 'staff_feedback',
         }),
       });
 
@@ -1516,15 +1526,121 @@ export function AdminFeedbackDashboard() {
       {/* 🔑 VIEW 3: PIN MANAGEMENT */}
       {/* ========================================================================= */}
       {activeTab === 'pins' && (
-        <div className="space-y-3">
+        <div className="space-y-4">
+          
+          {/* Top Scope Explanation Header Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Card 1: Manager Feedback (0000 - 5999) */}
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shrink-0">
+                👑
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-black text-amber-900">فیدباکی بەڕێوەبەر</h4>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 font-mono text-[10px] font-bold" dir="ltr">
+                    0000 - 5999
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1 leading-snug">
+                  کۆدی ٤ ژمارەیی تایبەت بۆ بەڕێوەبەر بۆ بینینی داشبۆرد، گراف و شیکاری ٨ کارمەندەکە و دەرهێنانی PDF.
+                </p>
+              </div>
+            </div>
+
+            {/* Card 2: Staff Feedback (6000 - 9999) */}
+            <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center font-black shrink-0">
+                👥
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-black text-rose-900">فیدباکی کارمەندان</h4>
+                  <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-800 font-mono text-[10px] font-bold" dir="ltr">
+                    6000 - 9999
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1 leading-snug">
+                  کۆدی ٤ ژمارەیی بۆ پڕکردنەوەی هەڵسەنگاندنی ڕۆژانەی کارمەندانی فرۆش و کاشێر لەلایەن کڕیاران و ستاف.
+                </p>
+              </div>
+            </div>
+
+            {/* Card 3: Warehouse (5 digits) */}
+            <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black shrink-0">
+                📦
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-black text-blue-900">بەشی کۆگا و جەرد</h4>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-800 font-mono text-[10px] font-bold" dir="ltr">
+                    ٥ ژمارە (10000 - 99999)
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1 leading-snug">
+                  کۆدی نهێنی ٥ ژمارەیی تایبەت بە کارمەندانی کۆگا بۆ بار داگرتن بە کامێرا و تۆمارکردنی جەرد لە Google Sheets.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Bar & Scope Filter Pills */}
           <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-black text-slate-900">
-                بەڕێوەبردنی کۆدەکانی PIN بۆ چوونەژوورەوەی فیدباک
-              </h3>
-              <p className="text-xs text-slate-500 font-medium">
-                دەتوانیت PINی چوار ژمارەیی دروست بکەیت و لینکی ڕاستەوخۆ بنێریت بۆ هەر کەسێک کە پێت باشە فیدباک پڕبکاتەوە.
-              </p>
+            <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setSelectedScopeFilter('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                  selectedScopeFilter === 'all'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                هەمووی ({Object.keys(pins).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedScopeFilter('manager_feedback')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  selectedScopeFilter === 'manager_feedback'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-amber-700 hover:text-amber-900'
+                }`}
+              >
+                <span>👑 بەڕێوەبەر</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-white/40">
+                  {Object.values(pins).filter(p => (p.scope || determinePinScope(p.pin)) === 'manager_feedback').length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedScopeFilter('staff_feedback')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  selectedScopeFilter === 'staff_feedback'
+                    ? 'bg-rose-500 text-white shadow-xs'
+                    : 'text-rose-700 hover:text-rose-900'
+                }`}
+              >
+                <span>👥 کارمەندان</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-white/40">
+                  {Object.values(pins).filter(p => (p.scope || determinePinScope(p.pin)) === 'staff_feedback').length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedScopeFilter('warehouse')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  selectedScopeFilter === 'warehouse'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-blue-700 hover:text-blue-900'
+                }`}
+              >
+                <span>📦 کۆگا (٥ ژمارە)</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-white/40">
+                  {Object.values(pins).filter(p => (p.scope || determinePinScope(p.pin)) === 'warehouse').length}
+                </span>
+              </button>
             </div>
 
             <div className="flex items-center gap-2">
@@ -1534,10 +1650,10 @@ export function AdminFeedbackDashboard() {
                   setCreatePinResult(null);
                   setShowCreatePinModal(true);
                 }}
-                className="h-9 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                className="h-9 px-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-xs transition-all"
               >
                 <Plus className="w-4 h-4" />
-                <span>PINی نوێ</span>
+                <span>دروستکردنی PIN</span>
               </button>
 
               <button
@@ -1546,7 +1662,7 @@ export function AdminFeedbackDashboard() {
                   setBatchCreatedPins([]);
                   setShowBatchModal(true);
                 }}
-                className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                className="h-9 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
               >
                 <KeyRound className="w-3.5 h-3.5" />
                 <span>دروستکردنی بەکۆمەڵ</span>
@@ -1571,6 +1687,7 @@ export function AdminFeedbackDashboard() {
                   <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-black">
                     <tr>
                       <th className="p-3.5">کۆدی PIN</th>
+                      <th className="p-3.5">بەش و دەسەڵات</th>
                       <th className="p-3.5">بۆ کێیە / مۆبایل</th>
                       <th className="p-3.5">جۆری بەکارهێنان</th>
                       <th className="p-3.5">دۆخ</th>
@@ -1581,109 +1698,144 @@ export function AdminFeedbackDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-semibold">
-                    {Object.values(pins).map((p) => {
-                      const directUrl = typeof window !== 'undefined'
-                        ? `${window.location.origin}/feedback?pin=${p.pin}`
-                        : `https://ashley-staff.vercel.app/feedback?pin=${p.pin}`;
+                    {Object.values(pins)
+                      .filter((p) => {
+                        const scope = p.scope || determinePinScope(p.pin) || 'staff_feedback';
+                        if (selectedScopeFilter === 'all') return true;
+                        return scope === selectedScopeFilter;
+                      })
+                      .map((p) => {
+                        const scope = p.scope || determinePinScope(p.pin) || 'staff_feedback';
+                        let directUrl = '';
+                        if (typeof window !== 'undefined') {
+                          if (scope === 'manager_feedback') {
+                            directUrl = `${window.location.origin}/feedback/admin?pin=${p.pin}`;
+                          } else if (scope === 'warehouse') {
+                            directUrl = `${window.location.origin}/?tab=warehouse&pin=${p.pin}`;
+                          } else {
+                            directUrl = `${window.location.origin}/feedback?pin=${p.pin}`;
+                          }
+                        }
 
-                      return (
-                        <tr key={p.pin} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="p-3.5">
-                            <span className="font-mono font-black text-sm px-3 py-1 rounded-xl bg-slate-900 text-amber-400 inline-block tracking-wider" dir="ltr">
-                              {p.pin}
-                            </span>
-                          </td>
+                        return (
+                          <tr key={p.pin} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="p-3.5">
+                              <span className="font-mono font-black text-sm px-3 py-1 rounded-xl bg-slate-900 text-amber-400 inline-block tracking-wider" dir="ltr">
+                                {p.pin}
+                              </span>
+                            </td>
 
-                          <td className="p-3.5">
-                            <div className="font-bold text-slate-900">
-                              {p.targetName || 'گشتی'}
-                            </div>
-                            {p.targetPhone && (
-                              <div className="text-[11px] font-mono text-slate-400" dir="ltr">
-                                {p.targetPhone}
+                            <td className="p-3.5">
+                              {scope === 'manager_feedback' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-800 border border-amber-500/30 font-bold text-[10.5px]">
+                                  <span>👑 فیدباکی بەڕێوەبەر</span>
+                                  <span className="font-mono text-[9px]">(0000-5999)</span>
+                                </span>
+                              )}
+                              {scope === 'staff_feedback' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-800 border border-rose-500/30 font-bold text-[10.5px]">
+                                  <span>👥 فیدباکی کارمەندان</span>
+                                  <span className="font-mono text-[9px]">(6000-9999)</span>
+                                </span>
+                              )}
+                              {scope === 'warehouse' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-800 border border-blue-500/30 font-bold text-[10.5px]">
+                                  <span>📦 بەشی کۆگا</span>
+                                  <span className="font-mono text-[9px]">(٥ ژمارە)</span>
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="p-3.5">
+                              <div className="font-bold text-slate-900">
+                                {p.targetName || (scope === 'manager_feedback' ? 'بەڕێوەبەری پێشانگا' : scope === 'warehouse' ? 'ستافی کۆگا' : 'کڕیار / گشتی')}
                               </div>
-                            )}
-                          </td>
+                              {p.targetPhone && (
+                                <div className="text-[11px] font-mono text-slate-400" dir="ltr">
+                                  {p.targetPhone}
+                                </div>
+                              )}
+                            </td>
 
-                          <td className="p-3.5">
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
-                              {p.isSingleUse ? 'یەکجار بەکارهێنان' : 'فرە بەکارهێنان'}
-                            </span>
-                          </td>
-
-                          <td className="p-3.5">
-                            {p.isUsed ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                                <span>پڕکراوەتەوە</span>
+                            <td className="p-3.5">
+                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
+                                {p.isSingleUse ? 'یەکجار بەکارهێنان' : 'هەمیشەیی / فرەجار'}
                               </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-bold">
-                                <Clock className="w-3.5 h-3.5 text-amber-500" />
-                                <span>چالاکە و چاوەڕوانە</span>
-                              </span>
-                            )}
-                          </td>
+                            </td>
 
-                          <td className="p-3.5 font-mono text-[11px] text-slate-500" dir="ltr">
-                            {p.createdAt ? p.createdAt.slice(0, 10) : '--'}
-                          </td>
+                            <td className="p-3.5">
+                              {p.isUsed ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                                  <span>بەکارهێنراوە</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-bold">
+                                  <Clock className="w-3.5 h-3.5 text-amber-500" />
+                                  <span>چالاکە و ئامادەیە</span>
+                                </span>
+                              )}
+                            </td>
 
-                          <td className="p-3.5 font-mono text-[11px] text-slate-500" dir="ltr">
-                            {p.usedAt ? p.usedAt.replace('T', ' ').slice(0, 16) : '--'}
-                          </td>
+                            <td className="p-3.5 font-mono text-[11px] text-slate-500" dir="ltr">
+                              {p.createdAt ? p.createdAt.slice(0, 10) : '--'}
+                            </td>
 
-                          <td className="p-3.5 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => handleCopy(p.pin, `PIN (${p.pin})`)}
-                                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold flex items-center gap-1 cursor-pointer active:scale-95"
-                                title="کۆپیکردنی PIN"
-                              >
-                                <Copy className="w-3 h-3" />
-                                <span>کۆد</span>
-                              </button>
+                            <td className="p-3.5 font-mono text-[11px] text-slate-500" dir="ltr">
+                              {p.usedAt ? p.usedAt.replace('T', ' ').slice(0, 16) : '--'}
+                            </td>
 
-                              <button
-                                type="button"
-                                onClick={() => handleCopy(directUrl, `لینکی فیدباک`)}
-                                className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center gap-1 cursor-pointer active:scale-95"
-                                title="کۆپیکردنی لینکی فیدباک"
-                              >
-                                <Share2 className="w-3 h-3" />
-                                <span>لینک</span>
-                              </button>
-                            </div>
-                          </td>
+                            <td className="p-3.5 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(p.pin, `PIN (${p.pin})`)}
+                                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold flex items-center gap-1 cursor-pointer active:scale-95"
+                                  title="کۆپیکردنی PIN"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                  <span>کۆد</span>
+                                </button>
 
-                          <td className="p-3.5 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              {/* Reset for Testing */}
-                              <button
-                                type="button"
-                                onClick={() => handleResetPin(p.pin)}
-                                className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/80 text-[11px] font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
-                                title="پاککردنەوەی داتای تێستی ئەم کۆدە و چالاککردنەوەی بۆ بەکارهێنانی دووبارە"
-                              >
-                                <RotateCcw className="w-3 h-3" />
-                                <span>ڕیسێت بۆ تێست</span>
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(directUrl, `لینکی چوونەژوورەوە`)}
+                                  className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center gap-1 cursor-pointer active:scale-95"
+                                  title="کۆپیکردنی لینکی ڕاستەوخۆ"
+                                >
+                                  <Share2 className="w-3 h-3" />
+                                  <span>لینک</span>
+                                </button>
+                              </div>
+                            </td>
 
-                              {/* Delete PIN */}
-                              <button
-                                type="button"
-                                onClick={() => handleDeletePin(p.pin)}
-                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60 cursor-pointer transition-all active:scale-95"
-                                title="سڕینەوەی ئەم PINە و گشت داتاکانی"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            <td className="p-3.5 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                {/* Reset for Testing */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleResetPin(p.pin)}
+                                  className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/80 text-[11px] font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
+                                  title="پاککردنەوەی داتای تێستی ئەم کۆدە و چالاککردنەوەی بۆ بەکارهێنانی دووبارە"
+                                >
+                                  <RotateCcw className="w-3 h-3" />
+                                  <span>ڕیسێت</span>
+                                </button>
+
+                                {/* Delete PIN */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePin(p.pin)}
+                                  className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60 cursor-pointer transition-all active:scale-95"
+                                  title="سڕینەوەی ئەم PINە"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -2361,24 +2513,24 @@ export function AdminFeedbackDashboard() {
       )}
 
       {/* ========================================================================= */}
-      {/* ➕ MODAL: CREATE NEW 4-DIGIT PIN */}
+      {/* ➕ MODAL: CREATE NEW PIN (BY SCOPE: MANAGER, STAFF, WAREHOUSE) */}
       {/* ========================================================================= */}
       {showCreatePinModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-black">
                   <KeyRound className="w-4 h-4 text-amber-500" />
                 </div>
                 <h3 className="text-sm font-black text-slate-900">
-                  دروستکردنی PINی نوێ (٤ ژمارەیی)
+                  دروستکردنی کۆدی نهێنی (PIN)
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowCreatePinModal(false)}
-                className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer"
+                className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-all"
               >
                 <X className="w-4 h-4 text-slate-500" />
               </button>
@@ -2390,9 +2542,9 @@ export function AdminFeedbackDashboard() {
                 <div className="flex items-center justify-between">
                   <span className="font-bold flex items-center gap-1.5 text-emerald-700">
                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    <span>کۆدی PIN دروستکرا!</span>
+                    <span>کۆدی PIN بە سەرکەوتوویی دروستکرا!</span>
                   </span>
-                  <span className="font-mono font-black text-lg bg-slate-900 text-amber-400 px-3 py-0.5 rounded-lg" dir="ltr">
+                  <span className="font-mono font-black text-lg bg-slate-900 text-amber-400 px-3 py-0.5 rounded-lg tracking-wider" dir="ltr">
                     {createPinResult.pin}
                   </span>
                 </div>
@@ -2403,13 +2555,18 @@ export function AdminFeedbackDashboard() {
                     onClick={() => handleCopy(createPinResult.pin, 'PIN')}
                     className="flex-1 py-1.5 rounded-lg bg-white border border-emerald-300 text-emerald-800 font-bold text-center text-[11px] cursor-pointer active:scale-95"
                   >
-                    کۆپیکردنی PIN
+                    کۆپیکردنی کۆد
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      const link = `${window.location.origin}/feedback?pin=${createPinResult.pin}`;
-                      handleCopy(link, 'لینکی ڕاستەوخۆ');
+                      let directLink = `${window.location.origin}/feedback?pin=${createPinResult.pin}`;
+                      if (createPinResult.scope === 'manager_feedback') {
+                        directLink = `${window.location.origin}/feedback/admin?pin=${createPinResult.pin}`;
+                      } else if (createPinResult.scope === 'warehouse') {
+                        directLink = `${window.location.origin}/?tab=warehouse&pin=${createPinResult.pin}`;
+                      }
+                      handleCopy(directLink, 'لینکی ڕاستەوخۆ');
                     }}
                     className="flex-1 py-1.5 rounded-lg bg-emerald-600 text-white font-bold text-center text-[11px] cursor-pointer active:scale-95 shadow-xs"
                   >
@@ -2419,56 +2576,152 @@ export function AdminFeedbackDashboard() {
               </div>
             )}
 
-            <form onSubmit={handleCreatePin} className="space-y-3.5 text-xs">
+            <form onSubmit={handleCreatePin} className="space-y-4 text-xs">
+              
+              {/* 1. Scope Selector */}
+              <div>
+                <label className="block text-slate-800 font-black mb-1.5">
+                  جۆری کۆدەکە هەڵبژێرە:
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewPinScope('manager_feedback');
+                      setNewCustomPin(generatePinForScope('manager_feedback'));
+                      setIsSingleUse(false);
+                    }}
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                      newPinScope === 'manager_feedback'
+                        ? 'bg-amber-500/15 border-amber-500 text-amber-950 font-black ring-2 ring-amber-400/40'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 font-bold'
+                    }`}
+                  >
+                    <div className="text-base mb-0.5">👑</div>
+                    <div className="text-[11px]">بەڕێوەبەر</div>
+                    <div className="text-[9.5px] font-mono text-amber-700" dir="ltr">0000 - 5999</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewPinScope('staff_feedback');
+                      setNewCustomPin(generatePinForScope('staff_feedback'));
+                      setIsSingleUse(true);
+                    }}
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                      newPinScope === 'staff_feedback'
+                        ? 'bg-rose-500/15 border-rose-500 text-rose-950 font-black ring-2 ring-rose-400/40'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 font-bold'
+                    }`}
+                  >
+                    <div className="text-base mb-0.5">👥</div>
+                    <div className="text-[11px]">کارمەندان</div>
+                    <div className="text-[9.5px] font-mono text-rose-700" dir="ltr">6000 - 9999</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewPinScope('warehouse');
+                      setNewCustomPin(generatePinForScope('warehouse'));
+                      setIsSingleUse(false);
+                    }}
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                      newPinScope === 'warehouse'
+                        ? 'bg-blue-500/15 border-blue-500 text-blue-950 font-black ring-2 ring-blue-400/40'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 font-bold'
+                    }`}
+                  >
+                    <div className="text-base mb-0.5">📦</div>
+                    <div className="text-[11px]">کۆگا</div>
+                    <div className="text-[9.5px] font-mono text-blue-700" dir="ltr">٥ ژمارە</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Scope Helper Box */}
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-center justify-between">
+                <span>
+                  {newPinScope === 'manager_feedback' && '👑 ڕێگەپێدراوە: ٤ ژمارە لە نێوان 0000 بۆ 5999 (فیدباکی بەڕێوەبەر)'}
+                  {newPinScope === 'staff_feedback' && '👥 ڕێگەپێدراوە: ٤ ژمارە لە نێوان 6000 بۆ 9999 (فیدباکی کارمەندان)'}
+                  {newPinScope === 'warehouse' && '📦 ڕێگەپێدراوە: ٥ ژمارە لە نێوان 10000 بۆ 99999 (بەشی کۆگا و بار داگرتن)'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setNewCustomPin(generatePinForScope(newPinScope))}
+                  className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-slate-400 text-slate-700 font-bold text-[10px] cursor-pointer"
+                  title="دروستکردنی ژمارەیەکی هەڕەمەکی گونجاو"
+                >
+                  🎲 کۆدی نوێ
+                </button>
+              </div>
+
+              {/* 2. PIN Input */}
               <div>
                 <label className="block text-slate-700 font-bold mb-1">
-                  کۆدی PIN (ئارەزوومەندانە - ئەگەر بەتاڵ بێت ٤ ژمارە بە ئۆتۆماتیک دروست دەبێت):
+                  کۆدی PIN ({newPinScope === 'warehouse' ? '٥ ژمارە' : '٤ ژمارە'}):
                 </label>
                 <input
                   type="text"
-                  maxLength={4}
+                  maxLength={newPinScope === 'warehouse' ? 5 : 4}
                   value={newCustomPin}
                   onChange={(e) => setNewCustomPin(e.target.value.replace(/\D/g, ''))}
-                  placeholder="بۆ نموونە: 4821 (بەتاڵی جێبێڵە بۆ خۆکار)"
-                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-mono font-bold outline-none focus:border-amber-500"
+                  placeholder={
+                    newPinScope === 'manager_feedback'
+                      ? 'بۆ نموونە: 2026 (لە نێوان 0000 بۆ 5999)'
+                      : newPinScope === 'staff_feedback'
+                      ? 'بۆ نموونە: 7540 (لە نێوان 6000 بۆ 9999)'
+                      : 'بۆ نموونە: 54321 (پێنج ژمارە)'
+                  }
+                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-mono font-bold outline-none focus:border-amber-500 bg-white"
                   dir="ltr"
                 />
               </div>
 
+              {/* 3. Target Name */}
               <div>
                 <label className="block text-slate-700 font-bold mb-1">
-                  ژمارەی مۆبایلی کارمەند / وەرگر:
-                </label>
-                <input
-                  type="text"
-                  value={newTargetPhone}
-                  onChange={(e) => setNewTargetPhone(e.target.value)}
-                  placeholder="بۆ نموونە: 0770 123 4567"
-                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-mono font-bold outline-none focus:border-amber-500"
-                  dir="ltr"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  ناوی کارمەند یان کەسی هەڵسەنگێنەر:
+                  بۆ کێیە یان مەبەستی کۆدەکە:
                 </label>
                 <input
                   type="text"
                   value={newTargetName}
                   onChange={(e) => setNewTargetName(e.target.value)}
-                  placeholder="بۆ نموونە: کڕیار یان کارمەند"
-                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-amber-500"
+                  placeholder={
+                    newPinScope === 'manager_feedback'
+                      ? 'بۆ نموونە: بەڕێوەبەری پێشانگا'
+                      : newPinScope === 'warehouse'
+                      ? 'بۆ نموونە: تیمی کۆگا و دابەزاندنی بار'
+                      : 'بۆ نموونە: کڕیار یان کارمەند'
+                  }
+                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-amber-500 bg-white"
                 />
               </div>
 
+              {/* 4. Target Phone */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  ژمارەی مۆبایل (ئارەزوومەندانە):
+                </label>
+                <input
+                  type="text"
+                  value={newTargetPhone}
+                  onChange={(e) => setNewTargetPhone(e.target.value)}
+                  placeholder="0770 123 4567"
+                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-mono font-bold outline-none focus:border-amber-500 bg-white"
+                  dir="ltr"
+                />
+              </div>
+
+              {/* 5. Single Use Toggle */}
               <div className="flex items-center gap-2 pt-1">
                 <input
                   type="checkbox"
                   id="singleUseCheck"
                   checked={isSingleUse}
                   onChange={(e) => setIsSingleUse(e.target.checked)}
-                  className="w-4 h-4 rounded text-amber-500 accent-amber-500"
+                  className="w-4 h-4 rounded text-amber-500 accent-amber-500 cursor-pointer"
                 />
                 <label htmlFor="singleUseCheck" className="text-slate-700 font-bold cursor-pointer">
                   تەنها بۆ یەکجار بەکارهێنان بێت (Single-Use)
@@ -2479,7 +2732,7 @@ export function AdminFeedbackDashboard() {
                 <button
                   type="submit"
                   disabled={creatingPin}
-                  className="flex-1 h-11 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-xs disabled:opacity-50"
+                  className="flex-1 h-11 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-xs disabled:opacity-50 transition-all"
                 >
                   {creatingPin ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                   <span>دروستکردنی PIN</span>
@@ -2488,7 +2741,7 @@ export function AdminFeedbackDashboard() {
                 <button
                   type="button"
                   onClick={() => setShowCreatePinModal(false)}
-                  className="px-4 h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs cursor-pointer"
+                  className="px-4 h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs cursor-pointer hover:bg-slate-200 transition-all"
                 >
                   داخستن
                 </button>
@@ -2499,10 +2752,10 @@ export function AdminFeedbackDashboard() {
       )}
 
       {/* ========================================================================= */}
-      {/* 📦 MODAL: CREATE BATCH PINS */}
+      {/* 📦 MODAL: CREATE BATCH PINS BY SCOPE */}
       {/* ========================================================================= */}
       {showBatchModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
               <div className="flex items-center gap-2">
@@ -2516,7 +2769,7 @@ export function AdminFeedbackDashboard() {
               <button
                 type="button"
                 onClick={() => setShowBatchModal(false)}
-                className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer"
+                className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-all"
               >
                 <X className="w-4 h-4 text-slate-500" />
               </button>
@@ -2529,18 +2782,32 @@ export function AdminFeedbackDashboard() {
                     ✅ {batchCreatedPins.length} کۆدی PIN بە سەرکەوتوویی دروستکران:
                   </span>
                   <div className="max-h-48 overflow-y-auto space-y-1 font-mono text-xs pt-1">
-                    {batchCreatedPins.map((p) => (
-                      <div key={p.pin} className="flex items-center justify-between p-1.5 rounded-lg bg-white border border-emerald-200">
-                        <span className="font-bold text-slate-900" dir="ltr">{p.pin}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(`${window.location.origin}/feedback?pin=${p.pin}`, `لینک (${p.pin})`)}
-                          className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
-                        >
-                          کۆپی لینک
-                        </button>
-                      </div>
-                    ))}
+                    {batchCreatedPins.map((p) => {
+                      let directUrl = `${window.location.origin}/feedback?pin=${p.pin}`;
+                      if (p.scope === 'manager_feedback') {
+                        directUrl = `${window.location.origin}/feedback/admin?pin=${p.pin}`;
+                      } else if (p.scope === 'warehouse') {
+                        directUrl = `${window.location.origin}/?tab=warehouse&pin=${p.pin}`;
+                      }
+
+                      return (
+                        <div key={p.pin} className="flex items-center justify-between p-2 rounded-xl bg-white border border-emerald-200">
+                          <span className="font-bold text-slate-900 px-2 py-0.5 rounded-md bg-slate-100 font-mono" dir="ltr">
+                            {p.pin}
+                          </span>
+                          <span className="text-[10px] text-slate-500">
+                            {p.scope === 'manager_feedback' ? '👑 بەڕێوەبەر' : p.scope === 'warehouse' ? '📦 کۆگا' : '👥 کارمەندان'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(directUrl, `لینک (${p.pin})`)}
+                            className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
+                          >
+                            کۆپی لینک
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -2548,7 +2815,7 @@ export function AdminFeedbackDashboard() {
                   <button
                     type="button"
                     onClick={() => {
-                      const allText = batchCreatedPins.map(p => `${p.pin}: ${window.location.origin}/feedback?pin=${p.pin}`).join('\n');
+                      const allText = batchCreatedPins.map(p => `${p.pin}`).join('\n');
                       handleCopy(allText, 'سەرجەم PINەکان');
                     }}
                     className="flex-1 h-10 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
@@ -2560,7 +2827,7 @@ export function AdminFeedbackDashboard() {
                   <button
                     type="button"
                     onClick={() => setShowBatchModal(false)}
-                    className="px-4 h-10 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs cursor-pointer"
+                    className="px-4 h-10 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs cursor-pointer hover:bg-slate-200"
                   >
                     تەواو
                   </button>
@@ -2568,25 +2835,41 @@ export function AdminFeedbackDashboard() {
               </div>
             ) : (
               <div className="space-y-4 text-xs">
-                <p className="text-slate-600 leading-relaxed font-semibold">
-                  ژمارەی ئەو PINانە دیاریبکە کە دەتەوێت دروستبکرێن بە یەک کلیک:
-                </p>
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    جۆری کۆدەکان دیاریبکە:
+                  </label>
+                  <select
+                    value={batchScope}
+                    onChange={(e) => setBatchScope(e.target.value as PinScope)}
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-amber-500 bg-white"
+                  >
+                    <option value="manager_feedback">👑 فیدباکی بەڕێوەبەر (0000 - 5999)</option>
+                    <option value="staff_feedback">👥 فیدباکی کارمەندان (6000 - 9999)</option>
+                    <option value="warehouse">📦 بەشی کۆگا و بار داگرتن (٥ ژمارەیی 10000 - 99999)</option>
+                  </select>
+                </div>
 
-                <div className="flex items-center gap-2">
-                  {[5, 10, 15, 20].map((num) => (
-                    <button
-                      key={num}
-                      type="button"
-                      onClick={() => setBatchCount(num)}
-                      className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-                        batchCount === num
-                          ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
-                    >
-                      {num} کۆد
-                    </button>
-                  ))}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1.5">
+                    ژمارەی ئەو PINانەی دەتەوێت دروستبکرێن:
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {[5, 10, 15, 20].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setBatchCount(num)}
+                        className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                          batchCount === num
+                            ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        {num} دانە
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
@@ -2594,7 +2877,7 @@ export function AdminFeedbackDashboard() {
                     type="button"
                     disabled={batchCreating}
                     onClick={handleCreateBatch}
-                    className="flex-1 h-11 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-xs disabled:opacity-50"
+                    className="flex-1 h-11 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-xs disabled:opacity-50 transition-all"
                   >
                     {batchCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                     <span>دروستکردنی {batchCount} PIN</span>
@@ -2603,7 +2886,7 @@ export function AdminFeedbackDashboard() {
                   <button
                     type="button"
                     onClick={() => setShowBatchModal(false)}
-                    className="px-4 h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs cursor-pointer"
+                    className="px-4 h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs cursor-pointer hover:bg-slate-200"
                   >
                     داخستن
                   </button>

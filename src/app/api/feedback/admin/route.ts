@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
     if (action === 'create_pin') {
       const result = await createFeedbackPin({
         customPin: body.customPin,
+        scope: body.scope,
         targetPhone: body.targetPhone,
         targetName: body.targetName,
         isSingleUse: body.isSingleUse,
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
     if (action === 'batch_pins') {
       const count = Number(body.count || 5);
       const result = await createBatchFeedbackPins(count, {
+        scope: body.scope,
         isSingleUse: body.isSingleUse,
         notes: body.notes,
         createdBy: body.createdBy || 'Admin',

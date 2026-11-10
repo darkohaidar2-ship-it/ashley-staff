@@ -2,8 +2,11 @@ import { supabase } from '@/lib/supabase/client';
 import { logger } from '@/lib/logger';
 import { getBaghdadNow } from '@/lib/telegram/telegram-service';
 
+export type PinScope = 'manager_feedback' | 'staff_feedback' | 'warehouse';
+
 export interface FeedbackPin {
-  pin: string; // 4 digits, e.g. "4920"
+  pin: string; // 4 digits for feedback (0000-5999 for manager, 6000-9999 for staff) or 5 digits for warehouse (10000-99999)
+  scope: PinScope; // 'manager_feedback' | 'staff_feedback' | 'warehouse'
   targetPhone?: string; // e.g. "0770 123 4567"
   targetName?: string; // e.g. "ناوی بەشداربوو / لق"
   isSingleUse: boolean;
@@ -129,7 +132,82 @@ const PINS_STORE_ID = 'ashley_feedback_pins';
 const SUBMISSIONS_STORE_ID = 'ashley_feedback_submissions';
 
 /**
- * 🔒 Fetch all feedback PINs from Supabase
+ * 🎯 Determine PIN Scope according to system rules:
+ * - Manager Feedback: 4 digits, range 0000 - 5999
+ * - Staff Feedback: 4 digits, range 6000 - 9999
+ * - Warehouse: 5 digits, range 10000 - 99999
+ */
+export function determinePinScope(pin: string): PinScope | null {
+  const clean = (pin || '').trim();
+  if (/^\d{5}$/.test(clean)) {
+    return 'warehouse';
+  }
+  if (/^\d{4}$/.test(clean)) {
+    const val = parseInt(clean, 10);
+    if (val >= 0 && val <= 5999) return 'manager_feedback';
+    if (val >= 6000 && val <= 9999) return 'staff_feedback';
+  }
+  return null;
+}
+
+/**
+ * 🎲 Generate a valid random PIN within the exact scope range
+ */
+export function generatePinForScope(scope: PinScope): string {
+  if (scope === 'manager_feedback') {
+    // 0000 to 5999
+    const val = Math.floor(Math.random() * 6000);
+    return String(val).padStart(4, '0');
+  }
+  if (scope === 'staff_feedback') {
+    // 6000 to 9999
+    const val = Math.floor(6000 + Math.random() * 4000);
+    return String(val);
+  }
+  // Warehouse: 5 digits (10000 to 99999)
+  const val = Math.floor(10000 + Math.random() * 90000);
+  return String(val);
+}
+
+/**
+ * 🔒 System Default Seed PINs
+ * Guarantees that the system is never locked out on initial setup
+ */
+export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
+  '2026': {
+    pin: '2026',
+    scope: 'manager_feedback',
+    targetName: 'کۆدی سەرەکی بەڕێوەبەر',
+    isSingleUse: false,
+    isUsed: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    createdBy: 'سیستەمی ئاشڵی',
+    notes: 'کۆدی فیدباکی بەڕێوەبەر (0000 - 5999)',
+  },
+  '9595': {
+    pin: '9595',
+    scope: 'staff_feedback',
+    targetName: 'فیدباکی گشتی کارمەندان',
+    isSingleUse: false,
+    isUsed: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    createdBy: 'سیستەمی ئاشڵی',
+    notes: 'کۆدی فیدباکی کارمەندان (6000 - 9999)',
+  },
+  '54321': {
+    pin: '54321',
+    scope: 'warehouse',
+    targetName: 'تیمی کۆگا و جەرد',
+    isSingleUse: false,
+    isUsed: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    createdBy: 'سیستەمی ئاشڵی',
+    notes: 'کۆدی ٥ ژمارەیی بەشی کۆگا و بار داگرتن',
+  },
+};
+
+/**
+ * 🔒 Fetch all feedback PINs from Supabase with Scope normalization & default seed fallback
  */
 export async function getAllFeedbackPins(): Promise<Record<string, FeedbackPin>> {
   try {
@@ -139,16 +217,42 @@ export async function getAllFeedbackPins(): Promise<Record<string, FeedbackPin>>
       .eq('id', PINS_STORE_ID)
       .maybeSingle();
 
-    if (error) {
-      logger.error('[FeedbackService] Error fetching pins:', error);
-      return {};
+    let pinsMap: Record<string, FeedbackPin> = {};
+
+    if (!error && data?.qr_code) {
+      try {
+        pinsMap = JSON.parse(data.qr_code);
+      } catch {
+        pinsMap = {};
+      }
     }
 
-    if (!data?.qr_code) return {};
-    return JSON.parse(data.qr_code);
+    // Merge system defaults if missing
+    let hasChanges = false;
+    for (const [key, defaultPin] of Object.entries(DEFAULT_SYSTEM_PINS)) {
+      if (!pinsMap[key]) {
+        pinsMap[key] = defaultPin;
+        hasChanges = true;
+      }
+    }
+
+    // Ensure all stored pins have a valid scope
+    for (const [key, pinObj] of Object.entries(pinsMap)) {
+      if (!pinObj.scope) {
+        pinObj.scope = determinePinScope(key) || 'staff_feedback';
+        hasChanges = true;
+      }
+    }
+
+    // If changes occurred, save silently in background
+    if (hasChanges && Object.keys(pinsMap).length > 0) {
+      saveFeedbackPins(pinsMap).catch(() => {});
+    }
+
+    return pinsMap;
   } catch (err) {
     logger.error('[FeedbackService] Exception reading pins:', err);
-    return {};
+    return { ...DEFAULT_SYSTEM_PINS };
   }
 }
 
@@ -227,18 +331,11 @@ export async function saveFeedbackSubmissions(submissions: FeedbackSubmission[])
 }
 
 /**
- * 🎲 Generate a cryptographically secure random 4-digit PIN
- */
-export function generateRandom4DigitPin(): string {
-  const num = Math.floor(1000 + Math.random() * 9000);
-  return num.toString();
-}
-
-/**
- * 🔑 Create a new Feedback PIN
+ * 🔑 Create a new PIN with strict scope validation
  */
 export async function createFeedbackPin(params: {
   customPin?: string;
+  scope?: PinScope;
   targetPhone?: string;
   targetName?: string;
   isSingleUse?: boolean;
@@ -247,28 +344,50 @@ export async function createFeedbackPin(params: {
 }): Promise<{ success: boolean; pin?: FeedbackPin; error?: string }> {
   try {
     const currentPins = await getAllFeedbackPins();
-
+    let requestedScope = params.scope;
     let pinToUse = params.customPin ? params.customPin.trim() : '';
-    if (!pinToUse) {
-      let attempts = 0;
-      do {
-        pinToUse = generateRandom4DigitPin();
-        attempts++;
-      } while (currentPins[pinToUse] && attempts < 100);
-    } else {
-      if (!/^\d{4}$/.test(pinToUse)) {
-        return { success: false, error: 'پێویستە کۆدەکە بە تەواوی ٤ ژمارە بێت.' };
+
+    if (pinToUse) {
+      const detectedScope = determinePinScope(pinToUse);
+      if (!detectedScope) {
+        return { 
+          success: false, 
+          error: 'کۆدی PIN نادروستە. دەبێت ٤ ژمارە بێت (0000-5999 بۆ بەڕێوەبەر، 6000-9999 بۆ کارمەندان) یان ٥ ژمارە بێت بۆ کۆگا.' 
+        };
       }
+
+      if (requestedScope && requestedScope !== detectedScope) {
+        if (requestedScope === 'manager_feedback') {
+          return { success: false, error: 'پێویستە کۆدی بەڕێوەبەر لە نێوان 0000 بۆ 5999 بێت.' };
+        }
+        if (requestedScope === 'staff_feedback') {
+          return { success: false, error: 'پێویستە کۆدی فیدباکی کارمەندان لە نێوان 6000 بۆ 9999 بێت.' };
+        }
+        if (requestedScope === 'warehouse') {
+          return { success: false, error: 'پێویستە کۆدی کۆگا بە تەواوی ٥ ژمارە بێت (10000 تا 99999).' };
+        }
+      }
+
+      requestedScope = detectedScope;
+
       if (currentPins[pinToUse]) {
         return { success: false, error: 'ئەم کۆدە (PIN) پێشتر تۆمارکراوە، تکایە یەکێکی تر هەڵبژێرە.' };
       }
+    } else {
+      requestedScope = requestedScope || 'staff_feedback';
+      let attempts = 0;
+      do {
+        pinToUse = generatePinForScope(requestedScope);
+        attempts++;
+      } while (currentPins[pinToUse] && attempts < 200);
     }
 
     const newPinRecord: FeedbackPin = {
       pin: pinToUse,
+      scope: requestedScope,
       targetPhone: params.targetPhone?.trim() || undefined,
       targetName: params.targetName?.trim() || undefined,
-      isSingleUse: params.isSingleUse ?? true,
+      isSingleUse: params.isSingleUse ?? (requestedScope === 'staff_feedback'),
       isUsed: false,
       createdAt: new Date().toISOString(),
       createdBy: params.createdBy || 'Admin',
@@ -289,16 +408,19 @@ export async function createFeedbackPin(params: {
 }
 
 /**
- * 📦 Create Batch Feedback PINs
+ * 📦 Create Batch PINs by Scope
  */
 export async function createBatchFeedbackPins(
   count: number = 5, 
-  optionsOrSingleUse: boolean | { isSingleUse?: boolean; notes?: string; createdBy?: string } = true
+  optionsOrSingleUse: boolean | { scope?: PinScope; isSingleUse?: boolean; notes?: string; createdBy?: string } = true
 ): Promise<{ success: boolean; created: FeedbackPin[]; error?: string }> {
   try {
     const isSingleUse = typeof optionsOrSingleUse === 'boolean' 
       ? optionsOrSingleUse 
       : (optionsOrSingleUse.isSingleUse ?? true);
+    const scope: PinScope = typeof optionsOrSingleUse === 'object' && optionsOrSingleUse.scope 
+      ? optionsOrSingleUse.scope 
+      : 'staff_feedback';
     const createdBy = typeof optionsOrSingleUse === 'object' 
       ? (optionsOrSingleUse.createdBy || 'Admin Batch') 
       : 'Admin Batch';
@@ -313,12 +435,13 @@ export async function createBatchFeedbackPins(
       let pinToUse = '';
       let attempts = 0;
       do {
-        pinToUse = generateRandom4DigitPin();
+        pinToUse = generatePinForScope(scope);
         attempts++;
-      } while ((currentPins[pinToUse] || created.some(p => p.pin === pinToUse)) && attempts < 100);
+      } while ((currentPins[pinToUse] || created.some(p => p.pin === pinToUse)) && attempts < 200);
 
       const record: FeedbackPin = {
         pin: pinToUse,
+        scope,
         isSingleUse,
         isUsed: false,
         createdAt: new Date().toISOString(),
@@ -342,30 +465,73 @@ export async function createBatchFeedbackPins(
 }
 
 /**
- * 🔍 Verify a Feedback PIN
+ * 🔍 Verify a PIN across all Scopes (Manager, Staff, Warehouse)
  */
-export async function verifyFeedbackPin(pin: string): Promise<{ valid: boolean; pinData?: FeedbackPin; error?: string }> {
+export async function verifyFeedbackPin(
+  pin: string, 
+  expectedScope?: PinScope
+): Promise<{ valid: boolean; scope?: PinScope; pinData?: FeedbackPin; error?: string }> {
   const cleanPin = pin ? pin.trim() : '';
-  if (!cleanPin || !/^\d{4}$/.test(cleanPin)) {
-    return { valid: false, error: 'تکایە کۆدی ٤ ژمارەیی بە دروستی بنووسە.' };
+  if (!cleanPin) {
+    return { valid: false, error: 'تکایە کۆدی PIN بنووسە.' };
+  }
+
+  const detectedScope = determinePinScope(cleanPin);
+  if (!detectedScope) {
+    return { 
+      valid: false, 
+      error: 'کۆدی PIN نادروستە. دەبێت ٤ ژمارە بێت (0000-5999 بۆ بەڕێوەبەر، 6000-9999 بۆ کارمەندان) یان ٥ ژمارە بێت بۆ کۆگا.' 
+    };
   }
 
   const currentPins = await getAllFeedbackPins();
-  const record = currentPins[cleanPin];
+  let record = currentPins[cleanPin];
+
+  // Check fallback system pins if record missing
+  if (!record && DEFAULT_SYSTEM_PINS[cleanPin]) {
+    record = DEFAULT_SYSTEM_PINS[cleanPin];
+  }
 
   if (!record) {
     return { valid: false, error: 'کۆدی PIN هەڵەیە یان ڕێگەی پێنەدراوە.' };
   }
 
+  // Ensure record has scope
+  const actualScope = record.scope || detectedScope;
+
+  // Validate expected scope
+  if (expectedScope && actualScope !== expectedScope) {
+    if (expectedScope === 'manager_feedback') {
+      return { 
+        valid: false, 
+        error: 'ئەم کۆدە بۆ بەڕێوەبەر نییە (پێویستە کۆدی ٤ ژمارەیی بێت لە نێوان 0000 بۆ 5999).' 
+      };
+    }
+    if (expectedScope === 'staff_feedback') {
+      return { 
+        valid: false, 
+        error: 'ئەم کۆدە بۆ فیدباکی کارمەندان نییە (پێویستە کۆدی ٤ ژمارەیی بێت لە نێوان 6000 بۆ 9999).' 
+      };
+    }
+    if (expectedScope === 'warehouse') {
+      return { 
+        valid: false, 
+        error: 'ئەم کۆدە بۆ بەشی کۆگا نییە (پێویستە کۆدێکی ٥ ژمارەیی بێت لە نێوان 10000 بۆ 99999).' 
+      };
+    }
+  }
+
+  // Check single-use
   if (record.isSingleUse && record.isUsed) {
     return {
       valid: false,
-      error: 'ئەم کۆدە پێشتر بەکارهێنراوە بۆ ناردنی فیدباک. ناتوانرێت دووبارە بەکاربهێنرێتەوە.',
+      error: 'ئەم کۆدە پێشتر بەکارهێنراوە و بەسەرچووە. ناتوانرێت دووبارە بەکاربهێنرێتەوە.',
       pinData: record,
+      scope: actualScope,
     };
   }
 
-  return { valid: true, pinData: record };
+  return { valid: true, scope: actualScope, pinData: { ...record, scope: actualScope } };
 }
 
 /**

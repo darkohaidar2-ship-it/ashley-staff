@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AshleyMobileApp from '@/components/mobile-app/AshleyMobileApp';
 import { FeedbackPortal } from '@/components/feedback/FeedbackPortal';
@@ -10,27 +10,51 @@ import {
   Loader2, 
   ArrowRight, 
   Boxes, 
-  MapPin, 
   MessageSquareHeart, 
-  Clock, 
   Building2, 
-  Sparkles, 
   Fingerprint, 
   ShieldCheck, 
-  BarChart3, 
   Home, 
   ChevronLeft, 
-  Truck, 
-  ClipboardCheck, 
-  Users, 
-  Award, 
-  Star,
   Lock,
-  ExternalLink
+  Unlock,
+  KeyRound,
+  Delete,
+  X,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { triggerHaptic } from '@/lib/offline-sync-manager';
+import { PinScope } from '@/lib/feedback/feedback-service';
 
 export type ActivePortal = 'home' | 'attendance' | 'feedback_hub' | 'feedback' | 'feedback_admin' | 'warehouse';
+
+function playAudioChime(success: boolean) {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    if (success) {
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } else {
+      osc.frequency.setValueAtTime(220, ctx.currentTime);
+      osc.frequency.setValueAtTime(160, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.3);
+    }
+  } catch {}
+}
 
 function RootPageContent() {
   const searchParams = useSearchParams();
@@ -53,9 +77,37 @@ function RootPageContent() {
     if (tabParam === 'attendance' || tabParam === 'checkin' || tabParam === 'punch') {
       return 'attendance';
     }
-    // Default is the 3-Circle Mobile Home Screen
     return 'home';
   });
+
+  // 🔐 Authentication States for PIN Protected Sections
+  const [managerAuthed, setManagerAuthed] = useState<boolean>(false);
+  const [warehouseAuthed, setWarehouseAuthed] = useState<boolean>(false);
+
+  // 🔑 PIN Gate Modal State
+  const [pinModalScope, setPinModalScope] = useState<PinScope | null>(null);
+  const [enteredPin, setEnteredPin] = useState<string>('');
+  const [pinVerifying, setPinVerifying] = useState<boolean>(false);
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [shakeDots, setShakeDots] = useState<boolean>(false);
+
+  // Check stored sessions on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedManager = sessionStorage.getItem('ashley_manager_auth_pin');
+      if (savedManager && /^\d{4}$/.test(savedManager)) {
+        const val = parseInt(savedManager, 10);
+        if (val >= 0 && val <= 5999) {
+          setManagerAuthed(true);
+        }
+      }
+
+      const savedWarehouse = sessionStorage.getItem('ashley_warehouse_auth_pin');
+      if (savedWarehouse && /^\d{5}$/.test(savedWarehouse)) {
+        setWarehouseAuthed(true);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (tabParam === 'feedback_admin' || tabParam === 'manager_feedback') {
@@ -85,6 +137,162 @@ function RootPageContent() {
       }
       window.history.replaceState({}, '', url.toString());
     }
+  };
+
+  // 🔑 Open PIN Gate Modal for specific scope
+  const openPinModal = (scope: PinScope) => {
+    triggerHaptic('medium');
+    setPinModalScope(scope);
+    setEnteredPin('');
+    setPinError(null);
+    setShakeDots(false);
+  };
+
+  const closePinModal = () => {
+    setPinModalScope(null);
+    setEnteredPin('');
+    setPinError(null);
+    setShakeDots(false);
+  };
+
+  // 🔓 Open Warehouse with 5-digit PIN check
+  const handleOpenWarehouse = () => {
+    if (warehouseAuthed) {
+      handleSwitchPortal('warehouse');
+      return;
+    }
+    openPinModal('warehouse');
+  };
+
+  // 🔓 Open Manager Feedback with 0000-5999 PIN check
+  const handleOpenManagerFeedback = () => {
+    if (managerAuthed) {
+      handleSwitchPortal('feedback_admin');
+      return;
+    }
+    openPinModal('manager_feedback');
+  };
+
+  // 🔓 Open Staff Feedback with 6000-9999 PIN check
+  const handleOpenStaffFeedback = () => {
+    openPinModal('staff_feedback');
+  };
+
+  // 🔒 Lock / Logout Handlers
+  const handleLockWarehouse = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('ashley_warehouse_auth_pin');
+    }
+    setWarehouseAuthed(false);
+    handleSwitchPortal('home');
+  };
+
+  const handleLockManager = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('ashley_manager_auth_pin');
+    }
+    setManagerAuthed(false);
+    handleSwitchPortal('feedback_hub');
+  };
+
+  // 🔢 Verify PIN through API
+  const submitPinCandidate = useCallback(async (pinToTest: string, scopeToTest: PinScope) => {
+    const requiredLen = scopeToTest === 'warehouse' ? 5 : 4;
+    if (pinToTest.length !== requiredLen) {
+      setPinError(`تکایە بە تەواوی ${requiredLen} ژمارە بنووسە.`);
+      triggerHaptic('error');
+      playAudioChime(false);
+      return;
+    }
+
+    setPinVerifying(true);
+    setPinError(null);
+
+    try {
+      const res = await fetch('/api/feedback/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinToTest, expectedScope: scopeToTest }),
+      });
+
+      const data = await res.json();
+      if (data.valid && data.pinData) {
+        triggerHaptic('success');
+        playAudioChime(true);
+        closePinModal();
+
+        if (scopeToTest === 'manager_feedback') {
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('ashley_manager_auth_pin', pinToTest);
+          }
+          setManagerAuthed(true);
+          handleSwitchPortal('feedback_admin');
+        } else if (scopeToTest === 'warehouse') {
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('ashley_warehouse_auth_pin', pinToTest);
+          }
+          setWarehouseAuthed(true);
+          handleSwitchPortal('warehouse');
+        } else if (scopeToTest === 'staff_feedback') {
+          handleSwitchPortal('feedback');
+          if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', 'feedback');
+            url.searchParams.set('pin', pinToTest);
+            window.history.replaceState({}, '', url.toString());
+          }
+        }
+      } else {
+        triggerHaptic('error');
+        playAudioChime(false);
+        setPinError(data.error || 'کۆدی PIN هەڵەیە یان ڕێگەی پێنەدراوە.');
+        setShakeDots(true);
+        setTimeout(() => {
+          setShakeDots(false);
+          setEnteredPin('');
+        }, 600);
+      }
+    } catch {
+      triggerHaptic('error');
+      playAudioChime(false);
+      setPinError('هەڵە لە پەیوەندیکردن بە سێرڤەر.');
+      setEnteredPin('');
+    } finally {
+      setPinVerifying(false);
+    }
+  }, []);
+
+  // ⌨️ Keypad Press Handler
+  const handleKeypadPress = (digit: string) => {
+    if (!pinModalScope || pinVerifying) return;
+    const requiredLen = pinModalScope === 'warehouse' ? 5 : 4;
+    if (enteredPin.length >= requiredLen) return;
+
+    triggerHaptic('light');
+    playAudioChime(true);
+    const nextPin = enteredPin + digit;
+    setEnteredPin(nextPin);
+    setPinError(null);
+
+    if (nextPin.length === requiredLen) {
+      setTimeout(() => {
+        submitPinCandidate(nextPin, pinModalScope);
+      }, 100);
+    }
+  };
+
+  const handleKeypadDelete = () => {
+    if (pinVerifying || enteredPin.length === 0) return;
+    triggerHaptic('light');
+    setEnteredPin((prev) => prev.slice(0, -1));
+    setPinError(null);
+  };
+
+  const handleKeypadClear = () => {
+    if (pinVerifying) return;
+    triggerHaptic('light');
+    setEnteredPin('');
+    setPinError(null);
   };
 
   // ===========================================================================
@@ -180,8 +388,9 @@ function RootPageContent() {
                     <span className="text-sm sm:text-base font-black text-white">
                       فیدباک
                     </span>
-                    <span className="text-[9.5px] sm:text-[10.5px] font-bold text-rose-300 mt-1 px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30">
-                      ٢ بەش
+                    <span className="text-[9.5px] sm:text-[10.5px] font-bold text-rose-300 mt-1 px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" />
+                      <span>PINی تایبەت</span>
                     </span>
                   </div>
                 </button>
@@ -191,11 +400,11 @@ function RootPageContent() {
                 </span>
               </div>
 
-              {/* ⭕ بازنەی دەستە چەپ: کۆگا (کە لەوێوە بچینە بەشی جەرد) */}
+              {/* ⭕ بازنەی دەستە چەپ: کۆگا (کە لەوێوە بچینە بەشی جەرد بە PINی ٥ ژمارە) */}
               <div className="flex flex-col items-center">
                 <button
                   type="button"
-                  onClick={() => handleSwitchPortal('warehouse')}
+                  onClick={handleOpenWarehouse}
                   className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-blue-500 p-1 shadow-2xl shadow-blue-500/35 ring-4 ring-blue-400/25 flex items-center justify-center cursor-pointer active:scale-95 transition-all duration-200 group hover:ring-blue-400/50"
                 >
                   <div className="w-full h-full rounded-full bg-slate-950 flex flex-col items-center justify-center p-2.5 text-center transition-all group-hover:bg-slate-900/90">
@@ -205,8 +414,9 @@ function RootPageContent() {
                     <span className="text-sm sm:text-base font-black text-white">
                       کۆگا
                     </span>
-                    <span className="text-[9.5px] sm:text-[10.5px] font-bold text-blue-300 mt-1 px-2 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/30">
-                      جەرد & بار
+                    <span className="text-[9.5px] sm:text-[10.5px] font-bold text-blue-300 mt-1 px-2 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" />
+                      <span>PINی ٥ ژمارە</span>
                     </span>
                   </div>
                 </button>
@@ -227,12 +437,15 @@ function RootPageContent() {
           کۆمپانیای مۆبیلیاتی ئاشڵی • گروپی دیوان ٢٠٢٦
         </footer>
 
+        {/* 🔐 PIN GATE MODAL POPUP */}
+        {renderPinModal()}
+
       </div>
     );
   }
 
   // ===========================================================================
-  // 💬 VIEW 2: FEEDBACK HUB (کە دوای ئەوە دوو فیدباکمان هەبێ: کارمەندان و بەڕێوبەر)
+  // 💬 VIEW 2: FEEDBACK HUB (دوو بەشی فیدباک: کارمەندان 6000-9999 و بەڕێوبەر 0000-5999)
   // ===========================================================================
   if (activePortal === 'feedback_hub') {
     return (
@@ -260,22 +473,22 @@ function RootPageContent() {
           
           <div className="text-center mb-2">
             <span className="px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold inline-block mb-2">
-              هەڵبژاردنی جۆری فیدباک
+              هەڵبژاردنی جۆری فیدباک بە PIN
             </span>
             <h3 className="text-xl sm:text-2xl font-black text-white">
               کام فیدباکە دەتەوێت بکەیتەوە؟
             </h3>
             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-              سیستەمەکە دوو بەشی فیدباکی جیاوازی هەیە: یەکەم بۆ هەڵسەنگاندنی کارمەندان لە ڕێی PIN، دووەم بۆ شیتاڵی و داتای بەڕێوەبەر.
+              هەر بەشێک کۆدی نهێنی (PIN)ی تایبەت بە خۆی هەیە کە لە لایەن ئەدمینەوە دیاریکراوە.
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-4 w-full">
             
-            {/* Card 1: فیدباکی کارمەندان */}
+            {/* Card 1: فیدباکی کارمەندان (PIN: 6000 تا 9999) */}
             <button
               type="button"
-              onClick={() => handleSwitchPortal('feedback')}
+              onClick={handleOpenStaffFeedback}
               className="p-5 rounded-3xl bg-slate-900 hover:bg-slate-800/90 border border-slate-800 hover:border-rose-500/50 shadow-xl text-right transition-all cursor-pointer active:scale-[0.98] group relative overflow-hidden"
             >
               <div className="absolute top-0 right-0 w-2 h-full bg-rose-500" />
@@ -287,12 +500,12 @@ function RootPageContent() {
                   <div>
                     <h4 className="text-base font-black text-white flex items-center gap-2">
                       <span>١. فیدباکی کارمەندان</span>
-                      <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-[10px] font-bold">
-                        PIN
+                      <span className="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-[10.5px] font-mono font-bold" dir="ltr">
+                        PIN 6000 - 9999
                       </span>
                     </h4>
                     <span className="text-xs text-slate-400">
-                      پڕکردنەوەی فیدباک لەسەر کارمەندانی فرۆش و کاشێر
+                      پڕکردنەوەی هەڵسەنگاندنی ٨ کارمەندەکە لەلایەن کڕیاران و ستاف
                     </span>
                   </div>
                 </div>
@@ -303,14 +516,14 @@ function RootPageContent() {
               </div>
 
               <p className="text-xs text-slate-400 leading-relaxed bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80">
-                پەڕەی هەڵسەنگاندنی کڕیاران و کارمەندان لە ڕێی ٤ ژمارەی PIN. تێیدا نمرە بە ڕەفتار، زانیاری و خزمەتگوزاری دەدرێت.
+                پێویستی بە کۆدی ٤ ژمارەیی لە نێوان <strong>6000 تا 9999</strong> هەیە بۆ دەستپێکردنی ڕاپرسییەکە.
               </p>
             </button>
 
-            {/* Card 2: فیدباکی بەڕێوەبەر */}
+            {/* Card 2: فیدباکی بەڕێوەبەر (PIN: 0000 تا 5999) */}
             <button
               type="button"
-              onClick={() => handleSwitchPortal('feedback_admin')}
+              onClick={handleOpenManagerFeedback}
               className="p-5 rounded-3xl bg-slate-900 hover:bg-slate-800/90 border border-slate-800 hover:border-amber-500/50 shadow-xl text-right transition-all cursor-pointer active:scale-[0.98] group relative overflow-hidden"
             >
               <div className="absolute top-0 right-0 w-2 h-full bg-amber-500" />
@@ -322,12 +535,12 @@ function RootPageContent() {
                   <div>
                     <h4 className="text-base font-black text-white flex items-center gap-2">
                       <span>٢. فیدباکی بەڕێوەبەر</span>
-                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold">
-                        Dashboard & PDF
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10.5px] font-mono font-bold" dir="ltr">
+                        PIN 0000 - 5999
                       </span>
                     </h4>
                     <span className="text-xs text-slate-400">
-                      داشبۆردی شیکاری، ڕیزبەندی کارمەندان و ڕاپۆرتی PDF
+                      داشبۆردی شیکاری، ڕیزبەندی کارمەندان، گراف و ڕاپۆرتی PDF
                     </span>
                   </div>
                 </div>
@@ -338,7 +551,7 @@ function RootPageContent() {
               </div>
 
               <p className="text-xs text-slate-400 leading-relaxed bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80">
-                بینینی هەموو فیدباکە تۆمارکراوەکان، دۆزینەوەی کارمەندی زێڕین، گرافی پرسیارەکان، و هەناردەکردنی ڕاپۆرتی فەرمی بە واژووی دیوان و ئاشڵی.
+                پێویستی بە کۆدی تایبەتی بەڕێوەبەر لە نێوان <strong>0000 تا 5999</strong> هەیە بۆ بینینی گراف و نمرەکان.
               </p>
             </button>
 
@@ -358,6 +571,9 @@ function RootPageContent() {
         <footer className="w-full text-center pb-safe pb-4 text-[11px] text-slate-500">
           بەشی فیدباک • سیستەمی ئاشڵی ٢٠٢٦
         </footer>
+
+        {/* 🔐 PIN GATE MODAL POPUP */}
+        {renderPinModal()}
 
       </div>
     );
@@ -395,7 +611,7 @@ function RootPageContent() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => handleSwitchPortal('feedback_admin')}
+              onClick={handleOpenManagerFeedback}
               className="h-9 px-3.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
             >
               <ShieldCheck className="w-4 h-4 text-amber-600" />
@@ -411,14 +627,58 @@ function RootPageContent() {
             onBackToMobileApp={() => handleSwitchPortal('home')} 
           />
         </main>
+
+        {renderPinModal()}
       </div>
     );
   }
 
   // ===========================================================================
-  // 📊 VIEW 4: MANAGER FEEDBACK DASHBOARD (فیدباکی بەڕێوەبەر)
+  // 📊 VIEW 4: MANAGER FEEDBACK DASHBOARD (فیدباکی بەڕێوەبەر 0000 - 5999)
   // ===========================================================================
   if (activePortal === 'feedback_admin') {
+    // If not authenticated, force PIN gate view
+    if (!managerAuthed) {
+      return (
+        <div className="min-h-[100dvh] bg-slate-950 text-white font-sans flex flex-col justify-between" dir="rtl">
+          <header className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => handleSwitchPortal('feedback_hub')}
+              className="h-9 px-3.5 rounded-xl bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5"
+            >
+              <ArrowRight className="w-4 h-4 text-amber-400" />
+              <span>گەڕانەوە</span>
+            </button>
+            <span className="text-xs font-bold text-amber-400">داشبۆردی بەڕێوەبەر</span>
+          </header>
+
+          <main className="flex-1 flex flex-col items-center justify-center p-4">
+            <div className="w-full max-w-sm text-center">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-3">
+                <Lock className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-black text-white mb-1">داشبۆردی بەڕێوەبەر قوفڵە</h2>
+              <p className="text-xs text-slate-400 mb-6">
+                پێویستە کۆدی PINی ٤ ژمارەیی بەڕێوەبەر بنووسیت (0000 بۆ 5999).
+              </p>
+              <button
+                type="button"
+                onClick={() => openPinModal('manager_feedback')}
+                className="w-full h-12 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 transition-all"
+              >
+                <KeyRound className="w-5 h-5" />
+                <span>لێدانی کۆدی بەڕێوەبەر</span>
+              </button>
+            </div>
+          </main>
+
+          <footer className="text-center pb-4 text-[11px] text-slate-600">گروپی دیوان • کۆمپانیای ئاشڵی</footer>
+          {renderPinModal()}
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-[100dvh] bg-[#f8fafc] text-slate-900 font-sans flex flex-col justify-between" dir="rtl">
         {/* Navigation Bar back to Hub or Home */}
@@ -447,7 +707,17 @@ function RootPageContent() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => handleSwitchPortal('feedback')}
+              onClick={handleLockManager}
+              className="h-9 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+              title="دەرچوون و قفڵکردنی داشبۆردی بەڕێوەبەر"
+            >
+              <Lock className="w-3.5 h-3.5 text-rose-600" />
+              <span>قفڵکردن</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenStaffFeedback}
               className="h-9 px-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-900 text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
             >
               <MessageSquareHeart className="w-4 h-4 text-rose-600" />
@@ -459,14 +729,58 @@ function RootPageContent() {
         <main className="flex-1 p-3 sm:p-6 max-w-[1920px] mx-auto w-full">
           <AdminFeedbackDashboard />
         </main>
+
+        {renderPinModal()}
       </div>
     );
   }
 
   // ===========================================================================
-  // 📦 VIEW 5: WAREHOUSE & STOCKTAKE (بەشی جەرد و بار داگرتن)
+  // 📦 VIEW 5: WAREHOUSE & STOCKTAKE (بەشی جەرد و بار داگرتن بە PINی ٥ ژمارە)
   // ===========================================================================
   if (activePortal === 'warehouse') {
+    // If not authenticated, force 5-digit PIN gate view
+    if (!warehouseAuthed) {
+      return (
+        <div className="min-h-[100dvh] bg-slate-950 text-white font-sans flex flex-col justify-between" dir="rtl">
+          <header className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => handleSwitchPortal('home')}
+              className="h-9 px-3.5 rounded-xl bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5"
+            >
+              <Home className="w-4 h-4 text-amber-400" />
+              <span>پەڕەی سەرەکی</span>
+            </button>
+            <span className="text-xs font-bold text-blue-400">بەشی کۆگا و جەرد</span>
+          </header>
+
+          <main className="flex-1 flex flex-col items-center justify-center p-4">
+            <div className="w-full max-w-sm text-center">
+              <div className="w-16 h-16 rounded-2xl bg-blue-500/15 border border-blue-500/30 text-blue-400 flex items-center justify-center mx-auto mb-3">
+                <Lock className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-black text-white mb-1">بەشی کۆگا پارێزراوە</h2>
+              <p className="text-xs text-slate-400 mb-6">
+                پێویستە کۆدی نهێنی ٥ ژمارەیی ڕێگەپێدراوی کۆگا بنووسیت (10000 تا 99999).
+              </p>
+              <button
+                type="button"
+                onClick={() => openPinModal('warehouse')}
+                className="w-full h-12 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 transition-all"
+              >
+                <KeyRound className="w-5 h-5" />
+                <span>لێدانی کۆدی ٥ ژمارەیی کۆگا</span>
+              </button>
+            </div>
+          </main>
+
+          <footer className="text-center pb-4 text-[11px] text-slate-600">گروپی دیوان • کۆمپانیای ئاشڵی</footer>
+          {renderPinModal()}
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-[100dvh] bg-[#f8fafc] text-slate-900 font-sans flex flex-col justify-between" dir="rtl">
         {/* Navigation Bar back to Home */}
@@ -486,8 +800,18 @@ function RootPageContent() {
             </span>
           </div>
 
-          {/* Quick links to other portals */}
+          {/* Action buttons */}
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleLockWarehouse}
+              className="h-9 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+              title="دەرچوون و قفڵکردنی کۆگا"
+            >
+              <Lock className="w-3.5 h-3.5 text-rose-600" />
+              <span>قفڵکردن</span>
+            </button>
+
             <button
               type="button"
               onClick={() => handleSwitchPortal('feedback_hub')}
@@ -515,6 +839,8 @@ function RootPageContent() {
             isMobileEmbedded={true}
           />
         </main>
+
+        {renderPinModal()}
       </div>
     );
   }
@@ -539,12 +865,141 @@ function RootPageContent() {
       <main className="flex-1">
         <AshleyMobileApp 
           onSwitchToFeedback={() => handleSwitchPortal('feedback_hub')} 
-          onSwitchToWarehouse={() => handleSwitchPortal('warehouse')}
+          onSwitchToWarehouse={handleOpenWarehouse}
           onSwitchPortal={(p) => handleSwitchPortal(p as ActivePortal)}
         />
       </main>
+
+      {renderPinModal()}
     </div>
   );
+
+  // ===========================================================================
+  // 🔐 PIN GATE MODAL COMPONENT (Rendered conditionally)
+  // ===========================================================================
+  function renderPinModal() {
+    if (!pinModalScope) return null;
+
+    const isWarehouse = pinModalScope === 'warehouse';
+    const isManager = pinModalScope === 'manager_feedback';
+    const requiredLength = isWarehouse ? 5 : 4;
+
+    const theme = isManager 
+      ? { border: 'border-amber-500/40', badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30', dotActive: 'bg-amber-400 border-amber-300 shadow-amber-400/50', title: '👑 فیدباکی بەڕێوەبەر', range: '0000 - 5999', desc: 'تکایە کۆدی ٤ ژمارەیی تایبەت بە بەڕێوەبەر بنووسە' }
+      : isWarehouse
+      ? { border: 'border-blue-500/40', badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30', dotActive: 'bg-blue-500 border-blue-400 shadow-blue-500/50', title: '📦 بەشی کۆگا و جەرد', range: '٥ ژمارە (10000 - 99999)', desc: 'تکایە کۆدی نهێنی ٥ ژمارەیی ڕێگەپێدراوی کۆگا بنووسە' }
+      : { border: 'border-rose-500/40', badge: 'bg-rose-500/20 text-rose-300 border-rose-500/30', dotActive: 'bg-rose-500 border-rose-400 shadow-rose-500/50', title: '👥 فیدباکی کارمەندان', range: '6000 - 9999', desc: 'تکایە کۆدی ٤ ژمارەیی هەڵسەنگاندن بنووسە' };
+
+    return (
+      <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className={`w-full max-w-sm bg-slate-900 border ${theme.border} rounded-3xl p-6 shadow-2xl text-center relative overflow-hidden`}>
+          
+          {/* Top Close Button */}
+          <button
+            type="button"
+            onClick={closePinModal}
+            className="absolute top-4 left-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer transition-all"
+          >
+            <X className="w-4 h-4" />
+          </button>
+
+          {/* Modal Header */}
+          <div className="mb-4">
+            <span className={`inline-block px-3 py-0.5 rounded-full text-[11px] font-bold font-mono border mb-2 ${theme.badge}`} dir="ltr">
+              {theme.range}
+            </span>
+            <h3 className="text-lg font-black text-white">{theme.title}</h3>
+            <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
+              {theme.desc}
+            </p>
+          </div>
+
+          {/* 🔘 PIN Dots Indicator */}
+          <div className={`flex items-center justify-center gap-3 my-5 ${shakeDots ? 'animate-shake' : ''}`}>
+            {Array.from({ length: requiredLength }).map((_, i) => {
+              const isFilled = i < enteredPin.length;
+              return (
+                <div
+                  key={i}
+                  className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 transition-all duration-200 ${
+                    isFilled
+                      ? `${theme.dotActive} scale-110 shadow-lg`
+                      : 'border-slate-700 bg-slate-800'
+                  }`}
+                />
+              );
+            })}
+          </div>
+
+          {/* Error / Verifying Banner */}
+          {pinVerifying ? (
+            <div className="h-6 flex items-center justify-center gap-1.5 text-xs text-amber-400 font-bold mb-3">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>پشکنینی کۆد...</span>
+            </div>
+          ) : pinError ? (
+            <div className="h-6 flex items-center justify-center gap-1 text-[11px] text-rose-400 font-bold mb-3">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{pinError}</span>
+            </div>
+          ) : (
+            <div className="h-6 text-[11px] text-slate-500 font-medium mb-3">
+              {requiredLength - enteredPin.length > 0
+                ? `${requiredLength - enteredPin.length} ژمارەی تر ماوە`
+                : 'کۆد پڕکرایەوە'}
+            </div>
+          )}
+
+          {/* ⌨️ Numeric Keypad */}
+          <div className="grid grid-cols-3 gap-2.5 max-w-[260px] mx-auto text-lg font-mono font-bold select-none">
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+              <button
+                key={digit}
+                type="button"
+                disabled={pinVerifying}
+                onClick={() => handleKeypadPress(digit)}
+                className="h-14 rounded-2xl bg-slate-800/90 hover:bg-slate-700 text-white border border-slate-700/80 active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-sm disabled:opacity-50"
+              >
+                {digit}
+              </button>
+            ))}
+
+            {/* Clear */}
+            <button
+              type="button"
+              disabled={pinVerifying || enteredPin.length === 0}
+              onClick={handleKeypadClear}
+              className="h-14 rounded-2xl bg-slate-800/50 hover:bg-slate-700 text-slate-400 text-xs font-bold font-sans border border-slate-700/60 active:scale-95 transition-all flex items-center justify-center cursor-pointer disabled:opacity-30"
+            >
+              پاککردن
+            </button>
+
+            {/* 0 */}
+            <button
+              type="button"
+              disabled={pinVerifying}
+              onClick={() => handleKeypadPress('0')}
+              className="h-14 rounded-2xl bg-slate-800/90 hover:bg-slate-700 text-white border border-slate-700/80 active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-sm disabled:opacity-50"
+            >
+              0
+            </button>
+
+            {/* Delete Backspace */}
+            <button
+              type="button"
+              disabled={pinVerifying || enteredPin.length === 0}
+              onClick={handleKeypadDelete}
+              className="h-14 rounded-2xl bg-slate-800/50 hover:bg-slate-700 text-rose-400 border border-slate-700/60 active:scale-95 transition-all flex items-center justify-center cursor-pointer disabled:opacity-30"
+              title="سڕینەوەی یەک ژمارە"
+            >
+              <Delete className="w-5 h-5" />
+            </button>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
 }
 
 export default function RootPage() {
