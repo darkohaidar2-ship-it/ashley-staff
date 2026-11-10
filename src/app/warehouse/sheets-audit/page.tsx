@@ -383,7 +383,7 @@ function WarehouseSheetsAuditContent() {
 
       {/* Main Google Sheets Warehouse Audit Component */}
       <div className="max-w-[1920px] mx-auto">
-        <GoogleSheetsWarehouseAudit />
+        <GoogleSheetsWarehouseAudit isMobileEmbedded={true} />
       </div>
     </div>
   );

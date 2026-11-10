@@ -53,15 +53,210 @@ import * as XLSX from 'xlsx';
 const LOCAL_STORAGE_KEY = 'ashley_warehouse_saved_sessions_v2';
 const ACTIVE_SESSION_ID_KEY = 'ashley_warehouse_active_session_id';
 
+// 📦 Seeded Standard Sessions (بار داگرتنی کانتینەر و تۆمارکردنی جەرد) for instant operational readiness on mobile
+const DEFAULT_SEEDED_SESSIONS: SheetsAuditSession[] = [
+  {
+    id: 'ashley-shipment-receiving-seed-01',
+    title: 'باری نوێ • کانتینەری مۆبیلیاتی ئاشڵی (CN-2026-08)',
+    mode: 'shipment_receiving',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    auditedBy: 'کارمەندی کۆگا',
+    totalItemsCount: 5,
+    totalExpectedUnits: 43,
+    totalAuditedUnits: 21,
+    totalCartonsCount: 33,
+    totalAuditedCartons: 17,
+    matchedCount: 2,
+    discrepantCount: 3,
+    damagedCount: 0,
+    status: 'active',
+    items: [
+      {
+        id: 'item-cn-1',
+        rowIndex: 1,
+        model: 'ASH-BED-901',
+        name: 'قەرەوێڵەی کینگ سایز ئاشڵی (King Bed Frame)',
+        expectedQty: 8,
+        checkedQty: 2,
+        variance: -6,
+        condition: 'Packaged',
+        auditStatus: 'pending',
+        rackLocation: 'Zone-A-01',
+        cartonCount: 8,
+        pcsPerCarton: 1,
+        checkedCartons: 2,
+        scannedCartonNumbers: [1, 2],
+        notes: 'ماوە: ٢ لە ٨ کارتۆن تۆمارکراوە',
+      },
+      {
+        id: 'item-cn-2',
+        rowIndex: 2,
+        model: 'ASH-SOFA-412',
+        name: 'قەنەفەی مۆدێرنی سێ نەفەری (Sectional Sofa 3-Piece)',
+        expectedQty: 6,
+        checkedQty: 6,
+        variance: 0,
+        condition: 'Packaged',
+        auditStatus: 'verified',
+        rackLocation: 'Zone-A-04',
+        cartonCount: 6,
+        pcsPerCarton: 1,
+        checkedCartons: 6,
+        scannedCartonNumbers: [1, 2, 3, 4, 5, 6],
+        notes: 'سەرجەم کارتۆنەکان تۆمارکران',
+      },
+      {
+        id: 'item-cn-3',
+        rowIndex: 3,
+        model: 'ASH-TABL-305',
+        name: 'مێزی نانخواردنی ٨ نەفەری دار بەڕوو (Dining Table Oak)',
+        expectedQty: 4,
+        checkedQty: 0,
+        variance: -4,
+        condition: 'Packaged',
+        auditStatus: 'pending',
+        rackLocation: 'Zone-B-02',
+        cartonCount: 4,
+        pcsPerCarton: 1,
+        checkedCartons: 0,
+        scannedCartonNumbers: [],
+        notes: 'چاوەڕوانی داگرتنە لە کانتینەر',
+      },
+      {
+        id: 'item-cn-4',
+        rowIndex: 4,
+        model: 'ASH-CHAIR-102',
+        name: 'کورسی مێزی نانخواردن (Dining Chair Set of 2)',
+        expectedQty: 20,
+        checkedQty: 8,
+        variance: -12,
+        condition: 'Packaged',
+        auditStatus: 'pending',
+        rackLocation: 'Zone-B-03',
+        cartonCount: 10,
+        pcsPerCarton: 2,
+        checkedCartons: 4,
+        scannedCartonNumbers: [1, 2, 3, 4],
+        notes: '٤ لە ١٠ کارتۆن (٨ پارچە)',
+      },
+      {
+        id: 'item-cn-5',
+        rowIndex: 5,
+        model: 'ASH-DRES-508',
+        name: 'مێزی مەیکەپ و ئاوێنەی ئاشڵی (Dresser with Mirror)',
+        expectedQty: 5,
+        checkedQty: 5,
+        variance: 0,
+        condition: 'Packaged',
+        auditStatus: 'verified',
+        rackLocation: 'Zone-C-01',
+        cartonCount: 5,
+        pcsPerCarton: 1,
+        checkedCartons: 5,
+        scannedCartonNumbers: [1, 2, 3, 4, 5],
+        notes: 'تەواوکراوە بە سەرکەوتوویی',
+      },
+    ],
+  },
+  {
+    id: 'ashley-inventory-stocktake-seed-02',
+    title: 'جەردی دەوری کۆگای ناوەندی (ST-2026)',
+    mode: 'inventory_stocktake',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    auditedBy: 'لیژنەی جەرد',
+    totalItemsCount: 4,
+    totalExpectedUnits: 43,
+    totalAuditedUnits: 29,
+    totalCartonsCount: 43,
+    totalAuditedCartons: 29,
+    matchedCount: 2,
+    discrepantCount: 2,
+    damagedCount: 0,
+    status: 'active',
+    items: [
+      {
+        id: 'item-st-1',
+        rowIndex: 1,
+        model: 'ASH-NIGHT-201',
+        name: 'کۆمیدی لای قەرەوێڵە (Nightstand 2-Drawer)',
+        expectedQty: 15,
+        checkedQty: 10,
+        variance: -5,
+        condition: 'Packaged',
+        auditStatus: 'pending',
+        rackLocation: 'Zone-A-12',
+        cartonCount: 15,
+        pcsPerCarton: 1,
+        checkedCartons: 10,
+        scannedCartonNumbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        notes: '١٠ لە ١٥ جەردکراوە',
+      },
+      {
+        id: 'item-st-2',
+        rowIndex: 2,
+        model: 'ASH-TV-804',
+        name: 'مێزی تەلەفزیۆنی دارین ٧٥ ئینج (TV Stand Console)',
+        expectedQty: 7,
+        checkedQty: 7,
+        variance: 0,
+        condition: 'Packaged',
+        auditStatus: 'verified',
+        rackLocation: 'Zone-B-08',
+        cartonCount: 7,
+        pcsPerCarton: 1,
+        checkedCartons: 7,
+        scannedCartonNumbers: [1, 2, 3, 4, 5, 6, 7],
+        notes: 'تەواوە لەگەڵ شیت ڕێکە',
+      },
+      {
+        id: 'item-st-3',
+        rowIndex: 3,
+        model: 'ASH-WARD-602',
+        name: 'کەنتۆری شەش دەرگای ئەوروپی (Wardrobe 6-Door)',
+        expectedQty: 12,
+        checkedQty: 3,
+        variance: -9,
+        condition: 'Packaged',
+        auditStatus: 'pending',
+        rackLocation: 'Zone-C-05',
+        cartonCount: 12,
+        pcsPerCarton: 1,
+        checkedCartons: 3,
+        scannedCartonNumbers: [1, 2, 3],
+        notes: '٣ لە ١٢ کارتۆن جەردکراوە',
+      },
+      {
+        id: 'item-st-4',
+        rowIndex: 4,
+        model: 'ASH-COF-110',
+        name: 'مێزی ناوەڕاستی شووشە و دار (Coffee Table Glass)',
+        expectedQty: 9,
+        checkedQty: 9,
+        variance: 0,
+        condition: 'Packaged',
+        auditStatus: 'verified',
+        rackLocation: 'Zone-D-02',
+        cartonCount: 9,
+        pcsPerCarton: 1,
+        checkedCartons: 9,
+        scannedCartonNumbers: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        notes: 'بە سەرکەوتوویی تەواوبوو',
+      },
+    ],
+  },
+];
+
 function getLocalWarehouseSessions(): SheetsAuditSession[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined') return DEFAULT_SEEDED_SESSIONS;
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!raw) return [];
+    if (!raw) return DEFAULT_SEEDED_SESSIONS;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_SEEDED_SESSIONS;
   } catch {
-    return [];
+    return DEFAULT_SEEDED_SESSIONS;
   }
 }
 
@@ -132,6 +327,21 @@ export function GoogleSheetsWarehouseAudit({
     setCopiedText(label);
     setTimeout(() => setCopiedText(null), 2500);
   };
+
+  // 📱 Mobile Screen Detection & Strict Operational Mode (No file upload / No question editing on mobile)
+  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(false);
+  useEffect(() => {
+    const updateSize = () => {
+      if (typeof window !== 'undefined') {
+        setIsMobileScreen(window.innerWidth < 768 || isMobileEmbedded);
+      }
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, [isMobileEmbedded]);
+
+  const isMobileOperational = isMobileEmbedded || isMobileScreen;
 
   // 1. Initial Local Cache Hydration (0ms blank delay)
   useEffect(() => {
@@ -927,20 +1137,27 @@ export function GoogleSheetsWarehouseAudit({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Quick Add Sheet Button */}
-            <button
-              type="button"
-              onClick={() => {
-                setInputMode(warehouseSection);
-                setShowConnectModal(true);
-              }}
-              className="h-10 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center gap-2 cursor-pointer active:scale-95 shadow-md shadow-blue-500/15 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              <span>
-                {warehouseSection === 'shipment_receiving' ? '+ داخڵکردنی باری نوێ' : '+ داخڵکردنی جەردی نوێ'}
-              </span>
-            </button>
+            {/* Quick Add Sheet Button (Hidden on Mobile to ensure operational purity) */}
+            {!isMobileOperational ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setInputMode(warehouseSection);
+                  setShowConnectModal(true);
+                }}
+                className="h-10 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center gap-2 cursor-pointer active:scale-95 shadow-md shadow-blue-500/15 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                <span>
+                  {warehouseSection === 'shipment_receiving' ? '+ داخڵکردنی باری نوێ' : '+ داخڵکردنی جەردی نوێ'}
+                </span>
+              </button>
+            ) : (
+              <div className="h-10 px-3.5 rounded-xl bg-blue-50/90 border border-blue-200/90 text-blue-900 font-bold text-xs flex items-center gap-1.5 shadow-2xs">
+                <Boxes className="w-4 h-4 text-blue-600" />
+                <span>دۆخی مۆبایل: تۆمارکردن، ژماردن و سکان</span>
+              </div>
+            )}
 
             {/* Switch Sessions Button */}
             <button
@@ -1058,16 +1275,22 @@ export function GoogleSheetsWarehouseAudit({
           {sectionSessions.length === 0 ? (
             <div className="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-center gap-2">
               <span>هیچ شیتێک لە سیستەمدا خەزن نەکراوە بۆ ئەم بەشە.</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setInputMode(warehouseSection);
-                  setShowConnectModal(true);
-                }}
-                className="text-blue-600 hover:underline font-bold"
-              >
-                + داخڵکردنی یەکەم شیت
-              </button>
+              {!isMobileOperational ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInputMode(warehouseSection);
+                    setShowConnectModal(true);
+                  }}
+                  className="text-blue-600 hover:underline font-bold"
+                >
+                  + داخڵکردنی یەکەم شیت
+                </button>
+              ) : (
+                <span className="text-[11px] text-slate-400">
+                  (شیتەکان لە ئەدمین پانێڵەوە لە کۆمپیوتەر زیاد دەکرێن، و لە مۆبایل کار لەسەر ژماردنیان دەکەیت)
+                </span>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
@@ -1337,26 +1560,30 @@ export function GoogleSheetsWarehouseAudit({
         </div>
       ) : (
         /* Empty State: No Session loaded yet */
-        <div className="bg-white border-2 border-dashed border-slate-200 rounded-3xl p-10 text-center space-y-4">
+        <div className="bg-white border-2 border-dashed border-slate-200 rounded-3xl p-8 sm:p-10 text-center space-y-4">
           <div className="w-16 h-16 rounded-3xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto shadow-xs">
             <FileSpreadsheet className="w-8 h-8" />
           </div>
           <div className="max-w-md mx-auto">
             <h3 className="text-base font-black text-slate-900">
-              هیچ خشتەیەکی چالاک بارنەکراوە
+              {isMobileOperational ? 'شیتێکی خەزنکراو لە سەرەوە هەڵبژێرە' : 'هیچ خشتەیەکی چالاک بارنەکراوە'}
             </h3>
             <p className="text-xs text-slate-500 font-medium mt-1">
-              کلیک لە دوگمەی خوارەوە بکە و لینکی گۆگڵ شیتی کانتینەر یان جەردی کۆگا دابنێ بۆ دەستپێکردنی پشکنین.
+              {isMobileOperational
+                ? 'کلیک لە یەکێک لە شیتەکانی خەزنکراوی سەرەوە بکە بۆ دەستپێکردنی ژماردن بە کامێرا و جەردکردن لە مۆبایل.'
+                : 'کلیک لە دوگمەی خوارەوە بکە و لینکی گۆگڵ شیتی کانتینەر یان جەردی کۆگا دابنێ بۆ دەستپێکردنی پشکنین.'}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowConnectModal(true)}
-            className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs cursor-pointer shadow-md inline-flex items-center gap-2 active:scale-95 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>بەستنەوە بە Google Sheet</span>
-          </button>
+          {!isMobileOperational && (
+            <button
+              type="button"
+              onClick={() => setShowConnectModal(true)}
+              className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs cursor-pointer shadow-md inline-flex items-center gap-2 active:scale-95 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>بەستنەوە بە Google Sheet</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -2261,17 +2488,19 @@ export function GoogleSheetsWarehouseAudit({
                         }}
                         className="px-3 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs cursor-pointer active:scale-95"
                       >
-                        کردنەوە
+                        دەستبەکاربوون
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteSession(s.id)}
-                        className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 cursor-pointer active:scale-95"
-                        title="سڕینەوە"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {!isMobileOperational && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSession(s.id)}
+                          className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 cursor-pointer active:scale-95"
+                          title="سڕینەوە"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))
