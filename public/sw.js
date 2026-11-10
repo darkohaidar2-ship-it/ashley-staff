@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ashley-apple-v38-reports';
+const CACHE_NAME = 'ashley-apple-v39-circles-hub';
 
 const PRECACHE_URLS = [
   '/',
