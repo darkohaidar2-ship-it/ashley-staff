@@ -60,8 +60,32 @@ export function FeedbackPortal({
     setIsDark(next);
     if (typeof window !== 'undefined') {
       localStorage.setItem('ashley_theme', next ? 'dark' : 'light');
+      if (next) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      window.dispatchEvent(new CustomEvent('ashley-theme-change', { detail: { isDark: next } }));
     }
   };
+
+  useEffect(() => {
+    if (initialDark !== undefined) {
+      setIsDark(initialDark);
+    }
+  }, [initialDark]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const handleTheme = (e: any) => {
+        if (e?.detail?.isDark !== undefined) {
+          setIsDark(e.detail.isDark);
+        }
+      };
+      window.addEventListener('ashley-theme-change', handleTheme);
+      return () => window.removeEventListener('ashley-theme-change', handleTheme);
+    }
+  }, []);
 
   // Step state: 'pin_gate' | 'questionnaire' | 'success'
   const [step, setStep] = useState<'pin_gate' | 'questionnaire' | 'success'>('pin_gate');

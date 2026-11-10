@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ashley-apple-v40-pins-security';
+const CACHE_NAME = 'ashley-apple-v41-light-dark-modes';
 
 const PRECACHE_URLS = [
   '/',

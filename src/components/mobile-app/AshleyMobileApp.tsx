@@ -73,8 +73,35 @@ export default function AshleyMobileApp({
     setIsDark(next);
     if (typeof window !== 'undefined') {
       localStorage.setItem('ashley_theme', next ? 'dark' : 'light');
+      if (next) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      window.dispatchEvent(new CustomEvent('ashley-theme-change', { detail: { isDark: next } }));
     }
   };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ashley_theme');
+      if (saved === 'dark') {
+        setIsDark(true);
+        document.documentElement.classList.add('dark');
+      } else if (saved === 'light') {
+        setIsDark(false);
+        document.documentElement.classList.remove('dark');
+      }
+
+      const handleTheme = (e: any) => {
+        if (e?.detail?.isDark !== undefined) {
+          setIsDark(e.detail.isDark);
+        }
+      };
+      window.addEventListener('ashley-theme-change', handleTheme);
+      return () => window.removeEventListener('ashley-theme-change', handleTheme);
+    }
+  }, []);
 
   // Tab switch with Apple haptic feedback
   const handleTabSwitch = (tab: 'attendance' | 'expenses' | 'leaves' | 'reports' | 'profile') => {
