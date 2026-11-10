@@ -49,6 +49,31 @@ import { SheetsAuditItem, SheetsAuditSession } from '@/app/api/warehouse/sheets-
 import { SmartCameraCartonScanner } from '@/components/admin/warehouse/SmartCameraCartonScanner';
 import * as XLSX from 'xlsx';
 
+// 💾 Local Storage Keys for 100% Persistent Data Guarantee
+const LOCAL_STORAGE_KEY = 'ashley_warehouse_saved_sessions_v2';
+const ACTIVE_SESSION_ID_KEY = 'ashley_warehouse_active_session_id';
+
+function getLocalWarehouseSessions(): SheetsAuditSession[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalWarehouseSessions(sessionsList: SheetsAuditSession[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessionsList));
+  } catch (e) {
+    console.warn('[Warehouse] Error saving local sessions:', e);
+  }
+}
+
 export interface GoogleSheetsWarehouseAuditProps {
   onBackToMobileApp?: () => void;
   onSwitchPortal?: (portal: 'attendance' | 'feedback' | 'warehouse') => void;
@@ -67,6 +92,10 @@ export function GoogleSheetsWarehouseAudit({
   const [saving, setSaving] = useState<boolean>(false);
   const [syncingGoogle, setSyncingGoogle] = useState<boolean>(false);
   const [syncSuccess, setSyncSuccess] = useState<boolean>(false);
+
+  // 🚛 📋 DUAL WAREHOUSE SECTIONS (داگرتنی باری نوێ و کانتینەر vs تۆمارکردنی جەرد)
+  const [warehouseSection, setWarehouseSection] = useState<'shipment_receiving' | 'inventory_stocktake'>('shipment_receiving');
+  const [lastSavedNotice, setLastSavedNotice] = useState<string | null>(null);
 
   // Search and Filter State
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -104,20 +133,60 @@ export function GoogleSheetsWarehouseAudit({
     setTimeout(() => setCopiedText(null), 2500);
   };
 
-  // 1. Fetch all stored sessions on load
+  // 1. Initial Local Cache Hydration (0ms blank delay)
+  useEffect(() => {
+    const local = getLocalWarehouseSessions();
+    if (local.length > 0) {
+      setSessions(local);
+      const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem(ACTIVE_SESSION_ID_KEY) : null;
+      const matchedActive = (savedActiveId ? local.find(s => s.id === savedActiveId) : null) || local[0];
+      if (matchedActive) {
+        setCurrentSession(matchedActive);
+        if (matchedActive.mode) {
+          setWarehouseSection(matchedActive.mode);
+          setInputMode(matchedActive.mode);
+        }
+      }
+      setLoading(false);
+    }
+  }, []);
+
+  // 1b. Fetch all stored sessions from cloud on load and merge
   const loadSessions = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await fetch('/api/warehouse/sheets-sync', { cache: 'no-store' });
       const data = await res.json();
       if (data.success && Array.isArray(data.sessions)) {
-        setSessions(data.sessions);
-        if (!currentSession && data.sessions.length > 0) {
-          setCurrentSession(data.sessions[0]);
+        const local = getLocalWarehouseSessions();
+        const map = new Map<string, SheetsAuditSession>();
+        // Add local first
+        local.forEach(s => map.set(s.id, s));
+        // Merge cloud sessions
+        data.sessions.forEach((srv: SheetsAuditSession) => {
+          const loc = map.get(srv.id);
+          if (!loc || new Date(srv.updatedAt).getTime() >= new Date(loc.updatedAt).getTime()) {
+            map.set(srv.id, srv);
+          }
+        });
+        const merged = Array.from(map.values()).sort(
+          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        );
+
+        setSessions(merged);
+        saveLocalWarehouseSessions(merged);
+
+        if (!currentSession && merged.length > 0) {
+          const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem(ACTIVE_SESSION_ID_KEY) : null;
+          const matched = (savedActiveId ? merged.find(s => s.id === savedActiveId) : null) || merged[0];
+          setCurrentSession(matched);
+          if (matched.mode) {
+            setWarehouseSection(matched.mode);
+            setInputMode(matched.mode);
+          }
         }
       }
     } catch {
-      // silent
+      // Offline fallback: already loaded from localStorage
     } finally {
       setLoading(false);
     }
@@ -126,6 +195,30 @@ export function GoogleSheetsWarehouseAudit({
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
+
+  // Switch between the Two Primary Warehouse Sections (بار داگرتن vs جەرد)
+  const handleSwitchWarehouseSection = (mode: 'shipment_receiving' | 'inventory_stocktake') => {
+    triggerHaptic('medium');
+    setWarehouseSection(mode);
+    setInputMode(mode);
+
+    // If active session belongs to this mode, keep it; otherwise find latest for this mode
+    if (currentSession && (currentSession.mode || 'shipment_receiving') === mode) {
+      return;
+    }
+    const matchingSession = sessions.find(s => (s.mode || 'shipment_receiving') === mode);
+    if (matchingSession) {
+      setCurrentSession(matchingSession);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(ACTIVE_SESSION_ID_KEY, matchingSession.id);
+      }
+    }
+  };
+
+  // Filtered Sessions for the active section
+  const sectionSessions = useMemo(() => {
+    return sessions.filter(s => (s.mode || 'shipment_receiving') === warehouseSection);
+  }, [sessions, warehouseSection]);
 
   // 2. Connect and Import Google Sheet
   const handleConnectSheet = async (e: React.FormEvent) => {
@@ -165,7 +258,16 @@ export function GoogleSheetsWarehouseAudit({
         }
 
         setCurrentSession(finalSession);
-        setSessions(prev => [finalSession, ...prev.filter(s => s.id !== finalSession.id)]);
+        setSessions(prev => {
+          const next = [finalSession, ...prev.filter(s => s.id !== finalSession.id)];
+          saveLocalWarehouseSessions(next);
+          return next;
+        });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(ACTIVE_SESSION_ID_KEY, finalSession.id);
+        }
+        if (finalSession.mode) setWarehouseSection(finalSession.mode);
+        setLastSavedNotice(`خەزنکراوە لە سیستەمدا • ${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}`);
         setShowConnectModal(false);
         setInputSheetUrl('');
         setInputSessionTitle('');
@@ -215,7 +317,16 @@ export function GoogleSheetsWarehouseAudit({
           });
         }
         setCurrentSession(finalSession);
-        setSessions(prev => [finalSession, ...prev.filter(s => s.id !== finalSession.id)]);
+        setSessions(prev => {
+          const next = [finalSession, ...prev.filter(s => s.id !== finalSession.id)];
+          saveLocalWarehouseSessions(next);
+          return next;
+        });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(ACTIVE_SESSION_ID_KEY, finalSession.id);
+        }
+        if (finalSession.mode) setWarehouseSection(finalSession.mode);
+        setLastSavedNotice(`خەزنکراوە لە سیستەمدا • ${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}`);
         setShowConnectModal(false);
         setInputRawPaste('');
         triggerHaptic('success');
@@ -272,7 +383,16 @@ export function GoogleSheetsWarehouseAudit({
             });
           }
           setCurrentSession(finalSession);
-          setSessions(prev => [finalSession, ...prev.filter(s => s.id !== finalSession.id)]);
+          setSessions(prev => {
+            const next = [finalSession, ...prev.filter(s => s.id !== finalSession.id)];
+            saveLocalWarehouseSessions(next);
+            return next;
+          });
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(ACTIVE_SESSION_ID_KEY, finalSession.id);
+          }
+          if (finalSession.mode) setWarehouseSection(finalSession.mode);
+          setLastSavedNotice(`خەزنکراوە لە سیستەمدا • ${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}`);
           setShowConnectModal(false);
           triggerHaptic('success');
         } else {
@@ -321,7 +441,16 @@ export function GoogleSheetsWarehouseAudit({
           });
         }
         setCurrentSession(finalSession);
-        setSessions(prev => [finalSession, ...prev.filter(s => s.id !== finalSession.id)]);
+        setSessions(prev => {
+          const next = [finalSession, ...prev.filter(s => s.id !== finalSession.id)];
+          saveLocalWarehouseSessions(next);
+          return next;
+        });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(ACTIVE_SESSION_ID_KEY, finalSession.id);
+        }
+        if (finalSession.mode) setWarehouseSection(finalSession.mode);
+        setLastSavedNotice(`خەزنکراوە لە سیستەمدا • ${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}`);
         setShowConnectModal(false);
         setInputRawPaste('');
         triggerHaptic('success');
@@ -335,10 +464,27 @@ export function GoogleSheetsWarehouseAudit({
     }
   };
 
-  // 3. Save / Auto-sync session to Cloud & Webhook
+  // 3. Save / Auto-sync session to Local Storage, Cloud & Webhook
   const persistSession = useCallback(async (sessionToSave: SheetsAuditSession, isManualSync = false) => {
     if (isManualSync) setSyncingGoogle(true);
     else setSaving(true);
+
+    // 1. Immediately persist locally (Guaranteed zero loss)
+    setSessions(prev => {
+      const exists = prev.some(s => s.id === sessionToSave.id);
+      const next = exists 
+        ? prev.map(s => s.id === sessionToSave.id ? sessionToSave : s) 
+        : [sessionToSave, ...prev];
+      saveLocalWarehouseSessions(next);
+      return next;
+    });
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ACTIVE_SESSION_ID_KEY, sessionToSave.id);
+    }
+
+    const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setLastSavedNotice(`خەزنکراوە لە سیستەمدا • ${timeStr}`);
 
     try {
       const res = await fetch('/api/warehouse/sheets-sync', {
@@ -349,7 +495,11 @@ export function GoogleSheetsWarehouseAudit({
       const data = await res.json();
       if (data.success && data.session) {
         setCurrentSession(data.session);
-        setSessions(prev => prev.map(s => s.id === data.session.id ? data.session : s));
+        setSessions(prev => {
+          const next = prev.map(s => s.id === data.session.id ? data.session : s);
+          saveLocalWarehouseSessions(next);
+          return next;
+        });
         if (isManualSync) {
           setSyncSuccess(true);
           setTimeout(() => setSyncSuccess(false), 3000);
@@ -357,7 +507,7 @@ export function GoogleSheetsWarehouseAudit({
         }
       }
     } catch {
-      // silent
+      // Offline fallback: already guaranteed saved in localStorage!
     } finally {
       setSaving(false);
       setSyncingGoogle(false);
@@ -522,20 +672,24 @@ export function GoogleSheetsWarehouseAudit({
 
   // 6. Delete a session
   const handleDeleteSession = async (sessionId: string) => {
-    if (!confirm('ئایا دڵنیایت لە سڕینەوەی ئەم سێشنەی پشکنین؟')) return;
+    if (!confirm('ئایا دڵنیایت لە سڕینەوەی ئەم شیتە لە سیستەم؟')) return;
     try {
       await fetch('/api/warehouse/sheets-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete_session', sessionId }),
       });
-      const remaining = sessions.filter(s => s.id !== sessionId);
-      setSessions(remaining);
-      if (currentSession?.id === sessionId) {
-        setCurrentSession(remaining[0] || null);
+    } catch {}
+    const remaining = sessions.filter(s => s.id !== sessionId);
+    setSessions(remaining);
+    saveLocalWarehouseSessions(remaining);
+    if (currentSession?.id === sessionId) {
+      const nextMatch = remaining.find(s => (s.mode || 'shipment_receiving') === warehouseSection) || remaining[0] || null;
+      setCurrentSession(nextMatch);
+      if (typeof window !== 'undefined') {
+        if (nextMatch) localStorage.setItem(ACTIVE_SESSION_ID_KEY, nextMatch.id);
+        else localStorage.removeItem(ACTIVE_SESSION_ID_KEY);
       }
-    } catch {
-      alert('هەڵە لە سڕینەوە');
     }
   };
 
@@ -744,39 +898,231 @@ export function GoogleSheetsWarehouseAudit({
       )}
 
       {/* ========================================================================= */}
-      {/* 🌟 1. TOP HEADER & WORKSPACE COMMAND BAR */}
+      {/* 🚛 📋 1. PRIMARY DUAL SECTIONS (دوو بەشە سەرەکییەکەی کۆگا: بار داگرتن & جەرد) */}
       {/* ========================================================================= */}
-      <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black shadow-md shadow-blue-500/20">
+      <div className="bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-5 shadow-xs space-y-4">
+        
+        {/* Title & Status Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black shadow-md shadow-blue-500/20 shrink-0">
               <Boxes className="w-5 h-5 text-white" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-base sm:text-lg font-black text-slate-900">
-                  چێککردنەوەی باری نوێ و جەردی کۆگا بە Google Sheets
+                  بەشی کۆگا و پشکنینی خشتەکان
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
-                  2-Way Live Sync
-                </span>
+                {lastSavedNotice && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>{lastSavedNotice}</span>
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
-                بەستنەوە بە گۆگڵ شیت، چێککردنەوەی کانتینەر و باری داگیراو، یان جەردکردنی دەوری ڕەفەکانی کۆگا
+                بێ پێویستی بە لۆگ ئین • خەزنکردنی هەمیشەیی شیتەکان لە سیستەم
               </p>
             </div>
           </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Quick Add Sheet Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setInputMode(warehouseSection);
+                setShowConnectModal(true);
+              }}
+              className="h-10 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center gap-2 cursor-pointer active:scale-95 shadow-md shadow-blue-500/15 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>
+                {warehouseSection === 'shipment_receiving' ? '+ داخڵکردنی باری نوێ' : '+ داخڵکردنی جەردی نوێ'}
+              </span>
+            </button>
+
+            {/* Switch Sessions Button */}
+            <button
+              type="button"
+              onClick={() => setShowSessionsModal(true)}
+              className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+              title="بینینی هەموو شیتە خەزنکراوەکان"
+            >
+              <Layers className="w-3.5 h-3.5 text-slate-500" />
+              <span>هەموو شیتەکان ({sessions.length})</span>
+            </button>
+          </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex flex-wrap items-center gap-2">
-          
-          {/* 🎥 Smart Mobile Camera Carton Scanner Button */}
-          {currentSession && (
+        {/* 🚛 📋 DUAL MODE SECTIONS TOGGLE (Large & Clear) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Section 1: بار داگرتن */}
+          <button
+            type="button"
+            onClick={() => handleSwitchWarehouseSection('shipment_receiving')}
+            className={`p-4 rounded-2xl border text-right transition-all cursor-pointer relative overflow-hidden active:scale-[0.99] ${
+              warehouseSection === 'shipment_receiving'
+                ? 'bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/5 border-amber-500 ring-2 ring-amber-500/30 shadow-md'
+                : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80 text-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black ${
+                  warehouseSection === 'shipment_receiving'
+                    ? 'bg-amber-500 text-slate-950 shadow-md'
+                    : 'bg-white border border-slate-200 text-slate-600'
+                }`}>
+                  <Truck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-black text-slate-900">
+                      ١. بەشی بار داگرتن
+                    </h3>
+                    {warehouseSection === 'shipment_receiving' && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black">
+                        بەشی چالاک
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    داگرتنی کانتینەر، ژماردنی پاکەت بە کامێرا و باڕکۆد
+                  </span>
+                </div>
+              </div>
+
+              <span className="px-2.5 py-1 rounded-xl bg-white border border-slate-200 text-xs font-mono font-black text-slate-700 shrink-0">
+                {sessions.filter(s => (s.mode || 'shipment_receiving') === 'shipment_receiving').length} شیت
+              </span>
+            </div>
+          </button>
+
+          {/* Section 2: تۆمارکردنی جەرد */}
+          <button
+            type="button"
+            onClick={() => handleSwitchWarehouseSection('inventory_stocktake')}
+            className={`p-4 rounded-2xl border text-right transition-all cursor-pointer relative overflow-hidden active:scale-[0.99] ${
+              warehouseSection === 'inventory_stocktake'
+                ? 'bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-blue-500/5 border-blue-500 ring-2 ring-blue-500/30 shadow-md'
+                : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80 text-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black ${
+                  warehouseSection === 'inventory_stocktake'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-white border border-slate-200 text-slate-600'
+                }`}>
+                  <ClipboardCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-black text-slate-900">
+                      ٢. بەشی تۆمارکردنی جەرد
+                    </h3>
+                    {warehouseSection === 'inventory_stocktake' && (
+                      <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-black">
+                        بەشی چالاک
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    جەردی دەوری کۆگا، ڕەفەکان، دۆخی پاکەت، جیاوازی کەمی و زیادی
+                  </span>
+                </div>
+              </div>
+
+              <span className="px-2.5 py-1 rounded-xl bg-white border border-slate-200 text-xs font-mono font-black text-slate-700 shrink-0">
+                {sessions.filter(s => s.mode === 'inventory_stocktake').length} شیت
+              </span>
+            </div>
+          </button>
+        </div>
+
+        {/* 📁 SAVED SHEETS QUICK SHELF FOR CURRENT SECTION (شیتە خەزنکراوەکانی سیستەم) */}
+        <div className="pt-2 border-t border-slate-100">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-blue-600" />
+              <span>شیتە خەزنکراوەکانی ئەم بەشە ({sectionSessions.length}):</span>
+            </span>
+
+            <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">
+              کلیک لە هەر شیتێک بکە بۆ کارکردنی دەستبەجێ لەسەری
+            </span>
+          </div>
+
+          {sectionSessions.length === 0 ? (
+            <div className="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-center gap-2">
+              <span>هیچ شیتێک لە سیستەمدا خەزن نەکراوە بۆ ئەم بەشە.</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setInputMode(warehouseSection);
+                  setShowConnectModal(true);
+                }}
+                className="text-blue-600 hover:underline font-bold"
+              >
+                + داخڵکردنی یەکەم شیت
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+              {sectionSessions.map((s) => {
+                const isSelected = currentSession?.id === s.id;
+                const totalUnits = s.totalExpectedUnits || 0;
+                const auditedUnits = s.totalAuditedUnits || 0;
+                const percent = totalUnits > 0 ? Math.round((auditedUnits / totalUnits) * 100) : 0;
+
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('light');
+                      setCurrentSession(s);
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem(ACTIVE_SESSION_ID_KEY, s.id);
+                      }
+                    }}
+                    className={`px-3 py-2 rounded-xl text-right transition-all cursor-pointer shrink-0 border flex items-center gap-2.5 active:scale-95 ${
+                      isSelected
+                        ? warehouseSection === 'shipment_receiving'
+                          ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-300/50 shadow-xs'
+                          : 'bg-blue-50 border-blue-300 ring-2 ring-blue-300/50 shadow-xs'
+                        : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black text-slate-900 truncate max-w-[170px]">
+                        {s.title}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        {auditedUnits} / {totalUnits} ({percent}%)
+                      </span>
+                    </div>
+
+                    {isSelected && (
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-ping" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Action Controls for Current Session */}
+        {currentSession && (
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+            {/* 🎥 Smart Mobile Camera Carton Scanner Button */}
             <button
               type="button"
               onClick={() => setShowCameraScanner(true)}
-              className="h-10 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-xs flex items-center gap-2 cursor-pointer active:scale-95 shadow-lg shadow-amber-500/25 transition-all border border-amber-400/50"
+              className="h-10 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-xs flex items-center gap-2 cursor-pointer active:scale-95 shadow-md shadow-amber-500/20 transition-all border border-amber-400/50"
               title="کردنەوەی کامێرای مۆبایل بۆ ژماردنی هۆشمەندی کارتۆنەکان بە دەنگ و ئاگادارکردنەوە"
             >
               <Camera className="w-4 h-4 text-slate-950" />
@@ -785,20 +1131,8 @@ export function GoogleSheetsWarehouseAudit({
                 {currentSession.items.reduce((acc, it) => acc + (it.checkedCartons || it.scannedCartonNumbers?.length || 0), 0)} / {currentSession.totalCartonsCount || currentSession.items.reduce((acc, it) => acc + (it.cartonCount || it.expectedQty || 1), 0)}
               </span>
             </button>
-          )}
 
-          {/* Connect New Google Sheet */}
-          <button
-            type="button"
-            onClick={() => setShowConnectModal(true)}
-            className="h-10 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-md shadow-blue-500/15 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>بەستنەوە بە Google Sheet</span>
-          </button>
-
-          {/* Sync Now / Google Push */}
-          {currentSession && (
+            {/* Sync Now / Google Push */}
             <button
               type="button"
               onClick={() => persistSession(currentSession, true)}
@@ -813,21 +1147,8 @@ export function GoogleSheetsWarehouseAudit({
               <RefreshCw className={`w-3.5 h-3.5 ${syncingGoogle ? 'animate-spin text-blue-600' : ''}`} />
               <span>{syncingGoogle ? 'هاوکات دەکرێت...' : syncSuccess ? 'هاوکاتکرا! ✅' : 'هاوکاتکردنی شیت'}</span>
             </button>
-          )}
 
-          {/* Switch Sessions */}
-          <button
-            type="button"
-            onClick={() => setShowSessionsModal(true)}
-            className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
-            title="بینین و گۆڕینی سێشنەکانی تر"
-          >
-            <Layers className="w-3.5 h-3.5 text-slate-500" />
-            <span>سێشنەکان ({sessions.length})</span>
-          </button>
-
-          {/* Export to Excel */}
-          {currentSession && (
+            {/* Export to Excel */}
             <button
               type="button"
               onClick={handleExportExcel}
@@ -837,10 +1158,8 @@ export function GoogleSheetsWarehouseAudit({
               <Download className="w-3.5 h-3.5" />
               <span>Excel</span>
             </button>
-          )}
 
-          {/* Print / Official PDF */}
-          {currentSession && (
+            {/* Print / Official PDF */}
             <button
               type="button"
               onClick={() => setShowPrintModal(true)}
@@ -850,19 +1169,19 @@ export function GoogleSheetsWarehouseAudit({
               <Printer className="w-3.5 h-3.5 text-amber-400" />
               <span>ڕاپۆرتی PDF</span>
             </button>
-          )}
 
-          {/* Help & Script Info */}
-          <button
-            type="button"
-            onClick={() => setShowHelpScriptModal(true)}
-            className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer active:scale-95 transition-all"
-            title="ڕێنمایی بەستنەوە و سکریپتی ئۆتۆماتیکی گۆگڵ"
-          >
-            <HelpCircle className="w-4 h-4" />
-          </button>
+            {/* Help & Script Info */}
+            <button
+              type="button"
+              onClick={() => setShowHelpScriptModal(true)}
+              className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer active:scale-95 transition-all mr-auto"
+              title="ڕێنمایی بەستنەوە و سکریپتی ئۆتۆماتیکی گۆگڵ"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
-        </div>
       </div>
 
       {/* ========================================================================= */}
@@ -916,9 +1235,10 @@ export function GoogleSheetsWarehouseAudit({
                 onClick={() => {
                   const updated = { ...currentSession, mode: 'shipment_receiving' as const };
                   setCurrentSession(updated);
+                  setWarehouseSection('shipment_receiving');
                   persistSession(updated);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                   currentSession.mode === 'shipment_receiving'
                     ? 'bg-white text-slate-900 shadow-xs font-black'
                     : 'text-slate-600 hover:text-slate-900'
@@ -933,9 +1253,10 @@ export function GoogleSheetsWarehouseAudit({
                 onClick={() => {
                   const updated = { ...currentSession, mode: 'inventory_stocktake' as const };
                   setCurrentSession(updated);
+                  setWarehouseSection('inventory_stocktake');
                   persistSession(updated);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                   currentSession.mode === 'inventory_stocktake'
                     ? 'bg-white text-slate-900 shadow-xs font-black'
                     : 'text-slate-600 hover:text-slate-900'

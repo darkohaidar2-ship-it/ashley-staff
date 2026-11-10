@@ -21,7 +21,8 @@ import {
   Delete,
   Fingerprint,
   MessageSquareHeart,
-  Boxes
+  Boxes,
+  Clock
 } from 'lucide-react';
 import { supabaseAuth } from '@/lib/supabase/client';
 import { MobileAuthUser } from './types';
@@ -304,6 +305,57 @@ export function LoginScreen({ onLoginSuccess, onNeedsBinding, onSwitchToFeedback
             {isDark ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
           </button>
         </div>
+
+        {/* 🌟 3 MAIN APP SECTIONS SWITCHER (بەشی تۆمارکردن • بەشی فیدباک • بەشی کۆگا) */}
+        {(onSwitchToFeedback || onSwitchToWarehouse) && (
+          <div className="w-full mt-3">
+            <div className={`p-1 rounded-2xl flex items-center gap-1 transition-colors ${
+              isDark ? 'bg-neutral-900 border border-neutral-800' : 'bg-slate-200/90'
+            }`}>
+              <button
+                type="button"
+                className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-xs ${
+                  isDark ? 'bg-neutral-800 text-white' : 'bg-white text-slate-900'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span className="truncate">تۆمارکردن</span>
+              </button>
+
+              {onSwitchToFeedback && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    onSwitchToFeedback();
+                  }}
+                  className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+                    isDark ? 'text-neutral-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <MessageSquareHeart className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                  <span className="truncate">فیدباک</span>
+                </button>
+              )}
+
+              {onSwitchToWarehouse && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    onSwitchToWarehouse();
+                  }}
+                  className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+                    isDark ? 'text-neutral-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Boxes className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  <span className="truncate">کۆگا</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* 2. BRANDING IDENTITY (Apple SF Pro Typography) */}
         <div className="my-auto py-4 flex flex-col items-center text-center">

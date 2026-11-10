@@ -346,6 +346,49 @@ export default function AshleyMobileApp({
       <div className="min-h-screen w-full bg-slate-900 text-white flex flex-col items-center justify-center p-6 select-none font-sans" dir="rtl">
         <div className="w-full max-w-lg bg-slate-800/95 border border-slate-700/80 rounded-3xl p-8 shadow-2xl backdrop-blur-xl text-center flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
           
+          {/* 🌟 3 MAIN APP SECTIONS SWITCHER ON DESKTOP */}
+          <div className="w-full max-w-sm mb-5">
+            <div className="p-1 rounded-2xl flex items-center gap-1 bg-slate-900 border border-slate-700">
+              <button
+                type="button"
+                className="flex-1 py-2 px-2.5 rounded-xl text-xs font-black bg-slate-800 text-white shadow-xs flex items-center justify-center gap-1.5"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-amber-500" />
+                <span>تۆمارکردن</span>
+              </button>
+
+              {(onSwitchToFeedback || onSwitchPortal) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    if (onSwitchToFeedback) onSwitchToFeedback();
+                    else if (onSwitchPortal) onSwitchPortal('feedback');
+                  }}
+                  className="flex-1 py-2 px-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <MessageSquareHeart className="w-3.5 h-3.5 text-rose-500" />
+                  <span>فیدباک</span>
+                </button>
+              )}
+
+              {(onSwitchToWarehouse || onSwitchPortal) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    if (onSwitchToWarehouse) onSwitchToWarehouse();
+                    else if (onSwitchPortal) onSwitchPortal('warehouse');
+                  }}
+                  className="flex-1 py-2 px-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <Boxes className="w-3.5 h-3.5 text-blue-500" />
+                  <span>کۆگا</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-4 border border-amber-500/30">
             <Smartphone className="w-8 h-8" />
           </div>
@@ -645,7 +688,7 @@ export default function AshleyMobileApp({
           </div>
         </header>
 
-        {/* 📱 3-WAY MOBILE PORTAL SWITCHER (ئامادەبوون • جەردەکە • فیدباک) */}
+        {/* 📱 3-WAY MOBILE PORTAL SWITCHER (تۆمارکردن • فیدباک • کۆگا) */}
         <div className="px-4 pt-3 pb-1">
           <div className={`p-1 rounded-2xl flex items-center gap-1 border shadow-xs transition-colors ${
             isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100/95 border-slate-200/90'
@@ -660,7 +703,24 @@ export default function AshleyMobileApp({
               }`}
             >
               <MapPin className="w-3.5 h-3.5 text-amber-500" />
-              <span>ئامادەبوون</span>
+              <span>بەشی تۆمارکردن</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic('light');
+                if (onSwitchToFeedback) onSwitchToFeedback();
+                else if (onSwitchPortal) onSwitchPortal('feedback');
+              }}
+              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+                isDark 
+                  ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30' 
+                  : 'bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs'
+              }`}
+            >
+              <MessageSquareHeart className="w-3.5 h-3.5 text-rose-500" />
+              <span>بەشی فیدباک</span>
             </button>
 
             <button
@@ -677,24 +737,7 @@ export default function AshleyMobileApp({
               }`}
             >
               <Boxes className="w-3.5 h-3.5 text-blue-500" />
-              <span>جەردەکە</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic('light');
-                if (onSwitchToFeedback) onSwitchToFeedback();
-                else if (onSwitchPortal) onSwitchPortal('feedback');
-              }}
-              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
-                isDark 
-                  ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30' 
-                  : 'bg-white hover:bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs'
-              }`}
-            >
-              <MessageSquareHeart className="w-3.5 h-3.5 text-amber-500" />
-              <span>فیدباک</span>
+              <span>بەشی کۆگا</span>
             </button>
           </div>
         </div>
