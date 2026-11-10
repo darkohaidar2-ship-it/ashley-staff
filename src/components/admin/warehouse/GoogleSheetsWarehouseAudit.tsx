@@ -308,7 +308,16 @@ export function GoogleSheetsWarehouseAudit({
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
   const [showHelpScriptModal, setShowHelpScriptModal] = useState<boolean>(false);
   const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
+  const [showGooglePushModal, setShowGooglePushModal] = useState<boolean>(false);
   const [isAiParsing, setIsAiParsing] = useState<boolean>(false);
+
+  // Google Push & Supabase Save States
+  const [tempWebhookUrl, setTempWebhookUrl] = useState<string>('');
+  const [isPushingGoogle, setIsPushingGoogle] = useState<boolean>(false);
+  const [pushSuccessMsg, setPushSuccessMsg] = useState<string | null>(null);
+  const [pushErrorMsg, setPushErrorMsg] = useState<string | null>(null);
+  const [supabaseSaveSuccess, setSupabaseSaveSuccess] = useState<boolean>(false);
+  const [lastSupabaseSavedTime, setLastSupabaseSavedTime] = useState<string | null>(null);
 
   // Connect Google Sheet Form State
   const [importTab, setImportTab] = useState<'url' | 'file' | 'paste' | 'ai'>('url');
@@ -1046,7 +1055,99 @@ export function GoogleSheetsWarehouseAudit({
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, currentSession.mode === 'shipment_receiving' ? 'پشکنینی باری نوێ' : 'جەردی کۆگا');
-    XLSX.writeFile(wb, `Ashley_${currentSession.mode}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(wb, `Ashley_${currentSession.mode === 'shipment_receiving' ? 'Bar-Dagirtn' : 'Jard'}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  // 💾 دوگمەی ١: خەزنکردنی ڕاستەوخۆ لە سیستەم (Supabase)
+  const handleSaveToSupabase = async () => {
+    if (!currentSession) return;
+    triggerHaptic('success');
+    await persistSession(currentSession, false);
+    const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setLastSupabaseSavedTime(timeStr);
+    setSupabaseSaveSuccess(true);
+    setTimeout(() => setSupabaseSaveSuccess(false), 5000);
+  };
+
+  // 🔄 دوگمەی ٢: گواستنەوە بۆ شیت (زیادکردنی کۆڵۆمەکان)
+  const handlePushToGoogleSheet = async () => {
+    if (!currentSession) return;
+    
+    // If webhookUrl is already configured, attempt live sync push directly
+    if (currentSession.webhookUrl && currentSession.webhookUrl.startsWith('http')) {
+      setIsPushingGoogle(true);
+      setPushErrorMsg(null);
+      try {
+        const res = await fetch('/api/warehouse/sheets-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'sync_to_google',
+            webhookUrl: currentSession.webhookUrl,
+            session: currentSession,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          triggerHaptic('success');
+          setPushSuccessMsg('✅ سەرجەم گۆڕانکارییەکان و ٨ کۆڵۆمی نوێ بە سەرکەوتوویی نێردران بۆ ناو Google Sheet!');
+          setTimeout(() => setPushSuccessMsg(null), 6000);
+          return;
+        } else {
+          setPushErrorMsg(data.error || 'هەڵە لە پەیوەندیکردن بە Google Webhook.');
+          setTempWebhookUrl(currentSession.webhookUrl || '');
+          setShowGooglePushModal(true);
+        }
+      } catch (err: any) {
+        setPushErrorMsg(err.message || 'هەڵەی پەیوەندی لەگەڵ Webhook.');
+        setTempWebhookUrl(currentSession.webhookUrl || '');
+        setShowGooglePushModal(true);
+      } finally {
+        setIsPushingGoogle(false);
+      }
+    } else {
+      // 1. Automatically trigger Excel export with all added columns
+      handleExportExcel();
+      // 2. Open push modal with clear guidance and Webhook link setup
+      setTempWebhookUrl(currentSession.webhookUrl || '');
+      setShowGooglePushModal(true);
+    }
+  };
+
+  // Save Webhook URL & Push directly to Google Sheet
+  const handleSaveWebhookAndPush = async () => {
+    if (!currentSession || !tempWebhookUrl.trim()) return;
+    setIsPushingGoogle(true);
+    setPushErrorMsg(null);
+
+    const updated = { ...currentSession, webhookUrl: tempWebhookUrl.trim() };
+    setCurrentSession(updated);
+    await persistSession(updated, false);
+
+    try {
+      const res = await fetch('/api/warehouse/sheets-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'sync_to_google',
+          webhookUrl: tempWebhookUrl.trim(),
+          session: updated,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        triggerHaptic('success');
+        setPushSuccessMsg('✅ پیرۆزە! شیتەکەت بەستراوە و هەموو کۆڵۆمەکان نێردران بۆ ناو Google Sheet.');
+        setShowGooglePushModal(false);
+        setTimeout(() => setPushSuccessMsg(null), 6000);
+      } else {
+        setPushErrorMsg(data.error || 'نەتوانرا پەیوەندی بە بەستەری Apps Script بکرێت. دڵنیابە لە بەشی Deploy جۆرەکەی Web appە و Who has access کراوەتە Anyone.');
+      }
+    } catch (err: any) {
+      setPushErrorMsg(err.message || 'هەڵە لە پەیوەندی بە Webhook.');
+    } finally {
+      setIsPushingGoogle(false);
+    }
   };
 
   return (
@@ -1355,31 +1456,71 @@ export function GoogleSheetsWarehouseAudit({
               </span>
             </button>
 
-            {/* Sync Now / Google Push */}
+            {/* 💾 دوگمەی ١: خەزنکردنی داتاکە لە سیستەم (Supabase) */}
             <button
               type="button"
-              onClick={() => persistSession(currentSession, true)}
-              disabled={syncingGoogle}
-              className={`h-10 px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all ${
-                syncSuccess 
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-300' 
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              onClick={handleSaveToSupabase}
+              disabled={saving}
+              className={`h-10 px-4 rounded-xl font-black text-xs flex items-center gap-2 cursor-pointer active:scale-95 transition-all shadow-xs ${
+                supabaseSaveSuccess 
+                  ? 'bg-emerald-600 text-white ring-2 ring-emerald-400' 
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300'
               }`}
-              title="هاوکاتکردنی ڕاستەوخۆ و ناردنی گۆڕانکارییەکان بۆ گۆگڵ شیت"
+              title="خەزنکردنی ڕاستەوخۆی سەرجەم ژماردن و گۆڕانکارییەکان لە داتابەیسی ناوەندی سیستەم (Supabase)"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${syncingGoogle ? 'animate-spin text-blue-600' : ''}`} />
-              <span>{syncingGoogle ? 'هاوکات دەکرێت...' : syncSuccess ? 'هاوکاتکرا! ✅' : 'هاوکاتکردنی شیت'}</span>
+              {saving ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-emerald-700" />
+              ) : supabaseSaveSuccess ? (
+                <CheckCircle2 className="w-4 h-4 text-white" />
+              ) : (
+                <Save className="w-4 h-4 text-emerald-700" />
+              )}
+              <span>
+                {saving 
+                  ? 'خەزن دەکرێت...' 
+                  : supabaseSaveSuccess 
+                    ? 'خەزنکرا لە Supabase! ✅' 
+                    : '💾 خەزنکردن لە سیستەم (Supabase)'}
+              </span>
+            </button>
+
+            {/* 🔄 دوگمەی ٢: گواستنەوەی گۆڕانکارییەکان بۆ شیتەکە (لەگەڵ زیادکردنی کۆڵۆمەکان) */}
+            <button
+              type="button"
+              onClick={handlePushToGoogleSheet}
+              disabled={isPushingGoogle}
+              className={`h-10 px-4 rounded-xl font-black text-xs flex items-center gap-2 cursor-pointer active:scale-95 transition-all shadow-xs ${
+                pushSuccessMsg 
+                  ? 'bg-blue-600 text-white ring-2 ring-blue-400' 
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-blue-500/20'
+              }`}
+              title="گواستنەوەی هەموو گۆڕانکارییەکان بۆ Google Sheet و زیادکردنی کۆڵۆمە پێویستەکان"
+            >
+              {isPushingGoogle ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-white" />
+              ) : pushSuccessMsg ? (
+                <CheckCircle2 className="w-4 h-4 text-white" />
+              ) : (
+                <FileSpreadsheet className="w-4 h-4 text-white" />
+              )}
+              <span>
+                {isPushingGoogle 
+                  ? 'ڕەوانەی شیت دەکرێت...' 
+                  : pushSuccessMsg 
+                    ? 'نێردرا بۆ شیت! ✅' 
+                    : '🔄 گواستنەوە بۆ شیت (زیادکردنی کۆڵۆمەکان)'}
+              </span>
             </button>
 
             {/* Export to Excel */}
             <button
               type="button"
               onClick={handleExportExcel}
-              className="h-10 px-3.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
-              title="داگرتنی داتاکان بە فۆرماتی Excel"
+              className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+              title="داگرتنی داتاکان بە فۆرماتی Excel لەگەڵ هەموو کۆڵۆمەکان"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Excel</span>
+              <span>داگرتنی Excel</span>
             </button>
 
             {/* Print / Official PDF */}
@@ -1402,6 +1543,28 @@ export function GoogleSheetsWarehouseAudit({
             >
               <HelpCircle className="w-4 h-4" />
             </button>
+          </div>
+        )}
+
+        {/* 📢 Dynamic Live Success Feedback Banners */}
+        {supabaseSaveSuccess && (
+          <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs font-bold flex items-center gap-2.5 animate-in fade-in duration-200">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>
+              ✅ بە سەرکەوتوویی لە داتابەیسی سیستەم (Supabase) خەزنکرا! سەرجەم گۆڕانکاری و کارتۆنەکان لە هەموو مۆبایل و بەشەکاندا دەستبەجێ بەردەستن.
+            </span>
+            {lastSupabaseSavedTime && (
+              <span className="text-[10px] bg-emerald-200/60 text-emerald-800 px-2.5 py-0.5 rounded-full mr-auto font-mono">
+                {lastSupabaseSavedTime}
+              </span>
+            )}
+          </div>
+        )}
+
+        {pushSuccessMsg && (
+          <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-300 text-blue-950 text-xs font-bold flex items-center gap-2.5 animate-in fade-in duration-200">
+            <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+            <span>{pushSuccessMsg}</span>
           </div>
         )}
 
@@ -2769,6 +2932,226 @@ export function GoogleSheetsWarehouseAudit({
                 ]}
               />
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🔄 MODAL 5: GOOGLE SHEETS LIVE SYNC & ADDED COLUMNS */}
+      {/* ========================================================================= */}
+      {showGooglePushModal && currentSession && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-2xl max-h-[92vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-slate-900 to-blue-950 text-white shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center">
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">
+                    گواستنەوەی گۆڕانکارییەکان و زیادکردنی کۆڵۆمەکان بۆ شیت
+                  </h3>
+                  <p className="text-[11px] text-slate-300 font-medium">
+                    {currentSession.title}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGooglePushModal(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 flex items-center justify-center cursor-pointer transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-5 overflow-y-auto space-y-4 text-xs font-medium text-slate-700">
+              
+              {/* Excel Downloaded Banner */}
+              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-black text-xs block text-emerald-950">
+                    📥 فایلی نوێکراوە لەگەڵ هەموو کۆڵۆمە زیادکراوەکان بە شێوازی Excel (.xlsx) دابەزی!
+                  </span>
+                  <span className="text-[11px] text-emerald-800">
+                    ئەم فایلە سەرجەم داتاکان و ٨ کۆڵۆمی پشکنین، دۆخی کارتۆنەکان و جیاوازییەکانی لەخۆگرتووە.
+                  </span>
+                </div>
+              </div>
+
+              {/* Added Columns Highlight */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <span className="font-black text-xs text-slate-900 flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-blue-600" />
+                  <span>کۆڵۆمە زیادکراوەکانی پشکنین و جەرد کە خەزن دەبن (٨ کۆڵۆم):</span>
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                  <div className="p-2 rounded-xl bg-white border border-slate-200 text-center">
+                    <span className="text-[10px] text-slate-400 block">کۆڵۆمی ١</span>
+                    <span className="text-xs font-bold text-slate-800">کارتۆنی داگیراو</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-white border border-slate-200 text-center">
+                    <span className="text-[10px] text-slate-400 block">کۆڵۆمی ٢</span>
+                    <span className="text-xs font-bold text-slate-800">بڕی ژمێردراو</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-white border border-slate-200 text-center">
+                    <span className="text-[10px] text-slate-400 block">کۆڵۆمی ٣</span>
+                    <span className="text-xs font-bold text-slate-800">جیاوازی و ماوە</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-white border border-slate-200 text-center">
+                    <span className="text-[10px] text-slate-400 block">کۆڵۆمی ٤</span>
+                    <span className="text-xs font-bold text-slate-800">دۆخی پشکنین</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-white border border-slate-200 text-center">
+                    <span className="text-[10px] text-slate-400 block">کۆڵۆمی ٥</span>
+                    <span className="text-xs font-bold text-slate-800">دۆخی فیزیکی</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-white border border-slate-200 text-center">
+                    <span className="text-[10px] text-slate-400 block">کۆڵۆمی ٦</span>
+                    <span className="text-xs font-bold text-slate-800">شوێن لە کۆگا</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-white border border-slate-200 text-center">
+                    <span className="text-[10px] text-slate-400 block">کۆڵۆمی ٧</span>
+                    <span className="text-xs font-bold text-slate-800">ناوی پشکێنەر</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-white border border-slate-200 text-center">
+                    <span className="text-[10px] text-slate-400 block">کۆڵۆمی ٨</span>
+                    <span className="text-xs font-bold text-slate-800">کاتی پشکنین و تێبینی</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Why Google Sheet didn't change automatically */}
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 space-y-1.5">
+                <span className="font-black text-xs flex items-center gap-1.5 text-amber-900">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                  <span>بۆچی لە سەرەتادا گۆڕانکاری بەسەر Google Sheetەکەت نەدەهات؟</span>
+                </span>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  کۆمپانیای گوگڵ (Google) لەبەر پاراستنی ئاسایشی داتاکانت، ڕێگە نادات هیچ بەرنامەیەک لە دەرەوە دەستکاری شیتی تایبەت بکات، مەگەر لە ناو شیتەکە مۆڵەتی پێبدەیت.
+                </p>
+              </div>
+
+              {/* Direct Webhook Setup Box */}
+              <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-3">
+                <span className="font-black text-xs text-blue-950 block">
+                  ⚡ ڕێکخستنی هاوکاتکردنی ڕاستەوخۆ لەگەڵ Google Sheet (بە یەک کلیک):
+                </span>
+                <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-blue-900 leading-relaxed">
+                  <li>لە ناو Google Sheetەکەت، کلیک لە <strong>Extensions</strong> بکە و پاشان <strong>Apps Script</strong>.</li>
+                  <li>تەواوی کۆدی ئەوێ بسڕەوە و ئەم کۆدەی خوارەوە کۆپی بکە و پەیستی بکە:</li>
+                </ol>
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] font-bold text-slate-700">کۆدی ئۆتۆماتیکی Apps Script:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const code = `function doPost(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = JSON.parse(e.postData.contents);
+    if (data.headers && data.rows) {
+      sheet.clear();
+      var output = [data.headers];
+      data.rows.forEach(function(r) { output.push(r); });
+      var numRows = output.length;
+      var numCols = data.headers.length;
+      var range = sheet.getRange(1, 1, numRows, numCols);
+      range.setValues(output);
+      
+      var headerRange = sheet.getRange(1, 1, 1, numCols);
+      headerRange.setFontWeight("bold")
+                 .setBackground("#0f172a")
+                 .setFontColor("#ffffff")
+                 .setHorizontalAlignment("center");
+                 
+      if (numRows > 1) {
+        var dataRange = sheet.getRange(2, 1, numRows - 1, numCols);
+        dataRange.setFontFamily("Segoe UI").setFontSize(10).setHorizontalAlignment("center");
+      }
+      sheet.autoResizeColumns(1, numCols);
+      return ContentService.createTextOutput(JSON.stringify({success: true, count: data.rows.length})).setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: "No data"})).setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+                      handleCopy(code, 'کۆدی سکریپت');
+                    }}
+                    className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-black text-xs cursor-pointer active:scale-95 transition-all flex items-center gap-1"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>کۆپیکردنی کۆد بە یەک کلیک</span>
+                  </button>
+                </div>
+
+                <ol start={3} className="list-decimal list-inside space-y-1.5 text-[11px] text-blue-900 leading-relaxed">
+                  <li>کلیک لە <strong>Deploy &gt; New deployment</strong> بکە، جۆرەکە بکە بە <strong>Web app</strong> و بەشی <strong>Who has access</strong> بکە بە <strong>Anyone</strong>.</li>
+                  <li>لینکی بەدەستهاتوو لێرە دابنێ و کلیک لە دوگمەی سەوز بکە:</li>
+                </ol>
+
+                {/* Webhook Input Field */}
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-[11px] font-bold text-slate-800">
+                    بەستەری Webhook URLی گۆگڵ شیت:
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={tempWebhookUrl}
+                      onChange={(e) => setTempWebhookUrl(e.target.value)}
+                      placeholder="https://script.google.com/macros/s/.../exec"
+                      className="flex-1 h-10 px-3 rounded-xl border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs bg-white"
+                      dir="ltr"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveWebhookAndPush}
+                      disabled={isPushingGoogle || !tempWebhookUrl.trim()}
+                      className="px-4 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-50 transition-all shrink-0 shadow-md"
+                    >
+                      {isPushingGoogle ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>پاشەکەوتکردن و ناردن</span>
+                    </button>
+                  </div>
+                  {pushErrorMsg && (
+                    <p className="text-[11px] font-bold text-rose-600 mt-1">
+                      {pushErrorMsg}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-emerald-700 border border-emerald-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>داگرتنەوەی فایلی Excel بە هەموو کۆڵۆمەکان</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowGooglePushModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs cursor-pointer active:scale-95"
+              >
+                داخستن
+              </button>
             </div>
           </div>
         </div>

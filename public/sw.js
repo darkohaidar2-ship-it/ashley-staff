@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ashley-apple-v43-mobile-operational';
+const CACHE_NAME = 'ashley-apple-v44-sheets-supabase-sync';
 
 const PRECACHE_URLS = [
   '/',

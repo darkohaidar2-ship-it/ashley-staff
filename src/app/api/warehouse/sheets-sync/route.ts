@@ -383,10 +383,8 @@ async function saveStoredSessions(sessions: Record<string, SheetsAuditSession>):
       .from('warehouses')
       .upsert({
         id: SESSIONS_STORE_ID,
+        name: 'Ashley Google Sheets Warehouse Sessions',
         qr_code: jsonStr,
-        warehouse_name: 'Ashley Google Sheets Warehouse Sessions',
-        location: 'Cloud DB',
-        updated_at: new Date().toISOString(),
       });
 
     if (error) {
