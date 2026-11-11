@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ashley-apple-v44-sheets-supabase-sync';
+const CACHE_NAME = 'ashley-apple-v45-sheets-cloud-authority';
 
 const PRECACHE_URLS = [
   '/',

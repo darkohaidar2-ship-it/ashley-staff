@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 export const dynamic = 'force-dynamic';
 
 const SESSIONS_STORE_ID = 'ashley_sheets_audit_sessions';
+const DELETED_IDS_STORE_ID = 'ashley_sheets_deleted_ids';
 
 export interface SheetsAuditItem {
   id: string;
@@ -398,15 +399,256 @@ async function saveStoredSessions(sessions: Record<string, SheetsAuditSession>):
   }
 }
 
+/**
+ * 🗑️ Fetch Deleted Session IDs from Supabase so stale devices never resurrect deleted files
+ */
+async function getDeletedSessionIds(): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', DELETED_IDS_STORE_ID)
+      .maybeSingle();
+
+    if (error || !data?.qr_code) return [];
+    const parsed = typeof data.qr_code === 'string' ? JSON.parse(data.qr_code) : data.qr_code;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function markSessionDeleted(sessionId: string): Promise<string[]> {
+  const existing = await getDeletedSessionIds();
+  const next = Array.from(new Set([sessionId, ...existing])).slice(0, 300);
+  try {
+    await supabase
+      .from('warehouses')
+      .upsert({
+        id: DELETED_IDS_STORE_ID,
+        name: 'Ashley Deleted Warehouse Sheet IDs',
+        qr_code: JSON.stringify(next),
+      });
+  } catch (err) {
+    logger.warn('[SheetsSync API] Failed storing deleted id:', err);
+  }
+  return next;
+}
+
+/**
+ * 📊 Build unified Google Sheet write-back payload (supports BOTH adding audit columns in-place & full table sync)
+ */
+function buildAuditSheetPayload(session: SheetsAuditSession) {
+  const items: SheetsAuditItem[] = session.items || [];
+  const headers = [
+    'کۆدی مۆدێل (Model)',
+    'ناوی کاڵا (Item Description)',
+    'بڕی بارکراو / خشتە (Expected Qty)',
+    'بڕی ژمێردراو / داگیراو (Audited Qty)',
+    'جیاوازی دانە (Qty Variance)',
+    'کۆی کارتۆن (Total Cartons)',
+    'کارتۆنی داگیراو (Checked Cartons)',
+    'کارتۆنە لێدراوەکان (Scanned Box #)',
+    'دانە لە کارتۆن (Pcs/Carton)',
+    'دۆخی پشکنین (Audit Status)',
+    'دۆخی فیزیکی (Condition)',
+    'شوێن لە کۆگا (Rack/Location)',
+    'پشکێنەر (Audited By)',
+    'دواین کاتی گۆڕانکاری (Last Modified)',
+    'تێبینی (Audit Notes)'
+  ];
+
+  const auditColumnHeaders = [
+    'بڕی ژمێردراو / داگیراو (Audited Qty)',
+    'جیاوازی دانە (Qty Variance)',
+    'کارتۆنی داگیراو (Checked Cartons)',
+    'کارتۆنە لێدراوەکان (Scanned Box #)',
+    'دۆخی پشکنین (Audit Status)',
+    'دۆخی فیزیکی (Condition)',
+    'شوێن لە کۆگا (Rack/Location)',
+    'پشکێنەر و کات (Audited By & Time)',
+    'تێبینی (Audit Notes)'
+  ];
+
+  const rows: any[][] = [];
+  const itemRecords: Array<{ rowIndex: number; model: string; auditValues: Record<string, any> }> = [];
+
+  items.forEach((i) => {
+    const totalCtn = i.cartonCount || (i.pcsPerCarton && i.expectedQty ? Math.ceil(i.expectedQty / i.pcsPerCarton) : i.expectedQty) || 1;
+    const checkedCtn = i.checkedCartons ?? (i.scannedCartonNumbers?.length ?? (i.pcsPerCarton ? Math.floor(i.checkedQty / i.pcsPerCarton) : i.checkedQty));
+    const scannedBoxesStr = Array.isArray(i.scannedCartonNumbers) && i.scannedCartonNumbers.length > 0
+      ? i.scannedCartonNumbers.join(', ')
+      : checkedCtn > 0 ? `1-${checkedCtn}` : '-';
+
+    let statusKurdish = 'چاوەڕوان';
+    if (i.auditStatus === 'verified') statusKurdish = '✅ هاوتا و تەواو';
+    else if (i.auditStatus === 'deficit') statusKurdish = `⚠️ کەمی هەیە (${i.variance})`;
+    else if (i.auditStatus === 'excess') statusKurdish = `➕ زیادەیە (+${i.variance})`;
+    else if (i.auditStatus === 'damaged') statusKurdish = '❌ شکاو / زیانلێکەوتوو';
+
+    let conditionKurdish = 'پاکەتکراو';
+    if (i.condition === 'Wrapped') conditionKurdish = 'لەفکراو';
+    else if (i.condition === 'Damaged') conditionKurdish = 'تێکچوو/شکاو';
+    else if (i.condition === 'Need Wrapped') conditionKurdish = 'پێویستی بە لەفە';
+    else if (i.condition === 'Normal') conditionKurdish = 'ئاسایی';
+
+    const lastModifiedStr = i.lastAuditedAt
+      ? new Date(i.lastAuditedAt).toLocaleString('en-GB', { hour12: false })
+      : '-';
+    const auditorStr = `${i.auditedBy || session.auditedBy || 'Admin'} (${lastModifiedStr})`;
+
+    rows.push([
+      i.model,
+      i.name,
+      i.expectedQty,
+      i.checkedQty,
+      i.variance,
+      totalCtn,
+      checkedCtn,
+      scannedBoxesStr,
+      i.pcsPerCarton || 1,
+      statusKurdish,
+      conditionKurdish,
+      i.rackLocation || '',
+      i.auditedBy || session.auditedBy || 'Admin',
+      lastModifiedStr,
+      i.notes || ''
+    ]);
+
+    itemRecords.push({
+      rowIndex: i.rowIndex,
+      model: i.model,
+      auditValues: {
+        'بڕی ژمێردراو / داگیراو (Audited Qty)': i.checkedQty,
+        'جیاوازی دانە (Qty Variance)': i.variance,
+        'کارتۆنی داگیراو (Checked Cartons)': `${checkedCtn} / ${totalCtn}`,
+        'کارتۆنە لێدراوەکان (Scanned Box #)': scannedBoxesStr,
+        'دۆخی پشکنین (Audit Status)': statusKurdish,
+        'دۆخی فیزیکی (Condition)': conditionKurdish,
+        'شوێن لە کۆگا (Rack/Location)': i.rackLocation || '',
+        'پشکێنەر و کات (Audited By & Time)': auditorStr,
+        'تێبینی (Audit Notes)': i.notes || '',
+      },
+    });
+  });
+
+  return {
+    action: 'sync_audit_columns',
+    sessionId: session.id,
+    title: session.title,
+    mode: session.mode,
+    updatedAt: new Date().toISOString(),
+    headers,
+    auditColumnHeaders,
+    rows,
+    itemRecords,
+  };
+}
+
+/**
+ * 🚀 Push audit updates directly to Google Apps Script Webhook and strictly verify response
+ */
+async function pushSessionToAppsScript(webhookUrl: string, session: SheetsAuditSession): Promise<{
+  ok: boolean;
+  status?: number;
+  updatedRows?: number;
+  mode?: string;
+  error?: string;
+}> {
+  const cleanUrl = (webhookUrl || '').trim();
+  if (!cleanUrl.startsWith('http')) {
+    return { ok: false, error: 'لینکی Webhook دروست نییە.' };
+  }
+  if (cleanUrl.includes('docs.google.com/spreadsheets')) {
+    return {
+      ok: false,
+      error: 'ئەم بەستەرە لینکی ئاسایی شیتەکەیە! بۆ نووسینی ڕاستەوخۆ، پێویستە لینکی Google Apps Script Web App دابنێیت کە بە https://script.google.com/macros/s/.../exec دەستپێدەکات.',
+    };
+  }
+
+  try {
+    const payload = buildAuditSheetPayload(session);
+    const postRes = await fetch(cleanUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      cache: 'no-store',
+    });
+
+    const responseText = await postRes.text();
+
+    // Detect HTML login screen / Apps Script permissions block
+    if (
+      responseText.includes('accounts.google.com') ||
+      responseText.includes('ServiceLogin') ||
+      responseText.trim().startsWith('<!DOCTYPE') ||
+      responseText.trim().startsWith('<html')
+    ) {
+      return {
+        ok: false,
+        status: postRes.status,
+        error: 'گۆگڵ داوای داخڵبوون (Sign in) دەکات و ڕێگەی بە Webhook نەدا! لە Google Apps Script بڕۆ Deploy > Manage deployments و بەشی "Who has access" بگۆڕە بۆ "Anyone".',
+      };
+    }
+
+    if (!postRes.ok) {
+      return {
+        ok: false,
+        status: postRes.status,
+        error: `سێرڤەری گۆگڵ کۆدی هەڵەی ${postRes.status} گەڕاندەوە.`,
+      };
+    }
+
+    try {
+      const parsed = JSON.parse(responseText);
+      if (parsed && parsed.success === false) {
+        return {
+          ok: false,
+          status: postRes.status,
+          error: parsed.error || 'سکریپتی Google Sheet هەڵەیەکی گەڕاندەوە.',
+        };
+      }
+      if (parsed && parsed.success === true) {
+        return {
+          ok: true,
+          status: postRes.status,
+          updatedRows: parsed.updatedRows ?? parsed.count,
+          mode: parsed.mode,
+        };
+      }
+    } catch {
+      return {
+        ok: false,
+        status: postRes.status,
+        error: 'وەڵامی Google Apps Script فۆرماتی JSONی دروستی نەبوو. دڵنیابە کۆدە نوێیەکەی Apps Scriptت بە تەواوی کۆپی کردووە و وەشانی نوێت Deploy کردووە.',
+      };
+    }
+
+    return { ok: true, status: postRes.status };
+  } catch (err: any) {
+    return {
+      ok: false,
+      error: err?.message || 'نەتوانرا پەیوەندی بە Google Webhook بکرێت.',
+    };
+  }
+}
+
 // =============================================================================
 // GET HANDLER
 // =============================================================================
 export async function GET(req: NextRequest) {
   try {
-    const sessions = await getStoredSessions();
+    const [sessions, deletedIds] = await Promise.all([
+      getStoredSessions(),
+      getDeletedSessionIds(),
+    ]);
     return NextResponse.json({
       success: true,
       sessions: Object.values(sessions).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+      deletedIds,
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message || 'Server error' }, { status: 500 });
@@ -542,7 +784,13 @@ export async function POST(req: NextRequest) {
       // Save to Supabase
       const allSessions = await getStoredSessions();
       allSessions[sessionId] = session;
-      await saveStoredSessions(allSessions);
+      const saved = await saveStoredSessions(allSessions);
+      if (!saved) {
+        return NextResponse.json({
+          success: false,
+          error: 'شیتەکە خوێندرایەوە بەڵام خەزنکردنی لە Supabase سەرکەوتوو نەبوو.',
+        }, { status: 500 });
+      }
 
       return NextResponse.json({
         success: true,
@@ -607,7 +855,13 @@ export async function POST(req: NextRequest) {
 
       const allSessions = await getStoredSessions();
       allSessions[sessionId] = session;
-      await saveStoredSessions(allSessions);
+      const saved = await saveStoredSessions(allSessions);
+      if (!saved) {
+        return NextResponse.json({
+          success: false,
+          error: 'فایلەکە خوێندرایەوە بەڵام خەزنکردنی لە Supabase سەرکەوتوو نەبوو.',
+        }, { status: 500 });
+      }
 
       return NextResponse.json({
         success: true,
@@ -629,6 +883,8 @@ export async function POST(req: NextRequest) {
       const items: SheetsAuditItem[] = session.items || [];
       let totalExpected = 0;
       let totalAudited = 0;
+      let totalCartons = 0;
+      let totalAuditedCartons = 0;
       let matchedCount = 0;
       let discrepantCount = 0;
       let damagedCount = 0;
@@ -636,6 +892,8 @@ export async function POST(req: NextRequest) {
       items.forEach(i => {
         totalExpected += i.expectedQty || 0;
         totalAudited += i.checkedQty || 0;
+        totalCartons += i.cartonCount || i.expectedQty || 0;
+        totalAuditedCartons += i.checkedCartons ?? (i.scannedCartonNumbers?.length || 0);
         if (i.condition === 'Damaged' || i.auditStatus === 'damaged') damagedCount++;
         else if (i.checkedQty > 0 && i.variance === 0) matchedCount++;
         else if (i.checkedQty > 0 && i.variance !== 0) discrepantCount++;
@@ -646,6 +904,8 @@ export async function POST(req: NextRequest) {
         totalItemsCount: items.length,
         totalExpectedUnits: totalExpected,
         totalAuditedUnits: totalAudited,
+        totalCartonsCount: totalCartons,
+        totalAuditedCartons: totalAuditedCartons,
         matchedCount,
         discrepantCount,
         damagedCount,
@@ -656,45 +916,12 @@ export async function POST(req: NextRequest) {
       allSessions[session.id] = updatedSession;
       const saved = await saveStoredSessions(allSessions);
 
-      // Auto-sync back to Google Sheet if Webhook URL is configured
+      // Auto-sync back to Google Sheet if Webhook URL is configured (using unified column-preserving engine)
       let webhookSyncResult = null;
-      if (session.webhookUrl && typeof session.webhookUrl === 'string' && session.webhookUrl.startsWith('http')) {
-        try {
-          const syncRes = await fetch(session.webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'update_audit',
-              sessionId: session.id,
-              title: session.title,
-              mode: session.mode,
-              updatedAt: new Date().toISOString(),
-              summary: {
-                totalItems: items.length,
-                totalExpected,
-                totalAudited,
-                matchedCount,
-                discrepantCount,
-                damagedCount,
-              },
-              rows: items.map(i => ({
-                model: i.model,
-                name: i.name,
-                expectedQty: i.expectedQty,
-                checkedQty: i.checkedQty,
-                variance: i.variance,
-                condition: i.condition,
-                auditStatus: i.auditStatus,
-                rackLocation: i.rackLocation || '',
-                notes: i.notes || '',
-                lastAuditedAt: i.lastAuditedAt || '',
-              })),
-            }),
-          });
-          webhookSyncResult = { status: syncRes.status, ok: syncRes.ok };
-        } catch (webhookErr: any) {
-          logger.warn('[SheetsSync API] Webhook push warning:', webhookErr);
-          webhookSyncResult = { ok: false, error: webhookErr.message };
+      if (updatedSession.webhookUrl && typeof updatedSession.webhookUrl === 'string' && updatedSession.webhookUrl.startsWith('http')) {
+        webhookSyncResult = await pushSessionToAppsScript(updatedSession.webhookUrl, updatedSession);
+        if (!webhookSyncResult.ok) {
+          logger.warn('[SheetsSync API] Webhook push warning:', webhookSyncResult.error);
         }
       }
 
@@ -719,8 +946,9 @@ export async function POST(req: NextRequest) {
         delete allSessions[sessionId];
         await saveStoredSessions(allSessions);
       }
+      const deletedIds = await markSessionDeleted(sessionId);
 
-      return NextResponse.json({ success: true, deletedId: sessionId });
+      return NextResponse.json({ success: true, deletedId: sessionId, deletedIds });
     }
 
     // -------------------------------------------------------------------------
@@ -732,82 +960,20 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'لینکی Webhook یان داتای سێشن بەردەست نییە' }, { status: 400 });
       }
 
-      const items: SheetsAuditItem[] = session.items || [];
-      const headers = [
-        'کۆدی مۆدێل (Model)',
-        'ناوی کاڵا (Item Description)',
-        'بڕی بارکراو / خشتە (Expected Qty)',
-        'بڕی ژمێردراو / داگیراو (Audited Qty)',
-        'جیاوازی دانە (Qty Variance)',
-        'کۆی کارتۆن (Total Cartons)',
-        'کارتۆنی داگیراو (Checked Cartons)',
-        'کارتۆنە لێدراوەکان (Scanned Box #)',
-        'دانە لە کارتۆن (Pcs/Carton)',
-        'دۆخی پشکنین (Audit Status)',
-        'دۆخی فیزیکی (Condition)',
-        'شوێن لە کۆگا (Rack/Location)',
-        'پشکێنەر (Audited By)',
-        'دواین کاتی گۆڕانکاری (Last Modified)',
-        'تێبینی (Audit Notes)'
-      ];
-
-      const rows = items.map(i => {
-        const totalCtn = i.cartonCount || (i.pcsPerCarton && i.expectedQty ? Math.ceil(i.expectedQty / i.pcsPerCarton) : i.expectedQty) || 1;
-        const checkedCtn = i.checkedCartons ?? (i.scannedCartonNumbers?.length ?? (i.pcsPerCarton ? Math.floor(i.checkedQty / i.pcsPerCarton) : i.checkedQty));
-        const scannedBoxesStr = Array.isArray(i.scannedCartonNumbers) && i.scannedCartonNumbers.length > 0 
-          ? i.scannedCartonNumbers.join(', ') 
-          : checkedCtn > 0 ? `1-${checkedCtn}` : '-';
-        
-        let statusKurdish = 'چاوەڕوان';
-        if (i.auditStatus === 'verified') statusKurdish = '✅ هاوتا و تەواو';
-        else if (i.auditStatus === 'deficit') statusKurdish = `⚠️ کەمی هەیە (${i.variance})`;
-        else if (i.auditStatus === 'excess') statusKurdish = `➕ زیادەیە (+${i.variance})`;
-        else if (i.auditStatus === 'damaged') statusKurdish = '❌ شکاو / زیانلێکەوتوو';
-
-        let conditionKurdish = 'پاکەتکراو';
-        if (i.condition === 'Wrapped') conditionKurdish = 'لەفکراو';
-        else if (i.condition === 'Damaged') conditionKurdish = 'تێکچوو/شکاو';
-        else if (i.condition === 'Need Wrapped') conditionKurdish = 'پێویستی بە لەفە';
-        else if (i.condition === 'Normal') conditionKurdish = 'ئاسایی';
-
-        const lastModifiedStr = i.lastAuditedAt 
-          ? new Date(i.lastAuditedAt).toLocaleString('en-GB', { hour12: false }) 
-          : '-';
-
-        return [
-          i.model,
-          i.name,
-          i.expectedQty,
-          i.checkedQty,
-          i.variance,
-          totalCtn,
-          checkedCtn,
-          scannedBoxesStr,
-          i.pcsPerCarton || 1,
-          statusKurdish,
-          conditionKurdish,
-          i.rackLocation || '',
-          i.auditedBy || session.auditedBy || 'Admin',
-          lastModifiedStr,
-          i.notes || ''
-        ];
-      });
-
-      const postRes = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'sync_table',
-          title: session.title,
-          updatedAt: new Date().toISOString(),
-          headers,
-          rows,
-        }),
-      });
+      const result = await pushSessionToAppsScript(webhookUrl, session);
+      if (!result.ok) {
+        return NextResponse.json({
+          success: false,
+          status: result.status || 400,
+          error: result.error || 'نەتوانرا داتاکان بنێردرێن بۆ Google Sheet.',
+        });
+      }
 
       return NextResponse.json({
-        success: postRes.ok,
-        status: postRes.status,
+        success: true,
+        status: result.status || 200,
+        updatedRows: result.updatedRows,
+        mode: result.mode,
       });
     }
 

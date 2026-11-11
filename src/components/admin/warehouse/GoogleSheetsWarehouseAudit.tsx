@@ -52,211 +52,159 @@ import * as XLSX from 'xlsx';
 // 💾 Local Storage Keys for 100% Persistent Data Guarantee
 const LOCAL_STORAGE_KEY = 'ashley_warehouse_saved_sessions_v2';
 const ACTIVE_SESSION_ID_KEY = 'ashley_warehouse_active_session_id';
+const DELETED_IDS_STORAGE_KEY = 'ashley_warehouse_deleted_ids_v1';
 
-// 📦 Seeded Standard Sessions (بار داگرتنی کانتینەر و تۆمارکردنی جەرد) for instant operational readiness on mobile
-const DEFAULT_SEEDED_SESSIONS: SheetsAuditSession[] = [
-  {
-    id: 'ashley-shipment-receiving-seed-01',
-    title: 'باری نوێ • کانتینەری مۆبیلیاتی ئاشڵی (CN-2026-08)',
-    mode: 'shipment_receiving',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    auditedBy: 'کارمەندی کۆگا',
-    totalItemsCount: 5,
-    totalExpectedUnits: 43,
-    totalAuditedUnits: 21,
-    totalCartonsCount: 33,
-    totalAuditedCartons: 17,
-    matchedCount: 2,
-    discrepantCount: 3,
-    damagedCount: 0,
-    status: 'active',
-    items: [
-      {
-        id: 'item-cn-1',
-        rowIndex: 1,
-        model: 'ASH-BED-901',
-        name: 'قەرەوێڵەی کینگ سایز ئاشڵی (King Bed Frame)',
-        expectedQty: 8,
-        checkedQty: 2,
-        variance: -6,
-        condition: 'Packaged',
-        auditStatus: 'pending',
-        rackLocation: 'Zone-A-01',
-        cartonCount: 8,
-        pcsPerCarton: 1,
-        checkedCartons: 2,
-        scannedCartonNumbers: [1, 2],
-        notes: 'ماوە: ٢ لە ٨ کارتۆن تۆمارکراوە',
-      },
-      {
-        id: 'item-cn-2',
-        rowIndex: 2,
-        model: 'ASH-SOFA-412',
-        name: 'قەنەفەی مۆدێرنی سێ نەفەری (Sectional Sofa 3-Piece)',
-        expectedQty: 6,
-        checkedQty: 6,
-        variance: 0,
-        condition: 'Packaged',
-        auditStatus: 'verified',
-        rackLocation: 'Zone-A-04',
-        cartonCount: 6,
-        pcsPerCarton: 1,
-        checkedCartons: 6,
-        scannedCartonNumbers: [1, 2, 3, 4, 5, 6],
-        notes: 'سەرجەم کارتۆنەکان تۆمارکران',
-      },
-      {
-        id: 'item-cn-3',
-        rowIndex: 3,
-        model: 'ASH-TABL-305',
-        name: 'مێزی نانخواردنی ٨ نەفەری دار بەڕوو (Dining Table Oak)',
-        expectedQty: 4,
-        checkedQty: 0,
-        variance: -4,
-        condition: 'Packaged',
-        auditStatus: 'pending',
-        rackLocation: 'Zone-B-02',
-        cartonCount: 4,
-        pcsPerCarton: 1,
-        checkedCartons: 0,
-        scannedCartonNumbers: [],
-        notes: 'چاوەڕوانی داگرتنە لە کانتینەر',
-      },
-      {
-        id: 'item-cn-4',
-        rowIndex: 4,
-        model: 'ASH-CHAIR-102',
-        name: 'کورسی مێزی نانخواردن (Dining Chair Set of 2)',
-        expectedQty: 20,
-        checkedQty: 8,
-        variance: -12,
-        condition: 'Packaged',
-        auditStatus: 'pending',
-        rackLocation: 'Zone-B-03',
-        cartonCount: 10,
-        pcsPerCarton: 2,
-        checkedCartons: 4,
-        scannedCartonNumbers: [1, 2, 3, 4],
-        notes: '٤ لە ١٠ کارتۆن (٨ پارچە)',
-      },
-      {
-        id: 'item-cn-5',
-        rowIndex: 5,
-        model: 'ASH-DRES-508',
-        name: 'مێزی مەیکەپ و ئاوێنەی ئاشڵی (Dresser with Mirror)',
-        expectedQty: 5,
-        checkedQty: 5,
-        variance: 0,
-        condition: 'Packaged',
-        auditStatus: 'verified',
-        rackLocation: 'Zone-C-01',
-        cartonCount: 5,
-        pcsPerCarton: 1,
-        checkedCartons: 5,
-        scannedCartonNumbers: [1, 2, 3, 4, 5],
-        notes: 'تەواوکراوە بە سەرکەوتوویی',
-      },
-    ],
-  },
-  {
-    id: 'ashley-inventory-stocktake-seed-02',
-    title: 'جەردی دەوری کۆگای ناوەندی (ST-2026)',
-    mode: 'inventory_stocktake',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    auditedBy: 'لیژنەی جەرد',
-    totalItemsCount: 4,
-    totalExpectedUnits: 43,
-    totalAuditedUnits: 29,
-    totalCartonsCount: 43,
-    totalAuditedCartons: 29,
-    matchedCount: 2,
-    discrepantCount: 2,
-    damagedCount: 0,
-    status: 'active',
-    items: [
-      {
-        id: 'item-st-1',
-        rowIndex: 1,
-        model: 'ASH-NIGHT-201',
-        name: 'کۆمیدی لای قەرەوێڵە (Nightstand 2-Drawer)',
-        expectedQty: 15,
-        checkedQty: 10,
-        variance: -5,
-        condition: 'Packaged',
-        auditStatus: 'pending',
-        rackLocation: 'Zone-A-12',
-        cartonCount: 15,
-        pcsPerCarton: 1,
-        checkedCartons: 10,
-        scannedCartonNumbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-        notes: '١٠ لە ١٥ جەردکراوە',
-      },
-      {
-        id: 'item-st-2',
-        rowIndex: 2,
-        model: 'ASH-TV-804',
-        name: 'مێزی تەلەفزیۆنی دارین ٧٥ ئینج (TV Stand Console)',
-        expectedQty: 7,
-        checkedQty: 7,
-        variance: 0,
-        condition: 'Packaged',
-        auditStatus: 'verified',
-        rackLocation: 'Zone-B-08',
-        cartonCount: 7,
-        pcsPerCarton: 1,
-        checkedCartons: 7,
-        scannedCartonNumbers: [1, 2, 3, 4, 5, 6, 7],
-        notes: 'تەواوە لەگەڵ شیت ڕێکە',
-      },
-      {
-        id: 'item-st-3',
-        rowIndex: 3,
-        model: 'ASH-WARD-602',
-        name: 'کەنتۆری شەش دەرگای ئەوروپی (Wardrobe 6-Door)',
-        expectedQty: 12,
-        checkedQty: 3,
-        variance: -9,
-        condition: 'Packaged',
-        auditStatus: 'pending',
-        rackLocation: 'Zone-C-05',
-        cartonCount: 12,
-        pcsPerCarton: 1,
-        checkedCartons: 3,
-        scannedCartonNumbers: [1, 2, 3],
-        notes: '٣ لە ١٢ کارتۆن جەردکراوە',
-      },
-      {
-        id: 'item-st-4',
-        rowIndex: 4,
-        model: 'ASH-COF-110',
-        name: 'مێزی ناوەڕاستی شووشە و دار (Coffee Table Glass)',
-        expectedQty: 9,
-        checkedQty: 9,
-        variance: 0,
-        condition: 'Packaged',
-        auditStatus: 'verified',
-        rackLocation: 'Zone-D-02',
-        cartonCount: 9,
-        pcsPerCarton: 1,
-        checkedCartons: 9,
-        scannedCartonNumbers: [1, 2, 3, 4, 5, 6, 7, 8, 9],
-        notes: 'بە سەرکەوتوویی تەواوبوو',
-      },
-    ],
-  },
-];
+// 📜 Smart Google Apps Script (Adds & Updates Audit Columns Directly Inside Existing Google Sheet Without Erasing Original Columns!)
+const ASHLEY_APPS_SCRIPT_CODE = `function doPost(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = JSON.parse(e.postData.contents);
+
+    var auditHeaders = data.auditColumnHeaders || [
+      'بڕی ژمێردراو / داگیراو (Audited Qty)',
+      'جیاوازی دانە (Qty Variance)',
+      'کارتۆنی داگیراو (Checked Cartons)',
+      'کارتۆنە لێدراوەکان (Scanned Box #)',
+      'دۆخی پشکنین (Audit Status)',
+      'دۆخی فیزیکی (Condition)',
+      'شوێن لە کۆگا (Rack/Location)',
+      'پشکێنەر و کات (Audited By & Time)',
+      'تێبینی (Audit Notes)'
+    ];
+
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+
+    if (lastRow >= 2 && lastCol >= 1 && data.itemRecords && data.itemRecords.length > 0) {
+      var maxCheckRows = Math.min(5, lastRow);
+      var topRows = sheet.getRange(1, 1, maxCheckRows, lastCol).getValues();
+      var headerRowNum = 1;
+      for (var hr = 0; hr < topRows.length; hr++) {
+        var nonEmpty = topRows[hr].filter(function(c) { return String(c || '').trim() !== ''; }).length;
+        if (nonEmpty >= 2) { headerRowNum = hr + 1; break; }
+      }
+
+      var sheetHeaders = sheet.getRange(headerRowNum, 1, 1, lastCol).getValues()[0].map(function(h) { return String(h || '').trim(); });
+      var modelColIdx = -1;
+      for (var c = 0; c < sheetHeaders.length; c++) {
+        var hLow = sheetHeaders[c].toLowerCase();
+        if (hLow.indexOf('model') !== -1 || hLow.indexOf('sku') !== -1 || hLow.indexOf('code') !== -1 || hLow.indexOf('مۆدێل') !== -1 || hLow.indexOf('کۆد') !== -1) {
+          modelColIdx = c;
+          break;
+        }
+      }
+      if (modelColIdx === -1) modelColIdx = 0;
+
+      var dataStartRow = headerRowNum + 1;
+      var numDataRows = Math.max(0, lastRow - headerRowNum);
+      var modelRowMap = {};
+      if (numDataRows > 0) {
+        var existingRows = sheet.getRange(dataStartRow, 1, numDataRows, lastCol).getValues();
+        for (var r = 0; r < existingRows.length; r++) {
+          var mVal = String(existingRows[r][modelColIdx] || '').trim().toLowerCase();
+          if (mVal && !modelRowMap[mVal]) {
+            modelRowMap[mVal] = dataStartRow + r;
+          }
+        }
+      }
+
+      var matchedCount = 0;
+      data.itemRecords.forEach(function(rec) {
+        var key = String(rec.model || '').trim().toLowerCase();
+        if (key && modelRowMap[key]) matchedCount++;
+      });
+
+      if (matchedCount >= 1) {
+        var colMap = {};
+        auditHeaders.forEach(function(hdr) {
+          var idx = sheetHeaders.indexOf(hdr);
+          if (idx === -1) {
+            lastCol++;
+            sheet.getRange(headerRowNum, lastCol).setValue(hdr)
+                 .setFontWeight('bold')
+                 .setBackground('#0f172a')
+                 .setFontColor('#ffffff')
+                 .setHorizontalAlignment('center');
+            sheetHeaders.push(hdr);
+            colMap[hdr] = lastCol;
+          } else {
+            colMap[hdr] = idx + 1;
+          }
+        });
+
+        var updatedCount = 0;
+        data.itemRecords.forEach(function(rec) {
+          var key = String(rec.model || '').trim().toLowerCase();
+          var targetRow = (key && modelRowMap[key]) ? modelRowMap[key] : -1;
+          if (targetRow !== -1 && rec.auditValues) {
+            auditHeaders.forEach(function(hdr) {
+              if (colMap[hdr] && rec.auditValues[hdr] !== undefined) {
+                sheet.getRange(targetRow, colMap[hdr]).setValue(rec.auditValues[hdr]);
+              }
+            });
+            updatedCount++;
+          }
+        });
+
+        sheet.autoResizeColumns(1, lastCol);
+        return ContentService.createTextOutput(JSON.stringify({
+          success: true,
+          mode: 'columns_added_updated',
+          updatedRows: updatedCount
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    if (data.headers && data.rows) {
+      sheet.clear();
+      var output = [data.headers];
+      data.rows.forEach(function(r) { output.push(r); });
+      var numRows = output.length;
+      var numCols = data.headers.length;
+      sheet.getRange(1, 1, numRows, numCols).setValues(output);
+
+      sheet.getRange(1, 1, 1, numCols)
+           .setFontWeight('bold')
+           .setBackground('#0f172a')
+           .setFontColor('#ffffff')
+           .setHorizontalAlignment('center');
+
+      if (numRows > 1) {
+        sheet.getRange(2, 1, numRows - 1, numCols)
+             .setFontFamily('Arial')
+             .setFontSize(10)
+             .setHorizontalAlignment('center');
+      }
+      sheet.autoResizeColumns(1, numCols);
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        mode: 'full_table',
+        updatedRows: data.rows.length
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'No data' })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+
+function isDemoSeedSessionId(id?: string): boolean {
+  if (!id) return false;
+  return id === 'ashley-shipment-receiving-seed-01' || id === 'ashley-stocktake-seed-01' || id === 'ashley-inventory-stocktake-seed-02';
+}
 
 function getLocalWarehouseSessions(): SheetsAuditSession[] {
-  if (typeof window === 'undefined') return DEFAULT_SEEDED_SESSIONS;
+  if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!raw) return DEFAULT_SEEDED_SESSIONS;
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_SEEDED_SESSIONS;
+    return Array.isArray(parsed)
+      ? parsed.filter((s: SheetsAuditSession) => s && s.id && !isDemoSeedSessionId(s.id))
+      : [];
   } catch {
-    return DEFAULT_SEEDED_SESSIONS;
+    return [];
   }
 }
 
@@ -267,6 +215,24 @@ function saveLocalWarehouseSessions(sessionsList: SheetsAuditSession[]) {
   } catch (e) {
     console.warn('[Warehouse] Error saving local sessions:', e);
   }
+}
+
+function getLocalDeletedIds(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(DELETED_IDS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalDeletedIds(ids: string[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(DELETED_IDS_STORAGE_KEY, JSON.stringify(Array.from(new Set(ids)).slice(0, 300)));
+  } catch {}
 }
 
 export interface GoogleSheetsWarehouseAuditProps {
@@ -316,8 +282,10 @@ export function GoogleSheetsWarehouseAudit({
   const [isPushingGoogle, setIsPushingGoogle] = useState<boolean>(false);
   const [pushSuccessMsg, setPushSuccessMsg] = useState<string | null>(null);
   const [pushErrorMsg, setPushErrorMsg] = useState<string | null>(null);
+  const [webhookWarningMsg, setWebhookWarningMsg] = useState<string | null>(null);
   const [supabaseSaveSuccess, setSupabaseSaveSuccess] = useState<boolean>(false);
   const [lastSupabaseSavedTime, setLastSupabaseSavedTime] = useState<string | null>(null);
+  const [refreshingCloud, setRefreshingCloud] = useState<boolean>(false);
 
   // Connect Google Sheet Form State
   const [importTab, setImportTab] = useState<'url' | 'file' | 'paste' | 'ai'>('url');
@@ -352,7 +320,20 @@ export function GoogleSheetsWarehouseAudit({
 
   const isMobileOperational = isMobileEmbedded || isMobileScreen;
 
-  // 1. Initial Local Cache Hydration (0ms blank delay)
+  // Refs to keep cloud sync stable & race-free
+  const currentSessionRef = useRef<SheetsAuditSession | null>(null);
+  const isMobileOperationalRef = useRef<boolean>(isMobileOperational);
+  const lastLocalMutationAtRef = useRef<number>(0);
+
+  useEffect(() => {
+    currentSessionRef.current = currentSession;
+  }, [currentSession]);
+
+  useEffect(() => {
+    isMobileOperationalRef.current = isMobileOperational;
+  }, [isMobileOperational]);
+
+  // 1. Initial Local Cache Hydration (filters out old demo seed sessions automatically)
   useEffect(() => {
     const local = getLocalWarehouseSessions();
     if (local.length > 0) {
@@ -366,53 +347,115 @@ export function GoogleSheetsWarehouseAudit({
           setInputMode(matchedActive.mode);
         }
       }
-      setLoading(false);
+    } else {
+      saveLocalWarehouseSessions([]);
     }
   }, []);
 
-  // 1b. Fetch all stored sessions from cloud on load and merge
-  const loadSessions = useCallback(async () => {
+  // 1b. Fetch authoritative sessions from Supabase (No zombie deleted sheets, no demo phantom sheets!)
+  const loadSessions = useCallback(async (isManualRefresh = false) => {
+    if (isManualRefresh) setRefreshingCloud(true);
     try {
+      const fetchStartedAt = Date.now();
       const res = await fetch('/api/warehouse/sheets-sync', { cache: 'no-store' });
       const data = await res.json();
+
+      // Skip overwriting state if user just edited an item while this background GET was in flight
+      if (!isManualRefresh && lastLocalMutationAtRef.current > fetchStartedAt) {
+        return;
+      }
+
       if (data.success && Array.isArray(data.sessions)) {
-        const local = getLocalWarehouseSessions();
-        const map = new Map<string, SheetsAuditSession>();
-        // Add local first
-        local.forEach(s => map.set(s.id, s));
-        // Merge cloud sessions
-        data.sessions.forEach((srv: SheetsAuditSession) => {
-          const loc = map.get(srv.id);
-          if (!loc || new Date(srv.updatedAt).getTime() >= new Date(loc.updatedAt).getTime()) {
-            map.set(srv.id, srv);
+        const deletedIds: string[] = Array.isArray(data.deletedIds) ? data.deletedIds : [];
+        const deletedSet = new Set<string>([...getLocalDeletedIds(), ...deletedIds]);
+        saveLocalDeletedIds(Array.from(deletedSet));
+
+        const local = getLocalWarehouseSessions().filter(s => !deletedSet.has(s.id) && !isDemoSeedSessionId(s.id));
+        const localById = new Map<string, SheetsAuditSession>();
+        local.forEach(s => localById.set(s.id, s));
+
+        const finalMap = new Map<string, SheetsAuditSession>();
+        const serverList: SheetsAuditSession[] = data.sessions.filter(
+          (s: SheetsAuditSession) => s && s.id && !deletedSet.has(s.id) && !isDemoSeedSessionId(s.id)
+        );
+
+        serverList.forEach((srv: SheetsAuditSession) => {
+          const loc = localById.get(srv.id);
+          // Only prefer local copy if it has a genuinely newer offline edit timestamp
+          if (loc && new Date(loc.updatedAt).getTime() > new Date(srv.updatedAt).getTime() + 1500) {
+            finalMap.set(srv.id, loc);
+          } else {
+            finalMap.set(srv.id, srv);
           }
         });
-        const merged = Array.from(map.values()).sort(
+
+        // Desktop Admin Rescue Sync: if Desktop created a sheet locally (audit_*) before cloud fix, push it to Supabase now!
+        if (!isMobileOperationalRef.current) {
+          for (const loc of local) {
+            if (!finalMap.has(loc.id) && loc.id.startsWith('audit_') && !deletedSet.has(loc.id)) {
+              finalMap.set(loc.id, loc);
+              fetch('/api/warehouse/sheets-sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'save_session', session: loc }),
+              }).catch(() => {});
+            }
+          }
+        }
+
+        const merged = Array.from(finalMap.values()).sort(
           (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         );
 
         setSessions(merged);
         saveLocalWarehouseSessions(merged);
 
-        if (!currentSession && merged.length > 0) {
+        // Keep active currentSession strictly synchronized with authoritative cloud list
+        const cur = currentSessionRef.current;
+        if (!cur || !finalMap.has(cur.id) || deletedSet.has(cur.id) || isDemoSeedSessionId(cur.id)) {
           const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem(ACTIVE_SESSION_ID_KEY) : null;
-          const matched = (savedActiveId ? merged.find(s => s.id === savedActiveId) : null) || merged[0];
+          const matched = (savedActiveId ? merged.find(s => s.id === savedActiveId) : null) || merged[0] || null;
           setCurrentSession(matched);
-          if (matched.mode) {
+          if (matched?.mode) {
             setWarehouseSection(matched.mode);
             setInputMode(matched.mode);
+          }
+        } else {
+          const updatedCur = finalMap.get(cur.id);
+          if (updatedCur && new Date(updatedCur.updatedAt).getTime() > new Date(cur.updatedAt).getTime()) {
+            setCurrentSession(updatedCur);
           }
         }
       }
     } catch {
-      // Offline fallback: already loaded from localStorage
+      // Offline fallback: retain cached localStorage
     } finally {
       setLoading(false);
+      if (isManualRefresh) setRefreshingCloud(false);
     }
-  }, [currentSession]);
+  }, []);
 
   useEffect(() => {
-    loadSessions();
+    loadSessions(false);
+
+    const onFocusOrVisible = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        loadSessions(false);
+      }
+    };
+    window.addEventListener('focus', onFocusOrVisible);
+    document.addEventListener('visibilitychange', onFocusOrVisible);
+    const interval = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        loadSessions(false);
+      }
+    }, 25000);
+
+    return () => {
+      window.removeEventListener('focus', onFocusOrVisible);
+      document.removeEventListener('visibilitychange', onFocusOrVisible);
+      clearInterval(interval);
+    };
   }, [loadSessions]);
 
   // Switch between the Two Primary Warehouse Sections (بار داگرتن vs جەرد)
@@ -421,16 +464,15 @@ export function GoogleSheetsWarehouseAudit({
     setWarehouseSection(mode);
     setInputMode(mode);
 
-    // If active session belongs to this mode, keep it; otherwise find latest for this mode
+    // If active session belongs to this mode, keep it; otherwise find latest for this mode (or null if empty)
     if (currentSession && (currentSession.mode || 'shipment_receiving') === mode) {
       return;
     }
-    const matchingSession = sessions.find(s => (s.mode || 'shipment_receiving') === mode);
-    if (matchingSession) {
-      setCurrentSession(matchingSession);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(ACTIVE_SESSION_ID_KEY, matchingSession.id);
-      }
+    const matchingSession = sessions.find(s => (s.mode || 'shipment_receiving') === mode) || null;
+    setCurrentSession(matchingSession);
+    if (typeof window !== 'undefined') {
+      if (matchingSession) localStorage.setItem(ACTIVE_SESSION_ID_KEY, matchingSession.id);
+      else localStorage.removeItem(ACTIVE_SESSION_ID_KEY);
     }
   };
 
@@ -688,6 +730,8 @@ export function GoogleSheetsWarehouseAudit({
     if (isManualSync) setSyncingGoogle(true);
     else setSaving(true);
 
+    lastLocalMutationAtRef.current = Date.now();
+
     // 1. Immediately persist locally (Guaranteed zero loss)
     setSessions(prev => {
       const exists = prev.some(s => s.id === sessionToSave.id);
@@ -713,20 +757,40 @@ export function GoogleSheetsWarehouseAudit({
       });
       const data = await res.json();
       if (data.success && data.session) {
+        lastLocalMutationAtRef.current = Date.now();
         setCurrentSession(data.session);
         setSessions(prev => {
-          const next = prev.map(s => s.id === data.session.id ? data.session : s);
+          const exists = prev.some(s => s.id === data.session.id);
+          const next = exists
+            ? prev.map(s => s.id === data.session.id ? data.session : s)
+            : [data.session, ...prev];
           saveLocalWarehouseSessions(next);
           return next;
         });
+
+        if (data.webhookSyncResult?.ok) {
+          setWebhookWarningMsg(null);
+          setLastSavedNotice(`خەزنکرا لە سیستەم + Google Sheet ✅ • ${timeStr}`);
+        } else if (data.webhookSyncResult && !data.webhookSyncResult.ok) {
+          setWebhookWarningMsg(
+            data.webhookSyncResult.error ||
+              'داتاکان لە سیستەم خەزنکران، بەڵام نەتوانرا ڕاستەوخۆ بنێردرێن بۆ ناو Google Sheet.'
+          );
+        }
+
         if (isManualSync) {
           setSyncSuccess(true);
           setTimeout(() => setSyncSuccess(false), 3000);
           triggerHaptic('success');
         }
+      } else {
+        setWebhookWarningMsg(data.error || 'خەزنکردن لە سێرڤەر سەرکەوتوو نەبوو — تکایە دووبارە هەوڵبدەرەوە.');
       }
     } catch {
       // Offline fallback: already guaranteed saved in localStorage!
+      if (isManualSync) {
+        setWebhookWarningMsg('پەیوەندی بە سێرڤەر پچڕا — گۆڕانکارییەکان کاتی لەم ئامێرە پارێزران.');
+      }
     } finally {
       setSaving(false);
       setSyncingGoogle(false);
@@ -892,13 +956,8 @@ export function GoogleSheetsWarehouseAudit({
   // 6. Delete a session
   const handleDeleteSession = async (sessionId: string) => {
     if (!confirm('ئایا دڵنیایت لە سڕینەوەی ئەم شیتە لە سیستەم؟')) return;
-    try {
-      await fetch('/api/warehouse/sheets-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete_session', sessionId }),
-      });
-    } catch {}
+    lastLocalMutationAtRef.current = Date.now();
+    saveLocalDeletedIds([sessionId, ...getLocalDeletedIds()]);
     const remaining = sessions.filter(s => s.id !== sessionId);
     setSessions(remaining);
     saveLocalWarehouseSessions(remaining);
@@ -910,6 +969,17 @@ export function GoogleSheetsWarehouseAudit({
         else localStorage.removeItem(ACTIVE_SESSION_ID_KEY);
       }
     }
+    try {
+      const res = await fetch('/api/warehouse/sheets-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_session', sessionId }),
+      });
+      const data = await res.json();
+      if (Array.isArray(data?.deletedIds)) {
+        saveLocalDeletedIds(data.deletedIds);
+      }
+    } catch {}
   };
 
   // Filtered Items
@@ -1072,55 +1142,78 @@ export function GoogleSheetsWarehouseAudit({
   // 🔄 دوگمەی ٢: گواستنەوە بۆ شیت (زیادکردنی کۆڵۆمەکان)
   const handlePushToGoogleSheet = async () => {
     if (!currentSession) return;
-    
-    // If webhookUrl is already configured, attempt live sync push directly
-    if (currentSession.webhookUrl && currentSession.webhookUrl.startsWith('http')) {
-      setIsPushingGoogle(true);
+
+    const webhook = currentSession.webhookUrl?.trim() || '';
+    if (!webhook || !webhook.startsWith('http')) {
+      setTempWebhookUrl('');
       setPushErrorMsg(null);
-      try {
-        const res = await fetch('/api/warehouse/sheets-sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'sync_to_google',
-            webhookUrl: currentSession.webhookUrl,
-            session: currentSession,
-          }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          triggerHaptic('success');
-          setPushSuccessMsg('✅ سەرجەم گۆڕانکارییەکان و ٨ کۆڵۆمی نوێ بە سەرکەوتوویی نێردران بۆ ناو Google Sheet!');
-          setTimeout(() => setPushSuccessMsg(null), 6000);
-          return;
-        } else {
-          setPushErrorMsg(data.error || 'هەڵە لە پەیوەندیکردن بە Google Webhook.');
-          setTempWebhookUrl(currentSession.webhookUrl || '');
-          setShowGooglePushModal(true);
-        }
-      } catch (err: any) {
-        setPushErrorMsg(err.message || 'هەڵەی پەیوەندی لەگەڵ Webhook.');
-        setTempWebhookUrl(currentSession.webhookUrl || '');
-        setShowGooglePushModal(true);
-      } finally {
-        setIsPushingGoogle(false);
-      }
-    } else {
-      // 1. Automatically trigger Excel export with all added columns
-      handleExportExcel();
-      // 2. Open push modal with clear guidance and Webhook link setup
-      setTempWebhookUrl(currentSession.webhookUrl || '');
       setShowGooglePushModal(true);
+      return;
+    }
+
+    if (webhook.includes('docs.google.com/spreadsheets')) {
+      setTempWebhookUrl(webhook);
+      setPushErrorMsg('ئەمە لینکی Google Sheetەکە خۆیەتی نەک Webhook URL! تکایە بەستەری Apps Script (https://script.google.com/macros/s/.../exec) لێرە دابنێ.');
+      setShowGooglePushModal(true);
+      return;
+    }
+
+    setIsPushingGoogle(true);
+    setPushErrorMsg(null);
+    try {
+      const res = await fetch('/api/warehouse/sheets-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'sync_to_google',
+          webhookUrl: webhook,
+          session: currentSession,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        triggerHaptic('success');
+        setWebhookWarningMsg(null);
+        const rowsCount = data.updatedRows ?? currentSession.items.length;
+        setPushSuccessMsg(`✅ ${rowsCount} ڕیز و کۆڵۆمەکانی پشکنین بە سەرکەوتوویی ڕاستەوخۆ لە Google Sheet نوێکرانەوە!`);
+        setTimeout(() => setPushSuccessMsg(null), 7000);
+        return;
+      } else {
+        const errText = data.error || 'هەڵە لە پەیوەندیکردن بە Google Apps Script Webhook.';
+        setWebhookWarningMsg(errText);
+        setPushErrorMsg(errText);
+        setTempWebhookUrl(webhook);
+        setShowGooglePushModal(true);
+      }
+    } catch (err: any) {
+      const errText = err.message || 'هەڵەی پەیوەندی لەگەڵ Webhook.';
+      setWebhookWarningMsg(errText);
+      setPushErrorMsg(errText);
+      setTempWebhookUrl(webhook);
+      setShowGooglePushModal(true);
+    } finally {
+      setIsPushingGoogle(false);
     }
   };
 
   // Save Webhook URL & Push directly to Google Sheet
   const handleSaveWebhookAndPush = async () => {
     if (!currentSession || !tempWebhookUrl.trim()) return;
+    const cleanedWebhook = tempWebhookUrl.trim();
+    if (cleanedWebhook.includes('docs.google.com/spreadsheets')) {
+      setPushErrorMsg('ئەمە لینکی خوێندنەوەی Google Sheetە! بۆ نووسینی ڕاستەوخۆ پێویستە لینکی Deployی Apps Script دابنێیت کە بە https://script.google.com/macros/s/ دەستپێدەکات.');
+      return;
+    }
+    if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(cleanedWebhook)) {
+      setPushErrorMsg('لینکەکە دەبێت بەستەری دروستی Google Apps Script Web App بێت (https://script.google.com/macros/s/.../exec).');
+      return;
+    }
+
     setIsPushingGoogle(true);
     setPushErrorMsg(null);
+    lastLocalMutationAtRef.current = Date.now();
 
-    const updated = { ...currentSession, webhookUrl: tempWebhookUrl.trim() };
+    const updated = { ...currentSession, webhookUrl: cleanedWebhook };
     setCurrentSession(updated);
     await persistSession(updated, false);
 
@@ -1130,21 +1223,27 @@ export function GoogleSheetsWarehouseAudit({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'sync_to_google',
-          webhookUrl: tempWebhookUrl.trim(),
+          webhookUrl: cleanedWebhook,
           session: updated,
         }),
       });
       const data = await res.json();
       if (data.success) {
         triggerHaptic('success');
-        setPushSuccessMsg('✅ پیرۆزە! شیتەکەت بەستراوە و هەموو کۆڵۆمەکان نێردران بۆ ناو Google Sheet.');
+        setWebhookWarningMsg(null);
+        const rowsCount = data.updatedRows ?? updated.items.length;
+        setPushSuccessMsg(`✅ پیرۆزە! شیتەکەت بەستراوە و ${rowsCount} ڕیز لەگەڵ کۆڵۆمەکان ڕاستەوخۆ نێردران بۆ ناو Google Sheet.`);
         setShowGooglePushModal(false);
-        setTimeout(() => setPushSuccessMsg(null), 6000);
+        setTimeout(() => setPushSuccessMsg(null), 7000);
       } else {
-        setPushErrorMsg(data.error || 'نەتوانرا پەیوەندی بە بەستەری Apps Script بکرێت. دڵنیابە لە بەشی Deploy جۆرەکەی Web appە و Who has access کراوەتە Anyone.');
+        const errText = data.error || 'نەتوانرا پەیوەندی بە بەستەری Apps Script بکرێت. دڵنیابە لە بەشی Deploy جۆرەکەی Web appە و Who has access کراوەتە Anyone.';
+        setWebhookWarningMsg(errText);
+        setPushErrorMsg(errText);
       }
     } catch (err: any) {
-      setPushErrorMsg(err.message || 'هەڵە لە پەیوەندی بە Webhook.');
+      const errText = err.message || 'هەڵە لە پەیوەندی بە Webhook.';
+      setWebhookWarningMsg(errText);
+      setPushErrorMsg(errText);
     } finally {
       setIsPushingGoogle(false);
     }
@@ -1362,15 +1461,27 @@ export function GoogleSheetsWarehouseAudit({
 
         {/* 📁 SAVED SHEETS QUICK SHELF FOR CURRENT SECTION (شیتە خەزنکراوەکانی سیستەم) */}
         <div className="pt-2 border-t border-slate-100">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-2 gap-2">
             <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-blue-600" />
               <span>شیتە خەزنکراوەکانی ئەم بەشە ({sectionSessions.length}):</span>
             </span>
 
-            <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">
-              کلیک لە هەر شیتێک بکە بۆ کارکردنی دەستبەجێ لەسەری
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">
+                کلیک لە هەر شیتێک بکە بۆ کارکردنی دەستبەجێ لەسەری
+              </span>
+              <button
+                type="button"
+                onClick={() => loadSessions(true)}
+                disabled={refreshingCloud}
+                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center gap-1 cursor-pointer active:scale-95 disabled:opacity-50"
+                title="نوێکردنەوەی لیستی شیتەکان لە Supabase"
+              >
+                <RefreshCw className={`w-3 h-3 ${refreshingCloud ? 'animate-spin' : ''}`} />
+                <span>🔄 نوێکردنەوە</span>
+              </button>
+            </div>
           </div>
 
           {sectionSessions.length === 0 ? (
@@ -1568,6 +1679,36 @@ export function GoogleSheetsWarehouseAudit({
           </div>
         )}
 
+        {webhookWarningMsg && (
+          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-xs font-bold flex flex-wrap items-center justify-between gap-2.5 animate-in fade-in duration-200">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <span className="leading-relaxed">{webhookWarningMsg}</span>
+            </div>
+            <div className="flex items-center gap-1.5 mr-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setTempWebhookUrl(currentSession?.webhookUrl || '');
+                  setPushErrorMsg(webhookWarningMsg);
+                  setShowGooglePushModal(true);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black cursor-pointer active:scale-95"
+              >
+                چاککردنی Webhook
+              </button>
+              <button
+                type="button"
+                onClick={() => setWebhookWarningMsg(null)}
+                className="w-7 h-7 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 flex items-center justify-center cursor-pointer"
+                aria-label="داخستنی ئاگادارکردنەوە"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* ========================================================================= */}
@@ -1598,18 +1739,42 @@ export function GoogleSheetsWarehouseAudit({
                     {currentSession.mode === 'shipment_receiving' ? 'داگرتنی باری نوێ' : 'جەردی کۆگا'}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 font-medium">
+                <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-slate-500 font-medium">
                   <span>بەروار: {currentSession.createdAt.slice(0, 10)}</span>
+                  {currentSession.googleSheetUrl && (
+                    <>
+                      <span>•</span>
+                      <a 
+                        href={currentSession.googleSheetUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-blue-600 hover:underline flex items-center gap-1 font-mono text-[11px]"
+                      >
+                        <span>کردنەوەی شیتەکە لە Google</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </>
+                  )}
                   <span>•</span>
-                  <a 
-                    href={currentSession.googleSheetUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="text-blue-600 hover:underline flex items-center gap-1 font-mono text-[11px]"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempWebhookUrl(currentSession.webhookUrl || '');
+                      setPushErrorMsg(null);
+                      setShowGooglePushModal(true);
+                    }}
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 cursor-pointer transition-all ${
+                      currentSession.webhookUrl && /^https:\/\/script\.google(usercontent)?\.com\//.test(currentSession.webhookUrl.trim())
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                        : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
+                    }`}
                   >
-                    <span>کردنەوەی شیتەکە لە Google</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
+                    <span>
+                      {currentSession.webhookUrl && /^https:\/\/script\.google(usercontent)?\.com\//.test(currentSession.webhookUrl.trim())
+                        ? '🟢 نووسینی ڕاستەوخۆ بۆ شیت: چالاکە'
+                        : '⚠️ نووسینی ڕاستەوخۆ بۆ شیت نەبەستراوە (کلیک بکە)'}
+                    </span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -2291,9 +2456,18 @@ export function GoogleSheetsWarehouseAudit({
                     value={inputWebhookUrl}
                     onChange={(e) => setInputWebhookUrl(e.target.value)}
                     placeholder="https://script.google.com/macros/s/.../exec (ئارەزوومەندانە)"
-                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-mono outline-none focus:border-blue-500"
+                    className={`w-full h-11 px-3.5 rounded-xl border text-xs font-mono outline-none ${
+                      inputWebhookUrl.trim().includes('docs.google.com/spreadsheets')
+                        ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500'
+                        : 'border-slate-200 focus:border-blue-500'
+                    }`}
                     dir="ltr"
                   />
+                  {inputWebhookUrl.trim().includes('docs.google.com/spreadsheets') && (
+                    <p className="text-[11px] font-bold text-rose-600 mt-1">
+                      ⚠️ ئەمە لینکی Google Sheetە نەک Webhook! لینکی Webhook دەبێت بە https://script.google.com/macros/s/ دەستپێبکات.
+                    </p>
+                  )}
                 </div>
 
                 {/* Submit Buttons */}
@@ -2700,92 +2874,27 @@ export function GoogleSheetsWarehouseAudit({
                 <span className="font-black text-sm block">📌 هەنگاوەکان:</span>
                 <ol className="list-decimal list-inside space-y-1 leading-relaxed">
                   <li>لە Google Sheet بچۆ بەشی سەرەوە کلیک لە <strong>Extensions</strong> بکە و پاشان <strong>Apps Script</strong>.</li>
-                  <li>تەواوی ئەو کۆدە بسڕەوە و ئەم کۆدەی خوارەوە لە شوێنی کۆپی-پەیست بکە:</li>
-                  <li>لە سەرەوەی پەڕەکە کلیک لە <strong>Deploy &gt; New deployment</strong> بکە.</li>
-                  <li>جۆرەکە هەڵبژێرە: <strong>Web app</strong>، و لە بەشی <strong>Who has access</strong> بیکە بە <strong>Anyone</strong>.</li>
-                  <li>کلیک لە <strong>Deploy</strong> بکە و لینکی بەدەستهاتوو وەک <strong>Webhook URL</strong> لێرە دابنێ!</li>
+                  <li>تەواوی کۆدە کۆنەکەی ناو Apps Script بسڕەوە و ئەم کۆدە نوێیەی خوارەوە لە شوێنی دابنێ و پاشەکەوتی بکە (Save):</li>
+                  <li>لە سەرەوەی پەڕەکە کلیک لە <strong>Deploy &gt; New deployment</strong> بکە (ئەگەر پێشتر کردووتە <strong>Manage deployments &gt; Edit &gt; New version</strong>).</li>
+                  <li>جۆرەکە هەڵبژێرە: <strong>Web app</strong> • بەشی <strong>Execute as</strong> بکە <strong>Me</strong> • و زۆر گرنگە بەشی <strong>Who has access</strong> بکەیتە <strong>Anyone</strong> (بۆ ئەوەی گوگڵ داوای لۆگین نەکات).</li>
+                  <li>کلیک لە <strong>Deploy</strong> بکە و مۆڵەت بدە (Authorize)، پاشان ئەو لینکەی بەدەست دێت کە بە <code className="font-mono bg-blue-100 px-1 rounded">https://script.google.com/macros/s/.../exec</code> دەستپێدەکات لێرە وەک <strong>Webhook URL</strong> دابنێ!</li>
                 </ol>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="font-bold text-slate-900">کۆدی Google Apps Script بۆ کۆپیکردن:</span>
+                  <span className="font-bold text-slate-900">کۆدی نوێی Google Apps Script (نووسینی ڕاستەوخۆ بەبێ تێکدانی کۆڵۆمە ئەسڵییەکان):</span>
                   <button
                     type="button"
-                    onClick={() => {
-                      const scriptCode = `function doPost(e) {
-  try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    var data = JSON.parse(e.postData.contents);
-    if (data.headers && data.rows) {
-      sheet.clear();
-      var output = [data.headers];
-      data.rows.forEach(function(r) { output.push(r); });
-      var numRows = output.length;
-      var numCols = data.headers.length;
-      var range = sheet.getRange(1, 1, numRows, numCols);
-      range.setValues(output);
-      
-      // Header styling
-      var headerRange = sheet.getRange(1, 1, 1, numCols);
-      headerRange.setFontWeight("bold")
-                 .setBackground("#0f172a")
-                 .setFontColor("#ffffff")
-                 .setHorizontalAlignment("center");
-                 
-      // Data rows styling
-      if (numRows > 1) {
-        var dataRange = sheet.getRange(2, 1, numRows - 1, numCols);
-        dataRange.setFontFamily("Arial").setFontSize(10).setHorizontalAlignment("center");
-      }
-      sheet.autoResizeColumns(1, numCols);
-      return ContentService.createTextOutput(JSON.stringify({success: true, count: data.rows.length})).setMimeType(ContentService.MimeType.JSON);
-    }
-    return ContentService.createTextOutput(JSON.stringify({success: false, error: "No data"})).setMimeType(ContentService.MimeType.JSON);
-  } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({success: false, error: err.toString()})).setMimeType(ContentService.MimeType.JSON);
-  }
-}`;
-                      handleCopy(scriptCode, 'کۆدی سکریپت');
-                    }}
+                    onClick={() => handleCopy(ASHLEY_APPS_SCRIPT_CODE, 'کۆدی سکریپت')}
                     className="px-3 py-1 rounded-lg bg-blue-600 text-white font-bold text-xs cursor-pointer active:scale-95"
                   >
                     کۆپیکردنی سکریپت
                   </button>
                 </div>
 
-                <pre className="p-3 bg-slate-900 text-emerald-400 rounded-xl text-[11px] font-mono overflow-x-auto" dir="ltr">
-{`function doPost(e) {
-  try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    var data = JSON.parse(e.postData.contents);
-    if (data.headers && data.rows) {
-      sheet.clear();
-      var output = [data.headers];
-      data.rows.forEach(function(r) { output.push(r); });
-      var numRows = output.length;
-      var numCols = data.headers.length;
-      var range = sheet.getRange(1, 1, numRows, numCols);
-      range.setValues(output);
-      
-      // Header styling (Ashley Slate Theme)
-      var headerRange = sheet.getRange(1, 1, 1, numCols);
-      headerRange.setFontWeight("bold")
-                 .setBackground("#0f172a")
-                 .setFontColor("#ffffff")
-                 .setHorizontalAlignment("center");
-                 
-      if (numRows > 1) {
-        var dataRange = sheet.getRange(2, 1, numRows - 1, numCols);
-        dataRange.setFontFamily("Arial").setFontSize(10).setHorizontalAlignment("center");
-      }
-      sheet.autoResizeColumns(1, numCols);
-      return ContentService.createTextOutput(JSON.stringify({success: true, count: data.rows.length})).setMimeType(ContentService.MimeType.JSON);
-    }
-  } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({error: err.toString()})).setMimeType(ContentService.MimeType.JSON);
-  }
-}`}
+                <pre className="p-3 bg-slate-900 text-emerald-400 rounded-xl text-[11px] font-mono overflow-x-auto max-h-64 overflow-y-auto" dir="ltr">
+{ASHLEY_APPS_SCRIPT_CODE}
                 </pre>
               </div>
             </div>
@@ -2970,15 +3079,25 @@ export function GoogleSheetsWarehouseAudit({
             {/* Content Body */}
             <div className="p-5 overflow-y-auto space-y-4 text-xs font-medium text-slate-700">
               
-              {/* Excel Downloaded Banner */}
-              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              {/* Connection Status Banner */}
+              <div className={`p-3.5 rounded-2xl border flex items-start gap-2.5 ${
+                currentSession.webhookUrl && /^https:\/\/script\.google(usercontent)?\.com\//.test(currentSession.webhookUrl.trim())
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : 'bg-amber-50 border-amber-200 text-amber-950'
+              }`}>
+                {currentSession.webhookUrl && /^https:\/\/script\.google(usercontent)?\.com\//.test(currentSession.webhookUrl.trim()) ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                )}
                 <div>
-                  <span className="font-black text-xs block text-emerald-950">
-                    📥 فایلی نوێکراوە لەگەڵ هەموو کۆڵۆمە زیادکراوەکان بە شێوازی Excel (.xlsx) دابەزی!
+                  <span className="font-black text-xs block">
+                    {currentSession.webhookUrl && /^https:\/\/script\.google(usercontent)?\.com\//.test(currentSession.webhookUrl.trim())
+                      ? '🟢 بەستەری Apps Script بەستراوە — دەتوانیت گۆڕانکاری بکەیت یان دووبارە تاقی بکەیتەوە'
+                      : '⚠️ بۆ نووسینی ڕاستەوخۆ لە ناو Google Sheet، بەستەری Apps Script Web App پێویستە'}
                   </span>
-                  <span className="text-[11px] text-emerald-800">
-                    ئەم فایلە سەرجەم داتاکان و ٨ کۆڵۆمی پشکنین، دۆخی کارتۆنەکان و جیاوازییەکانی لەخۆگرتووە.
+                  <span className="text-[11px] opacity-90">
+                    هەروەها هەر کاتێک بتەوێت دەتوانیت لە خوارەوە بە شێوازی Excel (.xlsx) فایلەکە لەگەڵ هەموو کۆڵۆمە زیادکراوەکان دابگریت.
                   </span>
                 </div>
               </div>
@@ -2987,7 +3106,7 @@ export function GoogleSheetsWarehouseAudit({
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                 <span className="font-black text-xs text-slate-900 flex items-center gap-1.5">
                   <Layers className="w-4 h-4 text-blue-600" />
-                  <span>کۆڵۆمە زیادکراوەکانی پشکنین و جەرد کە خەزن دەبن (٨ کۆڵۆم):</span>
+                  <span>کۆڵۆمە زیادکراوەکانی پشکنین و جەرد کە ڕاستەوخۆ لە شیتدا زیاد دەکرێن یان نوێ دەکرێنەوە:</span>
                 </span>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
                   <div className="p-2 rounded-xl bg-white border border-slate-200 text-center">
@@ -3029,61 +3148,28 @@ export function GoogleSheetsWarehouseAudit({
               <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 space-y-1.5">
                 <span className="font-black text-xs flex items-center gap-1.5 text-amber-900">
                   <AlertCircle className="w-4 h-4 text-amber-600" />
-                  <span>بۆچی لە سەرەتادا گۆڕانکاری بەسەر Google Sheetەکەت نەدەهات؟</span>
+                  <span>بۆچی پێویستە لینکی Apps Script Web App دابنێیت و Who has access بکەیتە Anyone؟</span>
                 </span>
                 <p className="text-[11px] text-amber-800 leading-relaxed">
-                  کۆمپانیای گوگڵ (Google) لەبەر پاراستنی ئاسایشی داتاکانت، ڕێگە نادات هیچ بەرنامەیەک لە دەرەوە دەستکاری شیتی تایبەت بکات، مەگەر لە ناو شیتەکە مۆڵەتی پێبدەیت.
+                  لینکی ئاسایی شیت (<code className="font-mono bg-amber-100 px-1 rounded">docs.google.com/spreadsheets</code>) تەنها بۆ خوێندنەوەیە. Google بۆ نووسینی ڕاستەوخۆ پێویستی بە <strong>Apps Script Web App</strong> هەیە کە لە بەشی Deploy <strong>Who has access = Anyone</strong> بێت (ئەگەرنا گوگڵ پەڕەی Sign-In دەنێرێتەوە و داتاکان نانووسرێن).
                 </p>
               </div>
 
               {/* Direct Webhook Setup Box */}
               <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-3">
                 <span className="font-black text-xs text-blue-950 block">
-                  ⚡ ڕێکخستنی هاوکاتکردنی ڕاستەوخۆ لەگەڵ Google Sheet (بە یەک کلیک):
+                  ⚡ ڕێکخستنی هاوکاتکردنی ڕاستەوخۆ لەگەڵ Google Sheet (بەبێ تێکدانی کۆڵۆمە ئەسڵییەکان):
                 </span>
                 <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-blue-900 leading-relaxed">
                   <li>لە ناو Google Sheetەکەت، کلیک لە <strong>Extensions</strong> بکە و پاشان <strong>Apps Script</strong>.</li>
-                  <li>تەواوی کۆدی ئەوێ بسڕەوە و ئەم کۆدەی خوارەوە کۆپی بکە و پەیستی بکە:</li>
+                  <li>تەواوی کۆدی ئەوێ بسڕەوە و ئەم کۆدە نوێیەی خوارەوە کۆپی بکە و پەیستی بکە پاشان پاشەکەوتی (Save) بکە:</li>
                 </ol>
 
                 <div className="flex items-center justify-between pt-1">
                   <span className="text-[11px] font-bold text-slate-700">کۆدی ئۆتۆماتیکی Apps Script:</span>
                   <button
                     type="button"
-                    onClick={() => {
-                      const code = `function doPost(e) {
-  try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    var data = JSON.parse(e.postData.contents);
-    if (data.headers && data.rows) {
-      sheet.clear();
-      var output = [data.headers];
-      data.rows.forEach(function(r) { output.push(r); });
-      var numRows = output.length;
-      var numCols = data.headers.length;
-      var range = sheet.getRange(1, 1, numRows, numCols);
-      range.setValues(output);
-      
-      var headerRange = sheet.getRange(1, 1, 1, numCols);
-      headerRange.setFontWeight("bold")
-                 .setBackground("#0f172a")
-                 .setFontColor("#ffffff")
-                 .setHorizontalAlignment("center");
-                 
-      if (numRows > 1) {
-        var dataRange = sheet.getRange(2, 1, numRows - 1, numCols);
-        dataRange.setFontFamily("Segoe UI").setFontSize(10).setHorizontalAlignment("center");
-      }
-      sheet.autoResizeColumns(1, numCols);
-      return ContentService.createTextOutput(JSON.stringify({success: true, count: data.rows.length})).setMimeType(ContentService.MimeType.JSON);
-    }
-    return ContentService.createTextOutput(JSON.stringify({success: false, error: "No data"})).setMimeType(ContentService.MimeType.JSON);
-  } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({success: false, error: err.toString()})).setMimeType(ContentService.MimeType.JSON);
-  }
-}`;
-                      handleCopy(code, 'کۆدی سکریپت');
-                    }}
+                    onClick={() => handleCopy(ASHLEY_APPS_SCRIPT_CODE, 'کۆدی سکریپت')}
                     className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-black text-xs cursor-pointer active:scale-95 transition-all flex items-center gap-1"
                   >
                     <Copy className="w-3.5 h-3.5" />
@@ -3092,8 +3178,8 @@ export function GoogleSheetsWarehouseAudit({
                 </div>
 
                 <ol start={3} className="list-decimal list-inside space-y-1.5 text-[11px] text-blue-900 leading-relaxed">
-                  <li>کلیک لە <strong>Deploy &gt; New deployment</strong> بکە، جۆرەکە بکە بە <strong>Web app</strong> و بەشی <strong>Who has access</strong> بکە بە <strong>Anyone</strong>.</li>
-                  <li>لینکی بەدەستهاتوو لێرە دابنێ و کلیک لە دوگمەی سەوز بکە:</li>
+                  <li>کلیک لە <strong>Deploy &gt; New deployment</strong> بکە (یاخود <strong>Manage deployments &gt; Edit &gt; New version</strong>)، جۆرەکە بکە <strong>Web app</strong> و <strong>Execute as = Me</strong> و زۆر گرنگە <strong>Who has access = Anyone</strong> هەڵبژێریت.</li>
+                  <li>تەنها ئەو لینکە دابنێ کە بە <code className="font-mono bg-blue-100 px-1 rounded">https://script.google.com/macros/s/.../exec</code> دەستپێدەکات و کلیک لە دوگمەی سەوز بکە:</li>
                 </ol>
 
                 {/* Webhook Input Field */}

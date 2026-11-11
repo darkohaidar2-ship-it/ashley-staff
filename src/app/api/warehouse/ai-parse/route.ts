@@ -29,10 +29,8 @@ async function saveStoredSessions(sessions: Record<string, SheetsAuditSession>):
       .from('warehouses')
       .upsert({
         id: SESSIONS_STORE_ID,
+        name: 'Ashley Google Sheets Warehouse Sessions',
         qr_code: jsonStr,
-        warehouse_name: 'Ashley Google Sheets Warehouse Sessions',
-        location: 'Cloud DB',
-        updated_at: new Date().toISOString(),
       });
 
     if (error) {
@@ -296,7 +294,13 @@ ${text.slice(0, 8000)}
 
     const allSessions = await getStoredSessions();
     allSessions[sessionId] = session;
-    await saveStoredSessions(allSessions);
+    const saved = await saveStoredSessions(allSessions);
+    if (!saved) {
+      return NextResponse.json({
+        success: false,
+        error: 'نەتوانرا شیتەکە لە داتابەیسی Supabase خەزن بکرێت. تکایە دووبارە هەوڵبدەرەوە.',
+      }, { status: 500 });
+    }
 
     return NextResponse.json({
       success: true,
