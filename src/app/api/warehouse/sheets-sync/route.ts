@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase/client';
 import { logger } from '@/lib/logger';
 import * as XLSX from 'xlsx';
+import {
+  analyzeWarehouseCodes,
+  CodeIntelligenceProfile,
+  normalizeDigitsUniversal,
+} from '@/lib/warehouse-code-intelligence';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,10 +31,11 @@ export interface SheetsAuditItem {
   rawColumns?: Record<string, any>;
 
   // 📦 Smart Container & Carton Unloading
-  cartonCount?: number;          // Total expected cartons (ژمارەی کارتۆن / پاکەت)
-  pcsPerCarton?: number;         // Pieces per carton (دانە لە هەر کارتۆنێکدا)
-  checkedCartons?: number;       // Checked cartons so far (کارتۆنە داگیراوەکان)
-  scannedCartonNumbers?: number[]; // Exact box numbers scanned so far, e.g. [1, 2, 4]
+  cartonCount?: number; // Total expected cartons (ژمارەی کارتۆن / پاکەت)
+  pcsPerCarton?: number; // Pieces per carton (دانە لە هەر کارتۆنێکدا / CASE QTY)
+  checkedCartons?: number; // Checked cartons so far (کارتۆنە داگیراوەکان)
+  scannedCartonNumbers?: number[]; // Exact box numbers scanned so far
+  scannedHistory?: Array<{ cartonNumber?: number; qty: number; scannedAt: string }>;
 }
 
 export interface SheetsAuditSession {
@@ -40,14 +46,19 @@ export interface SheetsAuditSession {
   spreadsheetId?: string;
   webhookUrl?: string;
   sheetName?: string;
+  packageId?: string;
+  packageTitle?: string;
+  tabIndex?: number;
+  tabGid?: string;
+  codeProfile?: CodeIntelligenceProfile;
   createdAt: string;
   updatedAt: string;
   auditedBy: string;
   totalItemsCount: number;
   totalExpectedUnits: number;
   totalAuditedUnits: number;
-  totalCartonsCount?: number;    // Total cartons across all items
-  totalAuditedCartons?: number;  // Audited cartons so far
+  totalCartonsCount?: number;
+  totalAuditedCartons?: number;
   matchedCount: number;
   discrepantCount: number;
   damagedCount: number;
@@ -55,11 +66,53 @@ export interface SheetsAuditSession {
   items: SheetsAuditItem[];
 }
 
+export type GoogleSheetDeleteAction = 'none' | 'clear_audit_columns' | 'delete_tab';
+
+/**
+ * 🕒 Format ISO timestamp cleanly in Iraq/Kurdistan local time (Asia/Baghdad)
+ */
+function formatBaghdadTimestamp(iso?: string): string {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '-';
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Baghdad',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(d);
+  } catch {
+    return d.toISOString().replace('T', ' ').slice(0, 19);
+  }
+}
+
 /**
  * 🔍 Extracts Google Spreadsheet candidate export URLs from any Google Sheets link
  */
-function extractSheetCandidates(url: string): { candidateUrls: string[]; spreadsheetId: string | null; gid: string } {
+function extractSheetCandidates(url: string): {
+  xlsxUrl: string | null;
+  candidateCsvUrls: string[];
+  spreadsheetId: string | null;
+  gid: string;
+  isAppsScriptUrl: boolean;
+} {
   const cleanUrl = url.trim();
+  const isAppsScriptUrl = /^https:\/\/script\.google(usercontent)?\.com\//.test(cleanUrl);
+
+  if (isAppsScriptUrl) {
+    return {
+      xlsxUrl: null,
+      candidateCsvUrls: [],
+      spreadsheetId: null,
+      gid: '0',
+      isAppsScriptUrl: true,
+    };
+  }
 
   // 1. Published to Web links (/spreadsheets/d/e/2PACX-...)
   if (cleanUrl.includes('/spreadsheets/d/e/2PACX-') || cleanUrl.includes('/2PACX-')) {
@@ -67,23 +120,28 @@ function extractSheetCandidates(url: string): { candidateUrls: string[]; spreads
     const pubId = pubMatch ? pubMatch[1] : '';
     const gidMatch = cleanUrl.match(/[#&?]gid=([0-9]+)/);
     const gid = gidMatch ? gidMatch[1] : '0';
-    
+
     let base = cleanUrl.split('?')[0].split('#')[0];
     if (base.endsWith('/pubhtml') || base.endsWith('/pub')) {
       base = base.replace(/\/pub(html)?$/, '/pub');
     }
-    
-    const candidateUrls = [
-      `${base}?output=csv${gid !== '0' ? `&gid=${gid}` : ''}`,
-      `${base}?output=tsv${gid !== '0' ? `&gid=${gid}` : ''}`,
-      `${base}?output=csv`,
-    ];
-    return { candidateUrls, spreadsheetId: pubId || null, gid };
+
+    return {
+      xlsxUrl: `${base}?output=xlsx`,
+      candidateCsvUrls: [
+        `${base}?output=csv${gid !== '0' ? `&gid=${gid}` : ''}`,
+        `${base}?output=tsv${gid !== '0' ? `&gid=${gid}` : ''}`,
+        `${base}?output=csv`,
+      ],
+      spreadsheetId: pubId || null,
+      gid,
+      isAppsScriptUrl: false,
+    };
   }
 
   // 2. Direct CSV / TSV / Export links
   if (cleanUrl.includes('/pub?output=csv') || cleanUrl.includes('/export?format=csv') || cleanUrl.includes('/gviz/tq?tqx=out:csv')) {
-    return { candidateUrls: [cleanUrl], spreadsheetId: null, gid: '0' };
+    return { xlsxUrl: null, candidateCsvUrls: [cleanUrl], spreadsheetId: null, gid: '0', isAppsScriptUrl: false };
   }
 
   // 3. Standard Google Sheets ID (/spreadsheets/d/{ID} or /file/d/{ID} or ?id={ID})
@@ -105,25 +163,28 @@ function extractSheetCandidates(url: string): { candidateUrls: string[]; spreads
   const gid = gidMatch ? gidMatch[1] : '0';
 
   if (spreadsheetId) {
-    const candidateUrls = [
-      // Primary: Google Visualization API (Direct, bypasses cookie redirect)
-      `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&gid=${gid}`,
-      // Secondary: Standard Export CSV
-      `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`,
-      // Tertiary: Export TSV
-      `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=tsv&gid=${gid}`,
-      // Fallback without GID
-      `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv`,
-      `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`,
-    ];
-    return { candidateUrls, spreadsheetId, gid };
+    return {
+      // Full multi-tab workbook export! Returns ALL sheets/tabs in exact order
+      xlsxUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=xlsx`,
+      candidateCsvUrls: [
+        `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&gid=${gid}`,
+        `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`,
+        `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=tsv&gid=${gid}`,
+        `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv`,
+        `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`,
+      ],
+      spreadsheetId,
+      gid,
+      isAppsScriptUrl: false,
+    };
   }
 
-  return { candidateUrls: [cleanUrl], spreadsheetId: null, gid: '0' };
+  return { xlsxUrl: null, candidateCsvUrls: [cleanUrl], spreadsheetId: null, gid: '0', isAppsScriptUrl: false };
 }
 
 /**
  * 🧠 Intelligent Column Header Detection for Kurdish, English, and Arabic
+ * Recognizes `ITEM NO` accurately as Model Code and `CASE QTY` as Pcs/Carton!
  */
 function identifyColumns(headerRow: string[]) {
   const cols = {
@@ -139,88 +200,182 @@ function identifyColumns(headerRow: string[]) {
   };
 
   headerRow.forEach((h, idx) => {
-    const text = String(h || '').trim().toLowerCase();
+    const text = normalizeDigitsUniversal(String(h || '')).trim().toLowerCase();
+    if (!text) return;
 
-    // Model / Code
-    if (cols.modelIdx === -1 && (
-      text.includes('model') || text.includes('code') || text.includes('barcode') || 
-      text.includes('مۆدێل') || text.includes('کۆد') || text.includes('کود') || text.includes('رمز') || text.includes('art')
-    )) {
+    const isItemNoHeader =
+      /\bitem\s*(?:no\.?|#|code|num|number|id)?\b/.test(text) && !text.includes('name') && !text.includes('desc');
+
+    // Model / SKU / ITEM NO
+    if (
+      cols.modelIdx === -1 &&
+      (isItemNoHeader ||
+        text.includes('model') ||
+        text.includes('sku') ||
+        text.includes('code') ||
+        text.includes('barcode') ||
+        text.includes('part no') ||
+        text.includes('part #') ||
+        text.includes('مۆدێل') ||
+        text.includes('کۆد') ||
+        text.includes('کود') ||
+        text.includes('رمز') ||
+        text.includes('art'))
+    ) {
       cols.modelIdx = idx;
+      return;
     }
 
-    // Name / Description
-    if (cols.nameIdx === -1 && (
-      text.includes('name') || text.includes('desc') || text.includes('item') || text.includes('title') ||
-      text.includes('ناو') || text.includes('وەسف') || text.includes('المادة') || text.includes('کاڵا') || text.includes('tanım')
-    )) {
+    // Name / Description (never hijack "ITEM NO" as name!)
+    if (
+      cols.nameIdx === -1 &&
+      !isItemNoHeader &&
+      (text.includes('name') ||
+        text.includes('desc') ||
+        text.includes('title') ||
+        text.includes('product') ||
+        (text.includes('item') && !text.includes('qty')) ||
+        text.includes('ناو') ||
+        text.includes('وەسف') ||
+        text.includes('المادة') ||
+        text.includes('کاڵا') ||
+        text.includes('tanım'))
+    ) {
       cols.nameIdx = idx;
     }
 
+    // Pieces Per Carton / CASE QTY
+    if (
+      cols.pcsPerCartonIdx === -1 &&
+      (text.includes('case qty') ||
+        text.includes('case q\'ty') ||
+        text.includes('ctn qty') ||
+        text.includes('pack qty') ||
+        text.includes('pcs/ctn') ||
+        text.includes('qty/ctn') ||
+        text.includes('pcs/box') ||
+        text.includes('pcs/koli') ||
+        text.includes('per carton') ||
+        text.includes('per box') ||
+        text.includes('دانە لە کارتۆن') ||
+        text.includes('قطع بالكرتون'))
+    ) {
+      cols.pcsPerCartonIdx = idx;
+      return;
+    }
+
     // Carton Count / Boxes (ژمارەی کارتۆن)
-    if (cols.cartonCountIdx === -1 && (
-      text.includes('carton') || text.includes('ctn') || text.includes('box') || text.includes('boxes') ||
-      text.includes('کارتۆن') || text.includes('پاکەت') || text.includes('صندوق') || text.includes('طرد') ||
-      text.includes('koli') || text.includes('paket')
-    ) && !text.includes('pcs') && !text.includes('/') && !text.includes('per')) {
+    if (
+      cols.cartonCountIdx === -1 &&
+      (text.includes('carton') ||
+        text.includes('ctn') ||
+        text.includes('box') ||
+        text.includes('boxes') ||
+        text.includes('کارتۆن') ||
+        text.includes('پاکەت') ||
+        text.includes('صندوق') ||
+        text.includes('طرد') ||
+        text.includes('koli') ||
+        text.includes('paket')) &&
+      !text.includes('pcs') &&
+      !text.includes('/') &&
+      !text.includes('per') &&
+      !text.includes('دۆخ') &&
+      !text.includes('حالة') &&
+      !text.includes('داگیراو')
+    ) {
       cols.cartonCountIdx = idx;
     }
 
-    // Pieces Per Carton (دانە لە هەر کارتۆنێکدا)
-    if (cols.pcsPerCartonIdx === -1 && (
-      text.includes('pcs/ctn') || text.includes('qty/ctn') || text.includes('pcs/box') || text.includes('pcs/koli') ||
-      text.includes('per carton') || text.includes('per box') || text.includes('دانە لە کارتۆن') || text.includes('قطع بالكرتون')
-    )) {
-      cols.pcsPerCartonIdx = idx;
-    }
-
-    // Expected / Book Qty (Total pieces)
-    if (cols.expectedQtyIdx === -1 && (
-      text.includes('expected') || text.includes('book') || text.includes('system') || text.includes('shipment') ||
-      text.includes('بارکراو') || text.includes('چاوەڕوان') || text.includes('تۆمارکراو') || text.includes('کۆگا') ||
-      text.includes('total qty') || text.includes('total pcs') || text.includes('کۆی گشتی') || text.includes('مجموع') ||
-      text === 'qty' || text === 'quantity' || text === 'بڕ' || text === 'عدد' || text === 'ژمارە' || text === 'adet'
-    )) {
-      cols.expectedQtyIdx = idx;
-    }
-
-    // Checked / Actual Qty
-    if (cols.checkedQtyIdx === -1 && (
-      text.includes('checked') || text.includes('counted') || text.includes('actual') || text.includes('received') ||
-      text.includes('چێک') || text.includes('ژمێردراو') || text.includes('داگیراو') || text.includes('وەرگیراو')
-    )) {
+    // Checked / Actual Qty (avoid matching expected/case/carton headers)
+    if (
+      cols.checkedQtyIdx === -1 &&
+      !text.includes('case') &&
+      (text.includes('checked') ||
+        text.includes('counted') ||
+        text.includes('actual') ||
+        text.includes('received') ||
+        text.includes('چێک') ||
+        text.includes('ژمێردراو') ||
+        text.includes('داگیراو') ||
+        text.includes('وەرگیراو'))
+    ) {
       cols.checkedQtyIdx = idx;
     }
 
+    // Expected / Book Qty (Total pieces)
+    if (
+      cols.expectedQtyIdx === -1 &&
+      idx !== cols.pcsPerCartonIdx &&
+      idx !== cols.checkedQtyIdx &&
+      (text.includes('expected') ||
+        text.includes('book') ||
+        text.includes('system') ||
+        text.includes('shipment') ||
+        text.includes('بارکراو') ||
+        text.includes('چاوەڕوان') ||
+        text.includes('تۆمارکراو') ||
+        text.includes('کۆگا') ||
+        text.includes('total qty') ||
+        text.includes('total pcs') ||
+        text.includes('کۆی گشتی') ||
+        text.includes('مجموع') ||
+        text === 'qty' ||
+        text === 'quantity' ||
+        text === 'بڕ' ||
+        text === 'عدد' ||
+        text === 'ژمارە' ||
+        text === 'adet')
+    ) {
+      cols.expectedQtyIdx = idx;
+    }
+
     // Condition
-    if (cols.conditionIdx === -1 && (
-      text.includes('condition') || text.includes('status') || text.includes('state') ||
-      text.includes('دۆخ') || text.includes('حالة') || text.includes('کارتۆن')
-    )) {
+    if (
+      cols.conditionIdx === -1 &&
+      (text.includes('condition') || text.includes('status') || text.includes('state') || text.includes('دۆخ') || text.includes('حالة'))
+    ) {
       cols.conditionIdx = idx;
     }
 
     // Rack / Location
-    if (cols.locationIdx === -1 && (
-      text.includes('rack') || text.includes('location') || text.includes('shelf') || text.includes('zone') ||
-      text.includes('شوێن') || text.includes('ڕەفە') || text.includes('الموقع') || text.includes('مەغزەن')
-    )) {
+    if (
+      cols.locationIdx === -1 &&
+      (text.includes('rack') ||
+        text.includes('location') ||
+        text.includes('shelf') ||
+        text.includes('zone') ||
+        text.includes('شوێن') ||
+        text.includes('ڕەفە') ||
+        text.includes('الموقع') ||
+        text.includes('مەغزەن'))
+    ) {
       cols.locationIdx = idx;
     }
 
     // Notes
-    if (cols.notesIdx === -1 && (
-      text.includes('note') || text.includes('comment') || text.includes('remark') ||
-      text.includes('تێبینی') || text.includes('ملاحظ') || text.includes('سەرنج')
-    )) {
+    if (
+      cols.notesIdx === -1 &&
+      (text.includes('note') ||
+        text.includes('comment') ||
+        text.includes('remark') ||
+        text.includes('تێبینی') ||
+        text.includes('ملاحظ') ||
+        text.includes('سەرنج'))
+    ) {
       cols.notesIdx = idx;
     }
   });
 
   // Fallbacks if not detected by keywords
   if (cols.modelIdx === -1 && headerRow.length > 0) cols.modelIdx = 0;
-  if (cols.nameIdx === -1 && headerRow.length > 1) cols.nameIdx = 1;
-  if (cols.expectedQtyIdx === -1 && headerRow.length > 2) cols.expectedQtyIdx = 2;
+  if (cols.nameIdx === -1 && headerRow.length > 1) {
+    cols.nameIdx = cols.modelIdx === 1 ? 0 : 1;
+  }
+  if (cols.expectedQtyIdx === -1 && headerRow.length > 2) {
+    const qtyCandidate = headerRow.findIndex((_, i) => i !== cols.modelIdx && i !== cols.nameIdx && i !== cols.pcsPerCartonIdx);
+    if (qtyCandidate !== -1) cols.expectedQtyIdx = qtyCandidate;
+  }
 
   return cols;
 }
@@ -228,16 +383,16 @@ function identifyColumns(headerRow: string[]) {
 /**
  * 📦 Converts parsed matrix rows into structured audit items with Carton Intelligence
  */
-function convertRowsToAuditItems(rawData: any[][]): { 
-  items: SheetsAuditItem[]; 
-  totalExpected: number; 
-  totalAudited: number; 
+function convertRowsToAuditItems(rawData: any[][], tabSalt = '0'): {
+  items: SheetsAuditItem[];
+  totalExpected: number;
+  totalAudited: number;
   totalCartons: number;
   totalAuditedCartons: number;
-  headerRow: string[] 
+  headerRow: string[];
 } {
   let headerRowIndex = 0;
-  for (let i = 0; i < Math.min(5, rawData.length); i++) {
+  for (let i = 0; i < Math.min(8, rawData.length); i++) {
     const nonEmp = (rawData[i] || []).filter((v: any) => String(v).trim().length > 0).length;
     if (nonEmp >= 2) {
       headerRowIndex = i;
@@ -258,29 +413,32 @@ function convertRowsToAuditItems(rawData: any[][]): {
     const row = rawData[r];
     if (!row || row.length === 0) continue;
 
-    const model = String(row[colMap.modelIdx] || '').trim();
-    const name = colMap.nameIdx !== -1 ? String(row[colMap.nameIdx] || '').trim() : '';
+    // Preserve exact model string (e.g. "EV 21345-02-BALK") with digits normalized
+    const modelRaw = normalizeDigitsUniversal(String(row[colMap.modelIdx] || '').replace(/\s+/g, ' ').trim());
+    const nameRaw = colMap.nameIdx !== -1 ? normalizeDigitsUniversal(String(row[colMap.nameIdx] || '').trim()) : '';
 
-    // Skip empty rows
-    if (!model && !name) continue;
+    // Skip empty or total/summary footer rows
+    if (!modelRaw && !nameRaw) continue;
+    const lowModel = modelRaw.toLowerCase();
+    if (lowModel === 'total' || lowModel === 'sum' || lowModel === 'کۆی گشتی') continue;
 
     // Parse cartons & pieces per carton
     let cartonCount = 0;
     if (colMap.cartonCountIdx !== -1) {
-      const rawCtn = String(row[colMap.cartonCountIdx] || '').replace(/[^\d.-]/g, '');
+      const rawCtn = normalizeDigitsUniversal(String(row[colMap.cartonCountIdx] || '')).replace(/[^\d.-]/g, '');
       cartonCount = parseFloat(rawCtn) || 0;
     }
 
     let pcsPerCarton = 1;
     if (colMap.pcsPerCartonIdx !== -1) {
-      const rawPcs = String(row[colMap.pcsPerCartonIdx] || '').replace(/[^\d.-]/g, '');
-      pcsPerCarton = parseFloat(rawPcs) || 1;
+      const rawPcs = normalizeDigitsUniversal(String(row[colMap.pcsPerCartonIdx] || '')).replace(/[^\d.-]/g, '');
+      pcsPerCarton = Math.max(1, parseFloat(rawPcs) || 1);
     }
 
     // Parse expected total qty
     let expectedQty = 0;
     if (colMap.expectedQtyIdx !== -1) {
-      const rawExp = String(row[colMap.expectedQtyIdx] || '').replace(/[^\d.-]/g, '');
+      const rawExp = normalizeDigitsUniversal(String(row[colMap.expectedQtyIdx] || '')).replace(/[^\d.-]/g, '');
       expectedQty = parseFloat(rawExp) || 0;
     }
 
@@ -302,7 +460,7 @@ function convertRowsToAuditItems(rawData: any[][]): {
     // Parse checked qty
     let checkedQty = 0;
     if (colMap.checkedQtyIdx !== -1 && colMap.checkedQtyIdx !== colMap.expectedQtyIdx) {
-      const rawChk = String(row[colMap.checkedQtyIdx] || '').replace(/[^\d.-]/g, '');
+      const rawChk = normalizeDigitsUniversal(String(row[colMap.checkedQtyIdx] || '')).replace(/[^\d.-]/g, '');
       checkedQty = parseFloat(rawChk) || 0;
     }
 
@@ -333,11 +491,14 @@ function convertRowsToAuditItems(rawData: any[][]): {
     totalCartons += cartonCount;
     totalAuditedCartons += checkedCartons;
 
+    const model = modelRaw || `ROW-${r}`;
+    const name = nameRaw || model;
+
     items.push({
-      id: `item_${r}_${model || Math.random().toString(36).slice(2, 7)}`,
+      id: `item_${tabSalt}_${r}_${model.replace(/\s+/g, '_') || Math.random().toString(36).slice(2, 7)}`,
       rowIndex: r,
-      model: model || `ROW-${r}`,
-      name: name || model,
+      model,
+      name,
       expectedQty,
       checkedQty,
       cartonCount,
@@ -354,6 +515,109 @@ function convertRowsToAuditItems(rawData: any[][]): {
   }
 
   return { items, totalExpected, totalAudited, totalCartons, totalAuditedCartons, headerRow };
+}
+
+/**
+ * Helper to create Package of Sessions from multiple parsed tabs & attach Smart Code Intelligence
+ */
+function buildSessionsPackage(params: {
+  tabs: Array<{ sheetName: string; tabGid?: string; rawData: any[][] }>;
+  mode: 'shipment_receiving' | 'inventory_stocktake';
+  packageTitle?: string;
+  googleSheetUrl?: string;
+  spreadsheetId?: string | null;
+  webhookUrl?: string;
+}): {
+  sessions: SheetsAuditSession[];
+  packageId: string;
+  packageTitle: string;
+  packageCodeProfile: CodeIntelligenceProfile;
+} {
+  const { tabs, mode, googleSheetUrl, spreadsheetId, webhookUrl } = params;
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const packageId = `pkg_${spreadsheetId || nowMs}_${nowMs.toString(36)}`;
+  const validWebhook =
+    webhookUrl && /^https:\/\/script\.google(usercontent)?\.com\//.test(webhookUrl.trim())
+      ? webhookUrl.trim()
+      : undefined;
+
+  const parsedTabs: Array<{
+    sheetName: string;
+    tabGid?: string;
+    tabIndex: number;
+    parsed: ReturnType<typeof convertRowsToAuditItems>;
+  }> = [];
+
+  tabs.forEach((t, idx) => {
+    const parsed = convertRowsToAuditItems(t.rawData, String(idx));
+    if (parsed.items.length > 0) {
+      parsedTabs.push({
+        sheetName: t.sheetName || `Sheet${idx + 1}`,
+        tabGid: t.tabGid,
+        tabIndex: idx,
+        parsed,
+      });
+    }
+  });
+
+  const allPackageItems = parsedTabs.flatMap((t) => t.parsed.items);
+  const packageCodeProfile = analyzeWarehouseCodes(allPackageItems);
+  const resolvedPkgTitle =
+    (params.packageTitle || '').trim() ||
+    (parsedTabs.length > 1
+      ? mode === 'shipment_receiving'
+        ? `پاکێجی باری نوێ (${parsedTabs.length} بەش)`
+        : `پاکێجی جەردی کۆگا (${parsedTabs.length} بەش)`
+      : parsedTabs[0]?.sheetName && parsedTabs[0].sheetName !== 'Sheet1'
+      ? parsedTabs[0].sheetName
+      : mode === 'shipment_receiving'
+      ? `پشکنینی باری نوێ (${allPackageItems.length} کاڵا)`
+      : `جەردی کۆگا (${allPackageItems.length} کاڵا)`);
+
+  const sessions: SheetsAuditSession[] = parsedTabs.map((pt, i) => {
+    const { items, totalExpected, totalAudited, totalCartons, totalAuditedCartons } = pt.parsed;
+    const tabCodeProfile = analyzeWarehouseCodes(items, allPackageItems);
+    const sessionTitle =
+      parsedTabs.length > 1
+        ? pt.sheetName
+        : (params.packageTitle || '').trim() || pt.sheetName || resolvedPkgTitle;
+
+    return {
+      id: `audit_${nowMs}_${i}`,
+      title: sessionTitle,
+      mode,
+      googleSheetUrl: googleSheetUrl || undefined,
+      spreadsheetId: spreadsheetId || undefined,
+      webhookUrl: validWebhook,
+      sheetName: pt.sheetName,
+      packageId,
+      packageTitle: resolvedPkgTitle,
+      tabIndex: i,
+      tabGid: pt.tabGid,
+      codeProfile: tabCodeProfile,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      auditedBy: 'Admin',
+      totalItemsCount: items.length,
+      totalExpectedUnits: totalExpected,
+      totalAuditedUnits: totalAudited,
+      totalCartonsCount: totalCartons,
+      totalAuditedCartons,
+      matchedCount: items.filter((it) => it.auditStatus === 'verified').length,
+      discrepantCount: items.filter((it) => it.auditStatus === 'deficit' || it.auditStatus === 'excess').length,
+      damagedCount: items.filter((it) => it.auditStatus === 'damaged').length,
+      status: 'active',
+      items,
+    };
+  });
+
+  return {
+    sessions,
+    packageId,
+    packageTitle: resolvedPkgTitle,
+    packageCodeProfile,
+  };
 }
 
 /**
@@ -401,7 +665,7 @@ async function saveStoredSessions(sessions: Record<string, SheetsAuditSession>):
 }
 
 /**
- * 🗑️ Fetch Deleted Session IDs from Supabase so stale devices never resurrect deleted files
+ * 🗑️ Fetch Deleted Session IDs from Supabase
  */
 async function getDeletedSessionIds(): Promise<string[]> {
   try {
@@ -419,9 +683,9 @@ async function getDeletedSessionIds(): Promise<string[]> {
   }
 }
 
-async function markSessionDeleted(sessionId: string): Promise<string[]> {
+async function markSessionsDeleted(sessionIds: string[]): Promise<string[]> {
   const existing = await getDeletedSessionIds();
-  const next = Array.from(new Set([sessionId, ...existing])).slice(0, 300);
+  const next = Array.from(new Set([...sessionIds, ...existing])).slice(0, 500);
   try {
     await supabase
       .from('warehouses')
@@ -431,13 +695,13 @@ async function markSessionDeleted(sessionId: string): Promise<string[]> {
         qr_code: JSON.stringify(next),
       });
   } catch (err) {
-    logger.warn('[SheetsSync API] Failed storing deleted id:', err);
+    logger.warn('[SheetsSync API] Failed storing deleted ids:', err);
   }
   return next;
 }
 
 /**
- * 🧹 Global reset timestamp so any cached desktop/mobile browser purges pre-reset sheets
+ * 🧹 Global reset timestamp
  */
 async function getResetEpoch(): Promise<string | null> {
   try {
@@ -472,7 +736,7 @@ async function setResetEpoch(isoTimestamp: string): Promise<boolean> {
 }
 
 /**
- * 📊 Build unified Google Sheet write-back payload (supports BOTH adding audit columns in-place & full table sync)
+ * 📊 Build Tab-Isolated Google Sheet Write-Back Payload (Includes Dedicated Baghdad Scanned At Column)
  */
 function buildAuditSheetPayload(session: SheetsAuditSession) {
   const items: SheetsAuditItem[] = session.items || [];
@@ -490,8 +754,8 @@ function buildAuditSheetPayload(session: SheetsAuditSession) {
     'دۆخی فیزیکی (Condition)',
     'شوێن لە کۆگا (Rack/Location)',
     'پشکێنەر (Audited By)',
-    'دواین کاتی گۆڕانکاری (Last Modified)',
-    'تێبینی (Audit Notes)'
+    'کاتی سکان / داخڵکردن (Scanned At)',
+    'تێبینی (Audit Notes)',
   ];
 
   const auditColumnHeaders = [
@@ -502,8 +766,9 @@ function buildAuditSheetPayload(session: SheetsAuditSession) {
     'دۆخی پشکنین (Audit Status)',
     'دۆخی فیزیکی (Condition)',
     'شوێن لە کۆگا (Rack/Location)',
-    'پشکێنەر و کات (Audited By & Time)',
-    'تێبینی (Audit Notes)'
+    'کاتی سکان / داخڵکردن (Scanned At)',
+    'پشکێنەر (Audited By)',
+    'تێبینی (Audit Notes)',
   ];
 
   const rows: any[][] = [];
@@ -512,9 +777,12 @@ function buildAuditSheetPayload(session: SheetsAuditSession) {
   items.forEach((i) => {
     const totalCtn = i.cartonCount || (i.pcsPerCarton && i.expectedQty ? Math.ceil(i.expectedQty / i.pcsPerCarton) : i.expectedQty) || 1;
     const checkedCtn = i.checkedCartons ?? (i.scannedCartonNumbers?.length ?? (i.pcsPerCarton ? Math.floor(i.checkedQty / i.pcsPerCarton) : i.checkedQty));
-    const scannedBoxesStr = Array.isArray(i.scannedCartonNumbers) && i.scannedCartonNumbers.length > 0
-      ? i.scannedCartonNumbers.join(', ')
-      : checkedCtn > 0 ? `1-${checkedCtn}` : '-';
+    const scannedBoxesStr =
+      Array.isArray(i.scannedCartonNumbers) && i.scannedCartonNumbers.length > 0
+        ? i.scannedCartonNumbers.join(', ')
+        : checkedCtn > 0
+        ? `1-${checkedCtn}`
+        : '-';
 
     let statusKurdish = 'چاوەڕوان';
     if (i.auditStatus === 'verified') statusKurdish = '✅ هاوتا و تەواو';
@@ -528,10 +796,8 @@ function buildAuditSheetPayload(session: SheetsAuditSession) {
     else if (i.condition === 'Need Wrapped') conditionKurdish = 'پێویستی بە لەفە';
     else if (i.condition === 'Normal') conditionKurdish = 'ئاسایی';
 
-    const lastModifiedStr = i.lastAuditedAt
-      ? new Date(i.lastAuditedAt).toLocaleString('en-GB', { hour12: false })
-      : '-';
-    const auditorStr = `${i.auditedBy || session.auditedBy || 'Admin'} (${lastModifiedStr})`;
+    const scannedAtStr = formatBaghdadTimestamp(i.lastAuditedAt);
+    const auditorName = i.auditedBy || session.auditedBy || 'Admin';
 
     rows.push([
       i.model,
@@ -546,9 +812,9 @@ function buildAuditSheetPayload(session: SheetsAuditSession) {
       statusKurdish,
       conditionKurdish,
       i.rackLocation || '',
-      i.auditedBy || session.auditedBy || 'Admin',
-      lastModifiedStr,
-      i.notes || ''
+      auditorName,
+      scannedAtStr,
+      i.notes || '',
     ]);
 
     itemRecords.push({
@@ -562,7 +828,8 @@ function buildAuditSheetPayload(session: SheetsAuditSession) {
         'دۆخی پشکنین (Audit Status)': statusKurdish,
         'دۆخی فیزیکی (Condition)': conditionKurdish,
         'شوێن لە کۆگا (Rack/Location)': i.rackLocation || '',
-        'پشکێنەر و کات (Audited By & Time)': auditorStr,
+        'کاتی سکان / داخڵکردن (Scanned At)': scannedAtStr,
+        'پشکێنەر (Audited By)': auditorName,
         'تێبینی (Audit Notes)': i.notes || '',
       },
     });
@@ -571,9 +838,12 @@ function buildAuditSheetPayload(session: SheetsAuditSession) {
   return {
     action: 'sync_audit_columns',
     sessionId: session.id,
+    packageId: session.packageId,
+    targetSheetName: session.sheetName || undefined,
+    targetSheetGid: session.tabGid || undefined,
     title: session.title,
     mode: session.mode,
-    updatedAt: new Date().toISOString(),
+    updatedAt: formatBaghdadTimestamp(new Date().toISOString()),
     headers,
     auditColumnHeaders,
     rows,
@@ -582,13 +852,18 @@ function buildAuditSheetPayload(session: SheetsAuditSession) {
 }
 
 /**
- * 🚀 Push audit updates directly to Google Apps Script Webhook and strictly verify response
+ * 🚀 Generic Google Apps Script Webhook caller (handles sync + tab-level clear/delete)
  */
-async function pushSessionToAppsScript(webhookUrl: string, session: SheetsAuditSession): Promise<{
+async function callGoogleAppsScriptWebhook(
+  webhookUrl: string,
+  payload: Record<string, any>
+): Promise<{
   ok: boolean;
   status?: number;
   updatedRows?: number;
   mode?: string;
+  targetSheetName?: string;
+  message?: string;
   error?: string;
 }> {
   const cleanUrl = (webhookUrl || '').trim();
@@ -598,17 +873,15 @@ async function pushSessionToAppsScript(webhookUrl: string, session: SheetsAuditS
   if (cleanUrl.includes('docs.google.com/spreadsheets')) {
     return {
       ok: false,
-      error: 'ئەم بەستەرە لینکی ئاسایی شیتەکەیە! بۆ نووسینی ڕاستەوخۆ، پێویستە لینکی Google Apps Script Web App دابنێیت کە بە https://script.google.com/macros/s/.../exec دەستپێدەکات.',
+      error:
+        'ئەم بەستەرە لینکی ئاسایی شیتەکەیە! بۆ نووسینی ڕاستەوخۆ، پێویستە لینکی Google Apps Script Web App دابنێیت کە بە https://script.google.com/macros/s/.../exec دەستپێدەکات.',
     };
   }
 
   try {
-    const payload = buildAuditSheetPayload(session);
     const postRes = await fetch(cleanUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       redirect: 'follow',
       cache: 'no-store',
@@ -616,7 +889,6 @@ async function pushSessionToAppsScript(webhookUrl: string, session: SheetsAuditS
 
     const responseText = await postRes.text();
 
-    // Detect HTML login screen / Apps Script permissions block
     if (
       responseText.includes('accounts.google.com') ||
       responseText.includes('ServiceLogin') ||
@@ -626,26 +898,19 @@ async function pushSessionToAppsScript(webhookUrl: string, session: SheetsAuditS
       return {
         ok: false,
         status: postRes.status,
-        error: 'گۆگڵ داوای داخڵبوون (Sign in) دەکات و ڕێگەی بە Webhook نەدا! لە Google Apps Script بڕۆ Deploy > Manage deployments و بەشی "Who has access" بگۆڕە بۆ "Anyone".',
+        error:
+          'گۆگڵ داوای داخڵبوون (Sign in) دەکات و ڕێگەی بە Webhook نەدا! لە Google Apps Script بڕۆ Deploy > Manage deployments و بەشی "Who has access" بگۆڕە بۆ "Anyone".',
       };
     }
 
     if (!postRes.ok) {
-      return {
-        ok: false,
-        status: postRes.status,
-        error: `سێرڤەری گۆگڵ کۆدی هەڵەی ${postRes.status} گەڕاندەوە.`,
-      };
+      return { ok: false, status: postRes.status, error: `سێرڤەری گۆگڵ کۆدی هەڵەی ${postRes.status} گەڕاندەوە.` };
     }
 
     try {
       const parsed = JSON.parse(responseText);
       if (parsed && parsed.success === false) {
-        return {
-          ok: false,
-          status: postRes.status,
-          error: parsed.error || 'سکریپتی Google Sheet هەڵەیەکی گەڕاندەوە.',
-        };
+        return { ok: false, status: postRes.status, error: parsed.error || 'سکریپتی Google Sheet هەڵەیەکی گەڕاندەوە.' };
       }
       if (parsed && parsed.success === true) {
         return {
@@ -653,29 +918,207 @@ async function pushSessionToAppsScript(webhookUrl: string, session: SheetsAuditS
           status: postRes.status,
           updatedRows: parsed.updatedRows ?? parsed.count,
           mode: parsed.mode,
+          targetSheetName: parsed.sheetName || payload.targetSheetName,
+          message: parsed.message,
         };
       }
     } catch {
       return {
         ok: false,
         status: postRes.status,
-        error: 'وەڵامی Google Apps Script فۆرماتی JSONی دروستی نەبوو. دڵنیابە کۆدە نوێیەکەی Apps Scriptت بە تەواوی کۆپی کردووە و وەشانی نوێت Deploy کردووە.',
+        error:
+          'وەڵامی Google Apps Script فۆرماتی JSONی دروستی نەبوو. دڵنیابە کۆدە نوێیەکەی Apps Scriptت بە تەواوی کۆپی کردووە و وەشانی نوێت Deploy کردووە.',
       };
     }
 
     return { ok: true, status: postRes.status };
   } catch (err: any) {
+    return { ok: false, error: err?.message || 'نەتوانرا پەیوەندی بە Google Webhook بکرێت.' };
+  }
+}
+
+async function pushSessionToAppsScript(webhookUrl: string, session: SheetsAuditSession) {
+  const payload = buildAuditSheetPayload(session);
+  return callGoogleAppsScriptWebhook(webhookUrl, payload);
+}
+
+/**
+ * 📥 Fetch Multi-Tab Google Spreadsheet via Apps Script `doGet` OR `/export?format=xlsx` OR CSV fallback
+ */
+async function fetchSpreadsheetTabsFromGoogle(params: {
+  sheetUrl: string;
+  webhookUrl?: string;
+}): Promise<{
+  ok: boolean;
+  tabs?: Array<{ sheetName: string; tabGid?: string; rawData: any[][] }>;
+  spreadsheetTitle?: string;
+  spreadsheetId?: string | null;
+  error?: string;
+}> {
+  const { sheetUrl, webhookUrl } = params;
+  const { xlsxUrl, candidateCsvUrls, spreadsheetId, gid, isAppsScriptUrl } = extractSheetCandidates(sheetUrl);
+
+  const scriptEndpoint = isAppsScriptUrl
+    ? sheetUrl.trim()
+    : webhookUrl && /^https:\/\/script\.google(usercontent)?\.com\//.test(webhookUrl.trim())
+    ? webhookUrl.trim()
+    : null;
+
+  // Path 1: Apps Script doGet (reads ALL tabs cleanly, even on private Google Sheets!)
+  if (scriptEndpoint) {
+    try {
+      const getRes = await fetch(scriptEndpoint, {
+        method: 'GET',
+        redirect: 'follow',
+        cache: 'no-store',
+      });
+      const text = await getRes.text();
+      if (
+        !text.includes('accounts.google.com') &&
+        !text.trim().startsWith('<!DOCTYPE') &&
+        !text.trim().startsWith('<html')
+      ) {
+        const parsed = JSON.parse(text);
+        if (parsed && parsed.success && Array.isArray(parsed.sheets) && parsed.sheets.length > 0) {
+          return {
+            ok: true,
+            tabs: parsed.sheets.map((s: any, idx: number) => ({
+              sheetName: String(s.sheetName || `Sheet${idx + 1}`),
+              tabGid: s.sheetId !== undefined ? String(s.sheetId) : undefined,
+              rawData: Array.isArray(s.rows) ? s.rows : [],
+            })),
+            spreadsheetTitle: parsed.spreadsheetName || undefined,
+            spreadsheetId: spreadsheetId || parsed.spreadsheetId || null,
+          };
+        }
+      }
+    } catch {
+      // Fall through to public XLSX / CSV methods
+    }
+
+    if (isAppsScriptUrl) {
+      return {
+        ok: false,
+        error:
+          'نەتوانرا شیتەکان لە ڕێگەی ئەم Apps Script URL بخوێندرێنەوە.\nدڵنیابە کۆدی نوێی Apps Script (کە function doGet(e) تێدایە) پاشەکەوت کراوە و وەک New version بە Who has access = Anyone بڵاوکراوەتەوە.',
+      };
+    }
+  }
+
+  let fetchErrorDetails = '';
+  let isHtmlLogin = false;
+
+  // Path 2: Google Sheets Full Multi-Tab `.xlsx` Export (Retrieves ALL tabs at once!)
+  if (xlsxUrl) {
+    try {
+      const xlsxRes = await fetch(xlsxUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36',
+        },
+        cache: 'no-store',
+        redirect: 'follow',
+      });
+
+      if (xlsxRes.ok) {
+        const buf = await xlsxRes.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        const isZip = bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b; // "PK" header for real .xlsx
+        if (isZip) {
+          const wb = XLSX.read(bytes, { type: 'array' });
+          const disp = xlsxRes.headers.get('content-disposition') || '';
+          const fnameMatch = disp.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+          const decodedTitle = fnameMatch ? decodeURIComponent(fnameMatch[1].replace(/["']/g, '')).replace(/\.xlsx$/i, '') : undefined;
+
+          const tabs = wb.SheetNames.map((name) => {
+            const ws = wb.Sheets[name];
+            const rawData = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '', raw: false });
+            return { sheetName: name, rawData };
+          });
+
+          return {
+            ok: true,
+            tabs,
+            spreadsheetTitle: decodedTitle,
+            spreadsheetId,
+          };
+        } else {
+          const preview = new TextDecoder().decode(bytes.slice(0, 1500));
+          if (preview.includes('accounts.google.com') || preview.includes('ServiceLogin')) {
+            isHtmlLogin = true;
+          }
+        }
+      } else {
+        fetchErrorDetails = `XLSX Export HTTP ${xlsxRes.status}`;
+      }
+    } catch (e: any) {
+      fetchErrorDetails = e?.message || '';
+    }
+  }
+
+  // Path 3: Single-tab CSV / TSV fallback
+  for (const targetUrl of candidateCsvUrls) {
+    try {
+      const fetchRes = await fetch(targetUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36',
+          Accept: 'text/csv,text/tab-separated-values,text/plain,*/*',
+        },
+        cache: 'no-store',
+        redirect: 'follow',
+      });
+
+      if (!fetchRes.ok) {
+        fetchErrorDetails = `Google Sheets returned HTTP ${fetchRes.status}`;
+        continue;
+      }
+
+      const text = await fetchRes.text();
+      if (
+        text.includes('accounts.google.com') ||
+        text.includes('Sign in - Google Accounts') ||
+        (text.includes('<html') && (text.includes('password') || text.includes('ServiceLogin')))
+      ) {
+        isHtmlLogin = true;
+        continue;
+      }
+      if (text.trim().startsWith('<!DOCTYPE html>') || (text.trim().startsWith('<html') && !text.includes(',') && !text.includes('\t'))) {
+        continue;
+      }
+
+      if (text.trim().length > 0) {
+        const wb = XLSX.read(text, { type: 'string' });
+        const firstSheet = wb.SheetNames[0];
+        const ws = wb.Sheets[firstSheet];
+        const rawData = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '', raw: false });
+        return {
+          ok: true,
+          tabs: [{ sheetName: firstSheet || 'Sheet1', tabGid: gid, rawData }],
+          spreadsheetId,
+        };
+      }
+    } catch (err: any) {
+      fetchErrorDetails = err.message;
+    }
+  }
+
+  if (isHtmlLogin) {
     return {
       ok: false,
-      error: err?.message || 'نەتوانرا پەیوەندی بە Google Webhook بکرێت.',
+      error:
+        'ئەم شیتە تایبەتە و پێویستی بە داخڵبوونی ئەکاونتی گۆگڵ هەیە (Google Sign-in).\n\nچۆن چارەسەری دەکەیت:\n١. لە ناو Google Sheet کلیک لە Share بکە → General Access بکە بە "Anyone with the link" (بۆ خوێندنەوەی هەموو تەبەکان).\n٢. یان کۆدی نوێی Apps Script (کە doGet و doPost تێدایە) دابنێ و بەستەری Webhook لێرە بنووسە — ئەو کاتە بێ Share ـیش هەموو بەشەکان دەهێنێت!',
     };
   }
+
+  return {
+    ok: false,
+    error: `نەتوانرا گۆگڵ شیتەکە بخوێندرێتەوە: ${fetchErrorDetails || 'تکایە دڵنیابە لە دروستی بەستەرەکە'}`,
+  };
 }
 
 // =============================================================================
 // GET HANDLER
 // =============================================================================
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const [sessions, deletedIds, resetBefore] = await Promise.all([
       getStoredSessions(),
@@ -715,138 +1158,112 @@ export async function POST(req: NextRequest) {
     const { action } = body;
 
     // -------------------------------------------------------------------------
-    // ACTION 1: FETCH & PARSE GOOGLE SHEET
+    // ACTION 1: FETCH & PARSE GOOGLE SHEET (FULL MULTI-TAB PACKAGE!)
     // -------------------------------------------------------------------------
     if (action === 'fetch_sheet') {
-      const { sheetUrl, mode = 'shipment_receiving', title } = body;
-      if (!sheetUrl || typeof sheetUrl !== 'string') {
-        return NextResponse.json({ success: false, error: 'تکایە لینکی دروستی Google Sheet بنووسە' }, { status: 400 });
+      const { sheetUrl, webhookUrl, mode = 'shipment_receiving', title } = body;
+      const effectiveSheetUrl = typeof sheetUrl === 'string' && sheetUrl.trim() ? sheetUrl.trim() : typeof webhookUrl === 'string' ? webhookUrl.trim() : '';
+
+      if (!effectiveSheetUrl) {
+        return NextResponse.json({ success: false, error: 'تکایە لینکی Google Sheet یان Apps Script Webhook بنووسە' }, { status: 400 });
       }
 
-      const { candidateUrls, spreadsheetId } = extractSheetCandidates(sheetUrl);
+      const fetched = await fetchSpreadsheetTabsFromGoogle({
+        sheetUrl: effectiveSheetUrl,
+        webhookUrl: typeof webhookUrl === 'string' ? webhookUrl : undefined,
+      });
 
-      let csvContent = '';
-      let fetchErrorDetails = '';
-      let isHtmlLogin = false;
-
-      for (const targetUrl of candidateUrls) {
-        try {
-          const fetchRes = await fetch(targetUrl, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-              'Accept': 'text/csv,text/tab-separated-values,text/plain,*/*',
-            },
-            cache: 'no-store',
-            redirect: 'follow',
-          });
-
-          if (!fetchRes.ok) {
-            fetchErrorDetails = `Google Sheets returned HTTP ${fetchRes.status}: ${fetchRes.statusText}`;
-            continue;
-          }
-
-          const text = await fetchRes.text();
-          // Check if Google returned an HTML login page or consent screen
-          if (text.includes('accounts.google.com') || text.includes('Sign in - Google Accounts') || (text.includes('<html') && (text.includes('password') || text.includes('ServiceLogin')))) {
-            isHtmlLogin = true;
-            fetchErrorDetails = 'Google requires authentication (Sign in). General Access must be set to "Anyone with the link".';
-            continue;
-          }
-
-          // If text is suspiciously pure HTML without tabular content
-          if (text.trim().startsWith('<!DOCTYPE html>') || (text.trim().startsWith('<html') && !text.includes(',') && !text.includes('\t'))) {
-            fetchErrorDetails = 'Google returned HTML page instead of tabular data.';
-            continue;
-          }
-
-          if (text.trim().length > 0) {
-            csvContent = text;
-            break;
-          }
-        } catch (fetchErr: any) {
-          fetchErrorDetails = fetchErr.message;
-        }
+      if (!fetched.ok || !fetched.tabs || fetched.tabs.length === 0) {
+        return NextResponse.json({ success: false, error: fetched.error || 'نەتوانرا خشتەکە بخوێندرێتەوە' }, { status: 400 });
       }
 
-      if (!csvContent) {
-        if (isHtmlLogin) {
-          return NextResponse.json({ 
-            success: false, 
-            error: 'ئەم شیتە تایبەتە و پێویستی بە داخڵبوونی ئەکاونتی گۆگڵ هەیە (Google Sign-in).\n\nچۆن چارەسەری دەکەیت:\n١. لە ناو Google Sheet کلیک لەسەر دوگمەی سەوزی Share بکە.\n٢. لە بەشی General Access بپشکنە کە "Anyone with the link" (هەر کەسێک بەم بەستەرە) هەڵبژێردراوە نەک تەنها دۆمەینێکی تایبەت.\n٣. دەتوانیت بە ئاسانی هەمان داتا لێرە بە فایل (.xlsx) دابنێیت یان ڕیزەکان ڕاستەوخۆ Copy & Paste بکەیت.' 
-          }, { status: 400 });
-        }
-
-        return NextResponse.json({ 
-          success: false, 
-          error: `نەتوانرا گۆگڵ شیتەکە بخوێندرێتەوە: ${fetchErrorDetails || 'تکایە دڵنیابە لە دروستی بەستەرەکە'}\n\nتێبینی: دەتوانیت بە ئاسانی هەمان فایل وەک Excel (.xlsx) داببەزێنیت و لێرە بەرزبکەیتەوە، یان ڕیزەکان کۆپی و پێست بکەیت.` 
-        }, { status: 400 });
-      }
-
-      // Parse with XLSX
-      let rawData: any[][] = [];
-      try {
-        const wb = XLSX.read(csvContent, { type: 'string' });
-        const firstSheetName = wb.SheetNames[0];
-        const ws = wb.Sheets[firstSheetName];
-        rawData = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '' });
-      } catch {
-        return NextResponse.json({ success: false, error: 'هەڵە لە شرۆڤەکردنی خشتەی گۆگڵ شیت' }, { status: 400 });
-      }
-
-      if (!rawData || rawData.length === 0) {
-        return NextResponse.json({ success: false, error: 'خشتەی گۆگڵ شیتەکە بەتاڵە' }, { status: 400 });
-      }
-
-      const { items, totalExpected, totalAudited, totalCartons, totalAuditedCartons, headerRow } = convertRowsToAuditItems(rawData);
-
-      if (items.length === 0) {
-        return NextResponse.json({ success: false, error: 'هیچ کاڵایەک لە ناو خشتەکە نەدۆزرایەوە. دڵنیابە ناوی مۆدێل و بڕ لە خشتەکەدا هەیە.' }, { status: 400 });
-      }
-
-      // Create new audit session
-      const nowIso = new Date().toISOString();
-      const sessionId = `audit_${Date.now()}`;
-      const defaultTitle = title || (mode === 'shipment_receiving' 
-        ? `پشکنینی باری نوێ (${items.length} کاڵا)` 
-        : `جەردی کۆگا (${items.length} کاڵا)`);
-
-      const session: SheetsAuditSession = {
-        id: sessionId,
-        title: defaultTitle,
+      const pkg = buildSessionsPackage({
+        tabs: fetched.tabs,
         mode,
-        googleSheetUrl: sheetUrl,
-        spreadsheetId: spreadsheetId || undefined,
-        sheetName: `Sheet1`,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        auditedBy: 'Admin',
-        totalItemsCount: items.length,
-        totalExpectedUnits: totalExpected,
-        totalAuditedUnits: totalAudited,
-        totalCartonsCount: totalCartons,
-        totalAuditedCartons: totalAuditedCartons,
-        matchedCount: items.filter(i => i.auditStatus === 'verified').length,
-        discrepantCount: items.filter(i => i.auditStatus === 'deficit' || i.auditStatus === 'excess').length,
-        damagedCount: items.filter(i => i.auditStatus === 'damaged').length,
-        status: 'active',
-        items,
-      };
+        packageTitle: (title || '').trim() || fetched.spreadsheetTitle,
+        googleSheetUrl: /^https:\/\/docs\.google\.com\/spreadsheets/.test(effectiveSheetUrl) ? effectiveSheetUrl : undefined,
+        spreadsheetId: fetched.spreadsheetId,
+        webhookUrl: /^https:\/\/script\.google(usercontent)?\.com\//.test(effectiveSheetUrl)
+          ? effectiveSheetUrl
+          : typeof webhookUrl === 'string'
+          ? webhookUrl
+          : undefined,
+      });
 
-      // Save to Supabase
+      if (pkg.sessions.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'هیچ کاڵایەک لە تەبەکانی ناو خشتەکەدا نەدۆزرایەوە. دڵنیابە ستوونی مۆدێل و بڕ لە خشتەکەدا هەیە.' },
+          { status: 400 }
+        );
+      }
+
       const allSessions = await getStoredSessions();
-      allSessions[sessionId] = session;
+      for (const s of pkg.sessions) {
+        allSessions[s.id] = s;
+      }
       const saved = await saveStoredSessions(allSessions);
       if (!saved) {
-        return NextResponse.json({
-          success: false,
-          error: 'شیتەکە خوێندرایەوە بەڵام خەزنکردنی لە Supabase سەرکەوتوو نەبوو.',
-        }, { status: 500 });
+        return NextResponse.json({ success: false, error: 'شیتەکان خوێندرانەوە بەڵام خەزنکردنیان لە Supabase سەرکەوتوو نەبوو.' }, { status: 500 });
       }
 
       return NextResponse.json({
         success: true,
-        session,
-        headersDetected: headerRow,
+        session: pkg.sessions[0],
+        sessions: pkg.sessions,
+        packageId: pkg.packageId,
+        packageTitle: pkg.packageTitle,
+        packageCodeProfile: pkg.packageCodeProfile,
+        tabsCount: pkg.sessions.length,
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // ACTION 1.25: PARSE MULTI-TAB EXCEL WORKBOOK AS ONE PACKAGE
+    // -------------------------------------------------------------------------
+    if (action === 'parse_workbook') {
+      const { sheets, mode = 'shipment_receiving', title, webhookUrl } = body;
+      if (!Array.isArray(sheets) || sheets.length === 0) {
+        return NextResponse.json({ success: false, error: 'هیچ پەڕەیەک (Tab) لە فایلی ئێکسڵەکەدا نەبوو.' }, { status: 400 });
+      }
+
+      const tabs: Array<{ sheetName: string; rawData: any[][] }> = sheets.map((s: any, idx: number) => {
+        if (Array.isArray(s.rawData)) {
+          return { sheetName: String(s.sheetName || `Sheet${idx + 1}`), rawData: s.rawData };
+        }
+        const wb = XLSX.read(String(s.csvText || ''), { type: 'string' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rawData = ws ? XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '', raw: false }) : [];
+        return { sheetName: String(s.sheetName || `Sheet${idx + 1}`), rawData };
+      });
+
+      const pkg = buildSessionsPackage({
+        tabs,
+        mode,
+        packageTitle: title,
+        webhookUrl,
+      });
+
+      if (pkg.sessions.length === 0) {
+        return NextResponse.json({ success: false, error: 'هیچ کاڵایەک لە تەبەکانی ناو ئەم فایلەدا نەدۆزرایەوە.' }, { status: 400 });
+      }
+
+      const allSessions = await getStoredSessions();
+      for (const s of pkg.sessions) {
+        allSessions[s.id] = s;
+      }
+      const saved = await saveStoredSessions(allSessions);
+      if (!saved) {
+        return NextResponse.json({ success: false, error: 'خەزنکردنی باکێچەکە لە Supabase سەرکەوتوو نەبوو.' }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        session: pkg.sessions[0],
+        sessions: pkg.sessions,
+        packageId: pkg.packageId,
+        packageTitle: pkg.packageTitle,
+        packageCodeProfile: pkg.packageCodeProfile,
+        tabsCount: pkg.sessions.length,
       });
     }
 
@@ -864,7 +1281,7 @@ export async function POST(req: NextRequest) {
         const wb = XLSX.read(rawText, { type: 'string' });
         const firstSheetName = wb.SheetNames[0];
         const ws = wb.Sheets[firstSheetName];
-        rawData = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '' });
+        rawData = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '', raw: false });
       } catch {
         return NextResponse.json({ success: false, error: 'هەڵە لە شرۆڤەکردنی داتای پێستکراو' }, { status: 400 });
       }
@@ -873,56 +1290,40 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'داتای پێستکراو بەتاڵە' }, { status: 400 });
       }
 
-      const { items, totalExpected, totalAudited, totalCartons, totalAuditedCartons, headerRow } = convertRowsToAuditItems(rawData);
+      const pkg = buildSessionsPackage({
+        tabs: [{ sheetName: title || 'Sheet1', rawData }],
+        mode,
+        packageTitle: title,
+      });
 
-      if (items.length === 0) {
-        return NextResponse.json({ success: false, error: 'هیچ کاڵایەک لە ناو خشتەکە نەدۆزرایەوە. دڵنیابە ستوونی مۆدێل و بڕ لە دەقەکەدا هەیە.' }, { status: 400 });
+      if (pkg.sessions.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'هیچ کاڵایەک لە ناو خشتەکە نەدۆزرایەوە. دڵنیابە ستوونی مۆدێل و بڕ لە دەقەکەدا هەیە.' },
+          { status: 400 }
+        );
       }
 
-      const nowIso = new Date().toISOString();
-      const sessionId = `audit_${Date.now()}`;
-      const defaultTitle = title || (mode === 'shipment_receiving' 
-        ? `پشکنینی باری نوێ (${items.length} کاڵا)` 
-        : `جەردی کۆگا (${items.length} کاڵا)`);
-
-      const session: SheetsAuditSession = {
-        id: sessionId,
-        title: defaultTitle,
-        mode,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        auditedBy: 'Admin',
-        totalItemsCount: items.length,
-        totalExpectedUnits: totalExpected,
-        totalAuditedUnits: totalAudited,
-        totalCartonsCount: totalCartons,
-        totalAuditedCartons: totalAuditedCartons,
-        matchedCount: items.filter(i => i.auditStatus === 'verified').length,
-        discrepantCount: items.filter(i => i.auditStatus === 'deficit' || i.auditStatus === 'excess').length,
-        damagedCount: items.filter(i => i.auditStatus === 'damaged').length,
-        status: 'active',
-        items,
-      };
-
       const allSessions = await getStoredSessions();
-      allSessions[sessionId] = session;
+      const session = pkg.sessions[0];
+      allSessions[session.id] = session;
       const saved = await saveStoredSessions(allSessions);
       if (!saved) {
-        return NextResponse.json({
-          success: false,
-          error: 'فایلەکە خوێندرایەوە بەڵام خەزنکردنی لە Supabase سەرکەوتوو نەبوو.',
-        }, { status: 500 });
+        return NextResponse.json({ success: false, error: 'فایلەکە خوێندرایەوە بەڵام خەزنکردنی لە Supabase سەرکەوتوو نەبوو.' }, { status: 500 });
       }
 
       return NextResponse.json({
         success: true,
         session,
-        headersDetected: headerRow,
+        sessions: [session],
+        packageId: pkg.packageId,
+        packageTitle: pkg.packageTitle,
+        packageCodeProfile: pkg.packageCodeProfile,
+        tabsCount: 1,
       });
     }
 
     // -------------------------------------------------------------------------
-    // ACTION 2: SAVE OR UPDATE AUDIT SESSION
+    // ACTION 2: SAVE OR UPDATE SINGLE AUDIT SESSION (ISOLATED BY TAB!)
     // -------------------------------------------------------------------------
     if (action === 'save_session') {
       const { session } = body;
@@ -930,7 +1331,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'داتای سێشن نادروستە' }, { status: 400 });
       }
 
-      // Recalculate summary metrics
       const items: SheetsAuditItem[] = session.items || [];
       let totalExpected = 0;
       let totalAudited = 0;
@@ -940,7 +1340,7 @@ export async function POST(req: NextRequest) {
       let discrepantCount = 0;
       let damagedCount = 0;
 
-      items.forEach(i => {
+      items.forEach((i) => {
         totalExpected += i.expectedQty || 0;
         totalAudited += i.checkedQty || 0;
         totalCartons += i.cartonCount || i.expectedQty || 0;
@@ -956,7 +1356,7 @@ export async function POST(req: NextRequest) {
         totalExpectedUnits: totalExpected,
         totalAuditedUnits: totalAudited,
         totalCartonsCount: totalCartons,
-        totalAuditedCartons: totalAuditedCartons,
+        totalAuditedCartons,
         matchedCount,
         discrepantCount,
         damagedCount,
@@ -967,9 +1367,9 @@ export async function POST(req: NextRequest) {
       allSessions[session.id] = updatedSession;
       const saved = await saveStoredSessions(allSessions);
 
-      // Auto-sync back to Google Sheet if Webhook URL is configured (using unified column-preserving engine)
+      // Targeted auto-sync back ONLY to this session's Google Sheet tab
       let webhookSyncResult = null;
-      if (updatedSession.webhookUrl && typeof updatedSession.webhookUrl === 'string' && updatedSession.webhookUrl.startsWith('http')) {
+      if (updatedSession.webhookUrl && /^https:\/\/script\.google(usercontent)?\.com\//.test(updatedSession.webhookUrl)) {
         webhookSyncResult = await pushSessionToAppsScript(updatedSession.webhookUrl, updatedSession);
         if (!webhookSyncResult.ok) {
           logger.warn('[SheetsSync API] Webhook push warning:', webhookSyncResult.error);
@@ -984,22 +1384,109 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------------------
-    // ACTION 3: DELETE AUDIT SESSION
+    // ACTION 2.5: APPLY WEBHOOK URL TO ENTIRE PACKAGE
+    // -------------------------------------------------------------------------
+    if (action === 'save_package_webhook') {
+      const { sessionId, packageId, webhookUrl } = body;
+      const cleanWebhook = (webhookUrl || '').trim();
+      if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(cleanWebhook)) {
+        return NextResponse.json(
+          { success: false, error: 'لینکی Webhook دەبێت بە https://script.google.com/macros/s/ دەستپێبکات.' },
+          { status: 400 }
+        );
+      }
+
+      const allSessions = await getStoredSessions();
+      const updatedList: SheetsAuditSession[] = [];
+      for (const id of Object.keys(allSessions)) {
+        const s = allSessions[id];
+        if (!s) continue;
+        if ((packageId && s.packageId === packageId) || s.id === sessionId) {
+          allSessions[id] = { ...s, webhookUrl: cleanWebhook, updatedAt: new Date().toISOString() };
+          updatedList.push(allSessions[id]);
+        }
+      }
+      const saved = await saveStoredSessions(allSessions);
+      return NextResponse.json({ success: saved, updatedSessions: updatedList });
+    }
+
+    // -------------------------------------------------------------------------
+    // ACTION 3: DELETE ONE SECTION/TAB (WITH OPTIONAL GOOGLE SHEET CLEANUP/DELETE)
     // -------------------------------------------------------------------------
     if (action === 'delete_session') {
-      const { sessionId } = body;
+      const { sessionId, googleSheetAction = 'none' as GoogleSheetDeleteAction } = body;
       if (!sessionId) {
         return NextResponse.json({ success: false, error: 'کۆدی سێشن دیاری نەکراوە' }, { status: 400 });
       }
 
       const allSessions = await getStoredSessions();
+      const target = allSessions[sessionId];
+      let googleResult = null;
+
+      if (target && googleSheetAction !== 'none' && target.webhookUrl) {
+        googleResult = await callGoogleAppsScriptWebhook(target.webhookUrl, {
+          action: googleSheetAction,
+          targetSheetName: target.sheetName,
+          targetSheetGid: target.tabGid,
+        });
+      }
+
       if (allSessions[sessionId]) {
         delete allSessions[sessionId];
         await saveStoredSessions(allSessions);
       }
-      const deletedIds = await markSessionDeleted(sessionId);
+      const deletedIds = await markSessionsDeleted([sessionId]);
 
-      return NextResponse.json({ success: true, deletedId: sessionId, deletedIds });
+      return NextResponse.json({ success: true, deletedId: sessionId, deletedIds, googleResult });
+    }
+
+    // -------------------------------------------------------------------------
+    // ACTION 3.25: DELETE ENTIRE PACKAGE (ALL TABS OF ONE GOOGLE SHEET AT ONCE)
+    // -------------------------------------------------------------------------
+    if (action === 'delete_package') {
+      const { packageId, sessionIds = [], googleSheetAction = 'none' as GoogleSheetDeleteAction } = body;
+      if (!packageId && (!Array.isArray(sessionIds) || sessionIds.length === 0)) {
+        return NextResponse.json({ success: false, error: 'ناسنامەی باکێچ دیاری نەکراوە' }, { status: 400 });
+      }
+
+      const allSessions = await getStoredSessions();
+      const idSet = new Set<string>(Array.isArray(sessionIds) ? sessionIds : []);
+      const targets: SheetsAuditSession[] = [];
+
+      Object.values(allSessions).forEach((s) => {
+        if (!s || !s.id) return;
+        if ((packageId && s.packageId === packageId) || idSet.has(s.id)) {
+          targets.push(s);
+          idSet.add(s.id);
+        }
+      });
+
+      const googleResults: any[] = [];
+      if (googleSheetAction !== 'none') {
+        for (const t of targets) {
+          if (t.webhookUrl) {
+            const gRes = await callGoogleAppsScriptWebhook(t.webhookUrl, {
+              action: googleSheetAction,
+              targetSheetName: t.sheetName,
+              targetSheetGid: t.tabGid,
+            });
+            googleResults.push({ tab: t.sheetName || t.title, ...gRes });
+          }
+        }
+      }
+
+      Array.from(idSet).forEach((id) => {
+        if (allSessions[id]) delete allSessions[id];
+      });
+      await saveStoredSessions(allSessions);
+      const deletedIds = await markSessionsDeleted(Array.from(idSet));
+
+      return NextResponse.json({
+        success: true,
+        deletedCount: idSet.size,
+        deletedIds,
+        googleResults,
+      });
     }
 
     // -------------------------------------------------------------------------
@@ -1009,28 +1496,14 @@ export async function POST(req: NextRequest) {
       const existing = await getStoredSessions();
       const prevIds = Object.keys(existing);
       const resetBefore = new Date().toISOString();
-      const [wiped, epochSaved] = await Promise.all([
-        saveStoredSessions({}),
-        setResetEpoch(resetBefore),
-      ]);
+      const [wiped, epochSaved] = await Promise.all([saveStoredSessions({}), setResetEpoch(resetBefore)]);
 
       if (!wiped || !epochSaved) {
-        return NextResponse.json({
-          success: false,
-          error: 'نەتوانرا هەموو شیتەکان لە Supabase بسڕدرێنەوە.',
-        }, { status: 500 });
+        return NextResponse.json({ success: false, error: 'نەتوانرا هەموو شیتەکان لە Supabase بسڕدرێنەوە.' }, { status: 500 });
       }
 
       if (prevIds.length > 0) {
-        const curDeleted = await getDeletedSessionIds();
-        const merged = Array.from(new Set([...prevIds, ...curDeleted])).slice(0, 300);
-        try {
-          await supabase.from('warehouses').upsert({
-            id: DELETED_IDS_STORE_ID,
-            name: 'Ashley Deleted Warehouse Sheet IDs',
-            qr_code: JSON.stringify(merged),
-          });
-        } catch {}
+        await markSessionsDeleted(prevIds);
       }
 
       return NextResponse.json({
@@ -1041,7 +1514,7 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------------------
-    // ACTION 4: DIRECT SYNC PUSH TO GOOGLE APPS SCRIPT WEBHOOK
+    // ACTION 4: DIRECT SYNC PUSH TO GOOGLE APPS SCRIPT WEBHOOK (SINGLE TAB)
     // -------------------------------------------------------------------------
     if (action === 'sync_to_google') {
       const { webhookUrl, session } = body;
@@ -1063,6 +1536,7 @@ export async function POST(req: NextRequest) {
         status: result.status || 200,
         updatedRows: result.updatedRows,
         mode: result.mode,
+        targetSheetName: result.targetSheetName || session.sheetName,
       });
     }
 
