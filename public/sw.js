@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ashley-apple-v45-sheets-cloud-authority';
+const CACHE_NAME = 'ashley-apple-v46-sheets-clean-reset';
 
 const PRECACHE_URLS = [
   '/',

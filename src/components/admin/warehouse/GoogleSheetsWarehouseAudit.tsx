@@ -53,6 +53,7 @@ import * as XLSX from 'xlsx';
 const LOCAL_STORAGE_KEY = 'ashley_warehouse_saved_sessions_v2';
 const ACTIVE_SESSION_ID_KEY = 'ashley_warehouse_active_session_id';
 const DELETED_IDS_STORAGE_KEY = 'ashley_warehouse_deleted_ids_v1';
+const RESET_BEFORE_STORAGE_KEY = 'ashley_warehouse_reset_before_v1';
 
 // 📜 Smart Google Apps Script (Adds & Updates Audit Columns Directly Inside Existing Google Sheet Without Erasing Original Columns!)
 const ASHLEY_APPS_SCRIPT_CODE = `function doPost(e) {
@@ -194,14 +195,41 @@ function isDemoSeedSessionId(id?: string): boolean {
   return id === 'ashley-shipment-receiving-seed-01' || id === 'ashley-stocktake-seed-01' || id === 'ashley-inventory-stocktake-seed-02';
 }
 
+function getLocalResetBefore(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(RESET_BEFORE_STORAGE_KEY);
+    if (!raw || isNaN(Date.parse(raw))) return null;
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalResetBefore(isoTimestamp: string) {
+  if (typeof window === 'undefined' || !isoTimestamp || isNaN(Date.parse(isoTimestamp))) return;
+  try {
+    localStorage.setItem(RESET_BEFORE_STORAGE_KEY, isoTimestamp);
+  } catch {}
+}
+
+function isBeforeResetEpoch(session: SheetsAuditSession | null | undefined, resetBefore?: string | null): boolean {
+  if (!session || !resetBefore) return false;
+  const resetMs = Date.parse(resetBefore);
+  if (isNaN(resetMs)) return false;
+  const sessionMs = Date.parse(session.updatedAt || session.createdAt || '');
+  return !isNaN(sessionMs) && sessionMs <= resetMs;
+}
+
 function getLocalWarehouseSessions(): SheetsAuditSession[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
+    const resetBefore = getLocalResetBefore();
     return Array.isArray(parsed)
-      ? parsed.filter((s: SheetsAuditSession) => s && s.id && !isDemoSeedSessionId(s.id))
+      ? parsed.filter((s: SheetsAuditSession) => s && s.id && !isDemoSeedSessionId(s.id) && !isBeforeResetEpoch(s, resetBefore))
       : [];
   } catch {
     return [];
@@ -370,13 +398,24 @@ export function GoogleSheetsWarehouseAudit({
         const deletedSet = new Set<string>([...getLocalDeletedIds(), ...deletedIds]);
         saveLocalDeletedIds(Array.from(deletedSet));
 
-        const local = getLocalWarehouseSessions().filter(s => !deletedSet.has(s.id) && !isDemoSeedSessionId(s.id));
+        const serverResetBefore =
+          typeof data.resetBefore === 'string' && !isNaN(Date.parse(data.resetBefore))
+            ? data.resetBefore
+            : getLocalResetBefore();
+        if (typeof data.resetBefore === 'string' && !isNaN(Date.parse(data.resetBefore))) {
+          saveLocalResetBefore(data.resetBefore);
+        }
+
+        const local = getLocalWarehouseSessions().filter(
+          s => !deletedSet.has(s.id) && !isDemoSeedSessionId(s.id) && !isBeforeResetEpoch(s, serverResetBefore)
+        );
         const localById = new Map<string, SheetsAuditSession>();
         local.forEach(s => localById.set(s.id, s));
 
         const finalMap = new Map<string, SheetsAuditSession>();
         const serverList: SheetsAuditSession[] = data.sessions.filter(
-          (s: SheetsAuditSession) => s && s.id && !deletedSet.has(s.id) && !isDemoSeedSessionId(s.id)
+          (s: SheetsAuditSession) =>
+            s && s.id && !deletedSet.has(s.id) && !isDemoSeedSessionId(s.id) && !isBeforeResetEpoch(s, serverResetBefore)
         );
 
         serverList.forEach((srv: SheetsAuditSession) => {
@@ -389,10 +428,15 @@ export function GoogleSheetsWarehouseAudit({
           }
         });
 
-        // Desktop Admin Rescue Sync: if Desktop created a sheet locally (audit_*) before cloud fix, push it to Supabase now!
+        // Desktop Admin Rescue Sync: if Desktop created a post-reset sheet locally (audit_*), push it to Supabase now!
         if (!isMobileOperationalRef.current) {
           for (const loc of local) {
-            if (!finalMap.has(loc.id) && loc.id.startsWith('audit_') && !deletedSet.has(loc.id)) {
+            if (
+              !finalMap.has(loc.id) &&
+              loc.id.startsWith('audit_') &&
+              !deletedSet.has(loc.id) &&
+              !isBeforeResetEpoch(loc, serverResetBefore)
+            ) {
               finalMap.set(loc.id, loc);
               fetch('/api/warehouse/sheets-sync', {
                 method: 'POST',
@@ -410,9 +454,19 @@ export function GoogleSheetsWarehouseAudit({
         setSessions(merged);
         saveLocalWarehouseSessions(merged);
 
+        if (merged.length === 0 && typeof window !== 'undefined') {
+          localStorage.removeItem(ACTIVE_SESSION_ID_KEY);
+        }
+
         // Keep active currentSession strictly synchronized with authoritative cloud list
         const cur = currentSessionRef.current;
-        if (!cur || !finalMap.has(cur.id) || deletedSet.has(cur.id) || isDemoSeedSessionId(cur.id)) {
+        if (
+          !cur ||
+          !finalMap.has(cur.id) ||
+          deletedSet.has(cur.id) ||
+          isDemoSeedSessionId(cur.id) ||
+          isBeforeResetEpoch(cur, serverResetBefore)
+        ) {
           const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem(ACTIVE_SESSION_ID_KEY) : null;
           const matched = (savedActiveId ? merged.find(s => s.id === savedActiveId) : null) || merged[0] || null;
           setCurrentSession(matched);
@@ -481,6 +535,57 @@ export function GoogleSheetsWarehouseAudit({
     return sessions.filter(s => (s.mode || 'shipment_receiving') === warehouseSection);
   }, [sessions, warehouseSection]);
 
+  // Shared helper to finalize any imported session (Google Sheet URL, AI, Excel, Paste)
+  const finalizeImportedSession = async (rawSession: SheetsAuditSession) => {
+    lastLocalMutationAtRef.current = Date.now();
+    const rawWebhook = inputWebhookUrl.trim();
+    const isSpreadsheetLinkInWebhook = rawWebhook.includes('docs.google.com/spreadsheets');
+    const validWebhook = rawWebhook && !isSpreadsheetLinkInWebhook ? rawWebhook : undefined;
+
+    if (isSpreadsheetLinkInWebhook) {
+      setWebhookWarningMsg(
+        'لینکی ئاسایی شیت لە خانەی Webhook دانرابوو بۆیە پشتگوێ خرا؛ شیتەکە بارکرا بەڵام بۆ نووسینی ڕاستەوخۆ پێویستە لینکی Apps Script (script.google.com) دابنێیت.'
+      );
+    } else {
+      setWebhookWarningMsg(null);
+    }
+
+    const finalSession: SheetsAuditSession = {
+      ...rawSession,
+      webhookUrl: validWebhook,
+    };
+
+    if (validWebhook) {
+      try {
+        await fetch('/api/warehouse/sheets-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'save_session', session: finalSession }),
+        });
+      } catch {}
+    }
+
+    setCurrentSession(finalSession);
+    setSessions(prev => {
+      const next = [finalSession, ...prev.filter(s => s.id !== finalSession.id)];
+      saveLocalWarehouseSessions(next);
+      return next;
+    });
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ACTIVE_SESSION_ID_KEY, finalSession.id);
+    }
+    if (finalSession.mode) setWarehouseSection(finalSession.mode);
+    setLastSavedNotice(
+      `خەزنکراوە لە سیستەمدا • ${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}`
+    );
+    setShowConnectModal(false);
+    setInputSheetUrl('');
+    setInputSessionTitle('');
+    setInputWebhookUrl('');
+    setInputRawPaste('');
+    triggerHaptic('success');
+  };
+
   // 2. Connect and Import Google Sheet
   const handleConnectSheet = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -503,37 +608,7 @@ export function GoogleSheetsWarehouseAudit({
 
       const data = await res.json();
       if (data.success && data.session) {
-        // If user also provided a webhook URL, attach it
-        const finalSession = {
-          ...data.session,
-          webhookUrl: inputWebhookUrl.trim() || undefined,
-        };
-
-        // Save session with webhook if exists
-        if (inputWebhookUrl.trim()) {
-          await fetch('/api/warehouse/sheets-sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'save_session', session: finalSession }),
-          });
-        }
-
-        setCurrentSession(finalSession);
-        setSessions(prev => {
-          const next = [finalSession, ...prev.filter(s => s.id !== finalSession.id)];
-          saveLocalWarehouseSessions(next);
-          return next;
-        });
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(ACTIVE_SESSION_ID_KEY, finalSession.id);
-        }
-        if (finalSession.mode) setWarehouseSection(finalSession.mode);
-        setLastSavedNotice(`خەزنکراوە لە سیستەمدا • ${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}`);
-        setShowConnectModal(false);
-        setInputSheetUrl('');
-        setInputSessionTitle('');
-        setInputWebhookUrl('');
-        triggerHaptic('success');
+        await finalizeImportedSession(data.session);
       } else {
         setConnectError(data.error || 'نەتوانرا گۆگڵ شیتەکە لۆد بکرێت.');
       }
@@ -566,31 +641,7 @@ export function GoogleSheetsWarehouseAudit({
 
       const data = await res.json();
       if (data.success && data.session) {
-        const finalSession = {
-          ...data.session,
-          webhookUrl: inputWebhookUrl.trim() || undefined,
-        };
-        if (inputWebhookUrl.trim()) {
-          await fetch('/api/warehouse/sheets-sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'save_session', session: finalSession }),
-          });
-        }
-        setCurrentSession(finalSession);
-        setSessions(prev => {
-          const next = [finalSession, ...prev.filter(s => s.id !== finalSession.id)];
-          saveLocalWarehouseSessions(next);
-          return next;
-        });
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(ACTIVE_SESSION_ID_KEY, finalSession.id);
-        }
-        if (finalSession.mode) setWarehouseSection(finalSession.mode);
-        setLastSavedNotice(`خەزنکراوە لە سیستەمدا • ${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}`);
-        setShowConnectModal(false);
-        setInputRawPaste('');
-        triggerHaptic('success');
+        await finalizeImportedSession(data.session);
       } else {
         setConnectError(data.error || 'نەتوانرا داتاکە بە زیرەکی دەستکرد شیبکرێتەوە.');
       }
@@ -632,30 +683,7 @@ export function GoogleSheetsWarehouseAudit({
 
         const data = await res.json();
         if (data.success && data.session) {
-          const finalSession = {
-            ...data.session,
-            webhookUrl: inputWebhookUrl.trim() || undefined,
-          };
-          if (inputWebhookUrl.trim()) {
-            await fetch('/api/warehouse/sheets-sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'save_session', session: finalSession }),
-            });
-          }
-          setCurrentSession(finalSession);
-          setSessions(prev => {
-            const next = [finalSession, ...prev.filter(s => s.id !== finalSession.id)];
-            saveLocalWarehouseSessions(next);
-            return next;
-          });
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(ACTIVE_SESSION_ID_KEY, finalSession.id);
-          }
-          if (finalSession.mode) setWarehouseSection(finalSession.mode);
-          setLastSavedNotice(`خەزنکراوە لە سیستەمدا • ${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}`);
-          setShowConnectModal(false);
-          triggerHaptic('success');
+          await finalizeImportedSession(data.session);
         } else {
           setConnectError(data.error || 'نەتوانرا فایلی ئێکسڵەکە بخوێندرێتەوە.');
         }
@@ -690,31 +718,7 @@ export function GoogleSheetsWarehouseAudit({
 
       const data = await res.json();
       if (data.success && data.session) {
-        const finalSession = {
-          ...data.session,
-          webhookUrl: inputWebhookUrl.trim() || undefined,
-        };
-        if (inputWebhookUrl.trim()) {
-          await fetch('/api/warehouse/sheets-sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'save_session', session: finalSession }),
-          });
-        }
-        setCurrentSession(finalSession);
-        setSessions(prev => {
-          const next = [finalSession, ...prev.filter(s => s.id !== finalSession.id)];
-          saveLocalWarehouseSessions(next);
-          return next;
-        });
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(ACTIVE_SESSION_ID_KEY, finalSession.id);
-        }
-        if (finalSession.mode) setWarehouseSection(finalSession.mode);
-        setLastSavedNotice(`خەزنکراوە لە سیستەمدا • ${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}`);
-        setShowConnectModal(false);
-        setInputRawPaste('');
-        triggerHaptic('success');
+        await finalizeImportedSession(data.session);
       } else {
         setConnectError(data.error || 'نەتوانرا داتاکە لۆد بکرێت.');
       }
@@ -979,6 +983,48 @@ export function GoogleSheetsWarehouseAudit({
       if (Array.isArray(data?.deletedIds)) {
         saveLocalDeletedIds(data.deletedIds);
       }
+    } catch {}
+  };
+
+  // 6b. Wipe ALL sessions from Supabase & every connected browser cache
+  const handleWipeAllSessions = async () => {
+    if (
+      !confirm(
+        'ئایا دڵنیایت لە سڕینەوە و سفرکردنەوەی هەموو شیتەکان؟ لە هەموو کۆمپیوتەر و مۆبایلەکان بە تەواوی سفر دەبێتەوە.'
+      )
+    ) {
+      return;
+    }
+
+    lastLocalMutationAtRef.current = Date.now();
+    const nowIso = new Date().toISOString();
+    saveLocalResetBefore(nowIso);
+    const allIds = sessions.map(s => s.id);
+    if (allIds.length > 0) {
+      saveLocalDeletedIds([...allIds, ...getLocalDeletedIds()]);
+    }
+
+    setSessions([]);
+    setCurrentSession(null);
+    saveLocalWarehouseSessions([]);
+    setWebhookWarningMsg(null);
+    setPushSuccessMsg(null);
+    setLastSavedNotice('هەموو شیتەکان سفر کرانەوە 🧹');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(ACTIVE_SESSION_ID_KEY);
+    }
+
+    try {
+      const res = await fetch('/api/warehouse/sheets-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'wipe_all_sessions' }),
+      });
+      const data = await res.json();
+      if (data?.resetBefore) {
+        saveLocalResetBefore(data.resetBefore);
+      }
+      triggerHaptic('success');
     } catch {}
   };
 
@@ -1369,6 +1415,19 @@ export function GoogleSheetsWarehouseAudit({
               <Layers className="w-3.5 h-3.5 text-slate-500" />
               <span>هەموو شیتەکان ({sessions.length})</span>
             </button>
+
+            {/* Full Reset Button (Desktop Admin Only) */}
+            {!isMobileOperational && sessions.length > 0 && (
+              <button
+                type="button"
+                onClick={handleWipeAllSessions}
+                className="h-10 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                title="سڕینەوە و سفرکردنەوەی هەموو شیتەکان لە سیستەم و مۆبایلەکان"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>سفرکردنەوەی هەمووی</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -2371,12 +2430,21 @@ export function GoogleSheetsWarehouseAudit({
             {/* TAB 1: GOOGLE SHEETS LINK */}
             {importTab === 'url' && (
               <form onSubmit={handleConnectSheet} className="space-y-4 text-xs">
+                <div className="p-3 rounded-2xl bg-blue-50/80 border border-blue-200 text-blue-950 space-y-1">
+                  <span className="font-black text-[11px] block">📌 چۆن لە Google Sheet دەیهێنیت بۆ ئێرە؟</span>
+                  <ol className="list-decimal list-inside space-y-0.5 text-[11px] text-blue-900">
+                    <li>لە Google Sheet کلیک لە <strong>Share</strong> بکە → <strong>General access</strong> بکە بە <strong>Anyone with the link</strong> (Viewer).</li>
+                    <li>کلیک لە <strong>Copy link</strong> بکە و لە خانەی خوارەوە پەیستی بکە.</li>
+                    <li><span className="text-slate-600">(بۆ گۆڕانکاری ڕاستەوخۆ بۆ ناو شیتەکە)</span> بەستەری Apps Script Webhook لە خانەی خوارتر دابنێ (یان دواتر زیادی بکە).</li>
+                  </ol>
+                </div>
+
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">
-                    لینکی Google Sheet (بەستەری ئاسایی یان Publish to web):
+                    لینکی Google Sheet (بەستەری شیت یان Publish to web):
                   </label>
                   <input
-                    type="url"
+                    type="text"
                     required
                     value={inputSheetUrl}
                     onChange={(e) => setInputSheetUrl(e.target.value)}
@@ -2385,7 +2453,7 @@ export function GoogleSheetsWarehouseAudit({
                     dir="ltr"
                   />
                   <p className="text-[10px] text-slate-500 mt-1 font-medium">
-                    پشتیوانی بەستەری بڵاوکراوە لە وێب (pubhtml) و بەستەری هاوبەشکراو (Anyone with the link) دەکات.
+                    پشتیوانی بەستەری هاوبەشکراو (Anyone with the link) و بڵاوکراوە لە وێب (pubhtml) دەکات.
                   </p>
                 </div>
 

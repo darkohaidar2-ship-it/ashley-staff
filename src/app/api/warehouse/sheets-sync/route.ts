@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 
 const SESSIONS_STORE_ID = 'ashley_sheets_audit_sessions';
 const DELETED_IDS_STORE_ID = 'ashley_sheets_deleted_ids';
+const RESET_EPOCH_STORE_ID = 'ashley_sheets_reset_epoch';
 
 export interface SheetsAuditItem {
   id: string;
@@ -436,6 +437,41 @@ async function markSessionDeleted(sessionId: string): Promise<string[]> {
 }
 
 /**
+ * 🧹 Global reset timestamp so any cached desktop/mobile browser purges pre-reset sheets
+ */
+async function getResetEpoch(): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', RESET_EPOCH_STORE_ID)
+      .maybeSingle();
+
+    if (error || !data?.qr_code) return null;
+    const raw = typeof data.qr_code === 'string' ? data.qr_code.trim() : String(data.qr_code);
+    if (!raw || isNaN(Date.parse(raw))) return null;
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
+async function setResetEpoch(isoTimestamp: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('warehouses')
+      .upsert({
+        id: RESET_EPOCH_STORE_ID,
+        name: 'Ashley Sheets Global Reset Timestamp',
+        qr_code: isoTimestamp,
+      });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * 📊 Build unified Google Sheet write-back payload (supports BOTH adding audit columns in-place & full table sync)
  */
 function buildAuditSheetPayload(session: SheetsAuditSession) {
@@ -641,14 +677,29 @@ async function pushSessionToAppsScript(webhookUrl: string, session: SheetsAuditS
 // =============================================================================
 export async function GET(req: NextRequest) {
   try {
-    const [sessions, deletedIds] = await Promise.all([
+    const [sessions, deletedIds, resetBefore] = await Promise.all([
       getStoredSessions(),
       getDeletedSessionIds(),
+      getResetEpoch(),
     ]);
+    const deletedSet = new Set(deletedIds);
+    const resetMs = resetBefore ? Date.parse(resetBefore) : 0;
+    const activeSessions = Object.values(sessions)
+      .filter((s) => {
+        if (!s || !s.id || deletedSet.has(s.id)) return false;
+        if (resetMs > 0) {
+          const ts = Date.parse(s.updatedAt || s.createdAt || '');
+          if (!isNaN(ts) && ts <= resetMs) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
     return NextResponse.json({
       success: true,
-      sessions: Object.values(sessions).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+      sessions: activeSessions,
       deletedIds,
+      resetBefore,
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message || 'Server error' }, { status: 500 });
@@ -949,6 +1000,44 @@ export async function POST(req: NextRequest) {
       const deletedIds = await markSessionDeleted(sessionId);
 
       return NextResponse.json({ success: true, deletedId: sessionId, deletedIds });
+    }
+
+    // -------------------------------------------------------------------------
+    // ACTION 3.5: WIPE ALL AUDIT SESSIONS (FULL RESET ACROSS ALL DEVICES)
+    // -------------------------------------------------------------------------
+    if (action === 'wipe_all_sessions') {
+      const existing = await getStoredSessions();
+      const prevIds = Object.keys(existing);
+      const resetBefore = new Date().toISOString();
+      const [wiped, epochSaved] = await Promise.all([
+        saveStoredSessions({}),
+        setResetEpoch(resetBefore),
+      ]);
+
+      if (!wiped || !epochSaved) {
+        return NextResponse.json({
+          success: false,
+          error: 'نەتوانرا هەموو شیتەکان لە Supabase بسڕدرێنەوە.',
+        }, { status: 500 });
+      }
+
+      if (prevIds.length > 0) {
+        const curDeleted = await getDeletedSessionIds();
+        const merged = Array.from(new Set([...prevIds, ...curDeleted])).slice(0, 300);
+        try {
+          await supabase.from('warehouses').upsert({
+            id: DELETED_IDS_STORE_ID,
+            name: 'Ashley Deleted Warehouse Sheet IDs',
+            qr_code: JSON.stringify(merged),
+          });
+        } catch {}
+      }
+
+      return NextResponse.json({
+        success: true,
+        clearedCount: prevIds.length,
+        resetBefore,
+      });
     }
 
     // -------------------------------------------------------------------------
