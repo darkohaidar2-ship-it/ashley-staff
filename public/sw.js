@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ashley-apple-v46-sheets-clean-reset';
+const CACHE_NAME = 'ashley-apple-v47-smart-carton-ocr';
 
 const PRECACHE_URLS = [
   '/',
@@ -55,6 +55,7 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/_next/static/') ||
     url.pathname.startsWith('/fonts/') ||
     url.pathname.startsWith('/models/') ||
+    url.pathname.startsWith('/ocr/') ||
     url.pathname.endsWith('.png') ||
     url.pathname.endsWith('.svg') ||
     url.pathname.endsWith('.jpg') ||
