@@ -49,6 +49,8 @@ import { triggerHaptic } from '@/lib/offline-sync-manager';
 import { OfficialPrintHeader, OfficialPrintSignatures } from '@/components/reports/OfficialPrintHeader';
 import {
   GoogleSheetDeleteAction,
+  GoogleSheetSyncDiffRow,
+  GoogleSheetSyncDiffSummary,
   SheetsAuditItem,
   SheetsAuditSession,
 } from '@/app/api/warehouse/sheets-sync/route';
@@ -121,7 +123,52 @@ function normalizeSku_(val) {
   return String(val || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
+function isAshleyProgramHeader_(hdr) {
+  var h = String(hdr || '').trim();
+  if (!h) return false;
+  var exactList = [
+    'بڕی ژمێردراو / داگیراو (Audited Qty)',
+    'جیاوازی دانە (Qty Variance)',
+    'کارتۆنی داگیراو (Checked Cartons)',
+    'کارتۆنە لێدراوەکان (Scanned Box #)',
+    'دۆخی پشکنین (Audit Status)',
+    'دۆخی فیزیکی (Condition)',
+    'شوێن لە کۆگا (Rack/Location)',
+    'کاتی سکان / داخڵکردن (Scanned At)',
+    'پشکێنەر (Audited By)',
+    'تێبینی (Audit Notes)',
+    'بڕی وەرگیراو',
+    'بڕی ژمێردراو',
+    'دواین گۆڕانکاری'
+  ];
+  if (exactList.indexOf(h) !== -1) return true;
+  var markers = [
+    '(Audited', '(Scanned', '(Qty Variance', '(Checked Cartons',
+    '(Audit Status', '(Condition)', '(Rack/Location)', '(Audit Notes)',
+    'کاتی سکان', 'کارتۆنی داگیراو', 'کارتۆنە لێدراوەکان',
+    'دۆخی پشکنین', 'دۆخی فیزیکی', 'جیاوازی دانە'
+  ];
+  for (var m = 0; m < markers.length; m++) {
+    if (h.indexOf(markers[m]) !== -1) return true;
+  }
+  return false;
+}
+
+function isAshleyGeneratedCoreHeader_(hdr) {
+  var h = String(hdr || '').trim();
+  var coreList = [
+    'کۆدی مۆدێل (Model)',
+    'ناوی کاڵا (Item Description)',
+    'بڕی بارکراو / خشتە (Expected Qty)',
+    'کۆی کارتۆن (Total Cartons)',
+    'دانە لە کارتۆن (Pcs/Carton)'
+  ];
+  return coreList.indexOf(h) !== -1;
+}
+
 function doPost(e) {
+  var lock = LockService.getScriptLock();
+  lock.tryLock(10000);
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var data = JSON.parse(e.postData.contents);
@@ -147,23 +194,37 @@ function doPost(e) {
       'تێبینی (Audit Notes)'
     ];
 
-    // 1. CLEAR ONLY AUDIT COLUMNS ON TARGET TAB
+    // 1. CLEAR ALL PROGRAM COLUMNS & ARTIFACTS ON TARGET TAB (LEAVE ZERO TRACE OF APP)
     if (data.action === 'clear_audit_columns') {
       var lastRowC = sheet.getLastRow();
       var lastColC = sheet.getLastColumn();
       var removedCols = 0;
       if (lastRowC >= 1 && lastColC >= 1) {
-        var maxHr = Math.min(5, lastRowC);
+        var maxHr = Math.min(8, lastRowC);
         var topR = sheet.getRange(1, 1, maxHr, lastColC).getValues();
         var hrRow = 1;
         for (var rIdx = 0; rIdx < topR.length; rIdx++) {
           if (topR[rIdx].filter(function(c) { return String(c || '').trim() !== ''; }).length >= 2) { hrRow = rIdx + 1; break; }
         }
         var curHdrs = sheet.getRange(hrRow, 1, 1, lastColC).getValues()[0].map(function(h) { return String(h || '').trim(); });
-        for (var col = curHdrs.length - 1; col >= 0; col--) {
-          if (auditHeaders.indexOf(curHdrs[col]) !== -1 || curHdrs[col].indexOf('(Audited') !== -1 || curHdrs[col].indexOf('(Scanned') !== -1) {
-            sheet.deleteColumn(col + 1);
-            removedCols++;
+        var allManagedByApp = curHdrs.length > 0 && curHdrs.every(function(ch) {
+          return !ch || isAshleyProgramHeader_(ch) || isAshleyGeneratedCoreHeader_(ch);
+        });
+
+        if (allManagedByApp && data.wipeProgramArtifacts) {
+          sheet.clear();
+          removedCols = curHdrs.length;
+        } else {
+          for (var col = curHdrs.length - 1; col >= 0; col--) {
+            if (auditHeaders.indexOf(curHdrs[col]) !== -1 || isAshleyProgramHeader_(curHdrs[col])) {
+              sheet.deleteColumn(col + 1);
+              removedCols++;
+            }
+          }
+          // Trim trailing blank formatting columns left behind
+          var remLastCol = sheet.getLastColumn();
+          if (remLastCol >= 1) {
+            sheet.getRange(1, 1, sheet.getLastRow() || 1, remLastCol).clearNote();
           }
         }
       }
@@ -195,7 +256,7 @@ function doPost(e) {
       }
     }
 
-    // 3. SYNC ONLY TARGET TAB WITH ISOLATED ROWS & SCANNED AT TIMESTAMP
+    // 3. SYNC ONLY TARGET TAB WITH ROW-VERIFIED ISOLATION & SCANNED AT TIMESTAMP
     var lastRow = sheet.getLastRow();
     var lastCol = sheet.getLastColumn();
 
@@ -224,14 +285,23 @@ function doPost(e) {
       var numDataRows = Math.max(0, lastRow - headerRowNum);
       var exactRowMap = {};
       var normRowMap = {};
+      var rowNormBySheetRow = {};
       if (numDataRows > 0) {
         var existingRows = sheet.getRange(dataStartRow, 1, numDataRows, lastCol).getValues();
         for (var r = 0; r < existingRows.length; r++) {
+          var sRowNum = dataStartRow + r;
           var rawVal = String(existingRows[r][modelColIdx] || '').trim();
           var mLow = rawVal.toLowerCase();
           var mNorm = normalizeSku_(rawVal);
-          if (mLow && !exactRowMap[mLow]) exactRowMap[mLow] = dataStartRow + r;
-          if (mNorm && !normRowMap[mNorm]) normRowMap[mNorm] = dataStartRow + r;
+          rowNormBySheetRow[sRowNum] = mNorm;
+          if (mLow) {
+            if (!exactRowMap[mLow]) exactRowMap[mLow] = [];
+            exactRowMap[mLow].push(sRowNum);
+          }
+          if (mNorm) {
+            if (!normRowMap[mNorm]) normRowMap[mNorm] = [];
+            normRowMap[mNorm].push(sRowNum);
+          }
         }
       }
 
@@ -260,12 +330,35 @@ function doPost(e) {
           }
         });
 
+        var usedRows = {};
         var updatedCount = 0;
         data.itemRecords.forEach(function(rec) {
           var key = String(rec.model || '').trim().toLowerCase();
           var nKey = normalizeSku_(rec.model);
-          var targetRow = (key && exactRowMap[key]) ? exactRowMap[key] : ((nKey && normRowMap[nKey]) ? normRowMap[nKey] : -1);
+          var targetRow = -1;
+
+          // 1. Prefer verified rowIndex (rec.rowIndex + 1 in 1-based sheet coords) if SKU still matches that row!
+          if (typeof rec.rowIndex === 'number' && rec.rowIndex >= 0) {
+            var directSheetRow = rec.rowIndex + 1;
+            if (rowNormBySheetRow[directSheetRow] && rowNormBySheetRow[directSheetRow] === nKey && !usedRows[directSheetRow]) {
+              targetRow = directSheetRow;
+            }
+          }
+
+          // 2. Otherwise pick next unused matching row from exactRowMap or normRowMap (handles duplicate SKUs cleanly!)
+          if (targetRow === -1 && key && exactRowMap[key]) {
+            for (var ei = 0; ei < exactRowMap[key].length; ei++) {
+              if (!usedRows[exactRowMap[key][ei]]) { targetRow = exactRowMap[key][ei]; break; }
+            }
+          }
+          if (targetRow === -1 && nKey && normRowMap[nKey]) {
+            for (var ni = 0; ni < normRowMap[nKey].length; ni++) {
+              if (!usedRows[normRowMap[nKey][ni]]) { targetRow = normRowMap[nKey][ni]; break; }
+            }
+          }
+
           if (targetRow !== -1 && rec.auditValues) {
+            usedRows[targetRow] = true;
             auditHeaders.forEach(function(hdr) {
               if (colMap[hdr] && rec.auditValues[hdr] !== undefined) {
                 sheet.getRange(targetRow, colMap[hdr]).setValue(rec.auditValues[hdr]);
@@ -315,6 +408,8 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'No data' })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    try { lock.releaseLock(); } catch (eLock) {}
   }
 }`;
 
@@ -391,6 +486,43 @@ function saveLocalDeletedIds(ids: string[]) {
   } catch {}
 }
 
+function mergeClientSessionsItemWise(loc: SheetsAuditSession, srv: SheetsAuditSession): SheetsAuditSession {
+  const locMs = Date.parse(loc.updatedAt || '') || 0;
+  const srvMs = Date.parse(srv.updatedAt || '') || 0;
+  const srvById = new Map<string, SheetsAuditItem>();
+  (srv.items || []).forEach((it) => srvById.set(it.id, it));
+
+  const seenIds = new Set<string>();
+  const preferLocByDefault = locMs > srvMs + 1500;
+  const mergedItems: SheetsAuditItem[] = (loc.items || []).map((lItem) => {
+    seenIds.add(lItem.id);
+    const sItem = srvById.get(lItem.id);
+    if (!sItem) return lItem;
+    const lTouch = Date.parse(lItem.lastAuditedAt || '') || 0;
+    const sTouch = Date.parse(sItem.lastAuditedAt || '') || 0;
+    if (lTouch > sTouch) return lItem;
+    if (sTouch > lTouch) return sItem;
+    return preferLocByDefault ? lItem : sItem;
+  });
+
+  for (const sItem of srv.items || []) {
+    if (!seenIds.has(sItem.id)) mergedItems.push(sItem);
+  }
+
+  return {
+    ...(preferLocByDefault ? { ...srv, ...loc } : { ...loc, ...srv }),
+    webhookUrl: loc.webhookUrl || srv.webhookUrl,
+    googleSheetUrl: loc.googleSheetUrl || srv.googleSheetUrl,
+    items: mergedItems,
+    totalItemsCount: mergedItems.length,
+    totalAuditedUnits: mergedItems.reduce((a, it) => a + (it.checkedQty || 0), 0),
+    totalAuditedCartons: mergedItems.reduce((a, it) => a + (it.checkedCartons || 0), 0),
+    matchedCount: mergedItems.filter((it) => it.auditStatus === 'verified').length,
+    discrepantCount: mergedItems.filter((it) => it.auditStatus === 'deficit' || it.auditStatus === 'excess').length,
+    damagedCount: mergedItems.filter((it) => it.auditStatus === 'damaged').length,
+  };
+}
+
 export interface GoogleSheetsWarehouseAuditProps {
   onBackToMobileApp?: () => void;
   onSwitchPortal?: (portal: 'attendance' | 'feedback' | 'warehouse') => void;
@@ -444,6 +576,17 @@ export function GoogleSheetsWarehouseAudit({
     tabNames: string[];
     profile: CodeIntelligenceProfile;
   } | null>(null);
+  const [showWipeAllModal, setShowWipeAllModal] = useState<boolean>(false);
+  const [wipingAll, setWipingAll] = useState<boolean>(false);
+  const [showSyncControlModal, setShowSyncControlModal] = useState<boolean>(false);
+  const [syncInspecting, setSyncInspecting] = useState<boolean>(false);
+  const [syncApplying, setSyncApplying] = useState<boolean>(false);
+  const [syncInspectionResult, setSyncInspectionResult] = useState<{
+    tabMatched: string;
+    summary: GoogleSheetSyncDiffSummary;
+    diffs: GoogleSheetSyncDiffRow[];
+  } | null>(null);
+  const [pendingGoogleSyncIds, setPendingGoogleSyncIds] = useState<Record<string, boolean>>({});
 
   // Google Push & Supabase Save States
   const [tempWebhookUrl, setTempWebhookUrl] = useState<string>('');
@@ -492,6 +635,8 @@ export function GoogleSheetsWarehouseAudit({
   const currentSessionRef = useRef<SheetsAuditSession | null>(null);
   const isMobileOperationalRef = useRef<boolean>(isMobileOperational);
   const lastLocalMutationAtRef = useRef<number>(0);
+  const googleSyncTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const latestSessionForPushRef = useRef<Record<string, SheetsAuditSession>>({});
 
   useEffect(() => {
     currentSessionRef.current = currentSession;
@@ -560,9 +705,8 @@ export function GoogleSheetsWarehouseAudit({
 
         serverList.forEach((srv: SheetsAuditSession) => {
           const loc = localById.get(srv.id);
-          // Only prefer local copy if it has a genuinely newer offline edit timestamp
-          if (loc && new Date(loc.updatedAt).getTime() > new Date(srv.updatedAt).getTime() + 1500) {
-            finalMap.set(srv.id, loc);
+          if (loc) {
+            finalMap.set(srv.id, mergeClientSessionsItemWise(loc, srv));
           } else {
             finalMap.set(srv.id, srv);
           }
@@ -616,8 +760,13 @@ export function GoogleSheetsWarehouseAudit({
           }
         } else {
           const updatedCur = finalMap.get(cur.id);
-          if (updatedCur && new Date(updatedCur.updatedAt).getTime() > new Date(cur.updatedAt).getTime()) {
-            setCurrentSession(updatedCur);
+          if (
+            updatedCur &&
+            (updatedCur.updatedAt !== cur.updatedAt ||
+              updatedCur.totalAuditedUnits !== cur.totalAuditedUnits ||
+              updatedCur.items.length !== cur.items.length)
+          ) {
+            setCurrentSession(mergeClientSessionsItemWise(cur, updatedCur));
           }
         }
       }
@@ -967,12 +1116,66 @@ export function GoogleSheetsWarehouseAudit({
     }
   };
 
-  // 3. Save / Auto-sync session to Local Storage, Cloud & Webhook
+  // 3a. Debounced Sequential Google Sheet Push (Prevents race conditions on rapid scans/taps)
+  const flushGoogleWebhookPush = useCallback(async (sessionToPush: SheetsAuditSession) => {
+    const webhook = sessionToPush.webhookUrl?.trim() || '';
+    if (!webhook || !/^https:\/\/script\.google(usercontent)?\.com\//.test(webhook)) {
+      setPendingGoogleSyncIds((prev) => ({ ...prev, [sessionToPush.id]: false }));
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/warehouse/sheets-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'sync_to_google',
+          webhookUrl: webhook,
+          session: sessionToPush,
+        }),
+      });
+      const data = await res.json();
+      setPendingGoogleSyncIds((prev) => ({ ...prev, [sessionToPush.id]: false }));
+      if (data.success) {
+        const syncedIso = data.lastGoogleSyncedAt || new Date().toISOString();
+        setWebhookWarningMsg(null);
+        setCurrentSession((cur) =>
+          cur && cur.id === sessionToPush.id
+            ? { ...cur, lastGoogleSyncedAt: syncedIso, lastSyncDirection: 'push' }
+            : cur
+        );
+        setSessions((prev) => {
+          const next = prev.map((s) =>
+            s.id === sessionToPush.id ? { ...s, lastGoogleSyncedAt: syncedIso, lastSyncDirection: 'push' as const } : s
+          );
+          saveLocalWarehouseSessions(next);
+          return next;
+        });
+        const tStr = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        setLastSavedNotice(`خەزنکرا لە سیستەم + Google Sheet ✅ • ${tStr}`);
+      } else if (data.error) {
+        setWebhookWarningMsg(data.error);
+      }
+    } catch {
+      setPendingGoogleSyncIds((prev) => ({ ...prev, [sessionToPush.id]: true }));
+    }
+  }, []);
+
+  // 3. Save / Auto-sync session to Local Storage, Cloud (Item-Merged) & Debounced Google Webhook
   const persistSession = useCallback(async (sessionToSave: SheetsAuditSession, isManualSync = false) => {
     if (isManualSync) setSyncingGoogle(true);
     else setSaving(true);
 
     lastLocalMutationAtRef.current = Date.now();
+    latestSessionForPushRef.current[sessionToSave.id] = sessionToSave;
+
+    const hasWebhook = Boolean(
+      sessionToSave.webhookUrl &&
+        /^https:\/\/script\.google(usercontent)?\.com\//.test(sessionToSave.webhookUrl.trim())
+    );
+    if (hasWebhook) {
+      setPendingGoogleSyncIds((prev) => ({ ...prev, [sessionToSave.id]: true }));
+    }
 
     // 1. Immediately persist locally (Guaranteed zero loss)
     setSessions(prev => {
@@ -995,41 +1198,60 @@ export function GoogleSheetsWarehouseAudit({
       const res = await fetch('/api/warehouse/sheets-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save_session', session: sessionToSave }),
+        body: JSON.stringify({
+          action: 'save_session',
+          session: sessionToSave,
+          skipWebhookPush: !isManualSync,
+        }),
       });
       const data = await res.json();
       if (data.success && data.session) {
         lastLocalMutationAtRef.current = Date.now();
-        setCurrentSession(data.session);
+        const latestFromServer: SheetsAuditSession = data.session;
+        latestSessionForPushRef.current[latestFromServer.id] = latestFromServer;
+        setCurrentSession(latestFromServer);
         setSessions(prev => {
-          const exists = prev.some(s => s.id === data.session.id);
+          const exists = prev.some(s => s.id === latestFromServer.id);
           const next = exists
-            ? prev.map(s => s.id === data.session.id ? data.session : s)
-            : [data.session, ...prev];
+            ? prev.map(s => s.id === latestFromServer.id ? latestFromServer : s)
+            : [latestFromServer, ...prev];
           saveLocalWarehouseSessions(next);
           return next;
         });
 
-        if (data.webhookSyncResult?.ok) {
-          setWebhookWarningMsg(null);
-          setLastSavedNotice(`خەزنکرا لە سیستەم + Google Sheet ✅ • ${timeStr}`);
-        } else if (data.webhookSyncResult && !data.webhookSyncResult.ok) {
-          setWebhookWarningMsg(
-            data.webhookSyncResult.error ||
-              'داتاکان لە سیستەم خەزنکران، بەڵام نەتوانرا ڕاستەوخۆ بنێردرێن بۆ ناو Google Sheet.'
-          );
-        }
-
         if (isManualSync) {
+          if (googleSyncTimersRef.current[latestFromServer.id]) {
+            clearTimeout(googleSyncTimersRef.current[latestFromServer.id]);
+            delete googleSyncTimersRef.current[latestFromServer.id];
+          }
+          if (data.webhookSyncResult?.ok) {
+            setPendingGoogleSyncIds((prev) => ({ ...prev, [latestFromServer.id]: false }));
+            setWebhookWarningMsg(null);
+            setLastSavedNotice(`خەزنکرا لە سیستەم + Google Sheet ✅ • ${timeStr}`);
+          } else if (data.webhookSyncResult && !data.webhookSyncResult.ok) {
+            setWebhookWarningMsg(
+              data.webhookSyncResult.error ||
+                'داتاکان لە سیستەم خەزنکران، بەڵام نەتوانرا ڕاستەوخۆ بنێردرێن بۆ ناو Google Sheet.'
+            );
+          }
           setSyncSuccess(true);
           setTimeout(() => setSyncSuccess(false), 3000);
           triggerHaptic('success');
+        } else if (hasWebhook) {
+          // Schedule crisp trailing 700ms debounced push so rapid +1/+5 taps collapse into ONE clean write!
+          if (googleSyncTimersRef.current[latestFromServer.id]) {
+            clearTimeout(googleSyncTimersRef.current[latestFromServer.id]);
+          }
+          const targetId = latestFromServer.id;
+          googleSyncTimersRef.current[targetId] = setTimeout(() => {
+            const latestSnap = latestSessionForPushRef.current[targetId] || latestFromServer;
+            flushGoogleWebhookPush(latestSnap);
+          }, 700);
         }
       } else {
         setWebhookWarningMsg(data.error || 'خەزنکردن لە سێرڤەر سەرکەوتوو نەبوو — تکایە دووبارە هەوڵبدەرەوە.');
       }
     } catch {
-      // Offline fallback: already guaranteed saved in localStorage!
       if (isManualSync) {
         setWebhookWarningMsg('پەیوەندی بە سێرڤەر پچڕا — گۆڕانکارییەکان کاتی لەم ئامێرە پارێزران.');
       }
@@ -1037,7 +1259,7 @@ export function GoogleSheetsWarehouseAudit({
       setSaving(false);
       setSyncingGoogle(false);
     }
-  }, []);
+  }, [flushGoogleWebhookPush]);
 
   // 4. Update an Item Quantity
   const handleUpdateItemQty = (itemId: string, delta: number) => {
@@ -1229,6 +1451,9 @@ export function GoogleSheetsWarehouseAudit({
             action: 'delete_session',
             sessionId: target.id,
             googleSheetAction,
+            webhookUrl: target.webhookUrl,
+            targetSheetName: target.sheetName,
+            targetSheetGid: target.tabGid,
           }),
         });
         const data = await res.json();
@@ -1239,7 +1464,7 @@ export function GoogleSheetsWarehouseAudit({
             `بەشەکە لە سیستەم سڕدرایەوە، بەڵام گۆگڵ شیت گەڕاندیەوە: ${data.googleResult.error || 'هەڵەیەک ڕوویدا'}`
           );
         } else if (googleSheetAction !== 'none') {
-          setLastSavedNotice(`بەشی «${target.sheetName || target.title}» لە سیستەم و گۆگڵ شیت پاککرایەوە ✅`);
+          setLastSavedNotice(`بەشی «${target.sheetName || target.title}» و هەموو شوێنەوارەکانی لە گۆگڵ شیت پاککرانەوە ✅`);
         } else {
           setLastSavedNotice(`بەشی «${target.sheetName || target.title}» تەنها لە سیستەم سڕدرایەوە`);
         }
@@ -1270,6 +1495,12 @@ export function GoogleSheetsWarehouseAudit({
             packageId,
             sessionIds: tabIds,
             googleSheetAction,
+            tabs: tabs.map((t) => ({
+              webhookUrl: t.webhookUrl,
+              sheetName: t.sheetName,
+              title: t.title,
+              tabGid: t.tabGid,
+            })),
           }),
         });
         const data = await res.json();
@@ -1278,7 +1509,7 @@ export function GoogleSheetsWarehouseAudit({
         setLastSavedNotice(
           googleSheetAction === 'none'
             ? `باکێچی «${packageTitle}» تەنها لە سیستەم سڕدرایەوە (گۆگڵ شیت پارێزراو ماوەتەوە)`
-            : `باکێچی «${packageTitle}» لە سیستەم و Google Sheet پاککرایەوە ✅`
+            : `باکێچی «${packageTitle}» و هەموو داتای پەیوەندیدار بە پرۆگرام لە Google Sheet پاککرانەوە ✅`
         );
       }
       triggerHaptic('success');
@@ -1290,46 +1521,157 @@ export function GoogleSheetsWarehouseAudit({
     }
   };
 
-  // 6b. Wipe ALL sessions from Supabase & every connected browser cache
-  const handleWipeAllSessions = async () => {
-    if (
-      !confirm(
-        'ئایا دڵنیایت لە سڕینەوە و سفرکردنەوەی هەموو شیتەکان؟ لە هەموو کۆمپیوتەر و مۆبایلەکان بە تەواوی سفر دەبێتەوە.'
-      )
-    ) {
-      return;
-    }
+  // 6b. Open Wipe ALL Modal (Offers choice between System Only vs Stripping All Program Data from Google Sheets)
+  const handleWipeAllSessions = () => {
+    setShowWipeAllModal(true);
+  };
 
+  const handleExecuteWipeAll = async (googleSheetAction: GoogleSheetDeleteAction) => {
+    setWipingAll(true);
     lastLocalMutationAtRef.current = Date.now();
-    const nowIso = new Date().toISOString();
-    saveLocalResetBefore(nowIso);
-    const allIds = sessions.map(s => s.id);
-    if (allIds.length > 0) {
-      saveLocalDeletedIds([...allIds, ...getLocalDeletedIds()]);
-    }
 
-    setSessions([]);
-    setCurrentSession(null);
-    saveLocalWarehouseSessions([]);
-    setWebhookWarningMsg(null);
-    setPushSuccessMsg(null);
-    setLastSavedNotice('هەموو شیتەکان سفر کرانەوە 🧹');
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(ACTIVE_SESSION_ID_KEY);
-    }
+    const localTargets = sessions.map((s) => ({
+      webhookUrl: s.webhookUrl,
+      sheetName: s.sheetName,
+      title: s.title,
+      tabGid: s.tabGid,
+    }));
 
     try {
       const res = await fetch('/api/warehouse/sheets-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'wipe_all_sessions' }),
+        body: JSON.stringify({
+          action: 'wipe_all_sessions',
+          googleSheetAction,
+          localTargets,
+        }),
       });
       const data = await res.json();
-      if (data?.resetBefore) {
-        saveLocalResetBefore(data.resetBefore);
+
+      const nowIso = data?.resetBefore || new Date().toISOString();
+      saveLocalResetBefore(nowIso);
+      const allIds = sessions.map((s) => s.id);
+      if (allIds.length > 0) {
+        saveLocalDeletedIds([...allIds, ...getLocalDeletedIds()]);
       }
+
+      setSessions([]);
+      setCurrentSession(null);
+      saveLocalWarehouseSessions([]);
+      setPushSuccessMsg(null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(ACTIVE_SESSION_ID_KEY);
+      }
+
+      const failedSheets = Array.isArray(data?.googleResults)
+        ? data.googleResults.filter((g: any) => !g.ok)
+        : [];
+      if (googleSheetAction !== 'none' && failedSheets.length > 0) {
+        setWebhookWarningMsg(
+          `هەموو داتای پرۆگرام سفر بوونەوە، بەڵام ${failedSheets.length} بەشی Google Sheet وەڵامی نەدایەوە (${failedSheets[0]?.error || ''})`
+        );
+      } else {
+        setWebhookWarningMsg(null);
+      }
+
+      setLastSavedNotice(
+        googleSheetAction === 'none'
+          ? 'هەموو شیتەکان تەنها لە پرۆگرام سفر کرانەوە 🧹'
+          : 'هەموو داتای پرۆگرام لە سیستەم و لە ناو هەموو گۆگڵ شیتەکان بە تەواوی پاککرانەوە ✅🧹'
+      );
       triggerHaptic('success');
-    } catch {}
+      setShowWipeAllModal(false);
+    } catch {
+      setShowWipeAllModal(false);
+    } finally {
+      setWipingAll(false);
+    }
+  };
+
+  // 6c. Smart Sync Control Center: Inspect & Reconcile (Program <-> Google Sheet)
+  const handleInspectGoogleDiff = async () => {
+    if (!currentSession) return;
+    setShowSyncControlModal(true);
+    setSyncInspecting(true);
+    setSyncInspectionResult(null);
+    setPushErrorMsg(null);
+
+    try {
+      const res = await fetch('/api/warehouse/sheets-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reconcile_with_google',
+          mode: 'inspect',
+          session: currentSession,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSyncInspectionResult({
+          tabMatched: data.tabMatched || currentSession.sheetName || currentSession.title,
+          summary: data.summary,
+          diffs: data.diffs || [],
+        });
+      } else {
+        setPushErrorMsg(data.error || 'نەتوانرا جیاوازییەکان بپشکنرێن.');
+      }
+    } catch (err: any) {
+      setPushErrorMsg(err?.message || 'هەڵەی پەیوەندی لە پشکنینی هاوکاتکردندا.');
+    } finally {
+      setSyncInspecting(false);
+    }
+  };
+
+  const handleReconcileWithGoogle = async (
+    mode: 'smart_merge' | 'push_program_to_google' | 'pull_google_overwrite'
+  ) => {
+    if (!currentSession) return;
+    setSyncApplying(true);
+    setPushErrorMsg(null);
+    lastLocalMutationAtRef.current = Date.now();
+
+    try {
+      const res = await fetch('/api/warehouse/sheets-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reconcile_with_google',
+          mode,
+          session: currentSession,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.session) {
+        const nextSess: SheetsAuditSession = data.session;
+        setCurrentSession(nextSess);
+        setSessions((prev) => {
+          const next = prev.map((s) => (s.id === nextSess.id ? nextSess : s));
+          saveLocalWarehouseSessions(next);
+          return next;
+        });
+        setPendingGoogleSyncIds((prev) => ({ ...prev, [nextSess.id]: false }));
+        setWebhookWarningMsg(null);
+
+        if (mode === 'smart_merge') {
+          setPushSuccessMsg('✅ تێکەڵکردنی زیرەکانە ئەنجامدرا: داتای شیت نوێکرایەوە + هەموو سکانەکانی پرۆگرام پارێزران!');
+        } else if (mode === 'push_program_to_google') {
+          setPushSuccessMsg('✅ تەواوی داتاکانی پرۆگرام ڕاستەوخۆ بۆ تەبی ناو Google Sheet نێردران!');
+        } else {
+          setPushSuccessMsg('✅ لیستەکە بە تەواوی لە Google Sheetـەوە نوێکرایەوە!');
+        }
+        setShowSyncControlModal(false);
+        setTimeout(() => setPushSuccessMsg(null), 6500);
+        triggerHaptic('success');
+      } else {
+        setPushErrorMsg(data.error || 'نەتوانرا هاوکاتکردنەکە تەواو بکرێت.');
+      }
+    } catch (err: any) {
+      setPushErrorMsg(err?.message || 'هەڵە لە کاتی هاوکاتکردن.');
+    } finally {
+      setSyncApplying(false);
+    }
   };
 
   // Filtered Items
@@ -2137,6 +2479,25 @@ export function GoogleSheetsWarehouseAudit({
               <span>ڕاپۆرتی PDF</span>
             </button>
 
+            {/* 🛡️ Smart Two-Way Sync Control Center */}
+            <button
+              type="button"
+              onClick={handleInspectGoogleDiff}
+              className={`h-10 px-3.5 rounded-xl font-black text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all border ${
+                pendingGoogleSyncIds[currentSession.id]
+                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
+                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border-indigo-200'
+              }`}
+              title="بەراوردکردن و کۆنترۆڵکردنی جیاوازی داتاکان نێوان پرۆگرام و Google Sheet"
+            >
+              <ShieldCheck className={`w-4 h-4 ${pendingGoogleSyncIds[currentSession.id] ? 'text-amber-600 animate-pulse' : 'text-indigo-600'}`} />
+              <span>
+                {pendingGoogleSyncIds[currentSession.id]
+                  ? 'چاوەڕوانی هاوکاتکردن...'
+                  : 'کۆنترۆڵی هاوکاتکردن'}
+              </span>
+            </button>
+
             {/* Help & Script Info */}
             <button
               type="button"
@@ -2505,29 +2866,44 @@ export function GoogleSheetsWarehouseAudit({
             </div>
           </div>
 
-          {/* Audit Matrix Table */}
+          {/* Audit Matrix Table (Fixed Column Bounds + Smart Inner-Cell Scroll) */}
           <div className="bg-white border border-slate-200/90 rounded-3xl overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-black">
+            <div className="max-h-[68vh] overflow-auto ashley-cell-scroll">
+              <table className="w-[1800px] table-fixed border-collapse text-right text-xs">
+                <colgroup>
+                  <col className="w-[46px]" />
+                  <col className="w-[170px]" />
+                  <col className="w-[215px]" />
+                  <col className="w-[136px]" />
+                  <col className="w-[156px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[96px]" />
+                  <col className="w-[172px]" />
+                  <col className="w-[80px]" />
+                  <col className="w-[130px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[144px]" />
+                  <col className="w-[215px]" />
+                </colgroup>
+                <thead className="bg-slate-50/95 backdrop-blur-xs border-b border-slate-200 text-slate-700 font-black sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
                   <tr>
-                    <th className="p-3.5 text-center w-12">#</th>
-                    <th className="p-3.5 min-w-[140px]">کۆدی مۆدێل</th>
-                    <th className="p-3.5 min-w-[180px]">ناوی کاڵا</th>
-                    <th className="p-3.5 text-center min-w-[130px]">کارتۆن (داگیراو / گشتی)</th>
-                    <th className="p-3.5 text-center min-w-[130px]">کارتۆنە لێدراوەکان</th>
-                    <th className="p-3.5 text-center">شوێن لە کۆگا</th>
-                    <th className="p-3.5 text-center">
+                    <th className="p-3 text-center border-l border-slate-200/75">#</th>
+                    <th className="p-3 border-l border-slate-200/75">کۆدی مۆدێل</th>
+                    <th className="p-3 border-l border-slate-200/75">ناوی کاڵا</th>
+                    <th className="p-3 text-center border-l border-slate-200/75">کارتۆن (داگیراو / گشتی)</th>
+                    <th className="p-3 text-center border-l border-slate-200/75">کارتۆنە لێدراوەکان</th>
+                    <th className="p-3 text-center border-l border-slate-200/75">شوێن لە کۆگا</th>
+                    <th className="p-3 text-center border-l border-slate-200/75">
                       {currentSession.mode === 'shipment_receiving' ? 'بڕی بارکراو' : 'بڕی تۆمارکراو'}
                     </th>
-                    <th className="p-3.5 text-center min-w-[160px]">
+                    <th className="p-3 text-center border-l border-slate-200/75">
                       {currentSession.mode === 'shipment_receiving' ? 'بڕی وەرگیراو (داگیراو)' : 'بڕی ژمێردراو (جەرد)'}
                     </th>
-                    <th className="p-3.5 text-center">جیاوازی</th>
-                    <th className="p-3.5 text-center">دۆخی کارتۆن</th>
-                    <th className="p-3.5 text-center">دۆخی چێک</th>
-                    <th className="p-3.5 text-center min-w-[130px]">دواین گۆڕانکاری</th>
-                    <th className="p-3.5 min-w-[180px]">تێبینی</th>
+                    <th className="p-3 text-center border-l border-slate-200/75">جیاوازی</th>
+                    <th className="p-3 text-center border-l border-slate-200/75">دۆخی کارتۆن</th>
+                    <th className="p-3 text-center border-l border-slate-200/75">دۆخی چێک</th>
+                    <th className="p-3 text-center border-l border-slate-200/75">دواین گۆڕانکاری</th>
+                    <th className="p-3">تێبینی</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-semibold">
@@ -2551,21 +2927,23 @@ export function GoogleSheetsWarehouseAudit({
                             isDamaged ? 'bg-rose-50/40' : isDeficit ? 'bg-amber-50/30' : isVerified ? 'bg-emerald-50/20' : ''
                           }`}
                         >
-                          {/* Row Number */}
-                          <td className="p-3.5 text-center font-mono text-[11px] text-slate-400">
+                          {/* 1. Row Number */}
+                          <td className="p-2.5 text-center font-mono text-[11px] text-slate-400 border-l border-slate-100 overflow-hidden">
                             {idx + 1}
                           </td>
 
-                          {/* Model Code */}
-                          <td className="p-3.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-mono font-black text-xs px-2 py-0.5 rounded-lg bg-slate-900 text-amber-400 inline-block tracking-wide" dir="ltr">
-                                {item.model}
-                              </span>
+                          {/* 2. Model Code (Fixed bound + horizontal smart inner scroll) */}
+                          <td className="p-2.5 border-l border-slate-100 overflow-hidden">
+                            <div className="flex items-center gap-1.5 w-full">
+                              <div className="flex-1 min-w-0 overflow-x-auto overflow-y-hidden ashley-cell-scroll pb-0.5" dir="ltr">
+                                <span className="font-mono font-black text-xs px-2 py-0.5 rounded-lg bg-slate-900 text-amber-400 inline-block whitespace-nowrap tracking-wide">
+                                  {item.model}
+                                </span>
+                              </div>
                               <button
                                 type="button"
                                 onClick={() => handleCopy(item.model, item.model)}
-                                className="text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+                                className="text-slate-400 hover:text-slate-600 cursor-pointer p-1 shrink-0 rounded-md hover:bg-slate-100"
                                 title="کۆپیکردنی کۆد"
                               >
                                 <Copy className="w-3 h-3" />
@@ -2573,18 +2951,21 @@ export function GoogleSheetsWarehouseAudit({
                             </div>
                           </td>
 
-                          {/* Item Name */}
-                          <td className="p-3.5 font-bold text-slate-900 max-w-[240px]">
-                            <span className="truncate block" title={item.name}>
+                          {/* 3. Item Name (Fixed bound + vertical smart inner scroll) */}
+                          <td className="p-2.5 font-bold text-slate-900 border-l border-slate-100 overflow-hidden">
+                            <div
+                              className="max-h-[54px] overflow-y-auto ashley-cell-scroll leading-snug text-xs pl-1 break-words"
+                              title={item.name}
+                            >
                               {item.name || '--'}
-                            </span>
+                            </div>
                           </td>
 
-                          {/* Cartons Count & Progress */}
-                          <td className="p-3.5 text-center">
+                          {/* 4. Cartons Count & Progress */}
+                          <td className="p-2.5 text-center border-l border-slate-100 overflow-hidden">
                             {item.cartonCount ? (
-                              <div className="inline-flex flex-col items-center gap-1">
-                                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black font-mono border ${
+                              <div className="inline-flex flex-col items-center gap-1 max-h-[54px] overflow-y-auto ashley-cell-scroll">
+                                <span className={`px-2 py-0.5 rounded-full text-[11px] font-black font-mono border whitespace-nowrap ${
                                   (item.checkedCartons || (item.scannedCartonNumbers?.length || 0)) >= item.cartonCount
                                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                     : (item.checkedCartons || (item.scannedCartonNumbers?.length || 0)) > 0
@@ -2594,7 +2975,7 @@ export function GoogleSheetsWarehouseAudit({
                                   {item.checkedCartons || (item.scannedCartonNumbers?.length || 0)} / {item.cartonCount} ctn
                                 </span>
                                 {item.pcsPerCarton && item.pcsPerCarton > 1 && (
-                                  <span className="text-[10px] text-slate-400 font-bold">
+                                  <span className="text-[10px] text-slate-400 font-bold whitespace-nowrap">
                                     ({item.pcsPerCarton} دانە/کارتۆن)
                                   </span>
                                 )}
@@ -2604,12 +2985,12 @@ export function GoogleSheetsWarehouseAudit({
                             )}
                           </td>
 
-                          {/* Scanned Cartons Badges */}
-                          <td className="p-3.5 text-center">
+                          {/* 5. Scanned Cartons Badges (Fixed height + smart inner vertical scroll for 100+ boxes!) */}
+                          <td className="p-2.5 text-center border-l border-slate-100 overflow-hidden">
                             {Array.isArray(item.scannedCartonNumbers) && item.scannedCartonNumbers.length > 0 ? (
-                              <div className="flex flex-wrap items-center justify-center gap-1 max-w-[130px] mx-auto">
+                              <div className="max-h-[54px] overflow-y-auto ashley-cell-scroll flex flex-wrap items-center justify-center gap-1 px-0.5">
                                 {item.scannedCartonNumbers.map(n => (
-                                  <span key={n} className="px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-mono font-black" title={`کارتۆنی ژمارە ${n} داگیراوە`}>
+                                  <span key={n} className="px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-mono font-black shrink-0" title={`کارتۆنی ژمارە ${n} داگیراوە`}>
                                     #{n}
                                   </span>
                                 ))}
@@ -2619,25 +3000,27 @@ export function GoogleSheetsWarehouseAudit({
                             )}
                           </td>
 
-                          {/* Rack Location */}
-                          <td className="p-3.5 text-center">
-                            <span className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold">
-                              {item.rackLocation || '--'}
-                            </span>
+                          {/* 6. Rack Location (Smart inner scroll) */}
+                          <td className="p-2.5 text-center border-l border-slate-100 overflow-hidden">
+                            <div className="max-h-[52px] overflow-y-auto overflow-x-auto ashley-cell-scroll">
+                              <span className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold inline-block break-all">
+                                {item.rackLocation || '--'}
+                              </span>
+                            </div>
                           </td>
 
-                          {/* Expected Qty */}
-                          <td className="p-3.5 text-center font-mono font-black text-slate-700 text-sm">
+                          {/* 7. Expected Qty */}
+                          <td className="p-2.5 text-center font-mono font-black text-slate-700 text-sm border-l border-slate-100 overflow-hidden">
                             {item.expectedQty}
                           </td>
 
-                          {/* Checked / Audited Qty with Tactile +/- Controls */}
-                          <td className="p-3.5 text-center">
-                            <div className="inline-flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
+                          {/* 8. Checked / Audited Qty with Tactile +/- Controls */}
+                          <td className="p-2 text-center border-l border-slate-100 overflow-hidden">
+                            <div className="inline-flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
                               <button
                                 type="button"
                                 onClick={() => handleUpdateItemQty(item.id, -1)}
-                                className="w-7 h-7 rounded-lg bg-white hover:bg-slate-200 text-slate-800 flex items-center justify-center font-black cursor-pointer shadow-xs active:scale-95"
+                                className="w-7 h-7 rounded-lg bg-white hover:bg-slate-200 text-slate-800 flex items-center justify-center font-black cursor-pointer shadow-xs active:scale-95 shrink-0"
                                 title="کەمکردنەوە بە ١"
                               >
                                 <Minus className="w-3 h-3" />
@@ -2647,13 +3030,13 @@ export function GoogleSheetsWarehouseAudit({
                                 type="number"
                                 value={item.checkedQty}
                                 onChange={(e) => handleSetDirectQty(item.id, e.target.value)}
-                                className="w-12 text-center font-mono font-black text-sm bg-transparent outline-none"
+                                className="w-11 text-center font-mono font-black text-sm bg-transparent outline-none shrink-0"
                               />
 
                               <button
                                 type="button"
                                 onClick={() => handleUpdateItemQty(item.id, 1)}
-                                className="w-7 h-7 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center font-black cursor-pointer shadow-xs active:scale-95"
+                                className="w-7 h-7 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center font-black cursor-pointer shadow-xs active:scale-95 shrink-0"
                                 title="زیادکردن بە ١"
                               >
                                 <Plus className="w-3 h-3" />
@@ -2663,7 +3046,7 @@ export function GoogleSheetsWarehouseAudit({
                               <button
                                 type="button"
                                 onClick={() => handleUpdateItemQty(item.id, 5)}
-                                className="px-1.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-mono font-bold cursor-pointer active:scale-95"
+                                className="px-1.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-mono font-bold cursor-pointer active:scale-95 shrink-0"
                                 title="زیادکردنی ٥ دانە"
                               >
                                 +5
@@ -2671,8 +3054,8 @@ export function GoogleSheetsWarehouseAudit({
                             </div>
                           </td>
 
-                          {/* Variance */}
-                          <td className="p-3.5 text-center font-mono font-black text-sm">
+                          {/* 9. Variance */}
+                          <td className="p-2.5 text-center font-mono font-black text-sm border-l border-slate-100 overflow-hidden">
                             {item.variance === 0 ? (
                               <span className="text-emerald-600">٠</span>
                             ) : item.variance < 0 ? (
@@ -2682,12 +3065,12 @@ export function GoogleSheetsWarehouseAudit({
                             )}
                           </td>
 
-                          {/* Condition Dropdown */}
-                          <td className="p-3.5 text-center">
+                          {/* 10. Condition Dropdown */}
+                          <td className="p-2 text-center border-l border-slate-100 overflow-hidden">
                             <select
                               value={item.condition}
                               onChange={(e) => handleUpdateCondition(item.id, e.target.value as any)}
-                              className={`h-8 px-2 rounded-xl text-xs font-bold outline-none cursor-pointer border ${
+                              className={`w-full h-8 px-1.5 rounded-xl text-[11px] font-bold outline-none cursor-pointer border ${
                                 item.condition === 'Damaged'
                                   ? 'bg-rose-50 text-rose-700 border-rose-300'
                                   : item.condition === 'Wrapped'
@@ -2703,40 +3086,42 @@ export function GoogleSheetsWarehouseAudit({
                             </select>
                           </td>
 
-                          {/* Audit Status Badge */}
-                          <td className="p-3.5 text-center">
-                            {isVerified ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                                <span>هاوتا ✅</span>
-                              </span>
-                            ) : isDamaged ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold">
-                                <AlertTriangle className="w-3 h-3 text-rose-500" />
-                                <span>شکاو ❌</span>
-                              </span>
-                            ) : isDeficit ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold">
-                                <AlertCircle className="w-3 h-3 text-amber-500" />
-                                <span>کەمە ({item.variance})</span>
-                              </span>
-                            ) : isExcess ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold">
-                                <span>زیادە (+{item.variance})</span>
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 text-[11px] font-bold">
-                                چاوەڕوان ⏳
-                              </span>
-                            )}
+                          {/* 11. Audit Status Badge */}
+                          <td className="p-2 text-center border-l border-slate-100 overflow-hidden">
+                            <div className="max-h-[52px] overflow-y-auto ashley-cell-scroll flex items-center justify-center">
+                              {isVerified ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold whitespace-nowrap">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                  <span>هاوتا ✅</span>
+                                </span>
+                              ) : isDamaged ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold whitespace-nowrap">
+                                  <AlertTriangle className="w-3 h-3 text-rose-500" />
+                                  <span>شکاو ❌</span>
+                                </span>
+                              ) : isDeficit ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold whitespace-nowrap">
+                                  <AlertCircle className="w-3 h-3 text-amber-500" />
+                                  <span>کەمە ({item.variance})</span>
+                                </span>
+                              ) : isExcess ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold whitespace-nowrap">
+                                  <span>زیادە (+{item.variance})</span>
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 text-[11px] font-bold whitespace-nowrap">
+                                  چاوەڕوان ⏳
+                                </span>
+                              )}
+                            </div>
                           </td>
 
-                          {/* Last Modified (Baghdad Exact Clock + Date) & Audited By */}
-                          <td className="p-3.5 text-center">
+                          {/* 12. Last Modified (Baghdad Exact Clock + Date) & Audited By */}
+                          <td className="p-2 text-center border-l border-slate-100 overflow-hidden">
                             {item.lastAuditedAt ? (
-                              <div className="font-mono text-[10.5px]">
-                                <span className="text-slate-800 font-black flex items-center justify-center gap-1" dir="ltr">
-                                  <Clock className="w-3 h-3 text-blue-600" />
+                              <div className="font-mono text-[10.5px] max-h-[52px] overflow-y-auto ashley-cell-scroll">
+                                <span className="text-slate-800 font-black flex items-center justify-center gap-1 whitespace-nowrap" dir="ltr">
+                                  <Clock className="w-3 h-3 text-blue-600 shrink-0" />
                                   {new Date(item.lastAuditedAt).toLocaleTimeString('en-GB', {
                                     timeZone: 'Asia/Baghdad',
                                     hour12: false,
@@ -2745,7 +3130,7 @@ export function GoogleSheetsWarehouseAudit({
                                     second: '2-digit',
                                   })}
                                 </span>
-                                <span className="text-[9.5px] text-slate-500 font-bold block">
+                                <span className="text-[9.5px] text-slate-500 font-bold block truncate">
                                   {new Date(item.lastAuditedAt).toLocaleDateString('en-GB', { timeZone: 'Asia/Baghdad' })} • {item.auditedBy || currentSession.auditedBy || 'Admin'}
                                 </span>
                               </div>
@@ -2754,14 +3139,14 @@ export function GoogleSheetsWarehouseAudit({
                             )}
                           </td>
 
-                          {/* Notes Inline Input */}
-                          <td className="p-3.5">
-                            <input
-                              type="text"
+                          {/* 13. Notes Inline Scrollable Textbox (Fixed bounds + inner vertical smart scroll) */}
+                          <td className="p-2 overflow-hidden">
+                            <textarea
+                              rows={2}
                               value={item.notes || ''}
                               onChange={(e) => handleUpdateNotes(item.id, e.target.value)}
                               placeholder="تێبینی بنووسە..."
-                              className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] font-medium outline-none focus:bg-white focus:border-blue-400"
+                              className="w-full h-[50px] p-1.5 rounded-xl border border-slate-200 bg-slate-50/60 text-[11px] font-medium outline-none focus:bg-white focus:border-blue-400 resize-none overflow-y-auto ashley-cell-scroll leading-snug"
                             />
                           </td>
                         </tr>
@@ -3859,10 +4244,10 @@ export function GoogleSheetsWarehouseAudit({
                     </div>
                     <div className="flex-1">
                       <span className="font-black text-amber-950 block">
-                        ٢. لە سیستەم بیسڕەوە + کۆڵۆمەکانی جەرد/سکان لە گۆگڵ شیت پاک بکەرەوە
+                        ٢. لە سیستەم بیسڕەوە + هەموو داتا و کۆڵۆمەکانی پەیوەندیدار بە پرۆگرام لە گۆگڵ شیت لاببە
                       </span>
                       <span className="text-[11px] text-amber-800/80 block mt-0.5">
-                        کۆڵۆمەکانی مۆدێل و بڕی ئەسڵی دەمێننەوە، تەنها کۆڵۆمەکانی سکان، ژمێردراو و کات سفر دەبنەوە.
+                        تەواوی کۆڵۆمە زیادکراوەکانی پرۆگرام، کاتی سکان، دۆخ و تێبینی لە Google Sheet دەسڕدرێنەوە تا شیتەکە ببێتەوە بە فۆرمە ئەسڵییەکەی خۆی.
                       </span>
                     </div>
                   </button>
@@ -4127,6 +4512,372 @@ export function GoogleSheetsWarehouseAudit({
       )}
 
       {/* ========================================================================= */}
+      {/* 🧹 MODAL 8: FULL RESET & GOOGLE SHEETS PROGRAM ARTIFACT CLEANUP */}
+      {/* ========================================================================= */}
+      {showWipeAllModal && (
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-rose-950 to-slate-900 text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-500/25 border border-rose-400/35 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-rose-300" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">سفرکردنەوە و پاککردنەوەی هەموو داتاکان</h3>
+                  <p className="text-[11px] text-rose-200 font-medium">
+                    هەموو شیتەکان ({sessions.length} بەش) لە هەموو مۆبایل و کۆمپیوتەرەکان سفر دەبنەوە
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={wipingAll}
+                onClick={() => setShowWipeAllModal(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 flex items-center justify-center cursor-pointer disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3 text-xs text-slate-700">
+              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 font-bold leading-relaxed">
+                دیاری بکە لە کاتی سفرکردنەوەی پرۆگرام، چۆن مامەڵە لەگەڵ فایلەکانی Google Sheet بکەیت:
+              </div>
+
+              {(() => {
+                const hasAnyWebhook = sessions.some(
+                  (s) => s.webhookUrl && /^https:\/\/script\.google(usercontent)?\.com\//.test(s.webhookUrl.trim())
+                );
+                return (
+                  <div className="space-y-2.5">
+                    <button
+                      type="button"
+                      disabled={wipingAll || !hasAnyWebhook}
+                      onClick={() => handleExecuteWipeAll('clear_audit_columns')}
+                      className="w-full p-3.5 rounded-2xl border-2 border-emerald-300 hover:border-emerald-500 hover:bg-emerald-50/70 text-right transition-all cursor-pointer active:scale-[0.99] disabled:opacity-45 disabled:cursor-not-allowed flex items-start gap-3"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                        <RotateCcw className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1">
+                        <span className="font-black text-emerald-950 block">
+                          ١. سفرکردنەوەی تەواوی پرۆگرام + لابردنی هەموو شوێنەوارێکی پرۆگرام لە گۆگڵ شیت (پێشنیازکراو)
+                        </span>
+                        <span className="text-[11px] text-emerald-800/90 block mt-0.5">
+                          هەموو شیتەکانی سیستەم دەسڕدرێنەوە و لە ناو هەموو گۆگڵ شیتە بەستراوەکاندا تەواوی کۆڵۆم و داتاکانی پرۆگرام دەسڕدرێنەوە تا داتای شیتە ئەسڵییەکانت بە پاکژی بمێننەوە.
+                        </span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={wipingAll || !hasAnyWebhook}
+                      onClick={() => handleExecuteWipeAll('delete_tab')}
+                      className="w-full p-3.5 rounded-2xl border-2 border-rose-200 hover:border-rose-500 hover:bg-rose-50/70 text-right transition-all cursor-pointer active:scale-[0.99] disabled:opacity-45 disabled:cursor-not-allowed flex items-start gap-3"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 mt-0.5">
+                        <Trash2 className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1">
+                        <span className="font-black text-rose-950 block">
+                          ٢. سفرکردنەوەی پرۆگرام + بەتاڵکردنەوەی ناوەڕۆکی هەموو گۆگڵ شیتەکان
+                        </span>
+                        <span className="text-[11px] text-rose-800/80 block mt-0.5">
+                          لە پرۆگرام و لە ناو Google Sheetیشدا بەش و ڕیزەکان سفر و پاک دەکرێنەوە.
+                        </span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={wipingAll}
+                      onClick={() => handleExecuteWipeAll('none')}
+                      className="w-full p-3.5 rounded-2xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50/60 text-right transition-all cursor-pointer active:scale-[0.99] disabled:opacity-50 flex items-start gap-3"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0 mt-0.5">
+                        <ShieldCheck className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <div className="flex-1">
+                        <span className="font-black text-slate-900 block">
+                          ٣. تەنها پرۆگرام سفر بکەرەوە (دەستکاری گۆگڵ شیت مەکە)
+                        </span>
+                        <span className="text-[11px] text-slate-500 block mt-0.5">
+                          هەموو شیتەکانی سیستەم سفر دەبنەوە و فایلەکانی Google Sheet وەک خۆیان دەمێننەوە.
+                        </span>
+                      </div>
+                    </button>
+
+                    {!hasAnyWebhook && (
+                      <div className="p-2.5 rounded-xl bg-slate-100 text-slate-600 text-[11px] font-medium">
+                        تێبینی: هیچ بەستەرێکی Webhook بە شیتەکانەوە نەبەستراوەتەوە، بۆیە بژاردەکانی پاککردنەوەی گۆگڵ شیت ناچالاکن.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {wipingAll && (
+                <div className="p-3 rounded-2xl bg-blue-50 border border-blue-200 text-blue-800 font-bold flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>تکایە چاوەڕێ بە، خەریکی سفرکردنەوەی تەواوی داتاکانین...</span>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+              <button
+                type="button"
+                disabled={wipingAll}
+                onClick={() => setShowWipeAllModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs cursor-pointer disabled:opacity-50"
+              >
+                پەشیمانبوونەوە
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🛡️ MODAL 9: SMART TWO-WAY SYNC CONTROL CENTER (PROGRAM <-> GOOGLE SHEET) */}
+      {/* ========================================================================= */}
+      {showSyncControlModal && currentSession && (
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-3xl max-h-[92vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-500/25 border border-indigo-400/35 flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5 text-emerald-300" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">
+                    ناوەندی زیرەکی کۆنترۆڵی داتاکان (پرۆگرام ↔ گۆگڵ شیت)
+                  </h3>
+                  <p className="text-[11px] text-indigo-200 font-medium">
+                    بەشی «{currentSession.sheetName || currentSession.title}» • بەراوردکردن، تێکەڵنەبوون و هاوکاتکردنی ورد
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={syncApplying}
+                onClick={() => setShowSyncControlModal(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 flex items-center justify-center cursor-pointer disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 text-xs text-slate-700 ashley-cell-scroll">
+              {/* Current Sync Status Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] text-slate-500 block font-bold">دواین هاوکاتکردن لەگەڵ گۆگڵ شیت</span>
+                  <span className="text-xs font-black font-mono text-slate-900 mt-0.5 block" dir="ltr">
+                    {currentSession.lastGoogleSyncedAt
+                      ? new Date(currentSession.lastGoogleSyncedAt).toLocaleString('en-GB', {
+                          timeZone: 'Asia/Baghdad',
+                          hour12: false,
+                        })
+                      : 'هێشتا تۆمار نەکراوە'}
+                  </span>
+                </div>
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] text-slate-500 block font-bold">پشکنینی جیاوازی زیندوو</span>
+                  <span className="text-xs font-black text-indigo-700 mt-0.5 block">
+                    {syncInspecting
+                      ? 'خەریکی خوێندنەوەی گۆگڵ شیتە...'
+                      : syncInspectionResult
+                      ? syncInspectionResult.summary.isInSync
+                        ? '🟢 ١٠٠٪ هاوتایە لەگەڵ گۆگڵ شیت'
+                        : `⚠️ ${
+                            syncInspectionResult.summary.newInGoogle +
+                            syncInspectionResult.summary.masterChanged +
+                            syncInspectionResult.summary.scanDiff +
+                            syncInspectionResult.summary.removedInGoogle
+                          } جیاوازی دۆزرایەوە`
+                      : 'بۆ پشکنین دوگمەکە دابگرە'}
+                  </span>
+                </div>
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block font-bold">نوێکردنەوەی بەراورد</span>
+                    <span className="text-[11px] font-bold text-slate-800">خوێندنەوەی گۆگڵ شیت</span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={syncInspecting || syncApplying}
+                    onClick={handleInspectGoogleDiff}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[11px] flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncInspecting ? 'animate-spin' : ''}`} />
+                    <span>بەراورد بکە</span>
+                  </button>
+                </div>
+              </div>
+
+              {pushErrorMsg && (
+                <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 font-bold flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                  <span>{pushErrorMsg}</span>
+                </div>
+              )}
+
+              {/* Diff Inspection Summary */}
+              {syncInspecting && (
+                <div className="p-6 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-indigo-900 font-bold flex items-center justify-center gap-2.5">
+                  <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+                  <span>خەریکی خوێندنەوە و بەراوردکردنی تەبی «{currentSession.sheetName || currentSession.title}» لە Google Sheet...</span>
+                </div>
+              )}
+
+              {syncInspectionResult && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                      <span className="text-[10px] text-emerald-700 block font-bold">هاوتا</span>
+                      <span className="text-base font-black text-emerald-900">{syncInspectionResult.summary.identical}</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200">
+                      <span className="text-[10px] text-blue-700 block font-bold">نوێ لە شیت</span>
+                      <span className="text-base font-black text-blue-900">{syncInspectionResult.summary.newInGoogle}</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200">
+                      <span className="text-[10px] text-amber-700 block font-bold">بڕ/ناو گۆڕاوە</span>
+                      <span className="text-base font-black text-amber-900">{syncInspectionResult.summary.masterChanged}</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200">
+                      <span className="text-[10px] text-purple-700 block font-bold">جیاوازی سکان</span>
+                      <span className="text-base font-black text-purple-900">{syncInspectionResult.summary.scanDiff}</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200">
+                      <span className="text-[10px] text-rose-700 block font-bold">لابراو لە شیت</span>
+                      <span className="text-base font-black text-rose-900">{syncInspectionResult.summary.removedInGoogle}</span>
+                    </div>
+                  </div>
+
+                  {syncInspectionResult.diffs.length > 0 && (
+                    <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                      <div className="max-h-52 overflow-y-auto ashley-cell-scroll">
+                        <table className="w-full table-fixed text-right text-[11px] border-collapse">
+                          <thead className="bg-slate-100 text-slate-700 font-black sticky top-0">
+                            <tr>
+                              <th className="p-2.5 w-[135px]">مۆدێل</th>
+                              <th className="p-2.5 w-[125px]">جۆری جیاوازی</th>
+                              <th className="p-2.5">وردەکاری جیاوازی نێوان پرۆگرام و گۆگڵ شیت</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {syncInspectionResult.diffs.map((d, idx) => (
+                              <tr key={`${d.model}-${idx}`} className="hover:bg-slate-50">
+                                <td className="p-2 font-mono font-bold truncate" dir="ltr">{d.model}</td>
+                                <td className="p-2 font-bold">
+                                  {d.kind === 'new_in_google'
+                                    ? '🔵 نوێ لە شیت'
+                                    : d.kind === 'master_changed'
+                                    ? '🟡 گۆڕانی خشتە'
+                                    : d.kind === 'scan_diff'
+                                    ? '🟣 جیاوازی ژماردن'
+                                    : '🔴 لابراو لە شیت'}
+                                </td>
+                                <td className="p-2 text-slate-700 font-medium">{d.noteKu}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Controlled Reconciliation Actions */}
+              <div className="space-y-2 pt-1">
+                <span className="font-black text-xs text-slate-900 block">
+                  بڕیاری کۆنترۆڵکراو هەڵبژێرە (بەبێ تێکەڵبوونی داتاکان):
+                </span>
+
+                <button
+                  type="button"
+                  disabled={syncApplying || syncInspecting}
+                  onClick={() => handleReconcileWithGoogle('smart_merge')}
+                  className="w-full p-3.5 rounded-2xl border-2 border-emerald-300 hover:border-emerald-500 hover:bg-emerald-50/70 text-right transition-all cursor-pointer active:scale-[0.99] disabled:opacity-50 flex items-start gap-3"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-black text-emerald-950 block">
+                      ١. تێکەڵکردنی زیرەکانە: نوێکارییەکانی Google Sheet بهێنە + سکانەکانی پرۆگرام بپارێزە (پێشنیازکراو)
+                    </span>
+                    <span className="text-[11px] text-emerald-800/90 block mt-0.5">
+                      کاڵا نوێکان و گۆڕانکارییەکانی «بڕی بارکراو» لە گۆگڵ شیتەوە وەردەگرێت، هەموو ژماردن و سکانەکانی ناو مۆبایل و پرۆگرام بە تەواوی دەپارێزێت، و دواتر بە یەکجار دەیاننێرێتەوە بۆ Google Sheet.
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={syncApplying || syncInspecting}
+                  onClick={() => handleReconcileWithGoogle('push_program_to_google')}
+                  className="w-full p-3.5 rounded-2xl border-2 border-blue-200 hover:border-blue-500 hover:bg-blue-50/70 text-right transition-all cursor-pointer active:scale-[0.99] disabled:opacity-50 flex items-start gap-3"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <Upload className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-black text-blue-950 block">
+                      ٢. ناردنی داتای ناو پرۆگرام بۆ گۆگڵ شیت (Program ← Google Sheet)
+                    </span>
+                    <span className="text-[11px] text-blue-800/80 block mt-0.5">
+                      ئەوەی لە سیستەمەکەدایە وەک سەرچاوەی سەرەکی دادەنێت و تەنها تەبی «{currentSession.sheetName || currentSession.title}» لە Google Sheet پێی نوێ دەکاتەوە.
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={syncApplying || syncInspecting}
+                  onClick={() => handleReconcileWithGoogle('pull_google_overwrite')}
+                  className="w-full p-3.5 rounded-2xl border-2 border-amber-200 hover:border-amber-500 hover:bg-amber-50/70 text-right transition-all cursor-pointer active:scale-[0.99] disabled:opacity-50 flex items-start gap-3"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <Download className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-black text-amber-950 block">
+                      ٣. هێنانەوەی سەرلەنوێ لە گۆگڵ شیتەوە (Google Sheet ← Program)
+                    </span>
+                    <span className="text-[11px] text-amber-800/80 block mt-0.5">
+                      ئەگەر گۆڕانکاری گرنگت لە ناو Google Sheetدا کردووە و دەتەوێت تەواوی ئەم تەبە لە سیستەمدا لە شیتەکەوە بخوێندرێتەوە.
+                    </span>
+                  </div>
+                </button>
+              </div>
+
+              {syncApplying && (
+                <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-800 font-bold flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>خەریکی هاوکاتکردن و ڕێکخستنی داتاکانین...</span>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+              <button
+                type="button"
+                disabled={syncApplying}
+                onClick={() => setShowSyncControlModal(false)}
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs cursor-pointer disabled:opacity-50"
+              >
+                داخستن
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* 🎥 SMART MOBILE CAMERA CARTON SCANNER (FULL SCREEN) */}
       {/* ========================================================================= */}
       {currentSession && (
@@ -4138,8 +4889,28 @@ export function GoogleSheetsWarehouseAudit({
         />
       )}
 
-      {/* Global Print Styling */}
+      {/* Smart Inner-Cell Scrollbars & Global Print Styling */}
       <style dangerouslySetInnerHTML={{ __html: `
+        .ashley-cell-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(100, 116, 139, 0.42) rgba(241, 245, 249, 0.55);
+          overscroll-behavior: contain;
+        }
+        .ashley-cell-scroll::-webkit-scrollbar {
+          width: 5px;
+          height: 5px;
+        }
+        .ashley-cell-scroll::-webkit-scrollbar-track {
+          background: rgba(241, 245, 249, 0.65);
+          border-radius: 9999px;
+        }
+        .ashley-cell-scroll::-webkit-scrollbar-thumb {
+          background: rgba(100, 116, 139, 0.38);
+          border-radius: 9999px;
+        }
+        .ashley-cell-scroll::-webkit-scrollbar-thumb:hover {
+          background: rgba(59, 130, 246, 0.65);
+        }
         @media print {
           body * {
             visibility: hidden !important;

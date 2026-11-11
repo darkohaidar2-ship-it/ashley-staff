@@ -63,10 +63,35 @@ export interface SheetsAuditSession {
   discrepantCount: number;
   damagedCount: number;
   status: 'active' | 'completed' | 'archived';
+  syncRevision?: number;
+  lastGoogleSyncedAt?: string;
+  lastSyncDirection?: 'push' | 'pull' | 'smart_merge';
   items: SheetsAuditItem[];
 }
 
 export type GoogleSheetDeleteAction = 'none' | 'clear_audit_columns' | 'delete_tab';
+
+export interface GoogleSheetSyncDiffRow {
+  kind: 'new_in_google' | 'removed_in_google' | 'master_changed' | 'scan_diff';
+  model: string;
+  name: string;
+  programExpected: number;
+  googleExpected: number;
+  programChecked: number;
+  googleChecked: number;
+  noteKu: string;
+}
+
+export interface GoogleSheetSyncDiffSummary {
+  newInGoogle: number;
+  removedInGoogle: number;
+  masterChanged: number;
+  scanDiff: number;
+  identical: number;
+  totalGoogleRows: number;
+  totalProgramRows: number;
+  isInSync: boolean;
+}
 
 /**
  * 🕒 Format ISO timestamp cleanly in Iraq/Kurdistan local time (Asia/Baghdad)
@@ -735,6 +760,332 @@ async function setResetEpoch(isoTimestamp: string): Promise<boolean> {
   }
 }
 
+function parseIsoMs(iso?: string): number {
+  if (!iso) return 0;
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+function buildOccurrenceKeys(items: SheetsAuditItem[]): Map<string, SheetsAuditItem> {
+  const counts = new Map<string, number>();
+  const out = new Map<string, SheetsAuditItem>();
+  for (const item of items) {
+    const base = String(item.model || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '') || String(item.id || '');
+    const occ = (counts.get(base) || 0) + 1;
+    counts.set(base, occ);
+    out.set(`${base}#${occ}`, item);
+  }
+  return out;
+}
+
+/**
+ * 🧮 Single source of truth for item variance/status & session KPI rollup
+ */
+function recomputeSessionTotals(session: SheetsAuditSession): SheetsAuditSession {
+  let totalExpected = 0;
+  let totalAudited = 0;
+  let totalCartons = 0;
+  let totalAuditedCartons = 0;
+  let matchedCount = 0;
+  let discrepantCount = 0;
+  let damagedCount = 0;
+
+  const items = (session.items || []).map((i) => {
+    const expectedQty = Math.max(0, Number(i.expectedQty) || 0);
+    const checkedQty = Math.max(0, Number(i.checkedQty) || 0);
+    const variance = checkedQty - expectedQty;
+    const pcs = Math.max(1, Number(i.pcsPerCarton) || 1);
+    const cartonCount = i.cartonCount || (pcs > 1 && expectedQty > 0 ? Math.ceil(expectedQty / pcs) : expectedQty || 1);
+    const checkedCartons =
+      typeof i.checkedCartons === 'number'
+        ? i.checkedCartons
+        : Array.isArray(i.scannedCartonNumbers)
+        ? i.scannedCartonNumbers.length
+        : Math.floor(checkedQty / pcs);
+
+    let auditStatus: SheetsAuditItem['auditStatus'] = 'pending';
+    if (i.condition === 'Damaged') auditStatus = 'damaged';
+    else if (checkedQty > 0) {
+      auditStatus = variance === 0 ? 'verified' : variance < 0 ? 'deficit' : 'excess';
+    }
+
+    totalExpected += expectedQty;
+    totalAudited += checkedQty;
+    totalCartons += cartonCount;
+    totalAuditedCartons += checkedCartons;
+    if (auditStatus === 'damaged') damagedCount++;
+    else if (auditStatus === 'verified') matchedCount++;
+    else if (auditStatus === 'deficit' || auditStatus === 'excess') discrepantCount++;
+
+    return {
+      ...i,
+      expectedQty,
+      checkedQty,
+      variance,
+      pcsPerCarton: pcs,
+      cartonCount,
+      checkedCartons,
+      auditStatus,
+    };
+  });
+
+  return {
+    ...session,
+    items,
+    totalItemsCount: items.length,
+    totalExpectedUnits: totalExpected,
+    totalAuditedUnits: totalAudited,
+    totalCartonsCount: totalCartons,
+    totalAuditedCartons,
+    matchedCount,
+    discrepantCount,
+    damagedCount,
+  };
+}
+
+/**
+ * 🤝 Item-level bidirectional merge so concurrent scans on different items across mobile & desktop never overwrite each other
+ */
+function mergeAuditSessionsSmartly(
+  existing: SheetsAuditSession | undefined,
+  incoming: SheetsAuditSession,
+  forceOverwrite = false
+): SheetsAuditSession {
+  if (!existing || forceOverwrite) {
+    return recomputeSessionTotals({
+      ...incoming,
+      syncRevision: Math.max((existing?.syncRevision || 0) + 1, incoming.syncRevision || 1),
+    });
+  }
+
+  const existingById = new Map<string, SheetsAuditItem>();
+  (existing.items || []).forEach((it) => existingById.set(it.id, it));
+
+  const incomingUpdatedMs = parseIsoMs(incoming.updatedAt);
+  const existingUpdatedMs = parseIsoMs(existing.updatedAt);
+  const preferIncomingDefault = incomingUpdatedMs >= existingUpdatedMs;
+  const mergedIds = new Set<string>();
+
+  const mergedItems: SheetsAuditItem[] = (incoming.items || []).map((inc) => {
+    mergedIds.add(inc.id);
+    const ex = existingById.get(inc.id);
+    if (!ex) return inc;
+
+    const exTouchMs = parseIsoMs(ex.lastAuditedAt);
+    const incTouchMs = parseIsoMs(inc.lastAuditedAt);
+
+    if (incTouchMs > exTouchMs) return inc;
+    if (exTouchMs > incTouchMs) {
+      // Keep fresher audited state from existing copy while accepting updated master columns if needed
+      return {
+        ...inc,
+        checkedQty: ex.checkedQty,
+        checkedCartons: ex.checkedCartons,
+        scannedCartonNumbers: ex.scannedCartonNumbers,
+        scannedHistory: ex.scannedHistory,
+        condition: ex.condition,
+        auditStatus: ex.auditStatus,
+        rackLocation: ex.rackLocation,
+        notes: ex.notes,
+        auditedBy: ex.auditedBy,
+        lastAuditedAt: ex.lastAuditedAt,
+      };
+    }
+    return preferIncomingDefault ? inc : ex;
+  });
+
+  for (const ex of existing.items || []) {
+    if (!mergedIds.has(ex.id)) {
+      mergedItems.push(ex);
+    }
+  }
+
+  return recomputeSessionTotals({
+    ...existing,
+    ...incoming,
+    webhookUrl: incoming.webhookUrl || existing.webhookUrl,
+    googleSheetUrl: incoming.googleSheetUrl || existing.googleSheetUrl,
+    spreadsheetId: incoming.spreadsheetId || existing.spreadsheetId,
+    packageId: incoming.packageId || existing.packageId,
+    packageTitle: incoming.packageTitle || existing.packageTitle,
+    sheetName: incoming.sheetName || existing.sheetName,
+    tabGid: incoming.tabGid || existing.tabGid,
+    lastGoogleSyncedAt:
+      parseIsoMs(incoming.lastGoogleSyncedAt) >= parseIsoMs(existing.lastGoogleSyncedAt)
+        ? incoming.lastGoogleSyncedAt || existing.lastGoogleSyncedAt
+        : existing.lastGoogleSyncedAt,
+    syncRevision: Math.max(existing.syncRevision || 0, incoming.syncRevision || 0) + 1,
+    updatedAt: new Date().toISOString(),
+    items: mergedItems,
+  });
+}
+
+/**
+ * 🔍 Compare Ashley Program tab items vs Live Google Sheet rows and build Smart Merge
+ */
+function diffSessionWithGoogleRows(
+  programSession: SheetsAuditSession,
+  googleItems: SheetsAuditItem[]
+): {
+  summary: GoogleSheetSyncDiffSummary;
+  diffs: GoogleSheetSyncDiffRow[];
+  smartMergedItems: SheetsAuditItem[];
+} {
+  const progByKey = buildOccurrenceKeys(programSession.items || []);
+  const googleByKey = buildOccurrenceKeys(googleItems);
+  const allKeys = Array.from(new Set([...Array.from(progByKey.keys()), ...Array.from(googleByKey.keys())]));
+
+  let newInGoogle = 0;
+  let removedInGoogle = 0;
+  let masterChanged = 0;
+  let scanDiff = 0;
+  let identical = 0;
+  const diffs: GoogleSheetSyncDiffRow[] = [];
+  const smartMergedItems: SheetsAuditItem[] = [];
+
+  for (const key of allKeys) {
+    const pItem = progByKey.get(key);
+    const gItem = googleByKey.get(key);
+
+    if (!pItem && gItem) {
+      newInGoogle++;
+      if (diffs.length < 80) {
+        diffs.push({
+          kind: 'new_in_google',
+          model: gItem.model,
+          name: gItem.name,
+          programExpected: 0,
+          googleExpected: gItem.expectedQty,
+          programChecked: 0,
+          googleChecked: gItem.checkedQty,
+          noteKu: `ئەم کاڵایە لە Google Sheet زیاد کراوە (بڕی شیت: ${gItem.expectedQty})`,
+        });
+      }
+      smartMergedItems.push({ ...gItem });
+      continue;
+    }
+
+    if (pItem && !gItem) {
+      removedInGoogle++;
+      if (diffs.length < 80) {
+        diffs.push({
+          kind: 'removed_in_google',
+          model: pItem.model,
+          name: pItem.name,
+          programExpected: pItem.expectedQty,
+          googleExpected: 0,
+          programChecked: pItem.checkedQty,
+          googleChecked: 0,
+          noteKu: 'لە Google Sheet لابراوە یان ناوەکەی گۆڕدراوە (لە پرۆگرام ماوە)',
+        });
+      }
+      smartMergedItems.push({ ...pItem });
+      continue;
+    }
+
+    if (pItem && gItem) {
+      const expectedChanged = pItem.expectedQty !== gItem.expectedQty;
+      const nameChanged = (pItem.name || '').trim() !== (gItem.name || '').trim() && Boolean(gItem.name?.trim());
+      const pcsChanged = (pItem.pcsPerCarton || 1) !== (gItem.pcsPerCarton || 1);
+      const checkedDiff = (pItem.checkedQty || 0) !== (gItem.checkedQty || 0);
+
+      if (expectedChanged || nameChanged || pcsChanged) {
+        masterChanged++;
+        const notes: string[] = [];
+        if (expectedChanged) notes.push(`بڕی بارکراو: ${pItem.expectedQty} ← ${gItem.expectedQty}`);
+        if (pcsChanged) notes.push(`دانە/کارتۆن: ${pItem.pcsPerCarton || 1} ← ${gItem.pcsPerCarton || 1}`);
+        if (nameChanged) notes.push('ناوی کاڵا نوێکرایەوە');
+        if (diffs.length < 80) {
+          diffs.push({
+            kind: 'master_changed',
+            model: pItem.model,
+            name: gItem.name || pItem.name,
+            programExpected: pItem.expectedQty,
+            googleExpected: gItem.expectedQty,
+            programChecked: pItem.checkedQty,
+            googleChecked: gItem.checkedQty,
+            noteKu: notes.join(' • '),
+          });
+        }
+      } else if (checkedDiff) {
+        scanDiff++;
+        if (diffs.length < 80) {
+          diffs.push({
+            kind: 'scan_diff',
+            model: pItem.model,
+            name: pItem.name,
+            programExpected: pItem.expectedQty,
+            googleExpected: gItem.expectedQty,
+            programChecked: pItem.checkedQty,
+            googleChecked: gItem.checkedQty,
+            noteKu: `بڕی سکان/جەرد لە پرۆگرام (${pItem.checkedQty}) جیاوازە لە Google Sheet (${gItem.checkedQty})`,
+          });
+        }
+      } else {
+        identical++;
+      }
+
+      // Smart merge keeps warehouse scan counts if present in program, otherwise adopts Google Sheet count
+      const keepProgramScan =
+        (pItem.checkedQty || 0) > 0 || Boolean(pItem.lastAuditedAt) || (gItem.checkedQty || 0) === 0;
+      const checkedQty = keepProgramScan ? pItem.checkedQty || 0 : gItem.checkedQty || 0;
+      const expectedQty = gItem.expectedQty;
+      const pcs = gItem.pcsPerCarton || pItem.pcsPerCarton || 1;
+
+      smartMergedItems.push({
+        ...pItem,
+        rowIndex: gItem.rowIndex,
+        name: gItem.name || pItem.name,
+        expectedQty,
+        pcsPerCarton: pcs,
+        cartonCount: gItem.cartonCount || Math.ceil(expectedQty / pcs) || 1,
+        checkedQty,
+        variance: checkedQty - expectedQty,
+        rackLocation: pItem.rackLocation || gItem.rackLocation,
+        notes: pItem.notes || gItem.notes,
+      });
+    }
+  }
+
+  return {
+    summary: {
+      newInGoogle,
+      removedInGoogle,
+      masterChanged,
+      scanDiff,
+      identical,
+      totalGoogleRows: googleItems.length,
+      totalProgramRows: (programSession.items || []).length,
+      isInSync: newInGoogle === 0 && removedInGoogle === 0 && masterChanged === 0 && scanDiff === 0,
+    },
+    diffs,
+    smartMergedItems,
+  };
+}
+
+function collectUniqueSheetWebhookTargets(
+  items: Array<{ webhookUrl?: string; sheetName?: string; title?: string; tabGid?: string }>
+): Array<{ webhookUrl: string; targetSheetName?: string; targetSheetGid?: string; label: string }> {
+  const seen = new Set<string>();
+  const targets: Array<{ webhookUrl: string; targetSheetName?: string; targetSheetGid?: string; label: string }> = [];
+  for (const it of items) {
+    const url = (it.webhookUrl || '').trim();
+    if (!url || !/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) continue;
+    const sheetName = (it.sheetName || '').trim() || undefined;
+    const tabGid = (it.tabGid || '').trim() || undefined;
+    const dedupKey = `${url}::${(sheetName || '').toLowerCase()}::${tabGid || ''}`;
+    if (seen.has(dedupKey)) continue;
+    seen.add(dedupKey);
+    targets.push({
+      webhookUrl: url,
+      targetSheetName: sheetName,
+      targetSheetGid: tabGid,
+      label: sheetName || it.title || 'Google Sheet',
+    });
+  }
+  return targets;
+}
+
 /**
  * 📊 Build Tab-Isolated Google Sheet Write-Back Payload (Includes Dedicated Baghdad Scanned At Column)
  */
@@ -1197,10 +1548,66 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const allSessions = await getStoredSessions();
-      for (const s of pkg.sessions) {
-        allSessions[s.id] = s;
-      }
+      const [allSessions, deletedIds, resetBefore] = await Promise.all([
+        getStoredSessions(),
+        getDeletedSessionIds(),
+        getResetEpoch(),
+      ]);
+      const deletedSet = new Set(deletedIds);
+      const resetMs = resetBefore ? Date.parse(resetBefore) : 0;
+
+      // Prevent duplicate active packages for the exact same spreadsheetId + mode + tab!
+      const activeExistingList = Object.values(allSessions).filter((ex) => {
+        if (!ex || !ex.id || deletedSet.has(ex.id)) return false;
+        if (resetMs > 0) {
+          const ts = Date.parse(ex.updatedAt || ex.createdAt || '');
+          if (!isNaN(ts) && ts <= resetMs) return false;
+        }
+        return (ex.mode || 'shipment_receiving') === mode;
+      });
+
+      let reconciledExisting = false;
+      const finalSessions: SheetsAuditSession[] = pkg.sessions.map((incomingTab) => {
+        const match = activeExistingList.find((ex) => {
+          const sameSheet =
+            (fetched.spreadsheetId && ex.spreadsheetId && ex.spreadsheetId === fetched.spreadsheetId) ||
+            (incomingTab.webhookUrl && ex.webhookUrl && incomingTab.webhookUrl === ex.webhookUrl);
+          if (!sameSheet) return false;
+          const sameTabName =
+            ex.sheetName &&
+            incomingTab.sheetName &&
+            ex.sheetName.trim().toLowerCase() === incomingTab.sheetName.trim().toLowerCase();
+          const sameGid = ex.tabGid && incomingTab.tabGid && ex.tabGid === incomingTab.tabGid;
+          return Boolean(sameTabName || sameGid);
+        });
+
+        if (match) {
+          reconciledExisting = true;
+          const { smartMergedItems } = diffSessionWithGoogleRows(match, incomingTab.items);
+          const nowIso = new Date().toISOString();
+          const mergedTab = recomputeSessionTotals({
+            ...match,
+            packageId: match.packageId || pkg.packageId,
+            packageTitle: (title || '').trim() || match.packageTitle || pkg.packageTitle,
+            googleSheetUrl: incomingTab.googleSheetUrl || match.googleSheetUrl,
+            webhookUrl: incomingTab.webhookUrl || match.webhookUrl,
+            spreadsheetId: incomingTab.spreadsheetId || match.spreadsheetId,
+            sheetName: incomingTab.sheetName || match.sheetName,
+            tabGid: incomingTab.tabGid || match.tabGid,
+            codeProfile: analyzeWarehouseCodes(smartMergedItems),
+            lastSyncDirection: 'smart_merge',
+            syncRevision: (match.syncRevision || 0) + 1,
+            updatedAt: nowIso,
+            items: smartMergedItems,
+          });
+          allSessions[mergedTab.id] = mergedTab;
+          return mergedTab;
+        }
+
+        allSessions[incomingTab.id] = incomingTab;
+        return incomingTab;
+      });
+
       const saved = await saveStoredSessions(allSessions);
       if (!saved) {
         return NextResponse.json({ success: false, error: 'شیتەکان خوێندرانەوە بەڵام خەزنکردنیان لە Supabase سەرکەوتوو نەبوو.' }, { status: 500 });
@@ -1208,12 +1615,13 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        session: pkg.sessions[0],
-        sessions: pkg.sessions,
-        packageId: pkg.packageId,
-        packageTitle: pkg.packageTitle,
+        reconciledExisting,
+        session: finalSessions[0],
+        sessions: finalSessions,
+        packageId: finalSessions[0]?.packageId || pkg.packageId,
+        packageTitle: finalSessions[0]?.packageTitle || pkg.packageTitle,
         packageCodeProfile: pkg.packageCodeProfile,
-        tabsCount: pkg.sessions.length,
+        tabsCount: finalSessions.length,
       });
     }
 
@@ -1323,62 +1731,39 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------------------
-    // ACTION 2: SAVE OR UPDATE SINGLE AUDIT SESSION (ISOLATED BY TAB!)
+    // ACTION 2: SAVE OR UPDATE SINGLE AUDIT SESSION (ITEM-LEVEL SMART MERGE + ISOLATED TAB!)
     // -------------------------------------------------------------------------
     if (action === 'save_session') {
-      const { session } = body;
+      const { session, forceOverwrite = false, skipWebhookPush = false } = body;
       if (!session || !session.id) {
         return NextResponse.json({ success: false, error: 'داتای سێشن نادروستە' }, { status: 400 });
       }
 
-      const items: SheetsAuditItem[] = session.items || [];
-      let totalExpected = 0;
-      let totalAudited = 0;
-      let totalCartons = 0;
-      let totalAuditedCartons = 0;
-      let matchedCount = 0;
-      let discrepantCount = 0;
-      let damagedCount = 0;
-
-      items.forEach((i) => {
-        totalExpected += i.expectedQty || 0;
-        totalAudited += i.checkedQty || 0;
-        totalCartons += i.cartonCount || i.expectedQty || 0;
-        totalAuditedCartons += i.checkedCartons ?? (i.scannedCartonNumbers?.length || 0);
-        if (i.condition === 'Damaged' || i.auditStatus === 'damaged') damagedCount++;
-        else if (i.checkedQty > 0 && i.variance === 0) matchedCount++;
-        else if (i.checkedQty > 0 && i.variance !== 0) discrepantCount++;
-      });
-
-      const updatedSession: SheetsAuditSession = {
-        ...session,
-        totalItemsCount: items.length,
-        totalExpectedUnits: totalExpected,
-        totalAuditedUnits: totalAudited,
-        totalCartonsCount: totalCartons,
-        totalAuditedCartons,
-        matchedCount,
-        discrepantCount,
-        damagedCount,
-        updatedAt: new Date().toISOString(),
-      };
-
       const allSessions = await getStoredSessions();
-      allSessions[session.id] = updatedSession;
-      const saved = await saveStoredSessions(allSessions);
+      const mergedSession = mergeAuditSessionsSmartly(allSessions[session.id], session, Boolean(forceOverwrite));
 
-      // Targeted auto-sync back ONLY to this session's Google Sheet tab
+      // Targeted auto-sync back ONLY to this session's Google Sheet tab (can be debounced by client via skipWebhookPush)
       let webhookSyncResult = null;
-      if (updatedSession.webhookUrl && /^https:\/\/script\.google(usercontent)?\.com\//.test(updatedSession.webhookUrl)) {
-        webhookSyncResult = await pushSessionToAppsScript(updatedSession.webhookUrl, updatedSession);
-        if (!webhookSyncResult.ok) {
+      if (
+        !skipWebhookPush &&
+        mergedSession.webhookUrl &&
+        /^https:\/\/script\.google(usercontent)?\.com\//.test(mergedSession.webhookUrl)
+      ) {
+        webhookSyncResult = await pushSessionToAppsScript(mergedSession.webhookUrl, mergedSession);
+        if (webhookSyncResult.ok) {
+          mergedSession.lastGoogleSyncedAt = new Date().toISOString();
+          mergedSession.lastSyncDirection = 'push';
+        } else {
           logger.warn('[SheetsSync API] Webhook push warning:', webhookSyncResult.error);
         }
       }
 
+      allSessions[session.id] = mergedSession;
+      const saved = await saveStoredSessions(allSessions);
+
       return NextResponse.json({
         success: saved,
-        session: updatedSession,
+        session: mergedSession,
         webhookSyncResult,
       });
     }
@@ -1411,23 +1796,33 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------------------
-    // ACTION 3: DELETE ONE SECTION/TAB (WITH OPTIONAL GOOGLE SHEET CLEANUP/DELETE)
+    // ACTION 3: DELETE ONE SECTION/TAB (WITH COMPLETE GOOGLE SHEET CLEANUP)
     // -------------------------------------------------------------------------
     if (action === 'delete_session') {
-      const { sessionId, googleSheetAction = 'none' as GoogleSheetDeleteAction } = body;
+      const {
+        sessionId,
+        googleSheetAction = 'none' as GoogleSheetDeleteAction,
+        webhookUrl: bodyWebhookUrl,
+        targetSheetName: bodySheetName,
+        targetSheetGid: bodySheetGid,
+      } = body;
       if (!sessionId) {
         return NextResponse.json({ success: false, error: 'کۆدی سێشن دیاری نەکراوە' }, { status: 400 });
       }
 
       const allSessions = await getStoredSessions();
       const target = allSessions[sessionId];
+      const resolvedWebhook = (target?.webhookUrl || bodyWebhookUrl || '').trim();
+      const resolvedSheetName = target?.sheetName || bodySheetName;
+      const resolvedSheetGid = target?.tabGid || bodySheetGid;
       let googleResult = null;
 
-      if (target && googleSheetAction !== 'none' && target.webhookUrl) {
-        googleResult = await callGoogleAppsScriptWebhook(target.webhookUrl, {
+      if (googleSheetAction !== 'none' && resolvedWebhook) {
+        googleResult = await callGoogleAppsScriptWebhook(resolvedWebhook, {
           action: googleSheetAction,
-          targetSheetName: target.sheetName,
-          targetSheetGid: target.tabGid,
+          targetSheetName: resolvedSheetName,
+          targetSheetGid: resolvedSheetGid,
+          wipeProgramArtifacts: true,
         });
       }
 
@@ -1444,7 +1839,12 @@ export async function POST(req: NextRequest) {
     // ACTION 3.25: DELETE ENTIRE PACKAGE (ALL TABS OF ONE GOOGLE SHEET AT ONCE)
     // -------------------------------------------------------------------------
     if (action === 'delete_package') {
-      const { packageId, sessionIds = [], googleSheetAction = 'none' as GoogleSheetDeleteAction } = body;
+      const {
+        packageId,
+        sessionIds = [],
+        googleSheetAction = 'none' as GoogleSheetDeleteAction,
+        tabs: fallbackTabs = [],
+      } = body;
       if (!packageId && (!Array.isArray(sessionIds) || sessionIds.length === 0)) {
         return NextResponse.json({ success: false, error: 'ناسنامەی باکێچ دیاری نەکراوە' }, { status: 400 });
       }
@@ -1461,17 +1861,21 @@ export async function POST(req: NextRequest) {
         }
       });
 
+      const sheetTargets = collectUniqueSheetWebhookTargets([
+        ...targets,
+        ...(Array.isArray(fallbackTabs) ? fallbackTabs : []),
+      ]);
+
       const googleResults: any[] = [];
       if (googleSheetAction !== 'none') {
-        for (const t of targets) {
-          if (t.webhookUrl) {
-            const gRes = await callGoogleAppsScriptWebhook(t.webhookUrl, {
-              action: googleSheetAction,
-              targetSheetName: t.sheetName,
-              targetSheetGid: t.tabGid,
-            });
-            googleResults.push({ tab: t.sheetName || t.title, ...gRes });
-          }
+        for (const t of sheetTargets) {
+          const gRes = await callGoogleAppsScriptWebhook(t.webhookUrl, {
+            action: googleSheetAction,
+            targetSheetName: t.targetSheetName,
+            targetSheetGid: t.targetSheetGid,
+            wipeProgramArtifacts: true,
+          });
+          googleResults.push({ tab: t.label, ...gRes });
         }
       }
 
@@ -1490,11 +1894,36 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------------------
-    // ACTION 3.5: WIPE ALL AUDIT SESSIONS (FULL RESET ACROSS ALL DEVICES)
+    // ACTION 3.5: WIPE ALL AUDIT SESSIONS (FULL RESET + OPTIONAL GOOGLE SHEET WIPE)
     // -------------------------------------------------------------------------
     if (action === 'wipe_all_sessions') {
+      const { googleSheetAction = 'none' as GoogleSheetDeleteAction, localTargets = [] } = body;
       const existing = await getStoredSessions();
       const prevIds = Object.keys(existing);
+
+      const sheetTargets = collectUniqueSheetWebhookTargets([
+        ...Object.values(existing),
+        ...(Array.isArray(localTargets) ? localTargets : []),
+      ]);
+
+      const googleResults: Array<{ tab: string; ok: boolean; mode?: string; error?: string }> = [];
+      if (googleSheetAction !== 'none') {
+        for (const t of sheetTargets) {
+          const gRes = await callGoogleAppsScriptWebhook(t.webhookUrl, {
+            action: googleSheetAction,
+            targetSheetName: t.targetSheetName,
+            targetSheetGid: t.targetSheetGid,
+            wipeProgramArtifacts: true,
+          });
+          googleResults.push({
+            tab: t.label,
+            ok: gRes.ok,
+            mode: gRes.mode,
+            error: gRes.error,
+          });
+        }
+      }
+
       const resetBefore = new Date().toISOString();
       const [wiped, epochSaved] = await Promise.all([saveStoredSessions({}), setResetEpoch(resetBefore)]);
 
@@ -1510,6 +1939,167 @@ export async function POST(req: NextRequest) {
         success: true,
         clearedCount: prevIds.length,
         resetBefore,
+        googleResults,
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // ACTION 3.75: SMART BIDIRECTIONAL RECONCILIATION (PROGRAM <-> GOOGLE SHEET)
+    // -------------------------------------------------------------------------
+    if (action === 'reconcile_with_google') {
+      const {
+        session,
+        mode = 'inspect' as 'inspect' | 'smart_merge' | 'push_program_to_google' | 'pull_google_overwrite',
+      } = body;
+      if (!session || !session.id) {
+        return NextResponse.json({ success: false, error: 'داتای سێشن بەردەست نییە' }, { status: 400 });
+      }
+
+      const typedSession: SheetsAuditSession = session;
+      const webhookUrl = (typedSession.webhookUrl || '').trim();
+      const sheetSourceUrl = (typedSession.googleSheetUrl || webhookUrl).trim();
+
+      if (mode === 'push_program_to_google') {
+        if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(webhookUrl)) {
+          return NextResponse.json(
+            { success: false, error: 'بۆ ناردنی داتا بۆ Google Sheet پێویستە لینکی Apps Script Webhook بەم فایلەوە بەسترابێتەوە.' },
+            { status: 400 }
+          );
+        }
+        const cleanSession = recomputeSessionTotals({
+          ...typedSession,
+          updatedAt: new Date().toISOString(),
+        });
+        const pushRes = await pushSessionToAppsScript(webhookUrl, cleanSession);
+        if (!pushRes.ok) {
+          return NextResponse.json({ success: false, error: pushRes.error || 'نەتوانرا داتا بنێردرێت بۆ Google Sheet' });
+        }
+        cleanSession.lastGoogleSyncedAt = new Date().toISOString();
+        cleanSession.lastSyncDirection = 'push';
+        cleanSession.syncRevision = (cleanSession.syncRevision || 0) + 1;
+
+        const allSessions = await getStoredSessions();
+        allSessions[cleanSession.id] = cleanSession;
+        await saveStoredSessions(allSessions);
+
+        return NextResponse.json({
+          success: true,
+          mode,
+          session: cleanSession,
+          updatedRows: pushRes.updatedRows,
+        });
+      }
+
+      if (!sheetSourceUrl) {
+        return NextResponse.json(
+          { success: false, error: 'ئەم بەشە هیچ لینکی Google Sheet یان Webhook ـی پێوە نەبەستراوەتەوە.' },
+          { status: 400 }
+        );
+      }
+
+      const fetched = await fetchSpreadsheetTabsFromGoogle({
+        sheetUrl: sheetSourceUrl,
+        webhookUrl: webhookUrl || undefined,
+      });
+
+      if (!fetched.ok || !fetched.tabs || fetched.tabs.length === 0) {
+        return NextResponse.json({ success: false, error: fetched.error || 'نەتوانرا تەبی ناو Google Sheet بخوێندرێتەوە.' }, { status: 400 });
+      }
+
+      // Strictly locate the exact matching tab inside the spreadsheet so tabs NEVER mix!
+      const targetNameLow = (typedSession.sheetName || '').trim().toLowerCase();
+      const targetGid = (typedSession.tabGid || '').trim();
+      const matchedTab =
+        fetched.tabs.find((t) => targetNameLow && (t.sheetName || '').trim().toLowerCase() === targetNameLow) ||
+        fetched.tabs.find((t) => targetGid && String(t.tabGid || '') === targetGid) ||
+        (typeof typedSession.tabIndex === 'number' && typedSession.tabIndex < fetched.tabs.length
+          ? fetched.tabs[typedSession.tabIndex]
+          : fetched.tabs.length === 1
+          ? fetched.tabs[0]
+          : null);
+
+      if (!matchedTab) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `تەبی «${typedSession.sheetName || typedSession.title}» لە ناو فایلە ئەسڵییەکەی گۆگڵ شیتدا نەدۆزرایەوە.`,
+          },
+          { status: 404 }
+        );
+      }
+
+      const googleParsed = convertRowsToAuditItems(matchedTab.rawData, String(typedSession.tabIndex || 0));
+      const { summary, diffs, smartMergedItems } = diffSessionWithGoogleRows(typedSession, googleParsed.items);
+
+      if (mode === 'inspect') {
+        return NextResponse.json({
+          success: true,
+          mode: 'inspect',
+          tabMatched: matchedTab.sheetName,
+          summary,
+          diffs,
+        });
+      }
+
+      const nowIso = new Date().toISOString();
+      if (mode === 'pull_google_overwrite') {
+        const pulledSession = recomputeSessionTotals({
+          ...typedSession,
+          sheetName: matchedTab.sheetName || typedSession.sheetName,
+          tabGid: matchedTab.tabGid || typedSession.tabGid,
+          items: googleParsed.items,
+          codeProfile: analyzeWarehouseCodes(googleParsed.items),
+          lastGoogleSyncedAt: nowIso,
+          lastSyncDirection: 'pull',
+          syncRevision: (typedSession.syncRevision || 0) + 1,
+          updatedAt: nowIso,
+        });
+
+        const allSessions = await getStoredSessions();
+        allSessions[pulledSession.id] = pulledSession;
+        await saveStoredSessions(allSessions);
+
+        return NextResponse.json({
+          success: true,
+          mode,
+          tabMatched: matchedTab.sheetName,
+          summary,
+          session: pulledSession,
+        });
+      }
+
+      // Smart Merge: merge Google Sheet updates + preserve Program scans, save to Supabase, and push unified result back!
+      const mergedSession = recomputeSessionTotals({
+        ...typedSession,
+        sheetName: matchedTab.sheetName || typedSession.sheetName,
+        tabGid: matchedTab.tabGid || typedSession.tabGid,
+        items: smartMergedItems,
+        codeProfile: analyzeWarehouseCodes(smartMergedItems),
+        lastSyncDirection: 'smart_merge',
+        syncRevision: (typedSession.syncRevision || 0) + 1,
+        updatedAt: nowIso,
+      });
+
+      let webhookSyncResult = null;
+      if (webhookUrl && /^https:\/\/script\.google(usercontent)?\.com\//.test(webhookUrl)) {
+        webhookSyncResult = await pushSessionToAppsScript(webhookUrl, mergedSession);
+        if (webhookSyncResult.ok) {
+          mergedSession.lastGoogleSyncedAt = new Date().toISOString();
+        }
+      }
+
+      const allSessions = await getStoredSessions();
+      allSessions[mergedSession.id] = mergedSession;
+      await saveStoredSessions(allSessions);
+
+      return NextResponse.json({
+        success: true,
+        mode: 'smart_merge',
+        tabMatched: matchedTab.sheetName,
+        summary,
+        diffs,
+        session: mergedSession,
+        webhookSyncResult,
       });
     }
 
@@ -1531,12 +2121,25 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      const nowIso = new Date().toISOString();
+      const allSessions = await getStoredSessions();
+      if (allSessions[session.id]) {
+        allSessions[session.id] = {
+          ...allSessions[session.id],
+          webhookUrl,
+          lastGoogleSyncedAt: nowIso,
+          lastSyncDirection: 'push',
+        };
+        await saveStoredSessions(allSessions);
+      }
+
       return NextResponse.json({
         success: true,
         status: result.status || 200,
         updatedRows: result.updatedRows,
         mode: result.mode,
         targetSheetName: result.targetSheetName || session.sheetName,
+        lastGoogleSyncedAt: nowIso,
       });
     }
 
