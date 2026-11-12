@@ -646,6 +646,121 @@
   animation: cyberScan 3s linear infinite;
 }
 
+/* ==========================================================================
+   LIQUID GLASS & BRUSHED METAL MOTION SYSTEM (Home & Feedback Hub)
+   ========================================================================== */
+@keyframes orbitSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes floatGentle {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes ambientBreathe {
+  0%, 100% { transform: scale(0.98); opacity: 0.5; }
+  50% { transform: scale(1.05); opacity: 0.85; }
+}
+
+.animate-orbit-slow {
+  animation: orbitSlow 16s linear infinite;
+}
+
+.animate-orbit-reverse {
+  animation: orbitSlow 22s linear infinite reverse;
+}
+
+.animate-float-gentle {
+  animation: floatGentle 5.5s ease-in-out infinite;
+}
+
+.animate-ambient-breathe {
+  animation: ambientBreathe 6s ease-in-out infinite;
+}
+
+.metal-ring-rose {
+  background: conic-gradient(
+    from 0deg,
+    rgba(244, 63, 94, 0.85),
+    rgba(255, 228, 230, 0.95),
+    rgba(225, 29, 72, 0.65),
+    rgba(251, 113, 133, 0.95),
+    rgba(244, 63, 94, 0.85)
+  );
+}
+
+.metal-ring-amber {
+  background: conic-gradient(
+    from 0deg,
+    rgba(245, 158, 11, 0.85),
+    rgba(254, 243, 199, 0.95),
+    rgba(217, 119, 6, 0.65),
+    rgba(251, 191, 36, 0.95),
+    rgba(245, 158, 11, 0.85)
+  );
+}
+
+.metal-ring-blue {
+  background: conic-gradient(
+    from 0deg,
+    rgba(59, 130, 246, 0.85),
+    rgba(224, 242, 254, 0.95),
+    rgba(37, 99, 235, 0.65),
+    rgba(96, 165, 250, 0.95),
+    rgba(59, 130, 246, 0.85)
+  );
+}
+
+.liquid-glass-sphere {
+  backdrop-filter: blur(22px) saturate(185%);
+  -webkit-backdrop-filter: blur(22px) saturate(185%);
+  box-shadow:
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.72),
+    inset 0 -8px 18px rgba(15, 23, 42, 0.06);
+}
+
+.dark .liquid-glass-sphere {
+  box-shadow:
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.2),
+    inset 0 -10px 20px rgba(0, 0, 0, 0.45);
+}
+
+.metal-card-gold {
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  box-shadow:
+    0 20px 45px -15px rgba(217, 119, 6, 0.25),
+    inset 0 1px 1px rgba(255, 255, 255, 0.75);
+}
+
+.dark .metal-card-gold {
+  box-shadow:
+    0 20px 45px -15px rgba(245, 158, 11, 0.18),
+    inset 0 1px 1px rgba(253, 230, 138, 0.2);
+}
+
+.metal-card-silver {
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.55);
+}
+
+.dark .metal-card-silver {
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-orbit-slow,
+  .animate-orbit-reverse,
+  .animate-float-gentle,
+  .animate-ambient-breathe,
+  .animate-glass-sheen {
+    animation: none !important;
+  }
+}
+
 
 
 

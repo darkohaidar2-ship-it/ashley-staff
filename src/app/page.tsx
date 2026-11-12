@@ -24,6 +24,7 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
+  Clock,
   Sun,
   Moon
 } from 'lucide-react';
@@ -61,6 +62,75 @@ function playAudioChime(success: boolean) {
       osc.stop(ctx.currentTime + 0.3);
     }
   } catch {}
+}
+
+/** Custom metallic-gold Boss emblem SVG */
+function BossMetalLogo({ className = 'w-10 h-10' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" fill="none" className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id="bossGoldGrad" x1="10" y1="6" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FEF08A" />
+          <stop offset="48%" stopColor="#F59E0B" />
+          <stop offset="100%" stopColor="#B45309" />
+        </linearGradient>
+        <linearGradient id="bossTieGrad" x1="32" y1="38" x2="32" y2="56" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#78350F" />
+          <stop offset="100%" stopColor="#451A03" />
+        </linearGradient>
+      </defs>
+      {/* Executive Crown */}
+      <path
+        d="M19 17.5L22 10L27 14L32 8L37 14L42 10L45 17.5H19Z"
+        fill="url(#bossGoldGrad)"
+      />
+      <rect x="20" y="18.5" width="24" height="2.6" rx="1.3" fill="url(#bossGoldGrad)" />
+      {/* Boss Head */}
+      <circle cx="32" cy="29" r="7.5" fill="url(#bossGoldGrad)" />
+      {/* Suit Shoulders & Collar */}
+      <path
+        d="M14 53C14 43.8 21.8 39 32 39C42.2 39 50 43.8 50 53C50 54.6 48.7 56 47 56H17C15.3 56 14 54.6 14 53Z"
+        fill="url(#bossGoldGrad)"
+      />
+      {/* Suit Tie */}
+      <path d="M29.2 39.2L32 43.5L34.8 39.2L33.5 52.8L32 55L30.5 52.8L29.2 39.2Z" fill="url(#bossTieGrad)" />
+    </svg>
+  );
+}
+
+/** Custom brushed-silver multi-person team emblem SVG */
+function TeamMetalLogo({ className = 'w-10 h-10' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" fill="none" className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id="teamSilverGrad" x1="8" y1="10" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#F1F5F9" />
+          <stop offset="50%" stopColor="#94A3B8" />
+          <stop offset="100%" stopColor="#475569" />
+        </linearGradient>
+      </defs>
+      {/* Left Person */}
+      <circle cx="17" cy="24" r="5.2" fill="url(#teamSilverGrad)" opacity="0.88" />
+      <path
+        d="M7.5 46C7.5 39.2 11.7 35 17.5 35C20 35 22.1 35.8 23.8 37.2C21.2 39.6 19.8 43.2 19.6 47.5H9.2C8.2 47.5 7.5 46.8 7.5 46Z"
+        fill="url(#teamSilverGrad)"
+        opacity="0.88"
+      />
+      {/* Right Person */}
+      <circle cx="47" cy="24" r="5.2" fill="url(#teamSilverGrad)" opacity="0.88" />
+      <path
+        d="M56.5 46C56.5 39.2 52.3 35 46.5 35C44 35 41.9 35.8 40.2 37.2C42.8 39.6 44.2 43.2 44.4 47.5H54.8C55.8 47.5 56.5 46.8 56.5 46Z"
+        fill="url(#teamSilverGrad)"
+        opacity="0.88"
+      />
+      {/* Center Lead Person */}
+      <circle cx="32" cy="21" r="6.5" fill="url(#teamSilverGrad)" />
+      <path
+        d="M19.5 48.5C19.5 40.4 24.8 35.5 32 35.5C39.2 35.5 44.5 40.4 44.5 48.5C44.5 49.9 43.4 51 42 51H22C20.6 51 19.5 49.9 19.5 48.5Z"
+        fill="url(#teamSilverGrad)"
+      />
+    </svg>
+  );
 }
 
 function RootPageContent() {
@@ -389,375 +459,435 @@ function RootPageContent() {
   };
 
   // ===========================================================================
-  // 🔘 VIEW 1: MAIN HOME SCREEN WITH 3 CIRCLES (سێ بازنەی پەرەی سەرەکی)
+  // 🔘 VIEW 1: MAIN HOME SCREEN WITH 3 MODERN LIQUID-GLASS & METAL CIRCLES
   // ===========================================================================
   if (activePortal === 'home') {
     return (
-      <div className={`min-h-[100dvh] w-full select-none font-sans flex flex-col justify-between transition-colors duration-200 ${
-        isDark ? 'bg-slate-950 text-white' : 'bg-[#f8fafc] text-slate-900'
-      }`} dir="rtl">
-        
-        {/* Ambient Luxury Background Lights */}
+      <div
+        className={`min-h-[100dvh] w-full select-none font-sans flex flex-col justify-between transition-colors duration-300 relative overflow-hidden ${
+          isDark
+            ? 'bg-gradient-to-b from-slate-950 via-[#090d16] to-slate-950 text-white'
+            : 'bg-gradient-to-b from-[#f8fafc] via-[#f1f5f9] to-[#f8fafc] text-slate-900'
+        }`}
+        dir="rtl"
+      >
+        {/* Ambient Soft Motion Mesh Lights */}
         <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-          <div className={`absolute -top-32 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full blur-3xl animate-pulse ${
-            isDark ? 'bg-amber-500/10' : 'bg-amber-400/20'
-          }`} />
-          <div className={`absolute bottom-10 right-10 w-72 h-72 rounded-full blur-3xl ${
-            isDark ? 'bg-rose-500/10' : 'bg-rose-400/15'
-          }`} />
-          <div className={`absolute bottom-10 left-10 w-72 h-72 rounded-full blur-3xl ${
-            isDark ? 'bg-blue-500/10' : 'bg-blue-400/15'
-          }`} />
+          <div
+            className={`absolute -top-28 left-1/2 -translate-x-1/2 w-[420px] h-[420px] rounded-full blur-3xl animate-ambient-breathe ${
+              isDark ? 'bg-rose-500/12' : 'bg-rose-400/18'
+            }`}
+          />
+          <div
+            className={`absolute bottom-12 right-6 w-80 h-80 rounded-full blur-3xl animate-ambient-breathe ${
+              isDark ? 'bg-amber-500/10' : 'bg-amber-400/16'
+            }`}
+          />
+          <div
+            className={`absolute bottom-12 left-6 w-80 h-80 rounded-full blur-3xl animate-ambient-breathe ${
+              isDark ? 'bg-blue-500/10' : 'bg-blue-400/16'
+            }`}
+          />
         </div>
 
-        {/* Top Floating App Bar */}
+        {/* Minimal Floating Glass App Bar */}
         <header className="relative z-10 w-full max-w-lg md:max-w-2xl mx-auto px-4 pt-safe pt-3 pb-2 flex items-center justify-between">
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md shadow-xs transition-colors ${
-            isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white/85 border-slate-200'
-          }`}>
+          <div
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-xl shadow-xs transition-colors ${
+              isDark ? 'bg-slate-900/65 border-white/10' : 'bg-white/75 border-white/80'
+            }`}
+          >
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className={`text-[11px] font-bold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-              Ashley Staff 2026
+            <span className={`text-[11px] font-bold font-mono ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+              Ashley 2026
             </span>
           </div>
 
           <div className="flex items-center gap-2.5">
-            <span className={`text-xs font-bold font-mono ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
+            <span className={`text-xs font-bold ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
               گروپی دیوان
             </span>
             {renderThemeButton('md')}
           </div>
         </header>
 
-        {/* 📱 3-CIRCLE HERO HUB */}
+        {/* 📱 3-CIRCLE LIQUID-GLASS & METAL HERO HUB */}
         <main className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 sm:p-6 max-w-md sm:max-w-xl md:max-w-2xl mx-auto w-full my-auto">
-          
-          {/* Header Title */}
-          <div className="text-center mb-6 sm:mb-8">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-[24px] bg-gradient-to-tr from-amber-500 via-amber-400 to-amber-300 p-0.5 shadow-2xl shadow-amber-500/30 flex items-center justify-center mx-auto mb-3">
-              <div className={`w-full h-full rounded-[22px] flex items-center justify-center transition-colors ${
-                isDark ? 'bg-slate-950 text-amber-400' : 'bg-white text-amber-500 shadow-sm'
-              }`}>
-                <Building2 className="w-8 h-8 sm:w-10 sm:h-10 text-amber-500" />
+          {/* Clean Minimal Brand Header */}
+          <div className="text-center mb-7 sm:mb-9">
+            <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-[20px] mx-auto mb-3 p-[1.5px] metal-ring-amber shadow-xl shadow-amber-500/20 overflow-hidden">
+              <div
+                className={`relative w-full h-full rounded-[19px] flex items-center justify-center overflow-hidden ${
+                  isDark ? 'bg-slate-950/90 text-amber-400' : 'bg-white/95 text-amber-500'
+                }`}
+              >
+                <div className="absolute inset-0 w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-glass-sheen pointer-events-none" />
+                <Building2 className="w-7 h-7 sm:w-8 sm:h-8 relative z-10" />
               </div>
             </div>
 
-            <h1 className={`text-2xl sm:text-3xl font-black tracking-tight mb-1 ${
-              isDark ? 'text-white' : 'text-slate-900'
-            }`}>
+            <h1 className={`text-2xl sm:text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
               ئاشڵی هۆم ستۆر
             </h1>
-            <p className={`text-xs sm:text-sm font-medium max-w-xs sm:max-w-sm mx-auto ${
-              isDark ? 'text-slate-400' : 'text-slate-600'
-            }`}>
-              سیستەمی یەکگرتووی دەوام، فیدباک، و جەردی کۆگا
-            </p>
           </div>
 
           {/* =================================================================== */}
-          {/* 🔘 THE THREE CIRCLES TRIANGLE LAYOUT (سێ بازنەکەی سەرەکی) */}
+          {/* 🔘 THE THREE MODERN GLASS-METAL CIRCLES (فیدباک لە سەرەوە) */}
           {/* =================================================================== */}
-          <div className="w-full flex flex-col items-center gap-6 sm:gap-8 my-auto">
-            
-            {/* ⭕ بازنەی ١ (سەرەوە): ئامادەبوون (کە پێویست ئەکا داخڵ بن) */}
-            <div className="flex flex-col items-center">
+          <div className="w-full flex flex-col items-center gap-7 sm:gap-9 my-auto">
+            {/* ⭕ بازنەی ١ (سەرەوە - سەرەکی): فیدباک */}
+            <div className="relative flex flex-col items-center animate-float-gentle">
+              {/* Soft Breathing Halo */}
+              <div
+                className={`absolute -inset-3 rounded-full blur-2xl pointer-events-none animate-ambient-breathe ${
+                  isDark ? 'bg-rose-500/25' : 'bg-rose-400/30'
+                }`}
+              />
+
               <button
                 type="button"
-                onClick={() => handleSwitchPortal('attendance')}
-                className="w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-gradient-to-tr from-amber-500 via-amber-400 to-amber-300 p-1 shadow-2xl shadow-amber-500/35 ring-4 ring-amber-400/25 flex items-center justify-center cursor-pointer active:scale-95 transition-all duration-200 group hover:ring-amber-400/50"
+                onClick={() => handleSwitchPortal('feedback_hub')}
+                className="relative w-40 h-40 sm:w-48 sm:h-48 rounded-full p-[2px] cursor-pointer active:scale-[0.94] hover:-translate-y-1 transition-all duration-200 group shadow-2xl shadow-rose-500/25"
               >
-                <div className={`w-full h-full rounded-full flex flex-col items-center justify-center p-3 text-center transition-all ${
-                  isDark ? 'bg-slate-950 group-hover:bg-slate-900/90' : 'bg-white group-hover:bg-amber-50/70 shadow-lg'
-                }`}>
-                  <div className={`w-11 h-11 sm:w-13 sm:h-13 rounded-full flex items-center justify-center mb-1 group-hover:scale-110 transition-transform ${
-                    isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-600'
-                  }`}>
-                    <Fingerprint className="w-6 h-6 sm:w-7 sm:h-7" />
+                {/* Rotating Metallic Conic Rim */}
+                <span className="absolute inset-0 rounded-full metal-ring-rose animate-orbit-slow opacity-90 group-hover:opacity-100" />
+
+                {/* Frosted Liquid Glass Core */}
+                <div
+                  className={`relative w-full h-full rounded-full liquid-glass-sphere flex flex-col items-center justify-center p-3 text-center overflow-hidden transition-colors ${
+                    isDark
+                      ? 'bg-slate-950/80 group-hover:bg-slate-900/75'
+                      : 'bg-white/80 group-hover:bg-white/90'
+                  }`}
+                >
+                  {/* Diagonal Glass Sheen Sweep */}
+                  <span className="absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-white/35 to-transparent animate-glass-sheen pointer-events-none" />
+
+                  <div
+                    className={`relative z-10 w-13 h-13 sm:w-14 sm:h-14 rounded-2xl border flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200 ${
+                      isDark
+                        ? 'bg-rose-500/15 border-rose-400/30 text-rose-300 shadow-inner'
+                        : 'bg-gradient-to-br from-rose-50 to-white border-rose-200/80 text-rose-500 shadow-sm'
+                    }`}
+                  >
+                    <MessageSquareHeart className="w-7 h-7" />
                   </div>
-                  <span className={`text-base sm:text-lg font-black ${
-                    isDark ? 'text-white' : 'text-slate-900'
-                  }`}>
-                    ئامادەبوون
+
+                  <span className={`relative z-10 text-lg sm:text-xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    فیدباک
                   </span>
-                  <span className={`text-[10px] sm:text-[11px] font-bold mt-1 px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${
-                    isDark ? 'text-amber-400 bg-amber-500/15 border-amber-500/30' : 'text-amber-800 bg-amber-100 border-amber-300'
-                  }`}>
-                    <Lock className="w-2.5 h-2.5" />
-                    <span>پێویستە داخڵ بن</span>
+
+                  <span
+                    className={`relative z-10 mt-1.5 px-2.5 py-0.5 rounded-full border text-[10px] font-bold flex items-center gap-1 ${
+                      isDark
+                        ? 'bg-emerald-500/15 border-emerald-400/30 text-emerald-300'
+                        : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>چالاکە</span>
                   </span>
                 </div>
               </button>
-
-              <span className={`text-[11px] sm:text-xs font-bold mt-2 text-center ${
-                isDark ? 'text-slate-400' : 'text-slate-600'
-              }`}>
-                تۆمارکردنی کاتی دەوام بە GPS و لۆگ ئین
-              </span>
             </div>
 
-            {/* ⭕⭕ بازنەی ٢ و ٣ (لای ڕاست: فیدباک • دەستە چەپ: کۆگا) */}
-            <div className="w-full flex items-start justify-center gap-6 sm:gap-14">
-              
-              {/* ⭕ بازنەی لاری ڕاست: فیدباک (فیدباکی کارمەندان و فیدباکی بەڕێوەبەر) */}
-              <div className="flex flex-col items-center">
+            {/* ⭕⭕ بازنەی ٢ و ٣ (خوارەوە: ئامادەبوون • کۆگا) */}
+            <div className="w-full flex items-center justify-center gap-7 sm:gap-14">
+              {/* ⭕ بازنەی دەستە ڕاست: ئامادەبوون */}
+              <div className="relative flex flex-col items-center">
+                <div
+                  className={`absolute -inset-2 rounded-full blur-xl pointer-events-none ${
+                    isDark ? 'bg-amber-500/15' : 'bg-amber-400/20'
+                  }`}
+                />
                 <button
                   type="button"
-                  onClick={() => handleSwitchPortal('feedback_hub')}
-                  className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gradient-to-tr from-rose-500 via-pink-500 to-rose-400 p-1 shadow-2xl shadow-rose-500/35 ring-4 ring-rose-400/25 flex items-center justify-center cursor-pointer active:scale-95 transition-all duration-200 group hover:ring-rose-400/50"
+                  onClick={() => handleSwitchPortal('attendance')}
+                  className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full p-[2px] cursor-pointer active:scale-[0.94] hover:-translate-y-1 transition-all duration-200 group shadow-xl shadow-amber-500/20"
                 >
-                  <div className={`w-full h-full rounded-full flex flex-col items-center justify-center p-2.5 text-center transition-all ${
-                    isDark ? 'bg-slate-950 group-hover:bg-slate-900/90' : 'bg-white group-hover:bg-rose-50/70 shadow-lg'
-                  }`}>
-                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center mb-1 group-hover:scale-110 transition-transform ${
-                      isDark ? 'bg-rose-500/20 text-rose-400' : 'bg-rose-100 text-rose-600'
-                    }`}>
-                      <MessageSquareHeart className="w-5 h-5 sm:w-6 sm:h-6" />
+                  <span className="absolute inset-0 rounded-full metal-ring-amber animate-orbit-reverse opacity-85 group-hover:opacity-100" />
+                  <div
+                    className={`relative w-full h-full rounded-full liquid-glass-sphere flex flex-col items-center justify-center p-2.5 text-center overflow-hidden ${
+                      isDark
+                        ? 'bg-slate-950/80 group-hover:bg-slate-900/75'
+                        : 'bg-white/80 group-hover:bg-white/90'
+                    }`}
+                  >
+                    <span className="absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-glass-sheen pointer-events-none" />
+                    <div
+                      className={`relative z-10 w-10 h-10 sm:w-12 sm:h-12 rounded-2xl border flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform duration-200 ${
+                        isDark
+                          ? 'bg-amber-500/15 border-amber-400/30 text-amber-300'
+                          : 'bg-gradient-to-br from-amber-50 to-white border-amber-200/80 text-amber-600 shadow-xs'
+                      }`}
+                    >
+                      <Fingerprint className="w-5 h-5 sm:w-6 sm:h-6" />
                     </div>
-                    <span className={`text-sm sm:text-base font-black ${
-                      isDark ? 'text-white' : 'text-slate-900'
-                    }`}>
-                      فیدباک
+                    <span className={`relative z-10 text-sm sm:text-base font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      ئامادەبوون
                     </span>
-                    <span className={`text-[9.5px] sm:text-[10.5px] font-bold mt-1 px-2 py-0.5 rounded-full border flex items-center gap-1 ${
-                      isDark ? 'text-rose-300 bg-rose-500/15 border-rose-500/30' : 'text-rose-800 bg-rose-100 border-rose-300'
-                    }`}>
+                    <span
+                      className={`relative z-10 mt-1 px-2 py-0.5 rounded-full border text-[9.5px] font-bold flex items-center gap-1 ${
+                        isDark
+                          ? 'bg-amber-500/10 border-amber-400/25 text-amber-300'
+                          : 'bg-amber-50/90 border-amber-200 text-amber-700'
+                      }`}
+                    >
                       <Lock className="w-2.5 h-2.5" />
-                      <span>PINی تایبەت</span>
+                      <span>دەوام</span>
                     </span>
                   </div>
                 </button>
-
-                <span className={`text-[10px] sm:text-[11px] font-bold mt-2 text-center max-w-[130px] sm:max-w-[160px] ${
-                  isDark ? 'text-slate-400' : 'text-slate-600'
-                }`}>
-                  فیدباکی کارمەندان & بەڕێوەبەر
-                </span>
               </div>
 
-              {/* ⭕ بازنەی دەستە چەپ: کۆگا (کە لەوێوە بچینە بەشی جەرد بە PINی ٥ ژمارە) */}
-              <div className="flex flex-col items-center">
+              {/* ⭕ بازنەی دەستە چەپ: کۆگا */}
+              <div className="relative flex flex-col items-center">
+                <div
+                  className={`absolute -inset-2 rounded-full blur-xl pointer-events-none ${
+                    isDark ? 'bg-blue-500/15' : 'bg-blue-400/20'
+                  }`}
+                />
                 <button
                   type="button"
                   onClick={handleOpenWarehouse}
-                  className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-blue-500 p-1 shadow-2xl shadow-blue-500/35 ring-4 ring-blue-400/25 flex items-center justify-center cursor-pointer active:scale-95 transition-all duration-200 group hover:ring-blue-400/50"
+                  className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full p-[2px] cursor-pointer active:scale-[0.94] hover:-translate-y-1 transition-all duration-200 group shadow-xl shadow-blue-500/20"
                 >
-                  <div className={`w-full h-full rounded-full flex flex-col items-center justify-center p-2.5 text-center transition-all ${
-                    isDark ? 'bg-slate-950 group-hover:bg-slate-900/90' : 'bg-white group-hover:bg-blue-50/70 shadow-lg'
-                  }`}>
-                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center mb-1 group-hover:scale-110 transition-transform ${
-                      isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
-                    }`}>
+                  <span className="absolute inset-0 rounded-full metal-ring-blue animate-orbit-slow opacity-85 group-hover:opacity-100" />
+                  <div
+                    className={`relative w-full h-full rounded-full liquid-glass-sphere flex flex-col items-center justify-center p-2.5 text-center overflow-hidden ${
+                      isDark
+                        ? 'bg-slate-950/80 group-hover:bg-slate-900/75'
+                        : 'bg-white/80 group-hover:bg-white/90'
+                    }`}
+                  >
+                    <span className="absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-glass-sheen pointer-events-none" />
+                    <div
+                      className={`relative z-10 w-10 h-10 sm:w-12 sm:h-12 rounded-2xl border flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform duration-200 ${
+                        isDark
+                          ? 'bg-blue-500/15 border-blue-400/30 text-blue-300'
+                          : 'bg-gradient-to-br from-blue-50 to-white border-blue-200/80 text-blue-600 shadow-xs'
+                      }`}
+                    >
                       <Boxes className="w-5 h-5 sm:w-6 sm:h-6" />
                     </div>
-                    <span className={`text-sm sm:text-base font-black ${
-                      isDark ? 'text-white' : 'text-slate-900'
-                    }`}>
+                    <span className={`relative z-10 text-sm sm:text-base font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
                       کۆگا
                     </span>
-                    <span className={`text-[9.5px] sm:text-[10.5px] font-bold mt-1 px-2 py-0.5 rounded-full border flex items-center gap-1 ${
-                      isDark ? 'text-blue-300 bg-blue-500/15 border-blue-500/30' : 'text-blue-800 bg-blue-100 border-blue-300'
-                    }`}>
+                    <span
+                      className={`relative z-10 mt-1 px-2 py-0.5 rounded-full border text-[9.5px] font-bold flex items-center gap-1 ${
+                        isDark
+                          ? 'bg-blue-500/10 border-blue-400/25 text-blue-300'
+                          : 'bg-blue-50/90 border-blue-200 text-blue-700'
+                      }`}
+                    >
                       <Lock className="w-2.5 h-2.5" />
-                      <span>PINی ٥ ژمارە</span>
+                      <span>جەرد</span>
                     </span>
                   </div>
                 </button>
-
-                <span className={`text-[10px] sm:text-[11px] font-bold mt-2 text-center max-w-[130px] sm:max-w-[160px] ${
-                  isDark ? 'text-slate-400' : 'text-slate-600'
-                }`}>
-                  بەشی جەرد و بار داگرتن
-                </span>
               </div>
-
             </div>
-
           </div>
-
         </main>
 
-        {/* Footer Brand Info */}
-        <footer className={`relative z-10 w-full text-center pb-safe pb-4 pt-2 text-[11px] font-medium ${
-          isDark ? 'text-slate-500' : 'text-slate-500'
-        }`}>
-          کۆمپانیای مۆبیلیاتی ئاشڵی • گروپی دیوان ٢٠٢٦
+        {/* Minimal Footer */}
+        <footer
+          className={`relative z-10 w-full text-center pb-safe pb-4 pt-2 text-[11px] font-medium ${
+            isDark ? 'text-slate-500' : 'text-slate-400'
+          }`}
+        >
+          ئاشڵی هۆم ستۆر • ٢٠٢٦
         </footer>
 
         {/* 🔐 PIN GATE MODAL POPUP */}
         {renderPinModal()}
-
       </div>
     );
   }
 
   // ===========================================================================
-  // 💬 VIEW 2: FEEDBACK HUB (دوو بەشی فیدباک: کارمەندان 6000-9999 و بەڕێوبەر 0000-5999)
+  // 💬 VIEW 2: FEEDBACK HUB (بەڕێوەبەر لە سەرەوە ئەکتیف + کارمەندان چاوەڕوانی)
   // ===========================================================================
   if (activePortal === 'feedback_hub') {
     return (
-      <div className={`min-h-[100dvh] w-full select-none font-sans flex flex-col justify-between transition-colors duration-200 ${
-        isDark ? 'bg-slate-950 text-white' : 'bg-[#f8fafc] text-slate-900'
-      }`} dir="rtl">
-        
-        {/* Top Header */}
-        <header className={`sticky top-0 z-40 backdrop-blur-xl border-b px-4 py-3 flex items-center justify-between transition-colors ${
-          isDark ? 'bg-slate-900/90 border-slate-800 text-white' : 'bg-white/90 border-slate-200 text-slate-900 shadow-2xs'
-        }`}>
+      <div
+        className={`min-h-[100dvh] w-full select-none font-sans flex flex-col justify-between transition-colors duration-300 relative overflow-hidden ${
+          isDark
+            ? 'bg-gradient-to-b from-slate-950 via-[#0b0f19] to-slate-950 text-white'
+            : 'bg-gradient-to-b from-[#f8fafc] via-[#f1f5f9] to-[#f8fafc] text-slate-900'
+        }`}
+        dir="rtl"
+      >
+        {/* Ambient Liquid Background Glow */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+          <div
+            className={`absolute top-12 left-1/2 -translate-x-1/2 w-[380px] h-[380px] rounded-full blur-3xl animate-ambient-breathe ${
+              isDark ? 'bg-amber-500/12' : 'bg-amber-400/18'
+            }`}
+          />
+          <div
+            className={`absolute bottom-10 right-1/3 w-72 h-72 rounded-full blur-3xl ${
+              isDark ? 'bg-slate-600/10' : 'bg-slate-300/25'
+            }`}
+          />
+        </div>
+
+        {/* Clean Top Header */}
+        <header
+          className={`sticky top-0 z-40 backdrop-blur-xl border-b px-4 py-3 flex items-center justify-between transition-colors ${
+            isDark ? 'bg-slate-900/75 border-white/10 text-white' : 'bg-white/80 border-slate-200/80 text-slate-900 shadow-2xs'
+          }`}
+        >
           <button
             type="button"
             onClick={() => handleSwitchPortal('home')}
             className={`h-9 px-3.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 border ${
-              isDark ? 'bg-slate-800 hover:bg-slate-700 text-white border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
+              isDark
+                ? 'bg-slate-800/80 hover:bg-slate-700 text-white border-white/10'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
             }`}
           >
             <Home className="w-4 h-4 text-amber-500" />
-            <span>پەڕەی سەرەکی</span>
+            <span>سەرەکی</span>
           </button>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <MessageSquareHeart className="w-5 h-5 text-rose-500" />
-              <h2 className={`text-sm font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                بەشی فیدباک و هەڵسەنگاندن
-              </h2>
-            </div>
+            <h2 className={`text-sm font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              بەشی فیدباک
+            </h2>
             {renderThemeButton('sm')}
           </div>
         </header>
 
-        {/* Dual Feedback Cards Selection */}
-        <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 max-w-lg md:max-w-2xl mx-auto w-full my-auto space-y-4">
-          
-          <div className="text-center mb-2">
-            <span className="px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-500 dark:text-rose-400 text-xs font-bold inline-block mb-2">
-              هەڵبژاردنی جۆری فیدباک بە PIN
-            </span>
-            <h3 className={`text-xl sm:text-2xl font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              کام فیدباکە دەتەوێت بکەیتەوە؟
-            </h3>
-            <p className={`text-xs mt-1 max-w-sm mx-auto ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              هەر بەشێک کۆدی نهێنی (PIN)ی تایبەت بە خۆی هەیە کە لە لایەن ئەدمینەوە دیاریکراوە.
-            </p>
-            <div className={`mt-3 p-2.5 rounded-2xl border text-[11px] font-bold flex items-center justify-center gap-1.5 ${
-              isDark ? 'bg-slate-900/80 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
-            }`}>
-              <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <span>📱 لە مۆبایل تەنها کار لەسەر وەڵامدانەوە دەکرێت • زیادکردنی پرسیار و فایل لە ئەدمین پانێڵەوەیە</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 w-full">
-            
-            {/* Card 1: فیدباکی کارمەندان (PIN: 6000 تا 9999) */}
-            <button
-              type="button"
-              onClick={handleOpenStaffFeedback}
-              className={`p-5 rounded-3xl border shadow-xl text-right transition-all cursor-pointer active:scale-[0.98] group relative overflow-hidden ${
-                isDark
-                  ? 'bg-slate-900 hover:bg-slate-800/90 border-slate-800 hover:border-rose-500/50'
-                  : 'bg-white hover:bg-rose-50/30 border-slate-200 hover:border-rose-400 shadow-slate-200/50'
-              }`}
-            >
-              <div className="absolute top-0 right-0 w-2 h-full bg-rose-500" />
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-500 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
-                    <MessageSquareHeart className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h4 className={`text-base font-black flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                      <span>١. وەڵامدانەوەی فیدباکی کارمەندان</span>
-                      <span className="px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-300 text-[10.5px] font-mono font-bold" dir="ltr">
-                        PIN 6000 - 9999
-                      </span>
-                    </h4>
-                    <span className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                      پڕکردنەوە و وەڵامدانەوەی خێرای هەڵسەنگاندنی ٨ کارمەندەکە لەلایەن کڕیاران و ستاف
-                    </span>
-                  </div>
-                </div>
-
-                <div className="w-9 h-9 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-md">
-                  <ChevronLeft className="w-5 h-5" />
-                </div>
-              </div>
-
-              <p className={`text-xs leading-relaxed p-3 rounded-2xl border transition-colors ${
-                isDark
-                  ? 'bg-slate-950/60 border-slate-800/80 text-slate-400'
-                  : 'bg-rose-50/70 border-rose-200/80 text-slate-700'
-              }`}>
-                پێویستی بە کۆدی ٤ ژمارەیی لە نێوان <strong>6000 تا 9999</strong> هەیە بۆ دەستپێکردنی ڕاپرسییەکە.
-              </p>
-            </button>
-
-            {/* Card 2: فیدباکی بەڕێوەبەر (PIN: 0000 تا 5999) */}
+        {/* Minimal Glass & Metallic Feedback Cards */}
+        <main className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 sm:p-6 max-w-md sm:max-w-lg mx-auto w-full my-auto space-y-5">
+          <div className="w-full space-y-4">
+            {/* 🏆 Card 1 (TOP — ACTIVE): هەڵسەنگاندنی بەڕێوەبەر */}
             <button
               type="button"
               onClick={handleOpenManagerFeedback}
-              className={`p-5 rounded-3xl border shadow-xl text-right transition-all cursor-pointer active:scale-[0.98] group relative overflow-hidden ${
+              className={`w-full p-5 sm:p-6 rounded-[30px] border text-right transition-all duration-200 cursor-pointer active:scale-[0.97] hover:-translate-y-0.5 group relative overflow-hidden metal-card-gold ${
                 isDark
-                  ? 'bg-slate-900 hover:bg-slate-800/90 border-slate-800 hover:border-amber-500/50'
-                  : 'bg-white hover:bg-amber-50/30 border-slate-200 hover:border-amber-400 shadow-slate-200/50'
+                  ? 'bg-gradient-to-br from-slate-900/85 via-slate-900/75 to-amber-950/35 border-amber-400/35 hover:border-amber-400/65'
+                  : 'bg-gradient-to-br from-white/90 via-white/80 to-amber-50/75 border-amber-300/70 hover:border-amber-400'
               }`}
             >
-              <div className="absolute top-0 right-0 w-2 h-full bg-amber-500" />
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-500 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
-                    <ShieldCheck className="w-6 h-6" />
+              {/* Diagonal Liquid Glass Sheen */}
+              <span className="absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-amber-200/25 to-transparent animate-glass-sheen pointer-events-none" />
+
+              <div className="relative z-10 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  {/* Metallic Gold Boss Medallion */}
+                  <div className="relative w-16 h-16 rounded-2xl p-[1.5px] metal-ring-amber shadow-lg shadow-amber-500/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
+                    <div
+                      className={`w-full h-full rounded-[15px] flex items-center justify-center ${
+                        isDark ? 'bg-slate-950/90' : 'bg-gradient-to-br from-amber-50 to-white'
+                      }`}
+                    >
+                      <BossMetalLogo className="w-11 h-11" />
+                    </div>
                   </div>
-                  <div>
-                    <h4 className={`text-base font-black flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                      <span>٢. فۆرمی هەڵسەنگاندنی بەڕێوەبەر</span>
-                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10.5px] font-mono font-bold" dir="ltr">
-                        PIN 0000 - 5999
+
+                  {/* Strictly Minimal Title + Code Range */}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className={`text-lg sm:text-xl font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                        هەڵسەنگاندنی بەڕێوەبەر
+                      </h3>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                          isDark
+                            ? 'bg-emerald-500/15 border-emerald-400/30 text-emerald-300'
+                            : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>ئەکتیفە</span>
                       </span>
-                    </h4>
-                    <span className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                      ڕاپرسی نهێنی و بێ ناو لەلایەن فرۆشیاران و کارمەندانەوە (٢٠ بڕگە + ٥ پرسیاری کراوە)
-                    </span>
+                    </div>
+
+                    <div
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs font-mono font-black ${
+                        isDark
+                          ? 'bg-amber-500/15 border-amber-400/30 text-amber-300'
+                          : 'bg-amber-100/80 border-amber-300/80 text-amber-900'
+                      }`}
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+                      <span>کۆد: 0 تا 5999</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="w-9 h-9 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center shadow-md">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center shadow-md shadow-amber-500/25 shrink-0 group-hover:-translate-x-1 transition-transform">
                   <ChevronLeft className="w-5 h-5" />
                 </div>
               </div>
-
-              <p className={`text-xs leading-relaxed p-3 rounded-2xl border transition-colors ${
-                isDark
-                  ? 'bg-slate-950/60 border-slate-800/80 text-slate-400'
-                  : 'bg-amber-50/70 border-amber-200/80 text-slate-700'
-              }`}>
-                پێویستی بە کۆدی تایبەتی <strong>0000 تا 5999</strong> هەیە بۆ کردنەوەی فۆرمی هەڵسەنگاندنی بەڕێوەبەر بە شێوەی نهێنی و بێ ناو (ئەنجامەکان تەنها لە ئەدمین پانێڵ دەبینرێن).
-              </p>
             </button>
 
+            {/* ⏳ Card 2 (BOTTOM — PENDING / چاوەڕوانی): فیدباکی کارمەندان */}
+            <button
+              type="button"
+              disabled
+              aria-disabled="true"
+              className={`w-full p-5 sm:p-6 rounded-[30px] border text-right relative overflow-hidden cursor-not-allowed opacity-75 metal-card-silver ${
+                isDark
+                  ? 'bg-slate-900/55 border-slate-700/60'
+                  : 'bg-white/65 border-slate-200/90'
+              }`}
+            >
+              <div className="relative z-10 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  {/* Frosted Brushed-Silver Multi-Person Medallion */}
+                  <div
+                    className={`w-16 h-16 rounded-2xl border flex items-center justify-center shrink-0 ${
+                      isDark
+                        ? 'bg-slate-950/75 border-slate-700/70'
+                        : 'bg-gradient-to-br from-slate-100 to-white border-slate-200'
+                    }`}
+                  >
+                    <TeamMetalLogo className="w-11 h-11" />
+                  </div>
+
+                  {/* Strictly Minimal Title + Pending Status */}
+                  <div className="space-y-2">
+                    <h3 className={`text-lg sm:text-xl font-black ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                      فیدباکی کارمەندان
+                    </h3>
+
+                    <div
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs font-black ${
+                        isDark
+                          ? 'bg-slate-800/80 border-slate-700 text-slate-300'
+                          : 'bg-slate-100 border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      <span>چاوەڕوانی</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${
+                    isDark
+                      ? 'bg-slate-800/70 border-slate-700 text-slate-500'
+                      : 'bg-slate-100 border-slate-200 text-slate-400'
+                  }`}
+                >
+                  <Lock className="w-4 h-4" />
+                </div>
+              </div>
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => handleSwitchPortal('home')}
-            className={`w-full py-3 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 mt-2 ${
-              isDark
-                ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                : 'bg-slate-200 hover:bg-slate-300 text-slate-800'
-            }`}
-          >
-            <Home className="w-4 h-4 text-amber-500" />
-            <span>گەڕانەوە بۆ پەڕەی سەرەکی (سێ بازنەکە)</span>
-          </button>
-
         </main>
 
-        <footer className={`w-full text-center pb-safe pb-4 text-[11px] ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
-          بەشی فیدباک • سیستەمی ئاشڵی ٢٠٢٦
+        <footer className={`relative z-10 w-full text-center pb-safe pb-4 text-[11px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+          ئاشڵی هۆم ستۆر • ٢٠٢٦
         </footer>
 
         {/* 🔐 PIN GATE MODAL POPUP */}
         {renderPinModal()}
-
       </div>
     );
   }
