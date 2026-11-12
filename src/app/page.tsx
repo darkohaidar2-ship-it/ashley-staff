@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AshleyMobileApp from '@/components/mobile-app/AshleyMobileApp';
 import { FeedbackPortal } from '@/components/feedback/FeedbackPortal';
-import { AdminFeedbackDashboard } from '@/components/admin/AdminFeedbackDashboard';
+import { ManagerEvaluationForm } from '@/components/feedback/ManagerEvaluationForm';
 import { GoogleSheetsWarehouseAudit } from '@/components/admin/warehouse/GoogleSheetsWarehouseAudit';
 import { 
   Loader2, 
@@ -65,7 +65,7 @@ function RootPageContent() {
   const pinParam = searchParams.get('pin') || '';
 
   const [activePortal, setActivePortal] = useState<ActivePortal>(() => {
-    if (tabParam === 'feedback_admin' || tabParam === 'manager_feedback') {
+    if (tabParam === 'feedback_admin' || tabParam === 'manager_feedback' || tabParam === 'manager_evaluation') {
       return 'feedback_admin';
     }
     if (tabParam === 'feedback' || (pinParam && /^\d{4}$/.test(pinParam))) {
@@ -85,6 +85,7 @@ function RootPageContent() {
 
   // 🔐 Authentication States for PIN Protected Sections
   const [managerAuthed, setManagerAuthed] = useState<boolean>(false);
+  const [managerPin, setManagerPin] = useState<string>('');
   const [warehouseAuthed, setWarehouseAuthed] = useState<boolean>(false);
 
   // 🔑 PIN Gate Modal State
@@ -170,14 +171,6 @@ function RootPageContent() {
   // Check stored sessions on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const savedManager = sessionStorage.getItem('ashley_manager_auth_pin');
-      if (savedManager && /^\d{4}$/.test(savedManager)) {
-        const val = parseInt(savedManager, 10);
-        if (val >= 0 && val <= 5999) {
-          setManagerAuthed(true);
-        }
-      }
-
       const savedWarehouse = sessionStorage.getItem('ashley_warehouse_auth_pin');
       if (savedWarehouse && /^\d{5}$/.test(savedWarehouse)) {
         setWarehouseAuthed(true);
@@ -186,7 +179,7 @@ function RootPageContent() {
   }, []);
 
   useEffect(() => {
-    if (tabParam === 'feedback_admin' || tabParam === 'manager_feedback') {
+    if (tabParam === 'feedback_admin' || tabParam === 'manager_feedback' || tabParam === 'manager_evaluation') {
       setActivePortal('feedback_admin');
     } else if (tabParam === 'feedback' || (pinParam && /^\d{4}$/.test(pinParam))) {
       setActivePortal('feedback');
@@ -240,9 +233,9 @@ function RootPageContent() {
     openPinModal('warehouse');
   };
 
-  // 🔓 Open Manager Feedback with 0000-5999 PIN check
+  // 🔓 Open Manager Evaluation Form with 0000-5999 PIN check
   const handleOpenManagerFeedback = () => {
-    if (managerAuthed) {
+    if (managerAuthed && managerPin) {
       handleSwitchPortal('feedback_admin');
       return;
     }
@@ -267,6 +260,7 @@ function RootPageContent() {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('ashley_manager_auth_pin');
     }
+    setManagerPin('');
     setManagerAuthed(false);
     handleSwitchPortal('feedback_hub');
   };
@@ -298,9 +292,7 @@ function RootPageContent() {
         closePinModal();
 
         if (scopeToTest === 'manager_feedback') {
-          if (typeof window !== 'undefined') {
-            sessionStorage.setItem('ashley_manager_auth_pin', pinToTest);
-          }
+          setManagerPin(pinToTest);
           setManagerAuthed(true);
           handleSwitchPortal('feedback_admin');
         } else if (scopeToTest === 'warehouse') {
@@ -692,13 +684,13 @@ function RootPageContent() {
                   </div>
                   <div>
                     <h4 className={`text-base font-black flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                      <span>٢. بینینی ئەنجامەکان و فیدباکی بەڕێوەبەر</span>
+                      <span>٢. فۆرمی هەڵسەنگاندنی بەڕێوەبەر</span>
                       <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10.5px] font-mono font-bold" dir="ltr">
                         PIN 0000 - 5999
                       </span>
                     </h4>
                     <span className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                      داشبۆردی شیکاری، ڕیزبەندی کارمەندان، گراف و ڕاپۆرتی PDF (تەنها بینین)
+                      ڕاپرسی نهێنی و بێ ناو لەلایەن فرۆشیاران و کارمەندانەوە (٢٠ بڕگە + ٥ پرسیاری کراوە)
                     </span>
                   </div>
                 </div>
@@ -713,7 +705,7 @@ function RootPageContent() {
                   ? 'bg-slate-950/60 border-slate-800/80 text-slate-400'
                   : 'bg-amber-50/70 border-amber-200/80 text-slate-700'
               }`}>
-                پێویستی بە کۆدی تایبەتی بەڕێوەبەر لە نێوان <strong>0000 تا 5999</strong> هەیە بۆ بینینی گراف و نمرەکان.
+                پێویستی بە کۆدی تایبەتی <strong>0000 تا 5999</strong> هەیە بۆ کردنەوەی فۆرمی هەڵسەنگاندنی بەڕێوەبەر بە شێوەی نهێنی و بێ ناو (ئەنجامەکان تەنها لە ئەدمین پانێڵ دەبینرێن).
               </p>
             </button>
 
@@ -815,11 +807,11 @@ function RootPageContent() {
   }
 
   // ===========================================================================
-  // 📊 VIEW 4: MANAGER FEEDBACK DASHBOARD (فیدباکی بەڕێوەبەر 0000 - 5999)
+  // 📝 VIEW 4: CONFIDENTIAL MANAGER EVALUATION FORM (0000 - 5999)
   // ===========================================================================
   if (activePortal === 'feedback_admin') {
-    // If not authenticated, force PIN gate view
-    if (!managerAuthed) {
+    // If PIN is not yet verified, prompt for 0000 - 5999 form access PIN
+    if (!managerAuthed || !managerPin) {
       return (
         <div className={`min-h-[100dvh] font-sans flex flex-col justify-between transition-colors duration-200 ${
           isDark ? 'bg-slate-950 text-white' : 'bg-[#f8fafc] text-slate-900'
@@ -838,7 +830,7 @@ function RootPageContent() {
               <span>گەڕانەوە</span>
             </button>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-amber-500">داشبۆردی بەڕێوەبەر</span>
+              <span className="text-xs font-bold text-amber-500">فۆرمی هەڵسەنگاندنی بەڕێوەبەر</span>
               {renderThemeButton('sm')}
             </div>
           </header>
@@ -851,10 +843,10 @@ function RootPageContent() {
                 <Lock className="w-8 h-8" />
               </div>
               <h2 className={`text-xl font-black mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                داشبۆردی بەڕێوەبەر قوفڵە
+                فۆرمی نهێنی هەڵسەنگاندنی بەڕێوەبەر
               </h2>
-              <p className={`text-xs mb-6 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                پێویستە کۆدی PINی ٤ ژمارەیی بەڕێوەبەر بنووسیت (0000 بۆ 5999).
+              <p className={`text-xs mb-6 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                پێویستە کۆدی PINی ٤ ژمارەیی (0000 بۆ 5999) بنووسیت بۆ کردنەوەی فۆرمە بێ‌ناوەکە.
               </p>
               <button
                 type="button"
@@ -862,7 +854,7 @@ function RootPageContent() {
                 className="w-full h-12 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 transition-all"
               >
                 <KeyRound className="w-5 h-5" />
-                <span>لێدانی کۆدی بەڕێوەبەر</span>
+                <span>لێدانی کۆدی چوونەژوورەوە</span>
               </button>
             </div>
           </main>
@@ -879,7 +871,6 @@ function RootPageContent() {
       <div className={`min-h-[100dvh] font-sans flex flex-col justify-between transition-colors duration-200 ${
         isDark ? 'bg-slate-950 text-white' : 'bg-[#f8fafc] text-slate-900'
       }`} dir="rtl">
-        {/* Navigation Bar back to Hub or Home */}
         <header className={`sticky top-0 z-40 backdrop-blur-md border-b px-3 sm:px-6 py-2.5 flex items-center justify-between shadow-2xs transition-colors ${
           isDark ? 'bg-slate-900/95 border-slate-800 text-white' : 'bg-white/95 border-slate-200/90 text-slate-900'
         }`}>
@@ -913,10 +904,10 @@ function RootPageContent() {
               type="button"
               onClick={handleLockManager}
               className="h-9 px-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-              title="دەرچوون و قفڵکردنی داشبۆردی بەڕێوەبەر"
+              title="دەرچوون و گۆڕینی کۆدی PIN"
             >
               <Lock className="w-3.5 h-3.5 text-rose-500" />
-              <span>قفڵکردن</span>
+              <span>گۆڕینی PIN</span>
             </button>
 
             <button
@@ -929,15 +920,24 @@ function RootPageContent() {
               }`}
             >
               <MessageSquareHeart className="w-4 h-4 text-rose-500" />
-              <span>فیدباکی کارمەندان (PIN)</span>
+              <span>فیدباکی کارمەندان</span>
             </button>
 
             {renderThemeButton('sm')}
           </div>
         </header>
 
-        <main className="flex-1 p-3 sm:p-6 max-w-[1920px] mx-auto w-full">
-          <AdminFeedbackDashboard />
+        <main className="flex-1 p-3 sm:p-6 max-w-5xl mx-auto w-full">
+          <ManagerEvaluationForm
+            pin={managerPin}
+            isDark={isDark}
+            onResetToPinGate={() => {
+              setManagerPin('');
+              setManagerAuthed(false);
+              openPinModal('manager_feedback');
+            }}
+            onBackToHub={() => handleSwitchPortal('feedback_hub')}
+          />
         </main>
 
         {renderPinModal()}
@@ -1126,7 +1126,7 @@ function RootPageContent() {
     const requiredLength = isWarehouse ? 5 : 4;
 
     const theme = isManager 
-      ? { border: 'border-amber-500/40', badge: 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/30', dotActive: 'bg-amber-500 border-amber-400 shadow-amber-500/50', title: '👑 فیدباکی بەڕێوەبەر', range: '0000 - 5999', desc: 'تکایە کۆدی ٤ ژمارەیی تایبەت بە بەڕێوەبەر بنووسە' }
+      ? { border: 'border-amber-500/40', badge: 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/30', dotActive: 'bg-amber-500 border-amber-400 shadow-amber-500/50', title: '📝 فۆرمی هەڵسەنگاندنی بەڕێوەبەر', range: '0000 - 5999', desc: 'کۆدی ٤ ژمارەیی (0000 - 5999) بنووسە بۆ کردنەوەی فۆرمە نهێنییەکە' }
       : isWarehouse
       ? { border: 'border-blue-500/40', badge: 'bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30', dotActive: 'bg-blue-500 border-blue-400 shadow-blue-500/50', title: '📦 بەشی کۆگا و جەرد', range: '٥ ژمارە (10000 - 99999)', desc: 'تکایە کۆدی نهێنی ٥ ژمارەیی ڕێگەپێدراوی کۆگا بنووسە' }
       : { border: 'border-rose-500/40', badge: 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/30', dotActive: 'bg-rose-500 border-rose-400 shadow-rose-500/50', title: '👥 فیدباکی کارمەندان', range: '6000 - 9999', desc: 'تکایە کۆدی ٤ ژمارەیی هەڵسەنگاندن بنووسە' };

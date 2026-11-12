@@ -1,28 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { 
   getAllFeedbackPins, 
-  getAllFeedbackSubmissions, 
+  getAllFeedbackSubmissions,
+  getAllManagerEvaluations,
   createFeedbackPin, 
   createBatchFeedbackPins, 
   deleteFeedbackPin,
   resetFeedbackPin,
   clearAllFeedbackSubmissions,
-  deleteFeedbackSubmission
+  deleteFeedbackSubmission,
+  deleteManagerEvaluation,
+  clearAllManagerEvaluations
 } from '@/lib/feedback/feedback-service';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    const [pins, submissions] = await Promise.all([
+    const [pins, submissions, managerEvaluations] = await Promise.all([
       getAllFeedbackPins(),
       getAllFeedbackSubmissions(),
+      getAllManagerEvaluations(),
     ]);
 
     return NextResponse.json({
       success: true,
       pins,
       submissions,
+      managerEvaluations,
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
@@ -40,17 +45,19 @@ export async function POST(req: NextRequest) {
 
     const action = body?.action || 'get_all';
 
-    // 0. Get all feedback & PINs
+    // 0. Get all feedback, manager evaluations & PINs
     if (action === 'get_all') {
-      const [pins, submissions] = await Promise.all([
+      const [pins, submissions, managerEvaluations] = await Promise.all([
         getAllFeedbackPins(),
         getAllFeedbackSubmissions(),
+        getAllManagerEvaluations(),
       ]);
 
       return NextResponse.json({
         success: true,
         pins,
         submissions,
+        managerEvaluations,
       });
     }
 
@@ -110,9 +117,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(result);
     }
 
-    // 6. Clear all test submissions
+    // 6. Clear all test submissions (Staff feedback only)
     if (action === 'clear_all_submissions') {
       const result = await clearAllFeedbackSubmissions();
+      return NextResponse.json(result);
+    }
+
+    // 7. Delete specific Manager Evaluation
+    if (action === 'delete_manager_evaluation') {
+      const id = body.id;
+      if (!id) {
+        return NextResponse.json({ success: false, error: 'Evaluation ID is required' }, { status: 400 });
+      }
+      const result = await deleteManagerEvaluation(id);
+      return NextResponse.json(result);
+    }
+
+    // 8. Clear all Manager Evaluations
+    if (action === 'clear_all_manager_evaluations') {
+      const result = await clearAllManagerEvaluations();
       return NextResponse.json(result);
     }
 

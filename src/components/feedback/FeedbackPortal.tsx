@@ -1,5 +1,7 @@
 'use client';
 
+import { ManagerEvaluationForm } from '@/components/feedback/ManagerEvaluationForm';
+
 import React, { useState, useEffect } from 'react';
 import { 
   Building2, 
@@ -87,8 +89,9 @@ export function FeedbackPortal({
     }
   }, []);
 
-  // Step state: 'pin_gate' | 'questionnaire' | 'success'
-  const [step, setStep] = useState<'pin_gate' | 'questionnaire' | 'success'>('pin_gate');
+  // Step state: 'pin_gate' | 'questionnaire' | 'manager_evaluation' | 'success'
+  const [step, setStep] = useState<'pin_gate' | 'questionnaire' | 'manager_evaluation' | 'success'>('pin_gate');
+  const [managerPin, setManagerPin] = useState<string>('');
 
   // PIN state
   const [pin, setPin] = useState<string>(initialPin);
@@ -218,18 +221,12 @@ export function FeedbackPortal({
 
       const data = await res.json();
       if (data.valid && data.pinData) {
-        // 👑 If this is a Manager PIN (0000 - 5999), route to Manager Dashboard
+        // 📝 If this is a Manager Evaluation PIN (0000 - 5999), open confidential Manager Evaluation Form
         if (data.scope === 'manager_feedback') {
-          if (typeof window !== 'undefined') {
-            sessionStorage.setItem('ashley_manager_auth_pin', pinToTest);
-          }
           triggerHaptic('success');
           playAudioChime(true);
-          if (onSwitchPortal) {
-            onSwitchPortal('feedback_admin');
-          } else if (typeof window !== 'undefined') {
-            window.location.href = `/feedback/admin?pin=${pinToTest}`;
-          }
+          setManagerPin(pinToTest);
+          setStep('manager_evaluation');
           return;
         }
 
@@ -562,6 +559,18 @@ export function FeedbackPortal({
         {/* ===================================================================== */}
         {/* 🔒 SCREEN 1: 4-DIGIT PIN GATE (FULL-SCREEN ADAPTIVE) */}
         {/* ===================================================================== */}
+        {step === 'manager_evaluation' && (
+          <ManagerEvaluationForm
+            pin={managerPin}
+            isDark={isDark}
+            onResetToPinGate={() => {
+              setManagerPin('');
+              setStep('pin_gate');
+            }}
+            onBackToHub={onBackToMobileApp}
+          />
+        )}
+
         {step === 'pin_gate' && (
           <div className="my-auto py-6 sm:py-10 flex flex-col items-center justify-center w-full">
             <div className={`w-full max-w-4xl lg:max-w-5xl p-6 sm:p-10 lg:p-12 rounded-[36px] border shadow-2xl backdrop-blur-2xl transition-all ${

@@ -1,6 +1,12 @@
 import { supabase } from '@/lib/supabase/client';
 import { logger } from '@/lib/logger';
 import { getBaghdadNow } from '@/lib/telegram/telegram-service';
+import {
+  MANAGER_EVALUATION_ITEMS,
+  ManagerEvaluationSubmission,
+  ManagerOpenAnswers,
+  computeManagerTotalScore,
+} from './manager-evaluation';
 
 export type PinScope = 'manager_feedback' | 'staff_feedback' | 'warehouse';
 
@@ -130,6 +136,7 @@ export interface FeedbackSubmission {
 
 const PINS_STORE_ID = 'ashley_feedback_pins';
 const SUBMISSIONS_STORE_ID = 'ashley_feedback_submissions';
+const MANAGER_EVAL_STORE_ID = 'ashley_manager_evaluations';
 
 /**
  * 🎯 Determine PIN Scope according to system rules:
@@ -592,11 +599,14 @@ export async function clearAllFeedbackSubmissions(): Promise<{ success: boolean;
     // 1. Wipe submissions array
     await saveFeedbackSubmissions([]);
 
-    // 2. Reset all PINs to isUsed = false
+    // 2. Reset staff_feedback PINs to isUsed = false
     const currentPins = await getAllFeedbackPins();
     Object.keys(currentPins).forEach((k) => {
-      currentPins[k].isUsed = false;
-      delete currentPins[k].usedAt;
+      const scope = currentPins[k].scope || determinePinScope(k);
+      if (scope === 'staff_feedback') {
+        currentPins[k].isUsed = false;
+        delete currentPins[k].usedAt;
+      }
     });
     await saveFeedbackPins(currentPins);
 
@@ -627,8 +637,8 @@ export async function recordFeedbackSubmission(params: {
   suggestionsForManagement?: string;
 }): Promise<{ success: boolean; submission?: FeedbackSubmission; error?: string }> {
   try {
-    // 1. Verify PIN validity
-    const check = await verifyFeedbackPin(params.pin);
+    // 1. Verify PIN validity strictly for staff_feedback
+    const check = await verifyFeedbackPin(params.pin, 'staff_feedback');
     if (!check.valid || !check.pinData) {
       return { success: false, error: check.error || 'کۆدی PIN نادروستە.' };
     }
@@ -707,6 +717,180 @@ export async function deleteFeedbackSubmission(id: string): Promise<{ success: b
     const filtered = list.filter(s => s.id !== id);
     const ok = await saveFeedbackSubmissions(filtered);
     return { success: ok };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ============================================================================
+// 👑 SEPARATE MANAGER EVALUATION STORAGE & HELPERS (نهێنی - بێ ناو)
+// Stored completely apart from staff feedback submissions so data never mixes
+// ============================================================================
+
+export async function getAllManagerEvaluations(): Promise<ManagerEvaluationSubmission[]> {
+  try {
+    const { data, error } = await supabase
+      .from('warehouses')
+      .select('qr_code')
+      .eq('id', MANAGER_EVAL_STORE_ID)
+      .maybeSingle();
+
+    if (error) {
+      logger.error('[FeedbackService] Error fetching manager evaluations:', error);
+      return [];
+    }
+
+    if (!data?.qr_code) return [];
+    const parsed = JSON.parse(data.qr_code);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    logger.error('[FeedbackService] Exception reading manager evaluations:', err);
+    return [];
+  }
+}
+
+export async function saveManagerEvaluations(items: ManagerEvaluationSubmission[]): Promise<boolean> {
+  try {
+    const jsonStr = JSON.stringify(items);
+    const { error } = await supabase
+      .from('warehouses')
+      .upsert({
+        id: MANAGER_EVAL_STORE_ID,
+        name: 'Ashley Manager Evaluation Storage',
+        qr_code: jsonStr,
+      });
+
+    if (error) {
+      logger.error('[FeedbackService] Error saving manager evaluations:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.error('[FeedbackService] Exception saving manager evaluations:', err);
+    return false;
+  }
+}
+
+export async function recordManagerEvaluation(params: {
+  pin: string;
+  evaluationDate?: string;
+  scores: Record<number | string, number>;
+  openAnswers?: ManagerOpenAnswers;
+}): Promise<{
+  success: boolean;
+  submissionMeta?: { id: string; submittedAt: string; baghdadDate: string; baghdadTime: string };
+  error?: string;
+}> {
+  try {
+    const check = await verifyFeedbackPin(params.pin, 'manager_feedback');
+    if (!check.valid || !check.pinData) {
+      return {
+        success: false,
+        error: check.error || 'کۆدی PIN نادروستە (دەبێت کۆدی فیدباکی بەڕێوەبەر 0000 - 5999 بێت).',
+      };
+    }
+
+    const normalizedScores: Record<number, number> = {};
+    for (const item of MANAGER_EVALUATION_ITEMS) {
+      const rawVal = params.scores?.[item.id] ?? params.scores?.[String(item.id)];
+      const numVal = Number(rawVal);
+      if (!Number.isInteger(numVal) || numVal < 1 || numVal > 5) {
+        return {
+          success: false,
+          error: `تکایە وەڵامی بڕگەی (${item.id}) هەڵبژێرە لە نێوان ١ بۆ ٥.`,
+        };
+      }
+      normalizedScores[item.id] = numVal;
+    }
+
+    const { totalScore, averageScore, band } = computeManagerTotalScore(normalizedScores);
+    const { dateStr, timeStr } = getBaghdadNow();
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const submissionId = `mgr_eval_${Date.now()}_${randomSuffix}`;
+
+    const cleanOpen: ManagerOpenAnswers = {
+      q1: params.openAnswers?.q1?.trim() || undefined,
+      q2: params.openAnswers?.q2?.trim() || undefined,
+      q3: params.openAnswers?.q3?.trim() || undefined,
+      q4: params.openAnswers?.q4?.trim() || undefined,
+      q5: params.openAnswers?.q5?.trim() || undefined,
+    };
+
+    const record: ManagerEvaluationSubmission = {
+      id: submissionId,
+      formType: 'manager_evaluation',
+      evaluatorRole: 'کارمەندان و فرۆشیاران',
+      evaluationDate: (params.evaluationDate || dateStr).trim(),
+      submittedAt: new Date().toISOString(),
+      baghdadDate: dateStr,
+      baghdadTime: timeStr,
+      scores: normalizedScores,
+      totalScore,
+      averageScore,
+      satisfactionBandKey: band.key,
+      openAnswers: cleanOpen,
+    };
+
+    const current = await getAllManagerEvaluations();
+    current.unshift(record);
+    const ok = await saveManagerEvaluations(current);
+    if (!ok) {
+      return { success: false, error: 'نەتوانرا هەڵسەنگاندنەکە لە سێرڤەر تۆمار بکرێت.' };
+    }
+
+    // Mark single-use PIN consumption cleanly without storing identity on the evaluation record
+    const currentPins = await getAllFeedbackPins();
+    const cleanPin = params.pin.trim();
+    if (currentPins[cleanPin] && currentPins[cleanPin].isSingleUse) {
+      currentPins[cleanPin].isUsed = true;
+      currentPins[cleanPin].usedAt = new Date().toISOString();
+      await saveFeedbackPins(currentPins);
+    }
+
+    // Notice: Do NOT return totalScore or satisfactionBandKey to the respondent client!
+    return {
+      success: true,
+      submissionMeta: {
+        id: record.id,
+        submittedAt: record.submittedAt,
+        baghdadDate: record.baghdadDate,
+        baghdadTime: record.baghdadTime,
+      },
+    };
+  } catch (err: any) {
+    logger.error('[FeedbackService] Error recording manager evaluation:', err);
+    return { success: false, error: err.message || 'هەڵەیەک ڕوویدا لە تۆمارکردنی هەڵسەنگاندن.' };
+  }
+}
+
+export async function deleteManagerEvaluation(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const list = await getAllManagerEvaluations();
+    const filtered = list.filter((e) => e.id !== id);
+    const ok = await saveManagerEvaluations(filtered);
+    return { success: ok };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function clearAllManagerEvaluations(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const ok = await saveManagerEvaluations([]);
+    if (!ok) return { success: false, error: 'نەتوانرا هەڵسەنگاندنەکان بسڕدرێنەوە.' };
+
+    // Also re-activate any single-use manager_feedback PINs cleanly
+    const currentPins = await getAllFeedbackPins();
+    Object.keys(currentPins).forEach((k) => {
+      const scope = currentPins[k].scope || determinePinScope(k);
+      if (scope === 'manager_feedback') {
+        currentPins[k].isUsed = false;
+        delete currentPins[k].usedAt;
+      }
+    });
+    await saveFeedbackPins(currentPins);
+
+    return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

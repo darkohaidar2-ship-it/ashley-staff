@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { recordFeedbackSubmission } from '@/lib/feedback/feedback-service';
+import { recordFeedbackSubmission, recordManagerEvaluation } from '@/lib/feedback/feedback-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +9,19 @@ export async function POST(req: NextRequest) {
 
     if (!body?.pin) {
       return NextResponse.json({ success: false, error: 'کۆدی PIN پێویستە' }, { status: 400 });
+    }
+
+    if (body?.formType === 'manager_evaluation') {
+      const result = await recordManagerEvaluation({
+        pin: body.pin,
+        evaluationDate: body.evaluationDate,
+        scores: body.scores || {},
+        openAnswers: body.openAnswers || {},
+      });
+      if (!result.success) {
+        return NextResponse.json(result, { status: 400 });
+      }
+      return NextResponse.json(result);
     }
 
     const result = await recordFeedbackSubmission(body);

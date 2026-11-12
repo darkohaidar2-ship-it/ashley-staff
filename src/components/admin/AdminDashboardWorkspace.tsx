@@ -15,8 +15,10 @@ import { AdminPasswordChangeModal } from '@/components/admin/AdminPasswordChange
 import NotificationRoutingMatrix from '@/components/admin/NotificationRoutingMatrix';
 import { AdminGoogleBindingsManager } from '@/components/admin/AdminGoogleBindingsManager';
 import { AdminFeedbackDashboard } from '@/components/admin/AdminFeedbackDashboard';
+import { AdminManagerEvaluationDashboard } from '@/components/admin/AdminManagerEvaluationDashboard';
 import { GoogleSheetsWarehouseAudit } from '@/components/admin/warehouse/GoogleSheetsWarehouseAudit';
 import { AdminUniversalPinsManager } from '@/components/admin/pins/AdminUniversalPinsManager';
+import { Award as ManagerEvalIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { 
   Building2, 
@@ -46,16 +48,16 @@ export function AdminDashboardWorkspace() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   
   // Segmented views in Admin Workspace (Synced with URL)
-  const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback' | 'sheets_warehouse' | 'pins'>('matrix');
+  const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback' | 'manager_evaluation' | 'sheets_warehouse' | 'pins'>('matrix');
 
   useEffect(() => {
     const viewParam = searchParams.get('view');
-    if (viewParam && ['matrix', 'daily', 'tools', 'workflow', 'google', 'feedback', 'sheets_warehouse', 'pins'].includes(viewParam)) {
+    if (viewParam && ['matrix', 'daily', 'tools', 'workflow', 'google', 'feedback', 'manager_evaluation', 'sheets_warehouse', 'pins'].includes(viewParam)) {
       setAdminView(viewParam as any);
     }
   }, [searchParams]);
 
-  const handleViewChange = (newView: 'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback' | 'sheets_warehouse' | 'pins') => {
+  const handleViewChange = (newView: 'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback' | 'manager_evaluation' | 'sheets_warehouse' | 'pins') => {
     setAdminView(newView);
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
@@ -399,6 +401,20 @@ export function AdminDashboardWorkspace() {
 
             <button
               type="button"
+              onClick={() => handleViewChange('manager_evaluation')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                adminView === 'manager_evaluation'
+                  ? 'bg-slate-900 text-amber-300 shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
+              title="بەشی هەڵسەنگاندنی بەڕێوەبەر (شیکردنەوەی ئەنجام ٢٠-١٠٠ و پرسیارە کراوەکان)"
+            >
+              <ManagerEvalIcon className="w-3.5 h-3.5 text-amber-500" />
+              <span>هەڵسەنگاندنی بەڕێوەبەر</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => handleViewChange('sheets_warehouse')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 adminView === 'sheets_warehouse'
@@ -606,6 +622,15 @@ export function AdminDashboardWorkspace() {
       {adminView === 'feedback' && (
         <section className="w-full transition-opacity duration-300">
           <AdminFeedbackDashboard />
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 👑 VIEW 6B: MANAGER EVALUATION ANALYTICS (بەشی سێیەم - ئەدمین بە تەنها) */}
+      {/* ========================================================================= */}
+      {adminView === 'manager_evaluation' && (
+        <section className="w-full transition-opacity duration-300">
+          <AdminManagerEvaluationDashboard />
         </section>
       )}
 

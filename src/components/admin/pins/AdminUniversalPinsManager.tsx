@@ -532,25 +532,25 @@ export function AdminUniversalPinsManager() {
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-base font-black text-slate-900">
-                    ١. کۆدەکانی بەشی فیدباکی بەڕێوەبەر (Manager Feedback)
+                    ١. کۆدەکانی فۆرمی هەڵسەنگاندنی بەڕێوەبەر (Manager Evaluation)
                   </h3>
                   <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-800 text-xs font-mono font-black" dir="ltr">
                     مەودا: 0000 - 5999
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 font-medium">
-                  <strong>شوێنی داخڵکردن:</strong> لە پەڕەی سەرەکی کلیک لەسەر بازنەی فیدباک -&gt; فیدباکی بەڕێوەبەر، یان ڕاستەوخۆ لە ڕێگەی بەستەری <code>/feedback/admin</code>.
+                  <strong>شوێنی داخڵکردن:</strong> ئەم کۆدانە فۆرمی نهێنی و بێ‌ناوی هەڵسەنگاندنی بەڕێوەبەر لە <code>/feedback</code> دەکەنەوە (شیکاری ئەنجامەکان تەنها لە ئەدمین پانێڵە).
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <Link
-                href="/feedback/admin"
+                href="/feedback"
                 target="_blank"
                 className="h-9 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-bold flex items-center gap-1.5 transition-all"
               >
-                <span>کردنەوەی پۆرتاڵ</span>
+                <span>کردنەوەی فۆرم</span>
                 <ExternalLink className="w-3.5 h-3.5 text-amber-600" />
               </Link>
             </div>
@@ -655,7 +655,7 @@ export function AdminUniversalPinsManager() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {managerPins.map((item) => {
-                  const directUrl = `https://ashley-staff.vercel.app/?tab=feedback_admin&pin=${item.pin}`;
+                  const directUrl = `https://ashley-staff.vercel.app/feedback?pin=${item.pin}`;
                   const isCopied = copiedKey === `mgr-${item.pin}`;
                   return (
                     <tr key={item.pin} className="hover:bg-slate-50 transition-colors">

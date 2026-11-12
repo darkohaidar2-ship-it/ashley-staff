@@ -195,7 +195,7 @@ export function AdminFeedbackDashboard() {
           action: 'batch_pins',
           count: batchCount,
           scope: batchScope,
-          isSingleUse: batchScope === 'staff_feedback',
+          isSingleUse: batchScope === 'staff_feedback' || batchScope === 'manager_feedback',
         }),
       });
 
@@ -527,14 +527,14 @@ export function AdminFeedbackDashboard() {
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Direct Link to Standalone Feedback Admin Page */}
+          {/* Direct Link to Separated Manager Evaluation Studio */}
           <Link
-            href="/feedback/admin"
-            className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all"
-            title="کردنەوەی ئەم بەشە لە پەڕەی سەربەخۆی /feedback/admin"
+            href="/adm1n_pan0l?view=manager_evaluation"
+            className="h-10 px-3.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 text-amber-900 font-black text-xs flex items-center gap-1.5 transition-all"
+            title="چوون بۆ بەشی جیاکراوەی هەڵسەنگاندنی بەڕێوەبەر (بەشی سێیەم ٢٠-١٠٠)"
           >
-            <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
-            <span>پەڕەی /feedback/admin</span>
+            <ExternalLink className="w-3.5 h-3.5 text-amber-600" />
+            <span>بەشی هەڵسەنگاندنی بەڕێوەبەر</span>
           </Link>
 
           {/* Official PDF Report button */}
@@ -1537,13 +1537,13 @@ export function AdminFeedbackDashboard() {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h4 className="text-xs font-black text-amber-900">فیدباکی بەڕێوەبەر</h4>
+                  <h4 className="text-xs font-black text-amber-900">فۆرمی هەڵسەنگاندنی بەڕێوەبەر</h4>
                   <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 font-mono text-[10px] font-bold" dir="ltr">
                     0000 - 5999
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-600 mt-1 leading-snug">
-                  کۆدی ٤ ژمارەیی تایبەت بۆ بەڕێوەبەر بۆ بینینی داشبۆرد، گراف و شیکاری ٨ کارمەندەکە و دەرهێنانی PDF.
+                  کۆدی ٤ ژمارەیی بۆ کردنەوەی فۆرمی نهێنی و بێ‌ناوی هەڵسەنگاندنی بەڕێوەبەر لە /feedback (ئەنجامەکان تەنها لە ئەدمین پانێڵە).
                 </p>
               </div>
             </div>
@@ -1709,7 +1709,7 @@ export function AdminFeedbackDashboard() {
                         let directUrl = '';
                         if (typeof window !== 'undefined') {
                           if (scope === 'manager_feedback') {
-                            directUrl = `${window.location.origin}/feedback/admin?pin=${p.pin}`;
+                            directUrl = `${window.location.origin}/feedback?pin=${p.pin}`;
                           } else if (scope === 'warehouse') {
                             directUrl = `${window.location.origin}/?tab=warehouse&pin=${p.pin}`;
                           } else {
@@ -2562,7 +2562,7 @@ export function AdminFeedbackDashboard() {
                     onClick={() => {
                       let directLink = `${window.location.origin}/feedback?pin=${createPinResult.pin}`;
                       if (createPinResult.scope === 'manager_feedback') {
-                        directLink = `${window.location.origin}/feedback/admin?pin=${createPinResult.pin}`;
+                        directLink = `${window.location.origin}/feedback?pin=${createPinResult.pin}`;
                       } else if (createPinResult.scope === 'warehouse') {
                         directLink = `${window.location.origin}/?tab=warehouse&pin=${createPinResult.pin}`;
                       }
@@ -2785,7 +2785,7 @@ export function AdminFeedbackDashboard() {
                     {batchCreatedPins.map((p) => {
                       let directUrl = `${window.location.origin}/feedback?pin=${p.pin}`;
                       if (p.scope === 'manager_feedback') {
-                        directUrl = `${window.location.origin}/feedback/admin?pin=${p.pin}`;
+                        directUrl = `${window.location.origin}/feedback?pin=${p.pin}`;
                       } else if (p.scope === 'warehouse') {
                         directUrl = `${window.location.origin}/?tab=warehouse&pin=${p.pin}`;
                       }
