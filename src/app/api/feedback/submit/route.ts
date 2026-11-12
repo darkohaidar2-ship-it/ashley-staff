@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
     if (body?.formType === 'manager_evaluation') {
       const result = await recordManagerEvaluation({
         pin: body.pin,
+        clientSubmissionIds: Array.isArray(body.clientSubmissionIds) ? body.clientSubmissionIds : undefined,
         evaluationDate: body.evaluationDate,
         scores: body.scores || {},
         openAnswers: body.openAnswers || {},

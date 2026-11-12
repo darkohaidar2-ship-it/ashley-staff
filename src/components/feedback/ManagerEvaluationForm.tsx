@@ -20,6 +20,10 @@ import {
 } from 'lucide-react';
 import { triggerHaptic } from '@/lib/offline-sync-manager';
 import {
+  getClientSubmissionIds,
+  recordSubmittedPinOnClient,
+} from '@/lib/feedback/submitted-pins-client';
+import {
   MANAGER_EVALUATION_ITEMS,
   MANAGER_OPEN_QUESTIONS,
   MANAGER_RATING_SCALE,
@@ -27,11 +31,18 @@ import {
   toKurdishDigits,
 } from '@/lib/feedback/manager-evaluation';
 
+const QUICK_OPEN_PRESETS = [
+  'دەست خۆش بێت هیچم نییە',
+  'هەموو شتێک زۆر باشە و سپاس',
+  'تێبینیم نییە، سەرکەوتوو بن',
+];
+
 export interface ManagerEvaluationFormProps {
   pin: string;
   isDark?: boolean;
   onResetToPinGate?: () => void;
   onBackToHub?: () => void;
+  onSubmissionSuccess?: (pin: string) => void;
 }
 
 export function ManagerEvaluationForm({
@@ -39,6 +50,7 @@ export function ManagerEvaluationForm({
   isDark = false,
   onResetToPinGate,
   onBackToHub,
+  onSubmissionSuccess,
 }: ManagerEvaluationFormProps) {
   const todayIso = useMemo(() => {
     try {
@@ -73,6 +85,7 @@ export function ManagerEvaluationForm({
   });
 
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
+  const [highlightedOpenKey, setHighlightedOpenKey] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [submittedMeta, setSubmittedMeta] = useState<{
@@ -82,14 +95,22 @@ export function ManagerEvaluationForm({
   } | null>(null);
 
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const openRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const answeredCount = useMemo(
     () => MANAGER_EVALUATION_ITEMS.filter((item) => (scores[item.id] || 0) >= 1 && (scores[item.id] || 0) <= 5).length,
     [scores]
   );
+  const openAnsweredCount = useMemo(
+    () => MANAGER_OPEN_QUESTIONS.filter((q) => (openAnswers[q.key] || '').trim().length >= 2).length,
+    [openAnswers]
+  );
   const totalCount = MANAGER_EVALUATION_ITEMS.length;
-  const isAllComplete = answeredCount === totalCount;
-  const progressPercent = Math.round((answeredCount / totalCount) * 100);
+  const totalOpenCount = MANAGER_OPEN_QUESTIONS.length;
+  const totalSteps = totalCount + totalOpenCount;
+  const totalAnswered = answeredCount + openAnsweredCount;
+  const isAllComplete = answeredCount === totalCount && openAnsweredCount === totalOpenCount;
+  const progressPercent = Math.round((totalAnswered / totalSteps) * 100);
 
   const formattedDateDisplay = useMemo(() => {
     const parts = evaluationDate.split('-');
@@ -111,6 +132,17 @@ export function ManagerEvaluationForm({
     }
   };
 
+  const handleSetOpenAnswer = (key: keyof ManagerOpenAnswers, value: string) => {
+    setOpenAnswers((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+    setSubmitError(null);
+    if (highlightedOpenKey === key && value.trim().length >= 2) {
+      setHighlightedOpenKey(null);
+    }
+  };
+
   const handleJumpNextUnanswered = () => {
     triggerHaptic('light');
     const nextMissing = MANAGER_EVALUATION_ITEMS.find((item) => !scores[item.id]);
@@ -121,6 +153,19 @@ export function ManagerEvaluationForm({
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
       setTimeout(() => setHighlightedId(null), 2400);
+      return;
+    }
+
+    const nextMissingOpen = MANAGER_OPEN_QUESTIONS.find(
+      (q) => (openAnswers[q.key] || '').trim().length < 2
+    );
+    if (nextMissingOpen) {
+      setHighlightedOpenKey(nextMissingOpen.key);
+      const el = openRowRefs.current[nextMissingOpen.key];
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      setTimeout(() => setHighlightedOpenKey(null), 2400);
     }
   };
 
@@ -138,6 +183,23 @@ export function ManagerEvaluationForm({
       return;
     }
 
+    const firstMissingOpen = MANAGER_OPEN_QUESTIONS.find(
+      (q) => (openAnswers[q.key] || '').trim().length < 2
+    );
+    if (firstMissingOpen) {
+      triggerHaptic('error');
+      setHighlightedOpenKey(firstMissingOpen.key);
+      const el = openRowRefs.current[firstMissingOpen.key];
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      setSubmitError(
+        `تکایە وەڵامی پرسیاری نووسینی ژمارە (${firstMissingOpen.num}) بنووسە یان دوگمەی «دەست خۆش بێت هیچم نییە» هەڵبژێرە.`
+      );
+      setTimeout(() => setHighlightedOpenKey(null), 3200);
+      return;
+    }
+
     setSubmitting(true);
     setSubmitError(null);
 
@@ -151,14 +213,18 @@ export function ManagerEvaluationForm({
           evaluationDate,
           scores,
           openAnswers,
+          clientSubmissionIds: getClientSubmissionIds(pin),
         }),
       });
 
       const data = await res.json();
       if (data.success) {
         triggerHaptic('success');
+        const createdId = data.submissionMeta?.id || '';
+        recordSubmittedPinOnClient(pin, createdId);
+        onSubmissionSuccess?.(pin);
         setSubmittedMeta({
-          id: data.submissionMeta?.id || '',
+          id: createdId,
           baghdadDate: data.submissionMeta?.baghdadDate || evaluationDate,
           baghdadTime: data.submissionMeta?.baghdadTime || '',
         });
@@ -387,10 +453,12 @@ export function ManagerEvaluationForm({
                   : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
               }`}
             >
-              {toKurdishDigits(answeredCount)} / {toKurdishDigits(totalCount)}
+              {toKurdishDigits(totalAnswered)} / {toKurdishDigits(totalSteps)}
             </span>
             <span className="text-xs sm:text-sm font-black">
-              {isAllComplete ? 'سەرجەم ٢٠ بڕگە وەڵام درانەوە!' : 'بڕگەکانی هەڵسەنگاندن (١ تا ٥)'}
+              {isAllComplete
+                ? 'سەرجەم ٢٠ بڕگە و ٥ پرسیار تەواون!'
+                : `بڕگە (${toKurdishDigits(answeredCount)}/${toKurdishDigits(totalCount)}) • پرسیاری نووسین (${toKurdishDigits(openAnsweredCount)}/${toKurdishDigits(totalOpenCount)})`}
             </span>
           </div>
 
@@ -580,40 +648,73 @@ export function ManagerEvaluationForm({
             </div>
           </div>
 
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-[11px] font-bold">
+          <span
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] font-bold ${
+              openAnsweredCount === totalOpenCount
+                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                : 'bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400'
+            }`}
+          >
             <MessageSquareText className="w-3.5 h-3.5" />
-            <span>٥ پرسیاری کراوە</span>
+            <span>
+              {toKurdishDigits(openAnsweredCount)} / {toKurdishDigits(totalOpenCount)} پرسیاری مەرجدار
+            </span>
           </span>
         </div>
 
         <div className="grid grid-cols-1 gap-4">
           {MANAGER_OPEN_QUESTIONS.map((q) => {
             const val = openAnswers[q.key] || '';
+            const isAnswered = val.trim().length >= 2;
+            const isHighlighted = highlightedOpenKey === q.key;
             return (
               <div
                 key={q.key}
+                ref={(el) => {
+                  openRowRefs.current[q.key] = el;
+                }}
                 className={`rounded-3xl border p-4 sm:p-5 transition-all ${
-                  isDark
-                    ? 'bg-neutral-900/80 border-neutral-800 focus-within:border-blue-500/50'
+                  isHighlighted
+                    ? 'border-rose-500 ring-2 ring-rose-500/35 bg-rose-500/5'
+                    : isDark
+                    ? isAnswered
+                      ? 'bg-neutral-900/90 border-emerald-500/35 focus-within:border-blue-500/50'
+                      : 'bg-neutral-900/80 border-neutral-800 focus-within:border-blue-500/50'
+                    : isAnswered
+                    ? 'bg-white border-emerald-300 shadow-xs focus-within:border-blue-400 focus-within:shadow-md'
                     : 'bg-white border-slate-200/90 shadow-xs focus-within:border-blue-400 focus-within:shadow-md'
                 }`}
               >
-                <label className="flex items-start gap-2.5 text-sm font-black leading-relaxed mb-3">
-                  <span className="w-7 h-7 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25 flex items-center justify-center font-mono text-xs shrink-0 mt-0.5">
-                    {q.num}
+                <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                  <label className="flex items-start gap-2.5 text-sm font-black leading-relaxed flex-1 min-w-[200px]">
+                    <span className="w-7 h-7 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25 flex items-center justify-center font-mono text-xs shrink-0 mt-0.5">
+                      {q.num}
+                    </span>
+                    <span>{q.label}</span>
+                  </label>
+
+                  <span
+                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ${
+                      isAnswered
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                        : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                    }`}
+                  >
+                    {isAnswered ? (
+                      <>
+                        <Check className="w-3 h-3" />
+                        <span>تەواوە</span>
+                      </>
+                    ) : (
+                      <span>مەرجە / پێویستە</span>
+                    )}
                   </span>
-                  <span>{q.label}</span>
-                </label>
+                </div>
 
                 <textarea
                   rows={3}
                   value={val}
-                  onChange={(e) =>
-                    setOpenAnswers((prev) => ({
-                      ...prev,
-                      [q.key]: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => handleSetOpenAnswer(q.key, e.target.value)}
                   placeholder={q.placeholder}
                   className={`w-full rounded-2xl border p-3.5 text-base sm:text-sm leading-relaxed outline-none resize-y transition-all ${
                     isDark
@@ -621,6 +722,39 @@ export function ManagerEvaluationForm({
                       : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-blue-500'
                   }`}
                 />
+
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                  <span
+                    className={`text-[11px] font-bold ml-1 ${
+                      isDark ? 'text-neutral-400' : 'text-slate-500'
+                    }`}
+                  >
+                    وەڵامی خێرا:
+                  </span>
+                  {QUICK_OPEN_PRESETS.map((preset) => {
+                    const isSelectedPreset = val.trim() === preset;
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic('light');
+                          handleSetOpenAnswer(q.key, preset);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer active:scale-95 transition-all ${
+                          isSelectedPreset
+                            ? 'bg-emerald-500 text-white border-emerald-500 shadow-xs'
+                            : isDark
+                            ? 'bg-neutral-950/80 border-neutral-800 text-neutral-300 hover:border-blue-500/50 hover:text-white'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-blue-50 hover:border-blue-300'
+                        }`}
+                      >
+                        {isSelectedPreset && <Check className="w-3 h-3" />}
+                        <span>{preset}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
@@ -659,13 +793,13 @@ export function ManagerEvaluationForm({
             ) : isAllComplete ? (
               <>
                 <Sparkles className="w-5 h-5" />
-                <span>ناردنی هەڵسەنگاندنی نهێنی (٢٠/٢٠ تەواوە)</span>
+                <span>ناردنی هەڵسەنگاندنی نهێنی (٢٥/٢٥ تەواوە)</span>
               </>
             ) : (
               <>
                 <Send className="w-4 h-4" />
                 <span>
-                  ناردنی فۆرم ({toKurdishDigits(answeredCount)} لە {toKurdishDigits(totalCount)} بڕگە تەواوە)
+                  ناردنی فۆرم ({toKurdishDigits(totalAnswered)} لە {toKurdishDigits(totalSteps)} هەنگاو تەواوە)
                 </span>
               </>
             )}

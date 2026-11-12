@@ -8,12 +8,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const pin = (body?.pin || '').toString().trim();
     const expectedScope = body?.expectedScope as PinScope | undefined;
+    const clientSubmissionIds = Array.isArray(body?.clientSubmissionIds) ? body.clientSubmissionIds : undefined;
 
     if (!pin) {
       return NextResponse.json({ valid: false, error: 'تکایە کۆدی PIN بنووسە' }, { status: 400 });
     }
 
-    const result = await verifyFeedbackPin(pin, expectedScope);
+    const result = await verifyFeedbackPin(pin, expectedScope, clientSubmissionIds);
     return NextResponse.json(result);
   } catch (err: any) {
     return NextResponse.json({ valid: false, error: err.message || 'هەڵە لە پشکنینی PIN' }, { status: 500 });

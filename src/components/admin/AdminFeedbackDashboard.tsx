@@ -112,6 +112,7 @@ export function AdminFeedbackDashboard() {
 
   // Copy notification state
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  const [managerEvalCount, setManagerEvalCount] = useState<number>(0);
 
   // Copy helper
   const handleCopy = (text: string, label: string) => {
@@ -135,6 +136,7 @@ export function AdminFeedbackDashboard() {
       if (data.success) {
         setPins(data.pins || {});
         setSubmissions(data.submissions || []);
+        setManagerEvalCount(Array.isArray(data.managerEvaluations) ? data.managerEvaluations.length : 0);
       } else {
         setError(data.error || 'نەتوانرا داتاکان باربکرێن');
       }
@@ -535,6 +537,11 @@ export function AdminFeedbackDashboard() {
           >
             <ExternalLink className="w-3.5 h-3.5 text-amber-600" />
             <span>بەشی هەڵسەنگاندنی بەڕێوەبەر</span>
+            {managerEvalCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-mono text-[10px] font-black">
+                {managerEvalCount}
+              </span>
+            )}
           </Link>
 
           {/* Official PDF Report button */}

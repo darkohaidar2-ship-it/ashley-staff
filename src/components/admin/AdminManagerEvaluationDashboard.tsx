@@ -19,6 +19,7 @@ import {
   Plus,
   Printer,
   RefreshCw,
+  RotateCcw,
   Search,
   ShieldCheck,
   Sparkles,
@@ -430,7 +431,8 @@ export function AdminManagerEvaluationDashboard() {
       }
       setEvaluations((prev) => prev.filter((item) => item.id !== id));
       if (selectedSubmission?.id === id) setSelectedSubmission(null);
-      showToast('فۆرمە هەڵبژێردراوەکە بە سەرکەوتوویی سڕایەوە');
+      await fetchData(true);
+      showToast('فۆرمە هەڵبژێردراوەکە سڕایەوە و کۆدە پەیوەندیدارەکە چالاککرایەوە');
     } catch (err: any) {
       showToast(err?.message || 'هەڵە لە سڕینەوە ڕوویدا');
     } finally {
@@ -454,7 +456,8 @@ export function AdminManagerEvaluationDashboard() {
       setEvaluations([]);
       setConfirmClearAll(false);
       setSelectedSubmission(null);
-      showToast('هەموو تۆمارەکانی هەڵسەنگاندنی بەڕێوەبەر سفر کرانەوە');
+      await fetchData(true);
+      showToast('هەموو تۆمارەکان سڕانەوە و کۆدەکانی تێست دووبارە چالاککرانەوە');
     } catch (err: any) {
       showToast(err?.message || 'هەڵە لە سڕینەوەی گشتی ڕوویدا');
     } finally {
@@ -525,6 +528,48 @@ export function AdminManagerEvaluationDashboard() {
       showToast(`${batchCount} کۆدی PINی یەکجار بەکارهێنان (0000-5999) دروستکرا`);
     } catch (err: any) {
       showToast(err?.message || 'هەڵە لە دروستکردنی کۆمەڵە کۆد');
+    } finally {
+      setPinActionLoading(false);
+    }
+  };
+
+  const handleResetPin = async (pinCode: string) => {
+    setPinActionLoading(true);
+    try {
+      const res = await fetch('/api/feedback/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset_pin', pin: pinCode }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'ڕیسێتکردنی کۆد سەرکەوتوو نەبوو');
+      }
+      await fetchData(true);
+      showToast(`کۆدی ${pinCode} ڕیسێت کرا و داتا تێستەکانی پەیوەندیدار سڕانەوە`);
+    } catch (err: any) {
+      showToast(err?.message || 'هەڵە لە ڕیسێتکردنی کۆد');
+    } finally {
+      setPinActionLoading(false);
+    }
+  };
+
+  const handleDeletePin = async (pinCode: string) => {
+    setPinActionLoading(true);
+    try {
+      const res = await fetch('/api/feedback/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_pin', pin: pinCode }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'سڕینەوەی کۆد سەرکەوتوو نەبوو');
+      }
+      await fetchData(true);
+      showToast(`کۆدی PIN (${pinCode}) سڕایەوە`);
+    } catch (err: any) {
+      showToast(err?.message || 'هەڵە لە سڕینەوەی کۆد');
     } finally {
       setPinActionLoading(false);
     }
@@ -768,6 +813,38 @@ export function AdminManagerEvaluationDashboard() {
                 <Printer className="w-3.5 h-3.5" />
                 <span>چاپ / PDF</span>
               </button>
+
+              {evaluations.length > 0 && (
+                confirmClearAll ? (
+                  <div className="flex items-center gap-1.5 bg-rose-500/20 border border-rose-400/50 rounded-xl px-2 py-1">
+                    <button
+                      type="button"
+                      disabled={clearingAll}
+                      onClick={handleClearAll}
+                      className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-black cursor-pointer active:scale-95"
+                    >
+                      {clearingAll ? 'دەسڕدرێتەوە...' : 'دڵنیام، هەمووی بسڕەوە'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmClearAll(false)}
+                      className="px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[11px] font-bold cursor-pointer"
+                    >
+                      پەشیمانم
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClearAll(true)}
+                    className="px-3 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/40 text-rose-100 text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                    title="سڕینەوەی هەموو تۆمارەکانی تێستی هەڵسەنگاندن"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-300" />
+                    <span>پاککردنەوەی تێست ({toKurdishDigits(evaluations.length)})</span>
+                  </button>
+                )
+              )}
             </div>
           </div>
 
@@ -1372,6 +1449,82 @@ export function AdminManagerEvaluationDashboard() {
               </div>
             </div>
           )}
+
+          {/* Quick Recent Submissions & Test Delete Table right on Overview */}
+          {filteredEvaluations.length > 0 && (
+            <div className="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-slate-900">
+                    دوایین فۆرمە تۆمارکراوەکان (بینین و سڕینەوە)
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    دەتوانیت لێرەدا ڕاستەوخۆ فۆرمە تێستەکان ببینیت یان بیانسڕیتەوە — دوای سڕینەوە PINە پەیوەندیدارەکە چالاک دەبێتەوە
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">
+                  {toKurdishDigits(filteredEvaluations.length)} تۆمار
+                </span>
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {filteredEvaluations.slice(0, 8).map((sub, idx) => {
+                  const b = getManagerScoreBand(sub.totalScore);
+                  return (
+                    <div
+                      key={sub.id}
+                      className="px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-3 hover:bg-slate-50/70 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="w-7 h-7 rounded-xl bg-slate-100 text-slate-700 font-mono text-xs font-black flex items-center justify-center shrink-0">
+                          {toKurdishDigits(idx + 1)}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className="px-2 py-0.5 rounded-lg text-[11px] font-black text-white"
+                              style={{ backgroundColor: b.color }}
+                            >
+                              {toKurdishDigits(sub.totalScore)} / ١٠٠ • {b.label}
+                            </span>
+                            <span className="text-[11px] font-mono text-slate-500">
+                              {sub.baghdadDate} {sub.baghdadTime ? `• ${sub.baghdadTime}` : ''}
+                            </span>
+                          </div>
+                          {sub.openAnswers?.q1 && (
+                            <p className="text-[11px] text-slate-500 truncate max-w-md mt-0.5">
+                              {sub.openAnswers.q1}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSubmission(sub)}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-black inline-flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>وردەکاری</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={deletingId === sub.id}
+                          onClick={() => handleDeleteEvaluation(sub.id)}
+                          className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[11px] font-black inline-flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
+                          title="سڕینەوەی ئەم فۆرمە"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>{deletingId === sub.id ? '...' : 'سڕینەوە'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1711,13 +1864,25 @@ export function AdminManagerEvaluationDashboard() {
                   ئەنجامی تەواوی هەڵسەنگاندن: {toKurdishDigits(selectedSubmission.totalScore)} / ١٠٠ ({getManagerScoreBand(selectedSubmission.totalScore).label})
                 </h3>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedSubmission(null)}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={deletingId === selectedSubmission.id}
+                  onClick={() => handleDeleteEvaluation(selectedSubmission.id)}
+                  className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-black inline-flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                  title="سڕینەوەی ئەم فۆرمە لە سیستەم"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{deletingId === selectedSubmission.id ? 'دەسڕدرێتەوە...' : 'سڕینەوەی ئەم فۆرمە'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSubmission(null)}
+                  className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -1880,14 +2045,35 @@ export function AdminManagerEvaluationDashboard() {
                           {p.notes && <div className="text-[10.5px] text-slate-500">{p.notes}</div>}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyLink(p.pin)}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>{copiedPin === p.pin ? 'کۆپی کرا' : 'کۆپی لینک'}</span>
-                      </button>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyLink(p.pin)}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>{copiedPin === p.pin ? 'کۆپی کرا' : 'کۆپی لینک'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={pinActionLoading}
+                          onClick={() => handleResetPin(p.pin)}
+                          className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          title="ڕیسێتکردنی کۆد و پاککردنەوەی تێستەکانی پەیوەندیدار"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>ڕیسێت</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={pinActionLoading}
+                          onClick={() => handleDeletePin(p.pin)}
+                          className="px-2 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          title="سڕینەوەی ئەم کۆدە"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })

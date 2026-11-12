@@ -18,6 +18,7 @@ export interface FeedbackPin {
   isSingleUse: boolean;
   isUsed: boolean;
   usedAt?: string;
+  usedSubmissionIds?: string[];
   createdAt: string;
   createdBy?: string;
   notes?: string;
@@ -394,7 +395,7 @@ export async function createFeedbackPin(params: {
       scope: requestedScope,
       targetPhone: params.targetPhone?.trim() || undefined,
       targetName: params.targetName?.trim() || undefined,
-      isSingleUse: params.isSingleUse ?? (requestedScope === 'staff_feedback'),
+      isSingleUse: params.isSingleUse ?? (requestedScope === 'staff_feedback' || requestedScope === 'manager_feedback'),
       isUsed: false,
       createdAt: new Date().toISOString(),
       createdBy: params.createdBy || 'Admin',
@@ -475,9 +476,16 @@ export async function createBatchFeedbackPins(
  * 🔍 Verify a PIN across all Scopes (Manager, Staff, Warehouse)
  */
 export async function verifyFeedbackPin(
-  pin: string, 
-  expectedScope?: PinScope
-): Promise<{ valid: boolean; scope?: PinScope; pinData?: FeedbackPin; error?: string }> {
+  pin: string,
+  expectedScope?: PinScope,
+  clientSubmissionIds?: string[]
+): Promise<{
+  valid: boolean;
+  alreadySubmitted?: boolean;
+  scope?: PinScope;
+  pinData?: FeedbackPin;
+  error?: string;
+}> {
   const cleanPin = pin ? pin.trim() : '';
   if (!cleanPin) {
     return { valid: false, error: 'تکایە کۆدی PIN بنووسە.' };
@@ -528,14 +536,47 @@ export async function verifyFeedbackPin(
     }
   }
 
-  // Check single-use
+  // Check single-use lock
   if (record.isSingleUse && record.isUsed) {
     return {
       valid: false,
-      error: 'ئەم کۆدە پێشتر بەکارهێنراوە و بەسەرچووە. ناتوانرێت دووبارە بەکاربهێنرێتەوە.',
+      alreadySubmitted: true,
+      error: 'تۆ فیدباکت کردووە، دەست خۆش بێت! ناتوانیت بەم کۆدە دووبارە داخڵ ببیتەوە.',
       pinData: record,
       scope: actualScope,
     };
+  }
+
+  // Check per-device / shared-PIN duplicate submission against live server records
+  // (Automatically unblocks if Admin deletes the test evaluation from Admin Panel!)
+  const cleanClientIds = Array.isArray(clientSubmissionIds)
+    ? clientSubmissionIds.filter((id) => typeof id === 'string' && id.trim().length > 0)
+    : [];
+
+  if (cleanClientIds.length > 0) {
+    if (actualScope === 'manager_feedback') {
+      const existingEvals = await getAllManagerEvaluations();
+      if (existingEvals.some((ev) => cleanClientIds.includes(ev.id))) {
+        return {
+          valid: false,
+          alreadySubmitted: true,
+          error: 'تۆ فیدباکت کردووە، دەست خۆش بێت! ناتوانیت بە هەمان کۆد دووبارە داخڵ ببیتەوە.',
+          pinData: record,
+          scope: actualScope,
+        };
+      }
+    } else if (actualScope === 'staff_feedback') {
+      const existingSubs = await getAllFeedbackSubmissions();
+      if (existingSubs.some((sub) => cleanClientIds.includes(sub.id))) {
+        return {
+          valid: false,
+          alreadySubmitted: true,
+          error: 'تۆ فیدباکت کردووە، دەست خۆش بێت! ناتوانیت بە هەمان کۆد دووبارە داخڵ ببیتەوە.',
+          pinData: record,
+          scope: actualScope,
+        };
+      }
+    }
   }
 
   return { valid: true, scope: actualScope, pinData: { ...record, scope: actualScope } };
@@ -547,16 +588,26 @@ export async function verifyFeedbackPin(
 export async function deleteFeedbackPin(pin: string): Promise<{ success: boolean; error?: string }> {
   try {
     const currentPins = await getAllFeedbackPins();
+    const trackedIds = currentPins[pin]?.usedSubmissionIds || [];
     if (currentPins[pin]) {
       delete currentPins[pin];
       await saveFeedbackPins(currentPins);
     }
 
-    // Also remove any submissions associated with this deleted PIN
+    // Also remove any staff submissions associated with this deleted PIN
     const submissions = await getAllFeedbackSubmissions();
     const filtered = submissions.filter(s => s.pin !== pin);
     if (filtered.length !== submissions.length) {
       await saveFeedbackSubmissions(filtered);
+    }
+
+    // Also remove any manager evaluations tracked against this deleted PIN
+    if (trackedIds.length > 0) {
+      const evals = await getAllManagerEvaluations();
+      const filteredEvals = evals.filter(e => !trackedIds.includes(e.id));
+      if (filteredEvals.length !== evals.length) {
+        await saveManagerEvaluations(filteredEvals);
+      }
     }
 
     return { success: true };
@@ -572,17 +623,28 @@ export async function deleteFeedbackPin(pin: string): Promise<{ success: boolean
 export async function resetFeedbackPin(pin: string): Promise<{ success: boolean; error?: string }> {
   try {
     const currentPins = await getAllFeedbackPins();
+    const trackedIds = currentPins[pin]?.usedSubmissionIds || [];
     if (currentPins[pin]) {
       currentPins[pin].isUsed = false;
       delete currentPins[pin].usedAt;
+      delete currentPins[pin].usedSubmissionIds;
       await saveFeedbackPins(currentPins);
     }
 
-    // Delete any test submissions made by this PIN
+    // Delete any test staff submissions made by this PIN
     const submissions = await getAllFeedbackSubmissions();
     const filtered = submissions.filter(s => s.pin !== pin);
     if (filtered.length !== submissions.length) {
       await saveFeedbackSubmissions(filtered);
+    }
+
+    // Delete any test manager evaluations tracked by this PIN
+    if (trackedIds.length > 0) {
+      const evals = await getAllManagerEvaluations();
+      const filteredEvals = evals.filter(e => !trackedIds.includes(e.id));
+      if (filteredEvals.length !== evals.length) {
+        await saveManagerEvaluations(filteredEvals);
+      }
     }
 
     return { success: true };
@@ -606,6 +668,7 @@ export async function clearAllFeedbackSubmissions(): Promise<{ success: boolean;
       if (scope === 'staff_feedback') {
         currentPins[k].isUsed = false;
         delete currentPins[k].usedAt;
+        delete currentPins[k].usedSubmissionIds;
       }
     });
     await saveFeedbackPins(currentPins);
@@ -621,6 +684,7 @@ export async function clearAllFeedbackSubmissions(): Promise<{ success: boolean;
  */
 export async function recordFeedbackSubmission(params: {
   pin: string;
+  clientSubmissionIds?: string[];
   respondentName?: string;
   department?: string;
   employeeRatings?: Record<string, EmployeeFeedbackRating>;
@@ -635,12 +699,16 @@ export async function recordFeedbackSubmission(params: {
   positiveHighlights?: string;
   workplaceChallenges?: string;
   suggestionsForManagement?: string;
-}): Promise<{ success: boolean; submission?: FeedbackSubmission; error?: string }> {
+}): Promise<{ success: boolean; alreadySubmitted?: boolean; submission?: FeedbackSubmission; error?: string }> {
   try {
     // 1. Verify PIN validity strictly for staff_feedback
-    const check = await verifyFeedbackPin(params.pin, 'staff_feedback');
+    const check = await verifyFeedbackPin(params.pin, 'staff_feedback', params.clientSubmissionIds);
     if (!check.valid || !check.pinData) {
-      return { success: false, error: check.error || 'کۆدی PIN نادروستە.' };
+      return {
+        success: false,
+        alreadySubmitted: check.alreadySubmitted,
+        error: check.error || 'کۆدی PIN نادروستە.',
+      };
     }
 
     const { dateStr, timeStr } = getBaghdadNow();
@@ -693,11 +761,18 @@ export async function recordFeedbackSubmission(params: {
       return { success: false, error: 'نەتوانرا فیدباکەکە لە سێرڤەر تۆمار بکرێت.' };
     }
 
-    // 3. Mark PIN as used
+    // 3. Track submission against PIN and mark single-use PIN used
     const currentPins = await getAllFeedbackPins();
-    if (currentPins[params.pin]) {
-      currentPins[params.pin].isUsed = true;
-      currentPins[params.pin].usedAt = new Date().toISOString();
+    const cleanPin = params.pin.trim();
+    if (currentPins[cleanPin]) {
+      const prevIds = Array.isArray(currentPins[cleanPin].usedSubmissionIds)
+        ? currentPins[cleanPin].usedSubmissionIds
+        : [];
+      currentPins[cleanPin].usedSubmissionIds = [...prevIds, submission.id];
+      currentPins[cleanPin].usedAt = new Date().toISOString();
+      if (currentPins[cleanPin].isSingleUse) {
+        currentPins[cleanPin].isUsed = true;
+      }
       await saveFeedbackPins(currentPins);
     }
 
@@ -716,6 +791,23 @@ export async function deleteFeedbackSubmission(id: string): Promise<{ success: b
     const list = await getAllFeedbackSubmissions();
     const filtered = list.filter(s => s.id !== id);
     const ok = await saveFeedbackSubmissions(filtered);
+    if (ok) {
+      const currentPins = await getAllFeedbackPins();
+      let pinsChanged = false;
+      Object.values(currentPins).forEach((p) => {
+        if (Array.isArray(p.usedSubmissionIds) && p.usedSubmissionIds.includes(id)) {
+          p.usedSubmissionIds = p.usedSubmissionIds.filter((x) => x !== id);
+          if (p.isSingleUse && p.usedSubmissionIds.length === 0) {
+            p.isUsed = false;
+            delete p.usedAt;
+          }
+          pinsChanged = true;
+        }
+      });
+      if (pinsChanged) {
+        await saveFeedbackPins(currentPins);
+      }
+    }
     return { success: ok };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -773,19 +865,22 @@ export async function saveManagerEvaluations(items: ManagerEvaluationSubmission[
 
 export async function recordManagerEvaluation(params: {
   pin: string;
+  clientSubmissionIds?: string[];
   evaluationDate?: string;
   scores: Record<number | string, number>;
   openAnswers?: ManagerOpenAnswers;
 }): Promise<{
   success: boolean;
+  alreadySubmitted?: boolean;
   submissionMeta?: { id: string; submittedAt: string; baghdadDate: string; baghdadTime: string };
   error?: string;
 }> {
   try {
-    const check = await verifyFeedbackPin(params.pin, 'manager_feedback');
+    const check = await verifyFeedbackPin(params.pin, 'manager_feedback', params.clientSubmissionIds);
     if (!check.valid || !check.pinData) {
       return {
         success: false,
+        alreadySubmitted: check.alreadySubmitted,
         error: check.error || 'کۆدی PIN نادروستە (دەبێت کۆدی فیدباکی بەڕێوەبەر 0000 - 5999 بێت).',
       };
     }
@@ -803,11 +898,6 @@ export async function recordManagerEvaluation(params: {
       normalizedScores[item.id] = numVal;
     }
 
-    const { totalScore, averageScore, band } = computeManagerTotalScore(normalizedScores);
-    const { dateStr, timeStr } = getBaghdadNow();
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const submissionId = `mgr_eval_${Date.now()}_${randomSuffix}`;
-
     const cleanOpen: ManagerOpenAnswers = {
       q1: params.openAnswers?.q1?.trim() || undefined,
       q2: params.openAnswers?.q2?.trim() || undefined,
@@ -815,6 +905,27 @@ export async function recordManagerEvaluation(params: {
       q4: params.openAnswers?.q4?.trim() || undefined,
       q5: params.openAnswers?.q5?.trim() || undefined,
     };
+
+    const requiredOpenKeys: Array<{ key: keyof ManagerOpenAnswers; num: string }> = [
+      { key: 'q1', num: '١' },
+      { key: 'q2', num: '٢' },
+      { key: 'q3', num: '٣' },
+      { key: 'q4', num: '٤' },
+      { key: 'q5', num: '٥' },
+    ];
+    for (const item of requiredOpenKeys) {
+      if (!cleanOpen[item.key] || cleanOpen[item.key]!.length < 2) {
+        return {
+          success: false,
+          error: `تکایە وەڵامی پرسیاری کراوەی (${item.num}) بنووسە یان بژاردەی «دەست خۆش بێت هیچم نییە» هەڵبژێرە.`,
+        };
+      }
+    }
+
+    const { totalScore, averageScore, band } = computeManagerTotalScore(normalizedScores);
+    const { dateStr, timeStr } = getBaghdadNow();
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const submissionId = `mgr_eval_${Date.now()}_${randomSuffix}`;
 
     const record: ManagerEvaluationSubmission = {
       id: submissionId,
@@ -838,12 +949,18 @@ export async function recordManagerEvaluation(params: {
       return { success: false, error: 'نەتوانرا هەڵسەنگاندنەکە لە سێرڤەر تۆمار بکرێت.' };
     }
 
-    // Mark single-use PIN consumption cleanly without storing identity on the evaluation record
+    // Track PIN usage cleanly without storing identity on the evaluation record
     const currentPins = await getAllFeedbackPins();
     const cleanPin = params.pin.trim();
-    if (currentPins[cleanPin] && currentPins[cleanPin].isSingleUse) {
-      currentPins[cleanPin].isUsed = true;
+    if (currentPins[cleanPin]) {
+      const prevIds = Array.isArray(currentPins[cleanPin].usedSubmissionIds)
+        ? currentPins[cleanPin].usedSubmissionIds
+        : [];
+      currentPins[cleanPin].usedSubmissionIds = [...prevIds, record.id];
       currentPins[cleanPin].usedAt = new Date().toISOString();
+      if (currentPins[cleanPin].isSingleUse) {
+        currentPins[cleanPin].isUsed = true;
+      }
       await saveFeedbackPins(currentPins);
     }
 
@@ -868,6 +985,31 @@ export async function deleteManagerEvaluation(id: string): Promise<{ success: bo
     const list = await getAllManagerEvaluations();
     const filtered = list.filter((e) => e.id !== id);
     const ok = await saveManagerEvaluations(filtered);
+
+    if (ok) {
+      const currentPins = await getAllFeedbackPins();
+      let pinsChanged = false;
+      Object.entries(currentPins).forEach(([k, p]) => {
+        const scope = p.scope || determinePinScope(k);
+        if (Array.isArray(p.usedSubmissionIds) && p.usedSubmissionIds.includes(id)) {
+          p.usedSubmissionIds = p.usedSubmissionIds.filter((x) => x !== id);
+          if (p.isSingleUse && p.usedSubmissionIds.length === 0) {
+            p.isUsed = false;
+            delete p.usedAt;
+          }
+          pinsChanged = true;
+        } else if (filtered.length === 0 && scope === 'manager_feedback' && p.isUsed) {
+          p.isUsed = false;
+          delete p.usedAt;
+          delete p.usedSubmissionIds;
+          pinsChanged = true;
+        }
+      });
+      if (pinsChanged) {
+        await saveFeedbackPins(currentPins);
+      }
+    }
+
     return { success: ok };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -886,6 +1028,7 @@ export async function clearAllManagerEvaluations(): Promise<{ success: boolean; 
       if (scope === 'manager_feedback') {
         currentPins[k].isUsed = false;
         delete currentPins[k].usedAt;
+        delete currentPins[k].usedSubmissionIds;
       }
     });
     await saveFeedbackPins(currentPins);

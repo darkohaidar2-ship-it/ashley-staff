@@ -29,6 +29,10 @@ import {
 } from 'lucide-react';
 import { triggerHaptic } from '@/lib/offline-sync-manager';
 import { PinScope } from '@/lib/feedback/feedback-service';
+import {
+  getClientSubmissionIds,
+  clearClientSubmissionIds,
+} from '@/lib/feedback/submitted-pins-client';
 
 export type ActivePortal = 'home' | 'attendance' | 'feedback_hub' | 'feedback' | 'feedback_admin' | 'warehouse';
 
@@ -93,6 +97,7 @@ function RootPageContent() {
   const [enteredPin, setEnteredPin] = useState<string>('');
   const [pinVerifying, setPinVerifying] = useState<boolean>(false);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [pinAlreadySubmitted, setPinAlreadySubmitted] = useState<boolean>(false);
   const [shakeDots, setShakeDots] = useState<boolean>(false);
 
   // 🌓 Theme State: Light / Dark Mode
@@ -214,6 +219,7 @@ function RootPageContent() {
     setPinModalScope(scope);
     setEnteredPin('');
     setPinError(null);
+    setPinAlreadySubmitted(false);
     setShakeDots(false);
   };
 
@@ -221,6 +227,7 @@ function RootPageContent() {
     setPinModalScope(null);
     setEnteredPin('');
     setPinError(null);
+    setPinAlreadySubmitted(false);
     setShakeDots(false);
   };
 
@@ -269,6 +276,7 @@ function RootPageContent() {
   const submitPinCandidate = useCallback(async (pinToTest: string, scopeToTest: PinScope) => {
     const requiredLen = scopeToTest === 'warehouse' ? 5 : 4;
     if (pinToTest.length !== requiredLen) {
+      setPinAlreadySubmitted(false);
       setPinError(`تکایە بە تەواوی ${requiredLen} ژمارە بنووسە.`);
       triggerHaptic('error');
       playAudioChime(false);
@@ -277,16 +285,23 @@ function RootPageContent() {
 
     setPinVerifying(true);
     setPinError(null);
+    setPinAlreadySubmitted(false);
 
     try {
       const res = await fetch('/api/feedback/verify-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: pinToTest, expectedScope: scopeToTest }),
+        body: JSON.stringify({
+          pin: pinToTest,
+          expectedScope: scopeToTest,
+          clientSubmissionIds: getClientSubmissionIds(pinToTest),
+        }),
       });
 
       const data = await res.json();
       if (data.valid && data.pinData) {
+        clearClientSubmissionIds(pinToTest);
+        setPinAlreadySubmitted(false);
         triggerHaptic('success');
         playAudioChime(true);
         closePinModal();
@@ -311,9 +326,16 @@ function RootPageContent() {
           }
         }
       } else {
+        const alreadyDone = Boolean(data.alreadySubmitted);
         triggerHaptic('error');
         playAudioChime(false);
-        setPinError(data.error || 'کۆدی PIN هەڵەیە یان ڕێگەی پێنەدراوە.');
+        setPinAlreadySubmitted(alreadyDone);
+        setPinError(
+          data.error ||
+            (alreadyDone
+              ? 'تۆ فیدباکت کردووە، دەست خۆش بێت!'
+              : 'کۆدی PIN هەڵەیە یان ڕێگەی پێنەدراوە.')
+        );
         setShakeDots(true);
         setTimeout(() => {
           setShakeDots(false);
@@ -323,6 +345,7 @@ function RootPageContent() {
     } catch {
       triggerHaptic('error');
       playAudioChime(false);
+      setPinAlreadySubmitted(false);
       setPinError('هەڵە لە پەیوەندیکردن بە سێرڤەر.');
       setEnteredPin('');
     } finally {
@@ -341,6 +364,7 @@ function RootPageContent() {
     const nextPin = enteredPin + digit;
     setEnteredPin(nextPin);
     setPinError(null);
+    setPinAlreadySubmitted(false);
 
     if (nextPin.length === requiredLen) {
       setTimeout(() => {
@@ -354,6 +378,7 @@ function RootPageContent() {
     triggerHaptic('light');
     setEnteredPin((prev) => prev.slice(0, -1));
     setPinError(null);
+    setPinAlreadySubmitted(false);
   };
 
   const handleKeypadClear = () => {
@@ -936,6 +961,9 @@ function RootPageContent() {
               setManagerAuthed(false);
               openPinModal('manager_feedback');
             }}
+            onSubmissionSuccess={() => {
+              setManagerAuthed(false);
+            }}
             onBackToHub={() => handleSwitchPortal('feedback_hub')}
           />
         </main>
@@ -1180,19 +1208,33 @@ function RootPageContent() {
             })}
           </div>
 
-          {/* Error / Verifying Banner */}
+          {/* Error / Already-Submitted / Verifying Banner */}
           {pinVerifying ? (
-            <div className="h-6 flex items-center justify-center gap-1.5 text-xs text-amber-500 font-bold mb-3">
+            <div className="min-h-8 flex items-center justify-center gap-1.5 text-xs text-amber-500 font-bold mb-3">
               <Loader2 className="w-4 h-4 animate-spin" />
               <span>پشکنینی کۆد...</span>
             </div>
           ) : pinError ? (
-            <div className="h-6 flex items-center justify-center gap-1 text-[11px] text-rose-500 font-bold mb-3">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{pinError}</span>
+            <div
+              className={`min-h-8 px-3 py-2 rounded-2xl border flex items-center justify-center gap-2 text-xs font-black leading-relaxed text-center mb-3 ${
+                pinAlreadySubmitted
+                  ? isDark
+                    ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-300'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : isDark
+                  ? 'bg-rose-500/15 border-rose-500/30 text-rose-400'
+                  : 'bg-rose-50 border-rose-200 text-rose-600'
+              }`}
+            >
+              {pinAlreadySubmitted ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 shrink-0" />
+              )}
+              <span>{pinError}</span>
             </div>
           ) : (
-            <div className={`h-6 text-[11px] font-medium mb-3 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+            <div className={`min-h-8 flex items-center justify-center text-[11px] font-medium mb-3 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
               {requiredLength - enteredPin.length > 0
                 ? `${requiredLength - enteredPin.length} ژمارەی تر ماوە`
                 : 'کۆد پڕکرایەوە'}

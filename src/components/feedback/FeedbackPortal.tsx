@@ -33,6 +33,11 @@ import {
 } from 'lucide-react';
 import { triggerHaptic } from '@/lib/offline-sync-manager';
 import { TARGET_SALES_CASHIER_STAFF } from '@/lib/feedback/feedback-service';
+import {
+  getClientSubmissionIds,
+  recordSubmittedPinOnClient,
+  clearClientSubmissionIds,
+} from '@/lib/feedback/submitted-pins-client';
 
 export interface FeedbackPortalProps {
   initialPin?: string;
@@ -97,6 +102,7 @@ export function FeedbackPortal({
   const [pin, setPin] = useState<string>(initialPin);
   const [pinVerifying, setPinVerifying] = useState<boolean>(false);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [pinAlreadySubmitted, setPinAlreadySubmitted] = useState<boolean>(false);
   const [verifiedPinData, setVerifiedPinData] = useState<any | null>(null);
 
   // Evaluator Name (optional)
@@ -203,6 +209,7 @@ export function FeedbackPortal({
   const handleVerifyPin = async (pinCandidate?: string) => {
     const pinToTest = (pinCandidate || pin).trim();
     if (!pinToTest || !/^\d{4}$/.test(pinToTest)) {
+      setPinAlreadySubmitted(false);
       setPinError('تکایە کۆدی چوار ژمارەیی بنووسە.');
       triggerHaptic('error');
       playAudioChime(false);
@@ -211,16 +218,22 @@ export function FeedbackPortal({
 
     setPinVerifying(true);
     setPinError(null);
+    setPinAlreadySubmitted(false);
 
     try {
       const res = await fetch('/api/feedback/verify-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: pinToTest }),
+        body: JSON.stringify({
+          pin: pinToTest,
+          clientSubmissionIds: getClientSubmissionIds(pinToTest),
+        }),
       });
 
       const data = await res.json();
       if (data.valid && data.pinData) {
+        clearClientSubmissionIds(pinToTest);
+        setPinAlreadySubmitted(false);
         // 📝 If this is a Manager Evaluation PIN (0000 - 5999), open confidential Manager Evaluation Form
         if (data.scope === 'manager_feedback') {
           triggerHaptic('success');
@@ -238,12 +251,20 @@ export function FeedbackPortal({
         playAudioChime(true);
         setStep('questionnaire');
       } else {
-        setPinError(data.error || 'کۆدی PIN هەڵەیە یان ڕێگەی پێنەدراوە.');
+        const alreadyDone = Boolean(data.alreadySubmitted);
+        setPinAlreadySubmitted(alreadyDone);
+        setPinError(
+          data.error ||
+            (alreadyDone
+              ? 'تۆ فیدباکت کردووە، دەست خۆش بێت!'
+              : 'کۆدی PIN هەڵەیە یان ڕێگەی پێنەدراوە.')
+        );
         triggerHaptic('error');
         playAudioChime(false);
         setPin('');
       }
     } catch (err: any) {
+      setPinAlreadySubmitted(false);
       setPinError('هەڵە لە پەیوەندی کردن بە سێرڤەر.');
       triggerHaptic('error');
       playAudioChime(false);
@@ -259,6 +280,7 @@ export function FeedbackPortal({
       const nextPin = pin + digit;
       setPin(nextPin);
       setPinError(null);
+      setPinAlreadySubmitted(false);
       if (nextPin.length === 4) {
         setTimeout(() => handleVerifyPin(nextPin), 150);
       }
@@ -269,6 +291,7 @@ export function FeedbackPortal({
     triggerHaptic('light');
     setPin((prev) => prev.slice(0, -1));
     setPinError(null);
+    setPinAlreadySubmitted(false);
   };
 
   // 2. Rating handler for a specific employee
@@ -368,6 +391,7 @@ export function FeedbackPortal({
         department: 'فرۆشیار و کاشێر',
         employeeRatings: formattedRatings,
         suggestionsForManagement: generalSuggestions?.trim() || undefined,
+        clientSubmissionIds: getClientSubmissionIds(pin),
       };
 
       const res = await fetch('/api/feedback/submit', {
@@ -380,6 +404,7 @@ export function FeedbackPortal({
       if (data.success) {
         triggerHaptic('success');
         playAudioChime(true);
+        recordSubmittedPinOnClient(pin, data.submission?.id || '');
         setStep('success');
       } else {
         setSubmitError(data.error || 'نەتوانرا فیدباکەکە تۆمار بکرێت.');
@@ -567,6 +592,9 @@ export function FeedbackPortal({
               setManagerPin('');
               setStep('pin_gate');
             }}
+            onSubmissionSuccess={() => {
+              setManagerPin('');
+            }}
             onBackToHub={onBackToMobileApp}
           />
         )}
@@ -657,10 +685,22 @@ export function FeedbackPortal({
                     })}
                   </div>
 
-                  {/* Error Message Pill */}
+                  {/* Error / Already-Submitted Pill */}
                   {pinError && (
-                    <div className="w-full max-w-xs mb-4 p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2 justify-center font-bold animate-shake">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
+                    <div
+                      className={`w-full max-w-sm mb-4 p-3.5 rounded-2xl border text-xs flex items-center gap-2.5 justify-center font-black leading-relaxed text-center animate-shake ${
+                        pinAlreadySubmitted
+                          ? isDark
+                            ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-300'
+                            : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                          : 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
+                      }`}
+                    >
+                      {pinAlreadySubmitted ? (
+                        <CheckCircle2 className="w-4.5 h-4.5 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                      )}
                       <span>{pinError}</span>
                     </div>
                   )}
@@ -839,6 +879,31 @@ export function FeedbackPortal({
                       : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-amber-500'
                   }`}
                 />
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {['دەست خۆش بێت هیچم نییە', 'هەموو شتێک زۆر باشە و سپاس'].map((preset) => {
+                    const activePreset = generalSuggestions.trim() === preset;
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic('light');
+                          setGeneralSuggestions(preset);
+                        }}
+                        className={`px-2.5 py-1 rounded-xl border text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer active:scale-95 transition-all ${
+                          activePreset
+                            ? 'bg-emerald-500 text-white border-emerald-500'
+                            : isDark
+                            ? 'bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-amber-500/50'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-amber-50 hover:border-amber-300'
+                        }`}
+                      >
+                        {activePreset && <Check className="w-3 h-3" />}
+                        <span>{preset}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
