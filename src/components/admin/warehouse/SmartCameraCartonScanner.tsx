@@ -428,16 +428,18 @@ export function SmartCameraCartonScanner({
   const [liveHud, setLiveHud] = useState<{
     lockedItem: SheetsAuditItem | null;
     lockedItemNo: string | null;
+    lockedItemName: string | null;
     lockedCaseQty: number | null;
     unmatchedCode: string | null;
-  }>({ lockedItem: null, lockedItemNo: null, lockedCaseQty: null, unmatchedCode: null });
+  }>({ lockedItem: null, lockedItemNo: null, lockedItemName: null, lockedCaseQty: null, unmatchedCode: null });
 
   const partialLockRef = useRef<{
     item: SheetsAuditItem | null;
     itemNo: string | null;
+    itemName: string | null;
     caseQty: number | null;
     lockedAt: number;
-  }>({ item: null, itemNo: null, caseQty: null, lockedAt: 0 });
+  }>({ item: null, itemNo: null, itemName: null, caseQty: null, lockedAt: 0 });
 
   const lastCompletedScanRef = useRef<{ model: string; timestamp: number }>({ model: '', timestamp: 0 });
 
@@ -686,8 +688,14 @@ export function SmartCameraCartonScanner({
       const spoken = formatKurdishSpokenScan(latestItem.model, effectivePcsPerCarton);
 
       lastCompletedScanRef.current = { model: latestItem.model, timestamp: now };
-      partialLockRef.current = { item: null, itemNo: null, caseQty: null, lockedAt: 0 };
-      setLiveHud({ lockedItem: null, lockedItemNo: null, lockedCaseQty: null, unmatchedCode: null });
+      partialLockRef.current = { item: null, itemNo: null, itemName: null, caseQty: null, lockedAt: 0 };
+      setLiveHud({
+        lockedItem: null,
+        lockedItemNo: null,
+        lockedItemName: null,
+        lockedCaseQty: null,
+        unmatchedCode: null,
+      });
       setFocusedItemId(latestItem.id);
 
       setVerifiedLabelsById((prev) => {
@@ -796,7 +804,22 @@ export function SmartCameraCartonScanner({
     return canvas;
   }, []);
 
-  // 5. Run Single Hybrid Frame Scan (BarcodeDetector + Tesseract OCR + Package Affix Awareness)
+  // Rotate cropped canvas 90°/270° when horizontal OCR misses vertical carton labels
+  const rotateCanvas90 = useCallback((source: HTMLCanvasElement, degrees: 90 | 270): HTMLCanvasElement | null => {
+    const rot = document.createElement('canvas');
+    rot.width = source.height;
+    rot.height = source.width;
+    const rCtx = rot.getContext('2d', { willReadFrequently: true });
+    if (!rCtx) return null;
+    rCtx.save();
+    rCtx.translate(rot.width / 2, rot.height / 2);
+    rCtx.rotate((degrees * Math.PI) / 180);
+    rCtx.drawImage(source, -source.width / 2, -source.height / 2);
+    rCtx.restore();
+    return rot;
+  }, []);
+
+  // 5. Run Single Hybrid Frame Scan (BarcodeDetector + Tesseract OCR + 90° Fallback + Package Affix Awareness)
   const runHybridFrameScan = useCallback(
     async (isManualShot: boolean) => {
       const videoEl = videoRef.current;
@@ -829,12 +852,43 @@ export function SmartCameraCartonScanner({
           ocrText = ocrRes?.data?.text || '';
         }
 
-        const parsed = parseCartonLabel(
+        let parsed = parseCartonLabel(
           ocrText,
           curSession.items,
           barcodeCandidate,
           curSession.codeProfile
         );
+
+        // Fallback for sideways (90°/270°) printed carton labels if 0° OCR didn't yield a complete read
+        if (ocrWorkerRef.current && (!parsed.matchedItem || parsed.caseQty === null)) {
+          const angles: Array<90 | 270> = isManualShot ? [90, 270] : [90];
+          for (const angle of angles) {
+            const rotCanvas = rotateCanvas90(canvas, angle);
+            if (!rotCanvas) continue;
+            const rotRes = await ocrWorkerRef.current.recognize(rotCanvas);
+            const rotText = rotRes?.data?.text || '';
+            if (!rotText.trim()) continue;
+            const rotParsed = parseCartonLabel(
+              rotText,
+              curSession.items,
+              barcodeCandidate,
+              curSession.codeProfile
+            );
+            const curScore = (parsed.matchedItem ? 2 : parsed.itemNo ? 1 : 0) + (parsed.caseQty ? 2 : 0) + (parsed.description ? 0.5 : 0);
+            const rotScore = (rotParsed.matchedItem ? 2 : rotParsed.itemNo ? 1 : 0) + (rotParsed.caseQty ? 2 : 0) + (rotParsed.description ? 0.5 : 0);
+            if (rotScore > curScore) {
+              parsed = {
+                ...rotParsed,
+                matchedItem: rotParsed.matchedItem || parsed.matchedItem,
+                itemNo: rotParsed.matchedItem?.model || rotParsed.itemNo || parsed.itemNo,
+                caseQty: rotParsed.caseQty ?? parsed.caseQty,
+                description: rotParsed.description || parsed.description,
+                isCompleteRead: Boolean((rotParsed.matchedItem || parsed.matchedItem) && (rotParsed.caseQty ?? parsed.caseQty)),
+              };
+            }
+            if (parsed.matchedItem && parsed.caseQty !== null) break;
+          }
+        }
 
         const now = Date.now();
         const prevLock = partialLockRef.current;
@@ -842,6 +896,8 @@ export function SmartCameraCartonScanner({
 
         const mergedItem = parsed.matchedItem || (lockFresh ? prevLock.item : null);
         const mergedItemNo = parsed.matchedItem?.model || (lockFresh ? prevLock.itemNo : null);
+        const mergedItemName =
+          mergedItem?.name || parsed.description || (lockFresh ? prevLock.itemName : null);
         let mergedCaseQty = parsed.caseQty ?? (lockFresh ? prevLock.caseQty : null);
 
         if (parsed.matchedItem && prevLock.item && parsed.matchedItem.id !== prevLock.item.id && !parsed.caseQty) {
@@ -854,20 +910,22 @@ export function SmartCameraCartonScanner({
           audio.playLockTick();
         }
 
-        if (parsed.matchedItem || parsed.caseQty) {
+        if (parsed.matchedItem || parsed.caseQty || parsed.description) {
           partialLockRef.current = {
             item: mergedItem,
             itemNo: mergedItemNo,
+            itemName: mergedItemName,
             caseQty: mergedCaseQty,
             lockedAt: now,
           };
         } else if (!lockFresh) {
-          partialLockRef.current = { item: null, itemNo: null, caseQty: null, lockedAt: 0 };
+          partialLockRef.current = { item: null, itemNo: null, itemName: null, caseQty: null, lockedAt: 0 };
         }
 
         setLiveHud({
           lockedItem: mergedItem,
           lockedItemNo: mergedItemNo,
+          lockedItemName: mergedItemName,
           lockedCaseQty: mergedCaseQty,
           unmatchedCode: !mergedItem && parsed.itemNo ? parsed.itemNo : null,
         });
@@ -885,6 +943,7 @@ export function SmartCameraCartonScanner({
           setLastScannedResult({
             type: 'unknown',
             model: (parsed.itemNo || barcodeCandidate || '').slice(0, 26),
+            name: parsed.description || undefined,
             caseQty: parsed.caseQty || 0,
             checkedQty: 0,
             expectedQty: 0,
@@ -901,7 +960,7 @@ export function SmartCameraCartonScanner({
         if (isManualShot) setIsScanningFrame(false);
       }
     },
-    [captureCroppedLabelCanvas, recordVerifiedCartonScan]
+    [captureCroppedLabelCanvas, rotateCanvas90, recordVerifiedCartonScan]
   );
 
   // Continuous background label OCR loop
@@ -1101,31 +1160,38 @@ export function SmartCameraCartonScanner({
 
             <div className="flex items-end justify-between gap-2">
               <div className="w-5 h-5 border-b-4 border-r-4 border-amber-400 rounded-br-lg shrink-0" />
-              <div className="flex-1 grid grid-cols-2 gap-1.5">
-                <div
-                  className={`px-2 py-1 rounded-xl border text-center backdrop-blur-md ${
-                    liveHud.lockedItemNo
-                      ? 'bg-emerald-500/90 border-emerald-200 text-slate-950 font-black'
-                      : 'bg-black/65 border-white/25 text-slate-200 font-bold'
-                  }`}
-                >
-                  <span className="block text-[9px] font-mono opacity-80">ITEM NO</span>
-                  <span className="text-xs font-mono truncate block" dir="ltr">
-                    {liveHud.lockedItemNo ? `✓ ${liveHud.lockedItemNo}` : 'دەگەڕێ...'}
-                  </span>
-                </div>
+              <div className="flex-1 flex flex-col gap-1 min-w-0">
+                {liveHud.lockedItemName && (
+                  <div className="px-2 py-0.5 rounded-lg bg-slate-950/80 border border-emerald-400/40 text-emerald-200 text-[10px] font-bold text-center truncate backdrop-blur-md">
+                    {liveHud.lockedItemName}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div
+                    className={`px-2 py-1 rounded-xl border text-center backdrop-blur-md ${
+                      liveHud.lockedItemNo
+                        ? 'bg-emerald-500/90 border-emerald-200 text-slate-950 font-black'
+                        : 'bg-black/65 border-white/25 text-slate-200 font-bold'
+                    }`}
+                  >
+                    <span className="block text-[9px] font-mono opacity-80">ITEM NO</span>
+                    <span className="text-xs font-mono truncate block" dir="ltr">
+                      {liveHud.lockedItemNo ? `✓ ${liveHud.lockedItemNo}` : 'دەگەڕێ...'}
+                    </span>
+                  </div>
 
-                <div
-                  className={`px-2 py-1 rounded-xl border text-center backdrop-blur-md ${
-                    liveHud.lockedCaseQty
-                      ? 'bg-emerald-500/90 border-emerald-200 text-slate-950 font-black'
-                      : 'bg-black/65 border-white/25 text-slate-200 font-bold'
-                  }`}
-                >
-                  <span className="block text-[9px] font-mono opacity-80">CASE QTY</span>
-                  <span className="text-xs font-mono truncate block">
-                    {liveHud.lockedCaseQty ? `✓ ${liveHud.lockedCaseQty} عەدەد` : 'ژمارە...'}
-                  </span>
+                  <div
+                    className={`px-2 py-1 rounded-xl border text-center backdrop-blur-md ${
+                      liveHud.lockedCaseQty
+                        ? 'bg-emerald-500/90 border-emerald-200 text-slate-950 font-black'
+                        : 'bg-black/65 border-white/25 text-slate-200 font-bold'
+                    }`}
+                  >
+                    <span className="block text-[9px] font-mono opacity-80">CASE / MASTER</span>
+                    <span className="text-xs font-mono truncate block">
+                      {liveHud.lockedCaseQty ? `✓ ${liveHud.lockedCaseQty} عەدەد` : 'ژمارە...'}
+                    </span>
+                  </div>
                 </div>
               </div>
               <div className="w-5 h-5 border-b-4 border-l-4 border-amber-400 rounded-bl-lg shrink-0" />
@@ -1311,6 +1377,106 @@ export function SmartCameraCartonScanner({
                     </button>
                   );
                 })}
+              </div>
+
+              {/* Quick Condition & Exact Damaged / Repack Quantity for Focused Item */}
+              <div className="mt-2.5 pt-2.5 border-t border-slate-800 flex flex-wrap items-center justify-between gap-1.5">
+                <div className="flex flex-wrap items-center gap-1">
+                  {(
+                    [
+                      { id: 'Packaged', label: 'ساغ ✅', activeCls: 'bg-emerald-500 text-slate-950' },
+                      { id: 'Damaged', label: 'شکاو ❌', activeCls: 'bg-rose-500 text-white' },
+                      { id: 'Need Wrapped', label: 'بێ تەغلیف', activeCls: 'bg-amber-400 text-slate-950' },
+                      { id: 'Wrapped', label: 'تەغلیفکراو', activeCls: 'bg-purple-500 text-white' },
+                    ] as const
+                  ).map((opt) => {
+                    const active = focusedItem.condition === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          const curSession = sessionRef.current;
+                          const nowIso = new Date().toISOString();
+                          const needsQty = opt.id !== 'Packaged';
+                          const updatedItems = curSession.items.map((it) => {
+                            if (it.id !== focusedItem.id) return it;
+                            let auditStatus = it.auditStatus;
+                            if (opt.id === 'Damaged') auditStatus = 'damaged';
+                            else if (it.checkedQty > 0) {
+                              auditStatus = it.variance === 0 ? 'verified' : it.variance < 0 ? 'deficit' : 'excess';
+                            } else {
+                              auditStatus = 'pending';
+                            }
+                            return {
+                              ...it,
+                              condition: opt.id,
+                              issueQty: needsQty ? Math.max(1, it.issueQty || 1) : undefined,
+                              auditStatus,
+                              lastAuditedAt: nowIso,
+                            };
+                          });
+                          onUpdateSessionRef.current({
+                            ...curSession,
+                            items: updatedItems,
+                            updatedAt: nowIso,
+                          });
+                        }}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-black cursor-pointer touch-manipulation ${
+                          active ? opt.activeCls : 'bg-slate-800 text-slate-300 border border-slate-700'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {(focusedItem.condition === 'Damaged' ||
+                  focusedItem.condition === 'Need Wrapped' ||
+                  focusedItem.condition === 'Wrapped') && (
+                  <div className="flex items-center gap-1 bg-slate-800 px-1.5 py-0.5 rounded-lg border border-slate-700" dir="ltr">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const curSession = sessionRef.current;
+                        const nowIso = new Date().toISOString();
+                        const nextQty = Math.max(0, (focusedItem.issueQty || 1) - 1);
+                        onUpdateSessionRef.current({
+                          ...curSession,
+                          items: curSession.items.map((it) =>
+                            it.id === focusedItem.id ? { ...it, issueQty: nextQty, lastAuditedAt: nowIso } : it
+                          ),
+                          updatedAt: nowIso,
+                        });
+                      }}
+                      className="w-5 h-5 rounded bg-slate-700 text-white font-black text-xs flex items-center justify-center cursor-pointer"
+                    >
+                      -
+                    </button>
+                    <span className="text-[11px] font-mono font-black text-white px-1">
+                      {focusedItem.issueQty ?? 1} دانە
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const curSession = sessionRef.current;
+                        const nowIso = new Date().toISOString();
+                        const nextQty = Math.min(9999, (focusedItem.issueQty || 0) + 1);
+                        onUpdateSessionRef.current({
+                          ...curSession,
+                          items: curSession.items.map((it) =>
+                            it.id === focusedItem.id ? { ...it, issueQty: nextQty, lastAuditedAt: nowIso } : it
+                          ),
+                          updatedAt: nowIso,
+                        });
+                      }}
+                      className="w-5 h-5 rounded bg-slate-700 text-white font-black text-xs flex items-center justify-center cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}

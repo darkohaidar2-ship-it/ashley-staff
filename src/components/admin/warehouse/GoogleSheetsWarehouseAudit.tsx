@@ -523,6 +523,89 @@ function mergeClientSessionsItemWise(loc: SheetsAuditSession, srv: SheetsAuditSe
   };
 }
 
+function DeferredNoteInput({
+  itemId,
+  value,
+  onCommit,
+  onEditingChange,
+}: {
+  itemId: string;
+  value: string;
+  onCommit: (itemId: string, nextValue: string) => void;
+  onEditingChange?: (itemId: string, isEditing: boolean) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [isEditing, setIsEditing] = useState(false);
+  const draftRef = useRef(draft);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  draftRef.current = draft;
+
+  useEffect(() => {
+    if (!isEditing) {
+      setDraft(value);
+    }
+  }, [value, isEditing, itemId]);
+
+  const commitIfDirty = useCallback(
+    (forceBlur = false) => {
+      setIsEditing(false);
+      onEditingChange?.(itemId, false);
+      if (draftRef.current !== value) {
+        onCommit(itemId, draftRef.current);
+      }
+      if (forceBlur && textareaRef.current) {
+        textareaRef.current.blur();
+      }
+    },
+    [itemId, onCommit, onEditingChange, value]
+  );
+
+  const isDirty = draft !== value;
+
+  return (
+    <div className="relative w-full">
+      <textarea
+        ref={textareaRef}
+        rows={2}
+        value={draft}
+        onFocus={() => {
+          setIsEditing(true);
+          onEditingChange?.(itemId, true);
+        }}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => commitIfDirty(false)}
+        onKeyDown={(e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            commitIfDirty(true);
+          }
+        }}
+        placeholder="تێبینی بنووسە..."
+        className={`w-full h-[50px] p-1.5 rounded-xl border text-[11px] font-medium outline-none resize-none overflow-y-auto ashley-cell-scroll leading-snug transition-colors ${
+          isEditing
+            ? 'bg-white border-blue-500 ring-2 ring-blue-100 pb-5'
+            : isDirty
+            ? 'bg-amber-50/60 border-amber-300'
+            : 'bg-slate-50/60 border-slate-200 focus:bg-white focus:border-blue-400'
+        }`}
+      />
+      {(isEditing || isDirty) && (
+        <button
+          type="button"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            commitIfDirty(true);
+          }}
+          className="absolute bottom-1 left-1 px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-black shadow-sm flex items-center gap-0.5 cursor-pointer"
+        >
+          <Check className="w-2.5 h-2.5 stroke-[3]" />
+          <span>تەواو</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 export interface GoogleSheetsWarehouseAuditProps {
   onBackToMobileApp?: () => void;
   onSwitchPortal?: (portal: 'attendance' | 'feedback' | 'warehouse') => void;
@@ -635,6 +718,8 @@ export function GoogleSheetsWarehouseAudit({
   const currentSessionRef = useRef<SheetsAuditSession | null>(null);
   const isMobileOperationalRef = useRef<boolean>(isMobileOperational);
   const lastLocalMutationAtRef = useRef<number>(0);
+  const localMutationSeqRef = useRef<number>(0);
+  const activeNoteEditingIdsRef = useRef<Set<string>>(new Set());
   const googleSyncTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const latestSessionForPushRef = useRef<Record<string, SheetsAuditSession>>({});
 
@@ -766,7 +851,16 @@ export function GoogleSheetsWarehouseAudit({
               updatedCur.totalAuditedUnits !== cur.totalAuditedUnits ||
               updatedCur.items.length !== cur.items.length)
           ) {
-            setCurrentSession(mergeClientSessionsItemWise(cur, updatedCur));
+            const mergedCur = mergeClientSessionsItemWise(cur, updatedCur);
+            if (activeNoteEditingIdsRef.current.size > 0) {
+              const curNotesById = new Map(cur.items.map((it) => [it.id, it.notes]));
+              mergedCur.items = mergedCur.items.map((it) =>
+                activeNoteEditingIdsRef.current.has(it.id)
+                  ? { ...it, notes: curNotesById.get(it.id) ?? it.notes }
+                  : it
+              );
+            }
+            setCurrentSession(mergedCur);
           }
         }
       }
@@ -1166,6 +1260,7 @@ export function GoogleSheetsWarehouseAudit({
     if (isManualSync) setSyncingGoogle(true);
     else setSaving(true);
 
+    const mutationSeq = ++localMutationSeqRef.current;
     lastLocalMutationAtRef.current = Date.now();
     latestSessionForPushRef.current[sessionToSave.id] = sessionToSave;
 
@@ -1208,16 +1303,18 @@ export function GoogleSheetsWarehouseAudit({
       if (data.success && data.session) {
         lastLocalMutationAtRef.current = Date.now();
         const latestFromServer: SheetsAuditSession = data.session;
-        latestSessionForPushRef.current[latestFromServer.id] = latestFromServer;
-        setCurrentSession(latestFromServer);
-        setSessions(prev => {
-          const exists = prev.some(s => s.id === latestFromServer.id);
-          const next = exists
-            ? prev.map(s => s.id === latestFromServer.id ? latestFromServer : s)
-            : [latestFromServer, ...prev];
-          saveLocalWarehouseSessions(next);
-          return next;
-        });
+        if (localMutationSeqRef.current === mutationSeq) {
+          latestSessionForPushRef.current[latestFromServer.id] = latestFromServer;
+          setCurrentSession(latestFromServer);
+          setSessions(prev => {
+            const exists = prev.some(s => s.id === latestFromServer.id);
+            const next = exists
+              ? prev.map(s => s.id === latestFromServer.id ? latestFromServer : s)
+              : [latestFromServer, ...prev];
+            saveLocalWarehouseSessions(next);
+            return next;
+          });
+        }
 
         if (isManualSync) {
           if (googleSyncTimersRef.current[latestFromServer.id]) {
@@ -1340,10 +1437,12 @@ export function GoogleSheetsWarehouseAudit({
     persistSession(updatedSession);
   };
 
-  // Change Item Condition
+  // Change Item Condition (Damaged / Need Wrapped / Wrapped / Packaged / Normal)
   const handleUpdateCondition = (itemId: string, condition: SheetsAuditItem['condition']) => {
     if (!currentSession) return;
     triggerHaptic('light');
+
+    const needsIssueQty = condition === 'Damaged' || condition === 'Need Wrapped' || condition === 'Wrapped';
 
     const updatedItems = currentSession.items.map(item => {
       if (item.id === itemId) {
@@ -1352,9 +1451,11 @@ export function GoogleSheetsWarehouseAudit({
         else if (item.checkedQty > 0) {
           auditStatus = item.variance === 0 ? 'verified' : item.variance < 0 ? 'deficit' : 'excess';
         }
+        const nextIssueQty = needsIssueQty ? Math.max(1, item.issueQty || 1) : undefined;
         return { 
           ...item, 
-          condition, 
+          condition,
+          issueQty: nextIssueQty,
           auditStatus, 
           auditedBy: currentSession.auditedBy || 'Admin',
           lastAuditedAt: new Date().toISOString() 
@@ -1368,22 +1469,54 @@ export function GoogleSheetsWarehouseAudit({
     persistSession(updatedSession);
   };
 
-  // Change Item Notes
-  const handleUpdateNotes = (itemId: string, notes: string) => {
-    if (!currentSession) return;
-    const updatedItems = currentSession.items.map(item => {
+  // Change Exact Broken / Damaged / Need-Wrapped Unit Count (چەنێکی شکاو یان تەغلیفە)
+  const handleUpdateIssueQty = (itemId: string, rawQty: number) => {
+    const cur = currentSessionRef.current;
+    if (!cur) return;
+    const cleanQty = Math.max(0, Math.min(9999, Math.round(Number.isFinite(rawQty) ? rawQty : 0)));
+
+    const updatedItems = cur.items.map(item => {
+      if (item.id === itemId) {
+        return {
+          ...item,
+          issueQty: cleanQty,
+          auditedBy: cur.auditedBy || 'Admin',
+          lastAuditedAt: new Date().toISOString(),
+        };
+      }
+      return item;
+    });
+
+    const updatedSession = { ...cur, items: updatedItems };
+    setCurrentSession(updatedSession);
+    persistSession(updatedSession);
+  };
+
+  const handleNoteEditingChange = useCallback((itemId: string, isEditing: boolean) => {
+    if (isEditing) {
+      activeNoteEditingIdsRef.current.add(itemId);
+    } else {
+      activeNoteEditingIdsRef.current.delete(itemId);
+    }
+  }, []);
+
+  // Commit Item Notes ONLY when user finishes typing (blur / "تەواو ✓" button)
+  const handleUpdateNotes = useCallback((itemId: string, notes: string) => {
+    const cur = currentSessionRef.current;
+    if (!cur) return;
+    const updatedItems = cur.items.map(item => {
       if (item.id === itemId) return { 
         ...item, 
         notes, 
-        auditedBy: currentSession.auditedBy || 'Admin',
+        auditedBy: cur.auditedBy || 'Admin',
         lastAuditedAt: new Date().toISOString() 
       };
       return item;
     });
-    const updatedSession = { ...currentSession, items: updatedItems };
+    const updatedSession = { ...cur, items: updatedItems };
     setCurrentSession(updatedSession);
     persistSession(updatedSession);
-  };
+  }, [persistSession]);
 
   // 5. Barcode Scanner Input Handling
   const handleBarcodeSubmit = (e: React.FormEvent) => {
@@ -1708,6 +1841,8 @@ export function GoogleSheetsWarehouseAudit({
         matchedCount: 0,
         discrepantCount: 0,
         damagedCount: 0,
+        damagedUnits: 0,
+        repackUnits: 0,
         pendingCount: 0,
       };
     }
@@ -1718,16 +1853,25 @@ export function GoogleSheetsWarehouseAudit({
     let matched = 0;
     let discrepant = 0;
     let damaged = 0;
+    let damagedUnits = 0;
+    let repackUnits = 0;
     let pending = 0;
 
     items.forEach(i => {
       expected += i.expectedQty || 0;
       audited += i.checkedQty || 0;
 
-      if (i.condition === 'Damaged' || i.auditStatus === 'damaged') damaged++;
-      else if (i.checkedQty === 0) pending++;
-      else if (i.variance === 0) matched++;
-      else discrepant++;
+      if (i.condition === 'Damaged' || i.auditStatus === 'damaged') {
+        damaged++;
+        damagedUnits += i.issueQty || 1;
+      } else {
+        if (i.condition === 'Need Wrapped' || i.condition === 'Wrapped') {
+          repackUnits += i.issueQty || 1;
+        }
+        if (i.checkedQty === 0) pending++;
+        else if (i.variance === 0) matched++;
+        else discrepant++;
+      }
     });
 
     const progressPercent = items.length > 0 
@@ -1742,6 +1886,8 @@ export function GoogleSheetsWarehouseAudit({
       matchedCount: matched,
       discrepantCount: discrepant,
       damagedCount: damaged,
+      damagedUnits,
+      repackUnits,
       pendingCount: pending,
     };
   }, [currentSession]);
@@ -1778,16 +1924,17 @@ export function GoogleSheetsWarehouseAudit({
         ? i.scannedCartonNumbers.join(', ') 
         : checkedCtn > 0 ? `1-${checkedCtn}` : '-';
       
+      const issueSuffix = typeof i.issueQty === 'number' && i.issueQty > 0 ? ` (${i.issueQty} دانە)` : '';
       let statusKurdish = 'چاوەڕوان';
       if (i.auditStatus === 'verified') statusKurdish = '✅ هاوتا و تەواو';
       else if (i.auditStatus === 'deficit') statusKurdish = `⚠️ کەمی هەیە (${i.variance})`;
       else if (i.auditStatus === 'excess') statusKurdish = `➕ زیادەیە (+${i.variance})`;
-      else if (i.auditStatus === 'damaged') statusKurdish = '❌ شکاو / زیانلێکەوتوو';
+      else if (i.auditStatus === 'damaged') statusKurdish = `❌ شکاو / زیانلێکەوتوو${issueSuffix}`;
 
       let conditionKurdish = 'پاکەتکراو';
-      if (i.condition === 'Wrapped') conditionKurdish = 'لەفکراو';
-      else if (i.condition === 'Damaged') conditionKurdish = 'تێکچوو/شکاو';
-      else if (i.condition === 'Need Wrapped') conditionKurdish = 'پێویستی بە لەفە';
+      if (i.condition === 'Wrapped') conditionKurdish = `لەفکراو / تەغلیف${issueSuffix}`;
+      else if (i.condition === 'Damaged') conditionKurdish = `تێکچوو/شکاو${issueSuffix}`;
+      else if (i.condition === 'Need Wrapped') conditionKurdish = `پێویستی بە لەفە / تەغلیف${issueSuffix}`;
       else if (i.condition === 'Normal') conditionKurdish = 'ئاسایی';
 
       const lastModifiedStr = i.lastAuditedAt 
@@ -2716,9 +2863,11 @@ export function GoogleSheetsWarehouseAudit({
             {/* Damaged (تێکچوو یان شکاو) */}
             <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-200">
               <span className="text-[10px] font-bold text-rose-800 block mb-1">زیانلێکەوتوو / شکاو</span>
-              <div className="flex items-baseline gap-1.5">
+              <div className="flex items-baseline gap-1.5 flex-wrap">
                 <span className="text-xl font-black font-mono text-rose-700">{sessionKPIs.damagedCount}</span>
-                <span className="text-[10px] text-rose-600 font-bold">دانە ❌</span>
+                <span className="text-[10px] text-rose-600 font-bold">
+                  جۆر{sessionKPIs.damagedUnits > 0 ? ` (${sessionKPIs.damagedUnits} دانە)` : ''} ❌
+                </span>
               </div>
             </div>
 
@@ -3065,25 +3214,73 @@ export function GoogleSheetsWarehouseAudit({
                             )}
                           </td>
 
-                          {/* 10. Condition Dropdown */}
+                          {/* 10. Condition Dropdown + Exact Damaged / Repack Quantity (چەنێکی وایە) */}
                           <td className="p-2 text-center border-l border-slate-100 overflow-hidden">
-                            <select
-                              value={item.condition}
-                              onChange={(e) => handleUpdateCondition(item.id, e.target.value as any)}
-                              className={`w-full h-8 px-1.5 rounded-xl text-[11px] font-bold outline-none cursor-pointer border ${
-                                item.condition === 'Damaged'
-                                  ? 'bg-rose-50 text-rose-700 border-rose-300'
-                                  : item.condition === 'Wrapped'
-                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                  : 'bg-slate-50 text-slate-700 border-slate-200'
-                              }`}
-                            >
-                              <option value="Packaged">کارتۆنی ساغ</option>
-                              <option value="Wrapped">لەفکراو</option>
-                              <option value="Need Wrapped">پێویست بە لەفە</option>
-                              <option value="Damaged">تێکچوو / شکاو</option>
-                              <option value="Normal">ئاسایی</option>
-                            </select>
+                            <div className="space-y-1">
+                              <select
+                                value={item.condition}
+                                onChange={(e) => handleUpdateCondition(item.id, e.target.value as any)}
+                                className={`w-full h-8 px-1.5 rounded-xl text-[11px] font-bold outline-none cursor-pointer border ${
+                                  item.condition === 'Damaged'
+                                    ? 'bg-rose-50 text-rose-700 border-rose-300'
+                                    : item.condition === 'Need Wrapped'
+                                    ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                    : item.condition === 'Wrapped'
+                                    ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                    : 'bg-slate-50 text-slate-700 border-slate-200'
+                                }`}
+                              >
+                                <option value="Packaged">کارتۆنی ساغ</option>
+                                <option value="Wrapped">لەفکراو / تەغلیف</option>
+                                <option value="Need Wrapped">پێویست بە تەغلیف</option>
+                                <option value="Damaged">تێکچوو / شکاو / عەیبدار</option>
+                                <option value="Normal">ئاسایی</option>
+                              </select>
+
+                              {(item.condition === 'Damaged' || item.condition === 'Need Wrapped' || item.condition === 'Wrapped') && (
+                                <div
+                                  className={`flex items-center justify-between gap-1 px-1.5 py-0.5 rounded-lg border text-[10px] font-bold ${
+                                    item.condition === 'Damaged'
+                                      ? 'bg-rose-50/90 border-rose-200 text-rose-700'
+                                      : item.condition === 'Need Wrapped'
+                                      ? 'bg-amber-50/90 border-amber-200 text-amber-800'
+                                      : 'bg-purple-50/90 border-purple-200 text-purple-700'
+                                  }`}
+                                >
+                                  <span className="truncate">
+                                    {item.condition === 'Damaged'
+                                      ? 'شکاو:'
+                                      : item.condition === 'Need Wrapped'
+                                      ? 'بێ تەغلیف:'
+                                      : 'تەغلیف:'}
+                                  </span>
+                                  <div className="flex items-center gap-0.5 shrink-0" dir="ltr">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateIssueQty(item.id, (item.issueQty || 1) - 1)}
+                                      className="w-4 h-4 rounded bg-white border border-current/20 flex items-center justify-center font-black leading-none cursor-pointer"
+                                    >
+                                      -
+                                    </button>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={9999}
+                                      value={item.issueQty ?? 1}
+                                      onChange={(e) => handleUpdateIssueQty(item.id, parseInt(e.target.value || '0', 10))}
+                                      className="w-8 h-4 text-center bg-white border border-current/20 rounded font-mono text-[10px] font-black outline-none"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateIssueQty(item.id, (item.issueQty || 0) + 1)}
+                                      className="w-4 h-4 rounded bg-white border border-current/20 flex items-center justify-center font-black leading-none cursor-pointer"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </td>
 
                           {/* 11. Audit Status Badge */}
@@ -3097,7 +3294,9 @@ export function GoogleSheetsWarehouseAudit({
                               ) : isDamaged ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold whitespace-nowrap">
                                   <AlertTriangle className="w-3 h-3 text-rose-500" />
-                                  <span>شکاو ❌</span>
+                                  <span>
+                                    شکاو{item.issueQty ? ` (${item.issueQty} دانە)` : ''} ❌
+                                  </span>
                                 </span>
                               ) : isDeficit ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold whitespace-nowrap">
@@ -3139,14 +3338,14 @@ export function GoogleSheetsWarehouseAudit({
                             )}
                           </td>
 
-                          {/* 13. Notes Inline Scrollable Textbox (Fixed bounds + inner vertical smart scroll) */}
+                          {/* 13. Notes Deferred Scrollable Textbox (Fixed bounds + commits cleanly on blur / "تەواو ✓") */}
                           <td className="p-2 overflow-hidden">
-                            <textarea
-                              rows={2}
+                            <DeferredNoteInput
+                              key={item.id}
+                              itemId={item.id}
                               value={item.notes || ''}
-                              onChange={(e) => handleUpdateNotes(item.id, e.target.value)}
-                              placeholder="تێبینی بنووسە..."
-                              className="w-full h-[50px] p-1.5 rounded-xl border border-slate-200 bg-slate-50/60 text-[11px] font-medium outline-none focus:bg-white focus:border-blue-400 resize-none overflow-y-auto ashley-cell-scroll leading-snug"
+                              onCommit={handleUpdateNotes}
+                              onEditingChange={handleNoteEditingChange}
                             />
                           </td>
                         </tr>
@@ -3915,7 +4114,13 @@ export function GoogleSheetsWarehouseAudit({
                             {i.variance === 0 ? '0' : i.variance > 0 ? `+${i.variance}` : i.variance}
                           </td>
                           <td className="p-2 border border-slate-300 text-center">
-                            {i.condition === 'Damaged' ? 'شکاو ❌' : i.condition === 'Wrapped' ? 'لەفکراو' : 'ساغ ✅'}
+                            {i.condition === 'Damaged'
+                              ? `شکاو${i.issueQty ? ` (${i.issueQty} دانە)` : ''} ❌`
+                              : i.condition === 'Need Wrapped'
+                              ? `پێویست بە تەغلیف${i.issueQty ? ` (${i.issueQty} دانە)` : ''}`
+                              : i.condition === 'Wrapped'
+                              ? `لەفکراو / تەغلیف${i.issueQty ? ` (${i.issueQty} دانە)` : ''}`
+                              : 'ساغ ✅'}
                           </td>
                           <td className="p-2 border border-slate-300 text-center font-mono text-[9.5px]">
                             {lastAuditStr}

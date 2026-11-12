@@ -23,6 +23,7 @@ export interface SheetsAuditItem {
   checkedQty: number; // total checked units / pieces
   variance: number; // checkedQty - expectedQty
   condition: 'Packaged' | 'Wrapped' | 'Damaged' | 'Need Wrapped' | 'Normal';
+  issueQty?: number; // Exact count of damaged/broken or wrapped/repack units (چەنێکی شکاو/تەغلیفە)
   auditStatus: 'pending' | 'verified' | 'deficit' | 'excess' | 'damaged';
   rackLocation?: string;
   notes?: string;
@@ -493,11 +494,20 @@ function convertRowsToAuditItems(rawData: any[][], tabSalt = '0'): {
 
     const conditionRaw = colMap.conditionIdx !== -1 ? String(row[colMap.conditionIdx] || '').trim() : '';
     let condition: SheetsAuditItem['condition'] = 'Packaged';
-    if (conditionRaw.includes('تێکچوو') || conditionRaw.includes('شکاو') || conditionRaw.toLowerCase().includes('damage')) {
+    if (conditionRaw.includes('تێکچوو') || conditionRaw.includes('شکاو') || conditionRaw.includes('عەیبدار') || conditionRaw.toLowerCase().includes('damage')) {
       condition = 'Damaged';
-    } else if (conditionRaw.includes('لەف') || conditionRaw.toLowerCase().includes('wrap')) {
+    } else if (conditionRaw.includes('پێویست') || conditionRaw.toLowerCase().includes('need')) {
+      condition = 'Need Wrapped';
+    } else if (conditionRaw.includes('لەف') || conditionRaw.includes('تەغلیف') || conditionRaw.toLowerCase().includes('wrap')) {
       condition = 'Wrapped';
+    } else if (conditionRaw.includes('ئاسایی') || conditionRaw.toLowerCase() === 'normal') {
+      condition = 'Normal';
     }
+    const issueQtyMatch = normalizeDigitsUniversal(conditionRaw).match(/\(?\s*(\d+)\s*(?:دانە|pcs?|pc|units?)?\s*\)?/i);
+    const issueQty =
+      issueQtyMatch && ['Damaged', 'Need Wrapped', 'Wrapped'].includes(condition)
+        ? Math.max(0, parseInt(issueQtyMatch[1], 10) || 0)
+        : undefined;
 
     const rackLocation = colMap.locationIdx !== -1 ? String(row[colMap.locationIdx] || '').trim() : '';
     const notes = colMap.notesIdx !== -1 ? String(row[colMap.notesIdx] || '').trim() : '';
@@ -532,6 +542,7 @@ function convertRowsToAuditItems(rawData: any[][], tabSalt = '0'): {
       scannedCartonNumbers: [],
       variance,
       condition,
+      issueQty,
       auditStatus,
       rackLocation,
       notes,
@@ -884,6 +895,7 @@ function mergeAuditSessionsSmartly(
         scannedCartonNumbers: ex.scannedCartonNumbers,
         scannedHistory: ex.scannedHistory,
         condition: ex.condition,
+        issueQty: ex.issueQty,
         auditStatus: ex.auditStatus,
         rackLocation: ex.rackLocation,
         notes: ex.notes,
@@ -1135,16 +1147,19 @@ function buildAuditSheetPayload(session: SheetsAuditSession) {
         ? `1-${checkedCtn}`
         : '-';
 
+    const hasIssueQty = typeof i.issueQty === 'number' && i.issueQty > 0;
+    const issueCountSuffix = hasIssueQty ? ` (${i.issueQty} دانە)` : '';
+
     let statusKurdish = 'چاوەڕوان';
     if (i.auditStatus === 'verified') statusKurdish = '✅ هاوتا و تەواو';
     else if (i.auditStatus === 'deficit') statusKurdish = `⚠️ کەمی هەیە (${i.variance})`;
     else if (i.auditStatus === 'excess') statusKurdish = `➕ زیادەیە (+${i.variance})`;
-    else if (i.auditStatus === 'damaged') statusKurdish = '❌ شکاو / زیانلێکەوتوو';
+    else if (i.auditStatus === 'damaged') statusKurdish = `❌ شکاو / زیانلێکەوتوو${issueCountSuffix}`;
 
     let conditionKurdish = 'پاکەتکراو';
-    if (i.condition === 'Wrapped') conditionKurdish = 'لەفکراو';
-    else if (i.condition === 'Damaged') conditionKurdish = 'تێکچوو/شکاو';
-    else if (i.condition === 'Need Wrapped') conditionKurdish = 'پێویستی بە لەفە';
+    if (i.condition === 'Wrapped') conditionKurdish = `لەفکراو / تەغلیف${issueCountSuffix}`;
+    else if (i.condition === 'Damaged') conditionKurdish = `تێکچوو / شکاو${issueCountSuffix}`;
+    else if (i.condition === 'Need Wrapped') conditionKurdish = `پێویستی بە لەفە / تەغلیف${issueCountSuffix}`;
     else if (i.condition === 'Normal') conditionKurdish = 'ئاسایی';
 
     const scannedAtStr = formatBaghdadTimestamp(i.lastAuditedAt);

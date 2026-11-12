@@ -4,6 +4,7 @@ import { CodeIntelligenceProfile, normalizeDigitsUniversal } from '@/lib/warehou
 export interface ParsedCartonLabel {
   itemNo: string | null;
   caseQty: number | null;
+  description: string | null;
   matchedItem: SheetsAuditItem | null;
   matchConfidence: 'exact' | 'normalized' | 'affix' | 'fuzzy' | 'none';
   isCompleteRead: boolean;
@@ -120,16 +121,17 @@ function isLikelyOcrConfusion(a: string, b: string): boolean {
 }
 
 const IGNORED_CODE_WORDS = new Set([
-  'ITEM', 'NO', 'NUMBER', 'CASE', 'QTY', 'QUANTITY', 'OTY', 'PCS', 'CTN', 'CARTON',
-  'BOX', 'MODEL', 'SKU', 'PART', 'MADE', 'IN', 'CHINA', 'VIETNAM', 'MALAYSIA',
-  'INDONESIA', 'TURKEY', 'ASHLEY', 'FURNITURE', 'GROSS', 'NET', 'WEIGHT', 'CBM',
-  'COLOR', 'SIZE', 'PACK', 'PO', 'LOT', 'OF',
+  'ITEM', 'NO', 'NUMBER', 'CASE', 'QTY', 'QNTY', 'QUANTITY', 'OTY', 'PCS', 'PC', 'SET', 'SETS',
+  'CTN', 'CARTON', 'BOX', 'MODEL', 'SKU', 'PART', 'MADE', 'IN', 'CHINA', 'VIETNAM', 'MALAYSIA',
+  'INDONESIA', 'TURKEY', 'INDIA', 'ASHLEY', 'FURNITURE', 'ELEVARRE', 'GROSS', 'NET', 'WEIGHT',
+  'CBM', 'COLOR', 'SIZE', 'PACK', 'PO', 'LOT', 'OF', 'DESC', 'DESCRIPTION', 'MASTER', 'INNER',
+  'DIMENSIONS', 'DIMENSION', 'CUBE', 'COUNTRY', 'ORIGIN',
 ]);
 
 function cleanCapturedCodeCandidate(raw: string): string {
-  // Trim trailing CASE / QTY words if OCR fused two columns onto one line
+  // Trim trailing label headers if OCR fused two columns onto one line
   const cut = raw
-    .replace(/\s+(?:CASE|CTN|QTY|Q['’]?TY|PCS|QUANTITY)\b.*$/i, '')
+    .replace(/\s+(?:CASE|CTN|QTY|Q['’]?TY|QNTY|PCS|PC|SET|SETS|QUANTITY|DESC|DESCRIPTION|MASTER|INNER|DIMENSIONS|MADE|ORIGIN)\b.*$/i, '')
     .replace(/[:;,.\s]+$/, '')
     .trim();
   return cut.toUpperCase();
@@ -137,7 +139,8 @@ function cleanCapturedCodeCandidate(raw: string): string {
 
 /**
  * Extract `ITEM NO` (model/SKU) from warehouse carton label text.
- * Supports same-line (`ITEM NO: EV 21345-02-BALK`) and stacked lines (`ITEM NO\nEV 21345-02`).
+ * Supports `ITEM NO.: EV21068-02`, `ITEM NO. : EV21165-03`, `ITEM NO: EV 51422-02`,
+ * and stacked lines (`ITEM NO\nEV 21345-02`).
  */
 export function extractItemNoFromText(text: string): string | null {
   const clean = normalizeDigits(text);
@@ -147,17 +150,17 @@ export function extractItemNoFromText(text: string): string | null {
     .filter(Boolean);
 
   // Supports optional short prefix + space + main code + optional suffix word
-  // e.g. "EV 21345-02", "EV 21345-02-BALK", "21345-02 BALK", "B555-31", "1050438"
+  // e.g. "EV21068-02", "EV 51422-02", "EV 21345-02-BALK", "23575-02", "51402-01"
   const codeCapture =
     '((?:[A-Z]{1,6}\\s+)?[A-Z0-9][A-Z0-9\\-/_]{1,26}(?:\\s+[A-Z]{2,8})?)';
 
   const sameLinePatterns = [
     new RegExp(
-      `(?:item|1tem|iten|i\\s*tem)\\s*(?:no\\.?|n[o0]|number|#|code)?\\s*[:.\\-=]?\\s*${codeCapture}`,
+      `(?:item|1tem|iten|i\\s*tem)\\s*(?:no\\.?|n[o0]|number|#|code)?\\s*[:.;\\-=\\s]*${codeCapture}`,
       'i'
     ),
     new RegExp(
-      `(?:model|mod\\.?|sku|art\\.?\\s*no|part\\s*(?:no|#))\\s*[:.\\-=]?\\s*${codeCapture}`,
+      `(?:model|mod\\.?|sku|art\\.?\\s*no|part\\s*(?:no|#))\\s*[:.;\\-=\\s]*${codeCapture}`,
       'i'
     ),
   ];
@@ -167,11 +170,11 @@ export function extractItemNoFromText(text: string): string | null {
 
     // Stacked format: line has only header "ITEM NO" and next line holds the model code
     if (
-      /^(?:item|1tem|iten)\s*(?:no\.?|n[o0]|number|#)?\s*[:.\-=]?$/i.test(line) ||
-      /^(?:model|sku|part\s*(?:no|#))\s*(?:no\.?|#)?\s*[:.\-=]?$/i.test(line)
+      /^(?:item|1tem|iten)\s*(?:no\.?|n[o0]|number|#)?\s*[:.;\-=]*$/i.test(line) ||
+      /^(?:model|sku|part\s*(?:no|#))\s*(?:no\.?|#)?\s*[:.;\-=]*$/i.test(line)
     ) {
       const nextLine = lines[i + 1] || '';
-      if (nextLine && !/^(?:case|qty|q['’]?ty|pcs)\b/i.test(nextLine)) {
+      if (nextLine && !/^(?:case|qty|q['’]?ty|qnty|quantity|pcs|desc|description|master)\b/i.test(nextLine)) {
         const nextMatch = nextLine.match(new RegExp(`^${codeCapture}`, 'i'));
         if (nextMatch && nextMatch[1]) {
           const candidate = cleanCapturedCodeCandidate(nextMatch[1]);
@@ -201,7 +204,58 @@ export function extractItemNoFromText(text: string): string | null {
 }
 
 /**
- * Extract `CASE QTY` (unit count per carton) from carton label text.
+ * Extract `DESCRIPTION:` / `DESC:` item name from warehouse carton labels.
+ */
+export function extractDescriptionFromText(text: string): string | null {
+  const clean = normalizeDigits(text);
+  const lines = clean
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const isStopLine = (line: string) =>
+    /^(?:master|case|c['’]?ase|ctn|qty|q['’]?ty|qnty|quantity|inner|dimensions?|made\s+in|country\s+of|p\.?\s*o\.?|carton|cube|item\s*no)\b/i.test(
+      line
+    );
+
+  const trimTrailingMeta = (val: string) =>
+    val
+      .replace(/\s+(?:MASTER|CASE\s*QTY|QUANTITY|INNER\s*Q(?:NT)?Y|DIMENSIONS?|MADE\s+IN)\b.*$/i, '')
+      .replace(/^[:.;\-=\s]+|[:;\s]+$/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const match = line.match(
+      /(?:description|descripton|desc\.?|item\s*name|product)\s*[:.;\-=\s]+(.*)$/i
+    );
+    if (!match) continue;
+
+    let desc = trimTrailingMeta(match[1] || '');
+
+    // Stacked format: `DESCRIPTION:` followed by next line
+    if (!desc && lines[i + 1] && !isStopLine(lines[i + 1])) {
+      desc = trimTrailingMeta(lines[i + 1]);
+      if (desc && lines[i + 2] && !isStopLine(lines[i + 2]) && lines[i + 2].length <= 36) {
+        desc = trimTrailingMeta(`${desc} ${lines[i + 2]}`);
+      }
+    } else if (desc && lines[i + 1] && !isStopLine(lines[i + 1]) && lines[i + 1].length <= 28) {
+      // Single wrapped continuation word like `... LARGE COCKTAIL\nTABLE`
+      desc = trimTrailingMeta(`${desc} ${lines[i + 1]}`);
+    }
+
+    if (desc.length >= 2) {
+      return desc;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract Master/Case Unit Quantity (`MASTER QUANTITY`, `MASTER QTY`, `CASE QTY`, `Case Quantity`)
+ * while strictly ignoring `INNER QNTY` / `INNER QTY`, weights, dimensions, and `CARTON NO: X OF Y`.
  */
 export function extractCaseQtyFromText(text: string): number | null {
   const clean = normalizeDigits(text);
@@ -221,45 +275,102 @@ export function extractCaseQtyFromText(text: string): number | null {
     return Number.isFinite(n) && n >= 1 && n <= 9999 ? n : null;
   };
 
-  // Priority 1: Explicit "CASE QTY" / "CTN QTY" / "PACK QTY"
+  const UNIT_SUFFIX = '(?:pcs?|sets?|units?|ea|ctn|box)?\\.?';
+  const NUM_CAPTURE = `([0-9OQIL]{1,4})(?!\\.[0-9])\\s*${UNIT_SUFFIX}(?=$|[\\s.,;/|)])`;
+  const BAD_QTY_LINE =
+    /\b(?:inner|gw|nw|weight|lbs|kg|cbm|cu\.?\s*ft|cube|mm|cm|inch|dimensions?|gross|net|carton\s*no|p\.?\s*o\.?|of)\b/i;
+
+  // Priority 0: Explicit MASTER QTY / MASTER QUANTITY or stacked `MASTER` + `QUANTITY: N`
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    if (/\binner\b/i.test(line)) continue;
+
+    const masterSameLine = line.match(
+      new RegExp(
+        `\\bmaster\\s*(?:carton|ctn|case)?\\s*(?:q['’]?ty|qnty|0ty|oty|gty|quantity)\\s*[:.;\\-=\\s]*${NUM_CAPTURE}`,
+        'i'
+      )
+    );
+    if (masterSameLine && masterSameLine[1]) {
+      const parsed = parseNumericToken(masterSameLine[1]);
+      if (parsed !== null) return parsed;
+    }
+
+    if (/^master(?:\s+(?:carton|ctn|pack|case))?\s*[:.;\-=]*$/i.test(line)) {
+      const nextLine = lines[i + 1] || '';
+      if (nextLine && !/\binner\b/i.test(nextLine)) {
+        const nextQty = nextLine.match(
+          new RegExp(`^(?:q['’]?ty|qnty|0ty|oty|gty|quantity)?\\s*[:.;\\-=\\s]*${NUM_CAPTURE}`, 'i')
+        );
+        if (nextQty && nextQty[1]) {
+          const parsed = parseNumericToken(nextQty[1]);
+          if (parsed !== null) return parsed;
+        }
+        if (/^(?:q['’]?ty|qnty|0ty|oty|gty|quantity)\s*[:.;\-=]*$/i.test(nextLine)) {
+          const thirdLine = lines[i + 2] || '';
+          const thirdMatch = thirdLine.match(new RegExp(`^\\s*${NUM_CAPTURE}`, 'i'));
+          if (thirdMatch && thirdMatch[1]) {
+            const parsed = parseNumericToken(thirdMatch[1]);
+            if (parsed !== null) return parsed;
+          }
+        }
+      }
+    }
+  }
+
+  // Priority 1: Explicit "CASE QTY" / "CASEQTY" / "Case Quantity" / "CTN QTY" (never INNER)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/\binner\b/i.test(line)) continue;
 
     const caseSameLine = line.match(
-      /(?:case|c['’]?ase|ctn|carton|pack|pk|box|inner)\s*(?:q['’]?ty|0ty|oty|gty|quantity)\s*[:.\-=]?\s*([0-9OQIL]{1,5})(?:\s*(?:pcs|pc|units|ea|set))?\b/i
+      new RegExp(
+        `(?:case|c['’]?ase|ctn|carton|pack|pk|box)\\s*(?:q['’]?ty|qnty|0ty|oty|gty|quantity)\\s*[:.;\\-=\\s]*${NUM_CAPTURE}`,
+        'i'
+      )
     );
     if (caseSameLine && caseSameLine[1]) {
       const parsed = parseNumericToken(caseSameLine[1]);
       if (parsed !== null) return parsed;
     }
 
-    if (/(?:case|ctn|carton|pack|box)\s*(?:q['’]?ty|0ty|oty|gty|quantity)\s*[:.\-=]?$/i.test(line)) {
+    if (
+      /(?:case|c['’]?ase|ctn|carton|pack|pk|box)\s*(?:q['’]?ty|qnty|0ty|oty|gty|quantity)\s*[:.;\-=]*$/i.test(
+        line
+      )
+    ) {
       const nextLine = lines[i + 1] || '';
-      const stackedMatch = nextLine.match(/^\s*([0-9OQIL]{1,5})(?:\s*(?:pcs|pc|units|ea))?\b/i);
-      if (stackedMatch && stackedMatch[1]) {
-        const parsed = parseNumericToken(stackedMatch[1]);
-        if (parsed !== null) return parsed;
+      if (nextLine && !/\bof\b/i.test(nextLine)) {
+        const stackedMatch = nextLine.match(new RegExp(`^\\s*${NUM_CAPTURE}`, 'i'));
+        if (stackedMatch && stackedMatch[1]) {
+          const parsed = parseNumericToken(stackedMatch[1]);
+          if (parsed !== null) return parsed;
+        }
       }
     }
   }
 
-  // Priority 2: Generic "QTY: N" or "QUANTITY: N" (skipping weights/dimensions/carton X of Y lines)
+  // Priority 2: Generic "QTY: N" or "QUANTITY: N" (strictly excluding INNER, weights, dimensions, carton X of Y)
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (/\b(?:gw|nw|weight|lbs|kg|cbm|mm|cm|inch|gross|net|of)\b/i.test(line)) continue;
+    if (BAD_QTY_LINE.test(line)) continue;
 
-    const qtyMatch = line.match(/(?:^|\s)(?:q['’]?ty|0ty|oty|quantity)\s*[:.\-=]?\s*([0-9OQIL]{1,5})(?:\s*(?:pcs|pc|ea))?\b/i);
+    const qtyMatch = line.match(
+      new RegExp(`(?:^|\\s)(?:q['’]?ty|qnty|0ty|oty|gty|quantity)\\s*[:.;\\-=\\s]*${NUM_CAPTURE}`, 'i')
+    );
     if (qtyMatch && qtyMatch[1]) {
       const parsed = parseNumericToken(qtyMatch[1]);
       if (parsed !== null) return parsed;
     }
 
-    if (/^(?:q['’]?ty|0ty|oty|quantity)\s*[:.\-=]?$/i.test(line)) {
+    if (/^(?:q['’]?ty|qnty|0ty|oty|gty|quantity)\s*[:.;\-=]*$/i.test(line)) {
       const nextLine = lines[i + 1] || '';
-      const stackedMatch = nextLine.match(/^\s*([0-9OQIL]{1,5})(?:\s*(?:pcs|pc|ea))?\b/i);
-      if (stackedMatch && stackedMatch[1]) {
-        const parsed = parseNumericToken(stackedMatch[1]);
-        if (parsed !== null) return parsed;
+      if (nextLine && !BAD_QTY_LINE.test(nextLine)) {
+        const stackedMatch = nextLine.match(new RegExp(`^\\s*${NUM_CAPTURE}`, 'i'));
+        if (stackedMatch && stackedMatch[1]) {
+          const parsed = parseNumericToken(stackedMatch[1]);
+          if (parsed !== null) return parsed;
+        }
       }
     }
   }
@@ -373,6 +484,7 @@ export function parseCartonLabel(
   const cleanText = normalizeDigits(rawOcrText || '');
   const extractedItemNo = extractItemNoFromText(cleanText);
   const extractedCaseQty = extractCaseQtyFromText(cleanText);
+  const extractedDescription = extractDescriptionFromText(cleanText);
 
   // Collect single tokens AND adjacent multi-token pairs like "EV 21345-02" or "21345-02 BALK"
   const tokenMatches = cleanText.match(/\b[A-Z0-9][A-Z0-9\-_/]{1,26}\b/gi) || [];
@@ -392,11 +504,13 @@ export function parseCartonLabel(
 
   const matched = matchSessionItemByCandidates(candidates, sessionItems, codeContext);
   const finalItemNo = matched.matchedCandidate || extractedItemNo || barcodeCandidate || null;
+  const finalDescription = matched.item?.name || extractedDescription || null;
   const isCompleteRead = Boolean(matched.item && extractedCaseQty !== null && extractedCaseQty > 0);
 
   return {
     itemNo: finalItemNo,
     caseQty: extractedCaseQty,
+    description: finalDescription,
     matchedItem: matched.item,
     matchConfidence: matched.confidence,
     isCompleteRead,
