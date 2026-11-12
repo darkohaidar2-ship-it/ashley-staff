@@ -17,6 +17,7 @@ import {
   ScanLine,
   Loader2,
   Clock,
+  ChevronDown,
 } from 'lucide-react';
 import { SheetsAuditItem, SheetsAuditSession } from '@/app/api/warehouse/sheets-sync/route';
 import { parseCartonLabel } from '@/lib/warehouse-label-parser';
@@ -27,6 +28,8 @@ import {
 
 interface SmartCameraCartonScannerProps {
   session: SheetsAuditSession;
+  allSessions?: SheetsAuditSession[];
+  onSelectSession?: (nextSession: SheetsAuditSession) => void;
   isOpen: boolean;
   onClose: () => void;
   onUpdateSession: (updatedSession: SheetsAuditSession) => Promise<void>;
@@ -398,6 +401,8 @@ function MetallicVerifiedStrip({
 // =============================================================================
 export function SmartCameraCartonScanner({
   session,
+  allSessions = [],
+  onSelectSession,
   isOpen,
   onClose,
   onUpdateSession,
@@ -445,6 +450,8 @@ export function SmartCameraCartonScanner({
 
   const [focusedItemId, setFocusedItemId] = useState<string>(session.items[0]?.id || '');
   const [showItemDrawer, setShowItemDrawer] = useState(false);
+  const [showTabSwitcher, setShowTabSwitcher] = useState(false);
+  const [tabSearchTerm, setTabSearchTerm] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [manualInput, setManualInput] = useState('');
 
@@ -471,6 +478,19 @@ export function SmartCameraCartonScanner({
       window.speechSynthesis.getVoices();
     }
   }, []);
+
+  // Reset ephemeral HUD locks cleanly when switching between sheets/tabs inside camera
+  useEffect(() => {
+    partialLockRef.current = { item: null, itemNo: null, itemName: null, caseQty: null, lockedAt: 0 };
+    setLiveHud({
+      lockedItem: null,
+      lockedItemNo: null,
+      lockedItemName: null,
+      lockedCaseQty: null,
+      unmatchedCode: null,
+    });
+    setLastScannedResult(null);
+  }, [session.id]);
 
   // Keep focused item valid on tab change
   useEffect(() => {
@@ -1091,13 +1111,29 @@ export function SmartCameraCartonScanner({
           <X className="w-5 h-5 text-white" />
         </button>
 
-        <div className="flex items-center gap-2 bg-black/55 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/15 max-w-[60vw]">
+        <button
+          type="button"
+          onClick={() => {
+            if (allSessions.length > 0 && onSelectSession) {
+              setShowTabSwitcher(true);
+            }
+          }}
+          className={`flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20 max-w-[58vw] ${
+            allSessions.length > 0 && onSelectSession
+              ? 'cursor-pointer active:scale-95 hover:bg-black/80 transition-transform touch-manipulation'
+              : ''
+          }`}
+          title="گۆڕینی شیت یان تابی کار"
+        >
           <span className={`w-2 h-2 rounded-full shrink-0 ${ocrReady ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
           <span className="text-[11px] font-black text-white truncate">{session.sheetName || session.title}</span>
           <span className="text-[11px] font-black font-mono text-amber-300 shrink-0">
             {totalSessionAuditedCartons}/{totalSessionCartons}
           </span>
-        </div>
+          {allSessions.length > 1 && onSelectSession && (
+            <ChevronDown className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+          )}
+        </button>
 
         <div className="flex items-center gap-1.5">
           <button
@@ -1559,6 +1595,121 @@ export function SmartCameraCartonScanner({
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* 📑 IN-CAMERA PACKAGE & TAB SWITCHER OVERLAY (هەموو شیت و تابەکان لە مۆبایلدا) */}
+      {showTabSwitcher && onSelectSession && (
+        <div className="absolute inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col p-4 pt-[max(1rem,env(safe-area-inset-top))] animate-in fade-in duration-150">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+            <h3 className="text-sm font-black text-white flex items-center gap-2">
+              <Layers className="w-4 h-4 text-amber-400" />
+              <span>هەڵبژاردنی شیت و تاب ({allSessions.length})</span>
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowTabSwitcher(false)}
+              className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center cursor-pointer active:scale-95 touch-manipulation"
+            >
+              <X className="w-4 h-4 text-slate-300" />
+            </button>
+          </div>
+
+          <div className="relative mb-3">
+            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
+            <input
+              type="text"
+              value={tabSearchTerm}
+              onChange={(e) => setTabSearchTerm(e.target.value)}
+              placeholder="گەڕان بەپێی ناوی شیت یان تاب..."
+              className="w-full h-10 pr-9 pl-3 rounded-xl bg-slate-900 border border-slate-800 text-[16px] sm:text-xs font-bold text-white outline-none focus:border-amber-400"
+            />
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-3 pb-6">
+            {(() => {
+              const q = tabSearchTerm.trim().toLowerCase();
+              const pkgMap = new Map<
+                string,
+                { packageId: string; packageTitle: string; tabs: SheetsAuditSession[] }
+              >();
+              for (const s of allSessions) {
+                const pid = s.packageId || s.id;
+                const pkgTitle = s.packageTitle || s.title;
+                const tabName = (s.sheetName || s.title).toLowerCase();
+                if (q && !pkgTitle.toLowerCase().includes(q) && !tabName.includes(q)) continue;
+                if (!pkgMap.has(pid)) {
+                  pkgMap.set(pid, { packageId: pid, packageTitle: pkgTitle, tabs: [] });
+                }
+                pkgMap.get(pid)!.tabs.push(s);
+              }
+              const groups = Array.from(pkgMap.values());
+              groups.forEach((g) => g.tabs.sort((a, b) => (a.tabIndex ?? 0) - (b.tabIndex ?? 0)));
+
+              if (groups.length === 0) {
+                return (
+                  <div className="py-12 text-center text-xs text-slate-400 font-bold">
+                    هیچ شیت یان تابێک نەدۆزرایەوە
+                  </div>
+                );
+              }
+
+              return groups.map((grp) => (
+                <div key={grp.packageId} className="rounded-2xl bg-slate-900/90 border border-slate-800 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Package className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span className="text-xs font-black text-white truncate">{grp.packageTitle}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 text-[10px] font-mono font-black shrink-0">
+                      {grp.tabs.length} تاب
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {grp.tabs.map((tab) => {
+                      const active = tab.id === session.id;
+                      const tot = tab.totalExpectedUnits || 0;
+                      const chk = tab.totalAuditedUnits || 0;
+                      const pct = tot > 0 ? Math.round((chk / tot) * 100) : 0;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => {
+                            onSelectSession(tab);
+                            setShowTabSwitcher(false);
+                          }}
+                          className={`w-full p-2.5 rounded-xl border text-right flex items-center justify-between gap-2 cursor-pointer active:scale-[0.99] touch-manipulation ${
+                            active
+                              ? 'bg-amber-400 text-slate-950 border-amber-300 font-black'
+                              : 'bg-slate-800/80 text-slate-100 border-slate-700 hover:bg-slate-800'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <span className="text-xs font-black block truncate">
+                              {tab.sheetName || tab.title}
+                            </span>
+                            <span className={`text-[10px] font-mono block ${active ? 'text-slate-900/80' : 'text-slate-400'}`}>
+                              {tab.mode === 'shipment_receiving' ? 'بار داگرتن' : 'جەرد'} • {tab.items?.length || 0} کاڵا
+                            </span>
+                          </div>
+                          <div className="text-left font-mono shrink-0">
+                            <span className="text-xs font-black block" dir="ltr">
+                              {chk}/{tot}
+                            </span>
+                            <span className={`text-[10px] font-bold block ${active ? 'text-slate-900' : 'text-emerald-400'}`}>
+                              {pct}%
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ));
+            })()}
           </div>
         </div>
       )}

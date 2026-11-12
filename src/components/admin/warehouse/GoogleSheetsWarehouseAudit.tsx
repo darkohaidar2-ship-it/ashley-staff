@@ -689,7 +689,26 @@ export function GoogleSheetsWarehouseAudit({
   const [inputMode, setInputMode] = useState<'shipment_receiving' | 'inventory_stocktake'>('shipment_receiving');
   const [inputWebhookUrl, setInputWebhookUrl] = useState<string>('');
   const [connecting, setConnecting] = useState<boolean>(false);
+  const [inspectingTabs, setInspectingTabs] = useState<boolean>(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [targetPackageIdForConnect, setTargetPackageIdForConnect] = useState<string | null>(null);
+  const [previewedTabs, setPreviewedTabs] = useState<
+    Array<{
+      sheetName: string;
+      tabGid?: string;
+      tabIndex: number;
+      itemCount: number;
+      totalUnits: number;
+      alreadyImported?: boolean;
+      existingAuditedUnits?: number;
+      rawData?: any[][];
+    }>
+  >([]);
+  const [selectedPreviewTabNames, setSelectedPreviewTabNames] = useState<string[]>([]);
+  const [pendingExcelTitle, setPendingExcelTitle] = useState<string | null>(null);
+  const [packageTabFilter, setPackageTabFilter] = useState<string>('');
+  const [sessionsModalSearch, setSessionsModalSearch] = useState<string>('');
+  const [sessionsModalModeFilter, setSessionsModalModeFilter] = useState<'all' | 'shipment_receiving' | 'inventory_stocktake'>('all');
 
   // Notification Copy
   const [copiedText, setCopiedText] = useState<string | null>(null);
@@ -1057,10 +1076,78 @@ export function GoogleSheetsWarehouseAudit({
   const finalizeImportedSession = async (rawSession: SheetsAuditSession) =>
     finalizeImportedPackage([rawSession]);
 
-  // 2. Connect and Import ALL Tabs of Google Sheet as 1 Package
+  const resetPreviewSelection = useCallback(() => {
+    setPreviewedTabs([]);
+    setSelectedPreviewTabNames([]);
+    setPendingExcelTitle(null);
+    setTargetPackageIdForConnect(null);
+  }, []);
+
+  // 1.5 Inspect All Available Tabs in a Google Sheet Before Choosing Which Ones to Import
+  const handleInspectSheetTabs = async (
+    overrideUrl?: string,
+    overrideWebhook?: string,
+    overrideMode?: 'shipment_receiving' | 'inventory_stocktake',
+    overridePkgId?: string | null
+  ) => {
+    const targetUrl = (overrideUrl ?? inputSheetUrl).trim();
+    if (!targetUrl) {
+      setConnectError('سەرەتا لینکی Google Sheet یان Apps Script بنووسە.');
+      return;
+    }
+
+    setInspectingTabs(true);
+    setConnectError(null);
+
+    try {
+      const rawWebhook = (overrideWebhook ?? inputWebhookUrl).trim();
+      const validWebhook =
+        rawWebhook && /^https:\/\/script\.google(usercontent)?\.com\//.test(rawWebhook) ? rawWebhook : undefined;
+
+      const res = await fetch('/api/warehouse/sheets-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'inspect_sheet',
+          sheetUrl: targetUrl,
+          webhookUrl: validWebhook,
+          mode: overrideMode || inputMode,
+          targetPackageId: overridePkgId ?? (targetPackageIdForConnect || undefined),
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && Array.isArray(data.tabs) && data.tabs.length > 0) {
+        setPreviewedTabs(data.tabs);
+        // Auto-select new tabs first if updating an existing package; otherwise select all
+        const newTabs = data.tabs.filter((t: any) => !t.alreadyImported);
+        const defaultSelected =
+          newTabs.length > 0 && newTabs.length < data.tabs.length
+            ? newTabs.map((t: any) => t.sheetName)
+            : data.tabs.map((t: any) => t.sheetName);
+        setSelectedPreviewTabNames(defaultSelected);
+        if (!inputSessionTitle.trim() && data.spreadsheetTitle) {
+          setInputSessionTitle(data.spreadsheetTitle);
+        }
+      } else {
+        setConnectError(data.error || 'نەتوانرا لیستی تابەکان بخوێندرێتەوە.');
+      }
+    } catch {
+      setConnectError('هەڵە لە پەیوەندیکردن بە سێرڤەر بۆ پشکنینی تابەکان.');
+    } finally {
+      setInspectingTabs(false);
+    }
+  };
+
+  // 2. Connect and Import All or Selected Tabs of Google Sheet into Package
   const handleConnectSheet = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputSheetUrl.trim()) return;
+
+    if (previewedTabs.length > 0 && selectedPreviewTabNames.length === 0) {
+      setConnectError('تکایە لانیکەم یەک تاب (بەش) هەڵبژێرە بۆ داخڵکردن.');
+      return;
+    }
 
     setConnecting(true);
     setConnectError(null);
@@ -1079,6 +1166,11 @@ export function GoogleSheetsWarehouseAudit({
           webhookUrl: validWebhook,
           mode: inputMode,
           title: inputSessionTitle.trim() || undefined,
+          selectedTabNames:
+            previewedTabs.length > 0 && selectedPreviewTabNames.length > 0
+              ? selectedPreviewTabNames
+              : undefined,
+          targetPackageId: targetPackageIdForConnect || undefined,
         }),
       });
 
@@ -1086,6 +1178,7 @@ export function GoogleSheetsWarehouseAudit({
       if (data.success && (Array.isArray(data.sessions) ? data.sessions.length > 0 : data.session)) {
         const list: SheetsAuditSession[] = Array.isArray(data.sessions) ? data.sessions : [data.session];
         await finalizeImportedPackage(list, data.packageCodeProfile, data.packageTitle);
+        resetPreviewSelection();
       } else {
         setConnectError(data.error || 'نەتوانرا گۆگڵ شیتەکە لۆد بکرێت.');
       }
@@ -1130,7 +1223,43 @@ export function GoogleSheetsWarehouseAudit({
     }
   };
 
-  // 2b. Import ALL Tabs via Excel File Upload (.xlsx, .xls, .csv) as 1 Package
+  // 2b. Import ALL or Selected Tabs via Excel File Upload (.xlsx, .xls, .csv) as 1 Package
+  const submitExcelSheetsPackage = async (
+    sheetsPayload: Array<{ sheetName: string; rawData: any[][] }>,
+    fallbackTitle: string,
+    selectedNames?: string[]
+  ) => {
+    setConnecting(true);
+    setConnectError(null);
+    try {
+      const res = await fetch('/api/warehouse/sheets-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'parse_workbook',
+          sheets: sheetsPayload,
+          selectedTabNames: selectedNames && selectedNames.length > 0 ? selectedNames : undefined,
+          mode: inputMode,
+          title: inputSessionTitle.trim() || fallbackTitle,
+          webhookUrl: inputWebhookUrl.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && (Array.isArray(data.sessions) ? data.sessions.length > 0 : data.session)) {
+        const list: SheetsAuditSession[] = Array.isArray(data.sessions) ? data.sessions : [data.session];
+        await finalizeImportedPackage(list, data.packageCodeProfile, data.packageTitle);
+        resetPreviewSelection();
+      } else {
+        setConnectError(data.error || 'نەتوانرا فایلی ئێکسڵەکە بخوێندرێتەوە.');
+      }
+    } catch (err: any) {
+      setConnectError('هەڵە لە ناردنی فایلی ئێکسڵ: ' + (err.message || ''));
+    } finally {
+      setConnecting(false);
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1148,29 +1277,29 @@ export function GoogleSheetsWarehouseAudit({
           const rawData = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '', raw: false });
           return { sheetName, rawData };
         });
+        const fallbackTitle = file.name.replace(/\.[^/.]+$/, '');
 
-        const res = await fetch('/api/warehouse/sheets-sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'parse_workbook',
-            sheets: sheetsPayload,
-            mode: inputMode,
-            title: inputSessionTitle.trim() || file.name.replace(/\.[^/.]+$/, ''),
-            webhookUrl: inputWebhookUrl.trim() || undefined,
-          }),
-        });
-
-        const data = await res.json();
-        if (data.success && (Array.isArray(data.sessions) ? data.sessions.length > 0 : data.session)) {
-          const list: SheetsAuditSession[] = Array.isArray(data.sessions) ? data.sessions : [data.session];
-          await finalizeImportedPackage(list, data.packageCodeProfile, data.packageTitle);
-        } else {
-          setConnectError(data.error || 'نەتوانرا فایلی ئێکسڵەکە بخوێندرێتەوە.');
+        if (sheetsPayload.length > 1) {
+          // Preview all Excel tabs so the user can choose all or specific tabs!
+          setPreviewedTabs(
+            sheetsPayload.map((sp, idx) => ({
+              sheetName: sp.sheetName,
+              tabIndex: idx,
+              itemCount: Math.max(0, sp.rawData.length - 1),
+              totalUnits: 0,
+              rawData: sp.rawData,
+            }))
+          );
+          setSelectedPreviewTabNames(sheetsPayload.map((sp) => sp.sheetName));
+          setPendingExcelTitle(fallbackTitle);
+          if (!inputSessionTitle.trim()) setInputSessionTitle(fallbackTitle);
+          setConnecting(false);
+          return;
         }
+
+        await submitExcelSheetsPackage(sheetsPayload, fallbackTitle);
       } catch (err: any) {
         setConnectError('هەڵە لە خوێندنەوەی فایلی ئێکسڵ: ' + (err.message || ''));
-      } finally {
         setConnecting(false);
       }
     };
@@ -2345,7 +2474,20 @@ export function GoogleSheetsWarehouseAudit({
               </span>
             </span>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {sectionSessions.length >= 6 && (
+                <div className="relative">
+                  <Search className="w-3 h-3 text-slate-400 absolute right-2 top-2" />
+                  <input
+                    type="text"
+                    value={packageTabFilter}
+                    onChange={(e) => setPackageTabFilter(e.target.value)}
+                    placeholder="گەڕان لە تابەکان..."
+                    className="h-7 pr-7 pl-2 rounded-lg border border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-400 w-36 sm:w-44"
+                  />
+                </div>
+              )}
+
               {currentSession && (
                 <button
                   type="button"
@@ -2386,6 +2528,7 @@ export function GoogleSheetsWarehouseAudit({
                 <button
                   type="button"
                   onClick={() => {
+                    resetPreviewSelection();
                     setInputMode(warehouseSection);
                     setShowConnectModal(true);
                   }}
@@ -2404,11 +2547,23 @@ export function GoogleSheetsWarehouseAudit({
               {groupedPackages.map((pkg) => {
                 const pkgPercent = pkg.totalUnits > 0 ? Math.round((pkg.auditedUnits / pkg.totalUnits) * 100) : 0;
                 const isPkgActive = pkg.tabs.some((t) => t.id === currentSession?.id);
+                const pkgWebhook = pkg.tabs.find((t) => t.webhookUrl)?.webhookUrl || '';
+                const pkgSheetSource = pkg.googleSheetUrl || pkgWebhook;
+                const tabQ = packageTabFilter.trim().toLowerCase();
+                const visibleTabs = tabQ
+                  ? pkg.tabs.filter(
+                      (s) =>
+                        (s.sheetName || s.title).toLowerCase().includes(tabQ) ||
+                        (pkg.packageTitle || '').toLowerCase().includes(tabQ)
+                    )
+                  : pkg.tabs;
+
+                if (tabQ && visibleTabs.length === 0) return null;
 
                 return (
                   <div
                     key={pkg.packageId}
-                    className={`rounded-2xl border p-3 transition-all space-y-2 ${
+                    className={`rounded-2xl border p-3 transition-all space-y-2.5 ${
                       isPkgActive
                         ? 'bg-slate-50/90 border-blue-200 shadow-xs'
                         : 'bg-white border-slate-200/90'
@@ -2426,7 +2581,7 @@ export function GoogleSheetsWarehouseAudit({
                               {pkg.packageTitle}
                             </span>
                             <span className="px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-800 text-[10px] font-black font-mono">
-                              {pkg.tabs.length} بەش
+                              {pkg.tabs.length} تاب / بەش
                             </span>
                             <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-mono font-bold">
                               {pkg.auditedUnits} / {pkg.totalUnits} ({pkgPercent}%)
@@ -2436,7 +2591,29 @@ export function GoogleSheetsWarehouseAudit({
                       </div>
 
                       {!isMobileOperational && (
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                          {pkgSheetSource && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                resetPreviewSelection();
+                                setImportTab('url');
+                                setInputMode(warehouseSection);
+                                setInputSheetUrl(pkgSheetSource);
+                                setInputWebhookUrl(pkgWebhook);
+                                setInputSessionTitle(pkg.packageTitle);
+                                setTargetPackageIdForConnect(pkg.packageId);
+                                setShowConnectModal(true);
+                                handleInspectSheetTabs(pkgSheetSource, pkgWebhook, warehouseSection, pkg.packageId);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-black flex items-center gap-1 cursor-pointer active:scale-95"
+                              title="بینین و هێنانی تابە نوێیەکان لەم گۆگڵ شیتە"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>تابی نوێ بهێنە</span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => openPackageCodeBriefing(pkg.tabs, pkg.packageTitle)}
@@ -2467,9 +2644,9 @@ export function GoogleSheetsWarehouseAudit({
                       )}
                     </div>
 
-                    {/* Horizontal Section Tabs inside Package */}
-                    <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-thin">
-                      {pkg.tabs.map((s) => {
+                    {/* Responsive Wrapped Grid of ALL Tabs inside Package (Visible without horizontal hiding!) */}
+                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-stretch gap-2 max-h-56 overflow-y-auto ashley-cell-scroll p-0.5">
+                      {visibleTabs.map((s) => {
                         const isSelected = currentSession?.id === s.id;
                         const totalUnits = s.totalExpectedUnits || 0;
                         const auditedUnits = s.totalAuditedUnits || 0;
@@ -2478,7 +2655,7 @@ export function GoogleSheetsWarehouseAudit({
                         return (
                           <div
                             key={s.id}
-                            className={`rounded-xl shrink-0 border flex items-center transition-all ${
+                            className={`rounded-xl border flex items-center justify-between transition-all min-w-[130px] ${
                               isSelected
                                 ? warehouseSection === 'shipment_receiving'
                                   ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-300/60 shadow-xs'
@@ -2495,14 +2672,14 @@ export function GoogleSheetsWarehouseAudit({
                                   localStorage.setItem(ACTIVE_SESSION_ID_KEY, s.id);
                                 }
                               }}
-                              className="px-3 py-1.5 text-right cursor-pointer flex items-center gap-2 active:scale-95"
+                              className="flex-1 px-2.5 py-2 text-right cursor-pointer flex items-center justify-between gap-2 active:scale-95 touch-manipulation min-w-0"
                             >
-                              <div className="flex flex-col">
+                              <div className="flex flex-col min-w-0">
                                 <span className="text-xs font-black text-slate-900 truncate max-w-[160px]">
                                   {s.sheetName || s.title}
                                 </span>
                                 <span className="text-[10px] text-slate-500 font-mono">
-                                  {auditedUnits} / {totalUnits} ({percent}%)
+                                  {s.items?.length || 0} کاڵا • {auditedUnits}/{totalUnits} ({percent}%)
                                 </span>
                               </div>
                               {isSelected && (
@@ -2514,7 +2691,7 @@ export function GoogleSheetsWarehouseAudit({
                               <button
                                 type="button"
                                 onClick={() => setDeleteDialog({ kind: 'tab', session: s })}
-                                className="pl-2 pr-1.5 py-2 text-slate-400 hover:text-rose-600 cursor-pointer border-r border-slate-200/80"
+                                className="pl-2 pr-1.5 py-2 text-slate-400 hover:text-rose-600 cursor-pointer border-r border-slate-200/80 shrink-0"
                                 title={`سڕینەوەی بەشی «${s.sheetName || s.title}»`}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -3365,7 +3542,7 @@ export function GoogleSheetsWarehouseAudit({
       {/* ========================================================================= */}
       {showConnectModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-lg max-h-[92vh] overflow-y-auto ashley-cell-scroll bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-black">
@@ -3373,16 +3550,19 @@ export function GoogleSheetsWarehouseAudit({
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-slate-900">
-                    بەستنەوە بە Google Sheet
+                    {targetPackageIdForConnect ? 'هێنان و هەڵبژاردنی تابەکان لە گۆگڵ شیت' : 'بەستنەوە بە Google Sheet'}
                   </h3>
                   <p className="text-[11px] text-slate-500 font-medium">
-                    لینکی شیتەکەت دابنێ بۆ ئەوەی ڕاستەوخۆ داتاکانی بار یان جەرد لۆد بێت
+                    دەتوانیت هەموو تابەکان یان تەنها چەند تابێکی دیاریکراو هەڵبژێریت و داخڵی بکەیت
                   </p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowConnectModal(false)}
+                onClick={() => {
+                  resetPreviewSelection();
+                  setShowConnectModal(false);
+                }}
                 className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer"
               >
                 <X className="w-4 h-4 text-slate-500" />
@@ -3393,7 +3573,7 @@ export function GoogleSheetsWarehouseAudit({
             <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100/90 rounded-2xl mb-4 border border-slate-200/70">
               <button
                 type="button"
-                onClick={() => { setImportTab('url'); setConnectError(null); }}
+                onClick={() => { setImportTab('url'); setConnectError(null); resetPreviewSelection(); }}
                 className={`py-2 px-1.5 rounded-xl text-[11px] font-black transition-all cursor-pointer flex items-center justify-center gap-1 ${
                   importTab === 'url'
                     ? 'bg-white text-blue-600 shadow-xs'
@@ -3467,19 +3647,114 @@ export function GoogleSheetsWarehouseAudit({
                   <label className="block text-slate-700 font-bold mb-1">
                     لینکی Google Sheet یان Apps Script Web App:
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={inputSheetUrl}
-                    onChange={(e) => setInputSheetUrl(e.target.value)}
-                    placeholder="https://docs.google.com/spreadsheets/d/1BxiMVs.../edit"
-                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-mono font-bold outline-none focus:border-blue-500"
-                    dir="ltr"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      required
+                      value={inputSheetUrl}
+                      onChange={(e) => {
+                        setInputSheetUrl(e.target.value);
+                        if (previewedTabs.length > 0) resetPreviewSelection();
+                      }}
+                      placeholder="https://docs.google.com/spreadsheets/d/1BxiMVs.../edit"
+                      className="flex-1 h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-mono font-bold outline-none focus:border-blue-500"
+                      dir="ltr"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleInspectSheetTabs()}
+                      disabled={inspectingTabs || !inputSheetUrl.trim()}
+                      className="h-11 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 font-black text-[11px] flex items-center gap-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+                      title="پیشاندانی هەموو تابەکان بۆ هەڵبژاردن"
+                    >
+                      {inspectingTabs ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                      <span>بینینی تابەکان</span>
+                    </button>
+                  </div>
                   <p className="text-[10px] text-slate-500 mt-1 font-medium">
-                    هەموو تەبەکان (بەشەکان) بە یەک جار دەهێنێت و بە زیرەکی کۆد و عەدەدەکان شی دەکاتەوە.
+                    کلیک لە «بینینی تابەکان» بکە بۆ هەڵبژاردنی تابی دیاریکراو، یان ڕاستەوخۆ هەمووی لۆد بکە.
                   </p>
                 </div>
+
+                {/* Interactive Tab Picker Preview (when user clicked "بینینی تابەکان") */}
+                {previewedTabs.length > 0 && importTab === 'url' && (
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-blue-200 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-black text-slate-800 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-blue-600" />
+                        <span>تابە دۆزراوەکان ({selectedPreviewTabNames.length} / {previewedTabs.length} هەڵبژێردراوە):</span>
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPreviewTabNames(previewedTabs.map((t) => t.sheetName))}
+                          className="text-[10px] font-black text-blue-600 hover:underline cursor-pointer"
+                        >
+                          هەمووی
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPreviewTabNames([])}
+                          className="text-[10px] font-black text-slate-500 hover:underline cursor-pointer"
+                        >
+                          لابردن
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto ashley-cell-scroll p-0.5">
+                      {previewedTabs.map((t) => {
+                        const checked = selectedPreviewTabNames.includes(t.sheetName);
+                        return (
+                          <button
+                            key={`${t.tabIndex}_${t.sheetName}`}
+                            type="button"
+                            onClick={() =>
+                              setSelectedPreviewTabNames((prev) =>
+                                prev.includes(t.sheetName)
+                                  ? prev.filter((n) => n !== t.sheetName)
+                                  : [...prev, t.sheetName]
+                              )
+                            }
+                            className={`p-2 rounded-xl border text-right flex items-center justify-between gap-2 cursor-pointer transition-all ${
+                              checked
+                                ? 'bg-blue-50 border-blue-400 text-slate-900 ring-1 ring-blue-300'
+                                : 'bg-white border-slate-200 text-slate-600 opacity-75'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span
+                                className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                                  checked
+                                    ? 'bg-blue-600 border-blue-600 text-white'
+                                    : 'bg-white border-slate-300'
+                                }`}
+                              >
+                                {checked && <Check className="w-3 h-3 stroke-[3]" />}
+                              </span>
+                              <div className="min-w-0">
+                                <span className="text-[11px] font-black block truncate">{t.sheetName}</span>
+                                <span className="text-[9.5px] font-mono text-slate-500 block">
+                                  {t.itemCount} کاڵا • {t.totalUnits} دانە
+                                </span>
+                              </div>
+                            </div>
+                            {t.alreadyImported ? (
+                              <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[9px] font-black shrink-0">
+                                هەیە
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-black shrink-0">
+                                نوێ
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Mode Selection */}
                 <div>
@@ -3570,12 +3845,19 @@ export function GoogleSheetsWarehouseAudit({
                     className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-md disabled:opacity-50"
                   >
                     {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    <span>لۆدکردن و دەستپێکردنی پشکنین</span>
+                    <span>
+                      {previewedTabs.length > 0
+                        ? `داخڵکردنی تابە هەڵبژێردراوەکان (${selectedPreviewTabNames.length})`
+                        : 'لۆدکردنی هەموو تابەکان و دەستپێکردن'}
+                    </span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setShowConnectModal(false)}
+                    onClick={() => {
+                      resetPreviewSelection();
+                      setShowConnectModal(false);
+                    }}
                     className="px-4 h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs cursor-pointer"
                   >
                     داخستن
@@ -3654,11 +3936,92 @@ export function GoogleSheetsWarehouseAudit({
                   />
                 </div>
 
+                {previewedTabs.length > 0 && pendingExcelTitle && (
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-blue-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black text-slate-800">
+                        تابەکانی ئێکسڵ ({selectedPreviewTabNames.length}/{previewedTabs.length}):
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPreviewTabNames(previewedTabs.map((t) => t.sheetName))}
+                          className="text-[10px] font-black text-blue-600 hover:underline cursor-pointer"
+                        >
+                          هەمووی
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPreviewTabNames([])}
+                          className="text-[10px] font-black text-slate-500 hover:underline cursor-pointer"
+                        >
+                          لابردن
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto ashley-cell-scroll">
+                      {previewedTabs.map((t) => {
+                        const checked = selectedPreviewTabNames.includes(t.sheetName);
+                        return (
+                          <button
+                            key={t.sheetName}
+                            type="button"
+                            onClick={() =>
+                              setSelectedPreviewTabNames((prev) =>
+                                prev.includes(t.sheetName)
+                                  ? prev.filter((n) => n !== t.sheetName)
+                                  : [...prev, t.sheetName]
+                              )
+                            }
+                            className={`p-2 rounded-xl border text-right flex items-center gap-2 cursor-pointer ${
+                              checked
+                                ? 'bg-blue-50 border-blue-400 text-slate-900'
+                                : 'bg-white border-slate-200 text-slate-500'
+                            }`}
+                          >
+                            <span
+                              className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                                checked ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-300'
+                              }`}
+                            >
+                              {checked && <Check className="w-3 h-3 stroke-[3]" />}
+                            </span>
+                            <span className="text-[11px] font-black truncate">{t.sheetName}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                  {previewedTabs.length > 0 && pendingExcelTitle && (
+                    <button
+                      type="button"
+                      disabled={connecting || selectedPreviewTabNames.length === 0}
+                      onClick={() =>
+                        submitExcelSheetsPackage(
+                          previewedTabs
+                            .filter((t) => selectedPreviewTabNames.includes(t.sheetName))
+                            .map((t) => ({ sheetName: t.sheetName, rawData: t.rawData || [] })),
+                          pendingExcelTitle,
+                          selectedPreviewTabNames
+                        )
+                      }
+                      className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                      <span>داخڵکردنی ({selectedPreviewTabNames.length}) تاب</span>
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => setShowConnectModal(false)}
-                    className="w-full h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs cursor-pointer"
+                    onClick={() => {
+                      resetPreviewSelection();
+                      setShowConnectModal(false);
+                    }}
+                    className={`${previewedTabs.length > 0 && pendingExcelTitle ? 'px-4' : 'w-full'} h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs cursor-pointer`}
                   >
                     داخستن
                   </button>
@@ -3859,84 +4222,205 @@ export function GoogleSheetsWarehouseAudit({
       {/* 📦 MODAL 2: SWITCH SESSIONS MODAL */}
       {/* ========================================================================= */}
       {showSessionsModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-200 p-4 sm:p-6 animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[88vh]">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-3 shrink-0">
               <div className="flex items-center gap-2">
                 <Layers className="w-5 h-5 text-blue-600" />
                 <h3 className="text-sm font-black text-slate-900">
-                  سێشنەکانی پشکنین و جەرد ({sessions.length})
+                  هەموو شیت و تابەکان ({sessions.length})
                 </h3>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowSessionsModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer"
-              >
-                <X className="w-4 h-4 text-slate-500" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => loadSessions(true)}
+                  disabled={refreshingCloud}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${refreshingCloud ? 'animate-spin' : ''}`} />
+                  <span>نوێکردنەوە</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSessionsModal(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer"
+                >
+                  <X className="w-4 h-4 text-slate-500" />
+                </button>
+              </div>
             </div>
 
-            <div className="max-h-96 overflow-y-auto space-y-2.5">
-              {sessions.length === 0 ? (
-                <div className="py-10 text-center text-xs text-slate-400 font-bold">
-                  هیچ سێشنێک تۆمار نەکراوە.
-                </div>
-              ) : (
-                sessions.map(s => (
-                  <div
-                    key={s.id}
-                    className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-                      currentSession?.id === s.id
-                        ? 'bg-blue-50/60 border-blue-300 ring-2 ring-blue-300/40'
-                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+            {/* Search & Section Filter inside All Sheets Modal */}
+            <div className="flex flex-col sm:flex-row gap-2 mb-3 shrink-0">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+                <input
+                  type="text"
+                  value={sessionsModalSearch}
+                  onChange={(e) => setSessionsModalSearch(e.target.value)}
+                  placeholder="گەڕان بەپێی ناوی فایل یان تاب..."
+                  className="w-full h-9 pr-9 pl-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold outline-none focus:bg-white focus:border-blue-400"
+                />
+              </div>
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl shrink-0">
+                {(
+                  [
+                    { id: 'all', label: 'هەمووی' },
+                    { id: 'shipment_receiving', label: 'بار داگرتن' },
+                    { id: 'inventory_stocktake', label: 'جەرد' },
+                  ] as const
+                ).map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setSessionsModalModeFilter(m.id)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-black cursor-pointer ${
+                      sessionsModalModeFilter === m.id
+                        ? 'bg-white text-blue-600 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-slate-900 text-xs truncate">{s.title}</span>
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3 ashley-cell-scroll pr-0.5">
+              {(() => {
+                const q = sessionsModalSearch.trim().toLowerCase();
+                const filtered = sessions.filter((s) => {
+                  const sMode = s.mode || 'shipment_receiving';
+                  if (sessionsModalModeFilter !== 'all' && sMode !== sessionsModalModeFilter) return false;
+                  if (!q) return true;
+                  return (
+                    (s.packageTitle || '').toLowerCase().includes(q) ||
+                    (s.sheetName || '').toLowerCase().includes(q) ||
+                    (s.title || '').toLowerCase().includes(q)
+                  );
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="py-10 text-center text-xs text-slate-400 font-bold">
+                      هیچ شیت یان تابێک نەدۆزرایەوە.
+                    </div>
+                  );
+                }
+
+                const groups = new Map<
+                  string,
+                  { packageId: string; packageTitle: string; mode: 'shipment_receiving' | 'inventory_stocktake'; tabs: SheetsAuditSession[] }
+                >();
+                for (const s of filtered) {
+                  const pid = `${s.packageId || s.id}__${s.mode || 'shipment_receiving'}`;
+                  if (!groups.has(pid)) {
+                    groups.set(pid, {
+                      packageId: s.packageId || s.id,
+                      packageTitle: s.packageTitle || s.title,
+                      mode: s.mode || 'shipment_receiving',
+                      tabs: [],
+                    });
+                  }
+                  groups.get(pid)!.tabs.push(s);
+                }
+
+                const groupList = Array.from(groups.values());
+                groupList.forEach((g) => g.tabs.sort((a, b) => (a.tabIndex ?? 0) - (b.tabIndex ?? 0)));
+
+                return groupList.map((grp) => (
+                  <div key={`${grp.mode}_${grp.packageId}`} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Package className="w-4 h-4 text-blue-600 shrink-0" />
+                        <span className="text-xs font-black text-slate-900 truncate">{grp.packageTitle}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <span className="text-[10px] px-2 py-0.5 rounded-md bg-white border border-slate-200 font-bold">
-                          {s.mode === 'shipment_receiving' ? 'باری نوێ' : 'جەرد'}
+                          {grp.mode === 'shipment_receiving' ? 'باری نوێ' : 'جەرد'}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 font-mono font-black">
+                          {grp.tabs.length} تاب
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center gap-2">
-                        <span>{s.createdAt.slice(0, 10)}</span>
-                        <span>•</span>
-                        <span>{s.items?.length || 0} کاڵا</span>
-                        <span>•</span>
-                        <span>{s.totalAuditedUnits || 0} / {s.totalExpectedUnits || 0} دانە</span>
-                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCurrentSession(s);
-                          setShowSessionsModal(false);
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs cursor-pointer active:scale-95"
-                      >
-                        دەستبەکاربوون
-                      </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {grp.tabs.map((s) => {
+                        const isCur = currentSession?.id === s.id;
+                        return (
+                          <div
+                            key={s.id}
+                            className={`p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2 ${
+                              isCur
+                                ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-300/50'
+                                : 'bg-white border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                triggerHaptic('light');
+                                setWarehouseSection(s.mode || 'shipment_receiving');
+                                setInputMode(s.mode || 'shipment_receiving');
+                                setCurrentSession(s);
+                                if (typeof window !== 'undefined') {
+                                  localStorage.setItem(ACTIVE_SESSION_ID_KEY, s.id);
+                                }
+                                setShowSessionsModal(false);
+                              }}
+                              className="flex-1 min-w-0 text-right cursor-pointer"
+                            >
+                              <span className="font-black text-slate-900 text-xs truncate block">
+                                {s.sheetName || s.title}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                                {s.items?.length || 0} کاڵا • {s.totalAuditedUnits || 0} / {s.totalExpectedUnits || 0} دانە
+                              </span>
+                            </button>
 
-                      {!isMobileOperational && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowSessionsModal(false);
-                            setDeleteDialog({ kind: 'tab', session: s });
-                          }}
-                          className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 cursor-pointer active:scale-95"
-                          title="سڕینەوەی ئەم بەشە (لەگەڵ بژاردەی گۆگڵ شیت)"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  triggerHaptic('light');
+                                  setWarehouseSection(s.mode || 'shipment_receiving');
+                                  setInputMode(s.mode || 'shipment_receiving');
+                                  setCurrentSession(s);
+                                  if (typeof window !== 'undefined') {
+                                    localStorage.setItem(ACTIVE_SESSION_ID_KEY, s.id);
+                                  }
+                                  setShowSessionsModal(false);
+                                }}
+                                className={`px-2.5 py-1 rounded-lg font-bold text-[11px] cursor-pointer active:scale-95 ${
+                                  isCur ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white'
+                                }`}
+                              >
+                                {isCur ? 'چالاکە' : 'کردنەوە'}
+                              </button>
+
+                              {!isMobileOperational && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowSessionsModal(false);
+                                    setDeleteDialog({ kind: 'tab', session: s });
+                                  }}
+                                  className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 cursor-pointer active:scale-95"
+                                  title="سڕینەوەی ئەم تابە"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                ))
-              )}
+                ));
+              })()}
             </div>
           </div>
         </div>
@@ -5088,6 +5572,16 @@ export function GoogleSheetsWarehouseAudit({
       {currentSession && (
         <SmartCameraCartonScanner
           session={currentSession}
+          allSessions={sessions}
+          onSelectSession={(nextSession) => {
+            triggerHaptic('light');
+            setWarehouseSection(nextSession.mode || 'shipment_receiving');
+            setInputMode(nextSession.mode || 'shipment_receiving');
+            setCurrentSession(nextSession);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem(ACTIVE_SESSION_ID_KEY, nextSession.id);
+            }
+          }}
           isOpen={showCameraScanner}
           onClose={() => setShowCameraScanner(false)}
           onUpdateSession={async (upd) => persistSession(upd)}

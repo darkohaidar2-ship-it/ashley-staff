@@ -614,10 +614,7 @@ function buildSessionsPackage(params: {
   const sessions: SheetsAuditSession[] = parsedTabs.map((pt, i) => {
     const { items, totalExpected, totalAudited, totalCartons, totalAuditedCartons } = pt.parsed;
     const tabCodeProfile = analyzeWarehouseCodes(items, allPackageItems);
-    const sessionTitle =
-      parsedTabs.length > 1
-        ? pt.sheetName
-        : (params.packageTitle || '').trim() || pt.sheetName || resolvedPkgTitle;
+    const sessionTitle = pt.sheetName || resolvedPkgTitle;
 
     return {
       id: `audit_${nowMs}_${i}`,
@@ -629,7 +626,7 @@ function buildSessionsPackage(params: {
       sheetName: pt.sheetName,
       packageId,
       packageTitle: resolvedPkgTitle,
-      tabIndex: i,
+      tabIndex: pt.tabIndex,
       tabGid: pt.tabGid,
       codeProfile: tabCodeProfile,
       createdAt: nowIso,
@@ -1524,10 +1521,98 @@ export async function POST(req: NextRequest) {
     const { action } = body;
 
     // -------------------------------------------------------------------------
-    // ACTION 1: FETCH & PARSE GOOGLE SHEET (FULL MULTI-TAB PACKAGE!)
+    // ACTION 0.5: INSPECT WORKBOOK TABS (Preview tabs before choosing which to check)
+    // -------------------------------------------------------------------------
+    if (action === 'inspect_sheet') {
+      const { sheetUrl, webhookUrl, mode = 'shipment_receiving', targetPackageId } = body;
+      const effectiveSheetUrl =
+        typeof sheetUrl === 'string' && sheetUrl.trim()
+          ? sheetUrl.trim()
+          : typeof webhookUrl === 'string'
+          ? webhookUrl.trim()
+          : '';
+
+      if (!effectiveSheetUrl) {
+        return NextResponse.json(
+          { success: false, error: 'تکایە لینکی Google Sheet یان Apps Script Webhook بنووسە' },
+          { status: 400 }
+        );
+      }
+
+      const fetched = await fetchSpreadsheetTabsFromGoogle({
+        sheetUrl: effectiveSheetUrl,
+        webhookUrl: typeof webhookUrl === 'string' ? webhookUrl : undefined,
+      });
+
+      if (!fetched.ok || !fetched.tabs || fetched.tabs.length === 0) {
+        return NextResponse.json(
+          { success: false, error: fetched.error || 'نەتوانرا تابەکانی ناو خشتەکە بخوێندرێنەوە' },
+          { status: 400 }
+        );
+      }
+
+      const [allSessions, deletedIds, resetBefore] = await Promise.all([
+        getStoredSessions(),
+        getDeletedSessionIds(),
+        getResetEpoch(),
+      ]);
+      const deletedSet = new Set(deletedIds);
+      const resetMs = resetBefore ? Date.parse(resetBefore) : 0;
+      const activeExistingList = Object.values(allSessions).filter((ex) => {
+        if (!ex || !ex.id || deletedSet.has(ex.id)) return false;
+        if (resetMs > 0) {
+          const ts = Date.parse(ex.updatedAt || ex.createdAt || '');
+          if (!isNaN(ts) && ts <= resetMs) return false;
+        }
+        return (ex.mode || 'shipment_receiving') === mode;
+      });
+
+      const validWebhook = /^https:\/\/script\.google(usercontent)?\.com\//.test(effectiveSheetUrl)
+        ? effectiveSheetUrl
+        : typeof webhookUrl === 'string'
+        ? webhookUrl.trim()
+        : undefined;
+
+      const tabsPreview = fetched.tabs.map((t, idx) => {
+        const parsed = convertRowsToAuditItems(t.rawData, String(idx));
+        const matchedExisting = activeExistingList.find((ex) => {
+          const samePkg =
+            (targetPackageId && (ex.packageId || ex.id) === targetPackageId) ||
+            (fetched.spreadsheetId && ex.spreadsheetId && ex.spreadsheetId === fetched.spreadsheetId) ||
+            (validWebhook && ex.webhookUrl && ex.webhookUrl === validWebhook);
+          if (!samePkg) return false;
+          const sameName =
+            ex.sheetName &&
+            t.sheetName &&
+            ex.sheetName.trim().toLowerCase() === t.sheetName.trim().toLowerCase();
+          const sameGid = ex.tabGid && t.tabGid && ex.tabGid === t.tabGid;
+          return Boolean(sameName || sameGid);
+        });
+
+        return {
+          sheetName: String(t.sheetName || `Sheet${idx + 1}`),
+          tabGid: t.tabGid,
+          tabIndex: idx,
+          itemCount: parsed.items.length,
+          totalUnits: parsed.totalExpected,
+          alreadyImported: Boolean(matchedExisting),
+          existingAuditedUnits: matchedExisting?.totalAuditedUnits || 0,
+        };
+      });
+
+      return NextResponse.json({
+        success: true,
+        spreadsheetTitle: fetched.spreadsheetTitle || undefined,
+        spreadsheetId: fetched.spreadsheetId || null,
+        tabs: tabsPreview,
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // ACTION 1: FETCH & PARSE GOOGLE SHEET (ALL TABS OR SELECTED TABS INTO PACKAGE)
     // -------------------------------------------------------------------------
     if (action === 'fetch_sheet') {
-      const { sheetUrl, webhookUrl, mode = 'shipment_receiving', title } = body;
+      const { sheetUrl, webhookUrl, mode = 'shipment_receiving', title, selectedTabNames, targetPackageId } = body;
       const effectiveSheetUrl = typeof sheetUrl === 'string' && sheetUrl.trim() ? sheetUrl.trim() : typeof webhookUrl === 'string' ? webhookUrl.trim() : '';
 
       if (!effectiveSheetUrl) {
@@ -1543,22 +1628,35 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: fetched.error || 'نەتوانرا خشتەکە بخوێندرێتەوە' }, { status: 400 });
       }
 
+      let tabsToImport = fetched.tabs;
+      if (Array.isArray(selectedTabNames) && selectedTabNames.length > 0) {
+        const wanted = new Set(
+          selectedTabNames.map((n: any) => String(n || '').trim().toLowerCase()).filter(Boolean)
+        );
+        const filtered = fetched.tabs.filter((t) => wanted.has(String(t.sheetName || '').trim().toLowerCase()));
+        if (filtered.length > 0) {
+          tabsToImport = filtered;
+        }
+      }
+
+      const resolvedWebhook = /^https:\/\/script\.google(usercontent)?\.com\//.test(effectiveSheetUrl)
+        ? effectiveSheetUrl
+        : typeof webhookUrl === 'string'
+        ? webhookUrl.trim()
+        : undefined;
+
       const pkg = buildSessionsPackage({
-        tabs: fetched.tabs,
+        tabs: tabsToImport,
         mode,
         packageTitle: (title || '').trim() || fetched.spreadsheetTitle,
         googleSheetUrl: /^https:\/\/docs\.google\.com\/spreadsheets/.test(effectiveSheetUrl) ? effectiveSheetUrl : undefined,
         spreadsheetId: fetched.spreadsheetId,
-        webhookUrl: /^https:\/\/script\.google(usercontent)?\.com\//.test(effectiveSheetUrl)
-          ? effectiveSheetUrl
-          : typeof webhookUrl === 'string'
-          ? webhookUrl
-          : undefined,
+        webhookUrl: resolvedWebhook,
       });
 
       if (pkg.sessions.length === 0) {
         return NextResponse.json(
-          { success: false, error: 'هیچ کاڵایەک لە تەبەکانی ناو خشتەکەدا نەدۆزرایەوە. دڵنیابە ستوونی مۆدێل و بڕ لە خشتەکەدا هەیە.' },
+          { success: false, error: 'هیچ کاڵایەک لە تەبەکانی هەڵبژێردراودا نەدۆزرایەوە. دڵنیابە ستوونی مۆدێل و بڕ لە خشتەکەدا هەیە.' },
           { status: 400 }
         );
       }
@@ -1581,10 +1679,20 @@ export async function POST(req: NextRequest) {
         return (ex.mode || 'shipment_receiving') === mode;
       });
 
+      // Keep ALL tabs added to the same Google Sheet inside ONE shared Package!
+      const existingPkgSample = activeExistingList.find((ex) =>
+        (targetPackageId && (ex.packageId || ex.id) === targetPackageId) ||
+        (fetched.spreadsheetId && ex.spreadsheetId && ex.spreadsheetId === fetched.spreadsheetId) ||
+        (resolvedWebhook && ex.webhookUrl && ex.webhookUrl === resolvedWebhook)
+      );
+      const sharedPackageId = existingPkgSample?.packageId || pkg.packageId;
+      const sharedPackageTitle = (title || '').trim() || existingPkgSample?.packageTitle || pkg.packageTitle;
+
       let reconciledExisting = false;
       const finalSessions: SheetsAuditSession[] = pkg.sessions.map((incomingTab) => {
         const match = activeExistingList.find((ex) => {
           const sameSheet =
+            (targetPackageId && (ex.packageId || ex.id) === targetPackageId) ||
             (fetched.spreadsheetId && ex.spreadsheetId && ex.spreadsheetId === fetched.spreadsheetId) ||
             (incomingTab.webhookUrl && ex.webhookUrl && incomingTab.webhookUrl === ex.webhookUrl);
           if (!sameSheet) return false;
@@ -1602,8 +1710,8 @@ export async function POST(req: NextRequest) {
           const nowIso = new Date().toISOString();
           const mergedTab = recomputeSessionTotals({
             ...match,
-            packageId: match.packageId || pkg.packageId,
-            packageTitle: (title || '').trim() || match.packageTitle || pkg.packageTitle,
+            packageId: sharedPackageId,
+            packageTitle: sharedPackageTitle,
             googleSheetUrl: incomingTab.googleSheetUrl || match.googleSheetUrl,
             webhookUrl: incomingTab.webhookUrl || match.webhookUrl,
             spreadsheetId: incomingTab.spreadsheetId || match.spreadsheetId,
@@ -1619,8 +1727,13 @@ export async function POST(req: NextRequest) {
           return mergedTab;
         }
 
-        allSessions[incomingTab.id] = incomingTab;
-        return incomingTab;
+        const attachedNewTab: SheetsAuditSession = {
+          ...incomingTab,
+          packageId: sharedPackageId,
+          packageTitle: sharedPackageTitle,
+        };
+        allSessions[attachedNewTab.id] = attachedNewTab;
+        return attachedNewTab;
       });
 
       const saved = await saveStoredSessions(allSessions);
@@ -1633,8 +1746,8 @@ export async function POST(req: NextRequest) {
         reconciledExisting,
         session: finalSessions[0],
         sessions: finalSessions,
-        packageId: finalSessions[0]?.packageId || pkg.packageId,
-        packageTitle: finalSessions[0]?.packageTitle || pkg.packageTitle,
+        packageId: sharedPackageId,
+        packageTitle: sharedPackageTitle,
         packageCodeProfile: pkg.packageCodeProfile,
         tabsCount: finalSessions.length,
       });
@@ -1644,12 +1757,23 @@ export async function POST(req: NextRequest) {
     // ACTION 1.25: PARSE MULTI-TAB EXCEL WORKBOOK AS ONE PACKAGE
     // -------------------------------------------------------------------------
     if (action === 'parse_workbook') {
-      const { sheets, mode = 'shipment_receiving', title, webhookUrl } = body;
+      const { sheets, mode = 'shipment_receiving', title, webhookUrl, selectedTabNames } = body;
       if (!Array.isArray(sheets) || sheets.length === 0) {
         return NextResponse.json({ success: false, error: 'هیچ پەڕەیەک (Tab) لە فایلی ئێکسڵەکەدا نەبوو.' }, { status: 400 });
       }
 
-      const tabs: Array<{ sheetName: string; rawData: any[][] }> = sheets.map((s: any, idx: number) => {
+      let filteredSheets = sheets;
+      if (Array.isArray(selectedTabNames) && selectedTabNames.length > 0) {
+        const wanted = new Set(
+          selectedTabNames.map((n: any) => String(n || '').trim().toLowerCase()).filter(Boolean)
+        );
+        const matchSheets = sheets.filter((s: any) =>
+          wanted.has(String(s.sheetName || '').trim().toLowerCase())
+        );
+        if (matchSheets.length > 0) filteredSheets = matchSheets;
+      }
+
+      const tabs: Array<{ sheetName: string; rawData: any[][] }> = filteredSheets.map((s: any, idx: number) => {
         if (Array.isArray(s.rawData)) {
           return { sheetName: String(s.sheetName || `Sheet${idx + 1}`), rawData: s.rawData };
         }
