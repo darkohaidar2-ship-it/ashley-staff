@@ -43,7 +43,9 @@ import {
   MessageSquareHeart,
   ArrowRight,
   Clock,
-  Package
+  Package,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import { triggerHaptic } from '@/lib/offline-sync-manager';
 import { OfficialPrintHeader, OfficialPrintSignatures } from '@/components/reports/OfficialPrintHeader';
@@ -57,7 +59,12 @@ import {
 import {
   analyzeWarehouseCodes,
   CodeIntelligenceProfile,
+  formatKurdishSpokenScan,
 } from '@/lib/warehouse-code-intelligence';
+import {
+  playKurdishScanAudio,
+  precacheSessionAudioClips,
+} from '@/lib/kurdish-audio-engine';
 import { SmartCameraCartonScanner } from '@/components/admin/warehouse/SmartCameraCartonScanner';
 import * as XLSX from 'xlsx';
 
@@ -536,6 +543,7 @@ function DeferredNoteInput({
 }) {
   const [draft, setDraft] = useState(value);
   const [isEditing, setIsEditing] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const draftRef = useRef(draft);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   draftRef.current = draft;
@@ -552,6 +560,8 @@ function DeferredNoteInput({
       onEditingChange?.(itemId, false);
       if (draftRef.current !== value) {
         onCommit(itemId, draftRef.current);
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 2600);
       }
       if (forceBlur && textareaRef.current) {
         textareaRef.current.blur();
@@ -567,6 +577,10 @@ function DeferredNoteInput({
       <textarea
         ref={textareaRef}
         rows={2}
+        dir="auto"
+        lang="ku"
+        autoComplete="off"
+        spellCheck={false}
         value={draft}
         onFocus={() => {
           setIsEditing(true);
@@ -581,12 +595,15 @@ function DeferredNoteInput({
           }
         }}
         placeholder="تێبینی بنووسە..."
+        style={{ unicodeBidi: 'plaintext', textAlign: 'right', direction: 'rtl' }}
         className={`w-full h-[50px] p-1.5 rounded-xl border text-[11px] font-medium outline-none resize-none overflow-y-auto ashley-cell-scroll leading-snug transition-colors ${
           isEditing
-            ? 'bg-white border-blue-500 ring-2 ring-blue-100 pb-5'
+            ? 'bg-white border-blue-500 ring-2 ring-blue-100 pb-5 text-slate-900'
             : isDirty
-            ? 'bg-amber-50/60 border-amber-300'
-            : 'bg-slate-50/60 border-slate-200 focus:bg-white focus:border-blue-400'
+            ? 'bg-amber-50/60 border-amber-300 text-slate-900'
+            : justSaved
+            ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950'
+            : 'bg-slate-50/60 border-slate-200 focus:bg-white focus:border-blue-400 text-slate-800'
         }`}
       />
       {(isEditing || isDirty) && (
@@ -596,11 +613,17 @@ function DeferredNoteInput({
             e.preventDefault();
             commitIfDirty(true);
           }}
-          className="absolute bottom-1 left-1 px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-black shadow-sm flex items-center gap-0.5 cursor-pointer"
+          className="absolute bottom-1 left-1 px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-[9px] font-black shadow-sm flex items-center gap-0.5 cursor-pointer transition-all"
         >
           <Check className="w-2.5 h-2.5 stroke-[3]" />
-          <span>تەواو</span>
+          <span>تەواو • خەزنکردن</span>
         </button>
+      )}
+      {justSaved && !isEditing && (
+        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-[9px] font-bold shadow-xs flex items-center gap-0.5 pointer-events-none">
+          <Check className="w-2.5 h-2.5 stroke-[3]" />
+          <span>خەزنکرا ✅</span>
+        </span>
       )}
     </div>
   );
@@ -644,6 +667,15 @@ export function GoogleSheetsWarehouseAudit({
   const [showSessionsModal, setShowSessionsModal] = useState<boolean>(false);
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
   const [showHelpScriptModal, setShowHelpScriptModal] = useState<boolean>(false);
+  const [showAudioSettingsModal, setShowAudioSettingsModal] = useState<boolean>(false);
+  const [testAudioCode, setTestAudioCode] = useState<string>('EV 21068-02');
+  const [testAudioQty, setTestAudioQty] = useState<number>(1);
+  const [isPlayingTestAudio, setIsPlayingTestAudio] = useState<boolean>(false);
+  const [precachingAudio, setPrecachingAudio] = useState<boolean>(false);
+  const [precacheAudioStatus, setPrecacheAudioStatus] = useState<string | null>(null);
+  const [elevenLabsKeyInput, setElevenLabsKeyInput] = useState<string>('');
+  const [savingAudioSettings, setSavingAudioSettings] = useState<boolean>(false);
+  const [audioSettingsSavedNotice, setAudioSettingsSavedNotice] = useState<string | null>(null);
   const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
   const [showGooglePushModal, setShowGooglePushModal] = useState<boolean>(false);
   const [isAiParsing, setIsAiParsing] = useState<boolean>(false);
@@ -1661,6 +1693,7 @@ export function GoogleSheetsWarehouseAudit({
 
     if (matched) {
       handleUpdateItemQty(matched.id, 1);
+      playKurdishScanAudio(matched.model, matched.pcsPerCarton || 1).catch(() => {});
       setScannedAlert({
         message: `کاڵا دۆزرایەوە: ${matched.model} - ژمارەی چێککراو بوو بە ${matched.checkedQty + 1}`,
         type: 'success',
@@ -2822,11 +2855,22 @@ export function GoogleSheetsWarehouseAudit({
               </span>
             </button>
 
+            {/* Kurdish Voice & Offline Audio Button */}
+            <button
+              type="button"
+              onClick={() => setShowAudioSettingsModal(true)}
+              className="h-10 px-3.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 font-black text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all mr-auto"
+              title="ڕێکخستن و تاقیکردنەوەی دەنگی کوردی و خەزنی ئۆفلاین"
+            >
+              <Volume2 className="w-4 h-4 text-blue-600" />
+              <span>دەنگی کوردی</span>
+            </button>
+
             {/* Help & Script Info */}
             <button
               type="button"
               onClick={() => setShowHelpScriptModal(true)}
-              className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer active:scale-95 transition-all mr-auto"
+              className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer active:scale-95 transition-all"
               title="ڕێنمایی بەستنەوە و سکریپتی ئۆتۆماتیکی گۆگڵ"
             >
               <HelpCircle className="w-4 h-4" />
@@ -3241,7 +3285,7 @@ export function GoogleSheetsWarehouseAudit({
                     </tr>
                   ) : (
                     filteredItems.map((item, idx) => {
-                      const isDamaged = item.condition === 'Damaged' || item.auditStatus === 'damaged';
+                      const isDamaged = item.condition === 'Damaged' || item.condition === 'Defective' || item.auditStatus === 'damaged';
                       const isDeficit = item.variance < 0 && item.checkedQty > 0;
                       const isExcess = item.variance > 0;
                       const isVerified = item.checkedQty > 0 && item.variance === 0 && !isDamaged;
@@ -3400,6 +3444,8 @@ export function GoogleSheetsWarehouseAudit({
                                 className={`w-full h-8 px-1.5 rounded-xl text-[11px] font-bold outline-none cursor-pointer border ${
                                   item.condition === 'Damaged'
                                     ? 'bg-rose-50 text-rose-700 border-rose-300'
+                                    : item.condition === 'Defective'
+                                    ? 'bg-orange-50 text-orange-800 border-orange-300'
                                     : item.condition === 'Need Wrapped'
                                     ? 'bg-amber-50 text-amber-800 border-amber-300'
                                     : item.condition === 'Wrapped'
@@ -3410,15 +3456,18 @@ export function GoogleSheetsWarehouseAudit({
                                 <option value="Packaged">کارتۆنی ساغ</option>
                                 <option value="Wrapped">لەفکراو / تەغلیف</option>
                                 <option value="Need Wrapped">پێویست بە تەغلیف</option>
-                                <option value="Damaged">تێکچوو / شکاو / عەیبدار</option>
+                                <option value="Damaged">شکاو / زیانلێکەوتوو</option>
+                                <option value="Defective">عەیبدار / کێشەی کارگە</option>
                                 <option value="Normal">ئاسایی</option>
                               </select>
 
-                              {(item.condition === 'Damaged' || item.condition === 'Need Wrapped' || item.condition === 'Wrapped') && (
+                              {(item.condition === 'Damaged' || item.condition === 'Defective' || item.condition === 'Need Wrapped' || item.condition === 'Wrapped') && (
                                 <div
                                   className={`flex items-center justify-between gap-1 px-1.5 py-0.5 rounded-lg border text-[10px] font-bold ${
                                     item.condition === 'Damaged'
                                       ? 'bg-rose-50/90 border-rose-200 text-rose-700'
+                                      : item.condition === 'Defective'
+                                      ? 'bg-orange-50/90 border-orange-200 text-orange-800'
                                       : item.condition === 'Need Wrapped'
                                       ? 'bg-amber-50/90 border-amber-200 text-amber-800'
                                       : 'bg-purple-50/90 border-purple-200 text-purple-700'
@@ -3427,6 +3476,8 @@ export function GoogleSheetsWarehouseAudit({
                                   <span className="truncate">
                                     {item.condition === 'Damaged'
                                       ? 'شکاو:'
+                                      : item.condition === 'Defective'
+                                      ? 'عەیبدار:'
                                       : item.condition === 'Need Wrapped'
                                       ? 'بێ تەغلیف:'
                                       : 'تەغلیف:'}
@@ -3472,7 +3523,8 @@ export function GoogleSheetsWarehouseAudit({
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold whitespace-nowrap">
                                   <AlertTriangle className="w-3 h-3 text-rose-500" />
                                   <span>
-                                    شکاو{item.issueQty ? ` (${item.issueQty} دانە)` : ''} ❌
+                                    {item.condition === 'Defective' ? 'عەیبدار' : 'شکاو'}
+                                    {item.issueQty ? ` (${item.issueQty} دانە)` : ''} {item.condition === 'Defective' ? '⚠️' : '❌'}
                                   </span>
                                 </span>
                               ) : isDeficit ? (
@@ -4421,6 +4473,229 @@ export function GoogleSheetsWarehouseAudit({
                   </div>
                 ));
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🎙️ MODAL 2.5: KURDISH OFFLINE AUDIO SETTINGS & TEST */}
+      {/* ========================================================================= */}
+      {showAudioSettingsModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-xl max-h-[90vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2">
+                <Volume2 className="w-5 h-5 text-blue-600" />
+                <h3 className="text-sm font-black text-slate-900">
+                  ڕێکخستن و تاقیکردنەوەی دەنگی کوردی (Kurdish Audio)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAudioSettingsModal(false);
+                  setAudioSettingsSavedNotice(null);
+                  setPrecacheAudioStatus(null);
+                }}
+                className="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4 text-slate-600" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 text-xs font-medium text-slate-700 ashley-cell-scroll">
+              {/* Architecture Info Banner */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 border border-blue-200 text-blue-950 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                  <span className="font-black text-xs">سیستەمی دەنگی ئۆفلاین (100% Offline & Supabase Cache)</span>
+                </div>
+                <p className="text-[11px] text-blue-900 leading-relaxed font-normal">
+                  دەنگەکان بۆ یەکەم جار لە سێرڤەر وەردەگیرێن و لە داتابەیسی Supabase و ناو مۆبایلەکەتدا خەزن دەکرێن. کاتی سکانکردن لە کۆگادا <strong>بەبێ ئینتەرنێت</strong> و لە <strong>٠ چرکەدا</strong> ڕاستەوخۆ دەخوێندرێنەوە.
+                </p>
+              </div>
+
+              {/* Section 1: Live Voice Test */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <span className="font-black text-slate-900 text-xs block">
+                  ١. تاقیکردنەوەی خوێندنەوەی دەنگی مۆدێل:
+                </span>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <label className="block text-[10px] text-slate-500 font-bold mb-1">کۆدی نموونە:</label>
+                    <input
+                      type="text"
+                      value={testAudioCode}
+                      onChange={(e) => setTestAudioCode(e.target.value)}
+                      placeholder="EV 21068-02"
+                      className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-mono font-black"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-bold mb-1">عەدەد:</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={999}
+                      value={testAudioQty}
+                      onChange={(e) => setTestAudioQty(parseInt(e.target.value || '1', 10))}
+                      className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-mono font-black text-center"
+                    />
+                  </div>
+                </div>
+
+                {/* Kurdish text preview */}
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-900">
+                  <span className="text-[10px] text-slate-400 block mb-0.5">دەقی خوێندنەوە بە کوردی:</span>
+                  <span className="text-xs font-bold text-blue-700 block">
+                    «{formatKurdishSpokenScan(testAudioCode, testAudioQty).displayText}»
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isPlayingTestAudio || !testAudioCode.trim()}
+                  onClick={async () => {
+                    setIsPlayingTestAudio(true);
+                    try {
+                      await playKurdishScanAudio(testAudioCode, testAudioQty);
+                    } finally {
+                      setIsPlayingTestAudio(false);
+                    }
+                  }}
+                  className="w-full h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50 shadow-sm"
+                >
+                  {isPlayingTestAudio ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  ) : (
+                    <Volume2 className="w-4 h-4 text-white" />
+                  )}
+                  <span>{isPlayingTestAudio ? 'دەخوێندرێتەوە...' : '🔊 گوێگرتن لە دەنگەکە ئێستا'}</span>
+                </button>
+              </div>
+
+              {/* Section 2: Session Pre-cache for 100% Offline Scanning */}
+              {currentSession && currentSession.items && currentSession.items.length > 0 && (
+                <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-2.5">
+                  <span className="font-black text-slate-900 text-xs block">
+                    ٢. داگرتنی دەنگەکانی ئەم شیتە بۆ ناو مۆبایل (Pre-cache):
+                  </span>
+                  <p className="text-[11px] text-slate-600 leading-snug">
+                    ئەم بەشە خاوەنی <strong>{currentSession.items.length}</strong> کاڵایە. دەتوانیت بە یەک کلیک هەموو دەنگەکان دابگریت بۆ ئەوەی پێش چوونە کۆگا هەمووی ئۆفلاین بێت:
+                  </p>
+
+                  <button
+                    type="button"
+                    disabled={precachingAudio}
+                    onClick={async () => {
+                      setPrecachingAudio(true);
+                      setPrecacheAudioStatus('خەریکی دابەزاندنی دەنگەکانە بۆ ناو مۆبایل...');
+                      try {
+                        const res = await precacheSessionAudioClips(currentSession.items);
+                        setPrecacheAudioStatus(
+                          `✅ بە سەرکەوتوویی هەموو (${res.cachedCount} لە ${res.totalCount}) دەنگەکان لە ناو مۆبایلەکەت خەزنکران بۆ ئۆفلاین!`
+                        );
+                      } catch {
+                        setPrecacheAudioStatus('هەڵەیەک ڕوویدا لە دابەزاندن.');
+                      } finally {
+                        setPrecachingAudio(false);
+                      }
+                    }}
+                    className="w-full h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50 shadow-sm"
+                  >
+                    {precachingAudio ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                    ) : (
+                      <Download className="w-4 h-4 text-slate-950" />
+                    )}
+                    <span>
+                      {precachingAudio ? 'خەریکی داگرتنە...' : `📥 داگرتنی دەنگی (${currentSession.items.length}) کاڵاکە بۆ ئۆفلاین`}
+                    </span>
+                  </button>
+
+                  {precacheAudioStatus && (
+                    <div className="p-2 rounded-xl bg-white border border-amber-300 text-[11px] font-bold text-amber-900 text-center">
+                      {precacheAudioStatus}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Section 3: ElevenLabs Studio Voice API (Optional) */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                <span className="font-black text-slate-900 text-xs block">
+                  ٣. بەستنەوەی زیرەکی دەستکردی ElevenLabs (ئارەزوومەندانە):
+                </span>
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  سیستەمەکە خۆی بەخۆڕایی بە دەنگی ئۆفلاین دەخوێنێتەوە. ئەگەر پێت باشە دەنگەکە وەک مرۆڤی ستۆدیۆ بێت لە ڕێگەی دەنگی کوردی ElevenLabs، دەتوانیت کلیلی بەخۆڕایی (Free API Key) لێرە دابنێیت:
+                </p>
+
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={elevenLabsKeyInput}
+                    onChange={(e) => setElevenLabsKeyInput(e.target.value)}
+                    placeholder="sk_xxxxxxxxxxxxxxxxxxxx (ElevenLabs API Key)"
+                    className="flex-1 h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-mono"
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    disabled={savingAudioSettings || !elevenLabsKeyInput.trim()}
+                    onClick={async () => {
+                      setSavingAudioSettings(true);
+                      setAudioSettingsSavedNotice(null);
+                      try {
+                        const res = await fetch('/api/warehouse/sheets-sync', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            action: 'save_audio_settings',
+                            elevenLabsApiKey: elevenLabsKeyInput.trim(),
+                          }),
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                          setAudioSettingsSavedNotice('✅ کلیلەکە بە سەرکەوتوویی لە Supabase خەزنکرا!');
+                          setElevenLabsKeyInput('');
+                        } else {
+                          setAudioSettingsSavedNotice('هەڵە لە پاشەکەوتکردن.');
+                        }
+                      } catch {
+                        setAudioSettingsSavedNotice('هەڵە لە پەیوەندیکردن بە سێرڤەر.');
+                      } finally {
+                        setSavingAudioSettings(false);
+                      }
+                    }}
+                    className="h-9 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {savingAudioSettings ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    <span>خەزنکردن</span>
+                  </button>
+                </div>
+
+                {audioSettingsSavedNotice && (
+                  <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-300 text-[11px] font-bold text-emerald-800 text-center">
+                    {audioSettingsSavedNotice}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAudioSettingsModal(false);
+                  setAudioSettingsSavedNotice(null);
+                  setPrecacheAudioStatus(null);
+                }}
+                className="px-5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-black text-xs cursor-pointer active:scale-95"
+              >
+                داخستن
+              </button>
             </div>
           </div>
         </div>

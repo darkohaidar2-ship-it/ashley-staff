@@ -25,6 +25,11 @@ import {
   formatKurdishSpokenScan,
   KurdishSpokenResult,
 } from '@/lib/warehouse-code-intelligence';
+import {
+  playKurdishScanAudio,
+  playSpeechSynthesisFallback,
+  precacheSessionAudioClips,
+} from '@/lib/kurdish-audio-engine';
 
 interface SmartCameraCartonScannerProps {
   session: SheetsAuditSession;
@@ -161,56 +166,33 @@ class WarehouseAudioFeedback {
     } catch {}
   }
 
-  speakKurdishResult(spoken: KurdishSpokenResult) {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    try {
-      window.speechSynthesis.cancel();
-      const voices = window.speechSynthesis.getVoices() || [];
-      const kuVoice = voices.find((v) => v.lang.toLowerCase().startsWith('ku') || v.lang.toLowerCase().startsWith('ckb'));
-      const faVoice = voices.find((v) => v.lang.toLowerCase().startsWith('fa'));
-      const arVoice = voices.find((v) => v.lang.toLowerCase().startsWith('ar'));
-      const enVoice = voices.find((v) => v.lang.toLowerCase().startsWith('en'));
-
-      let textToSpeak = spoken.speechKurdish;
-      let targetVoice = kuVoice;
-
-      if (kuVoice) {
-        textToSpeak = spoken.speechKurdish;
-        targetVoice = kuVoice;
-      } else if (faVoice) {
-        textToSpeak = spoken.speechPersianPhonetic;
-        targetVoice = faVoice;
-      } else if (arVoice) {
-        textToSpeak = spoken.speechArabicPhonetic;
-        targetVoice = arVoice;
-      } else if (enVoice) {
-        textToSpeak = spoken.speechEnglish;
-        targetVoice = enVoice;
-      }
-
-      const utterance = new SpeechSynthesisUtterance(textToSpeak);
-      utterance.rate = 0.98;
-      utterance.pitch = 1.0;
-      if (targetVoice) {
-        utterance.voice = targetVoice;
-        utterance.lang = targetVoice.lang;
-      }
-      window.speechSynthesis.speak(utterance);
-    } catch {}
+  async speakKurdishResult(spoken: KurdishSpokenResult, model?: string, qty?: number) {
+    if (model && typeof qty === 'number') {
+      try {
+        await playKurdishScanAudio(model, qty, spoken);
+        return;
+      } catch {}
+    }
+    playSpeechSynthesisFallback(spoken);
   }
 
-  speakRawNotice(textKu: string, fallbackEn: string) {
+  speakRawNotice(textKu: string, fallbackLatin?: string) {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     try {
       window.speechSynthesis.cancel();
       const voices = window.speechSynthesis.getVoices() || [];
       const kuOrAr = voices.find((v) => v.lang.startsWith('ku') || v.lang.startsWith('ckb') || v.lang.startsWith('ar') || v.lang.startsWith('fa'));
-      const utterance = new SpeechSynthesisUtterance(kuOrAr ? textKu : fallbackEn);
+      const textToUse = kuOrAr ? textKu : (fallbackLatin || textKu);
+      const utterance = new SpeechSynthesisUtterance(textToUse);
       if (kuOrAr) {
         utterance.voice = kuOrAr;
         utterance.lang = kuOrAr.lang;
+      } else {
+        const enVoice = voices.find((v) => v.lang.startsWith('en'));
+        if (enVoice) utterance.voice = enVoice;
+        utterance.lang = enVoice ? enVoice.lang : 'ar-SA';
+        utterance.rate = 0.9;
       }
-      utterance.rate = 1.0;
       window.speechSynthesis.speak(utterance);
     } catch {}
   }
@@ -490,6 +472,11 @@ export function SmartCameraCartonScanner({
       unmatchedCode: null,
     });
     setLastScannedResult(null);
+
+    // Pre-cache session audio clips into mobile IndexedDB for instant offline playback
+    if (session.items && session.items.length > 0) {
+      precacheSessionAudioClips(session.items).catch(() => {});
+    }
   }, [session.id]);
 
   // Keep focused item valid on tab change
@@ -650,7 +637,10 @@ export function SmartCameraCartonScanner({
         audio.playDuplicate();
         vibrateMobile([60, 40, 60]);
         if (voiceEnabledRef.current) {
-          audio.speakRawNotice(`ئەم کارتۆنە پێشتر تۆمار کراوە: ${targetCartonNumber}`, `Carton ${targetCartonNumber} already scanned`);
+          audio.speakRawNotice(
+            `ئەم کارتۆنە پێشتر تۆمار کراوە: ژمارە ${targetCartonNumber}`,
+            `Am kartona peshtr tomar krawe: zhmaray ${targetCartonNumber}`
+          );
         }
         setLastScannedResult({
           type: 'duplicate',
@@ -742,7 +732,7 @@ export function SmartCameraCartonScanner({
         vibrateMobile([35, 20, 60]);
       }
       if (voiceEnabledRef.current) {
-        audio.speakKurdishResult(spoken);
+        audio.speakKurdishResult(spoken, latestItem.model, effectivePcsPerCarton);
       }
 
       setLastScannedResult({
@@ -956,7 +946,7 @@ export function SmartCameraCartonScanner({
             now - lastCompletedScanRef.current.timestamp < 2600;
 
           if (!sameModelCooldown || isManualShot) {
-            recordVerifiedCartonScan(mergedItem, mergedCaseQty);
+            recordVerifiedCartonScan(mergedItem, mergedCaseQty, parsed.cartonNumber);
           }
         } else if (isManualShot && !mergedItem && (parsed.itemNo || barcodeCandidate)) {
           audio.playError();
@@ -1304,7 +1294,12 @@ export function SmartCameraCartonScanner({
             spokenDisplay={lastScannedResult.spoken?.displayText}
             onReplayVoice={
               lastScannedResult.spoken
-                ? () => audio.speakKurdishResult(lastScannedResult.spoken!)
+                ? () =>
+                    audio.speakKurdishResult(
+                      lastScannedResult.spoken!,
+                      lastScannedResult.model,
+                      lastScannedResult.caseQty
+                    )
                 : undefined
             }
           />
@@ -1422,6 +1417,7 @@ export function SmartCameraCartonScanner({
                     [
                       { id: 'Packaged', label: 'ساغ ✅', activeCls: 'bg-emerald-500 text-slate-950' },
                       { id: 'Damaged', label: 'شکاو ❌', activeCls: 'bg-rose-500 text-white' },
+                      { id: 'Defective', label: 'عەیبدار ⚠️', activeCls: 'bg-orange-500 text-white' },
                       { id: 'Need Wrapped', label: 'بێ تەغلیف', activeCls: 'bg-amber-400 text-slate-950' },
                       { id: 'Wrapped', label: 'تەغلیفکراو', activeCls: 'bg-purple-500 text-white' },
                     ] as const
@@ -1438,7 +1434,7 @@ export function SmartCameraCartonScanner({
                           const updatedItems = curSession.items.map((it) => {
                             if (it.id !== focusedItem.id) return it;
                             let auditStatus = it.auditStatus;
-                            if (opt.id === 'Damaged') auditStatus = 'damaged';
+                            if (opt.id === 'Damaged' || opt.id === 'Defective') auditStatus = 'damaged';
                             else if (it.checkedQty > 0) {
                               auditStatus = it.variance === 0 ? 'verified' : it.variance < 0 ? 'deficit' : 'excess';
                             } else {
@@ -1469,50 +1465,155 @@ export function SmartCameraCartonScanner({
                 </div>
 
                 {(focusedItem.condition === 'Damaged' ||
+                  focusedItem.condition === 'Defective' ||
                   focusedItem.condition === 'Need Wrapped' ||
                   focusedItem.condition === 'Wrapped') && (
-                  <div className="flex items-center gap-1 bg-slate-800 px-1.5 py-0.5 rounded-lg border border-slate-700" dir="ltr">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex items-center gap-1 bg-slate-800 px-1.5 py-0.5 rounded-lg border border-slate-700" dir="ltr">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const curSession = sessionRef.current;
+                          const nowIso = new Date().toISOString();
+                          const nextQty = Math.max(0, (focusedItem.issueQty || 1) - 1);
+                          onUpdateSessionRef.current({
+                            ...curSession,
+                            items: curSession.items.map((it) =>
+                              it.id === focusedItem.id ? { ...it, issueQty: nextQty, lastAuditedAt: nowIso } : it
+                            ),
+                            updatedAt: nowIso,
+                          });
+                        }}
+                        className="w-5 h-5 rounded bg-slate-700 hover:bg-slate-600 text-white font-black text-xs flex items-center justify-center cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <span className="text-[11px] font-mono font-black text-white px-1">
+                        {focusedItem.issueQty ?? 1} دانە
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const curSession = sessionRef.current;
+                          const nowIso = new Date().toISOString();
+                          const nextQty = Math.min(9999, (focusedItem.issueQty || 0) + 1);
+                          onUpdateSessionRef.current({
+                            ...curSession,
+                            items: curSession.items.map((it) =>
+                              it.id === focusedItem.id ? { ...it, issueQty: nextQty, lastAuditedAt: nowIso } : it
+                            ),
+                            updatedAt: nowIso,
+                          });
+                        }}
+                        className="w-5 h-5 rounded bg-slate-700 hover:bg-slate-600 text-white font-black text-xs flex items-center justify-center cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    {/* Quick presets for 1 piece or all pieces in carton */}
                     <button
                       type="button"
                       onClick={() => {
                         const curSession = sessionRef.current;
                         const nowIso = new Date().toISOString();
-                        const nextQty = Math.max(0, (focusedItem.issueQty || 1) - 1);
                         onUpdateSessionRef.current({
                           ...curSession,
                           items: curSession.items.map((it) =>
-                            it.id === focusedItem.id ? { ...it, issueQty: nextQty, lastAuditedAt: nowIso } : it
+                            it.id === focusedItem.id ? { ...it, issueQty: 1, lastAuditedAt: nowIso } : it
                           ),
                           updatedAt: nowIso,
                         });
                       }}
-                      className="w-5 h-5 rounded bg-slate-700 text-white font-black text-xs flex items-center justify-center cursor-pointer"
+                      className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-[10px] font-bold cursor-pointer"
                     >
-                      -
+                      ١ دانە
                     </button>
-                    <span className="text-[11px] font-mono font-black text-white px-1">
-                      {focusedItem.issueQty ?? 1} دانە
-                    </span>
                     <button
                       type="button"
                       onClick={() => {
                         const curSession = sessionRef.current;
                         const nowIso = new Date().toISOString();
-                        const nextQty = Math.min(9999, (focusedItem.issueQty || 0) + 1);
+                        const maxPcs = focusedItem.pcsPerCarton || focusedItem.checkedQty || 1;
                         onUpdateSessionRef.current({
                           ...curSession,
                           items: curSession.items.map((it) =>
-                            it.id === focusedItem.id ? { ...it, issueQty: nextQty, lastAuditedAt: nowIso } : it
+                            it.id === focusedItem.id ? { ...it, issueQty: maxPcs, lastAuditedAt: nowIso } : it
                           ),
                           updatedAt: nowIso,
                         });
                       }}
-                      className="w-5 h-5 rounded bg-slate-700 text-white font-black text-xs flex items-center justify-center cursor-pointer"
+                      className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-amber-300 hover:text-amber-200 text-[10px] font-bold cursor-pointer"
                     >
-                      +
+                      هەمووی ({focusedItem.pcsPerCarton || focusedItem.checkedQty || 1})
                     </button>
                   </div>
                 )}
+              </div>
+
+              {/* Quick Note & Damage Tags for Focused Item */}
+              <div className="mt-2 pt-2 border-t border-slate-800/80">
+                <div className="flex items-center gap-1 overflow-x-auto pb-1 mb-1.5 no-scrollbar">
+                  {[
+                    'پاکەت دڕاوە',
+                    'شووشە شکاوە',
+                    'عەیبی کارگە',
+                    'تەڕ بووە',
+                    'کارتۆن کەمی هەیە',
+                  ].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        const curSession = sessionRef.current;
+                        const nowIso = new Date().toISOString();
+                        const curNote = (focusedItem.notes || '').trim();
+                        const nextNote = curNote ? `${curNote} • ${tag}` : tag;
+                        onUpdateSessionRef.current({
+                          ...curSession,
+                          items: curSession.items.map((it) =>
+                            it.id === focusedItem.id ? { ...it, notes: nextNote, lastAuditedAt: nowIso } : it
+                          ),
+                          updatedAt: nowIso,
+                        });
+                      }}
+                      className="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-[9.5px] font-bold whitespace-nowrap border border-slate-700 shrink-0 cursor-pointer"
+                    >
+                      + {tag}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  dir="auto"
+                  lang="ku"
+                  autoComplete="off"
+                  spellCheck={false}
+                  defaultValue={focusedItem.notes || ''}
+                  key={`note-${focusedItem.id}-${focusedItem.notes || ''}`}
+                  placeholder="تێبینی / شوێنی عەیبەکە بنووسە..."
+                  onBlur={(e) => {
+                    const nextVal = e.target.value.trim();
+                    if (nextVal !== (focusedItem.notes || '').trim()) {
+                      const curSession = sessionRef.current;
+                      const nowIso = new Date().toISOString();
+                      onUpdateSessionRef.current({
+                        ...curSession,
+                        items: curSession.items.map((it) =>
+                          it.id === focusedItem.id ? { ...it, notes: nextVal, lastAuditedAt: nowIso } : it
+                        ),
+                        updatedAt: nowIso,
+                      });
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-[11px] text-white placeholder-slate-500 outline-none focus:border-amber-400"
+                  style={{ unicodeBidi: 'plaintext' }}
+                />
               </div>
             </div>
           )}
@@ -1555,7 +1656,9 @@ export function SmartCameraCartonScanner({
                       isComplete={item.checkedQty >= item.expectedQty}
                       scannedTime={formatClockTime(verifiedMeta?.scannedAtIso || item.lastAuditedAt)}
                       spokenDisplay={spokenItem.displayText}
-                      onReplayVoice={() => audio.speakKurdishResult(spokenItem)}
+                      onReplayVoice={() =>
+                        audio.speakKurdishResult(spokenItem, item.model, item.pcsPerCarton || 1)
+                      }
                     />
                   </div>
                 );

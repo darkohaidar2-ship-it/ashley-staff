@@ -4,6 +4,8 @@ import { CodeIntelligenceProfile, normalizeDigitsUniversal } from '@/lib/warehou
 export interface ParsedCartonLabel {
   itemNo: string | null;
   caseQty: number | null;
+  cartonNumber: number | null;
+  totalCartons: number | null;
   description: string | null;
   matchedItem: SheetsAuditItem | null;
   matchConfidence: 'exact' | 'normalized' | 'affix' | 'fuzzy' | 'none';
@@ -254,7 +256,28 @@ export function extractDescriptionFromText(text: string): string | null {
 }
 
 /**
- * Extract Master/Case Unit Quantity (`MASTER QUANTITY`, `MASTER QTY`, `CASE QTY`, `Case Quantity`)
+ * Extract carton sequence (e.g. `CARTON NO.: 175 OF 250`, `Carton Number: 16 OF 100`, `CARTON NO. 52 OF 200`).
+ */
+export function extractCartonProgressFromText(text: string): {
+  cartonNumber: number | null;
+  totalCartons: number | null;
+} {
+  const clean = normalizeDigits(text);
+  const m = clean.match(
+    /(?:carton|ctn)\s*(?:no\.?|number|#)?\s*[:.;\-=\s]*([0-9]{1,5})\s*(?:of|\/)\s*([0-9]{1,5})/i
+  );
+  if (m && m[1] && m[2]) {
+    const cur = parseInt(m[1], 10);
+    const tot = parseInt(m[2], 10);
+    if (Number.isFinite(cur) && Number.isFinite(tot) && cur >= 1 && tot >= 1) {
+      return { cartonNumber: cur, totalCartons: tot };
+    }
+  }
+  return { cartonNumber: null, totalCartons: null };
+}
+
+/**
+ * Extract Master/Case Unit Quantity (`MASTER QUANTITY`, `MASTER QTY`, `CASE QTY`, `Case Quantity`, `1 SET`, `2 PCS`)
  * while strictly ignoring `INNER QNTY` / `INNER QTY`, weights, dimensions, and `CARTON NO: X OF Y`.
  */
 export function extractCaseQtyFromText(text: string): number | null {
@@ -278,16 +301,19 @@ export function extractCaseQtyFromText(text: string): number | null {
   const UNIT_SUFFIX = '(?:pcs?|sets?|units?|ea|ctn|box)?\\.?';
   const NUM_CAPTURE = `([0-9OQIL]{1,4})(?!\\.[0-9])\\s*${UNIT_SUFFIX}(?=$|[\\s.,;/|)])`;
   const BAD_QTY_LINE =
-    /\b(?:inner|gw|nw|weight|lbs|kg|cbm|cu\.?\s*ft|cube|mm|cm|inch|dimensions?|gross|net|carton\s*no|p\.?\s*o\.?|of)\b/i;
+    /\b(?:gw|nw|weight|lbs|kg|cbm|cu\.?\s*ft|cube|mm|cm|inch|dimensions?|gross|net|carton\s*no|p\.?\s*o\.?|of)\b/i;
+
+  const stripInnerSection = (lineStr: string) =>
+    lineStr.replace(/\b(?:inner|inr)\s*(?:q['’]?ty\.?|qnty\.?|qty|quantity|set|sets|pc|pcs)?\b.*$/i, '').trim();
 
   // Priority 0: Explicit MASTER QTY / MASTER QUANTITY or stacked `MASTER` + `QUANTITY: N`
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (/\binner\b/i.test(line)) continue;
+    const rawLine = lines[i];
+    const sanitizedLine = stripInnerSection(rawLine);
 
-    const masterSameLine = line.match(
+    const masterSameLine = sanitizedLine.match(
       new RegExp(
-        `\\bmaster\\s*(?:carton|ctn|case)?\\s*(?:q['’]?ty|qnty|0ty|oty|gty|quantity)\\s*[:.;\\-=\\s]*${NUM_CAPTURE}`,
+        `\\bmaster\\s*(?:carton|ctn|case|pack)?\\s*(?:q['’]?ty\\.?|qnty\\.?|0ty\\.?|oty\\.?|gty\\.?|quantity)\\s*[:.;\\-=\\s]*${NUM_CAPTURE}`,
         'i'
       )
     );
@@ -296,19 +322,21 @@ export function extractCaseQtyFromText(text: string): number | null {
       if (parsed !== null) return parsed;
     }
 
-    if (/^master(?:\s+(?:carton|ctn|pack|case))?\s*[:.;\-=]*$/i.test(line)) {
+    if (/^master(?:\s+(?:carton|ctn|pack|case))?\s*[:.;\-=]*$/i.test(rawLine)) {
       const nextLine = lines[i + 1] || '';
-      if (nextLine && !/\binner\b/i.test(nextLine)) {
-        const nextQty = nextLine.match(
-          new RegExp(`^(?:q['’]?ty|qnty|0ty|oty|gty|quantity)?\\s*[:.;\\-=\\s]*${NUM_CAPTURE}`, 'i')
+      const sanitizedNext = stripInnerSection(nextLine);
+      if (sanitizedNext) {
+        const nextQty = sanitizedNext.match(
+          new RegExp(`^(?:q['’]?ty\\.?|qnty\\.?|0ty\\.?|oty\\.?|gty\\.?|quantity)?\\s*[:.;\\-=\\s]*${NUM_CAPTURE}`, 'i')
         );
         if (nextQty && nextQty[1]) {
           const parsed = parseNumericToken(nextQty[1]);
           if (parsed !== null) return parsed;
         }
-        if (/^(?:q['’]?ty|qnty|0ty|oty|gty|quantity)\s*[:.;\-=]*$/i.test(nextLine)) {
+        if (/^(?:q['’]?ty\\.?|qnty\\.?|0ty\\.?|oty\\.?|gty\\.?|quantity)\s*[:.;\-=]*$/i.test(sanitizedNext)) {
           const thirdLine = lines[i + 2] || '';
-          const thirdMatch = thirdLine.match(new RegExp(`^\\s*${NUM_CAPTURE}`, 'i'));
+          const sanitizedThird = stripInnerSection(thirdLine);
+          const thirdMatch = sanitizedThird.match(new RegExp(`^\\s*${NUM_CAPTURE}`, 'i'));
           if (thirdMatch && thirdMatch[1]) {
             const parsed = parseNumericToken(thirdMatch[1]);
             if (parsed !== null) return parsed;
@@ -320,12 +348,12 @@ export function extractCaseQtyFromText(text: string): number | null {
 
   // Priority 1: Explicit "CASE QTY" / "CASEQTY" / "Case Quantity" / "CTN QTY" (never INNER)
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (/\binner\b/i.test(line)) continue;
+    const rawLine = lines[i];
+    const sanitizedLine = stripInnerSection(rawLine);
 
-    const caseSameLine = line.match(
+    const caseSameLine = sanitizedLine.match(
       new RegExp(
-        `(?:case|c['’]?ase|ctn|carton|pack|pk|box)\\s*(?:q['’]?ty|qnty|0ty|oty|gty|quantity)\\s*[:.;\\-=\\s]*${NUM_CAPTURE}`,
+        `(?:case|c['’]?ase|ctn|carton|pack|pk|box)\\s*(?:q['’]?ty\\.?|qnty\\.?|0ty\\.?|oty\\.?|gty\\.?|quantity)\\s*[:.;\\-=\\s]*${NUM_CAPTURE}`,
         'i'
       )
     );
@@ -335,13 +363,14 @@ export function extractCaseQtyFromText(text: string): number | null {
     }
 
     if (
-      /(?:case|c['’]?ase|ctn|carton|pack|pk|box)\s*(?:q['’]?ty|qnty|0ty|oty|gty|quantity)\s*[:.;\-=]*$/i.test(
-        line
+      /(?:case|c['’]?ase|ctn|carton|pack|pk|box)\s*(?:q['’]?ty\\.?|qnty\\.?|0ty\\.?|oty\\.?|gty\\.?|quantity)\s*[:.;\-=]*$/i.test(
+        sanitizedLine
       )
     ) {
       const nextLine = lines[i + 1] || '';
-      if (nextLine && !/\bof\b/i.test(nextLine)) {
-        const stackedMatch = nextLine.match(new RegExp(`^\\s*${NUM_CAPTURE}`, 'i'));
+      const sanitizedNext = stripInnerSection(nextLine);
+      if (sanitizedNext && !/\bof\b/i.test(sanitizedNext)) {
+        const stackedMatch = sanitizedNext.match(new RegExp(`^\\s*${NUM_CAPTURE}`, 'i'));
         if (stackedMatch && stackedMatch[1]) {
           const parsed = parseNumericToken(stackedMatch[1]);
           if (parsed !== null) return parsed;
@@ -350,23 +379,25 @@ export function extractCaseQtyFromText(text: string): number | null {
     }
   }
 
-  // Priority 2: Generic "QTY: N" or "QUANTITY: N" (strictly excluding INNER, weights, dimensions, carton X of Y)
+  // Priority 2: Generic "QTY: N" or "QUANTITY: N" (strictly excluding weights, dimensions, carton X of Y)
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (BAD_QTY_LINE.test(line)) continue;
+    const rawLine = lines[i];
+    const sanitizedLine = stripInnerSection(rawLine);
+    if (BAD_QTY_LINE.test(sanitizedLine)) continue;
 
-    const qtyMatch = line.match(
-      new RegExp(`(?:^|\\s)(?:q['’]?ty|qnty|0ty|oty|gty|quantity)\\s*[:.;\\-=\\s]*${NUM_CAPTURE}`, 'i')
+    const qtyMatch = sanitizedLine.match(
+      new RegExp(`(?:^|\\s)(?:q['’]?ty\\.?|qnty\\.?|0ty\\.?|oty\\.?|gty\\.?|quantity)\\s*[:.;\\-=\\s]*${NUM_CAPTURE}`, 'i')
     );
     if (qtyMatch && qtyMatch[1]) {
       const parsed = parseNumericToken(qtyMatch[1]);
       if (parsed !== null) return parsed;
     }
 
-    if (/^(?:q['’]?ty|qnty|0ty|oty|gty|quantity)\s*[:.;\-=]*$/i.test(line)) {
+    if (/^(?:q['’]?ty\\.?|qnty\\.?|0ty\\.?|oty\\.?|gty\\.?|quantity)\s*[:.;\-=]*$/i.test(sanitizedLine)) {
       const nextLine = lines[i + 1] || '';
-      if (nextLine && !BAD_QTY_LINE.test(nextLine)) {
-        const stackedMatch = nextLine.match(new RegExp(`^\\s*${NUM_CAPTURE}`, 'i'));
+      const sanitizedNext = stripInnerSection(nextLine);
+      if (sanitizedNext && !BAD_QTY_LINE.test(sanitizedNext)) {
+        const stackedMatch = sanitizedNext.match(new RegExp(`^\\s*${NUM_CAPTURE}`, 'i'));
         if (stackedMatch && stackedMatch[1]) {
           const parsed = parseNumericToken(stackedMatch[1]);
           if (parsed !== null) return parsed;
@@ -483,8 +514,9 @@ export function parseCartonLabel(
 ): ParsedCartonLabel {
   const cleanText = normalizeDigits(rawOcrText || '');
   const extractedItemNo = extractItemNoFromText(cleanText);
-  const extractedCaseQty = extractCaseQtyFromText(cleanText);
+  let extractedCaseQty = extractCaseQtyFromText(cleanText);
   const extractedDescription = extractDescriptionFromText(cleanText);
+  const { cartonNumber, totalCartons } = extractCartonProgressFromText(cleanText);
 
   // Collect single tokens AND adjacent multi-token pairs like "EV 21345-02" or "21345-02 BALK"
   const tokenMatches = cleanText.match(/\b[A-Z0-9][A-Z0-9\-_/]{1,26}\b/gi) || [];
@@ -505,11 +537,19 @@ export function parseCartonLabel(
   const matched = matchSessionItemByCandidates(candidates, sessionItems, codeContext);
   const finalItemNo = matched.matchedCandidate || extractedItemNo || barcodeCandidate || null;
   const finalDescription = matched.item?.name || extractedDescription || null;
+
+  // Resilient fallback: If carton quantity wasn't stamped or legible, use manifest pcsPerCarton
+  if (extractedCaseQty === null && matched.item?.pcsPerCarton && matched.item.pcsPerCarton > 0) {
+    extractedCaseQty = matched.item.pcsPerCarton;
+  }
+
   const isCompleteRead = Boolean(matched.item && extractedCaseQty !== null && extractedCaseQty > 0);
 
   return {
     itemNo: finalItemNo,
     caseQty: extractedCaseQty,
+    cartonNumber,
+    totalCartons,
     description: finalDescription,
     matchedItem: matched.item,
     matchConfidence: matched.confidence,

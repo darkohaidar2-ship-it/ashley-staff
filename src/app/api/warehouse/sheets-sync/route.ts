@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/client';
+import { supabase, fetchSupabaseJson, saveSupabaseJson } from '@/lib/supabase/client';
 import { logger } from '@/lib/logger';
 import * as XLSX from 'xlsx';
 import {
@@ -22,7 +22,7 @@ export interface SheetsAuditItem {
   expectedQty: number; // total units / pieces
   checkedQty: number; // total checked units / pieces
   variance: number; // checkedQty - expectedQty
-  condition: 'Packaged' | 'Wrapped' | 'Damaged' | 'Need Wrapped' | 'Normal';
+  condition: 'Packaged' | 'Wrapped' | 'Damaged' | 'Need Wrapped' | 'Normal' | 'Defective';
   issueQty?: number; // Exact count of damaged/broken or wrapped/repack units (چەنێکی شکاو/تەغلیفە)
   auditStatus: 'pending' | 'verified' | 'deficit' | 'excess' | 'damaged';
   rackLocation?: string;
@@ -1156,6 +1156,7 @@ function buildAuditSheetPayload(session: SheetsAuditSession) {
     let conditionKurdish = 'پاکەتکراو';
     if (i.condition === 'Wrapped') conditionKurdish = `لەفکراو / تەغلیف${issueCountSuffix}`;
     else if (i.condition === 'Damaged') conditionKurdish = `تێکچوو / شکاو${issueCountSuffix}`;
+    else if (i.condition === 'Defective') conditionKurdish = `عەیبدار / کێشەی کارگە${issueCountSuffix}`;
     else if (i.condition === 'Need Wrapped') conditionKurdish = `پێویستی بە لەفە / تەغلیف${issueCountSuffix}`;
     else if (i.condition === 'Normal') conditionKurdish = 'ئاسایی';
 
@@ -1932,6 +1933,26 @@ export async function POST(req: NextRequest) {
       }
       const saved = await saveStoredSessions(allSessions);
       return NextResponse.json({ success: saved, updatedSessions: updatedList });
+    }
+
+    // -------------------------------------------------------------------------
+    // ACTION 2.75: SAVE AUDIO SETTINGS (ELEVENLABS API KEY ETC)
+    // -------------------------------------------------------------------------
+    if (action === 'save_audio_settings') {
+      const { elevenLabsApiKey, voiceId } = body;
+      const existing = await fetchSupabaseJson<any>('ashley_warehouse_audio_settings', {});
+      const nextSettings = {
+        ...existing,
+        elevenLabsApiKey: (elevenLabsApiKey || '').trim() || existing.elevenLabsApiKey,
+        voiceId: (voiceId || '').trim() || existing.voiceId,
+        updatedAt: new Date().toISOString(),
+      };
+      const saved = await saveSupabaseJson(
+        'ashley_warehouse_audio_settings',
+        'Ashley Warehouse Audio Settings',
+        nextSettings
+      );
+      return NextResponse.json({ success: saved, settings: { hasKey: Boolean(nextSettings.elevenLabsApiKey) } });
     }
 
     // -------------------------------------------------------------------------

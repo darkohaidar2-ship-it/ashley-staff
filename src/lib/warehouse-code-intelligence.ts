@@ -33,6 +33,7 @@ export interface KurdishSpokenResult {
   speechKurdish: string;
   speechPersianPhonetic: string;
   speechArabicPhonetic: string;
+  speechKurdishLatin: string;
   speechEnglish: string;
 }
 
@@ -478,6 +479,61 @@ export function toPhoneticArabic(kuText: string): string {
     .replace(/ک/g, 'ك');
 }
 
+const KURDISH_TO_LATIN_MAP: Record<string, string> = {
+  'یەک': 'Yak',
+  'دوو': 'Doo',
+  'سێ': 'Seh',
+  'چوار': 'Chwar',
+  'پێنج': 'Penj',
+  'شەش': 'Shash',
+  'حەوت': 'Hawt',
+  'هەشت': 'Hasht',
+  'نۆ': 'Noh',
+  'دە': 'Dah',
+  'یازدە': 'Yazdah',
+  'دوازدە': 'Dwazdah',
+  'سیانزە': 'Syanzah',
+  'چواردە': 'Chwardah',
+  'پانزە': 'Panzah',
+  'شازدە': 'Shazdah',
+  'حەڤدە': 'Hawdah',
+  'هەژدە': 'Hazhdah',
+  'نۆزدە': 'Nozdah',
+  'بیست': 'Beest',
+  'سی': 'See',
+  'چل': 'Chl',
+  'پەنجا': 'Panja',
+  'شەست': 'Shest',
+  'حەفتا': 'Hafta',
+  'هەشتا': 'Hashta',
+  'نەوەد': 'Nawad',
+  'سەد': 'Sad',
+  'دووسەد': 'Doosad',
+  'سێسەد': 'Sehsad',
+  'چوارسەد': 'Chwarsad',
+  'پێنجسەد': 'Penjsad',
+  'شەشسەد': 'Shashsad',
+  'حەوتسەد': 'Hawtsad',
+  'هەشتسەد': 'Hashtsad',
+  'نۆسەد': 'Nohsad',
+  'هەزار': 'Hazar',
+  'سفر': 'Sefr',
+  'داش': 'Dash',
+  'عەدەد': 'adad',
+  'لە': 'la',
+  'مۆدێلی': 'modelee',
+  'ئی': 'Ee',
+  'ڤی': 'Vee',
+  'و': 'oo',
+};
+
+export function toKurdishLatinPhonetic(kuText: string): string {
+  const words = (kuText || '').split(/\s+/);
+  return words
+    .map((w) => KURDISH_TO_LATIN_MAP[w] || w)
+    .join(' ');
+}
+
 function formatEnglishSpokenScan(model: string, qty: number): string {
   const tokens = tokenizeModelCode(model);
   const enParts = tokens.map((tok) => {
@@ -528,6 +584,7 @@ export function formatKurdishSpokenScan(model: string, qty: number): KurdishSpok
     speechKurdish,
     speechPersianPhonetic: toPhoneticPersian(speechKurdish),
     speechArabicPhonetic: toPhoneticArabic(speechKurdish),
+    speechKurdishLatin: toKurdishLatinPhonetic(speechKurdish),
     speechEnglish: formatEnglishSpokenScan(model, cleanQty),
   };
 }
