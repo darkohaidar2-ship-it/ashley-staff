@@ -298,7 +298,7 @@ export function extractCaseQtyFromText(text: string): number | null {
     return Number.isFinite(n) && n >= 1 && n <= 9999 ? n : null;
   };
 
-  const UNIT_SUFFIX = '(?:pcs?|sets?|units?|ea|ctn|box)?\\.?';
+  const UNIT_SUFFIX = '(?:pcs?|sets?|pairs?|units?|ea|ctn|box)?\\.?';
   const NUM_CAPTURE = `([0-9OQIL]{1,4})(?!\\.[0-9])\\s*${UNIT_SUFFIX}(?=$|[\\s.,;/|)])`;
   const BAD_QTY_LINE =
     /\b(?:gw|nw|weight|lbs|kg|cbm|cu\.?\s*ft|cube|mm|cm|inch|dimensions?|gross|net|carton\s*no|p\.?\s*o\.?|of)\b/i;
@@ -306,14 +306,14 @@ export function extractCaseQtyFromText(text: string): number | null {
   const stripInnerSection = (lineStr: string) =>
     lineStr.replace(/\b(?:inner|inr)\s*(?:q['’]?ty\.?|qnty\.?|qty|quantity|set|sets|pc|pcs)?\b.*$/i, '').trim();
 
-  // Priority 0: Explicit MASTER QTY / MASTER QUANTITY or stacked `MASTER` + `QUANTITY: N`
+  // Priority 0: Explicit MASTER QTY / MASTER QUANTITY / MASTER: N or stacked `MASTER` + `QUANTITY: N`
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i];
     const sanitizedLine = stripInnerSection(rawLine);
 
     const masterSameLine = sanitizedLine.match(
       new RegExp(
-        `\\bmaster\\s*(?:carton|ctn|case|pack)?\\s*(?:q['’]?ty\\.?|qnty\\.?|0ty\\.?|oty\\.?|gty\\.?|quantity)\\s*[:.;\\-=\\s]*${NUM_CAPTURE}`,
+        `\\bmaster\\s*(?:carton|ctn|case|pack)?\\s*(?:q['’]?ty\\.?|qnty\\.?|0ty\\.?|oty\\.?|gty\\.?|quantity)?\\s*[:.;\\-=\\s]*${NUM_CAPTURE}`,
         'i'
       )
     );

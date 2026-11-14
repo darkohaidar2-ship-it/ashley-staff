@@ -379,6 +379,126 @@ function MetallicVerifiedStrip({
 }
 
 // =============================================================================
+// 📝 DECOUPLED SCANNER NOTE BOX (Zero Letter Scrambling & Mobile IME Protected)
+// =============================================================================
+function ScannerNoteBox({
+  item,
+  onCommitNote,
+}: {
+  item: SheetsAuditItem;
+  onCommitNote: (itemId: string, note: string) => void;
+}) {
+  const [draft, setDraft] = useState(item.notes || '');
+  const [isEditing, setIsEditing] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+  const isComposingRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setDraft(item.notes || '');
+    }
+  }, [item.notes, item.id, isEditing]);
+
+  const commitIfChanged = (forceBlur = false) => {
+    setIsEditing(false);
+    const trimmed = (draft || '').trim();
+    if (trimmed !== (item.notes || '').trim()) {
+      onCommitNote(item.id, trimmed);
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 2400);
+    }
+    if (forceBlur && inputRef.current) {
+      inputRef.current.blur();
+    }
+  };
+
+  const handleAddTag = (tag: string) => {
+    const cur = (draft || '').trim();
+    const next = cur ? `${cur} • ${tag}` : tag;
+    setDraft(next);
+    setIsEditing(true);
+  };
+
+  const isDirty = (draft || '').trim() !== (item.notes || '').trim();
+
+  return (
+    <div className="mt-2 pt-2 border-t border-slate-800/80">
+      <div className="flex items-center gap-1 overflow-x-auto pb-1 mb-1.5 no-scrollbar">
+        {[
+          'پاکەت دڕاوە',
+          'شووشە شکاوە',
+          'عەیبی کارگە',
+          'تەڕ بووە',
+          'کارتۆن کەمی هەیە',
+        ].map((tag) => (
+          <button
+            key={tag}
+            type="button"
+            onClick={() => handleAddTag(tag)}
+            className="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-[9.5px] font-bold whitespace-nowrap border border-slate-700 shrink-0 cursor-pointer active:scale-95 transition-transform"
+          >
+            + {tag}
+          </button>
+        ))}
+      </div>
+      <div className="relative flex items-center">
+        <input
+          ref={inputRef}
+          type="text"
+          dir="rtl"
+          lang="ku"
+          autoComplete="off"
+          spellCheck={false}
+          value={draft}
+          onFocus={() => setIsEditing(true)}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={(e) => {
+            isComposingRef.current = false;
+            setDraft((e.target as HTMLInputElement).value);
+          }}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => {
+            if (!isComposingRef.current) {
+              commitIfChanged(false);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commitIfChanged(true);
+            }
+          }}
+          placeholder="تێبینی / شوێنی عەیبەکە بنووسە..."
+          className="w-full bg-slate-900 border border-slate-700 rounded-lg pr-2.5 pl-20 py-1.5 text-[11px] text-white placeholder-slate-500 outline-none focus:border-amber-400 transition-colors"
+          style={{ direction: 'rtl', textAlign: 'right', unicodeBidi: 'isolate' }}
+        />
+        {(isEditing || isDirty) && (
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              commitIfChanged(true);
+            }}
+            className="absolute left-1 px-2 py-0.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[9.5px] font-black cursor-pointer shadow-sm active:scale-95 transition-all flex items-center gap-0.5 z-10"
+          >
+            <Check className="w-2.5 h-2.5 stroke-[3]" />
+            <span>خەزنکردن</span>
+          </button>
+        )}
+        {justSaved && !isEditing && (
+          <span className="absolute left-1 px-1.5 py-0.5 rounded-md bg-emerald-900/80 border border-emerald-600 text-emerald-300 text-[9px] font-bold pointer-events-none animate-in fade-in z-10">
+            خەزنکرا ✅
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // 🎥 MAIN SIMPLE & ACCURATE CAMERA CARTON SCANNER
 // =============================================================================
 export function SmartCameraCartonScanner({
@@ -1511,7 +1631,7 @@ export function SmartCameraCartonScanner({
                       </button>
                     </div>
 
-                    {/* Quick presets for 1 piece or all pieces in carton */}
+                    {/* Quick presets for 1 piece, 2 pieces or all pieces in carton */}
                     <button
                       type="button"
                       onClick={() => {
@@ -1528,6 +1648,23 @@ export function SmartCameraCartonScanner({
                       className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-[10px] font-bold cursor-pointer"
                     >
                       ١ دانە
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const curSession = sessionRef.current;
+                        const nowIso = new Date().toISOString();
+                        onUpdateSessionRef.current({
+                          ...curSession,
+                          items: curSession.items.map((it) =>
+                            it.id === focusedItem.id ? { ...it, issueQty: 2, lastAuditedAt: nowIso } : it
+                          ),
+                          updatedAt: nowIso,
+                        });
+                      }}
+                      className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-[10px] font-bold cursor-pointer"
+                    >
+                      ٢ دانە
                     </button>
                     <button
                       type="button"
@@ -1551,70 +1688,22 @@ export function SmartCameraCartonScanner({
                 )}
               </div>
 
-              {/* Quick Note & Damage Tags for Focused Item */}
-              <div className="mt-2 pt-2 border-t border-slate-800/80">
-                <div className="flex items-center gap-1 overflow-x-auto pb-1 mb-1.5 no-scrollbar">
-                  {[
-                    'پاکەت دڕاوە',
-                    'شووشە شکاوە',
-                    'عەیبی کارگە',
-                    'تەڕ بووە',
-                    'کارتۆن کەمی هەیە',
-                  ].map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => {
-                        const curSession = sessionRef.current;
-                        const nowIso = new Date().toISOString();
-                        const curNote = (focusedItem.notes || '').trim();
-                        const nextNote = curNote ? `${curNote} • ${tag}` : tag;
-                        onUpdateSessionRef.current({
-                          ...curSession,
-                          items: curSession.items.map((it) =>
-                            it.id === focusedItem.id ? { ...it, notes: nextNote, lastAuditedAt: nowIso } : it
-                          ),
-                          updatedAt: nowIso,
-                        });
-                      }}
-                      className="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-[9.5px] font-bold whitespace-nowrap border border-slate-700 shrink-0 cursor-pointer"
-                    >
-                      + {tag}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  type="text"
-                  dir="auto"
-                  lang="ku"
-                  autoComplete="off"
-                  spellCheck={false}
-                  defaultValue={focusedItem.notes || ''}
-                  key={`note-${focusedItem.id}-${focusedItem.notes || ''}`}
-                  placeholder="تێبینی / شوێنی عەیبەکە بنووسە..."
-                  onBlur={(e) => {
-                    const nextVal = e.target.value.trim();
-                    if (nextVal !== (focusedItem.notes || '').trim()) {
-                      const curSession = sessionRef.current;
-                      const nowIso = new Date().toISOString();
-                      onUpdateSessionRef.current({
-                        ...curSession,
-                        items: curSession.items.map((it) =>
-                          it.id === focusedItem.id ? { ...it, notes: nextVal, lastAuditedAt: nowIso } : it
-                        ),
-                        updatedAt: nowIso,
-                      });
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.currentTarget.blur();
-                    }
-                  }}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-[11px] text-white placeholder-slate-500 outline-none focus:border-amber-400"
-                  style={{ unicodeBidi: 'plaintext' }}
-                />
-              </div>
+              {/* Quick Note & Damage Tags for Focused Item (Decoupled, zero character jumbling) */}
+              <ScannerNoteBox
+                key={focusedItem.id}
+                item={focusedItem}
+                onCommitNote={(itemId, nextVal) => {
+                  const curSession = sessionRef.current;
+                  const nowIso = new Date().toISOString();
+                  onUpdateSessionRef.current({
+                    ...curSession,
+                    items: curSession.items.map((it) =>
+                      it.id === itemId ? { ...it, notes: nextVal, lastAuditedAt: nowIso } : it
+                    ),
+                    updatedAt: nowIso,
+                  });
+                }}
+              />
             </div>
           )}
 

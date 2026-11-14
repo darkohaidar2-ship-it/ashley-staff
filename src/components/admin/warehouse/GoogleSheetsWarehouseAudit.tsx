@@ -545,6 +545,7 @@ function DeferredNoteInput({
   const [isEditing, setIsEditing] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const draftRef = useRef(draft);
+  const isComposingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   draftRef.current = draft;
 
@@ -558,10 +559,12 @@ function DeferredNoteInput({
     (forceBlur = false) => {
       setIsEditing(false);
       onEditingChange?.(itemId, false);
-      if (draftRef.current !== value) {
-        onCommit(itemId, draftRef.current);
+      const trimmedDraft = (draftRef.current || '').trim();
+      const trimmedVal = (value || '').trim();
+      if (trimmedDraft !== trimmedVal) {
+        onCommit(itemId, trimmedDraft);
         setJustSaved(true);
-        setTimeout(() => setJustSaved(false), 2600);
+        setTimeout(() => setJustSaved(false), 2400);
       }
       if (forceBlur && textareaRef.current) {
         textareaRef.current.blur();
@@ -570,14 +573,14 @@ function DeferredNoteInput({
     [itemId, onCommit, onEditingChange, value]
   );
 
-  const isDirty = draft !== value;
+  const isDirty = (draft || '').trim() !== (value || '').trim();
 
   return (
     <div className="relative w-full">
       <textarea
         ref={textareaRef}
         rows={2}
-        dir="auto"
+        dir="rtl"
         lang="ku"
         autoComplete="off"
         spellCheck={false}
@@ -586,8 +589,21 @@ function DeferredNoteInput({
           setIsEditing(true);
           onEditingChange?.(itemId, true);
         }}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => commitIfDirty(false)}
+        onCompositionStart={() => {
+          isComposingRef.current = true;
+        }}
+        onCompositionEnd={(e) => {
+          isComposingRef.current = false;
+          setDraft((e.target as HTMLTextAreaElement).value);
+        }}
+        onChange={(e) => {
+          setDraft(e.target.value);
+        }}
+        onBlur={() => {
+          if (!isComposingRef.current) {
+            commitIfDirty(false);
+          }
+        }}
         onKeyDown={(e) => {
           if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
             e.preventDefault();
@@ -595,15 +611,15 @@ function DeferredNoteInput({
           }
         }}
         placeholder="تێبینی بنووسە..."
-        style={{ unicodeBidi: 'plaintext', textAlign: 'right', direction: 'rtl' }}
-        className={`w-full h-[50px] p-1.5 rounded-xl border text-[11px] font-medium outline-none resize-none overflow-y-auto ashley-cell-scroll leading-snug transition-colors ${
+        style={{ direction: 'rtl', textAlign: 'right', unicodeBidi: 'isolate' }}
+        className={`w-full h-[52px] p-2 rounded-xl border text-[11px] font-medium outline-none resize-none overflow-y-auto ashley-cell-scroll leading-snug transition-all ${
           isEditing
-            ? 'bg-white border-blue-500 ring-2 ring-blue-100 pb-5 text-slate-900'
+            ? 'bg-white border-blue-500 ring-2 ring-blue-100 pb-5 text-slate-900 shadow-sm'
             : isDirty
-            ? 'bg-amber-50/60 border-amber-300 text-slate-900'
+            ? 'bg-amber-50/70 border-amber-300 text-slate-900'
             : justSaved
-            ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950'
-            : 'bg-slate-50/60 border-slate-200 focus:bg-white focus:border-blue-400 text-slate-800'
+            ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
+            : 'bg-slate-50/70 border-slate-200 focus:bg-white focus:border-blue-400 text-slate-800'
         }`}
       />
       {(isEditing || isDirty) && (
@@ -613,14 +629,14 @@ function DeferredNoteInput({
             e.preventDefault();
             commitIfDirty(true);
           }}
-          className="absolute bottom-1 left-1 px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-[9px] font-black shadow-sm flex items-center gap-0.5 cursor-pointer transition-all"
+          className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-[9.5px] font-black shadow-sm flex items-center gap-1 cursor-pointer transition-all z-10"
         >
           <Check className="w-2.5 h-2.5 stroke-[3]" />
           <span>تەواو • خەزنکردن</span>
         </button>
       )}
       {justSaved && !isEditing && (
-        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-[9px] font-bold shadow-xs flex items-center gap-0.5 pointer-events-none">
+        <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[9.5px] font-black shadow-xs flex items-center gap-1 pointer-events-none z-10 animate-in fade-in duration-200">
           <Check className="w-2.5 h-2.5 stroke-[3]" />
           <span>خەزنکرا ✅</span>
         </span>
@@ -3463,47 +3479,76 @@ export function GoogleSheetsWarehouseAudit({
 
                               {(item.condition === 'Damaged' || item.condition === 'Defective' || item.condition === 'Need Wrapped' || item.condition === 'Wrapped') && (
                                 <div
-                                  className={`flex items-center justify-between gap-1 px-1.5 py-0.5 rounded-lg border text-[10px] font-bold ${
+                                  className={`p-1.5 rounded-xl border text-[10.5px] font-bold space-y-1 ${
                                     item.condition === 'Damaged'
-                                      ? 'bg-rose-50/90 border-rose-200 text-rose-700'
+                                      ? 'bg-rose-50/90 border-rose-200 text-rose-800'
                                       : item.condition === 'Defective'
                                       ? 'bg-orange-50/90 border-orange-200 text-orange-800'
                                       : item.condition === 'Need Wrapped'
                                       ? 'bg-amber-50/90 border-amber-200 text-amber-800'
-                                      : 'bg-purple-50/90 border-purple-200 text-purple-700'
+                                      : 'bg-purple-50/90 border-purple-200 text-purple-800'
                                   }`}
                                 >
-                                  <span className="truncate">
-                                    {item.condition === 'Damaged'
-                                      ? 'شکاو:'
-                                      : item.condition === 'Defective'
-                                      ? 'عەیبدار:'
-                                      : item.condition === 'Need Wrapped'
-                                      ? 'بێ تەغلیف:'
-                                      : 'تەغلیف:'}
-                                  </span>
-                                  <div className="flex items-center gap-0.5 shrink-0" dir="ltr">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="truncate font-black">
+                                      {item.condition === 'Damaged'
+                                        ? 'بڕی شکاو:'
+                                        : item.condition === 'Defective'
+                                        ? 'بڕی عەیبدار:'
+                                        : item.condition === 'Need Wrapped'
+                                        ? 'بێ تەغلیف:'
+                                        : 'تەغلیفکراو:'}
+                                    </span>
+                                    <div className="flex items-center gap-1 shrink-0" dir="ltr">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateIssueQty(item.id, (item.issueQty || 1) - 1)}
+                                        className="w-5 h-5 rounded-md bg-white hover:bg-slate-100 border border-current/30 flex items-center justify-center font-black text-xs leading-none cursor-pointer active:scale-95 transition-transform"
+                                        title="کەمکردنەوە"
+                                      >
+                                        -
+                                      </button>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        max={9999}
+                                        value={item.issueQty ?? 1}
+                                        onChange={(e) => handleUpdateIssueQty(item.id, parseInt(e.target.value || '0', 10))}
+                                        className="w-9 h-5 text-center bg-white border border-current/30 rounded-md font-mono text-[11px] font-black outline-none focus:ring-1 focus:ring-current"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateIssueQty(item.id, (item.issueQty || 0) + 1)}
+                                        className="w-5 h-5 rounded-md bg-white hover:bg-slate-100 border border-current/30 flex items-center justify-center font-black text-xs leading-none cursor-pointer active:scale-95 transition-transform"
+                                        title="زیادکردن"
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Quick preset buttons: [1 دانە], [2 دانە], [هەمووی] */}
+                                  <div className="flex items-center justify-end gap-1 pt-0.5">
                                     <button
                                       type="button"
-                                      onClick={() => handleUpdateIssueQty(item.id, (item.issueQty || 1) - 1)}
-                                      className="w-4 h-4 rounded bg-white border border-current/20 flex items-center justify-center font-black leading-none cursor-pointer"
+                                      onClick={() => handleUpdateIssueQty(item.id, 1)}
+                                      className="px-1.5 py-0.5 rounded bg-white/80 hover:bg-white border border-current/20 text-[9px] font-black cursor-pointer active:scale-95"
                                     >
-                                      -
+                                      ١ دانە
                                     </button>
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      max={9999}
-                                      value={item.issueQty ?? 1}
-                                      onChange={(e) => handleUpdateIssueQty(item.id, parseInt(e.target.value || '0', 10))}
-                                      className="w-8 h-4 text-center bg-white border border-current/20 rounded font-mono text-[10px] font-black outline-none"
-                                    />
                                     <button
                                       type="button"
-                                      onClick={() => handleUpdateIssueQty(item.id, (item.issueQty || 0) + 1)}
-                                      className="w-4 h-4 rounded bg-white border border-current/20 flex items-center justify-center font-black leading-none cursor-pointer"
+                                      onClick={() => handleUpdateIssueQty(item.id, 2)}
+                                      className="px-1.5 py-0.5 rounded bg-white/80 hover:bg-white border border-current/20 text-[9px] font-black cursor-pointer active:scale-95"
                                     >
-                                      +
+                                      ٢ دانە
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateIssueQty(item.id, item.checkedQty || item.pcsPerCarton || item.expectedQty || 1)}
+                                      className="px-1.5 py-0.5 rounded bg-white hover:bg-slate-50 border border-current/30 text-[9px] font-black cursor-pointer active:scale-95 text-rose-700"
+                                    >
+                                      هەمووی ({item.checkedQty || item.pcsPerCarton || item.expectedQty || 1})
                                     </button>
                                   </div>
                                 </div>

@@ -506,6 +506,7 @@ const KURDISH_TO_LATIN_MAP: Record<string, string> = {
   'شەست': 'Shest',
   'حەفتا': 'Hafta',
   'هەشتا': 'Hashta',
+  'نەود': 'Nawad',
   'نەوەد': 'Nawad',
   'سەد': 'Sad',
   'دووسەد': 'Doosad',
