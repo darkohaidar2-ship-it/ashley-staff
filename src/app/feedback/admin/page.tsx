@@ -20,15 +20,33 @@ function FeedbackAdminContent() {
   const searchParams = useSearchParams();
   const viewParam = searchParams.get('view');
 
-  const [checkingSession, setCheckingSession] = useState<boolean>(true);
-  const [isAdminAuthed, setIsAdminAuthed] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'manager_evaluation' | 'feedback'>(
-    viewParam === 'feedback' ? 'feedback' : 'manager_evaluation'
-  );
+  const [isAdminAuthed, setIsAdminAuthed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const stored = sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session');
+      return Boolean(stored);
+    } catch {
+      return false;
+    }
+  });
+  const [checkingSession, setCheckingSession] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session');
+    return !stored;
+  });
+  const [activeTab, setActiveTab] = useState<'manager_evaluation' | 'feedback_sales' | 'feedback_warehouse'>(() => {
+    if (viewParam === 'feedback_warehouse') return 'feedback_warehouse';
+    if (viewParam === 'feedback' || viewParam === 'feedback_sales') return 'feedback_sales';
+    return 'manager_evaluation';
+  });
 
   useEffect(() => {
-    if (viewParam === 'feedback' || viewParam === 'manager_evaluation') {
-      setActiveTab(viewParam);
+    if (viewParam === 'feedback_warehouse') {
+      setActiveTab('feedback_warehouse');
+    } else if (viewParam === 'feedback' || viewParam === 'feedback_sales') {
+      setActiveTab('feedback_sales');
+    } else if (viewParam === 'manager_evaluation') {
+      setActiveTab('manager_evaluation');
     }
   }, [viewParam]);
 
@@ -149,8 +167,32 @@ function FeedbackAdminContent() {
           <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
             <button
               type="button"
+              onClick={() => setActiveTab('feedback_sales')}
+              className={`px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all ${
+                activeTab === 'feedback_sales'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <MessageSquareHeart className="w-4 h-4 text-emerald-600" />
+              <span>فرۆشیار و کاشێر (٧٥٠٠-٩٠٠٠)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('feedback_warehouse')}
+              className={`px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all ${
+                activeTab === 'feedback_warehouse'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <MessageSquareHeart className="w-4 h-4 text-blue-600" />
+              <span>کارمەندانی کۆگا (٥٠٠٠-٧٥٠٠)</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('manager_evaluation')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all ${
+              className={`px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all ${
                 activeTab === 'manager_evaluation'
                   ? 'bg-slate-900 text-amber-300 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
@@ -159,28 +201,14 @@ function FeedbackAdminContent() {
               <Award className="w-4 h-4 text-amber-500" />
               <span>هەڵسەنگاندنی بەڕێوەبەر</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('feedback')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all ${
-                activeTab === 'feedback'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <MessageSquareHeart className="w-4 h-4 text-rose-500" />
-              <span>فیدباکی کارمەندان</span>
-            </button>
           </div>
         </div>
       </header>
 
       <main className="p-3 sm:p-6">
-        {activeTab === 'manager_evaluation' ? (
-          <AdminManagerEvaluationDashboard />
-        ) : (
-          <AdminFeedbackDashboard />
-        )}
+        {activeTab === 'manager_evaluation' && <AdminManagerEvaluationDashboard />}
+        {activeTab === 'feedback_sales' && <AdminFeedbackDashboard initialStaffCategory="sales_cashier" />}
+        {activeTab === 'feedback_warehouse' && <AdminFeedbackDashboard initialStaffCategory="warehouse" />}
       </main>
     </div>
   );

@@ -37,21 +37,42 @@ import {
   ExternalLink,
   Layers,
   HelpCircle,
-  Hash
+  Hash,
+  Boxes
 } from 'lucide-react';
 import { 
   FeedbackPin, 
   FeedbackSubmission, 
   TARGET_SALES_CASHIER_STAFF,
+  TARGET_WAREHOUSE_STAFF,
   PinScope,
   generatePinForScope,
   determinePinScope
 } from '@/lib/feedback/feedback-service';
 import { OfficialPrintHeader, OfficialPrintSignatures } from '@/components/reports/OfficialPrintHeader';
-import * as XLSX from 'xlsx';
 
-export function AdminFeedbackDashboard() {
+export interface AdminFeedbackDashboardProps {
+  initialStaffCategory?: 'sales_cashier' | 'warehouse';
+}
+
+export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' }: AdminFeedbackDashboardProps = {}) {
   const searchParams = useSearchParams();
+
+  // 🎯 Category State: Sales & Cashiers (7500-9000) vs Warehouse Staff (5000-7500)
+  const [staffCategory, setStaffCategory] = useState<'sales_cashier' | 'warehouse'>(() => {
+    const cat = searchParams?.get('category');
+    if (cat === 'warehouse' || cat === 'sales_cashier') return cat;
+    return initialStaffCategory;
+  });
+
+  useEffect(() => {
+    if (initialStaffCategory) {
+      setStaffCategory(initialStaffCategory);
+    }
+  }, [initialStaffCategory]);
+
+  const isWarehouse = staffCategory === 'warehouse';
+  const currentTargetStaff = isWarehouse ? TARGET_WAREHOUSE_STAFF : TARGET_SALES_CASHIER_STAFF;
 
   const [pins, setPins] = useState<Record<string, FeedbackPin>>({});
   const [submissions, setSubmissions] = useState<FeedbackSubmission[]>([]);
@@ -298,9 +319,52 @@ export function AdminFeedbackDashboard() {
     }
   };
 
-  // Filtered Submissions
+  // Submissions filtered strictly by category (Warehouse vs Sales/Cashier)
+  const categorySubmissions = useMemo(() => {
+    const warehouseEmpIds = TARGET_WAREHOUSE_STAFF.map(e => e.employeeId);
+    const salesEmpIds = TARGET_SALES_CASHIER_STAFF.map(e => e.employeeId);
+
+    return submissions.filter((sub) => {
+      const pinNum = parseInt(sub.pin || '0', 10);
+      const ratingEmpIds = sub.employeeRatings ? Object.keys(sub.employeeRatings) : [];
+      const hasWarehouseEmp = ratingEmpIds.some(id => warehouseEmpIds.includes(id));
+      const hasSalesEmp = ratingEmpIds.some(id => salesEmpIds.includes(id));
+
+      if (isWarehouse) {
+        if (hasWarehouseEmp) return true;
+        if (pinNum >= 5000 && pinNum <= 7500) return true;
+        return false;
+      } else {
+        if (hasSalesEmp) return true;
+        if (pinNum > 7500 && pinNum <= 9000) return true;
+        if (!hasWarehouseEmp && !(pinNum >= 5000 && pinNum <= 7500)) return true;
+        return false;
+      }
+    });
+  }, [submissions, isWarehouse]);
+
+  // PINs filtered by category
+  const categoryPins = useMemo(() => {
+    const res: Record<string, FeedbackPin> = {};
+    Object.entries(pins).forEach(([pinKey, pinObj]) => {
+      const pinNum = parseInt(pinKey, 10);
+      const scope = pinObj.scope || determinePinScope(pinKey);
+      if (isWarehouse) {
+        if (scope === 'warehouse_staff_feedback' || (pinNum >= 5000 && pinNum <= 7500)) {
+          res[pinKey] = pinObj;
+        }
+      } else {
+        if (scope === 'sales_cashier_feedback' || scope === 'staff_feedback' || (pinNum > 7500 && pinNum <= 9000)) {
+          res[pinKey] = pinObj;
+        }
+      }
+    });
+    return res;
+  }, [pins, isWarehouse]);
+
+  // Filtered Submissions (with active search and rating filter)
   const filteredSubmissions = useMemo(() => {
-    return submissions.filter((s) => {
+    return categorySubmissions.filter((s) => {
       const matchesSearch = 
         !searchTerm.trim() ||
         s.pin.includes(searchTerm.trim()) ||
@@ -313,20 +377,21 @@ export function AdminFeedbackDashboard() {
 
       return matchesSearch && matchesRating;
     });
-  }, [submissions, searchTerm, ratingFilter]);
+  }, [categorySubmissions, searchTerm, ratingFilter]);
 
-  // 🌟 SALES & CASHIERS LEADERBOARD STATS
+  // 🌟 LEADERBOARD STATS (Tailored to active category: Sales/Cashier or Warehouse Staff)
   const staffLeaderboard = useMemo(() => {
     const map: Record<string, {
-      emp: typeof TARGET_SALES_CASHIER_STAFF[0];
+      emp: typeof currentTargetStaff[0];
       count: number;
       sumService: number;
       sumPerf: number;
       sumDisc: number;
       sumOverall: number;
+      sumTeamwork: number;
     }> = {};
 
-    TARGET_SALES_CASHIER_STAFF.forEach((emp) => {
+    currentTargetStaff.forEach((emp) => {
       map[emp.employeeId] = {
         emp,
         count: 0,
@@ -334,10 +399,11 @@ export function AdminFeedbackDashboard() {
         sumPerf: 0,
         sumDisc: 0,
         sumOverall: 0,
+        sumTeamwork: 0,
       };
     });
 
-    submissions.forEach((sub) => {
+    categorySubmissions.forEach((sub) => {
       if (sub.employeeRatings) {
         Object.entries(sub.employeeRatings).forEach(([empId, r]: [string, any]) => {
           if (map[empId] && r) {
@@ -346,6 +412,7 @@ export function AdminFeedbackDashboard() {
             map[empId].sumPerf += r.performanceRating || 0;
             map[empId].sumDisc += r.disciplineRating || 0;
             map[empId].sumOverall += r.overallRating || 0;
+            map[empId].sumTeamwork += r.teamworkRating || 0;
           }
         });
       }
@@ -358,6 +425,7 @@ export function AdminFeedbackDashboard() {
         avgService: item.count > 0 ? Number((item.sumService / item.count).toFixed(1)) : 0,
         avgPerf: item.count > 0 ? Number((item.sumPerf / item.count).toFixed(1)) : 0,
         avgDisc: item.count > 0 ? Number((item.sumDisc / item.count).toFixed(1)) : 0,
+        avgTeamwork: item.count > 0 ? Number((item.sumTeamwork / item.count).toFixed(1)) : 0,
       }))
       .sort((a, b) => {
         // Sort primarily by avgOverall descending
@@ -367,23 +435,24 @@ export function AdminFeedbackDashboard() {
         // Then by avgService descending
         return b.avgService - a.avgService;
       });
-  }, [submissions]);
+  }, [currentTargetStaff, categorySubmissions]);
 
   // Top 3 Podium performers
   const topPerformer = staffLeaderboard[0] || null;
   const secondPerformer = staffLeaderboard[1] || null;
   const thirdPerformer = staffLeaderboard[2] || null;
 
-  // Store-wide metrics & averages across all submissions
+  // Store-wide metrics & averages across category submissions
   const storeAnalytics = useMemo(() => {
     let totalService = 0;
     let totalPerf = 0;
     let totalDisc = 0;
+    let totalTeamwork = 0;
     let totalStaffRatingsCount = 0;
 
     const distribution: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
 
-    submissions.forEach((s) => {
+    categorySubmissions.forEach((s) => {
       const overallRounded = Math.min(5, Math.max(1, Math.round(s.overallSatisfaction || 5)));
       if (distribution[overallRounded] !== undefined) {
         distribution[overallRounded]++;
@@ -395,6 +464,7 @@ export function AdminFeedbackDashboard() {
             totalService += r.serviceRating || 0;
             totalPerf += r.performanceRating || 0;
             totalDisc += r.disciplineRating || 0;
+            totalTeamwork += r.teamworkRating || 0;
             totalStaffRatingsCount++;
           }
         });
@@ -404,35 +474,37 @@ export function AdminFeedbackDashboard() {
     const avgService = totalStaffRatingsCount > 0 ? Number((totalService / totalStaffRatingsCount).toFixed(1)) : 0;
     const avgPerf = totalStaffRatingsCount > 0 ? Number((totalPerf / totalStaffRatingsCount).toFixed(1)) : 0;
     const avgDisc = totalStaffRatingsCount > 0 ? Number((totalDisc / totalStaffRatingsCount).toFixed(1)) : 0;
+    const avgTeamwork = totalStaffRatingsCount > 0 ? Number((totalTeamwork / totalStaffRatingsCount).toFixed(1)) : 0;
 
     return {
       avgService,
       avgPerf,
       avgDisc,
+      avgTeamwork,
       totalStaffRatingsCount,
       distribution,
     };
-  }, [submissions]);
+  }, [categorySubmissions]);
 
   // Overall General Metrics
   const metrics = useMemo(() => {
-    const total = submissions.length;
+    const total = categorySubmissions.length;
+    const pinValues = Object.values(categoryPins);
     if (total === 0) {
       return {
         totalSubmissions: 0,
         avgOverall: 0,
-        totalPins: Object.keys(pins).length,
-        usedPinsCount: Object.values(pins).filter(p => p.isUsed).length,
-        activePinsCount: Object.values(pins).filter(p => !p.isUsed).length,
+        totalPins: pinValues.length,
+        usedPinsCount: pinValues.filter(p => p.isUsed).length,
+        activePinsCount: pinValues.filter(p => !p.isUsed).length,
       };
     }
 
     let sumOverall = 0;
-    submissions.forEach((s) => {
+    categorySubmissions.forEach((s) => {
       sumOverall += s.overallSatisfaction || 0;
     });
 
-    const pinValues = Object.values(pins);
     return {
       totalSubmissions: total,
       avgOverall: Number((sumOverall / total).toFixed(1)),
@@ -440,14 +512,16 @@ export function AdminFeedbackDashboard() {
       usedPinsCount: pinValues.filter(p => p.isUsed).length,
       activePinsCount: pinValues.filter(p => !p.isUsed).length,
     };
-  }, [submissions, pins]);
+  }, [categorySubmissions, categoryPins]);
 
-  // Export to Excel (.xlsx)
-  const handleExportExcel = () => {
-    if (submissions.length === 0) {
+  // Export to Excel (.xlsx) with Lazy Loading
+  const handleExportExcel = async () => {
+    if (categorySubmissions.length === 0) {
       alert('هیچ فیدباکێک نییە بۆ داگرتن.');
       return;
     }
+
+    const XLSX = await import('xlsx');
 
     const baseHeaders = [
       'کۆدی PIN',
@@ -460,17 +534,19 @@ export function AdminFeedbackDashboard() {
     ];
 
     const employeeHeaders: string[] = [];
-    TARGET_SALES_CASHIER_STAFF.forEach((emp) => {
+    currentTargetStaff.forEach((emp) => {
       employeeHeaders.push(`${emp.name} (${emp.role}) - گشتی`);
-      employeeHeaders.push(`${emp.name} - مامەڵە لەگەڵ کڕیار`);
-      employeeHeaders.push(`${emp.name} - چالاکی و کار`);
-      employeeHeaders.push(`${emp.name} - پابەندبوون بە دەوام`);
-      employeeHeaders.push(`${emp.name} - تێبینی`);
+      employeeHeaders.push(`${emp.name} - ${isWarehouse ? 'ڕەفتار لەگەڵ تیمی کۆگا' : 'مامەڵە لەگەڵ کڕیار'}`);
+      employeeHeaders.push(`${emp.name} - ${isWarehouse ? 'چالاکی و لێهاتوویی کۆگا' : 'چالاکی و کار'}`);
+      employeeHeaders.push(`${emp.name} - ${isWarehouse ? 'پابەندبوون بە دەوام و سەلامەتی' : 'پابەندبوون بە دەوام'}`);
+      employeeHeaders.push(`${emp.name} - ${isWarehouse ? 'هەماهەنگی و هاوکاری دەستەجەمعی' : 'هاوکاری دەستەجەمعی'}`);
+      employeeHeaders.push(`${emp.name} - تێبینی پرسیاری پێنجەم`);
+      employeeHeaders.push(`${emp.name} - تێبینی گشتی`);
     });
 
     const headers = [...baseHeaders, ...employeeHeaders, 'پێشنیاری گشتی بۆ ئیدارە'];
 
-    const rows = submissions.map((s) => {
+    const rows = categorySubmissions.map((s) => {
       const baseRow = [
         s.pin,
         s.targetPhone || '--',
@@ -482,16 +558,18 @@ export function AdminFeedbackDashboard() {
       ];
 
       const empCols: any[] = [];
-      TARGET_SALES_CASHIER_STAFF.forEach((emp) => {
+      currentTargetStaff.forEach((emp) => {
         const er = s.employeeRatings ? s.employeeRatings[emp.employeeId] : null;
         if (er) {
           empCols.push(er.overallRating || '--');
           empCols.push(er.serviceRating || '--');
           empCols.push(er.performanceRating || '--');
           empCols.push(er.disciplineRating || '--');
+          empCols.push(er.teamworkRating || '--');
+          empCols.push(er.note5 || '--');
           empCols.push(er.comment || '--');
         } else {
-          empCols.push('--', '--', '--', '--', '--');
+          empCols.push('--', '--', '--', '--', '--', '--', '--');
         }
       });
 
@@ -501,13 +579,56 @@ export function AdminFeedbackDashboard() {
     const data = [headers, ...rows];
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'هەڵسەنگاندنی فرۆشیار و کاشێر');
-    XLSX.writeFile(wb, `Ashley_Sales_Cashier_Evaluation_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    const sheetTitle = isWarehouse ? 'فیدباکی کارمەندانی کۆگا' : 'فیدباکی فرۆشیار و کاشێر';
+    const filePrefix = isWarehouse ? 'Ashley_Warehouse_Staff_Evaluation_' : 'Ashley_Sales_Cashier_Evaluation_';
+    XLSX.utils.book_append_sheet(wb, ws, sheetTitle);
+    XLSX.writeFile(wb, `${filePrefix}${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   return (
     <div className="space-y-5 text-slate-900 font-sans" dir="rtl">
       
+      {/* 🎯 TOP CATEGORY SWITCHER (فرۆشیار و کاشێر بەرامبەر کۆگا) */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setStaffCategory('sales_cashier')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
+              !isWarehouse
+                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Users className="w-4 h-4 text-emerald-600" />
+            <span>فیدباکی فرۆشیار و کاشێر (٧٥٠٠ - ٩٠٠٠)</span>
+            <span className="px-2 py-0.5 rounded-md bg-black/10 text-[10px] font-mono font-bold">
+              {TARGET_SALES_CASHIER_STAFF.length} کارمەند
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStaffCategory('warehouse')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
+              isWarehouse
+                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Boxes className="w-4 h-4 text-blue-600" />
+            <span>فیدباکی کارمەندانی کۆگا (٥٠٠٠ - ٧٥٠٠)</span>
+            <span className="px-2 py-0.5 rounded-md bg-black/10 text-[10px] font-mono font-bold">
+              {TARGET_WAREHOUSE_STAFF.length} کارمەند
+            </span>
+          </button>
+        </div>
+
+        <div className="text-xs text-slate-500 font-bold px-2">
+          {isWarehouse ? '📦 بەشی تایبەت بە کارمەندانی کۆگا' : '🛒 بەشی تایبەت بە فرۆشیار و کاشێرەکان'}
+        </div>
+      </div>
+
       {/* 🌟 1. TOP HEADER & METRIC SUMMARY */}
       <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -516,7 +637,7 @@ export function AdminFeedbackDashboard() {
               <Trophy className="w-5 h-5 text-slate-950" />
             </div>
             <h2 className="text-base font-black text-slate-900">
-              داشبۆردی فیدباک و هەڵسەنگاندنی فرۆشیار و کاشێرەکان
+              {isWarehouse ? 'داشبۆردی فیدباک و هەڵسەنگاندنی کارمەندانی کۆگا' : 'داشبۆردی فیدباک و هەڵسەنگاندنی فرۆشیار و کاشێرەکان'}
             </h2>
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
               {submissions.length} فیدباکی تۆمارکراو
@@ -1905,9 +2026,9 @@ export function AdminFeedbackDashboard() {
                 
                 {/* 1.1 Official Letterhead Header */}
                 <OfficialPrintHeader
-                  title="ڕاپۆرتی شیکاری فیدباک و هەڵسەنگاندنی کارمەندانی فرۆشیار و کاشێر"
-                  subtitle="پوختەی هەڵسەنگاندنی کڕیاران، شیکاری پێوانەیی، و پێشنیارەکانی پەرەپێدان"
-                  documentCode="ASH-DGP-FB-2026"
+                  title={isWarehouse ? "ڕاپۆرتی شیکاری فیدباک و هەڵسەنگاندنی کارمەندانی کۆگا" : "ڕاپۆرتی شیکاری فیدباک و هەڵسەنگاندنی کارمەندانی فرۆشیار و کاشێر"}
+                  subtitle={isWarehouse ? "پوختەی هەڵسەنگاندنی هاوپیشەکان، تیمی کۆگا و پێشنیارەکانی بەڕێوەبردن" : "پوختەی هەڵسەنگاندنی کڕیاران، شیکاری پێوانەیی، و پێشنیارەکانی پەرەپێدان"}
+                  documentCode={isWarehouse ? "ASH-WH-FB-2026" : "ASH-DGP-FB-2026"}
                 />
 
                 {/* 1.2 Executive KPI Summary Cards */}
@@ -1917,7 +2038,7 @@ export function AdminFeedbackDashboard() {
                     <span className="text-xl font-black font-mono text-slate-900">{metrics.totalSubmissions}</span>
                   </div>
                   <div className="p-3 rounded-xl bg-slate-50 border border-slate-300 text-center">
-                    <span className="text-[10px] font-bold text-slate-500 block">تێکڕای نمرەی پێشانگا</span>
+                    <span className="text-[10px] font-bold text-slate-500 block">{isWarehouse ? "تێکڕای کۆگا" : "تێکڕای نمرەی پێشانگا"}</span>
                     <span className="text-xl font-black font-mono text-amber-600">⭐ {metrics.avgOverall} / 5</span>
                   </div>
                   <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-300 text-center">
@@ -1957,7 +2078,7 @@ export function AdminFeedbackDashboard() {
                         </div>
                         <h4 className="text-sm font-black text-slate-950 mt-1">{topPerformer.emp.fullName}</h4>
                         <p className="text-[10px] text-slate-600 font-bold mt-0.5">
-                          {topPerformer.emp.role} • خاوەنی بەرزترین ئاستی ڕەزامەندی کڕیاران ({topPerformer.count} دەنگ)
+                          {topPerformer.emp.role} • خاوەنی بەرزترین ئاستی ڕەزامەندی ({topPerformer.count} دەنگ)
                         </p>
                       </div>
                     </div>
@@ -1969,11 +2090,11 @@ export function AdminFeedbackDashboard() {
                   </div>
                 )}
 
-                {/* 1.4 Comprehensive 8-Staff Evaluation Table */}
+                {/* 1.4 Comprehensive Staff Evaluation Table */}
                 <div className="break-inside-avoid">
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="text-xs font-black text-slate-900">
-                      خشتەی نمرەی سەرجەم ٨ کارمەندی فرۆشیار و کاشێر:
+                      {isWarehouse ? `خشتەی نمرەی سەرجەم ${currentTargetStaff.length} کارمەندی بەڕێزی کۆگا:` : `خشتەی نمرەی سەرجەم ${currentTargetStaff.length} کارمەندی فرۆشیار و کاشێر:`}
                     </h4>
                     <span className="text-[10px] text-slate-500 font-bold">پێوەری فەرمی ٥ ئەستێرە</span>
                   </div>
@@ -1984,10 +2105,10 @@ export function AdminFeedbackDashboard() {
                         <th className="p-2 border border-slate-300 text-center">پلە</th>
                         <th className="p-2 border border-slate-300">ناوی کارمەند</th>
                         <th className="p-2 border border-slate-300 text-center">ڕۆڵ</th>
-                        <th className="p-2 border border-slate-300 text-center">ژمارەی دەنگ</th>
-                        <th className="p-2 border border-slate-300 text-center">مامەڵە لەگەڵ کڕیار</th>
-                        <th className="p-2 border border-slate-300 text-center">چالاکی فرۆشتن</th>
-                        <th className="p-2 border border-slate-300 text-center">پابەندبوون بە دەوام</th>
+                        <th className="p-2 border border-slate-300 text-center">دەنگ</th>
+                        <th className="p-2 border border-slate-300 text-center">{isWarehouse ? 'مامەڵە لەگەڵ تیم' : 'مامەڵە لەگەڵ کڕیار'}</th>
+                        <th className="p-2 border border-slate-300 text-center">{isWarehouse ? 'چالاکی کۆگا' : 'چالاکی فرۆشتن'}</th>
+                        <th className="p-2 border border-slate-300 text-center">{isWarehouse ? 'دەوام و سەلامەتی' : 'پابەندبوون بە دەوام'}</th>
                         <th className="p-2 border border-slate-300 text-center">تێکڕای گشتی</th>
                       </tr>
                     </thead>
@@ -2038,17 +2159,17 @@ export function AdminFeedbackDashboard() {
                     </h3>
                   </div>
                   <span className="text-[11px] font-bold text-slate-500">
-                    بەراوردی نمرەی ٨ کارمەندەکە لەسەر ئاستی پرسیارەکان
+                    {isWarehouse ? `بەراوردی نمرەی ${currentTargetStaff.length} کارمەندەکەی کۆگا لەسەر ئاستی پرسیارەکان` : `بەراوردی نمرەی ${currentTargetStaff.length} کارمەندەکە لەسەر ئاستی پرسیارەکان`}
                   </span>
                 </div>
 
-                {/* 2.1 Graph Question 1: Customer Service (مامەڵە و ڕەفتار لەگەڵ کڕیار) */}
+                {/* 2.1 Graph Question 1 */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 break-inside-avoid">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <span className="w-6 h-6 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black text-xs">١</span>
                       <h4 className="text-xs font-black text-slate-900">
-                        پرسیاری ١: مامەڵە و ڕەفتار لەگەڵ کڕیار (خزمەتگوزاری و پێشوازی)
+                        {isWarehouse ? "پرسیاری ١: ڕەفتار و مامەڵە لەگەڵ تیمی کۆگا و هاوپیشەکان" : "پرسیاری ١: مامەڵە و ڕەفتار لەگەڵ کڕیار (خزمەتگوزاری و پێشوازی)"}
                       </h4>
                     </div>
                     <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
@@ -2056,7 +2177,7 @@ export function AdminFeedbackDashboard() {
                     </span>
                   </div>
 
-                  {/* 8-Column Bar Chart for Question 1 */}
+                  {/* Dynamic Column Bar Chart for Question 1 */}
                   <div className="flex items-end justify-between gap-2 h-32 px-2 pb-1 border-b border-slate-300">
                     {staffLeaderboard.map((item, index) => {
                       const percent = (item.avgService / 5) * 100;
@@ -2080,13 +2201,13 @@ export function AdminFeedbackDashboard() {
                   </div>
                 </div>
 
-                {/* 2.2 Graph Question 2: Sales Performance & Agility (چالاکی و لێهاتوویی فرۆشتن و کاش) */}
+                {/* 2.2 Graph Question 2 */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 break-inside-avoid">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <span className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-xs">٢</span>
                       <h4 className="text-xs font-black text-slate-900">
-                        پرسیاری ٢: چالاکی، زانیاری و لێهاتوویی لە فرۆشتن و کاش
+                        {isWarehouse ? "پرسیاری ٢: چالاکی، لێهاتوویی و خێرایی لە کارەکانی کۆگا و گواستنەوە" : "پرسیاری ٢: چالاکی، زانیاری و لێهاتوویی لە فرۆشتن و کاش"}
                       </h4>
                     </div>
                     <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
@@ -2094,7 +2215,7 @@ export function AdminFeedbackDashboard() {
                     </span>
                   </div>
 
-                  {/* 8-Column Bar Chart for Question 2 */}
+                  {/* Dynamic Column Bar Chart for Question 2 */}
                   <div className="flex items-end justify-between gap-2 h-32 px-2 pb-1 border-b border-slate-300">
                     {staffLeaderboard.map((item) => {
                       const percent = (item.avgPerf / 5) * 100;
@@ -2118,13 +2239,13 @@ export function AdminFeedbackDashboard() {
                   </div>
                 </div>
 
-                {/* 2.3 Graph Question 3: Discipline & Punctuality (پابەندبوون بە دەوام و کات) */}
+                {/* 2.3 Graph Question 3 */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 break-inside-avoid">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <span className="w-6 h-6 rounded-lg bg-purple-600 text-white flex items-center justify-center font-black text-xs">٣</span>
                       <h4 className="text-xs font-black text-slate-900">
-                        پرسیاری ٣: پابەندبوون بە دەوام، کات، و ڕێنماییەکانی پێشانگا
+                        {isWarehouse ? "پرسیاری ٣: پابەندبوون بە کاتی دەوام، پاراستنی کەلوپەل و سەلامەتی" : "پرسیاری ٣: پابەندبوون بە دەوام، کات، و ڕێنماییەکانی پێشانگا"}
                       </h4>
                     </div>
                     <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-md">

@@ -7,7 +7,15 @@ export default function withAuth<P extends object>(WrappedComponent: React.Compo
   const WithAuthComponent = (props: P) => {
     const { user, loading } = useAuth();
     const router = useRouter();
-    const [hasSession, setHasSession] = React.useState<boolean | null>(null);
+    const [hasSession, setHasSession] = React.useState<boolean | null>(() => {
+      if (typeof window === 'undefined') return null;
+      try {
+        const stored = sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session');
+        return Boolean(stored);
+      } catch {
+        return null;
+      }
+    });
 
     React.useEffect(() => {
       const stored = typeof window !== 'undefined' ? (sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session')) : null;
@@ -17,6 +25,11 @@ export default function withAuth<P extends object>(WrappedComponent: React.Compo
         router.replace('/');
       }
     }, [user, loading, router]);
+
+    // Fast-path: If user already has a valid stored session in browser storage, render instantly (0ms delay)
+    if (hasSession === true || user) {
+      return <WrappedComponent {...props} />;
+    }
 
     if (loading || hasSession === null) {
       return (

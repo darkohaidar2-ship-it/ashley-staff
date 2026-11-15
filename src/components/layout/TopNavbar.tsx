@@ -133,6 +133,7 @@ export function TopNavbar() {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
                 className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap active:scale-95 ${
                   isActive
                     ? 'bg-slate-900 text-white shadow-2xs font-black'

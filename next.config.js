@@ -2,6 +2,14 @@
 
 const nextConfig = {
   /* Other config options */
+  compress: true,
+  poweredByHeader: false,
+  experimental: {
+    optimizePackageImports: [
+      'lucide-react',
+      'date-fns',
+    ],
+  },
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
   },
