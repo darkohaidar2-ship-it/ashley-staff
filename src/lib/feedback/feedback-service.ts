@@ -8,11 +8,16 @@ import {
   computeManagerTotalScore,
 } from './manager-evaluation';
 
-export type PinScope = 'manager_feedback' | 'staff_feedback' | 'warehouse';
+export type PinScope = 
+  | 'manager_feedback' 
+  | 'warehouse_staff_feedback' 
+  | 'sales_cashier_feedback' 
+  | 'staff_feedback' 
+  | 'warehouse';
 
 export interface FeedbackPin {
-  pin: string; // 4 digits for feedback (0000-5999 for manager, 6000-9999 for staff) or 5 digits for warehouse (10000-99999)
-  scope: PinScope; // 'manager_feedback' | 'staff_feedback' | 'warehouse'
+  pin: string; // 4 digits for feedback (0000-4999 manager, 5000-7500 warehouse, 7500-9000 sales/cashier) or 5 digits for warehouse inventory (10000-99999)
+  scope: PinScope;
   targetPhone?: string; // e.g. "0770 123 4567"
   targetName?: string; // e.g. "ناوی بەشداربوو / لق"
   isSingleUse: boolean;
@@ -28,13 +33,15 @@ export interface EmployeeFeedbackRating {
   employeeId: string;
   name: string;
   fullName: string;
-  role: 'فرۆشیار' | 'کاشێر' | 'ئیدارە و کاشێر';
+  role: string;
   photoUrl: string;
-  serviceRating: number;      // مامەڵە و ڕەفتار لەگەڵ کڕیار (1-5)
-  performanceRating: number;  // چالاکی و لێهاتوویی لە فرۆشتن/کاش (1-5)
-  disciplineRating: number;   // پابەندبوون بە دەوام و ڕێنماییەکان (1-5)
-  overallRating: number;      // نمرەی گشتی بۆ ئەم کارمەندە (1-5)
-  comment?: string;           // سەرنج یان تێبینی
+  serviceRating: number;      // ١. مامەڵە و ڕەفتار لەگەڵ هاوپیشە/کڕیار (1-5)
+  performanceRating: number;  // ٢. چالاکی و لێهاتوویی لە ئیش (1-5)
+  disciplineRating: number;   // ٣. پابەندبوون بە دەوام و ڕێنماییەکان (1-5)
+  overallRating: number;      // ٤. نمرەی گشتی بۆ ئەم کارمەندە (1-5)
+  teamworkRating?: number;    // ٥. هەماهەنگی و هاوکاری دەستەجەمعی (1-5)
+  comment?: string;           // تێبینی و سەرنجی گشتی
+  note5?: string;             // تێبینی تایبەت بە پرسیاری پێنجەم
 }
 
 // 🎯 The official list of Salespersons and Cashiers to be evaluated
@@ -105,6 +112,98 @@ export const TARGET_SALES_CASHIER_STAFF = [
   },
 ];
 
+// 📦 The official list of Warehouse Staff to be evaluated (کارمەندانی کۆگا)
+export const TARGET_WAREHOUSE_STAFF = [
+  {
+    employeeId: '01',
+    id: 'emp-01',
+    name: 'سه هەند',
+    fullName: 'سه هەند مەریوان ( سەرپەرشتیاری کۆگا )',
+    role: 'سەرپەرشتیاری کۆگا' as const,
+    photoUrl: '/employees/emp-01.jpg',
+  },
+  {
+    employeeId: '03',
+    id: 'emp-03',
+    name: 'شادیار',
+    fullName: 'شادیار هوشیار ( سەرپەرشتیاری کارمەندان )',
+    role: 'سەرپەرشتیاری کارمەندان' as const,
+    photoUrl: '/employees/emp-03.jpg',
+  },
+  {
+    employeeId: '04',
+    id: 'emp-04',
+    name: 'هەڤاڵ',
+    fullName: 'هەڤاڵ حبیب ( سەرپەرشتیاری گواستنەوە )',
+    role: 'سەرپەرشتیاری گواستنەوە' as const,
+    photoUrl: '/employees/emp-04.jpg',
+  },
+  {
+    employeeId: '05',
+    id: 'emp-05',
+    name: 'عیماد',
+    fullName: 'عیماد سەباح ( تیمی کۆگا )',
+    role: 'تیمی کۆگا' as const,
+    photoUrl: '/employees/emp-05.jpg',
+  },
+  {
+    employeeId: '06',
+    id: 'emp-06',
+    name: 'کامەران',
+    fullName: 'کامەران عومەر ( تیمی کۆگا )',
+    role: 'تیمی کۆگا' as const,
+    photoUrl: '/employees/emp-06.jpg',
+  },
+  {
+    employeeId: '07',
+    id: 'emp-07',
+    name: 'ڕابەر',
+    fullName: 'ڕابەر محەمەد ( تیمی کۆگا )',
+    role: 'تیمی کۆگا' as const,
+    photoUrl: '/employees/emp-07.jpg',
+  },
+  {
+    employeeId: '08',
+    id: 'emp-08',
+    name: 'دانەر',
+    fullName: 'دانەر محەمەد ( تیمی کۆگا )',
+    role: 'تیمی کۆگا' as const,
+    photoUrl: '/employees/emp-08.jpg',
+  },
+  {
+    employeeId: '09',
+    id: 'emp-09',
+    name: 'ڕێبین',
+    fullName: 'ڕێبین سەباح ( تیمی کۆگا )',
+    role: 'تیمی کۆگا' as const,
+    photoUrl: '/employees/emp-09.jpg',
+  },
+  {
+    employeeId: '10',
+    id: 'emp-10',
+    name: 'بەهرەمەند',
+    fullName: 'بەهرەمەند ڕزگار ( تیمی کۆگا )',
+    role: 'تیمی کۆگا' as const,
+    photoUrl: '/employees/emp-10.jpg',
+  },
+  {
+    employeeId: '11',
+    id: 'emp-11',
+    name: 'شادومان',
+    fullName: 'شادومان یادگار ( تیمی کۆگا )',
+    role: 'تیمی کۆگا' as const,
+    photoUrl: '/employees/emp-11.jpg',
+  },
+  {
+    employeeId: '12',
+    id: 'emp-12',
+    name: 'سەروەت',
+    fullName: 'سەروەت قادر ( تیمی کۆگا )',
+    role: 'تیمی کۆگا' as const,
+    photoUrl: '/employees/emp-12.jpg',
+  },
+];
+
 export interface FeedbackSubmission {
   id: string;
   pin: string;
@@ -141,9 +240,11 @@ const MANAGER_EVAL_STORE_ID = 'ashley_manager_evaluations';
 
 /**
  * 🎯 Determine PIN Scope according to system rules:
- * - Manager Feedback: 4 digits, range 0000 - 5999
- * - Staff Feedback: 4 digits, range 6000 - 9999
- * - Warehouse: 5 digits, range 10000 - 99999
+ * - Manager Feedback: 4 digits, range 0000 - 4999 (یان تا 5000)
+ * - Warehouse Staff Feedback (کارمەند بۆ کارمەندی کۆگا): 4 digits, range 5000 - 7500
+ * - Sales & Cashier Feedback (کارمەند بۆ فرۆشیاران و کاشێر): 4 digits, range 7501 - 9000
+ * - General Staff Feedback: 4 digits, range 9001 - 9999 (fallback)
+ * - Warehouse Inventory: 5 digits, range 10000 - 99999
  */
 export function determinePinScope(pin: string): PinScope | null {
   const clean = (pin || '').trim();
@@ -152,8 +253,10 @@ export function determinePinScope(pin: string): PinScope | null {
   }
   if (/^\d{4}$/.test(clean)) {
     const val = parseInt(clean, 10);
-    if (val >= 0 && val <= 5999) return 'manager_feedback';
-    if (val >= 6000 && val <= 9999) return 'staff_feedback';
+    if (val >= 0 && val < 5000) return 'manager_feedback';
+    if (val >= 5000 && val <= 7500) return 'warehouse_staff_feedback';
+    if (val > 7500 && val <= 9000) return 'sales_cashier_feedback';
+    if (val > 9000 && val <= 9999) return 'staff_feedback';
   }
   return null;
 }
@@ -163,16 +266,21 @@ export function determinePinScope(pin: string): PinScope | null {
  */
 export function generatePinForScope(scope: PinScope): string {
   if (scope === 'manager_feedback') {
-    // 0000 to 5999
-    const val = Math.floor(Math.random() * 6000);
+    // 0000 to 4999
+    const val = Math.floor(Math.random() * 5000);
     return String(val).padStart(4, '0');
   }
-  if (scope === 'staff_feedback') {
-    // 6000 to 9999
-    const val = Math.floor(6000 + Math.random() * 4000);
+  if (scope === 'warehouse_staff_feedback') {
+    // 5000 to 7500
+    const val = Math.floor(5000 + Math.random() * 2501);
     return String(val);
   }
-  // Warehouse: 5 digits (10000 to 99999)
+  if (scope === 'sales_cashier_feedback' || scope === 'staff_feedback') {
+    // 7501 to 9000
+    const val = Math.floor(7501 + Math.random() * 1500);
+    return String(val);
+  }
+  // Warehouse Inventory: 5 digits (10000 to 99999)
   const val = Math.floor(10000 + Math.random() * 90000);
   return String(val);
 }
@@ -190,17 +298,37 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     isUsed: false,
     createdAt: '2026-01-01T00:00:00.000Z',
     createdBy: 'سیستەمی ئاشڵی',
-    notes: 'کۆدی فیدباکی بەڕێوەبەر (0000 - 5999)',
+    notes: 'کۆدی فیدباکی بەڕێوەبەر (0000 - 4999)',
+  },
+  '5555': {
+    pin: '5555',
+    scope: 'warehouse_staff_feedback',
+    targetName: 'فیدباکی کارمەندانی کۆگا',
+    isSingleUse: false,
+    isUsed: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    createdBy: 'سیستەمی ئاشڵی',
+    notes: 'کۆدی کارمەند بۆ کارمەندی کۆگا (5000 - 7500)',
+  },
+  '7777': {
+    pin: '7777',
+    scope: 'sales_cashier_feedback',
+    targetName: 'فیدباکی فرۆشیاران و کاشێر',
+    isSingleUse: false,
+    isUsed: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    createdBy: 'سیستەمی ئاشڵی',
+    notes: 'کۆدی کارمەند بۆ فرۆشیاران و کاشێر (7500 - 9000)',
   },
   '9595': {
     pin: '9595',
-    scope: 'staff_feedback',
+    scope: 'sales_cashier_feedback',
     targetName: 'فیدباکی گشتی کارمەندان',
     isSingleUse: false,
     isUsed: false,
     createdAt: '2026-01-01T00:00:00.000Z',
     createdBy: 'سیستەمی ئاشڵی',
-    notes: 'کۆدی فیدباکی کارمەندان (6000 - 9999)',
+    notes: 'کۆدی تاقیکردنەوەی فیدباک',
   },
   '54321': {
     pin: '54321',
@@ -360,16 +488,19 @@ export async function createFeedbackPin(params: {
       if (!detectedScope) {
         return { 
           success: false, 
-          error: 'کۆدی PIN نادروستە. دەبێت ٤ ژمارە بێت (0000-5999 بۆ بەڕێوەبەر، 6000-9999 بۆ کارمەندان) یان ٥ ژمارە بێت بۆ کۆگا.' 
+          error: 'کۆدی PIN نادروستە. دەبێت ٤ ژمارە بێت (0-4999 بۆ بەڕێوەبەر، 5000-7500 بۆ کۆگا، 7501-9000 بۆ فرۆشیاران و کاشێر) یان ٥ ژمارە بێت بۆ کۆگا.' 
         };
       }
 
       if (requestedScope && requestedScope !== detectedScope) {
         if (requestedScope === 'manager_feedback') {
-          return { success: false, error: 'پێویستە کۆدی بەڕێوەبەر لە نێوان 0000 بۆ 5999 بێت.' };
+          return { success: false, error: 'پێویستە کۆدی بەڕێوەبەر لە نێوان 0 بۆ 4999 بێت.' };
         }
-        if (requestedScope === 'staff_feedback') {
-          return { success: false, error: 'پێویستە کۆدی فیدباکی کارمەندان لە نێوان 6000 بۆ 9999 بێت.' };
+        if (requestedScope === 'warehouse_staff_feedback') {
+          return { success: false, error: 'پێویستە کۆدی کارمەند بۆ کارمەندی کۆگا لە نێوان 5000 بۆ 7500 بێت.' };
+        }
+        if (requestedScope === 'sales_cashier_feedback') {
+          return { success: false, error: 'پێویستە کۆدی کارمەند بۆ فرۆشیاران و کاشێر لە نێوان 7500 بۆ 9000 بێت.' };
         }
         if (requestedScope === 'warehouse') {
           return { success: false, error: 'پێویستە کۆدی کۆگا بە تەواوی ٥ ژمارە بێت (10000 تا 99999).' };
@@ -519,13 +650,25 @@ export async function verifyFeedbackPin(
     if (expectedScope === 'manager_feedback') {
       return { 
         valid: false, 
-        error: 'ئەم کۆدە بۆ بەڕێوەبەر نییە (پێویستە کۆدی ٤ ژمارەیی بێت لە نێوان 0000 بۆ 5999).' 
+        error: 'ئەم کۆدە بۆ بەڕێوەبەر نییە (پێویستە کۆدی ٤ ژمارەیی بێت لە نێوان 0 تا 5000).' 
       };
     }
-    if (expectedScope === 'staff_feedback') {
+    if (expectedScope === 'warehouse_staff_feedback') {
       return { 
         valid: false, 
-        error: 'ئەم کۆدە بۆ فیدباکی کارمەندان نییە (پێویستە کۆدی ٤ ژمارەیی بێت لە نێوان 6000 بۆ 9999).' 
+        error: 'ئەم کۆدە بۆ فیدباکی کارمەندانی کۆگا نییە (پێویستە لە نێوان 5000 تا 7500 بێت).' 
+      };
+    }
+    if (expectedScope === 'sales_cashier_feedback') {
+      return { 
+        valid: false, 
+        error: 'ئەم کۆدە بۆ فرۆشیاران و کاشێر نییە (پێویستە لە نێوان 7500 تا 9000 بێت).' 
+      };
+    }
+    if (expectedScope === 'staff_feedback' && actualScope !== 'warehouse_staff_feedback' && actualScope !== 'sales_cashier_feedback') {
+      return { 
+        valid: false, 
+        error: 'ئەم کۆدە بۆ فیدباکی کارمەندان نییە (پێویستە لە نێوان 5000 تا 9000 بێت).' 
       };
     }
     if (expectedScope === 'warehouse') {

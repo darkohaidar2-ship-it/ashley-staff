@@ -32,7 +32,12 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { triggerHaptic } from '@/lib/offline-sync-manager';
-import { TARGET_SALES_CASHIER_STAFF } from '@/lib/feedback/feedback-service';
+import { 
+  TARGET_SALES_CASHIER_STAFF, 
+  TARGET_WAREHOUSE_STAFF, 
+  determinePinScope,
+  PinScope 
+} from '@/lib/feedback/feedback-service';
 import {
   getClientSubmissionIds,
   recordSubmittedPinOnClient,
@@ -41,6 +46,7 @@ import {
 
 export interface FeedbackPortalProps {
   initialPin?: string;
+  initialScope?: PinScope;
   isDark?: boolean;
   onSwitchPortal?: (portal: 'attendance' | 'feedback' | 'warehouse' | 'feedback_admin') => void;
   onBackToMobileApp?: () => void;
@@ -48,6 +54,7 @@ export interface FeedbackPortalProps {
 
 export function FeedbackPortal({ 
   initialPin = '', 
+  initialScope,
   isDark: initialDark = false,
   onSwitchPortal,
   onBackToMobileApp
@@ -98,6 +105,13 @@ export function FeedbackPortal({
   const [step, setStep] = useState<'pin_gate' | 'questionnaire' | 'manager_evaluation' | 'success'>('pin_gate');
   const [managerPin, setManagerPin] = useState<string>('');
 
+  // Active Scope ('warehouse_staff_feedback' vs 'sales_cashier_feedback')
+  const [activeScope, setActiveScope] = useState<PinScope | null>(() => {
+    if (initialScope) return initialScope;
+    if (initialPin) return determinePinScope(initialPin);
+    return null;
+  });
+
   // PIN state
   const [pin, setPin] = useState<string>(initialPin);
   const [pinVerifying, setPinVerifying] = useState<boolean>(false);
@@ -108,23 +122,34 @@ export function FeedbackPortal({
   // Evaluator Name (optional)
   const [respondentName, setRespondentName] = useState<string>('');
 
-  // 🌟 Employee Ratings: ALL 4 CRITERIA START AT 0 (UNSELECTED)
-  // "با ئەستێرەکان لەسەر هەڵنەبژێراوە بێت بۆ ئەوەی هیچی بیر نەجێط"
+  // Dynamic Staff Group Detection
+  const isWarehouse = 
+    activeScope === 'warehouse_staff_feedback' || 
+    (Boolean(pin) && /^\d+$/.test(pin) && parseInt(pin, 10) >= 5000 && parseInt(pin, 10) <= 7500);
+
+  const targetStaffList = isWarehouse ? TARGET_WAREHOUSE_STAFF : TARGET_SALES_CASHIER_STAFF;
+
+  // 🌟 Employee Ratings: ALL 5 CRITERIA START AT 0 (UNSELECTED)
+  // "پرسیاری پێنچەم بە تێبینیەوەیە لەگەڵ کۆتا خاڵ"
   const [employeeRatings, setEmployeeRatings] = useState<Record<string, {
     serviceRating: number;      // 0 = unselected
     performanceRating: number;  // 0 = unselected
     disciplineRating: number;   // 0 = unselected
     overallRating: number;      // 0 = unselected
+    teamworkRating: number;     // 0 = unselected (پرسیاری ٥)
     comment: string;
+    note5: string;              // تێبینی پرسیاری پێنجەم
   }>>(() => {
     const initial: any = {};
-    TARGET_SALES_CASHIER_STAFF.forEach(emp => {
+    [...TARGET_SALES_CASHIER_STAFF, ...TARGET_WAREHOUSE_STAFF].forEach(emp => {
       initial[emp.employeeId] = {
         serviceRating: 0,
         performanceRating: 0,
         disciplineRating: 0,
         overallRating: 0,
+        teamworkRating: 0,
         comment: '',
+        note5: '',
       };
     });
     return initial;
@@ -234,8 +259,11 @@ export function FeedbackPortal({
       if (data.valid && data.pinData) {
         clearClientSubmissionIds(pinToTest);
         setPinAlreadySubmitted(false);
-        // 📝 If this is a Manager Evaluation PIN (0000 - 5999), open confidential Manager Evaluation Form
-        if (data.scope === 'manager_feedback') {
+        const scopeFound = data.scope || data.pinData?.scope || determinePinScope(pinToTest);
+        setActiveScope(scopeFound);
+
+        // 📝 If this is a Manager Evaluation PIN (0000 - 4999), open confidential Manager Evaluation Form
+        if (data.scope === 'manager_feedback' || scopeFound === 'manager_feedback') {
           triggerHaptic('success');
           playAudioChime(true);
           setManagerPin(pinToTest);
@@ -297,7 +325,7 @@ export function FeedbackPortal({
   // 2. Rating handler for a specific employee
   const handleRatingChange = (
     empId: string, 
-    field: 'serviceRating' | 'performanceRating' | 'disciplineRating' | 'overallRating', 
+    field: 'serviceRating' | 'performanceRating' | 'disciplineRating' | 'overallRating' | 'teamworkRating', 
     val: number
   ) => {
     triggerHaptic('light');
@@ -321,28 +349,45 @@ export function FeedbackPortal({
     }));
   };
 
-  // Helper: check if a specific employee is complete
+  const handleNote5Change = (empId: string, text: string) => {
+    setEmployeeRatings((prev) => ({
+      ...prev,
+      [empId]: {
+        ...prev[empId],
+        note5: text,
+      },
+    }));
+  };
+
+  // Helper: check if a specific employee is complete (All 5 criteria selected > 0)
   const isEmployeeComplete = (empId: string) => {
     const r = employeeRatings[empId];
     if (!r) return false;
-    return r.serviceRating > 0 && r.performanceRating > 0 && r.disciplineRating > 0 && r.overallRating > 0;
+    return (
+      r.serviceRating > 0 && 
+      r.performanceRating > 0 && 
+      r.disciplineRating > 0 && 
+      r.overallRating > 0 &&
+      (r.teamworkRating || 0) > 0
+    );
   };
 
   // Helper: count remaining questions for an employee
   const getRemainingQuestionsCount = (empId: string) => {
     const r = employeeRatings[empId];
-    if (!r) return 4;
+    if (!r) return 5;
     let count = 0;
     if (r.serviceRating === 0) count++;
     if (r.performanceRating === 0) count++;
     if (r.disciplineRating === 0) count++;
     if (r.overallRating === 0) count++;
+    if (!r.teamworkRating || r.teamworkRating === 0) count++;
     return count;
   };
 
   // Completion metrics
-  const completedCount = TARGET_SALES_CASHIER_STAFF.filter((e) => isEmployeeComplete(e.employeeId)).length;
-  const totalEmployeesCount = TARGET_SALES_CASHIER_STAFF.length;
+  const completedCount = targetStaffList.filter((e) => isEmployeeComplete(e.employeeId)).length;
+  const totalEmployeesCount = targetStaffList.length;
   const isAllComplete = completedCount === totalEmployeesCount;
   const progressPercent = Math.round((completedCount / totalEmployeesCount) * 100);
 
@@ -351,14 +396,14 @@ export function FeedbackPortal({
     if (!isAllComplete) {
       triggerHaptic('error');
       playAudioChime(false);
-      const firstIncomplete = TARGET_SALES_CASHIER_STAFF.find((e) => !isEmployeeComplete(e.employeeId));
+      const firstIncomplete = targetStaffList.find((e) => !isEmployeeComplete(e.employeeId));
       if (firstIncomplete) {
         setHighlightedEmpId(firstIncomplete.employeeId);
         const el = document.getElementById(`emp-card-${firstIncomplete.employeeId}`);
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-        setSubmitError(`تکایە سەرجەم پرسیارەکانی کارمەند (${firstIncomplete.name}) و هەموو کارمەندەکان هەڵبژێرە.`);
+        setSubmitError(`تکایە سەرجەم پێوەرەکانی کارمەند (${firstIncomplete.name}) و هەموو کارمەندەکان هەڵبژێرە.`);
         setTimeout(() => setHighlightedEmpId(null), 3000);
       }
       return;
@@ -369,7 +414,7 @@ export function FeedbackPortal({
 
     try {
       const formattedRatings: Record<string, any> = {};
-      TARGET_SALES_CASHIER_STAFF.forEach((emp) => {
+      targetStaffList.forEach((emp) => {
         const r = employeeRatings[emp.employeeId];
         formattedRatings[emp.employeeId] = {
           employeeId: emp.employeeId,
@@ -381,14 +426,16 @@ export function FeedbackPortal({
           performanceRating: r.performanceRating,
           disciplineRating: r.disciplineRating,
           overallRating: r.overallRating,
+          teamworkRating: r.teamworkRating,
           comment: r.comment?.trim() || undefined,
+          note5: r.note5?.trim() || undefined,
         };
       });
 
       const payload = {
         pin,
         respondentName: respondentName?.trim() || undefined,
-        department: 'فرۆشیار و کاشێر',
+        department: isWarehouse ? 'کۆگا و گواستنەوە' : 'فرۆشیار و کاشێر',
         employeeRatings: formattedRatings,
         suggestionsForManagement: generalSuggestions?.trim() || undefined,
         clientSubmissionIds: getClientSubmissionIds(pin),
@@ -795,10 +842,14 @@ export function FeedbackPortal({
                   </div>
                   <div>
                     <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                      هەڵسەنگاندنی سەرجەم ٨ کارمەندانی فرۆشیار و کاشێر
+                      {isWarehouse 
+                        ? 'هەڵسەنگاندنی سەرجەم ١١ کارمەندی کۆگا' 
+                        : 'هەڵسەنگاندنی سەرجەم ٨ کارمەندی فرۆشیار و کاشێر'}
                     </h2>
                     <p className="text-xs text-slate-500 dark:text-neutral-400">
-                      پێویستە هەموو کارمەندەکان هەڵبسەنگێندرێن پێش ناردن
+                      {isWarehouse
+                        ? 'فیدباکی کارمەند بۆ کارمەندی کۆگا بە ٥ پێوەر و تێبینی'
+                        : 'فیدباکی کارمەند بۆ فرۆشیاران و کاشێر بە ٥ پێوەر و تێبینی'}
                     </p>
                   </div>
                 </div>
@@ -866,7 +917,7 @@ export function FeedbackPortal({
                 isDark ? 'bg-neutral-900/60 border-neutral-800' : 'bg-white border-slate-200/80 shadow-xs'
               }`}>
                 <label className="block text-xs font-black text-slate-800 dark:text-neutral-200 mb-1.5">
-                  سەرنج یان پێشنیاری گشتی بۆ ئیدارەی ئاشڵی (ئارەزوومەندانە):
+                  کۆتا خاڵ: سەرنج یان پێشنیاری گشتی بۆ ئیدارەی ئاشڵی (ئارەزوومەندانە):
                 </label>
                 <input
                   type="text"
@@ -909,13 +960,15 @@ export function FeedbackPortal({
 
             {/* 🌟 4-COLUMN FULL-SCREEN GRID: 1 COL ON MOBILE, 2 COLS ON TABLET, 3-4 COLS ON DESKTOP */}
             <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 lg:gap-6">
-              {TARGET_SALES_CASHIER_STAFF.map((emp, index) => {
+              {targetStaffList.map((emp, index) => {
                 const ratings = employeeRatings[emp.employeeId] || {
                   serviceRating: 0,
                   performanceRating: 0,
                   disciplineRating: 0,
                   overallRating: 0,
+                  teamworkRating: 0,
                   comment: '',
+                  note5: '',
                 };
 
                 const complete = isEmployeeComplete(emp.employeeId);
@@ -980,45 +1033,74 @@ export function FeedbackPortal({
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 text-[10px] font-bold">
-                              <span>{remaining} پرسیار ماوە</span>
+                              <span>{remaining} پێوەر ماوە</span>
                             </span>
                           )}
                         </div>
                       </div>
 
-                      {/* 4 Star Rating Questions (Start at 0 / Unselected) */}
+                      {/* 🌟 5 Star Rating Questions (Start at 0 / Unselected) */}
                       <div className="space-y-3">
+                        {/* ١. مامەڵە و ڕەفتار */}
                         <StarRatingSelector
-                          label="١. ڕەفتار و مامەڵە لەگەڵ کڕیار (ڕێز و پێشوازی)"
+                          label={isWarehouse ? "١. ڕەفتار و مامەڵە لەگەڵ تیمی کۆگا و هاوپیشەکان (ڕێز و لێکتێگەیشتن)" : "١. ڕەفتار و مامەڵە لەگەڵ کڕیار (ڕێز و پێشوازی گەرم)"}
                           value={ratings.serviceRating}
                           onChange={(val) => handleRatingChange(emp.employeeId, 'serviceRating', val)}
                         />
 
+                        {/* ٢. چالاکی و لێهاتوویی */}
                         <StarRatingSelector
-                          label={`٢. چالاکی و لێهاتوویی لە کار (${emp.role.includes('کاشێر') ? 'کاش و حیسابات' : 'فرۆشتن'})`}
+                          label={isWarehouse ? "٢. چالاکی، لێهاتوویی و خێرایی لە کارەکانی کۆگا و گواستنەوە" : `٢. چالاکی و لێهاتوویی لە کار (${emp.role.includes('کاشێر') ? 'کاش و حیسابات' : 'فرۆشتن'})`}
                           value={ratings.performanceRating}
                           onChange={(val) => handleRatingChange(emp.employeeId, 'performanceRating', val)}
                         />
 
+                        {/* ٣. پابەندبوون */}
                         <StarRatingSelector
-                          label="٣. پابەندبوون بە کاتی دەوام و ڕێنماییەکان"
+                          label={isWarehouse ? "٣. پابەندبوون بە کاتی دەوام، پاراستنی کەلوپەل و سەلامەتی" : "٣. پابەندبوون بە کاتی دەوام و ڕێنماییەکان"}
                           value={ratings.disciplineRating}
                           onChange={(val) => handleRatingChange(emp.employeeId, 'disciplineRating', val)}
                         />
 
+                        {/* ٤. نمرەی گشتی */}
                         <StarRatingSelector
                           label={`٤. نمرەی گشتی هەڵسەنگاندن بۆ ${emp.name}`}
                           value={ratings.overallRating}
                           onChange={(val) => handleRatingChange(emp.employeeId, 'overallRating', val)}
                         />
 
+                        {/* ٥. پرسیاری پێنجەم: هەماهەنگی و کاری دەستەجەمعی بە تێبینیەوە */}
+                        <StarRatingSelector
+                          label={isWarehouse ? "٥. هەماهەنگی و هاوکاری دەستەجەمعی لە کاتی فشار و کاردا" : "٥. هاوکاری دەستەجەمعی و پەیوەندی لەگەڵ ستاف و تیم"}
+                          value={ratings.teamworkRating || 0}
+                          onChange={(val) => handleRatingChange(emp.employeeId, 'teamworkRating', val)}
+                        />
+
+                        {/* بۆکسی تێبینی تایبەت بە پرسیاری پێنجەم */}
+                        <div className="pt-1.5 pb-0.5">
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-neutral-300 mb-1">
+                            تێبینی و ڕوونکردنەوەی پرسیاری پێنجەم (ئارەزوومەندانە):
+                          </label>
+                          <input
+                            type="text"
+                            value={ratings.note5 || ''}
+                            onChange={(e) => handleNote5Change(emp.employeeId, e.target.value)}
+                            placeholder={`تێبینی تایبەت لەسەر هاوکاری و هەماهەنگی ${emp.name}...`}
+                            className={`w-full h-10 px-3.5 text-xs rounded-2xl border outline-none transition-all ${
+                              isDark 
+                                ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500' 
+                                : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-amber-500'
+                            }`}
+                          />
+                        </div>
+
                         {/* Optional Comment for this employee */}
                         <div className="pt-1">
                           <input
                             type="text"
-                            value={ratings.comment}
+                            value={ratings.comment || ''}
                             onChange={(e) => handleCommentChange(emp.employeeId, e.target.value)}
-                            placeholder={`سەرنج یان تێبینی لەسەر ${emp.name} (ئارەزوومەندانە)...`}
+                            placeholder={`سەرنج یان تێبینی گشتی لەسەر ${emp.name} (ئارەزوومەندانە)...`}
                             className={`w-full h-10 px-3.5 text-xs rounded-2xl border outline-none transition-all ${
                               isDark 
                                 ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500' 
@@ -1060,7 +1142,7 @@ export function FeedbackPortal({
                   ) : isAllComplete ? (
                     <>
                       <CheckCircle2 className="w-5 h-5 text-slate-950" />
-                      <span>ناردنی فیدباک (سەرجەم ٨ کارمەندەکە تەواو بوو)</span>
+                      <span>ناردنی فیدباک (سەرجەم {totalEmployeesCount} کارمەندەکە تەواو بوو)</span>
                     </>
                   ) : (
                     <>
@@ -1096,7 +1178,7 @@ export function FeedbackPortal({
               </h2>
 
               <p className="text-xs sm:text-sm text-slate-600 dark:text-neutral-400 max-w-lg mx-auto leading-relaxed mb-6 font-medium">
-                فیدباکەکەت بۆ سەرجەم ٨ کارمەندانی فرۆشیار و کاشێری ئاشڵی بە وردی لە سیستەمدا خەزن کرا و ڕاستەوخۆ دەگاتە دەستی بەڕێوەبەرایەتی.
+                فیدباکەکەت بۆ سەرجەم {totalEmployeesCount} کارمەندەکە بە وردی لە سیستەمدا خەزن کرا و ڕاستەوخۆ دەگاتە دەستی بەڕێوەبەرایەتی.
               </p>
 
               <div className="w-full max-w-sm mx-auto p-4 rounded-2xl bg-slate-50 dark:bg-neutral-950 border border-slate-200/80 dark:border-neutral-800 text-xs text-slate-500 dark:text-neutral-400 mb-6 font-mono font-bold">

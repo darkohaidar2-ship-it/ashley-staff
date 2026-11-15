@@ -64,6 +64,44 @@ function playAudioChime(success: boolean) {
   } catch {}
 }
 
+/** 🔊 High-fidelity synthesized tactile pop/chime for mobile circles and buttons */
+function playCircleTapSound(variant: 'pop' | 'chime' | 'soft' = 'pop') {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    if (variant === 'pop') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+    } else if (variant === 'chime') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1046.5, ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.16, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.28);
+    } else {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(320, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.08);
+    }
+  } catch {}
+}
+
 /** Custom metallic-gold Boss emblem SVG */
 function BossMetalLogo({ className = 'w-10 h-10' }: { className?: string }) {
   return (
@@ -310,8 +348,9 @@ function RootPageContent() {
     openPinModal('warehouse');
   };
 
-  // 🔓 Open Manager Evaluation Form with 0000-5999 PIN check
+  // 🔓 Open Manager Evaluation Form with 0000-4999 (0-5000) PIN check
   const handleOpenManagerFeedback = () => {
+    playCircleTapSound('chime');
     if (managerAuthed && managerPin) {
       handleSwitchPortal('feedback_admin');
       return;
@@ -319,9 +358,22 @@ function RootPageContent() {
     openPinModal('manager_feedback');
   };
 
-  // 🔓 Open Staff Feedback with 6000-9999 PIN check
+  // 🔓 Open Warehouse Staff Feedback with 5000-7500 PIN check (کارمەند بۆ کارمەندی کۆگا)
+  const handleOpenWarehouseStaffFeedback = () => {
+    playCircleTapSound('chime');
+    openPinModal('warehouse_staff_feedback');
+  };
+
+  // 🔓 Open Sales & Cashier Staff Feedback with 7500-9000 PIN check (کارمەند بۆ فرۆشیاران و کاشێر)
+  const handleOpenSalesCashierFeedback = () => {
+    playCircleTapSound('chime');
+    openPinModal('sales_cashier_feedback');
+  };
+
+  // 🔓 Open General Staff Feedback fallback
   const handleOpenStaffFeedback = () => {
-    openPinModal('staff_feedback');
+    playCircleTapSound('chime');
+    openPinModal('sales_cashier_feedback');
   };
 
   // 🔒 Lock / Logout Handlers
@@ -386,12 +438,17 @@ function RootPageContent() {
           }
           setWarehouseAuthed(true);
           handleSwitchPortal('warehouse');
-        } else if (scopeToTest === 'staff_feedback') {
+        } else if (
+          scopeToTest === 'staff_feedback' ||
+          scopeToTest === 'warehouse_staff_feedback' ||
+          scopeToTest === 'sales_cashier_feedback'
+        ) {
           handleSwitchPortal('feedback');
           if (typeof window !== 'undefined') {
             const url = new URL(window.location.href);
             url.searchParams.set('tab', 'feedback');
             url.searchParams.set('pin', pinToTest);
+            url.searchParams.set('scope', scopeToTest);
             window.history.replaceState({}, '', url.toString());
           }
         }
@@ -546,7 +603,10 @@ function RootPageContent() {
 
               <button
                 type="button"
-                onClick={() => handleSwitchPortal('feedback_hub')}
+                onClick={() => {
+                  playCircleTapSound('chime');
+                  handleSwitchPortal('feedback_hub');
+                }}
                 className="relative w-40 h-40 sm:w-48 sm:h-48 rounded-full p-[2px] cursor-pointer active:scale-[0.94] hover:-translate-y-1 transition-all duration-200 group shadow-2xl shadow-rose-500/25"
               >
                 {/* Rotating Metallic Conic Rim */}
@@ -602,7 +662,10 @@ function RootPageContent() {
                 />
                 <button
                   type="button"
-                  onClick={() => handleSwitchPortal('attendance')}
+                  onClick={() => {
+                    playCircleTapSound('pop');
+                    handleSwitchPortal('attendance');
+                  }}
                   className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full p-[2px] cursor-pointer active:scale-[0.94] hover:-translate-y-1 transition-all duration-200 group shadow-xl shadow-amber-500/20"
                 >
                   <span className="absolute inset-0 rounded-full metal-ring-amber animate-orbit-reverse opacity-85 group-hover:opacity-100" />
@@ -649,7 +712,10 @@ function RootPageContent() {
                 />
                 <button
                   type="button"
-                  onClick={handleOpenWarehouse}
+                  onClick={() => {
+                    playCircleTapSound('pop');
+                    handleOpenWarehouse();
+                  }}
                   className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full p-[2px] cursor-pointer active:scale-[0.94] hover:-translate-y-1 transition-all duration-200 group shadow-xl shadow-blue-500/20"
                 >
                   <span className="absolute inset-0 rounded-full metal-ring-blue animate-orbit-slow opacity-85 group-hover:opacity-100" />
@@ -760,13 +826,13 @@ function RootPageContent() {
         </header>
 
         {/* Minimal Glass & Metallic Feedback Cards */}
-        <main className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 sm:p-6 max-w-md sm:max-w-lg mx-auto w-full my-auto space-y-5">
-          <div className="w-full space-y-4">
+        <main className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 sm:p-6 max-w-md sm:max-w-lg mx-auto w-full my-auto space-y-4">
+          <div className="w-full space-y-3.5">
             {/* 🏆 Card 1 (TOP — ACTIVE): هەڵسەنگاندنی بەڕێوەبەر */}
             <button
               type="button"
               onClick={handleOpenManagerFeedback}
-              className={`w-full p-5 sm:p-6 rounded-[30px] border text-right transition-all duration-200 cursor-pointer active:scale-[0.97] hover:-translate-y-0.5 group relative overflow-hidden metal-card-gold ${
+              className={`w-full p-4.5 sm:p-5 rounded-[28px] border text-right transition-all duration-200 cursor-pointer active:scale-[0.97] hover:-translate-y-0.5 group relative overflow-hidden metal-card-gold ${
                 isDark
                   ? 'bg-gradient-to-br from-slate-900/85 via-slate-900/75 to-amber-950/35 border-amber-400/35 hover:border-amber-400/65'
                   : 'bg-gradient-to-br from-white/90 via-white/80 to-amber-50/75 border-amber-300/70 hover:border-amber-400'
@@ -775,23 +841,22 @@ function RootPageContent() {
               {/* Diagonal Liquid Glass Sheen */}
               <span className="absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-amber-200/25 to-transparent animate-glass-sheen pointer-events-none" />
 
-              <div className="relative z-10 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
+              <div className="relative z-10 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3.5">
                   {/* Metallic Gold Boss Medallion */}
-                  <div className="relative w-16 h-16 rounded-2xl p-[1.5px] metal-ring-amber shadow-lg shadow-amber-500/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
+                  <div className="relative w-15 h-15 rounded-2xl p-[1.5px] metal-ring-amber shadow-lg shadow-amber-500/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
                     <div
                       className={`w-full h-full rounded-[15px] flex items-center justify-center ${
                         isDark ? 'bg-slate-950/90' : 'bg-gradient-to-br from-amber-50 to-white'
                       }`}
                     >
-                      <BossMetalLogo className="w-11 h-11" />
+                      <BossMetalLogo className="w-10 h-10" />
                     </div>
                   </div>
 
-                  {/* Strictly Minimal Title + Code Range */}
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className={`text-lg sm:text-xl font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      <h3 className={`text-base sm:text-lg font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
                         هەڵسەنگاندنی بەڕێوەبەر
                       </h3>
                       <span
@@ -807,75 +872,152 @@ function RootPageContent() {
                     </div>
 
                     <div
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs font-mono font-black ${
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-xl border text-[11px] font-mono font-black ${
                         isDark
                           ? 'bg-amber-500/15 border-amber-400/30 text-amber-300'
                           : 'bg-amber-100/80 border-amber-300/80 text-amber-900'
                       }`}
                     >
-                      <KeyRound className="w-3.5 h-3.5 text-amber-500" />
-                      <span>کۆد: 0 تا 5999</span>
+                      <KeyRound className="w-3 h-3 text-amber-500" />
+                      <span>کۆد: 0 تا 5000</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center shadow-md shadow-amber-500/25 shrink-0 group-hover:-translate-x-1 transition-transform">
-                  <ChevronLeft className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center shadow-md shadow-amber-500/25 shrink-0 group-hover:-translate-x-1 transition-transform">
+                  <ChevronLeft className="w-4 h-4" />
                 </div>
               </div>
             </button>
 
-            {/* ⏳ Card 2 (BOTTOM — PENDING / چاوەڕوانی): فیدباکی کارمەندان */}
+            {/* 📦 Card 2 (ACTIVE): کارمەند بۆ کارمەندی کۆگا */}
             <button
               type="button"
-              disabled
-              aria-disabled="true"
-              className={`w-full p-5 sm:p-6 rounded-[30px] border text-right relative overflow-hidden cursor-not-allowed opacity-75 metal-card-silver ${
+              onClick={handleOpenWarehouseStaffFeedback}
+              className={`w-full p-4.5 sm:p-5 rounded-[28px] border text-right transition-all duration-200 cursor-pointer active:scale-[0.97] hover:-translate-y-0.5 group relative overflow-hidden ${
                 isDark
-                  ? 'bg-slate-900/55 border-slate-700/60'
-                  : 'bg-white/65 border-slate-200/90'
+                  ? 'bg-gradient-to-br from-slate-900/85 via-slate-900/75 to-blue-950/35 border-blue-400/35 hover:border-blue-400/65'
+                  : 'bg-gradient-to-br from-white/90 via-white/80 to-blue-50/75 border-blue-300/70 hover:border-blue-400'
               }`}
             >
-              <div className="relative z-10 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  {/* Frosted Brushed-Silver Multi-Person Medallion */}
-                  <div
-                    className={`w-16 h-16 rounded-2xl border flex items-center justify-center shrink-0 ${
-                      isDark
-                        ? 'bg-slate-950/75 border-slate-700/70'
-                        : 'bg-gradient-to-br from-slate-100 to-white border-slate-200'
-                    }`}
-                  >
-                    <TeamMetalLogo className="w-11 h-11" />
-                  </div>
+              <span className="absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-blue-200/25 to-transparent animate-glass-sheen pointer-events-none" />
 
-                  {/* Strictly Minimal Title + Pending Status */}
-                  <div className="space-y-2">
-                    <h3 className={`text-lg sm:text-xl font-black ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
-                      فیدباکی کارمەندان
-                    </h3>
-
+              <div className="relative z-10 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3.5">
+                  {/* Glowing Circular Metallic Medallion with Emojis */}
+                  <div className="relative w-15 h-15 rounded-full p-[2px] bg-gradient-to-tr from-blue-500 via-cyan-400 to-indigo-500 shadow-lg shadow-blue-500/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
                     <div
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs font-black ${
-                        isDark
-                          ? 'bg-slate-800/80 border-slate-700 text-slate-300'
-                          : 'bg-slate-100 border-slate-200 text-slate-600'
+                      className={`w-full h-full rounded-full flex flex-col items-center justify-center text-xl select-none ${
+                        isDark ? 'bg-slate-950/90' : 'bg-gradient-to-br from-blue-50 to-white'
                       }`}
                     >
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      <span>چاوەڕوانی</span>
+                      <span className="transform -translate-y-0.5 drop-shadow-sm">📦</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className={`text-base sm:text-lg font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                        کارمەند بۆ کارمەندی کۆگا
+                      </h3>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                          isDark
+                            ? 'bg-blue-500/15 border-blue-400/30 text-blue-300'
+                            : 'bg-blue-50 border-blue-200 text-blue-700'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                        <span>ئەکتیفە</span>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-xl border text-[11px] font-mono font-black ${
+                          isDark
+                            ? 'bg-blue-500/15 border-blue-400/30 text-blue-300'
+                            : 'bg-blue-100/80 border-blue-300/80 text-blue-900'
+                        }`}
+                      >
+                        <KeyRound className="w-3 h-3 text-blue-500" />
+                        <span>کۆد: 5000 تا 7500</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-bold hidden xs:inline">
+                        (١١ کارمەندی کۆگا)
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                <div
-                  className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${
-                    isDark
-                      ? 'bg-slate-800/70 border-slate-700 text-slate-500'
-                      : 'bg-slate-100 border-slate-200 text-slate-400'
-                  }`}
-                >
-                  <Lock className="w-4 h-4" />
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/25 shrink-0 group-hover:-translate-x-1 transition-transform">
+                  <ChevronLeft className="w-4 h-4" />
+                </div>
+              </div>
+            </button>
+
+            {/* 🛍️ Card 3 (ACTIVE): کارمەند بۆ فرۆشیاران و کاشێر */}
+            <button
+              type="button"
+              onClick={handleOpenSalesCashierFeedback}
+              className={`w-full p-4.5 sm:p-5 rounded-[28px] border text-right transition-all duration-200 cursor-pointer active:scale-[0.97] hover:-translate-y-0.5 group relative overflow-hidden ${
+                isDark
+                  ? 'bg-gradient-to-br from-slate-900/85 via-slate-900/75 to-rose-950/35 border-rose-400/35 hover:border-rose-400/65'
+                  : 'bg-gradient-to-br from-white/90 via-white/80 to-rose-50/75 border-rose-300/70 hover:border-rose-400'
+              }`}
+            >
+              <span className="absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-rose-200/25 to-transparent animate-glass-sheen pointer-events-none" />
+
+              <div className="relative z-10 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3.5">
+                  {/* Glowing Circular Metallic Medallion with Emojis */}
+                  <div className="relative w-15 h-15 rounded-full p-[2px] bg-gradient-to-tr from-rose-500 via-pink-400 to-amber-400 shadow-lg shadow-rose-500/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
+                    <div
+                      className={`w-full h-full rounded-full flex flex-col items-center justify-center text-xl select-none ${
+                        isDark ? 'bg-slate-950/90' : 'bg-gradient-to-br from-rose-50 to-white'
+                      }`}
+                    >
+                      <span className="transform -translate-y-0.5 drop-shadow-sm">🛍️</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className={`text-base sm:text-lg font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                        کارمەند بۆ فرۆشیاران و کاشێر
+                      </h3>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                          isDark
+                            ? 'bg-rose-500/15 border-rose-400/30 text-rose-300'
+                            : 'bg-rose-50 border-rose-200 text-rose-700'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                        <span>ئەکتیفە</span>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-xl border text-[11px] font-mono font-black ${
+                          isDark
+                            ? 'bg-rose-500/15 border-rose-400/30 text-rose-300'
+                            : 'bg-rose-100/80 border-rose-300/80 text-rose-900'
+                        }`}
+                      >
+                        <KeyRound className="w-3 h-3 text-rose-500" />
+                        <span>کۆد: 7500 بۆ 9000</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-bold hidden xs:inline">
+                        (٨ فرۆشیار و کاشێر)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-rose-500 to-pink-600 text-white flex items-center justify-center shadow-md shadow-rose-500/25 shrink-0 group-hover:-translate-x-1 transition-transform">
+                  <ChevronLeft className="w-4 h-4" />
                 </div>
               </div>
             </button>
@@ -1281,13 +1423,54 @@ function RootPageContent() {
 
     const isWarehouse = pinModalScope === 'warehouse';
     const isManager = pinModalScope === 'manager_feedback';
+    const isWarehouseStaff = pinModalScope === 'warehouse_staff_feedback';
+    const isSalesCashier = pinModalScope === 'sales_cashier_feedback';
     const requiredLength = isWarehouse ? 5 : 4;
 
     const theme = isManager 
-      ? { border: 'border-amber-500/40', badge: 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/30', dotActive: 'bg-amber-500 border-amber-400 shadow-amber-500/50', title: '📝 فۆرمی هەڵسەنگاندنی بەڕێوەبەر', range: '0000 - 5999', desc: 'کۆدی ٤ ژمارەیی (0000 - 5999) بنووسە بۆ کردنەوەی فۆرمە نهێنییەکە' }
+      ? { 
+          border: 'border-amber-500/40', 
+          badge: 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/30', 
+          dotActive: 'bg-amber-500 border-amber-400 shadow-amber-500/50', 
+          title: '👑 فۆرمی هەڵسەنگاندنی بەڕێوەبەر', 
+          range: '0000 - 4999 (0 تا 5000)', 
+          desc: 'کۆدی ٤ ژمارەیی (0 تا 5000) بنووسە بۆ کردنەوەی فۆرمی نهێنی بەڕێوەبەر' 
+        }
+      : isWarehouseStaff
+      ? { 
+          border: 'border-blue-500/40', 
+          badge: 'bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30', 
+          dotActive: 'bg-blue-500 border-blue-400 shadow-blue-500/50', 
+          title: '📦 فیدباکی کارمەند بۆ کارمەندی کۆگا', 
+          range: '5000 - 7500', 
+          desc: 'کۆدی ٤ ژمارەیی (5000 تا 7500) بنووسە بۆ هەڵسەنگاندنی سەرجەم ١١ کارمەندی کۆگا' 
+        }
+      : isSalesCashier
+      ? { 
+          border: 'border-rose-500/40', 
+          badge: 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/30', 
+          dotActive: 'bg-rose-500 border-rose-400 shadow-rose-500/50', 
+          title: '🛍️ فیدباکی کارمەند بۆ فرۆشیاران و کاشێر', 
+          range: '7500 - 9000', 
+          desc: 'کۆدی ٤ ژمارەیی (7500 تا 9000) بنووسە بۆ هەڵسەنگاندنی سەرجەم ٨ کارمەندی فرۆشیار و کاشێر' 
+        }
       : isWarehouse
-      ? { border: 'border-blue-500/40', badge: 'bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30', dotActive: 'bg-blue-500 border-blue-400 shadow-blue-500/50', title: '📦 بەشی کۆگا و جەرد', range: '٥ ژمارە (10000 - 99999)', desc: 'تکایە کۆدی نهێنی ٥ ژمارەیی ڕێگەپێدراوی کۆگا بنووسە' }
-      : { border: 'border-rose-500/40', badge: 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/30', dotActive: 'bg-rose-500 border-rose-400 shadow-rose-500/50', title: '👥 فیدباکی کارمەندان', range: '6000 - 9999', desc: 'تکایە کۆدی ٤ ژمارەیی هەڵسەنگاندن بنووسە' };
+      ? { 
+          border: 'border-cyan-500/40', 
+          badge: 'bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 border-cyan-500/30', 
+          dotActive: 'bg-cyan-500 border-cyan-400 shadow-cyan-500/50', 
+          title: '📦 بەشی کۆگا و جەرد', 
+          range: '٥ ژمارە (10000 - 99999)', 
+          desc: 'تکایە کۆدی نهێنی ٥ ژمارەیی ڕێگەپێدراوی کۆگا بنووسە' 
+        }
+      : { 
+          border: 'border-rose-500/40', 
+          badge: 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/30', 
+          dotActive: 'bg-rose-500 border-rose-400 shadow-rose-500/50', 
+          title: '👥 فیدباکی کارمەندان', 
+          range: '5000 - 9000', 
+          desc: 'تکایە کۆدی ٤ ژمارەیی هەڵسەنگاندن بنووسە' 
+        };
 
     return (
       <div className={`fixed inset-0 z-50 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200 ${

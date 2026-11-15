@@ -2442,7 +2442,7 @@ export function AdminFeedbackDashboard() {
                 <div className="space-y-3">
                   <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
                     <Users className="w-4 h-4 text-amber-500" />
-                    <span>هەڵسەنگاندنی کارمەندانی فرۆشیار و کاشێر:</span>
+                    <span>هەڵسەنگاندنی وردی کارمەندان ({selectedSubmission.department || 'فرۆشیار، کاشێر و کۆگا'}):</span>
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2457,7 +2457,7 @@ export function AdminFeedbackDashboard() {
 
                         <div className="space-y-1 text-[11px] text-slate-700 font-semibold">
                           <div className="flex items-center justify-between">
-                            <span>• مامەڵە لەگەڵ کڕیار:</span>
+                            <span>• مامەڵە و ڕەفتار:</span>
                             <span className="font-mono text-emerald-600 font-bold">⭐ {er.serviceRating} / 5</span>
                           </div>
                           <div className="flex items-center justify-between">
@@ -2468,11 +2468,23 @@ export function AdminFeedbackDashboard() {
                             <span>• پابەندبوون بە دەوام:</span>
                             <span className="font-mono text-purple-600 font-bold">⭐ {er.disciplineRating} / 5</span>
                           </div>
+                          {er.teamworkRating ? (
+                            <div className="flex items-center justify-between">
+                              <span>• هاوکاری و هەماهەنگی (پرسیاری ٥):</span>
+                              <span className="font-mono text-indigo-600 font-bold">⭐ {er.teamworkRating} / 5</span>
+                            </div>
+                          ) : null}
                           <div className="flex items-center justify-between pt-1 border-t border-slate-200">
                             <span className="font-black">نمرەی گشتی:</span>
                             <span className="font-mono text-amber-600 font-black text-xs">⭐ {er.overallRating} / 5</span>
                           </div>
                         </div>
+
+                        {er.note5 && (
+                          <div className="p-2 rounded-xl bg-amber-50/70 border border-amber-200 text-[11px] text-amber-900 mt-1">
+                            📝 <span className="font-bold">تێبینی پرسیاری ٥:</span> {er.note5}
+                          </div>
+                        )}
 
                         {er.comment && (
                           <div className="p-2 rounded-xl bg-white border border-slate-200 text-[11px] text-slate-800 mt-1">

@@ -36,7 +36,11 @@ import {
   Sparkles,
   Mail,
   MessageSquareHeart,
-  Boxes
+  Boxes,
+  ChevronDown,
+  Check,
+  Users,
+  ShieldCheck
 } from 'lucide-react';
 
 export function AdminDashboardWorkspace() {
@@ -46,6 +50,7 @@ export function AdminDashboardWorkspace() {
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showFeedbackDropdown, setShowFeedbackDropdown] = useState(false);
   
   // Segmented views in Admin Workspace (Synced with URL)
   const [adminView, setAdminView] = useState<'matrix' | 'daily' | 'tools' | 'workflow' | 'google' | 'feedback' | 'manager_evaluation' | 'sheets_warehouse' | 'pins'>('matrix');
@@ -387,34 +392,6 @@ export function AdminDashboardWorkspace() {
 
             <button
               type="button"
-              onClick={() => handleViewChange('feedback')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
-                adminView === 'feedback'
-                  ? 'bg-white text-blue-600 shadow-xs font-black'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-              title="بەڕێوەبردنی فیدباک، PIN، و ڕاپۆرتەکان"
-            >
-              <MessageSquareHeart className="w-3.5 h-3.5 text-amber-500" />
-              <span>بەشی فیدباک</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleViewChange('manager_evaluation')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
-                adminView === 'manager_evaluation'
-                  ? 'bg-slate-900 text-amber-300 shadow-xs font-black'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-              title="بەشی هەڵسەنگاندنی بەڕێوەبەر (شیکردنەوەی ئەنجام ٢٠-١٠٠ و پرسیارە کراوەکان)"
-            >
-              <ManagerEvalIcon className="w-3.5 h-3.5 text-amber-500" />
-              <span>هەڵسەنگاندنی بەڕێوەبەر</span>
-            </button>
-
-            <button
-              type="button"
               onClick={() => handleViewChange('sheets_warehouse')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 adminView === 'sheets_warehouse'
@@ -427,19 +404,103 @@ export function AdminDashboardWorkspace() {
               <span>پشکنینی بار و جەرد (شیت)</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => handleViewChange('pins')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
-                adminView === 'pins'
-                  ? 'bg-white text-amber-600 shadow-xs font-black'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-              title="کۆگای گشتی بەڕێوەبردنی کۆدەکانی PIN (فیدباک، کۆگا، دەوام)"
-            >
-              <KeyRound className="w-3.5 h-3.5 text-amber-500" />
-              <span>کۆدەکانی PIN</span>
-            </button>
+            {/* 🌟 Professional Unified Feedback Hub Dropdown in Top Bar */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowFeedbackDropdown((prev) => !prev)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 border ${
+                  ['feedback', 'manager_evaluation', 'pins'].includes(adminView)
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 border-amber-400 shadow-sm shadow-amber-500/20 font-black'
+                    : 'text-slate-700 hover:text-slate-900 hover:bg-white/80 border-transparent'
+                }`}
+                title="فیدباک و هەڵسەنگاندن (کارمەندان، بەڕێوەبەر، PIN)"
+              >
+                <MessageSquareHeart className={`w-3.5 h-3.5 ${['feedback', 'manager_evaluation', 'pins'].includes(adminView) ? 'text-slate-950' : 'text-amber-500'}`} />
+                <span>فیدباک • Feedback</span>
+                <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showFeedbackDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showFeedbackDropdown && (
+                <div 
+                  className="absolute top-full left-0 sm:left-auto sm:right-0 mt-2 w-72 bg-white/95 backdrop-blur-xl border border-slate-200/90 rounded-2xl p-2 shadow-2xl z-50 text-right animate-in fade-in slide-in-from-top-2"
+                  dir="rtl"
+                >
+                  <div className="px-3 py-1.5 mb-1 border-b border-slate-100 flex items-center justify-between">
+                    <span className="text-[10px] font-mono font-bold text-slate-400">
+                      بەشەکانی فیدباک
+                    </span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleViewChange('feedback');
+                      setShowFeedbackDropdown(false);
+                    }}
+                    className={`w-full p-2.5 rounded-xl text-xs font-bold text-right flex items-center justify-between transition-all cursor-pointer ${
+                      adminView === 'feedback'
+                        ? 'bg-amber-500/15 text-amber-900 font-black'
+                        : 'hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Users className="w-4 h-4 text-amber-500 shrink-0" />
+                      <div>
+                        <div className="font-black">فیدباکی کارمەندان</div>
+                        <div className="text-[10px] text-slate-400">تیمی فرۆشیار، کاشێر و کۆگا</div>
+                      </div>
+                    </div>
+                    {adminView === 'feedback' && <Check className="w-3.5 h-3.5 text-amber-500" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleViewChange('manager_evaluation');
+                      setShowFeedbackDropdown(false);
+                    }}
+                    className={`w-full p-2.5 rounded-xl text-xs font-bold text-right flex items-center justify-between transition-all cursor-pointer ${
+                      adminView === 'manager_evaluation'
+                        ? 'bg-amber-500/15 text-amber-900 font-black'
+                        : 'hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <ManagerEvalIcon className="w-4 h-4 text-amber-500 shrink-0" />
+                      <div>
+                        <div className="font-black">هەڵسەنگاندنی بەڕێوەبەر</div>
+                        <div className="text-[10px] text-slate-400">شیکاری ئەنجامی بەڕێوەبەر ٢٠-١٠٠</div>
+                      </div>
+                    </div>
+                    {adminView === 'manager_evaluation' && <Check className="w-3.5 h-3.5 text-amber-500" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleViewChange('pins');
+                      setShowFeedbackDropdown(false);
+                    }}
+                    className={`w-full p-2.5 rounded-xl text-xs font-bold text-right flex items-center justify-between transition-all cursor-pointer ${
+                      adminView === 'pins'
+                        ? 'bg-amber-500/15 text-amber-900 font-black'
+                        : 'hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <KeyRound className="w-4 h-4 text-amber-500 shrink-0" />
+                      <div>
+                        <div className="font-black">کۆگای گشتی PIN</div>
+                        <div className="text-[10px] text-slate-400">بەڕێوەبردنی کۆدەکانی فیدباک، بەڕێوەبەر و کۆگا</div>
+                      </div>
+                    </div>
+                    {adminView === 'pins' && <Check className="w-3.5 h-3.5 text-amber-500" />}
+                  </button>
+                </div>
+              )}
+            </div>
 
           </div>
 
@@ -619,6 +680,56 @@ export function AdminDashboardWorkspace() {
       {/* ========================================================================= */}
       {/* 💬 VIEW 6: FEEDBACK & SURVEY MANAGEMENT DASHBOARD */}
       {/* ========================================================================= */}
+      {['feedback', 'manager_evaluation', 'pins'].includes(adminView) && (
+        <div className="w-full mb-5 p-2 rounded-2xl bg-white border border-slate-200/90 shadow-xs flex flex-wrap items-center justify-between gap-2" dir="rtl">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => handleViewChange('feedback')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
+                adminView === 'feedback'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <Users className="w-4 h-4 text-amber-500" />
+              <span>فیدباکی کارمەندان (فرۆشیار، کاشێر و کۆگا)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleViewChange('manager_evaluation')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
+                adminView === 'manager_evaluation'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <ManagerEvalIcon className="w-4 h-4 text-amber-500" />
+              <span>هەڵسەنگاندنی بەڕێوەبەر</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleViewChange('pins')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
+                adminView === 'pins'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <KeyRound className="w-4 h-4 text-amber-500" />
+              <span>بەڕێوەبردنی کۆدەکانی PIN</span>
+            </button>
+          </div>
+
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-900 text-xs font-bold border border-amber-200">
+            <ShieldCheck className="w-4 h-4 text-amber-500" />
+            <span>بەشی فیدباک • Feedback Hub</span>
+          </div>
+        </div>
+      )}
+
       {adminView === 'feedback' && (
         <section className="w-full transition-opacity duration-300">
           <AdminFeedbackDashboard />
