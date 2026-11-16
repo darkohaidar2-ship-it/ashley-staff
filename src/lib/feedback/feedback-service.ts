@@ -39,6 +39,10 @@ export interface EmployeeFeedbackRating {
   performanceRating: number;  // ٢. چالاکی و لێهاتوویی لە ئیش (1-5)
   disciplineRating: number;   // ٣. پابەندبوون بە دەوام و ڕێنماییەکان (1-5)
   overallRating: number;      // ٤. نمرەی گشتی بۆ ئەم کارمەندە (1-5)
+  hasAnnoyingBehavior?: 'yes' | 'no' | null; // ٥. ئایا هیچ ڕەفتارێکی بێزارکەر هەیە کە لەگەڵ شوێنەکە نەگونجێت؟ ('yes' | 'no')
+  annoyingPoint1?: string;    // خاڵی ١ (پێویستە ئەگەر بەڵێ بێت)
+  annoyingPoint2?: string;    // خاڵی ٢ (ئارەزوومەندانە)
+  annoyingPoint3?: string;    // خاڵی ٣ (ئارەزوومەندانە)
   teamworkRating?: number;    // ٥. هەماهەنگی و هاوکاری دەستەجەمعی (1-5)
   comment?: string;           // تێبینی و سەرنجی گشتی
   note5?: string;             // تێبینی تایبەت بە پرسیاری پێنجەم
@@ -232,6 +236,11 @@ export interface FeedbackSubmission {
   positiveHighlights?: string;
   workplaceChallenges?: string;
   suggestionsForManagement?: string;
+
+  // 🎯 داوای پێشنیاری چی ئەکرێ بۆ باشترکردن: بە سێ خاڵ
+  improvementPoint1?: string;
+  improvementPoint2?: string;
+  improvementPoint3?: string;
 }
 
 const PINS_STORE_ID = 'ashley_feedback_pins';
@@ -952,6 +961,11 @@ export async function recordFeedbackSubmission(params: {
   positiveHighlights?: string;
   workplaceChallenges?: string;
   suggestionsForManagement?: string;
+
+  // 🎯 داوای پێشنیاری چی ئەکرێ بۆ باشترکردن: بە سێ خاڵ
+  improvementPoint1?: string;
+  improvementPoint2?: string;
+  improvementPoint3?: string;
 }): Promise<{ success: boolean; alreadySubmitted?: boolean; submission?: FeedbackSubmission; error?: string }> {
   try {
     // 1. Verify PIN validity strictly for staff_feedback
@@ -1003,6 +1017,10 @@ export async function recordFeedbackSubmission(params: {
       positiveHighlights: params.positiveHighlights?.trim() || undefined,
       workplaceChallenges: params.workplaceChallenges?.trim() || undefined,
       suggestionsForManagement: params.suggestionsForManagement?.trim() || undefined,
+
+      improvementPoint1: params.improvementPoint1?.trim() || undefined,
+      improvementPoint2: params.improvementPoint2?.trim() || undefined,
+      improvementPoint3: params.improvementPoint3?.trim() || undefined,
     };
 
     // 2. Append to submissions

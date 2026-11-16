@@ -29,7 +29,8 @@ import {
   Smartphone,
   MapPin,
   Boxes,
-  ArrowRight
+  ArrowRight,
+  Plus
 } from 'lucide-react';
 import { triggerHaptic } from '@/lib/offline-sync-manager';
 import { 
@@ -129,16 +130,20 @@ export function FeedbackPortal({
 
   const targetStaffList = isWarehouse ? TARGET_WAREHOUSE_STAFF : TARGET_SALES_CASHIER_STAFF;
 
-  // 🌟 Employee Ratings: ALL 5 CRITERIA START AT 0 (UNSELECTED)
-  // "پرسیاری پێنچەم بە تێبینیەوەیە لەگەڵ کۆتا خاڵ"
+  // 🌟 Employee Ratings: ALL 4 STARS START AT 0 (UNSELECTED) + Q5 BEHAVIOR CHECK
+  // "پرسیاری پێنچەم لە وێنەکە کە ناردوومە نووسیوومە: ئایا هیچ ڕەفتارێکی بێزار کەر هەیە لەگەڵ شوێنەکە نەگونجێت؟"
   const [employeeRatings, setEmployeeRatings] = useState<Record<string, {
-    serviceRating: number;      // 0 = unselected
-    performanceRating: number;  // 0 = unselected
-    disciplineRating: number;   // 0 = unselected
-    overallRating: number;      // 0 = unselected
-    teamworkRating: number;     // 0 = unselected (پرسیاری ٥)
+    serviceRating: number;      // 0 = unselected (1-5)
+    performanceRating: number;  // 0 = unselected (1-5)
+    disciplineRating: number;   // 0 = unselected (1-5)
+    overallRating: number;      // 0 = unselected (1-5)
+    hasAnnoyingBehavior: 'yes' | 'no' | null; // null = unselected, 'yes' | 'no'
+    annoyingPoint1: string;     // خاڵی ١ (پێویستە ئەگەر بەڵێ بێت)
+    annoyingPoint2: string;     // خاڵی ٢ (ئارەزوومەندانە)
+    annoyingPoint3: string;     // خاڵی ٣ (ئارەزوومەندانە)
     comment: string;
-    note5: string;              // تێبینی پرسیاری پێنجەم
+    teamworkRating?: number;
+    note5?: string;
   }>>(() => {
     const initial: any = {};
     [...TARGET_SALES_CASHIER_STAFF, ...TARGET_WAREHOUSE_STAFF].forEach(emp => {
@@ -147,13 +152,22 @@ export function FeedbackPortal({
         performanceRating: 0,
         disciplineRating: 0,
         overallRating: 0,
-        teamworkRating: 0,
+        hasAnnoyingBehavior: null,
+        annoyingPoint1: '',
+        annoyingPoint2: '',
+        annoyingPoint3: '',
         comment: '',
+        teamworkRating: 0,
         note5: '',
       };
     });
     return initial;
   });
+
+  // 💡 داوای پێشنیاری چی ئەکرێ بۆ باشتر کردن: بە سێ خاڵ
+  const [improvementPoint1, setImprovementPoint1] = useState<string>('');
+  const [improvementPoint2, setImprovementPoint2] = useState<string>('');
+  const [improvementPoint3, setImprovementPoint3] = useState<string>('');
 
   // General store suggestions
   const [generalSuggestions, setGeneralSuggestions] = useState<string>('');
@@ -339,6 +353,31 @@ export function FeedbackPortal({
     setSubmitError(null);
   };
 
+  const handleAnnoyingToggle = (empId: string, val: 'yes' | 'no') => {
+    triggerHaptic('medium');
+    setEmployeeRatings((prev) => ({
+      ...prev,
+      [empId]: {
+        ...prev[empId],
+        hasAnnoyingBehavior: val,
+        // If switched to 'no', clear annoying points
+        ...(val === 'no' ? { annoyingPoint1: '', annoyingPoint2: '', annoyingPoint3: '' } : {}),
+      },
+    }));
+    setSubmitError(null);
+  };
+
+  const handleAnnoyingPointChange = (empId: string, pointIndex: 1 | 2 | 3, text: string) => {
+    setEmployeeRatings((prev) => ({
+      ...prev,
+      [empId]: {
+        ...prev[empId],
+        [`annoyingPoint${pointIndex}`]: text,
+      },
+    }));
+    setSubmitError(null);
+  };
+
   const handleCommentChange = (empId: string, text: string) => {
     setEmployeeRatings((prev) => ({
       ...prev,
@@ -359,17 +398,23 @@ export function FeedbackPortal({
     }));
   };
 
-  // Helper: check if a specific employee is complete (All 5 criteria selected > 0)
+  // Helper: check if a specific employee is complete
+  // (Questions 1-4 selected > 0, and Q5 answered: if 'no' complete; if 'yes' point 1 required)
   const isEmployeeComplete = (empId: string) => {
     const r = employeeRatings[empId];
     if (!r) return false;
-    return (
+    const starsDone = (
       r.serviceRating > 0 && 
       r.performanceRating > 0 && 
       r.disciplineRating > 0 && 
-      r.overallRating > 0 &&
-      (r.teamworkRating || 0) > 0
+      r.overallRating > 0
     );
+    if (!starsDone) return false;
+    if (r.hasAnnoyingBehavior === 'no') return true;
+    if (r.hasAnnoyingBehavior === 'yes') {
+      return Boolean(r.annoyingPoint1 && r.annoyingPoint1.trim().length > 0);
+    }
+    return false;
   };
 
   // Helper: count remaining questions for an employee
@@ -381,19 +426,25 @@ export function FeedbackPortal({
     if (r.performanceRating === 0) count++;
     if (r.disciplineRating === 0) count++;
     if (r.overallRating === 0) count++;
-    if (!r.teamworkRating || r.teamworkRating === 0) count++;
+    if (r.hasAnnoyingBehavior === null) {
+      count++;
+    } else if (r.hasAnnoyingBehavior === 'yes' && (!r.annoyingPoint1 || !r.annoyingPoint1.trim())) {
+      count++;
+    }
     return count;
   };
 
   // Completion metrics
   const completedCount = targetStaffList.filter((e) => isEmployeeComplete(e.employeeId)).length;
   const totalEmployeesCount = targetStaffList.length;
-  const isAllComplete = completedCount === totalEmployeesCount;
+  const areAllEmployeesComplete = completedCount === totalEmployeesCount;
+  const isImprovementComplete = improvementPoint1.trim().length > 0;
+  const isAllComplete = areAllEmployeesComplete && isImprovementComplete;
   const progressPercent = Math.round((completedCount / totalEmployeesCount) * 100);
 
   // 3. Submit Response Handler
   const handleSubmitFeedback = async () => {
-    if (!isAllComplete) {
+    if (!areAllEmployeesComplete) {
       triggerHaptic('error');
       playAudioChime(false);
       const firstIncomplete = targetStaffList.find((e) => !isEmployeeComplete(e.employeeId));
@@ -403,9 +454,20 @@ export function FeedbackPortal({
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-        setSubmitError(`تکایە سەرجەم پێوەرەکانی کارمەند (${firstIncomplete.name}) و هەموو کارمەندەکان هەڵبژێرە.`);
-        setTimeout(() => setHighlightedEmpId(null), 3000);
+        setSubmitError(`تکایە سەرجەم پرسیارەکانی کارمەند (${firstIncomplete.name}) تەواو بکە.`);
+        setTimeout(() => setHighlightedEmpId(null), 3500);
       }
+      return;
+    }
+
+    if (!isImprovementComplete) {
+      triggerHaptic('error');
+      playAudioChime(false);
+      const el = document.getElementById('improvement-suggestions-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      setSubmitError('تکایە خاڵی یەکەمی پێشنیاری باشترکردن بنووسە.');
       return;
     }
 
@@ -426,18 +488,32 @@ export function FeedbackPortal({
           performanceRating: r.performanceRating,
           disciplineRating: r.disciplineRating,
           overallRating: r.overallRating,
-          teamworkRating: r.teamworkRating,
+          hasAnnoyingBehavior: r.hasAnnoyingBehavior,
+          annoyingPoint1: r.annoyingPoint1?.trim() || undefined,
+          annoyingPoint2: r.annoyingPoint2?.trim() || undefined,
+          annoyingPoint3: r.annoyingPoint3?.trim() || undefined,
+          teamworkRating: r.overallRating, // fallback compatibility
           comment: r.comment?.trim() || undefined,
-          note5: r.note5?.trim() || undefined,
+          note5: r.annoyingPoint1?.trim() || undefined,
         };
       });
+
+      const combinedSuggestions = [
+        improvementPoint1.trim() ? `خاڵی ١: ${improvementPoint1.trim()}` : '',
+        improvementPoint2.trim() ? `خاڵی ٢: ${improvementPoint2.trim()}` : '',
+        improvementPoint3.trim() ? `خاڵی ٣: ${improvementPoint3.trim()}` : '',
+        generalSuggestions.trim() ? `سەرنجی گشتی: ${generalSuggestions.trim()}` : '',
+      ].filter(Boolean).join('\n');
 
       const payload = {
         pin,
         respondentName: respondentName?.trim() || undefined,
         department: isWarehouse ? 'کۆگا و گواستنەوە' : 'فرۆشیار و کاشێر',
         employeeRatings: formattedRatings,
-        suggestionsForManagement: generalSuggestions?.trim() || undefined,
+        improvementPoint1: improvementPoint1.trim() || undefined,
+        improvementPoint2: improvementPoint2.trim() || undefined,
+        improvementPoint3: improvementPoint3.trim() || undefined,
+        suggestionsForManagement: combinedSuggestions || undefined,
         clientSubmissionIds: getClientSubmissionIds(pin),
       };
 
@@ -1069,29 +1145,141 @@ export function FeedbackPortal({
                           onChange={(val) => handleRatingChange(emp.employeeId, 'overallRating', val)}
                         />
 
-                        {/* ٥. پرسیاری پێنجەم: هەماهەنگی و کاری دەستەجەمعی بە تێبینیەوە */}
-                        <StarRatingSelector
-                          label={isWarehouse ? "٥. هەماهەنگی و هاوکاری دەستەجەمعی لە کاتی فشار و کاردا" : "٥. هاوکاری دەستەجەمعی و پەیوەندی لەگەڵ ستاف و تیم"}
-                          value={ratings.teamworkRating || 0}
-                          onChange={(val) => handleRatingChange(emp.employeeId, 'teamworkRating', val)}
-                        />
+                        {/* ٥. پرسیاری پێنجەم: ئایا هیچ ڕەفتارێکی بێزارکەر هەیە کە لەگەڵ شوێنەکە نەگونجێت؟ */}
+                        <div className={`p-3 sm:p-3.5 rounded-2xl border transition-all ${
+                          ratings.hasAnnoyingBehavior === null
+                            ? isDark ? 'bg-neutral-900/50 border-amber-500/30 shadow-2xs' : 'bg-amber-50/40 border-amber-200/60 shadow-2xs'
+                            : ratings.hasAnnoyingBehavior === 'yes'
+                            ? isDark ? 'bg-rose-950/20 border-rose-500/30' : 'bg-rose-50/50 border-rose-200'
+                            : isDark ? 'bg-neutral-900/80 border-neutral-800' : 'bg-slate-50 border-slate-200/80'
+                        }`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className={`text-xs font-black ${isDark ? 'text-neutral-200' : 'text-slate-800'}`}>
+                              ٥. ئایا هیچ ڕەفتارێکی بێزارکەر هەیە کە لەگەڵ شوێنەکە نەگونجێت؟
+                            </span>
+                            <span className={`text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full transition-all ${
+                              ratings.hasAnnoyingBehavior === null
+                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse'
+                                : ratings.hasAnnoyingBehavior === 'yes'
+                                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                                : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold'
+                            }`}>
+                              {ratings.hasAnnoyingBehavior === null ? 'وەڵام نەدراوەتەوە' : ratings.hasAnnoyingBehavior === 'yes' ? 'بەڵێ، هەیە' : 'نەخێر، نییە'}
+                            </span>
+                          </div>
 
-                        {/* بۆکسی تێبینی تایبەت بە پرسیاری پێنجەم */}
-                        <div className="pt-1.5 pb-0.5">
-                          <label className="block text-[11px] font-bold text-slate-700 dark:text-neutral-300 mb-1">
-                            تێبینی و ڕوونکردنەوەی پرسیاری پێنجەم (ئارەزوومەندانە):
-                          </label>
-                          <input
-                            type="text"
-                            value={ratings.note5 || ''}
-                            onChange={(e) => handleNote5Change(emp.employeeId, e.target.value)}
-                            placeholder={`تێبینی تایبەت لەسەر هاوکاری و هەماهەنگی ${emp.name}...`}
-                            className={`w-full h-10 px-3.5 text-xs rounded-2xl border outline-none transition-all ${
-                              isDark 
-                                ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500' 
-                                : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-amber-500'
-                            }`}
-                          />
+                          {/* دوو دوگمەی بەڵێ / نەخێر */}
+                          <div className="grid grid-cols-2 gap-2 mt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleAnnoyingToggle(emp.employeeId, 'no')}
+                              className={`h-10 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 border ${
+                                ratings.hasAnnoyingBehavior === 'no'
+                                  ? 'bg-emerald-500 text-white border-emerald-500 shadow-md ring-2 ring-emerald-500/30'
+                                  : isDark
+                                  ? 'bg-neutral-950/70 text-neutral-300 border-neutral-800 hover:border-neutral-700'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>نەخێر نییە</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleAnnoyingToggle(emp.employeeId, 'yes')}
+                              className={`h-10 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 border ${
+                                ratings.hasAnnoyingBehavior === 'yes'
+                                  ? 'bg-rose-500 text-white border-rose-500 shadow-md ring-2 ring-rose-500/30'
+                                  : isDark
+                                  ? 'bg-neutral-950/70 text-neutral-300 border-neutral-800 hover:border-neutral-700'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <span>بەڵێ هەیە</span>
+                            </button>
+                          </div>
+
+                          {/* ئەگەر نەخێر نییە: پێویست ناکات تێبینی بنووسێ */}
+                          {ratings.hasAnnoyingBehavior === 'no' && (
+                            <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>نەخێر نییە (پێویست ناکات تێبینی بنووسرێت).</span>
+                            </p>
+                          )}
+
+                          {/* ئەگەر بەڵێ هەیە: داوای تێبینی لێ بکات تا ٣ خاڵ */}
+                          {ratings.hasAnnoyingBehavior === 'yes' && (
+                            <div className="mt-3 pt-2.5 border-t border-rose-500/20 space-y-2">
+                              <label className="block text-[11px] font-black text-rose-600 dark:text-rose-400">
+                                تکایە ڕەفتارە بێزارکەرەکە بە خاڵ بنووسە (تا ٣ خاڵ):
+                              </label>
+
+                              {/* خاڵی ١ (پێویستە) */}
+                              <div>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="text-[10px] font-bold text-slate-700 dark:text-neutral-300">
+                                    خاڵی ١ <span className="text-rose-500 font-black">* پێویستە</span>
+                                  </span>
+                                  {ratings.annoyingPoint1?.trim() && (
+                                    <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-1">
+                                      <Check className="w-3 h-3" /> تەواوە
+                                    </span>
+                                  )}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={ratings.annoyingPoint1 || ''}
+                                  onChange={(e) => handleAnnoyingPointChange(emp.employeeId, 1, e.target.value)}
+                                  placeholder={`خاڵی یەکەمی ڕەفتاری نەگونجاوی ${emp.name}...`}
+                                  className={`w-full h-9.5 px-3 text-xs rounded-xl border outline-none transition-all ${
+                                    !ratings.annoyingPoint1?.trim()
+                                      ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 text-slate-900 dark:text-white'
+                                      : isDark
+                                      ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500'
+                                      : 'bg-white border-slate-200 text-slate-900 focus:border-amber-500'
+                                  }`}
+                                />
+                              </div>
+
+                              {/* خاڵی ٢ (ئارەزوومەندانە) */}
+                              <div>
+                                <span className="block text-[10px] font-bold text-slate-500 dark:text-neutral-400 mb-0.5">
+                                  خاڵی ٢ (ئارەزوومەندانە)
+                                </span>
+                                <input
+                                  type="text"
+                                  value={ratings.annoyingPoint2 || ''}
+                                  onChange={(e) => handleAnnoyingPointChange(emp.employeeId, 2, e.target.value)}
+                                  placeholder="خاڵی دووەم (ئەگەر هەبێت)..."
+                                  className={`w-full h-9.5 px-3 text-xs rounded-xl border outline-none transition-all ${
+                                    isDark
+                                      ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500'
+                                      : 'bg-white border-slate-200 text-slate-900 focus:border-amber-500'
+                                  }`}
+                                />
+                              </div>
+
+                              {/* خاڵی ٣ (ئارەزوومەندانە) */}
+                              <div>
+                                <span className="block text-[10px] font-bold text-slate-500 dark:text-neutral-400 mb-0.5">
+                                  خاڵی ٣ (ئارەزوومەندانە)
+                                </span>
+                                <input
+                                  type="text"
+                                  value={ratings.annoyingPoint3 || ''}
+                                  onChange={(e) => handleAnnoyingPointChange(emp.employeeId, 3, e.target.value)}
+                                  placeholder="خاڵی سێیەم (ئەگەر هەبێت)..."
+                                  className={`w-full h-9.5 px-3 text-xs rounded-xl border outline-none transition-all ${
+                                    isDark
+                                      ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500'
+                                      : 'bg-white border-slate-200 text-slate-900 focus:border-amber-500'
+                                  }`}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         {/* Optional Comment for this employee */}
@@ -1101,7 +1289,7 @@ export function FeedbackPortal({
                             value={ratings.comment || ''}
                             onChange={(e) => handleCommentChange(emp.employeeId, e.target.value)}
                             placeholder={`سەرنج یان تێبینی گشتی لەسەر ${emp.name} (ئارەزوومەندانە)...`}
-                            className={`w-full h-10 px-3.5 text-xs rounded-2xl border outline-none transition-all ${
+                            className={`w-full h-9.5 px-3 text-xs rounded-xl border outline-none transition-all ${
                               isDark 
                                 ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500' 
                                 : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-amber-500'
@@ -1114,6 +1302,133 @@ export function FeedbackPortal({
                   </div>
                 );
               })}
+            </div>
+
+            {/* ===================================================================== */}
+            {/* 💡 SECTION: 3 IMPROVEMENT SUGGESTIONS (داوای پێشنیاری چی ئەکرێ بۆ باشترکردن بە سێ خاڵ) */}
+            {/* ===================================================================== */}
+            <div 
+              id="improvement-suggestions-section"
+              className={`w-full p-5 sm:p-7 rounded-3xl border shadow-md transition-all ${
+                isDark ? 'bg-neutral-900/90 border-neutral-800' : 'bg-white border-slate-200/90'
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0 shadow-xs">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+                    داوای پێشنیاری چی ئەکرێ بۆ باشتر کردن؟ (بە سێ خاڵ)
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-neutral-400">
+                    تکایە پێشنیارەکانت بۆ باشترکردنی کار و ژینگەی شوێنەکە لەم ٣ خاڵەدا دیاری بکە:
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3.5">
+                {/* خاڵی ١ (پێویستە) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-black text-slate-800 dark:text-neutral-200 flex items-center gap-1.5">
+                      <span>خاڵی ١: پێشنیاری یەکەم</span>
+                      <span className="text-rose-500 text-[10px]">* پێویستە</span>
+                    </label>
+                    {improvementPoint1.trim() && (
+                      <span className="text-[11px] text-emerald-500 font-bold flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> تەواوە
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={improvementPoint1}
+                    onChange={(e) => {
+                      setImprovementPoint1(e.target.value);
+                      setSubmitError(null);
+                    }}
+                    placeholder="پێشنیاری یەکەم بۆ باشترکردنی کار و ئاسانکارییەکان بنووسە..."
+                    className={`w-full h-11 px-3.5 text-xs rounded-2xl border outline-none transition-all ${
+                      !improvementPoint1.trim()
+                        ? 'border-amber-400/80 bg-amber-50/30 dark:bg-amber-950/20 text-slate-900 dark:text-white'
+                        : isDark
+                        ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-amber-500'
+                    }`}
+                  />
+                </div>
+
+                {/* خاڵی ٢ (ئارەزوومەندانە) */}
+                <div>
+                  <label className="block text-xs font-black text-slate-800 dark:text-neutral-200 mb-1">
+                    خاڵی ٢: پێشنیاری دووەم (ئارەزوومەندانە):
+                  </label>
+                  <input
+                    type="text"
+                    value={improvementPoint2}
+                    onChange={(e) => setImprovementPoint2(e.target.value)}
+                    placeholder="پێشنیاری دووەم (ئەگەر هەبێت)..."
+                    className={`w-full h-11 px-3.5 text-xs rounded-2xl border outline-none transition-all ${
+                      isDark
+                        ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-amber-500'
+                    }`}
+                  />
+                </div>
+
+                {/* خاڵی ٣ (ئارەزوومەندانە) */}
+                <div>
+                  <label className="block text-xs font-black text-slate-800 dark:text-neutral-200 mb-1">
+                    خاڵی ٣: پێشنیاری سێیەم (ئارەزوومەندانە):
+                  </label>
+                  <input
+                    type="text"
+                    value={improvementPoint3}
+                    onChange={(e) => setImprovementPoint3(e.target.value)}
+                    placeholder="پێشنیاری سێیەم (ئەگەر هەبێت)..."
+                    className={`w-full h-11 px-3.5 text-xs rounded-2xl border outline-none transition-all ${
+                      isDark
+                        ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-amber-500'
+                    }`}
+                  />
+                </div>
+
+                {/* دوگمەی پێشنیارە ئامادەکراوەکان */}
+                <div className="pt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-slate-400 ml-1">پێشنیاری خێرا:</span>
+                  {[
+                    'پەرەپێدانی کەلوپەل و ئامێرەکانی کارکردن',
+                    'ڕێکخستنەوەی کاتی دەوام و پشوو',
+                    'زیادکردنی هاوکاری و هەماهەنگی نێوان بەشەکان',
+                    'هەموو شتێک بەباشی بەڕێوەدەچێت و دەستتان خۆش بێت',
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('light');
+                        if (!improvementPoint1.trim()) {
+                          setImprovementPoint1(preset);
+                        } else if (!improvementPoint2.trim()) {
+                          setImprovementPoint2(preset);
+                        } else if (!improvementPoint3.trim()) {
+                          setImprovementPoint3(preset);
+                        }
+                      }}
+                      className={`px-2.5 py-1 rounded-xl border text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer active:scale-95 transition-all ${
+                        isDark
+                          ? 'bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-amber-500/50'
+                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-amber-50 hover:border-amber-300'
+                      }`}
+                    >
+                      <Plus className="w-3 h-3 text-amber-500" />
+                      <span>{preset}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Error Message */}
@@ -1129,12 +1444,12 @@ export function FeedbackPortal({
               <div className="w-full max-w-2xl bg-white/85 dark:bg-neutral-900/85 backdrop-blur-xl p-2 rounded-3xl border border-slate-200/90 dark:border-neutral-800 shadow-2xl flex items-center justify-center">
                 <button
                   type="button"
-                  disabled={submitting}
+                  disabled={!isAllComplete || submitting}
                   onClick={handleSubmitFeedback}
                   className={`w-full h-14 rounded-2xl font-black text-xs sm:text-base flex items-center justify-center gap-2.5 transition-all cursor-pointer active:scale-[0.98] shadow-lg ${
                     isAllComplete
                       ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-slate-950 ring-2 ring-amber-400/50'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 opacity-90'
+                      : 'bg-slate-300 dark:bg-neutral-800 text-slate-500 dark:text-neutral-500 border border-slate-300 dark:border-neutral-700 opacity-60 cursor-not-allowed'
                   }`}
                 >
                   {submitting ? (
@@ -1142,12 +1457,17 @@ export function FeedbackPortal({
                   ) : isAllComplete ? (
                     <>
                       <CheckCircle2 className="w-5 h-5 text-slate-950" />
-                      <span>ناردنی فیدباک (سەرجەم {totalEmployeesCount} کارمەندەکە تەواو بوو)</span>
+                      <span>ناردنی فیدباک (سەرجەم پرسیارەکان و پێشنیارەکان تەواو بوون)</span>
+                    </>
+                  ) : !areAllEmployeesComplete ? (
+                    <>
+                      <Lock className="w-4 h-4" />
+                      <span>تەواوکردنی پرسیارەکان ({completedCount} لە {totalEmployeesCount} کارمەند تەواوە)</span>
                     </>
                   ) : (
                     <>
-                      <Send className="w-4 h-4" />
-                      <span>تەواوکردنی وەڵامەکان ({completedCount} لە {totalEmployeesCount} کارمەند)</span>
+                      <Sparkles className="w-4 h-4 text-amber-500" />
+                      <span>تکایە خاڵی یەکەمی پێشنیاری باشترکردن بنووسە بۆ ناردن</span>
                     </>
                   )}
                 </button>
