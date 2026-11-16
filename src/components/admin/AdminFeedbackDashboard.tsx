@@ -475,6 +475,7 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
     let totalService = 0;
     let totalPerf = 0;
     let totalDisc = 0;
+    let totalOverall = 0;
     let totalTeamwork = 0;
     let totalStaffRatingsCount = 0;
 
@@ -492,6 +493,7 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
             totalService += r.serviceRating || 0;
             totalPerf += r.performanceRating || 0;
             totalDisc += r.disciplineRating || 0;
+            totalOverall += r.overallRating || 0;
             totalTeamwork += r.teamworkRating || 0;
             totalStaffRatingsCount++;
           }
@@ -502,12 +504,14 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
     const avgService = totalStaffRatingsCount > 0 ? Number((totalService / totalStaffRatingsCount).toFixed(1)) : 0;
     const avgPerf = totalStaffRatingsCount > 0 ? Number((totalPerf / totalStaffRatingsCount).toFixed(1)) : 0;
     const avgDisc = totalStaffRatingsCount > 0 ? Number((totalDisc / totalStaffRatingsCount).toFixed(1)) : 0;
+    const avgOverall = totalStaffRatingsCount > 0 ? Number((totalOverall / totalStaffRatingsCount).toFixed(1)) : 0;
     const avgTeamwork = totalStaffRatingsCount > 0 ? Number((totalTeamwork / totalStaffRatingsCount).toFixed(1)) : 0;
 
     return {
       avgService,
       avgPerf,
       avgDisc,
+      avgOverall,
       avgTeamwork,
       totalStaffRatingsCount,
       distribution,
@@ -546,27 +550,27 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
   const radarData = useMemo(() => {
     return [
       {
-        subject: isWarehouse ? 'ڕەفتار لەگەڵ تیم' : 'مامەڵە لەگەڵ کڕیار',
+        subject: 'ئەدا و هەڵسوکەوت (ڕێز)',
         value: storeAnalytics.avgService,
         fullMark: 5,
       },
       {
-        subject: isWarehouse ? 'چالاکی و لێهاتوویی' : 'چالاکی لە فرۆشتن/کاش',
+        subject: 'هاوکاری بێ پێ وتن',
         value: storeAnalytics.avgPerf,
         fullMark: 5,
       },
       {
-        subject: isWarehouse ? 'پابەندبوون بە دەوام و سەلامەتی' : 'پابەندبوون بە دەوام',
+        subject: 'پابەندبوون (مۆبایل)',
         value: storeAnalytics.avgDisc,
         fullMark: 5,
       },
       {
-        subject: 'نمرەی تێکڕای گشتی',
-        value: metrics.avgOverall,
+        subject: 'پاکوخاوێنی و تەمیزی',
+        value: storeAnalytics.avgOverall || metrics.avgOverall,
         fullMark: 5,
       },
     ];
-  }, [isWarehouse, storeAnalytics, metrics]);
+  }, [storeAnalytics, metrics]);
 
   // 🌟 RECHARTS DATA: Employee Leaderboard Bars
   const employeeBarData = useMemo(() => {
@@ -727,11 +731,12 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
 
     const employeeHeaders: string[] = [];
     currentTargetStaff.forEach((emp) => {
-      employeeHeaders.push(`${emp.name} (${emp.role}) - گشتی`);
-      employeeHeaders.push(`${emp.name} - ${isWarehouse ? 'ڕەفتار لەگەڵ تیمی کۆگا' : 'مامەڵە لەگەڵ کڕیار'}`);
-      employeeHeaders.push(`${emp.name} - ${isWarehouse ? 'چالاکی و لێهاتوویی کۆگا' : 'چالاکی و کار'}`);
-      employeeHeaders.push(`${emp.name} - ${isWarehouse ? 'پابەندبوون بە دەوام و سەلامەتی' : 'پابەندبوون بە دەوام'}`);
-      employeeHeaders.push(`${emp.name} - پرسیاری ٥: ڕەفتاری بێزارکەر`);
+      employeeHeaders.push(`${emp.name} (${emp.role}) - تێکڕا`);
+      employeeHeaders.push(`${emp.name} - ١. ئەدا و ڕەفتار (ڕێز)`);
+      employeeHeaders.push(`${emp.name} - ٢. هاوکاری لە کاتی پێویست`);
+      employeeHeaders.push(`${emp.name} - ٣. پابەندبوون (مۆبایل)`);
+      employeeHeaders.push(`${emp.name} - ٤. پاکوخاوێنی و تەمیزی`);
+      employeeHeaders.push(`${emp.name} - ٥. ڕەفتاری نەگونجاو`);
       employeeHeaders.push(`${emp.name} - خاڵی ١`);
       employeeHeaders.push(`${emp.name} - خاڵی ٢`);
       employeeHeaders.push(`${emp.name} - خاڵی ٣`);

@@ -53,6 +53,96 @@ export interface FeedbackPortalProps {
   onBackToMobileApp?: () => void;
 }
 
+// ============================================================================
+// 🌟 TACTILE RATING SCALES & OPTIONS (Manager Evaluation Style • No Stars!)
+// ============================================================================
+interface FeedbackScaleOption {
+  value: number; // 1 to 5
+  kurdishDigit: string;
+  label: string;
+  shortLabel: string;
+}
+
+const SCALE_STYLES: Record<number, {
+  activeBg: string;
+  activeBorder: string;
+  activeText: string;
+  ringColor: string;
+  badgeBg: string;
+}> = {
+  1: {
+    activeBg: 'bg-rose-500 text-white shadow-md shadow-rose-500/25',
+    activeBorder: 'border-rose-500',
+    activeText: 'text-rose-600 dark:text-rose-400',
+    ringColor: 'ring-2 ring-rose-500/30',
+    badgeBg: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30',
+  },
+  2: {
+    activeBg: 'bg-orange-500 text-white shadow-md shadow-orange-500/25',
+    activeBorder: 'border-orange-500',
+    activeText: 'text-orange-600 dark:text-orange-400',
+    ringColor: 'ring-2 ring-orange-500/30',
+    badgeBg: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30',
+  },
+  3: {
+    activeBg: 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/25',
+    activeBorder: 'border-amber-500',
+    activeText: 'text-amber-600 dark:text-amber-400',
+    ringColor: 'ring-2 ring-amber-500/30',
+    badgeBg: 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30',
+  },
+  4: {
+    activeBg: 'bg-sky-500 text-white shadow-md shadow-sky-500/25',
+    activeBorder: 'border-sky-500',
+    activeText: 'text-sky-600 dark:text-sky-400',
+    ringColor: 'ring-2 ring-sky-500/30',
+    badgeBg: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30',
+  },
+  5: {
+    activeBg: 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25',
+    activeBorder: 'border-emerald-500',
+    activeText: 'text-emerald-600 dark:text-emerald-400',
+    ringColor: 'ring-2 ring-emerald-500/30',
+    badgeBg: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+  },
+};
+
+// ١. تا چەند لە ئەدا و هەڵسوکەوتی ڕازیت؟ (ڕەفتار و ڕێز گرتن)
+const Q1_OPTIONS: FeedbackScaleOption[] = [
+  { value: 1, kurdishDigit: '١', label: 'زۆر ناڕازیم', shortLabel: 'زۆر ناڕازیم' },
+  { value: 2, kurdishDigit: '٢', label: 'ناڕازیم', shortLabel: 'ناڕازیم' },
+  { value: 3, kurdishDigit: '٣', label: 'مامناوەند', shortLabel: 'مامناوەند' },
+  { value: 4, kurdishDigit: '٤', label: 'ڕازیم', shortLabel: 'ڕازیم' },
+  { value: 5, kurdishDigit: '٥', label: 'زۆر ڕازیم', shortLabel: 'زۆر ڕازیم' },
+];
+
+// ٢. لە کاتی پێویست دا بە بێ پێ وتن هاوکاریتان دەکات؟
+const Q2_OPTIONS: FeedbackScaleOption[] = [
+  { value: 1, kurdishDigit: '١', label: 'هەرگیز', shortLabel: 'هەرگیز' },
+  { value: 2, kurdishDigit: '٢', label: 'زۆر کەم', shortLabel: 'زۆر کەم' },
+  { value: 3, kurdishDigit: '٣', label: 'هەندێک جار', shortLabel: 'هەندێک جار' },
+  { value: 4, kurdishDigit: '٤', label: 'زۆربەی کات', shortLabel: 'زۆربەی کات' },
+  { value: 5, kurdishDigit: '٥', label: 'هەمیشە هاوکارە', shortLabel: 'هەمیشە' },
+];
+
+// ٣. لە کاتی کارکردن مۆبایل بەکار دێنێت بۆ کار و باری خۆی؟
+const Q3_OPTIONS: FeedbackScaleOption[] = [
+  { value: 1, kurdishDigit: '١', label: 'بەردەوام', shortLabel: 'بەردەوام' },
+  { value: 2, kurdishDigit: '٢', label: 'زۆربەی کات', shortLabel: 'زۆربەی کات' },
+  { value: 3, kurdishDigit: '٣', label: 'مامناوەند', shortLabel: 'مامناوەند' },
+  { value: 4, kurdishDigit: '٤', label: 'زۆر بە دەگمەن', shortLabel: 'زۆر دەگمەن' },
+  { value: 5, kurdishDigit: '٥', label: 'هەرگیز بەکار ناهێنێت', shortLabel: 'هەرگیز' },
+];
+
+// ٤. تا چەند گرنگی دە دات بە پاک و تەمیزی و خاوێنی خۆی و شوێنەکە؟
+const Q4_OPTIONS: FeedbackScaleOption[] = [
+  { value: 1, kurdishDigit: '١', label: 'گرنگی نادات', shortLabel: 'گرنگی نادات' },
+  { value: 2, kurdishDigit: '٢', label: 'کەم', shortLabel: 'کەم' },
+  { value: 3, kurdishDigit: '٣', label: 'مامناوەند', shortLabel: 'مامناوەند' },
+  { value: 4, kurdishDigit: '٤', label: 'باشە', shortLabel: 'باشە' },
+  { value: 5, kurdishDigit: '٥', label: 'زۆر نایابە', shortLabel: 'زۆر نایاب' },
+];
+
 export function FeedbackPortal({ 
   initialPin = '', 
   initialScope,
@@ -543,67 +633,95 @@ export function FeedbackPortal({
     }
   };
 
-  // Star Rating Component
-  const StarRatingSelector = ({ 
+  // 🌟 Tactile Choice Selector Component (Manager Evaluation Style • No Stars!)
+  const TactileChoiceSelector = ({ 
+    questionNum,
     label, 
     value, 
+    options,
     onChange 
   }: { 
+    questionNum: string;
     label: string; 
     value: number; // 0 to 5
+    options: FeedbackScaleOption[];
     onChange: (val: number) => void;
   }) => {
-    const getRatingLabel = (val: number) => {
-      switch (val) {
-        case 1: return 'لاوازە (١/٥)';
-        case 2: return 'مامناوەندە (٢/٥)';
-        case 3: return 'باشە (٣/٥)';
-        case 4: return 'زۆر باشە (٤/٥)';
-        case 5: return 'نایابە (٥/٥)';
-        default: return 'هەڵنەبژێردراوە';
-      }
-    };
+    const selectedOpt = options.find((o) => o.value === value);
+    const selectedStyle = value > 0 ? SCALE_STYLES[value] : null;
 
     return (
-      <div className={`p-3 sm:p-3.5 rounded-2xl border transition-all ${
+      <div className={`p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 ${
         value === 0 
           ? isDark ? 'bg-neutral-900/50 border-amber-500/30 shadow-2xs' : 'bg-amber-50/40 border-amber-200/60 shadow-2xs'
           : isDark ? 'bg-neutral-900/80 border-neutral-800' : 'bg-slate-50 border-slate-200/80'
       }`}>
-        <div className="flex items-center justify-between mb-2">
-          <span className={`text-xs font-black ${isDark ? 'text-neutral-200' : 'text-slate-800'}`}>
-            {label}
-          </span>
-          <span className={`text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full transition-all ${
-            value === 0
-              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse'
-              : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-mono font-bold'
-          }`}>
-            {getRatingLabel(value)}
-          </span>
+        {/* Header with question number, label, and live status badge */}
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="flex items-start gap-2 flex-1 min-w-0">
+            <span
+              className={`w-6 h-6 rounded-lg font-mono font-black text-xs flex items-center justify-center shrink-0 mt-0.5 ${
+                value > 0
+                  ? 'bg-emerald-500 text-white shadow-2xs'
+                  : isDark
+                  ? 'bg-neutral-800 text-amber-400'
+                  : 'bg-amber-100 text-amber-700'
+              }`}
+            >
+              {value > 0 ? <Check className="w-3.5 h-3.5" /> : questionNum}
+            </span>
+            <span className={`text-xs sm:text-[13px] font-bold leading-snug ${isDark ? 'text-neutral-200' : 'text-slate-800'}`}>
+              {label}
+            </span>
+          </div>
+
+          <div className="shrink-0 text-left">
+            {selectedOpt && selectedStyle ? (
+              <span
+                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black border ${selectedStyle.badgeBg}`}
+              >
+                <span className="font-mono">{selectedOpt.kurdishDigit}</span>
+                <span>—</span>
+                <span>{selectedOpt.shortLabel}</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 animate-pulse">
+                وەڵام نەدراوە
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center justify-between px-1 sm:px-2 py-1" dir="ltr">
-          {[1, 2, 3, 4, 5].map((star) => {
-            const isFilled = star <= value;
+        {/* 5 Tactile Option Buttons (Manager Evaluation Style) */}
+        <div className="grid grid-cols-5 gap-1 sm:gap-1.5 w-full mt-2" dir="rtl">
+          {options.map((opt) => {
+            const active = value === opt.value;
+            const style = SCALE_STYLES[opt.value];
             return (
               <button
-                key={star}
+                key={opt.value}
                 type="button"
                 onClick={() => {
                   triggerHaptic('light');
-                  onChange(star);
+                  playAudioChime(true);
+                  onChange(opt.value);
                 }}
-                className="p-1 sm:p-1.5 cursor-pointer transition-transform hover:scale-120 active:scale-90"
-                title={`${star} ئەستێرە`}
+                className={`min-h-[50px] sm:min-h-[54px] px-1 py-1.5 rounded-xl border flex flex-col items-center justify-center gap-0.5 cursor-pointer select-none transition-all duration-150 active:scale-92 ${
+                  active
+                    ? `${style.activeBg} ${style.activeBorder} ring-2 ${style.ringColor} scale-[1.02] font-black shadow-sm`
+                    : isDark
+                    ? 'bg-neutral-950/75 border-neutral-800 text-neutral-300 hover:bg-neutral-800 hover:border-neutral-700'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
+                }`}
+                aria-pressed={active}
+                title={`${opt.kurdishDigit}: ${opt.label}`}
               >
-                <Star
-                  className={`w-7 h-7 sm:w-8 sm:h-8 transition-colors ${
-                    isFilled 
-                      ? 'fill-amber-400 text-amber-400 drop-shadow-sm' 
-                      : isDark ? 'text-neutral-700 hover:text-neutral-500' : 'text-slate-300 hover:text-slate-400'
-                  }`}
-                />
+                <span className="text-sm sm:text-base font-mono font-black leading-none">
+                  {opt.kurdishDigit}
+                </span>
+                <span className="text-[9px] sm:text-[10px] font-bold leading-tight text-center line-clamp-1">
+                  {opt.shortLabel}
+                </span>
               </button>
             );
           })}
@@ -960,7 +1078,7 @@ export function FeedbackPortal({
                 ) : (
                   <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                     <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>هێشتا {totalEmployeesCount - completedCount} کارمەند ماوە. دەست بنێ بە ئەستێرەکاندا بۆ هەڵبژاردن.</span>
+                    <span>هێشتا {totalEmployeesCount - completedCount} کارمەند ماوە. تکایە هەڵبژاردنەکان دیاری بکە.</span>
                   </span>
                 )}
               </div>
@@ -1066,8 +1184,8 @@ export function FeedbackPortal({
                     <div>
                       {/* Employee Identity Header */}
                       <div className="flex items-center justify-between pb-3.5 mb-3.5 border-b border-slate-100 dark:border-neutral-800">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-2xl overflow-hidden bg-amber-500/10 border border-amber-500/20 flex items-center justify-center font-black text-amber-600 shrink-0 shadow-2xs">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center font-black text-amber-600 shrink-0 shadow-sm relative">
                             {emp.photoUrl ? (
                               <img 
                                 src={emp.photoUrl} 
@@ -1078,19 +1196,19 @@ export function FeedbackPortal({
                                 }}
                               />
                             ) : null}
-                            <span className="text-base">{emp.name.slice(0, 1)}</span>
+                            <span className="text-xl absolute inset-0 flex items-center justify-center -z-10">{emp.name.slice(0, 1)}</span>
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-mono font-bold text-slate-400">
+                              <span className="text-[10px] font-mono font-bold text-slate-400 shrink-0">
                                 #{index + 1}
                               </span>
-                              <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                              <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white truncate">
                                 {emp.fullName}
                               </h3>
                             </div>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="px-2 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/25 shrink-0">
                                 {emp.role}
                               </span>
                               <span className="text-[10px] font-mono text-slate-400">
@@ -1103,49 +1221,57 @@ export function FeedbackPortal({
                         {/* Card Completion Badge */}
                         <div className="text-left shrink-0">
                           {complete ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 text-[11px] font-black">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 text-[11px] sm:text-xs font-black shadow-2xs">
                               <Check className="w-3.5 h-3.5" />
                               <span>تەواو بوو</span>
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 text-[10px] font-bold">
-                              <span>{remaining} پێوەر ماوە</span>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 text-[10px] sm:text-[11px] font-bold">
+                              <span>{remaining} پرسیار ماوە</span>
                             </span>
                           )}
                         </div>
                       </div>
 
-                      {/* 🌟 5 Star Rating Questions (Start at 0 / Unselected) */}
+                      {/* 🌟 4 Tactile Questions (Manager Evaluation Style • No Stars!) */}
                       <div className="space-y-3">
-                        {/* ١. مامەڵە و ڕەفتار */}
-                        <StarRatingSelector
-                          label={isWarehouse ? "١. ڕەفتار و مامەڵە لەگەڵ تیمی کۆگا و هاوپیشەکان (ڕێز و لێکتێگەیشتن)" : "١. ڕەفتار و مامەڵە لەگەڵ کڕیار (ڕێز و پێشوازی گەرم)"}
+                        {/* ١. تا چەند لە ئەدا و هەڵسوکەوتی ڕازیت؟ (ڕەفتار و ڕێز گرتن) */}
+                        <TactileChoiceSelector
+                          questionNum="١"
+                          label="١. تا چەند لە ئەدا و هەڵسوکەوتی ڕازیت؟ (ڕەفتار و ڕێز گرتن)"
                           value={ratings.serviceRating}
+                          options={Q1_OPTIONS}
                           onChange={(val) => handleRatingChange(emp.employeeId, 'serviceRating', val)}
                         />
 
-                        {/* ٢. چالاکی و لێهاتوویی */}
-                        <StarRatingSelector
-                          label={isWarehouse ? "٢. چالاکی، لێهاتوویی و خێرایی لە کارەکانی کۆگا و گواستنەوە" : `٢. چالاکی و لێهاتوویی لە کار (${emp.role.includes('کاشێر') ? 'کاش و حیسابات' : 'فرۆشتن'})`}
+                        {/* ٢. لە کاتی پێویست دا بە بێ پێ وتن هاوکاریتان دەکات؟ */}
+                        <TactileChoiceSelector
+                          questionNum="٢"
+                          label="٢. لە کاتی پێویست دا بە بێ پێ وتن هاوکاریتان دەکات؟"
                           value={ratings.performanceRating}
+                          options={Q2_OPTIONS}
                           onChange={(val) => handleRatingChange(emp.employeeId, 'performanceRating', val)}
                         />
 
-                        {/* ٣. پابەندبوون */}
-                        <StarRatingSelector
-                          label={isWarehouse ? "٣. پابەندبوون بە کاتی دەوام، پاراستنی کەلوپەل و سەلامەتی" : "٣. پابەندبوون بە کاتی دەوام و ڕێنماییەکان"}
+                        {/* ٣. لە کاتی کارکردن مۆبایل بەکار دێنێت بۆ کار و باری خۆی؟ */}
+                        <TactileChoiceSelector
+                          questionNum="٣"
+                          label="٣. لە کاتی کارکردن مۆبایل بەکار دێنێت بۆ کار و باری خۆی؟"
                           value={ratings.disciplineRating}
+                          options={Q3_OPTIONS}
                           onChange={(val) => handleRatingChange(emp.employeeId, 'disciplineRating', val)}
                         />
 
-                        {/* ٤. نمرەی گشتی */}
-                        <StarRatingSelector
-                          label={`٤. نمرەی گشتی هەڵسەنگاندن بۆ ${emp.name}`}
+                        {/* ٤. تا چەند گرنگی دە دات بە پاک و تەمیزی و خاوێنی خۆی و شوێنەکە؟ */}
+                        <TactileChoiceSelector
+                          questionNum="٤"
+                          label="٤. تا چەند گرنگی دە دات بە پاک و تەمیزی و خاوێنی خۆی و شوێنەکە؟"
                           value={ratings.overallRating}
+                          options={Q4_OPTIONS}
                           onChange={(val) => handleRatingChange(emp.employeeId, 'overallRating', val)}
                         />
 
-                        {/* ٥. پرسیاری پێنجەم: ئایا هیچ ڕەفتارێکی بێزارکەر هەیە کە لەگەڵ شوێنەکە نەگونجێت؟ */}
+                        {/* ٥. پرسیاری پێنجەم: هیچ ڕەفتارێکی بێزارکەر یان نەگونجاو هەیە کە لەگەڵ شوێنەکە یەک ناگرێتەوە؟ */}
                         <div className={`p-3 sm:p-3.5 rounded-2xl border transition-all ${
                           ratings.hasAnnoyingBehavior === null
                             ? isDark ? 'bg-neutral-900/50 border-amber-500/30 shadow-2xs' : 'bg-amber-50/40 border-amber-200/60 shadow-2xs'
@@ -1155,7 +1281,7 @@ export function FeedbackPortal({
                         }`}>
                           <div className="flex items-center justify-between mb-2">
                             <span className={`text-xs font-black ${isDark ? 'text-neutral-200' : 'text-slate-800'}`}>
-                              ٥. ئایا هیچ ڕەفتارێکی بێزارکەر هەیە کە لەگەڵ شوێنەکە نەگونجێت؟
+                              ٥. هیچ ڕەفتارێکی بێزارکەر یان نەگونجاو هەیە کە لەگەڵ شوێنەکە یەک ناگرێتەوە؟
                             </span>
                             <span className={`text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full transition-all ${
                               ratings.hasAnnoyingBehavior === null
@@ -1164,16 +1290,16 @@ export function FeedbackPortal({
                                 ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
                                 : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold'
                             }`}>
-                              {ratings.hasAnnoyingBehavior === null ? 'وەڵام نەدراوەتەوە' : ratings.hasAnnoyingBehavior === 'yes' ? 'بەڵێ، هەیە' : 'نەخێر، نییە'}
+                              {ratings.hasAnnoyingBehavior === null ? 'وەڵام نەدراوە' : ratings.hasAnnoyingBehavior === 'yes' ? 'بەڵێ، هەیەتی' : 'نەخێر، نییەتی'}
                             </span>
                           </div>
 
-                          {/* دوو دوگمەی بەڵێ / نەخێر */}
+                          {/* دوو دوگمەی نەخێر نییەتی / بەڵێ هەیەتی */}
                           <div className="grid grid-cols-2 gap-2 mt-1">
                             <button
                               type="button"
                               onClick={() => handleAnnoyingToggle(emp.employeeId, 'no')}
-                              className={`h-10 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 border ${
+                              className={`h-11 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 border ${
                                 ratings.hasAnnoyingBehavior === 'no'
                                   ? 'bg-emerald-500 text-white border-emerald-500 shadow-md ring-2 ring-emerald-500/30'
                                   : isDark
@@ -1182,13 +1308,13 @@ export function FeedbackPortal({
                               }`}
                             >
                               <Check className="w-3.5 h-3.5" />
-                              <span>نەخێر نییە</span>
+                              <span>نەخێر نییەتی</span>
                             </button>
 
                             <button
                               type="button"
                               onClick={() => handleAnnoyingToggle(emp.employeeId, 'yes')}
-                              className={`h-10 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 border ${
+                              className={`h-11 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 border ${
                                 ratings.hasAnnoyingBehavior === 'yes'
                                   ? 'bg-rose-500 text-white border-rose-500 shadow-md ring-2 ring-rose-500/30'
                                   : isDark
@@ -1197,23 +1323,23 @@ export function FeedbackPortal({
                               }`}
                             >
                               <AlertCircle className="w-3.5 h-3.5" />
-                              <span>بەڵێ هەیە</span>
+                              <span>بەڵێ هەیەتی</span>
                             </button>
                           </div>
 
-                          {/* ئەگەر نەخێر نییە: پێویست ناکات تێبینی بنووسێ */}
+                          {/* ئەگەر نەخێر نییەتی: پێویست ناکات تێبینی بنووسێ */}
                           {ratings.hasAnnoyingBehavior === 'no' && (
                             <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-1.5">
                               <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                              <span>نەخێر نییە (پێویست ناکات تێبینی بنووسرێت).</span>
+                              <span>نەخێر نییەتی (پێویست ناکات تێبینی بنووسرێت).</span>
                             </p>
                           )}
 
-                          {/* ئەگەر بەڵێ هەیە: داوای تێبینی لێ بکات تا ٣ خاڵ */}
+                          {/* ئەگەر بەڵێ هەیەتی: داوای نووسین بە ٣ خاڵ */}
                           {ratings.hasAnnoyingBehavior === 'yes' && (
                             <div className="mt-3 pt-2.5 border-t border-rose-500/20 space-y-2">
                               <label className="block text-[11px] font-black text-rose-600 dark:text-rose-400">
-                                تکایە ڕەفتارە بێزارکەرەکە بە خاڵ بنووسە (تا ٣ خاڵ):
+                                تکایە ڕەفتارە نەگونجاوەکە بە خاڵ بنووسە (تا ٣ خاڵ):
                               </label>
 
                               {/* خاڵی ١ (پێویستە) */}
@@ -1305,7 +1431,7 @@ export function FeedbackPortal({
             </div>
 
             {/* ===================================================================== */}
-            {/* 💡 SECTION: 3 IMPROVEMENT SUGGESTIONS (داوای پێشنیاری چی ئەکرێ بۆ باشترکردن بە سێ خاڵ) */}
+            {/* 💡 SECTION: 3 IMPROVEMENT SUGGESTIONS (تێبینیت چی هەیە بۆ باشترکردنی کاروبارەکان بە ٣ خاڵ) */}
             {/* ===================================================================== */}
             <div 
               id="improvement-suggestions-section"
@@ -1319,10 +1445,10 @@ export function FeedbackPortal({
                 </div>
                 <div>
                   <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                    داوای پێشنیاری چی ئەکرێ بۆ باشتر کردن؟ (بە سێ خاڵ)
+                    تێبینیت چی هەیە بۆ باشترکردنی کاروبارەکان؟ (بە ٣ خاڵ)
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-neutral-400">
-                    تکایە پێشنیارەکانت بۆ باشترکردنی کار و ژینگەی شوێنەکە لەم ٣ خاڵەدا دیاری بکە:
+                    تکایە تێبینی و پێشنیارەکانت بۆ باشترکردنی کار و ژینگەی شوێنەکە لەم ٣ خاڵەدا دیاری بکە:
                   </p>
                 </div>
               </div>
