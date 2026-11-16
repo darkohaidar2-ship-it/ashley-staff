@@ -123,6 +123,14 @@ export const TARGET_WAREHOUSE_STAFF = [
     photoUrl: '/employees/emp-01.jpg',
   },
   {
+    employeeId: '02',
+    id: 'emp-02',
+    name: 'دارکۆ',
+    fullName: 'دارکۆ حەیدەر ( تیمی کۆگا )',
+    role: 'تیمی کۆگا' as const,
+    photoUrl: '/employees/emp-02.jpg',
+  },
+  {
     employeeId: '03',
     id: 'emp-03',
     name: 'شادیار',
@@ -161,14 +169,6 @@ export const TARGET_WAREHOUSE_STAFF = [
     fullName: 'ڕابەر محەمەد ( تیمی کۆگا )',
     role: 'تیمی کۆگا' as const,
     photoUrl: '/employees/emp-07.jpg',
-  },
-  {
-    employeeId: '08',
-    id: 'emp-08',
-    name: 'دانەر',
-    fullName: 'دانەر محەمەد ( تیمی کۆگا )',
-    role: 'تیمی کۆگا' as const,
-    photoUrl: '/employees/emp-08.jpg',
   },
   {
     employeeId: '09',
@@ -323,6 +323,16 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
   '5102': {
     pin: '5102',
     scope: 'warehouse_staff_feedback',
+    targetName: 'دارکۆ حەیدەر ( تیمی کۆگا )',
+    isSingleUse: true,
+    isUsed: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    createdBy: 'ئیدارەی ئاشڵی',
+    notes: 'کۆدی فیدباکی تایبەت بە دارکۆ حەیدەر',
+  },
+  '5103': {
+    pin: '5103',
+    scope: 'warehouse_staff_feedback',
     targetName: 'شادیار هوشیار ( سەرپەرشتیاری کارمەندان )',
     isSingleUse: true,
     isUsed: false,
@@ -330,8 +340,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە شادیار هوشیار',
   },
-  '5103': {
-    pin: '5103',
+  '5104': {
+    pin: '5104',
     scope: 'warehouse_staff_feedback',
     targetName: 'هەڤاڵ حبیب ( سەرپەرشتیاری گواستنەوە )',
     isSingleUse: true,
@@ -340,8 +350,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە هەڤاڵ حبیب',
   },
-  '5104': {
-    pin: '5104',
+  '5105': {
+    pin: '5105',
     scope: 'warehouse_staff_feedback',
     targetName: 'عیماد سەباح ( تیمی کۆگا )',
     isSingleUse: true,
@@ -350,8 +360,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە عیماد سەباح',
   },
-  '5105': {
-    pin: '5105',
+  '5106': {
+    pin: '5106',
     scope: 'warehouse_staff_feedback',
     targetName: 'کامەران عومەر ( تیمی کۆگا )',
     isSingleUse: true,
@@ -360,8 +370,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە کامەران عومەر',
   },
-  '5106': {
-    pin: '5106',
+  '5107': {
+    pin: '5107',
     scope: 'warehouse_staff_feedback',
     targetName: 'ڕابەر محەمەد ( تیمی کۆگا )',
     isSingleUse: true,
@@ -369,16 +379,6 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdAt: '2026-01-01T00:00:00.000Z',
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە ڕابەر محەمەد',
-  },
-  '5107': {
-    pin: '5107',
-    scope: 'warehouse_staff_feedback',
-    targetName: 'دانەر محەمەد ( تیمی کۆگا )',
-    isSingleUse: true,
-    isUsed: false,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    createdBy: 'ئیدارەی ئاشڵی',
-    notes: 'کۆدی فیدباکی تایبەت بە دانەر محەمەد',
   },
   '5108': {
     pin: '5108',
