@@ -869,21 +869,19 @@ export function FeedbackPortal({
             isDark ? 'border-neutral-800' : 'border-slate-100'
           }`}>
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className={`${isSlide ? 'w-16 h-16 sm:w-20 sm:h-20' : 'w-14 h-14 sm:w-16 sm:h-16'} rounded-2xl overflow-hidden bg-gradient-to-br from-amber-500/20 to-amber-600/10 border-2 border-amber-500/30 flex items-center justify-center font-black text-amber-600 dark:text-amber-400 shrink-0 shadow-sm relative group`}>
-                <span className={`${isSlide ? 'text-2xl sm:text-3xl' : 'text-xl'} font-black select-none pointer-events-none`}>
-                  {emp.name.slice(0, 1)}
-                </span>
-                {emp.photoUrl ? (
-                  <img 
-                    src={emp.photoUrl} 
-                    alt={emp.name} 
-                    loading="eager"
-                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                ) : null}
+              <div className={`${isSlide ? 'w-16 h-16 sm:w-20 sm:h-20' : 'w-14 h-14 sm:w-16 sm:h-16'} rounded-2xl overflow-hidden bg-black border-2 border-amber-500/30 flex items-center justify-center shrink-0 shadow-sm relative group`}>
+                <img 
+                  src={emp.photoUrl || '/ashley-icon.jpg'} 
+                  alt={emp.name} 
+                  loading="eager"
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    if (!target.src.includes('ashley-icon.jpg')) {
+                      target.src = '/ashley-icon.jpg';
+                    }
+                  }}
+                />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -1544,19 +1542,19 @@ export function FeedbackPortal({
                           transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                         />
                       )}
-                      <div className="w-8 h-8 rounded-xl overflow-hidden bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 flex items-center justify-center font-black text-amber-600 shrink-0 relative z-10">
-                        <span className="text-xs select-none pointer-events-none">{emp.name.slice(0, 1)}</span>
-                        {emp.photoUrl ? (
-                          <img 
-                            src={emp.photoUrl} 
-                            alt={emp.name} 
-                            loading="eager"
-                            className="absolute inset-0 w-full h-full object-cover" 
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                            }}
-                          />
-                        ) : null}
+                      <div className="w-8 h-8 rounded-xl overflow-hidden bg-black border border-amber-500/30 flex items-center justify-center shrink-0 relative z-10">
+                        <img 
+                          src={emp.photoUrl || '/ashley-icon.jpg'} 
+                          alt={emp.name} 
+                          loading="eager"
+                          className="w-full h-full object-cover" 
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            if (!target.src.includes('ashley-icon.jpg')) {
+                              target.src = '/ashley-icon.jpg';
+                            }
+                          }}
+                        />
                       </div>
                       <div className="relative z-10 min-w-0">
                         <div className="flex items-center gap-1.5">
