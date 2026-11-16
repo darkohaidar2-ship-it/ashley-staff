@@ -33,6 +33,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { compressEmployeeAvatar } from '@/lib/image-compression';
 import { useAuth } from '@/hooks/use-auth';
 import { useAppContext } from '@/context/app-provider';
 import type {
@@ -574,15 +575,20 @@ function AccountPage() {
     setIsEditing(!isEditing);
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = event => {
-        const result = event.target?.result as string;
-        setPhotoUrl(result);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressEmployeeAvatar(file, 360, 360, 0.75);
+        setPhotoUrl(compressed);
+      } catch (err) {
+        const reader = new FileReader();
+        reader.onload = event => {
+          const result = event.target?.result as string;
+          setPhotoUrl(result);
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 

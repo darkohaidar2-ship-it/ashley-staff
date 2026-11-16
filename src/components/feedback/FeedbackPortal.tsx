@@ -46,6 +46,7 @@ import {
   PinScope 
 } from '@/lib/feedback/feedback-service';
 import { useAppContext } from '@/context/app-provider';
+import { useToast } from '@/hooks/use-toast';
 import {
   getClientSubmissionIds,
   recordSubmittedPinOnClient,
@@ -141,7 +142,7 @@ const Q3_OPTIONS: FeedbackScaleOption[] = [
   { value: 5, kurdishDigit: '٥', label: 'هەرگیز بەکار ناهێنێت', shortLabel: 'هەرگیز' },
 ];
 
-// ٤. تا چەند گرنگی دە دات بە پاک و تەمیزی و خاوێنی خۆی و شوێنەکە؟
+// ٤. تا چەند گرنگی دە دات بە پاک و خاوێنی خۆی و شوێنەکە؟
 const Q4_OPTIONS: FeedbackScaleOption[] = [
   { value: 1, kurdishDigit: '١', label: 'گرنگی نادات', shortLabel: 'گرنگی نادات' },
   { value: 2, kurdishDigit: '٢', label: 'کەم', shortLabel: 'کەم' },
@@ -207,6 +208,7 @@ export function FeedbackPortal({
   onSwitchPortal,
   onBackToMobileApp
 }: FeedbackPortalProps) {
+  const { toast } = useToast();
   // Theme state
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -357,12 +359,66 @@ export function FeedbackPortal({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [highlightedEmpId, setHighlightedEmpId] = useState<string | null>(null);
 
+  // Helper: check if a specific employee is complete
+  // (Questions 1-4 selected > 0, and Q5 answered: if 'no' complete; if 'yes' point 1 required)
+  const isEmployeeComplete = (empId: string) => {
+    const r = employeeRatings[empId];
+    if (!r) return false;
+    const starsDone = (
+      r.serviceRating > 0 && 
+      r.performanceRating > 0 && 
+      r.disciplineRating > 0 && 
+      r.overallRating > 0
+    );
+    if (!starsDone) return false;
+    if (r.hasAnnoyingBehavior === 'no') return true;
+    if (r.hasAnnoyingBehavior === 'yes') {
+      return Boolean(r.annoyingPoint1 && r.annoyingPoint1.trim().length > 0);
+    }
+    return false;
+  };
+
+  // Helper: count remaining questions for an employee
+  const getRemainingQuestionsCount = (empId: string) => {
+    const r = employeeRatings[empId];
+    if (!r) return 5;
+    let count = 0;
+    if (r.serviceRating === 0) count++;
+    if (r.performanceRating === 0) count++;
+    if (r.disciplineRating === 0) count++;
+    if (r.overallRating === 0) count++;
+    if (r.hasAnnoyingBehavior === null) {
+      count++;
+    } else if (r.hasAnnoyingBehavior === 'yes' && (!r.annoyingPoint1 || !r.annoyingPoint1.trim())) {
+      count++;
+    }
+    return count;
+  };
+
   // 🪄 PowerPoint Morph Slide Mode state
   const [currentEmpIndex, setCurrentEmpIndex] = useState<number>(0);
   const [slideDirection, setSlideDirection] = useState<number>(1); // 1 = forward, -1 = backward
   const [viewMode, setViewMode] = useState<'slide' | 'grid'>('slide'); // 'slide' (PowerPoint Morph) vs 'grid' (all cards)
 
+  // 🔒 هەنگاونان بۆ کارمەندی دواتر: "تا کارمەندێک تەواو نەکەن نەچنە سەر کارمەندی تر"
   const goToNextSlide = () => {
+    if (currentEmpIndex < targetStaffList.length) {
+      const currentEmp = targetStaffList[currentEmpIndex];
+      if (!isEmployeeComplete(currentEmp.employeeId)) {
+        triggerHaptic('error');
+        playAudioChime(false);
+        setHighlightedEmpId(currentEmp.employeeId);
+        const rem = getRemainingQuestionsCount(currentEmp.employeeId);
+        toast({
+          variant: 'destructive',
+          title: '⚠️ کارمەندەکە تەواو نەکراوە',
+          description: `تکایە سەرەتا سەرجەم پرسیارەکانی ${currentEmp.name} وەڵام بدەوە (${rem} پرسیار ماوە) پێش ئەوەی بچیتە سەر کارمەندی دواتر.`
+        });
+        return;
+      }
+    }
+
+    setHighlightedEmpId(null);
     triggerHaptic('light');
     playAudioChime(true);
     setSlideDirection(1);
@@ -373,6 +429,7 @@ export function FeedbackPortal({
   };
 
   const goToPrevSlide = () => {
+    setHighlightedEmpId(null);
     triggerHaptic('light');
     playAudioChime(true);
     setSlideDirection(-1);
@@ -382,7 +439,31 @@ export function FeedbackPortal({
     }
   };
 
+  // 🔒 پشکنینی ڕێگری لە بازدانی کارمەند: ناچێتە سەر کارمەندی تر تاوەکو کارمەندی پێشوو تەواو نەبێت
   const goToSlideIndex = (index: number) => {
+    if (index > currentEmpIndex) {
+      // پشکنینی ئەوەی ئایا هیچ کارمەندێک لە پێش ئەم هەڵبژاردنەدا ماوەتەوە تەواو نەکرابێت
+      const firstIncompleteIdx = targetStaffList.findIndex(
+        (emp, i) => i < index && !isEmployeeComplete(emp.employeeId)
+      );
+      if (firstIncompleteIdx !== -1) {
+        triggerHaptic('error');
+        playAudioChime(false);
+        const incEmp = targetStaffList[firstIncompleteIdx];
+        setHighlightedEmpId(incEmp.employeeId);
+        setSlideDirection(firstIncompleteIdx > currentEmpIndex ? 1 : -1);
+        setCurrentEmpIndex(firstIncompleteIdx);
+        const rem = getRemainingQuestionsCount(incEmp.employeeId);
+        toast({
+          variant: 'destructive',
+          title: '⚠️ پێویستە ئەم کارمەندە تەواو بکرێت',
+          description: `تا هەڵسەنگاندنی ${incEmp.name} بە تەواوی پڕنەکەیتەوە (${rem} پرسیار ماوە)، ناتوانیت باز بدەیتە سەر کارمەندانی تر.`
+        });
+        return;
+      }
+    }
+
+    setHighlightedEmpId(null);
     triggerHaptic('light');
     playAudioChime(true);
     setSlideDirection(index > currentEmpIndex ? 1 : -1);
@@ -611,42 +692,6 @@ export function FeedbackPortal({
         note5: text,
       },
     }));
-  };
-
-  // Helper: check if a specific employee is complete
-  // (Questions 1-4 selected > 0, and Q5 answered: if 'no' complete; if 'yes' point 1 required)
-  const isEmployeeComplete = (empId: string) => {
-    const r = employeeRatings[empId];
-    if (!r) return false;
-    const starsDone = (
-      r.serviceRating > 0 && 
-      r.performanceRating > 0 && 
-      r.disciplineRating > 0 && 
-      r.overallRating > 0
-    );
-    if (!starsDone) return false;
-    if (r.hasAnnoyingBehavior === 'no') return true;
-    if (r.hasAnnoyingBehavior === 'yes') {
-      return Boolean(r.annoyingPoint1 && r.annoyingPoint1.trim().length > 0);
-    }
-    return false;
-  };
-
-  // Helper: count remaining questions for an employee
-  const getRemainingQuestionsCount = (empId: string) => {
-    const r = employeeRatings[empId];
-    if (!r) return 5;
-    let count = 0;
-    if (r.serviceRating === 0) count++;
-    if (r.performanceRating === 0) count++;
-    if (r.disciplineRating === 0) count++;
-    if (r.overallRating === 0) count++;
-    if (r.hasAnnoyingBehavior === null) {
-      count++;
-    } else if (r.hasAnnoyingBehavior === 'yes' && (!r.annoyingPoint1 || !r.annoyingPoint1.trim())) {
-      count++;
-    }
-    return count;
   };
 
   // Completion metrics
@@ -889,7 +934,7 @@ export function FeedbackPortal({
         id={`emp-card-${emp.employeeId}`}
         className={`rounded-3xl border transition-all duration-300 ${
           isSlide 
-            ? isDark ? 'bg-neutral-900/95 border-neutral-800 p-5 sm:p-7 shadow-2xl backdrop-blur-xl' : 'bg-white border-slate-200/95 p-5 sm:p-7 shadow-xl'
+            ? `${isHighlighted ? 'ring-4 ring-amber-500/70 border-amber-500 shadow-amber-500/20' : ''} ${isDark ? 'bg-neutral-900/95 border-neutral-800' : 'bg-white border-slate-200/95'} p-5 sm:p-7 shadow-2xl backdrop-blur-xl`
             : `p-4 sm:p-5 flex flex-col justify-between ${
                 isHighlighted
                   ? 'ring-3 ring-amber-500 border-amber-500 scale-[1.01]'
@@ -983,10 +1028,10 @@ export function FeedbackPortal({
               onChange={(val) => handleRatingChange(emp.employeeId, 'disciplineRating', val)}
             />
 
-            {/* ٤. تا چەند گرنگی دە دات بە پاک و تەمیزی و خاوێنی خۆی و شوێنەکە؟ */}
+            {/* ٤. تا چەند گرنگی دە دات بە پاک و خاوێنی خۆی و شوێنەکە؟ */}
             <TactileChoiceSelector
               questionNum="٤"
-              label="٤. تا چەند گرنگی دە دات بە پاک و تەمیزی و خاوێنی خۆی و شوێنەکە؟"
+              label="٤. تا چەند گرنگی دە دات بە پاک و خاوێنی خۆی و شوێنەکە؟"
               value={ratings.overallRating}
               options={Q4_OPTIONS}
               onChange={(val) => handleRatingChange(emp.employeeId, 'overallRating', val)}
@@ -1560,6 +1605,7 @@ export function FeedbackPortal({
                 {targetStaffList.map((emp, idx) => {
                   const isCurrent = currentEmpIndex === idx;
                   const complete = isEmployeeComplete(emp.employeeId);
+                  const isLocked = targetStaffList.some((e, i) => i < idx && !isEmployeeComplete(e.employeeId));
                   return (
                     <button
                       key={emp.employeeId}
@@ -1568,6 +1614,8 @@ export function FeedbackPortal({
                       className={`relative shrink-0 flex items-center gap-2 px-3 py-2 rounded-2xl transition-all cursor-pointer text-right group ${
                         isCurrent 
                           ? 'text-slate-950 dark:text-white font-black' 
+                          : isLocked
+                          ? 'text-slate-400 dark:text-neutral-500 opacity-60 hover:opacity-90 font-medium'
                           : 'text-slate-600 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-800/60 font-bold'
                       }`}
                     >
@@ -1596,11 +1644,16 @@ export function FeedbackPortal({
                         <div className="flex items-center gap-1.5">
                           <span className="text-[10px] font-mono text-slate-400">#{idx + 1}</span>
                           <span className="text-xs truncate max-w-[80px] sm:max-w-[100px]">{emp.name}</span>
+                          {isLocked && !complete && <Lock className="w-2.5 h-2.5 text-slate-400 shrink-0" />}
                         </div>
                         <div className="flex items-center gap-1">
                           {complete ? (
                             <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-0.5">
                               <Check className="w-2.5 h-2.5" /> تەواوە
+                            </span>
+                          ) : isLocked ? (
+                            <span className="text-[10px] text-slate-400 font-bold flex items-center gap-0.5">
+                              <Lock className="w-2.5 h-2.5" /> قفڵە
                             </span>
                           ) : (
                             <span className="text-[10px] text-amber-500 font-bold">
@@ -1620,6 +1673,8 @@ export function FeedbackPortal({
                   className={`relative shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-2xl transition-all cursor-pointer text-right ${
                     currentEmpIndex === targetStaffList.length
                       ? 'text-slate-950 dark:text-white font-black'
+                      : !areAllEmployeesComplete
+                      ? 'text-slate-400 dark:text-neutral-500 opacity-60 hover:opacity-90 font-medium'
                       : 'text-slate-600 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-800/60 font-bold'
                   }`}
                 >
@@ -1630,12 +1685,18 @@ export function FeedbackPortal({
                       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                     />
                   )}
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 flex items-center justify-center shrink-0 shadow-xs relative z-10">
-                    <Sparkles className="w-4 h-4" />
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-xs relative z-10 ${
+                    areAllEmployeesComplete 
+                      ? 'bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950' 
+                      : 'bg-slate-200 dark:bg-neutral-800 text-slate-400'
+                  }`}>
+                    {areAllEmployeesComplete ? <Sparkles className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   </div>
                   <div className="relative z-10">
                     <span className="text-xs font-black block">پێشنیارەکان</span>
-                    <span className="text-[10px] text-slate-400 block font-mono">تەواوکردن</span>
+                    <span className="text-[10px] text-slate-400 block font-mono">
+                      {areAllEmployeesComplete ? 'تەواوکردن' : 'قفڵە'}
+                    </span>
                   </div>
                 </button>
               </div>
@@ -1680,17 +1741,33 @@ export function FeedbackPortal({
                             کارمەندی {currentEmpIndex + 1} لە {targetStaffList.length}
                           </span>
                           <span className="text-[10px] text-slate-400 font-bold font-mono">
-                            {isEmployeeComplete(targetStaffList[currentEmpIndex].employeeId) ? '✓ ئەم کارمەندە تەواوە' : 'هەڵبژاردن بکە'}
+                            {isEmployeeComplete(targetStaffList[currentEmpIndex].employeeId) 
+                              ? '✓ ئەم کارمەندە تەواوە' 
+                              : `${getRemainingQuestionsCount(targetStaffList[currentEmpIndex].employeeId)} پرسیار ماوە`}
                           </span>
                         </div>
 
                         <button
                           type="button"
                           onClick={goToNextSlide}
-                          className="h-12 px-5 sm:px-7 rounded-2xl text-xs sm:text-sm font-black flex items-center gap-2 transition-all cursor-pointer active:scale-95 bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md ring-2 ring-amber-400/40"
+                          className={`h-12 px-5 sm:px-7 rounded-2xl text-xs sm:text-sm font-black flex items-center gap-2 transition-all cursor-pointer active:scale-95 shadow-md ${
+                            isEmployeeComplete(targetStaffList[currentEmpIndex].employeeId)
+                              ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white shadow-emerald-500/25 ring-2 ring-emerald-400/50'
+                              : 'bg-amber-500/90 hover:bg-amber-400 text-slate-950 shadow-amber-500/10 ring-2 ring-amber-400/40'
+                          }`}
                         >
-                          <span>{currentEmpIndex === targetStaffList.length - 1 ? 'پێشنیارەکان و کۆتایی ✦' : 'کارمەندی دواتر'}</span>
-                          <ChevronLeft className="w-4 h-4" />
+                          {isEmployeeComplete(targetStaffList[currentEmpIndex].employeeId) ? (
+                            <>
+                              <span>{currentEmpIndex === targetStaffList.length - 1 ? 'پێشنیارەکان و کۆتایی ✦' : 'کارمەندی دواتر ✓'}</span>
+                              <ChevronLeft className="w-4 h-4" />
+                            </>
+                          ) : (
+                            <>
+                              <Lock className="w-3.5 h-3.5 text-slate-950" />
+                              <span>{`کارمەندی دواتر (${getRemainingQuestionsCount(targetStaffList[currentEmpIndex].employeeId)} ماوە)`}</span>
+                              <ChevronLeft className="w-4 h-4 opacity-50" />
+                            </>
+                          )}
                         </button>
                       </div>
                     </motion.div>

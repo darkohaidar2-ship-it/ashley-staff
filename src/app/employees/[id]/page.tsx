@@ -49,6 +49,7 @@ import { formatTime24H } from '@/lib/export-utils';
 import { resolveEmployeeDayAttendance, getCheckInStatus, getCheckOutStatus, getSavedEmployeeShiftOverride } from '@/lib/attendance-helpers';
 import { getEmployeeShiftConfig, saveEmployeeShiftSettings, type EmployeeShiftConfig } from '@/lib/attendance/shift-service';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
+import { compressEmployeeAvatar } from '@/lib/image-compression';
 import * as XLSX from 'xlsx';
 
 const ASHLEY_DEFAULT_EMPLOYEES = ASHLEY_OFFICIAL_EMPLOYEES;
@@ -383,7 +384,7 @@ function EmployeeDetailPage() {
     }
   };
 
-  // Direct Photo Upload Handler
+  // Direct Photo Upload Handler (Ultra-lightweight compressed avatar)
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedEmployee) return;
@@ -393,17 +394,21 @@ function EmployeeDetailPage() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const base64Url = ev.target?.result as string;
-      if (!base64Url) return;
+    try {
+      toast({
+        title: '⏳ کەمکردنەوەی قەبارەی وێنە...',
+        description: 'وێنەکە زۆر سووک دەکرێت بۆ ئەوەی بە خێرایی و هەمیشەیی بمێنێتەوە.'
+      });
 
-      setEditPhotoUrl(base64Url);
+      // Compress to ultra-light ~20KB-35KB JPEG (360x360)
+      const compressedBase64 = await compressEmployeeAvatar(file, 360, 360, 0.75);
+
+      setEditPhotoUrl(compressedBase64);
       const updated = {
         ...selectedEmployee,
-        photoUrl: base64Url,
+        photoUrl: compressedBase64,
       };
-      setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? (updated as any) : e));
+      setEmployees(prev => prev.map(emp => emp.id === selectedEmployee.id ? (updated as any) : emp));
 
       try {
         await fetch('/api/attendance/profile', {
@@ -411,21 +416,26 @@ function EmployeeDetailPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: selectedEmployee.id,
-            photoUrl: base64Url,
+            photoUrl: compressedBase64,
           }),
         });
         toast({
-          title: '📸 وێنەی نوێ جێگیر کرا',
-          description: 'وێنەی کارمەند بە سەرکەوتوویی نوێکرایەوە و لە تەواوی سیستەمدا چەسپێنرا.'
+          title: '📸 وێنەی سووککراو جێگیر کرا',
+          description: 'وێنەی کارمەند بە سووکی و سەرکەوتوویی لە تەواوی سیستەمدا چەسپێنرا.'
         });
       } catch (err) {
         toast({
           title: '📸 وێنە لە بیرگە تۆمارکرا',
-          description: 'وێنەکە لە ئامێرەکەت جێگیر کرا.'
+          description: 'وێنە سووککراوەکە لە ئامێرەکەت جێگیر کرا.'
         });
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (compressErr) {
+      toast({
+        variant: 'destructive',
+        title: 'هەڵە',
+        description: 'نەتوانرا قەبارەی وێنەکە کەمبکرێتەوە.'
+      });
+    }
   };
 
   // Toggle Resigned / Active

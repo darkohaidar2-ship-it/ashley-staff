@@ -570,7 +570,7 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
         fullMark: 5,
       },
       {
-        subject: 'پاکوخاوێنی و تەمیزی',
+        subject: 'پاک و خاوێنی',
         value: storeAnalytics.avgOverall || metrics.avgOverall,
         fullMark: 5,
       },
@@ -740,7 +740,7 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
       employeeHeaders.push(`${emp.name} - ١. ئەدا و ڕەفتار (ڕێز)`);
       employeeHeaders.push(`${emp.name} - ٢. هاوکاری لە کاتی پێویست`);
       employeeHeaders.push(`${emp.name} - ٣. پابەندبوون (مۆبایل)`);
-      employeeHeaders.push(`${emp.name} - ٤. پاکوخاوێنی و تەمیزی`);
+      employeeHeaders.push(`${emp.name} - ٤. پاک و خاوێنی`);
       employeeHeaders.push(`${emp.name} - ٥. ڕەفتاری نەگونجاو`);
       employeeHeaders.push(`${emp.name} - خاڵی ١`);
       employeeHeaders.push(`${emp.name} - خاڵی ٢`);
