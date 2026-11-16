@@ -300,8 +300,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'سیستەمی ئاشڵی',
     notes: 'کۆدی فیدباکی بەڕێوەبەر (0000 - 4999)',
   },
-  '5555': {
-    pin: '5555',
+  '6050': {
+    pin: '6050',
     scope: 'warehouse_staff_feedback',
     targetName: 'کۆدی تاقیکردنەوە (Test PIN)',
     isSingleUse: false,
@@ -310,8 +310,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'سیستەمی ئاشڵی',
     notes: 'کۆدی تاقیکردنەوەی فیدباکی کۆگا (5000 - 7500) - فرەبەکارهێنان',
   },
-  '5101': {
-    pin: '5101',
+  '5382': {
+    pin: '5382',
     scope: 'warehouse_staff_feedback',
     targetName: 'سه هەند مەریوان ( سەرپەرشتیاری کۆگا )',
     isSingleUse: true,
@@ -320,8 +320,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە سه هەند مەریوان',
   },
-  '5102': {
-    pin: '5102',
+  '6741': {
+    pin: '6741',
     scope: 'warehouse_staff_feedback',
     targetName: 'دارکۆ حەیدەر ( تیمی کۆگا )',
     isSingleUse: true,
@@ -330,8 +330,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە دارکۆ حەیدەر',
   },
-  '5103': {
-    pin: '5103',
+  '5916': {
+    pin: '5916',
     scope: 'warehouse_staff_feedback',
     targetName: 'شادیار هوشیار ( سەرپەرشتیاری کارمەندان )',
     isSingleUse: true,
@@ -340,8 +340,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە شادیار هوشیار',
   },
-  '5104': {
-    pin: '5104',
+  '7204': {
+    pin: '7204',
     scope: 'warehouse_staff_feedback',
     targetName: 'هەڤاڵ حبیب ( سەرپەرشتیاری گواستنەوە )',
     isSingleUse: true,
@@ -350,8 +350,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە هەڤاڵ حبیب',
   },
-  '5105': {
-    pin: '5105',
+  '6158': {
+    pin: '6158',
     scope: 'warehouse_staff_feedback',
     targetName: 'عیماد سەباح ( تیمی کۆگا )',
     isSingleUse: true,
@@ -360,8 +360,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە عیماد سەباح',
   },
-  '5106': {
-    pin: '5106',
+  '5429': {
+    pin: '5429',
     scope: 'warehouse_staff_feedback',
     targetName: 'کامەران عومەر ( تیمی کۆگا )',
     isSingleUse: true,
@@ -370,8 +370,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە کامەران عومەر',
   },
-  '5107': {
-    pin: '5107',
+  '6893': {
+    pin: '6893',
     scope: 'warehouse_staff_feedback',
     targetName: 'ڕابەر محەمەد ( تیمی کۆگا )',
     isSingleUse: true,
@@ -380,8 +380,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە ڕابەر محەمەد',
   },
-  '5108': {
-    pin: '5108',
+  '5730': {
+    pin: '5730',
     scope: 'warehouse_staff_feedback',
     targetName: 'ڕێبین سەباح ( تیمی کۆگا )',
     isSingleUse: true,
@@ -390,8 +390,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە ڕێبین سەباح',
   },
-  '5109': {
-    pin: '5109',
+  '7145': {
+    pin: '7145',
     scope: 'warehouse_staff_feedback',
     targetName: 'بەهرەمەند ڕزگار ( تیمی کۆگا )',
     isSingleUse: true,
@@ -400,8 +400,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە بەهرەمەند ڕزگار',
   },
-  '5110': {
-    pin: '5110',
+  '6387': {
+    pin: '6387',
     scope: 'warehouse_staff_feedback',
     targetName: 'شادومان یادگار ( تیمی کۆگا )',
     isSingleUse: true,
@@ -410,8 +410,8 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'ئیدارەی ئاشڵی',
     notes: 'کۆدی فیدباکی تایبەت بە شادومان یادگار',
   },
-  '5111': {
-    pin: '5111',
+  '5662': {
+    pin: '5662',
     scope: 'warehouse_staff_feedback',
     targetName: 'سەروەت قادر ( تیمی کۆگا )',
     isSingleUse: true,
