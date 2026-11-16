@@ -69,10 +69,12 @@ import {
   FeedbackSubmission, 
   TARGET_SALES_CASHIER_STAFF,
   TARGET_WAREHOUSE_STAFF,
+  getSyncedFeedbackStaffList,
   PinScope,
   generatePinForScope,
   determinePinScope
 } from '@/lib/feedback/feedback-service';
+import { useAppContext } from '@/context/app-provider';
 import { OfficialPrintHeader, OfficialPrintSignatures } from '@/components/reports/OfficialPrintHeader';
 
 export interface AdminFeedbackDashboardProps {
@@ -95,8 +97,11 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
     }
   }, [initialStaffCategory]);
 
+  const { employees } = useAppContext();
   const isWarehouse = staffCategory === 'warehouse';
-  const currentTargetStaff = isWarehouse ? TARGET_WAREHOUSE_STAFF : TARGET_SALES_CASHIER_STAFF;
+  const currentTargetStaff = useMemo(() => {
+    return getSyncedFeedbackStaffList(isWarehouse ? 'warehouse' : 'sales', employees);
+  }, [isWarehouse, employees]);
 
   const [pins, setPins] = useState<Record<string, FeedbackPin>>({});
   const [submissions, setSubmissions] = useState<FeedbackSubmission[]>([]);
@@ -818,7 +823,7 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
             <Users className="w-4 h-4 text-emerald-600" />
             <span>فیدباکی فرۆشیار و کاشێر (٧٥٠٠ - ٩٠٠٠)</span>
             <span className="px-2 py-0.5 rounded-md bg-black/10 text-[10px] font-mono font-bold">
-              {TARGET_SALES_CASHIER_STAFF.length} کارمەند
+              {getSyncedFeedbackStaffList('sales', employees).length} کارمەند
             </span>
           </button>
 
@@ -834,7 +839,7 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
             <Boxes className="w-4 h-4 text-blue-600" />
             <span>فیدباکی کارمەندانی کۆگا (٥٠٠٠ - ٧٥٠٠)</span>
             <span className="px-2 py-0.5 rounded-md bg-black/10 text-[10px] font-mono font-bold">
-              {TARGET_WAREHOUSE_STAFF.length} کارمەند
+              {getSyncedFeedbackStaffList('warehouse', employees).length} کارمەند
             </span>
           </button>
         </div>

@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase/client';
 import { logger } from '@/lib/logger';
 import { getBaghdadNow } from '@/lib/telegram/telegram-service';
+import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
+import type { Employee } from '@/lib/types';
 import {
   MANAGER_EVALUATION_ITEMS,
   ManagerEvaluationSubmission,
@@ -48,165 +50,176 @@ export interface EmployeeFeedbackRating {
   note5?: string;             // تێبینی تایبەت بە پرسیاری پێنجەم
 }
 
-// 🎯 The official list of Salespersons and Cashiers to be evaluated
-export const TARGET_SALES_CASHIER_STAFF = [
-  {
-    employeeId: '3743',
-    id: 'emp-3743',
-    name: 'ئارجان',
-    fullName: 'ئارجان عەلی ( فرۆشیار )',
-    role: 'فرۆشیار' as const,
-    photoUrl: '/employees/emp-3743.jpg',
-  },
-  {
-    employeeId: '5908',
-    id: 'emp-5908',
-    name: 'ئەڤین',
-    fullName: 'ئەڤین ئەحمەد ( فرۆشیار )',
-    role: 'فرۆشیار' as const,
-    photoUrl: '/employees/emp-5908.jpg',
-  },
-  {
-    employeeId: '4997',
-    id: 'emp-4997',
-    name: 'بڕوا',
-    fullName: 'بڕوا عوسمان ( فرۆشیار )',
-    role: 'فرۆشیار' as const,
-    photoUrl: '/employees/emp-4997.jpg',
-  },
-  {
-    employeeId: '7347',
-    id: 'emp-7347',
-    name: 'شاکار',
-    fullName: 'شاکار جەمال ( کاشێر )',
-    role: 'کاشێر' as const,
-    photoUrl: '/employees/emp-7347.jpg',
-  },
-  {
-    employeeId: '7037',
-    id: 'emp-7037',
-    name: 'شنیا',
-    fullName: 'شنیا کامیل ( فرۆشیار )',
-    role: 'فرۆشیار' as const,
-    photoUrl: '/employees/emp-7037.jpg',
-  },
-  {
-    employeeId: '4973',
-    id: 'emp-4973',
-    name: 'مامۆستا بنار',
-    fullName: 'مامۆستا بنار ( کاشێر و ئیدارە )',
-    role: 'کاشێر' as const,
-    photoUrl: '/employees/emp-4973.jpg',
-  },
-  {
-    employeeId: '4150',
-    id: 'emp-4150',
-    name: 'نگین',
-    fullName: 'نگین مەحمود ( فرۆشیار )',
-    role: 'فرۆشیار' as const,
-    photoUrl: '/employees/emp-4150.jpg',
-  },
-  {
-    employeeId: '6312',
-    id: 'emp-6312',
-    name: 'پەیڤی',
-    fullName: 'پەیڤی سەردار ( فرۆشیار )',
-    role: 'فرۆشیار' as const,
-    photoUrl: '/employees/emp-6312.jpg',
-  },
-];
+export interface FeedbackTargetEmployee {
+  employeeId: string;
+  id: string;
+  name: string;
+  fullName: string;
+  role: string;
+  photoUrl: string;
+}
 
-// 📦 The official list of Warehouse Staff to be evaluated (کارمەندانی کۆگا)
-export const TARGET_WAREHOUSE_STAFF = [
-  {
-    employeeId: '01',
-    id: 'emp-01',
-    name: 'سه هەند',
-    fullName: 'سه هەند مەریوان حەمەسەعید ( سەرپەرشتیاری کۆگا )',
-    role: 'سەرپەرشتیاری کۆگا' as const,
-    photoUrl: '/employees/emp-01.jpg',
-  },
-  {
-    employeeId: '02',
-    id: 'emp-02',
-    name: 'دارکۆ',
-    fullName: 'دارکۆ حەیدەر حسێن ( تیمی کۆگا )',
-    role: 'تیمی کۆگا' as const,
-    photoUrl: '/employees/emp-02.jpg',
-  },
-  {
-    employeeId: '03',
-    id: 'emp-03',
-    name: 'شادیار',
-    fullName: 'شادیار هوشیار ( سەرپەرشتیاری کارمەندان )',
-    role: 'سەرپەرشتیاری کارمەندان' as const,
-    photoUrl: '/employees/emp-03.jpg',
-  },
-  {
-    employeeId: '04',
-    id: 'emp-04',
-    name: 'هەڤاڵ',
-    fullName: 'هەڤاڵ حبیب حەمەڕەزا ( سەرپەرشتیاری گواستنەوە )',
-    role: 'سەرپەرشتیاری گواستنەوە' as const,
-    photoUrl: '/employees/emp-04.jpg',
-  },
-  {
-    employeeId: '05',
-    id: 'emp-05',
-    name: 'عیماد',
-    fullName: 'عیماد سەباح نوری ( تیمی کۆگا )',
-    role: 'تیمی کۆگا' as const,
-    photoUrl: '/employees/emp-05.jpg',
-  },
-  {
-    employeeId: '06',
-    id: 'emp-06',
-    name: 'کامەران',
-    fullName: 'کامەران عومەر ڕووئوف ( تیمی کۆگا )',
-    role: 'تیمی کۆگا' as const,
-    photoUrl: '/employees/emp-06.jpg',
-  },
-  {
-    employeeId: '07',
-    id: 'emp-07',
-    name: 'ڕابەر',
-    fullName: 'ڕابەر محەمەد مەحمود ( تیمی کۆگا )',
-    role: 'تیمی کۆگا' as const,
-    photoUrl: '/employees/emp-07.jpg',
-  },
-  {
-    employeeId: '09',
-    id: 'emp-09',
-    name: 'ڕێبین',
-    fullName: 'ڕێبین سەباح نوری ( تیمی کۆگا )',
-    role: 'تیمی کۆگا' as const,
-    photoUrl: '/employees/emp-09.jpg',
-  },
-  {
-    employeeId: '10',
-    id: 'emp-10',
-    name: 'بەهرەمەند',
-    fullName: 'بەهرەمەند ڕزگار عزیز ( تیمی کۆگا )',
-    role: 'تیمی کۆگا' as const,
-    photoUrl: '/employees/emp-10.jpg',
-  },
-  {
-    employeeId: '11',
-    id: 'emp-11',
-    name: 'شادومان',
-    fullName: 'شادومان یادگار رحیم ( تیمی کۆگا )',
-    role: 'تیمی کۆگا' as const,
-    photoUrl: '/employees/emp-11.jpg',
-  },
-  {
-    employeeId: '12',
-    id: 'emp-12',
-    name: 'سەروەت',
-    fullName: 'سەروەت قادر ( تیمی کۆگا )',
-    role: 'تیمی کۆگا' as const,
-    photoUrl: '/employees/emp-12.jpg',
-  },
-];
+export function cleanShortEmployeeName(name: string): string {
+  if (!name) return '';
+  return name.replace(/\s*\([^)]*\)\s*/g, '').trim();
+}
+
+/**
+ * 🔄 LIVE SYNCHRONIZATION ENGINE:
+ * Synchronizes feedback portal employee list, names, positions (پۆست), and photos
+ * directly from the Employees Section (`/employees`, `ASHLEY_OFFICIAL_EMPLOYEES`, and live context/cache).
+ */
+export function getSyncedFeedbackStaffList(
+  scope: PinScope | 'warehouse' | 'sales',
+  liveEmployees?: Employee[]
+): FeedbackTargetEmployee[] {
+  const map = new Map<string, any>();
+
+  // 1. Baseline authoritative official employees registry
+  ASHLEY_OFFICIAL_EMPLOYEES.forEach((emp) => {
+    const idKey = (emp.id || '').toLowerCase();
+    map.set(idKey, { ...emp });
+    if (emp.employeeId) {
+      map.set(emp.employeeId.toLowerCase(), { ...emp });
+    }
+  });
+
+  // 2. Overlay client localStorage cache (where /employees page saves live edits)
+  if (typeof window !== 'undefined') {
+    try {
+      const cached = localStorage.getItem('ashley_sb_employees') || localStorage.getItem('ashley_local_employees');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          parsed.forEach((emp: any) => {
+            if (!emp || !emp.id) return;
+            const key = emp.id.toLowerCase();
+            const existing = map.get(key) || (emp.employeeId ? map.get(emp.employeeId.toLowerCase()) : undefined);
+            map.set(key, { ...(existing || {}), ...emp });
+          });
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Overlay live context employees from AppContext
+  if (Array.isArray(liveEmployees) && liveEmployees.length > 0) {
+    liveEmployees.forEach((emp: any) => {
+      if (!emp || !emp.id) return;
+      const key = emp.id.toLowerCase();
+      const existing = map.get(key) || (emp.employeeId ? map.get(emp.employeeId.toLowerCase()) : undefined);
+      map.set(key, { ...(existing || {}), ...emp });
+    });
+  }
+
+  // 4. Extract unique employees by ID
+  const seen = new Set<string>();
+  const allEmployees: any[] = [];
+  map.forEach((emp) => {
+    const normId = (emp.id || '').toLowerCase();
+    if (!seen.has(normId)) {
+      seen.add(normId);
+      allEmployees.push(emp);
+    }
+  });
+
+  const isWarehouse = scope === 'warehouse_staff_feedback' || scope === 'warehouse';
+
+  if (isWarehouse) {
+    // 📦 Warehouse Staff:
+    // Exclude: resigned employees (status === 'resigned' or isActive === false or emp-08 / Daner who resigned)
+    // Exclude: Super manager (emp-13 / fe2ad0d3-4d9d-48f8-8cbb-51dc705678e3 / Walid)
+    // Include: emp-01 to emp-12 (except 08), emp-02 (Darko), or employees whose role contains warehouse/transport/supervisor
+    const warehouseList = allEmployees.filter((emp) => {
+      const id = (emp.id || '').toLowerCase();
+      const numId = (emp.employeeId || '').replace(/[^\d]/g, '');
+      const role = (emp.role || '').toLowerCase();
+
+      // Explicit exclusions
+      if (id === 'emp-08' || numId === '08' || numId === '8') return false; // Daner resigned
+      if (id === 'emp-13' || numId === '13' || id.includes('fe2ad0d3')) return false; // Walid (Super Manager)
+      if (emp.status === 'resigned' || emp.isActive === false) return false;
+
+      // Explicit warehouse inclusions
+      if (id === 'emp-02' || numId === '02' || numId === '2') return true; // Darko Haidar
+      const isNumInRange = parseInt(numId, 10) >= 1 && parseInt(numId, 10) <= 12;
+      const isWarehouseRole = role.includes('کۆگا') || role.includes('گواستنەوە') || role.includes('سەرپەرشتیار') || role.includes('warehouse') || role.includes('supervisor') || role.includes('employee');
+
+      return isNumInRange || isWarehouseRole;
+    });
+
+    warehouseList.sort((a, b) => {
+      const idA = parseInt((a.employeeId || '999').replace(/[^\d]/g, ''), 10);
+      const idB = parseInt((b.employeeId || '999').replace(/[^\d]/g, ''), 10);
+      return idA - idB;
+    });
+
+    return warehouseList.map((emp) => {
+      const shortName = cleanShortEmployeeName(emp.name) || cleanShortEmployeeName(emp.fullName3Part) || 'کارمەند';
+      const fullName = emp.fullName3Part || emp.name;
+      const roleDisplay = emp.id === 'emp-02' ? 'تیمی کۆگا' : (emp.role || 'تیمی کۆگا');
+      const photo = emp.photoUrl || (emp as any).photo;
+      const photoUrl = (photo && typeof photo === 'string' && photo.trim().length > 0) ? photo : `/employees/${emp.id}.jpg`;
+
+      return {
+        employeeId: emp.employeeId || emp.id.replace('emp-', ''),
+        id: emp.id,
+        name: shortName,
+        fullName: fullName.includes('(') ? fullName : `${fullName} ( ${roleDisplay} )`,
+        role: roleDisplay,
+        photoUrl,
+      };
+    });
+  } else {
+    // 🎯 Sales & Cashier Staff:
+    // Exclude resigned employees
+    // Include emp-3743, 5908, 4997, 7347, 7037, 4973, 4150, 6312 or roles 'فرۆشیار', 'کاشێر', 'sales', 'cashier'
+    const salesList = allEmployees.filter((emp) => {
+      const id = (emp.id || '').toLowerCase();
+      const numId = (emp.employeeId || '').replace(/[^\d]/g, '');
+      const role = (emp.role || '').toLowerCase();
+
+      if (emp.status === 'resigned' || emp.isActive === false) return false;
+      if (id === 'emp-08' || numId === '08' || id === 'emp-13' || numId === '13') return false;
+
+      const isKnownSalesId = ['3743', '5908', '4997', '7347', '7037', '4973', '4150', '6312'].includes(numId);
+      const isSalesRole = role.includes('فرۆشیار') || role.includes('کاشێر') || role.includes('ئیدارە') || role.includes('sales') || role.includes('cashier');
+
+      return isKnownSalesId || isSalesRole;
+    });
+
+    const order = ['3743', '5908', '4997', '7347', '7037', '4973', '4150', '6312'];
+    salesList.sort((a, b) => {
+      const idxA = order.indexOf((a.employeeId || '').replace(/[^\d]/g, ''));
+      const idxB = order.indexOf((b.employeeId || '').replace(/[^\d]/g, ''));
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return (a.employeeId || '').localeCompare(b.employeeId || '');
+    });
+
+    return salesList.map((emp) => {
+      const shortName = cleanShortEmployeeName(emp.name) || cleanShortEmployeeName(emp.fullName3Part) || 'کارمەند';
+      const fullName = emp.fullName3Part || emp.name;
+      const roleDisplay = emp.role || 'فرۆشیار';
+      const photo = emp.photoUrl || (emp as any).photo;
+      const photoUrl = (photo && typeof photo === 'string' && photo.trim().length > 0) ? photo : `/employees/${emp.id}.jpg`;
+
+      return {
+        employeeId: emp.employeeId || emp.id.replace('emp-', ''),
+        id: emp.id,
+        name: shortName,
+        fullName: fullName.includes('(') ? fullName : `${fullName} ( ${roleDisplay} )`,
+        role: roleDisplay,
+        photoUrl,
+      };
+    });
+  }
+}
+
+// 🎯 Authoritative synced defaults (evaluated dynamically)
+export const TARGET_SALES_CASHIER_STAFF: FeedbackTargetEmployee[] = getSyncedFeedbackStaffList('sales');
+export const TARGET_WAREHOUSE_STAFF: FeedbackTargetEmployee[] = getSyncedFeedbackStaffList('warehouse');
 
 export interface FeedbackSubmission {
   id: string;

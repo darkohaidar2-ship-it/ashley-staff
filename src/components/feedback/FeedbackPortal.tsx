@@ -2,7 +2,7 @@
 
 import { ManagerEvaluationForm } from '@/components/feedback/ManagerEvaluationForm';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { 
   Building2, 
@@ -40,9 +40,12 @@ import { triggerHaptic } from '@/lib/offline-sync-manager';
 import { 
   TARGET_SALES_CASHIER_STAFF, 
   TARGET_WAREHOUSE_STAFF, 
+  getSyncedFeedbackStaffList,
+  FeedbackTargetEmployee,
   determinePinScope,
   PinScope 
 } from '@/lib/feedback/feedback-service';
+import { useAppContext } from '@/context/app-provider';
 import {
   getClientSubmissionIds,
   recordSubmittedPinOnClient,
@@ -267,12 +270,17 @@ export function FeedbackPortal({
   // Evaluator Name (optional)
   const [respondentName, setRespondentName] = useState<string>('');
 
+  // 🔄 LIVE SYNCHRONIZATION WITH EMPLOYEES SECTION (سایجیک بە بەشی کارمەندان)
+  const { employees } = useAppContext();
+
   // Dynamic Staff Group Detection
   const isWarehouse = 
     activeScope === 'warehouse_staff_feedback' || 
     (Boolean(pin) && /^\d+$/.test(pin) && parseInt(pin, 10) >= 5000 && parseInt(pin, 10) <= 7500);
 
-  const targetStaffList = isWarehouse ? TARGET_WAREHOUSE_STAFF : TARGET_SALES_CASHIER_STAFF;
+  const targetStaffList: FeedbackTargetEmployee[] = useMemo(() => {
+    return getSyncedFeedbackStaffList(isWarehouse ? 'warehouse' : 'sales', employees);
+  }, [isWarehouse, employees]);
 
   // 🌟 Employee Ratings: ALL 4 STARS START AT 0 (UNSELECTED) + Q5 BEHAVIOR CHECK
   // "پرسیاری پێنچەم لە وێنەکە کە ناردوومە نووسیوومە: ئایا هیچ ڕەفتارێکی بێزار کەر هەیە لەگەڵ شوێنەکە نەگونجێت؟"
@@ -290,7 +298,8 @@ export function FeedbackPortal({
     note5?: string;
   }>>(() => {
     const initial: any = {};
-    [...TARGET_SALES_CASHIER_STAFF, ...TARGET_WAREHOUSE_STAFF].forEach(emp => {
+    const allKnown = [...getSyncedFeedbackStaffList('sales'), ...getSyncedFeedbackStaffList('warehouse')];
+    allKnown.forEach(emp => {
       initial[emp.employeeId] = {
         serviceRating: 0,
         performanceRating: 0,
@@ -307,6 +316,33 @@ export function FeedbackPortal({
     });
     return initial;
   });
+
+  // Keep ratings record synchronized with any dynamic additions to targetStaffList
+  useEffect(() => {
+    setEmployeeRatings((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      targetStaffList.forEach((emp) => {
+        if (!next[emp.employeeId]) {
+          next[emp.employeeId] = {
+            serviceRating: 0,
+            performanceRating: 0,
+            disciplineRating: 0,
+            overallRating: 0,
+            hasAnnoyingBehavior: null,
+            annoyingPoint1: '',
+            annoyingPoint2: '',
+            annoyingPoint3: '',
+            comment: '',
+            teamworkRating: 0,
+            note5: '',
+          };
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [targetStaffList]);
 
   // 💡 داوای پێشنیاری چی ئەکرێ بۆ باشتر کردن: بە سێ خاڵ
   const [improvementPoint1, setImprovementPoint1] = useState<string>('');
