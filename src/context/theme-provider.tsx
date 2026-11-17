@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { safeStorage } from '@/lib/safe-storage';
 
 export type ErpTheme = 'classic-nav' | 'modern-bc' | 'ibm-carbon' | 'fluent-win11';
 
@@ -76,7 +77,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
-    const saved = localStorage.getItem('ashley_erp_theme') as ErpTheme;
+    const saved = safeStorage.getItem('ashley_erp_theme') as ErpTheme;
     if (saved && ERP_THEMES.some(t => t.id === saved)) {
       setThemeState(saved);
       document.documentElement.setAttribute('data-theme', saved);
@@ -87,7 +88,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = (newTheme: ErpTheme) => {
     setThemeState(newTheme);
-    localStorage.setItem('ashley_erp_theme', newTheme);
+    safeStorage.setItem('ashley_erp_theme', newTheme);
     document.documentElement.setAttribute('data-theme', newTheme);
   };
 

@@ -46,6 +46,7 @@ import {
   PinScope 
 } from '@/lib/feedback/feedback-service';
 import { useAppContext } from '@/context/app-provider';
+import { safeStorage } from '@/lib/safe-storage';
 import { useToast } from '@/hooks/use-toast';
 import {
   getClientSubmissionIds,
@@ -211,10 +212,8 @@ export function FeedbackPortal({
   const { toast } = useToast();
   // Theme state
   const [isDark, setIsDark] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('ashley_theme');
-      if (saved) return saved === 'dark';
-    }
+    const saved = safeStorage.getItem('ashley_theme');
+    if (saved) return saved === 'dark';
     return initialDark;
   });
 
@@ -222,14 +221,16 @@ export function FeedbackPortal({
     triggerHaptic('light');
     const next = !isDark;
     setIsDark(next);
+    safeStorage.setItem('ashley_theme', next ? 'dark' : 'light');
     if (typeof window !== 'undefined') {
-      localStorage.setItem('ashley_theme', next ? 'dark' : 'light');
-      if (next) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-      window.dispatchEvent(new CustomEvent('ashley-theme-change', { detail: { isDark: next } }));
+      try {
+        if (next) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+        window.dispatchEvent(new CustomEvent('ashley-theme-change', { detail: { isDark: next } }));
+      } catch {}
     }
   };
 
@@ -420,9 +421,11 @@ export function FeedbackPortal({
     playAudioChime(true);
     setSlideDirection(1);
     setCurrentEmpIndex((prev) => Math.min(prev + 1, targetStaffList.length));
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 100, behavior: 'smooth' });
-    }
+    try {
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 100, behavior: 'smooth' });
+      }
+    } catch {}
   };
 
   const goToPrevSlide = () => {
@@ -431,9 +434,11 @@ export function FeedbackPortal({
     playAudioChime(true);
     setSlideDirection(-1);
     setCurrentEmpIndex((prev) => Math.max(prev - 1, 0));
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 100, behavior: 'smooth' });
-    }
+    try {
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 100, behavior: 'smooth' });
+      }
+    } catch {}
   };
 
   // 🔒 پشکنینی ڕێگری لە بازدانی کارمەند: ناچێتە سەر کارمەندی تر تاوەکو کارمەندی پێشوو تەواو نەبێت
@@ -447,15 +452,17 @@ export function FeedbackPortal({
         triggerHaptic('error');
         playAudioChime(false);
         const incEmp = targetStaffList[firstIncompleteIdx];
-        setHighlightedEmpId(incEmp.employeeId);
-        setSlideDirection(firstIncompleteIdx > currentEmpIndex ? 1 : -1);
-        setCurrentEmpIndex(firstIncompleteIdx);
-        const rem = getRemainingQuestionsCount(incEmp.employeeId);
-        toast({
-          variant: 'destructive',
-          title: '⚠️ پێویستە ئەم کارمەندە تەواو بکرێت',
-          description: `تا هەڵسەنگاندنی ${incEmp.name} بە تەواوی پڕنەکەیتەوە (${rem} پرسیار ماوە)، ناتوانیت باز بدەیتە سەر کارمەندانی تر.`
-        });
+        if (incEmp) {
+          setHighlightedEmpId(incEmp.employeeId);
+          setSlideDirection(firstIncompleteIdx > currentEmpIndex ? 1 : -1);
+          setCurrentEmpIndex(firstIncompleteIdx);
+          const rem = getRemainingQuestionsCount(incEmp.employeeId);
+          toast({
+            variant: 'destructive',
+            title: '⚠️ پێویستە ئەم کارمەندە تەواو بکرێت',
+            description: `تا هەڵسەنگاندنی ${incEmp.name} بە تەواوی پڕنەکەیتەوە (${rem} پرسیار ماوە)، ناتوانیت باز بدەیتە سەر کارمەندانی تر.`
+          });
+        }
         return;
       }
     }
@@ -465,15 +472,17 @@ export function FeedbackPortal({
     playAudioChime(true);
     setSlideDirection(index > currentEmpIndex ? 1 : -1);
     setCurrentEmpIndex(index);
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 100, behavior: 'smooth' });
-    }
+    try {
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 100, behavior: 'smooth' });
+      }
+    } catch {}
   };
 
   // Auto-verify if initialPin is provided via URL
   useEffect(() => {
     if (initialPin && /^\d{4}$/.test(initialPin)) {
-      handleVerifyPin(initialPin);
+      handleVerifyPin(initialPin, true);
     }
   }, [initialPin]);
 
@@ -505,12 +514,16 @@ export function FeedbackPortal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [step, pin]);
 
-  // Audio Chime helper
+  // Audio Chime helper (Safe for iOS WebKit & user gesture policies)
   const playAudioChime = (success: boolean) => {
     try {
+      if (typeof window === 'undefined') return;
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
@@ -520,17 +533,17 @@ export function FeedbackPortal({
       if (success) {
         osc.frequency.setValueAtTime(587.33, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
         osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.35);
+        osc.stop(ctx.currentTime + 0.3);
       } else {
         osc.frequency.setValueAtTime(300, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.2);
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
         osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.25);
+        osc.stop(ctx.currentTime + 0.2);
       }
     } catch {
       // AudioCtx gesture policy
@@ -538,13 +551,15 @@ export function FeedbackPortal({
   };
 
   // 1. PIN Verification
-  const handleVerifyPin = async (pinCandidate?: string) => {
+  const handleVerifyPin = async (pinCandidate?: string, isAutoVerify: boolean = false) => {
     const pinToTest = (pinCandidate || pin).trim();
     if (!pinToTest || !/^\d{4}$/.test(pinToTest)) {
       setPinAlreadySubmitted(false);
       setPinError('تکایە کۆدی چوار ژمارەیی بنووسە.');
-      triggerHaptic('error');
-      playAudioChime(false);
+      if (!isAutoVerify) {
+        triggerHaptic('error');
+        playAudioChime(false);
+      }
       return;
     }
 
@@ -571,16 +586,20 @@ export function FeedbackPortal({
 
         // 📝 If this is a Manager Evaluation PIN (0000 - 4999), open confidential Manager Evaluation Form
         if (data.scope === 'manager_feedback' || scopeFound === 'manager_feedback') {
-          triggerHaptic('success');
-          playAudioChime(true);
+          if (!isAutoVerify) {
+            triggerHaptic('success');
+            playAudioChime(true);
+          }
           setManagerPin(pinToTest);
           setStep('manager_evaluation');
           return;
         }
 
         setVerifiedPinData(data.pinData);
-        triggerHaptic('success');
-        playAudioChime(true);
+        if (!isAutoVerify) {
+          triggerHaptic('success');
+          playAudioChime(true);
+        }
         setStep('questionnaire');
       } else {
         const alreadyDone = Boolean(data.alreadySubmitted);
@@ -591,15 +610,19 @@ export function FeedbackPortal({
               ? 'تۆ فیدباکت کردووە، دەست خۆش بێت!'
               : 'کۆدی PIN هەڵەیە یان ڕێگەی پێنەدراوە.')
         );
-        triggerHaptic('error');
-        playAudioChime(false);
+        if (!isAutoVerify) {
+          triggerHaptic('error');
+          playAudioChime(false);
+        }
         setPin('');
       }
     } catch (err: any) {
       setPinAlreadySubmitted(false);
       setPinError('هەڵە لە پەیوەندی کردن بە سێرڤەر.');
-      triggerHaptic('error');
-      playAudioChime(false);
+      if (!isAutoVerify) {
+        triggerHaptic('error');
+        playAudioChime(false);
+      }
     } finally {
       setPinVerifying(false);
     }
@@ -1716,9 +1739,9 @@ export function FeedbackPortal({
             {viewMode === 'slide' && (
               <div className="w-full max-w-2xl sm:max-w-3xl mx-auto overflow-hidden min-h-[500px]">
                 <AnimatePresence mode="wait" custom={{ dir: slideDirection, idx: currentEmpIndex }}>
-                  {currentEmpIndex < targetStaffList.length ? (
+                  {currentEmpIndex < targetStaffList.length && targetStaffList[currentEmpIndex] ? (
                     <motion.div
-                      key={targetStaffList[currentEmpIndex].employeeId}
+                      key={targetStaffList[currentEmpIndex]?.employeeId || `staff-slide-${currentEmpIndex}`}
                       custom={{ dir: slideDirection, idx: currentEmpIndex }}
                       variants={morphVariants}
                       initial="enter"

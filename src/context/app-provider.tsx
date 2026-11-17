@@ -1,6 +1,7 @@
 'use client';
 
 import { logger } from '@/lib/logger';
+import { safeStorage } from '@/lib/safe-storage';
 import React, { createContext, useContext, ReactNode, useMemo, useEffect, useState, useCallback } from 'react';
 import { 
     supabase, 
@@ -145,14 +146,12 @@ function useSupabaseCollection<T extends { id?: string }>(
     initialFallback: T[]
 ) {
     const [localData, setLocalData] = useState<T[]>(() => {
-        if (typeof window !== 'undefined') {
-            const cached = localStorage.getItem(`ashley_sb_${key}`) || localStorage.getItem(`ashley_local_${key}`);
-            if (cached) {
-                try {
-                    const parsed = JSON.parse(cached);
-                    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-                } catch (err) { logger.warn(err); }
-            }
+        const cached = safeStorage.getItem(`ashley_sb_${key}`) || safeStorage.getItem(`ashley_local_${key}`);
+        if (cached) {
+            try {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            } catch (err) { logger.warn(err); }
         }
         return initialFallback;
     });
@@ -167,10 +166,8 @@ function useSupabaseCollection<T extends { id?: string }>(
                 if (!mounted) return;
                 if (Array.isArray(data) && data.length > 0) {
                     setLocalData(data);
-                    if (typeof window !== 'undefined') {
-                        localStorage.setItem(`ashley_sb_${key}`, JSON.stringify(data));
-                        localStorage.setItem(`ashley_local_${key}`, JSON.stringify(data));
-                    }
+                    safeStorage.setItem(`ashley_sb_${key}`, JSON.stringify(data));
+                    safeStorage.setItem(`ashley_local_${key}`, JSON.stringify(data));
                 }
             })
             .catch((err) => {
@@ -191,14 +188,8 @@ function useSupabaseCollection<T extends { id?: string }>(
             const custom = e as CustomEvent<T[]>;
             if (custom.detail && Array.isArray(custom.detail)) {
                 setLocalData(custom.detail);
-                if (typeof window !== 'undefined') {
-                    try {
-                        localStorage.setItem(`ashley_sb_${key}`, JSON.stringify(custom.detail));
-                        localStorage.setItem(`ashley_local_${key}`, JSON.stringify(custom.detail));
-                    } catch (storageErr) {
-                        logger.warn(`[Storage] Remote sync failed to write to localStorage for ${key}:`, storageErr);
-                    }
-                }
+                safeStorage.setItem(`ashley_sb_${key}`, JSON.stringify(custom.detail));
+                safeStorage.setItem(`ashley_local_${key}`, JSON.stringify(custom.detail));
             }
         };
         window.addEventListener(`ashley_sb_sync_${key}`, handleRemoteSync);
@@ -215,14 +206,8 @@ function useSupabaseCollection<T extends { id?: string }>(
                 ? (newDataOrFn as (p: T[]) => T[])(current) 
                 : newDataOrFn;
 
-            if (typeof window !== 'undefined') {
-                try {
-                    localStorage.setItem(`ashley_sb_${key}`, JSON.stringify(next));
-                    localStorage.setItem(`ashley_local_${key}`, JSON.stringify(next));
-                } catch (storageErr) {
-                    logger.warn(`[Storage] Failed to cache ${key} in localStorage:`, storageErr);
-                }
-            }
+            safeStorage.setItem(`ashley_sb_${key}`, JSON.stringify(next));
+            safeStorage.setItem(`ashley_local_${key}`, JSON.stringify(next));
 
             // Asynchronously save to Supabase
             try {
@@ -245,13 +230,11 @@ function useSupabaseCollection<T extends { id?: string }>(
  */
 function useSimpleLocalState<T>(key: string, initialFallback: T[]) {
     const [data, setData] = useState<T[]>(() => {
-        if (typeof window !== 'undefined') {
-            const cached = localStorage.getItem(`ashley_local_${key}`);
-            if (cached) {
-                try {
-                    return JSON.parse(cached);
-                } catch (err) { logger.warn(err); }
-            }
+        const cached = safeStorage.getItem(`ashley_local_${key}`);
+        if (cached) {
+            try {
+                return JSON.parse(cached);
+            } catch (err) { logger.warn(err); }
         }
         return initialFallback;
     });
@@ -261,9 +244,7 @@ function useSimpleLocalState<T>(key: string, initialFallback: T[]) {
             const next = typeof newDataOrFn === 'function' 
                 ? (newDataOrFn as (p: T[]) => T[])(prev) 
                 : newDataOrFn;
-            if (typeof window !== 'undefined') {
-                localStorage.setItem(`ashley_local_${key}`, JSON.stringify(next));
-            }
+            safeStorage.setItem(`ashley_local_${key}`, JSON.stringify(next));
             return next;
         });
     }, [key]);
@@ -310,13 +291,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // 4. Attendance Live Logs State
     const [attendanceLogs, setAttendanceLogs] = useState<AttendanceRecord[]>(() => {
-        if (typeof window !== 'undefined') {
-            const cached = localStorage.getItem('ashley_sb_attendanceLogs') || localStorage.getItem('ashley_local_attendanceLogs');
-            if (cached) {
-                try {
-                    return JSON.parse(cached);
-                } catch (err) { logger.warn(err); }
-            }
+        const cached = safeStorage.getItem('ashley_sb_attendanceLogs') || safeStorage.getItem('ashley_local_attendanceLogs');
+        if (cached) {
+            try {
+                return JSON.parse(cached);
+            } catch (err) { logger.warn(err); }
         }
         return (initialData as any).attendanceLogs || [];
     });
@@ -424,7 +403,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Clean legacy local storage artifacts
         if (typeof window !== 'undefined') {
             try {
-                localStorage.removeItem('ashley_live_checkins');
+                safeStorage.removeItem('ashley_live_checkins');
                 Object.keys(localStorage).forEach((k) => {
                     if (
                         k.startsWith('ashley_admin_notes_') ||
@@ -433,7 +412,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         k.startsWith('ashley_time_override_') ||
                         k.startsWith('ashley_seed_')
                     ) {
-                        localStorage.removeItem(k);
+                        safeStorage.removeItem(k);
                     }
                 });
             } catch (err) { logger.warn(err); }
@@ -443,6 +422,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const syncSupabaseAttendance = (force = false) => {
             if (isFetching) return;
             if (typeof document !== 'undefined' && document.hidden) return;
+            // 🚫 Do not run heavy attendance sync on public feedback pages
+            if (typeof window !== 'undefined' && window.location.pathname.startsWith('/feedback')) return;
             isFetching = true;
             const url = force ? `/api/attendance/logs?force=true&t=${Date.now()}` : '/api/attendance/logs';
             fetch(url, { cache: force ? 'no-store' : 'default' })
@@ -450,10 +431,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 .then((supabaseLogs) => {
                     if (Array.isArray(supabaseLogs)) {
                         setAttendanceLogs(supabaseLogs);
-                        if (typeof window !== 'undefined') {
-                            localStorage.setItem('ashley_sb_attendanceLogs', JSON.stringify(supabaseLogs));
-                            localStorage.setItem('ashley_local_attendanceLogs', JSON.stringify(supabaseLogs));
-                        }
+                        safeStorage.setItem('ashley_sb_attendanceLogs', JSON.stringify(supabaseLogs));
+                        safeStorage.setItem('ashley_local_attendanceLogs', JSON.stringify(supabaseLogs));
                     }
                 })
                 .catch((err) => logger.warn('[Attendance] Realtime sync notice:', err))
@@ -525,9 +504,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         } else if (row.id === 'ashley_global_settings') {
                             setLocalSettings((prev) => {
                                 const merged = { ...prev, ...parsed };
-                                if (typeof window !== 'undefined') {
-                                    localStorage.setItem('ashley_terminal_settings', JSON.stringify(merged));
-                                }
+                                safeStorage.setItem('ashley_terminal_settings', JSON.stringify(merged));
                                 return merged;
                             });
                         }
@@ -687,29 +664,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, [viewMode]);
 
     const [dashboardScale, setDashboardScale] = useState<number>(() => {
-        if (typeof window !== 'undefined') {
-            const cached = localStorage.getItem('ashley_dashboard_scale');
-            return cached ? parseInt(cached, 10) : 100;
-        }
-        return 100;
+        const cached = safeStorage.getItem('ashley_dashboard_scale');
+        return cached ? parseInt(cached, 10) : 100;
     });
 
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            localStorage.setItem('ashley_dashboard_scale', dashboardScale.toString());
-        }
+        safeStorage.setItem('ashley_dashboard_scale', dashboardScale.toString());
     }, [dashboardScale]);
 
     // System Settings (Salary Settings backed by Supabase)
     const [settings, setLocalSettings] = useState<AppSettings>(() => {
-        if (typeof window !== 'undefined') {
-            const cached = localStorage.getItem('ashley_terminal_settings');
-            if (cached) {
-                try {
-                    return { ...initialSettings, ...JSON.parse(cached) };
-                } catch (err) { logger.warn(err); }
-            }
-            return initialSettings;
+        const cached = safeStorage.getItem('ashley_terminal_settings');
+        if (cached) {
+            try {
+                return { ...initialSettings, ...JSON.parse(cached) };
+            } catch (err) { logger.warn(err); }
         }
         return initialSettings;
     });
@@ -721,9 +690,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 if (sbSettings) {
                     setLocalSettings((prev) => {
                         const merged = { ...prev, ...sbSettings };
-                        if (typeof window !== 'undefined') {
-                            localStorage.setItem('ashley_terminal_settings', JSON.stringify(merged));
-                        }
+                        safeStorage.setItem('ashley_terminal_settings', JSON.stringify(merged));
                         return merged;
                     });
                 }
@@ -748,9 +715,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const setSettings = useCallback(async (value: React.SetStateAction<AppSettings>) => {
         setLocalSettings((prev) => {
             const newSettings = typeof value === 'function' ? value(prev) : value;
-            if (typeof window !== 'undefined') {
-                localStorage.setItem('ashley_terminal_settings', JSON.stringify(newSettings));
-            }
+            safeStorage.setItem('ashley_terminal_settings', JSON.stringify(newSettings));
             // Realtime sync to Supabase Cloud
             saveAppSettings(newSettings).catch((err) => {
                 logger.error('[Supabase] Failed to sync settings to cloud:', err);

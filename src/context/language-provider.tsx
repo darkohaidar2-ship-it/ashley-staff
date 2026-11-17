@@ -2,6 +2,7 @@
 'use client';
 
 import React, { createContext, useState, ReactNode, useCallback, useEffect } from 'react';
+import { safeStorage } from '@/lib/safe-storage';
 import { useAppContext } from './app-provider';
 import { Translations, Language } from '@/lib/types';
 
@@ -25,19 +26,15 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>('ku');
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('ashley_lang') as Language;
-      if (saved === 'en' || saved === 'ku') {
-        setLanguageState(saved);
-      }
+    const saved = safeStorage.getItem('ashley_lang') as Language;
+    if (saved === 'en' || saved === 'ku') {
+      setLanguageState(saved);
     }
   }, []);
 
   const setLanguage = useCallback((lang: Language) => {
     setLanguageState(lang);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ashley_lang', lang);
-    }
+    safeStorage.setItem('ashley_lang', lang);
   }, []);
 
   const enTranslations = settings?.translations?.en || {};
