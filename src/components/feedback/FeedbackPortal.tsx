@@ -1357,7 +1357,7 @@ export function FeedbackPortal({
                       isDark ? 'bg-neutral-950/60 border-neutral-800 text-neutral-300' : 'bg-slate-50 border-slate-200/80 text-slate-700'
                     }`}>
                       <Lock className="w-4 h-4 text-amber-500 shrink-0" />
-                      <span>وەڵامەکان ١٠٠٪ نهێنین و ناوت بە ئارەزووی خۆتە</span>
+                      <span>وەڵامەکان ١٠٠٪ نهێنین و تەنها بۆ باشترکردنی توانای کارمەندانە</span>
                     </div>
                     <div className={`p-3 rounded-2xl border text-xs font-bold flex items-center gap-2.5 ${
                       isDark ? 'bg-neutral-950/60 border-neutral-800 text-neutral-300' : 'bg-slate-50 border-slate-200/80 text-slate-700'
@@ -1545,6 +1545,23 @@ export function FeedbackPortal({
                     <span>هێشتا {totalEmployeesCount - completedCount} کارمەند ماوە. تکایە هەڵبژاردنەکان دیاری بکە.</span>
                   </span>
                 )}
+              </div>
+
+              {/* 🛡️ ڕوونکردنەوەی سەرەوە: ئەم فیدباکە ١٠٠٪ نهێنییە و بۆ باشترکردنی کارمەندەکانە */}
+              <div className={`mt-3.5 pt-3.5 border-t flex items-center gap-3 ${
+                isDark ? 'border-neutral-800 text-amber-300/90' : 'border-slate-100 text-amber-950'
+              }`}>
+                <div className="w-8 h-8 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0 text-amber-500 shadow-2xs">
+                  <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+                </div>
+                <div className="text-[11px] sm:text-xs leading-relaxed">
+                  <span className="font-black block text-amber-700 dark:text-amber-300">
+                    🔒 ئەم فیدباکە ١٠٠٪ نهێنی و پارێزراوە
+                  </span>
+                  <span className="opacity-90">
+                    وەڵامەکانت بە تەواوی نهێنین و ناوت دەرناکەوێت، ئەم پڕۆسەیە تەنها بۆ باشترکردنی توانای کارمەندان، دروستکردنی کەشێکی لەبار و پێشخستنی کاروباری شوێنەکەیە.
+                  </span>
+                </div>
               </div>
             </div>
 
