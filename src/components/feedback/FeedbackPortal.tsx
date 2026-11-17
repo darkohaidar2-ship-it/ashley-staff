@@ -269,9 +269,6 @@ export function FeedbackPortal({
   const [pinAlreadySubmitted, setPinAlreadySubmitted] = useState<boolean>(false);
   const [verifiedPinData, setVerifiedPinData] = useState<any | null>(null);
 
-  // Evaluator Name (optional)
-  const [respondentName, setRespondentName] = useState<string>('');
-
   // 🔄 LIVE SYNCHRONIZATION WITH EMPLOYEES SECTION (سایجیک بە بەشی کارمەندان)
   const { employees } = useAppContext();
 
@@ -582,9 +579,6 @@ export function FeedbackPortal({
         }
 
         setVerifiedPinData(data.pinData);
-        if (data.pinData.targetName) {
-          setRespondentName(data.pinData.targetName);
-        }
         triggerHaptic('success');
         playAudioChime(true);
         setStep('questionnaire');
@@ -776,7 +770,6 @@ export function FeedbackPortal({
 
       const payload = {
         pin,
-        respondentName: respondentName?.trim() || undefined,
         department: isWarehouse ? 'کۆگا و گواستنەوە' : 'فرۆشیار و کاشێر',
         employeeRatings: formattedRatings,
         improvementPoint1: improvementPoint1.trim() || undefined,
@@ -1816,22 +1809,17 @@ export function FeedbackPortal({
                           </div>
                         </div>
 
-                        {/* Submitter Name (Optional) */}
-                        <div className="mb-4">
-                          <label className="block text-xs font-black text-slate-800 dark:text-neutral-200 mb-1.5">
-                            ناوی بەشداربوو / هەڵسەنگێنەر (ئارەزوومەندانە):
-                          </label>
-                          <input
-                            type="text"
-                            value={respondentName}
-                            onChange={(e) => setRespondentName(e.target.value)}
-                            placeholder="ناوت بنووسە ئەگەر پێت باشە لەگەڵ فیدباکەکەدا بێت..."
-                            className={`w-full h-11 px-3.5 text-xs rounded-2xl border outline-none transition-all ${
-                              isDark 
-                                ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500' 
-                                : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-amber-500'
-                            }`}
-                          />
+                        {/* 🔒 100% Anonymous & Confidential Banner */}
+                        <div className={`p-3.5 rounded-2xl border flex items-center gap-3 mb-4 ${
+                          isDark 
+                            ? 'bg-emerald-950/30 border-emerald-800/40 text-emerald-300' 
+                            : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        }`}>
+                          <ShieldCheck className="w-5 h-5 text-emerald-500 shrink-0" />
+                          <div className="text-xs">
+                            <span className="font-black block">ئەم فیدباکە ١٠٠٪ بە نهێنی تۆمار دەکرێت</span>
+                            <span className="text-[11px] opacity-80">هیچ ناوێک داوا ناکرێت و تۆمار ناکرێت؛ وەڵامەکانت تەواو نهێنین.</span>
+                          </div>
                         </div>
 
                         {/* General Store Remarks (Optional) */}
@@ -2067,26 +2055,19 @@ export function FeedbackPortal({
             {/* 🌟 VIEW MODE 2: CLASSIC RESPONSIVE GRID MODE */}
             {viewMode === 'grid' && (
               <>
-                {/* Submitter Name & Suggestions (Adaptive 2-Column Grid on Large Screens) */}
-                <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-                  {/* Submitter Name (Optional) */}
-                  <div className={`p-4 sm:p-5 rounded-3xl border ${
-                    isDark ? 'bg-neutral-900/60 border-neutral-800' : 'bg-white border-slate-200/80 shadow-xs'
+                {/* Anonymity Banner & General Remarks */}
+                <div className="w-full space-y-4">
+                  {/* 🔒 100% Anonymous Banner */}
+                  <div className={`p-4 rounded-3xl border flex items-center gap-3 ${
+                    isDark 
+                      ? 'bg-emerald-950/30 border-emerald-800/40 text-emerald-300' 
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-800'
                   }`}>
-                    <label className="block text-xs font-black text-slate-800 dark:text-neutral-200 mb-1.5">
-                      ناوی بەشداربوو / هەڵسەنگێنەر (ئارەزوومەندانە):
-                    </label>
-                    <input
-                      type="text"
-                      value={respondentName}
-                      onChange={(e) => setRespondentName(e.target.value)}
-                      placeholder="ناوت بنووسە ئەگەر پێت باشە لەگەڵ فیدباکەکەدا بێت..."
-                      className={`w-full h-11 px-3.5 text-xs rounded-2xl border outline-none transition-all ${
-                        isDark 
-                          ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500' 
-                          : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-amber-500'
-                      }`}
-                    />
+                    <ShieldCheck className="w-6 h-6 text-emerald-500 shrink-0" />
+                    <div>
+                      <span className="font-black text-sm block">ئەم فیدباکە ١٠٠٪ بە نهێنی و پارێزراوی تۆمار دەکرێت</span>
+                      <span className="text-xs opacity-80">هیچ ناوێک داوا ناکرێت و تۆمار ناکرێت؛ وەڵامەکانت بە تەواوی پارێزراون.</span>
+                    </div>
                   </div>
 
                   {/* General Store Remarks (Optional) */}

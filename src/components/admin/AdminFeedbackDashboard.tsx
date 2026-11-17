@@ -395,44 +395,99 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
     return res;
   }, [pins, isWarehouse]);
 
-  // Filtered Submissions (with active search and rating filter)
+  // 🎯 فرمولەی نوێی هەژمارکردنی خاڵەکان (بەپێی ڕێنمایی: کۆی گشتی بە ڕێژەی ٪ بەبێ ئەستێرە):
+  // ٤ پرسیاری سەرەتا: ٥ بژاردەیە، هەر پرسیارێک ٢٠ خاڵ لەسەرە (کۆی ٤ پرسیارەکە = ٨٠ خاڵ)
+  //   بژاردەی ٥ = ٢٠ خاڵ | ٤ = ١٦ خاڵ | ٣ = ١٢ خاڵ | ٢ = ٨ خاڵ | ١ = ٤ خاڵ (rating * 4)
+  // ١ پرسیاری کۆتایی (پرسیاری ٥): ٢ بژاردەیە:
+  //   نەخێر نییەتی = ٢٠ خاڵ
+  //   بەڵێ هەیبوو = ١٠ خاڵ
+  // کۆی گشتی = ٨٠ + ٢٠ = ١٠٠ خاڵ = ١٠٠٪
+  const calculateEmployeeScoreBreakdown = useCallback((r: any) => {
+    if (!r) {
+      return { q1Pts: 0, q2Pts: 0, q3Pts: 0, q4Pts: 0, q5Pts: 0, totalPts: 0, percent: 0 };
+    }
+    const q1Pts = Math.min(20, Math.max(0, (r.serviceRating || 0) * 4));
+    const q2Pts = Math.min(20, Math.max(0, (r.performanceRating || 0) * 4));
+    const q3Pts = Math.min(20, Math.max(0, (r.disciplineRating || 0) * 4));
+    const q4Pts = Math.min(20, Math.max(0, (r.overallRating || 0) * 4));
+
+    let q5Pts = 0;
+    if (r.hasAnnoyingBehavior === 'no') {
+      q5Pts = 20;
+    } else if (r.hasAnnoyingBehavior === 'yes') {
+      q5Pts = 10;
+    } else if (q1Pts > 0 || q2Pts > 0 || q3Pts > 0 || q4Pts > 0) {
+      q5Pts = 20; // fallback if previously submitted without Q5
+    }
+
+    const totalPts = q1Pts + q2Pts + q3Pts + q4Pts + q5Pts;
+    return {
+      q1Pts,
+      q2Pts,
+      q3Pts,
+      q4Pts,
+      q5Pts,
+      totalPts,
+      percent: totalPts,
+    };
+  }, []);
+
+  // Helper to calculate whole submission overall percentage
+  const getSubmissionOverallPercent = useCallback((sub: FeedbackSubmission): number => {
+    if (sub.employeeRatings && Object.keys(sub.employeeRatings).length > 0) {
+      const scores = Object.values(sub.employeeRatings).map(r => calculateEmployeeScoreBreakdown(r).totalPts);
+      return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+    }
+    return Math.round(((sub.overallSatisfaction || 5) / 5) * 100);
+  }, [calculateEmployeeScoreBreakdown]);
+
+  // Filtered Submissions (with active search and percentage rating filter)
   const filteredSubmissions = useMemo(() => {
     return categorySubmissions.filter((s) => {
+      const q = searchTerm.trim().toLowerCase();
       const matchesSearch = 
-        !searchTerm.trim() ||
-        s.pin.includes(searchTerm.trim()) ||
-        (s.targetPhone && s.targetPhone.includes(searchTerm.trim())) ||
-        (s.targetName && s.targetName.toLowerCase().includes(searchTerm.toLowerCase().trim())) ||
-        (s.respondentName && s.respondentName.toLowerCase().includes(searchTerm.toLowerCase().trim())) ||
-        (s.suggestionsForManagement && s.suggestionsForManagement.toLowerCase().includes(searchTerm.toLowerCase().trim()));
+        !q ||
+        s.pin.toLowerCase().includes(q) ||
+        (s.targetName && s.targetName.toLowerCase().includes(q)) ||
+        (s.targetPhone && s.targetPhone.includes(q)) ||
+        (s.suggestionsForManagement && s.suggestionsForManagement.toLowerCase().includes(q));
 
-      const matchesRating = ratingFilter === 'all' || Math.round(s.overallSatisfaction).toString() === ratingFilter;
+      const subScore = getSubmissionOverallPercent(s);
+
+      let matchesRating = true;
+      if (ratingFilter === '90-100') matchesRating = subScore >= 90;
+      else if (ratingFilter === '80-89') matchesRating = subScore >= 80 && subScore < 90;
+      else if (ratingFilter === '70-79') matchesRating = subScore >= 70 && subScore < 80;
+      else if (ratingFilter === '60-69') matchesRating = subScore >= 60 && subScore < 70;
+      else if (ratingFilter === 'below-60') matchesRating = subScore < 60;
 
       return matchesSearch && matchesRating;
     });
-  }, [categorySubmissions, searchTerm, ratingFilter]);
+  }, [categorySubmissions, searchTerm, ratingFilter, getSubmissionOverallPercent]);
 
   // 🌟 LEADERBOARD STATS (Tailored to active category: Sales/Cashier or Warehouse Staff)
   const staffLeaderboard = useMemo(() => {
     const map: Record<string, {
       emp: typeof currentTargetStaff[0];
       count: number;
-      sumService: number;
-      sumPerf: number;
-      sumDisc: number;
-      sumOverall: number;
-      sumTeamwork: number;
+      sumTotalPts: number;
+      sumQ1Pts: number;
+      sumQ2Pts: number;
+      sumQ3Pts: number;
+      sumQ4Pts: number;
+      sumQ5Pts: number;
     }> = {};
 
     currentTargetStaff.forEach((emp) => {
       map[emp.employeeId] = {
         emp,
         count: 0,
-        sumService: 0,
-        sumPerf: 0,
-        sumDisc: 0,
-        sumOverall: 0,
-        sumTeamwork: 0,
+        sumTotalPts: 0,
+        sumQ1Pts: 0,
+        sumQ2Pts: 0,
+        sumQ3Pts: 0,
+        sumQ4Pts: 0,
+        sumQ5Pts: 0,
       };
     });
 
@@ -440,35 +495,51 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
       if (sub.employeeRatings) {
         Object.entries(sub.employeeRatings).forEach(([empId, r]: [string, any]) => {
           if (map[empId] && r) {
+            const sc = calculateEmployeeScoreBreakdown(r);
             map[empId].count++;
-            map[empId].sumService += r.serviceRating || 0;
-            map[empId].sumPerf += r.performanceRating || 0;
-            map[empId].sumDisc += r.disciplineRating || 0;
-            map[empId].sumOverall += r.overallRating || 0;
-            map[empId].sumTeamwork += r.teamworkRating || 0;
+            map[empId].sumTotalPts += sc.totalPts;
+            map[empId].sumQ1Pts += sc.q1Pts;
+            map[empId].sumQ2Pts += sc.q2Pts;
+            map[empId].sumQ3Pts += sc.q3Pts;
+            map[empId].sumQ4Pts += sc.q4Pts;
+            map[empId].sumQ5Pts += sc.q5Pts;
           }
         });
       }
     });
 
     return Object.values(map)
-      .map((item) => ({
-        ...item,
-        avgOverall: item.count > 0 ? Number((item.sumOverall / item.count).toFixed(1)) : 0,
-        avgService: item.count > 0 ? Number((item.sumService / item.count).toFixed(1)) : 0,
-        avgPerf: item.count > 0 ? Number((item.sumPerf / item.count).toFixed(1)) : 0,
-        avgDisc: item.count > 0 ? Number((item.sumDisc / item.count).toFixed(1)) : 0,
-        avgTeamwork: item.count > 0 ? Number((item.sumTeamwork / item.count).toFixed(1)) : 0,
-      }))
+      .map((item) => {
+        const count = item.count;
+        const avgScorePercent = count > 0 ? Math.round(item.sumTotalPts / count) : 0;
+        const avgQ1Pts = count > 0 ? Number((item.sumQ1Pts / count).toFixed(1)) : 0;
+        const avgQ2Pts = count > 0 ? Number((item.sumQ2Pts / count).toFixed(1)) : 0;
+        const avgQ3Pts = count > 0 ? Number((item.sumQ3Pts / count).toFixed(1)) : 0;
+        const avgQ4Pts = count > 0 ? Number((item.sumQ4Pts / count).toFixed(1)) : 0;
+        const avgQ5Pts = count > 0 ? Number((item.sumQ5Pts / count).toFixed(1)) : 0;
+
+        return {
+          ...item,
+          avgOverall: avgScorePercent, // Directly percentage (0-100%)
+          avgScorePercent,
+          avgQ1Pts,
+          avgQ2Pts,
+          avgQ3Pts,
+          avgQ4Pts,
+          avgQ5Pts,
+          avgQ1Percent: Math.round((avgQ1Pts / 20) * 100),
+          avgQ2Percent: Math.round((avgQ2Pts / 20) * 100),
+          avgQ3Percent: Math.round((avgQ3Pts / 20) * 100),
+          avgQ4Percent: Math.round((avgQ4Pts / 20) * 100),
+          avgQ5Percent: Math.round((avgQ5Pts / 20) * 100),
+        };
+      })
       .sort((a, b) => {
-        // Sort primarily by avgOverall descending
-        if (b.avgOverall !== a.avgOverall) return b.avgOverall - a.avgOverall;
-        // Then by count descending
+        if (b.avgScorePercent !== a.avgScorePercent) return b.avgScorePercent - a.avgScorePercent;
         if (b.count !== a.count) return b.count - a.count;
-        // Then by avgService descending
-        return b.avgService - a.avgService;
+        return b.avgQ1Pts - a.avgQ1Pts;
       });
-  }, [currentTargetStaff, categorySubmissions]);
+  }, [currentTargetStaff, categorySubmissions, calculateEmployeeScoreBreakdown]);
 
   // Top 3 Podium performers
   const topPerformer = staffLeaderboard[0] || null;
@@ -477,51 +548,63 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
 
   // Store-wide metrics & averages across category submissions
   const storeAnalytics = useMemo(() => {
-    let totalService = 0;
-    let totalPerf = 0;
-    let totalDisc = 0;
-    let totalOverall = 0;
-    let totalTeamwork = 0;
+    let totalScore = 0;
+    let totalQ1 = 0;
+    let totalQ2 = 0;
+    let totalQ3 = 0;
+    let totalQ4 = 0;
+    let totalQ5 = 0;
     let totalStaffRatingsCount = 0;
 
-    const distribution: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    const distribution: Record<string, number> = {
+      '90-100': 0,
+      '80-89': 0,
+      '70-79': 0,
+      '60-69': 0,
+      'below-60': 0,
+    };
 
     categorySubmissions.forEach((s) => {
-      const overallRounded = Math.min(5, Math.max(1, Math.round(s.overallSatisfaction || 5)));
-      if (distribution[overallRounded] !== undefined) {
-        distribution[overallRounded]++;
-      }
-
       if (s.employeeRatings) {
         Object.values(s.employeeRatings).forEach((r: any) => {
           if (r) {
-            totalService += r.serviceRating || 0;
-            totalPerf += r.performanceRating || 0;
-            totalDisc += r.disciplineRating || 0;
-            totalOverall += r.overallRating || 0;
-            totalTeamwork += r.teamworkRating || 0;
+            const sc = calculateEmployeeScoreBreakdown(r);
+            totalScore += sc.totalPts;
+            totalQ1 += sc.q1Pts;
+            totalQ2 += sc.q2Pts;
+            totalQ3 += sc.q3Pts;
+            totalQ4 += sc.q4Pts;
+            totalQ5 += sc.q5Pts;
             totalStaffRatingsCount++;
+
+            if (sc.totalPts >= 90) distribution['90-100']++;
+            else if (sc.totalPts >= 80) distribution['80-89']++;
+            else if (sc.totalPts >= 70) distribution['70-79']++;
+            else if (sc.totalPts >= 60) distribution['60-69']++;
+            else distribution['below-60']++;
           }
         });
       }
     });
 
-    const avgService = totalStaffRatingsCount > 0 ? Number((totalService / totalStaffRatingsCount).toFixed(1)) : 0;
-    const avgPerf = totalStaffRatingsCount > 0 ? Number((totalPerf / totalStaffRatingsCount).toFixed(1)) : 0;
-    const avgDisc = totalStaffRatingsCount > 0 ? Number((totalDisc / totalStaffRatingsCount).toFixed(1)) : 0;
-    const avgOverall = totalStaffRatingsCount > 0 ? Number((totalOverall / totalStaffRatingsCount).toFixed(1)) : 0;
-    const avgTeamwork = totalStaffRatingsCount > 0 ? Number((totalTeamwork / totalStaffRatingsCount).toFixed(1)) : 0;
+    const avgOverallPercent = totalStaffRatingsCount > 0 ? Math.round(totalScore / totalStaffRatingsCount) : 0;
+    const avgQ1 = totalStaffRatingsCount > 0 ? Number((totalQ1 / totalStaffRatingsCount).toFixed(1)) : 0;
+    const avgQ2 = totalStaffRatingsCount > 0 ? Number((totalQ2 / totalStaffRatingsCount).toFixed(1)) : 0;
+    const avgQ3 = totalStaffRatingsCount > 0 ? Number((totalQ3 / totalStaffRatingsCount).toFixed(1)) : 0;
+    const avgQ4 = totalStaffRatingsCount > 0 ? Number((totalQ4 / totalStaffRatingsCount).toFixed(1)) : 0;
+    const avgQ5 = totalStaffRatingsCount > 0 ? Number((totalQ5 / totalStaffRatingsCount).toFixed(1)) : 0;
 
     return {
-      avgService,
-      avgPerf,
-      avgDisc,
-      avgOverall,
-      avgTeamwork,
+      avgOverallPercent,
+      avgQ1,
+      avgQ2,
+      avgQ3,
+      avgQ4,
+      avgQ5,
       totalStaffRatingsCount,
       distribution,
     };
-  }, [categorySubmissions]);
+  }, [categorySubmissions, calculateEmployeeScoreBreakdown]);
 
   // Overall General Metrics
   const metrics = useMemo(() => {
@@ -530,76 +613,77 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
     if (total === 0) {
       return {
         totalSubmissions: 0,
-        avgOverall: 0,
+        avgOverallPercent: 0,
         totalPins: pinValues.length,
         usedPinsCount: pinValues.filter(p => p.isUsed).length,
         activePinsCount: pinValues.filter(p => !p.isUsed).length,
       };
     }
 
-    let sumOverall = 0;
-    categorySubmissions.forEach((s) => {
-      sumOverall += s.overallSatisfaction || 0;
-    });
-
     return {
       totalSubmissions: total,
-      avgOverall: Number((sumOverall / total).toFixed(1)),
+      avgOverallPercent: storeAnalytics.avgOverallPercent,
       totalPins: pinValues.length,
       usedPinsCount: pinValues.filter(p => p.isUsed).length,
       activePinsCount: pinValues.filter(p => !p.isUsed).length,
     };
-  }, [categorySubmissions, categoryPins]);
+  }, [categorySubmissions, categoryPins, storeAnalytics]);
 
-  // 🌟 RECHARTS DATA: 4-Pillars Competency Radar
+  // 🌟 RECHARTS DATA: 4-Pillars Competency Radar (Domain: 0 to 100%)
   const radarData = useMemo(() => {
     return [
       {
         subject: 'ئەدا و هەڵسوکەوت (ڕێز)',
-        value: storeAnalytics.avgService,
-        fullMark: 5,
+        value: Math.round((storeAnalytics.avgQ1 / 20) * 100),
+        rawPts: storeAnalytics.avgQ1,
+        fullMark: 100,
       },
       {
         subject: 'هاوکاری بێ پێ وتن',
-        value: storeAnalytics.avgPerf,
-        fullMark: 5,
+        value: Math.round((storeAnalytics.avgQ2 / 20) * 100),
+        rawPts: storeAnalytics.avgQ2,
+        fullMark: 100,
       },
       {
         subject: 'پابەندبوون (مۆبایل)',
-        value: storeAnalytics.avgDisc,
-        fullMark: 5,
+        value: Math.round((storeAnalytics.avgQ3 / 20) * 100),
+        rawPts: storeAnalytics.avgQ3,
+        fullMark: 100,
       },
       {
         subject: 'پاک و خاوێنی',
-        value: storeAnalytics.avgOverall || metrics.avgOverall,
-        fullMark: 5,
+        value: Math.round((storeAnalytics.avgQ4 / 20) * 100),
+        rawPts: storeAnalytics.avgQ4,
+        fullMark: 100,
       },
     ];
-  }, [storeAnalytics, metrics]);
+  }, [storeAnalytics]);
 
-  // 🌟 RECHARTS DATA: Employee Leaderboard Bars
+  // 🌟 RECHARTS DATA: Employee Leaderboard Bars (Domain: 0 to 100%)
   const employeeBarData = useMemo(() => {
     return staffLeaderboard.map((item) => ({
       name: item.emp.name,
       fullName: item.emp.fullName,
-      score: item.avgOverall,
-      service: item.avgService,
-      perf: item.avgPerf,
-      disc: item.avgDisc,
+      score: item.avgScorePercent,
+      q1: item.avgQ1Pts,
+      q2: item.avgQ2Pts,
+      q3: item.avgQ3Pts,
+      q4: item.avgQ4Pts,
+      q5: item.avgQ5Pts,
       count: item.count,
       role: item.emp.role,
       photoUrl: item.emp.photoUrl,
     }));
   }, [staffLeaderboard]);
 
-  // 🌟 RECHARTS DATA: Score Distribution
+  // 🌟 RECHARTS DATA: Score Distribution (Percentage Bands)
   const scoreDistributionData = useMemo(() => {
     return [
-      { star: '٥ ئەستێرە (نایاب)', count: storeAnalytics.distribution[5] || 0, fill: '#10b981' },
-      { star: '٤ ئەستێرە (زۆر باش)', count: storeAnalytics.distribution[4] || 0, fill: '#3b82f6' },
-      { star: '٣ ئەستێرە (باش)', count: storeAnalytics.distribution[3] || 0, fill: '#f59e0b' },
-      { star: '٢ ئەستێرە (مامناوەند)', count: storeAnalytics.distribution[2] || 0, fill: '#f97316' },
-      { star: '١ ئەستێرە (لاواز)', count: storeAnalytics.distribution[1] || 0, fill: '#ef4444' },
+      { tier: '٩٠٪ - ١٠٠٪ (نایاب)', count: storeAnalytics.distribution['90-100'] || 0, fill: '#10b981' },
+      { tier: '٨٠٪ - ٨٩٪ (زۆر باش)', count: storeAnalytics.distribution['80-89'] || 0, fill: '#3b82f6' },
+      { tier: '٧٠٪ - ٧٩٪ (باش)', count: storeAnalytics.distribution['70-79'] || 0, fill: '#f59e0b' },
+      { tier: '٦٠٪ - ٦٩٪ (مامناوەند)', count: storeAnalytics.distribution['60-69'] || 0, fill: '#f97316' },
+      { tier: 'کەمتر لە ٦٠٪ (لاواز)', count: storeAnalytics.distribution['below-60'] || 0, fill: '#ef4444' },
     ];
   }, [storeAnalytics]);
 
@@ -728,24 +812,23 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
       'کۆدی PIN',
       'ژمارەی مۆبایل',
       'ناوی کارمەند لە PIN',
-      'ناوی بەشداربوو',
+      'بەشداربوو',
       'بەرواری ناردن',
       'کاتی ناردن',
-      'تێکڕای گشتی (1-5)',
+      'کۆی گشتی خاڵەکان (٪)',
     ];
 
     const employeeHeaders: string[] = [];
     currentTargetStaff.forEach((emp) => {
-      employeeHeaders.push(`${emp.name} (${emp.role}) - تێکڕا`);
-      employeeHeaders.push(`${emp.name} - ١. ئەدا و ڕەفتار (ڕێز)`);
-      employeeHeaders.push(`${emp.name} - ٢. هاوکاری لە کاتی پێویست`);
-      employeeHeaders.push(`${emp.name} - ٣. پابەندبوون (مۆبایل)`);
-      employeeHeaders.push(`${emp.name} - ٤. پاک و خاوێنی`);
-      employeeHeaders.push(`${emp.name} - ٥. ڕەفتاری نەگونجاو`);
-      employeeHeaders.push(`${emp.name} - خاڵی ١`);
-      employeeHeaders.push(`${emp.name} - خاڵی ٢`);
-      employeeHeaders.push(`${emp.name} - خاڵی ٣`);
-      employeeHeaders.push(`${emp.name} - تێبینی گشتی`);
+      employeeHeaders.push(`${emp.name} (${emp.role}) - کۆی گشتی (٪)`);
+      employeeHeaders.push(`${emp.name} - ١. ئەدا و ڕەفتار (٢٠)`);
+      employeeHeaders.push(`${emp.name} - ٢. هاوکاری بێ پێ وتن (٢٠)`);
+      employeeHeaders.push(`${emp.name} - ٣. مۆبایل و پابەندبوون (٢٠)`);
+      employeeHeaders.push(`${emp.name} - ٤. پاک و خاوێنی (٢٠)`);
+      employeeHeaders.push(`${emp.name} - ٥. خاڵی ڕەفتار (٢٠)`);
+      employeeHeaders.push(`${emp.name} - بارودۆخی ڕەفتاری نەگونجاو`);
+      employeeHeaders.push(`${emp.name} - خاڵی تێبینیکراو`);
+      employeeHeaders.push(`${emp.name} - سەرنج`);
     });
 
     const headers = [
@@ -762,24 +845,25 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
         s.pin,
         s.targetPhone || '--',
         s.targetName || '--',
-        s.respondentName || '--',
+        'نهێنی (پارێزراو)',
         s.baghdadDate,
         s.baghdadTime,
-        s.overallSatisfaction,
+        `٪${getSubmissionOverallPercent(s)}`,
       ];
 
       const empCols: any[] = [];
       currentTargetStaff.forEach((emp) => {
         const er = s.employeeRatings ? s.employeeRatings[emp.employeeId] : null;
         if (er) {
-          empCols.push(er.overallRating || '--');
-          empCols.push(er.serviceRating || '--');
-          empCols.push(er.performanceRating || '--');
-          empCols.push(er.disciplineRating || '--');
-          empCols.push(er.hasAnnoyingBehavior === 'yes' ? 'بەڵێ هەیە' : er.hasAnnoyingBehavior === 'no' ? 'نەخێر نییە' : '--');
+          const sc = calculateEmployeeScoreBreakdown(er);
+          empCols.push(`٪${sc.totalPts}`);
+          empCols.push(sc.q1Pts);
+          empCols.push(sc.q2Pts);
+          empCols.push(sc.q3Pts);
+          empCols.push(sc.q4Pts);
+          empCols.push(sc.q5Pts);
+          empCols.push(er.hasAnnoyingBehavior === 'yes' ? 'بەڵێ هەیە (١٠ خاڵ)' : er.hasAnnoyingBehavior === 'no' ? 'نەخێر نییە (٢٠ خاڵ)' : '--');
           empCols.push(er.annoyingPoint1 || er.note5 || '--');
-          empCols.push(er.annoyingPoint2 || '--');
-          empCols.push(er.annoyingPoint3 || '--');
           empCols.push(er.comment || '--');
         } else {
           empCols.push('--', '--', '--', '--', '--', '--', '--', '--', '--');
@@ -970,10 +1054,10 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
         </div>
 
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
-          <span className="text-[11px] font-bold text-slate-500 block mb-1">تێکڕای نمرەی پێشانگا</span>
+          <span className="text-[11px] font-bold text-slate-500 block mb-1">تێکڕای ڕێژەی کۆی ستاف</span>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black font-mono text-amber-500">⭐ {metrics.avgOverall}</span>
-            <span className="text-[10px] text-slate-400 font-bold">لە ٥</span>
+            <span className="text-2xl font-black font-mono text-amber-500">٪{metrics.avgOverallPercent}</span>
+            <span className="text-[10px] text-slate-400 font-bold">لە ١٠٠٪</span>
           </div>
         </div>
 
@@ -1169,53 +1253,57 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                       </div>
                     </div>
 
-                    {/* Overall Big Score Card */}
-                    <div className="bg-white/90 backdrop-blur-xs border-2 border-amber-400 rounded-2xl p-3.5 shadow-sm text-center min-w-[140px] shrink-0">
-                      <span className="text-[11px] font-bold text-amber-900 block mb-0.5">تێکڕای نمرەی زێڕین</span>
-                      <div className="flex items-baseline justify-center gap-1 font-mono font-black text-amber-600 text-3xl">
-                        <span>{topPerformer.avgOverall}</span>
-                        <span className="text-sm text-slate-500 font-bold">/ 5</span>
+                    {/* Overall Big Score Card (Percentage, No Stars) */}
+                    <div className="bg-white/95 backdrop-blur-xs border-2 border-amber-400 rounded-2xl p-3.5 shadow-sm text-center min-w-[145px] shrink-0">
+                      <span className="text-[11px] font-black text-amber-900 block mb-0.5">تێکڕای ڕێژەی زێڕین</span>
+                      <div className="flex items-baseline justify-center gap-0.5 font-mono font-black text-amber-600 text-3xl">
+                        <span>٪{topPerformer.avgScorePercent}</span>
                       </div>
-                      <div className="flex items-center justify-center gap-0.5 mt-1 text-amber-500">
-                        {[1, 2, 3, 4, 5].map((s) => (
-                          <Star 
-                            key={s} 
-                            className={`w-3.5 h-3.5 ${s <= Math.round(topPerformer.avgOverall) ? 'fill-amber-400 text-amber-500' : 'text-slate-300'}`} 
-                          />
-                        ))}
+                      <div className="text-[11px] font-bold text-emerald-700 mt-1 bg-emerald-50 border border-emerald-200/80 rounded-lg py-0.5 px-2">
+                        {topPerformer.avgScorePercent} / ١٠٠ خاڵ
                       </div>
                     </div>
                   </div>
 
-                  {/* 3 Golden Progress Bars */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2">
+                  {/* 4 Pillar Competency Progress Bars (Each out of 20 points = 80 total) */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
                     <div className="bg-white/80 rounded-xl p-2.5 border border-amber-200">
                       <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1">
-                        <span>مامەڵە لەگەڵ کڕیار:</span>
-                        <span className="font-mono text-emerald-700 font-black">⭐ {topPerformer.avgService}</span>
+                        <span>١. ڕەفتار و ڕێز:</span>
+                        <span className="font-mono text-emerald-700 font-black">{topPerformer.avgQ1Pts} / ٢٠</span>
                       </div>
                       <div className="w-full h-2 rounded-full bg-slate-200/80 overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" style={{ width: `${(topPerformer.avgService / 5) * 100}%` }} />
+                        <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" style={{ width: `${topPerformer.avgQ1Percent}%` }} />
                       </div>
                     </div>
 
                     <div className="bg-white/80 rounded-xl p-2.5 border border-amber-200">
                       <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1">
-                        <span>چالاکی فرۆشتن:</span>
-                        <span className="font-mono text-blue-700 font-black">⭐ {topPerformer.avgPerf}</span>
+                        <span>٢. هاوکاری بێ پێ وتن:</span>
+                        <span className="font-mono text-blue-700 font-black">{topPerformer.avgQ2Pts} / ٢٠</span>
                       </div>
                       <div className="w-full h-2 rounded-full bg-slate-200/80 overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style={{ width: `${(topPerformer.avgPerf / 5) * 100}%` }} />
+                        <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style={{ width: `${topPerformer.avgQ2Percent}%` }} />
                       </div>
                     </div>
 
                     <div className="bg-white/80 rounded-xl p-2.5 border border-amber-200">
                       <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1">
-                        <span>پابەندبوون بە دەوام:</span>
-                        <span className="font-mono text-purple-700 font-black">⭐ {topPerformer.avgDisc}</span>
+                        <span>٣. مۆبایل و دەوام:</span>
+                        <span className="font-mono text-purple-700 font-black">{topPerformer.avgQ3Pts} / ٢٠</span>
                       </div>
                       <div className="w-full h-2 rounded-full bg-slate-200/80 overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" style={{ width: `${(topPerformer.avgDisc / 5) * 100}%` }} />
+                        <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" style={{ width: `${topPerformer.avgQ3Percent}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="bg-white/80 rounded-xl p-2.5 border border-amber-200">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1">
+                        <span>٤. پاک و خاوێنی:</span>
+                        <span className="font-mono text-amber-700 font-black">{topPerformer.avgQ4Pts} / ٢٠</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-slate-200/80 overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-amber-500 to-orange-400 rounded-full" style={{ width: `${topPerformer.avgQ4Percent}%` }} />
                       </div>
                     </div>
                   </div>
@@ -1223,7 +1311,7 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
               </div>
             ) : null}
 
-            {/* 🥈 & 🥉 RUNNERS-UP (SILVER & BRONZE CARDS) */}
+            {/* 🥈 & 🥉 RUNNERS-UP (SILVER & BRONZE CARDS - Percentages & Points) */}
             <div className="space-y-3 flex flex-col justify-between">
               
               {/* 🥈 2nd Place: Silver Performer */}
@@ -1234,8 +1322,8 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                       <Medal className="w-3.5 h-3.5 text-slate-600" />
                       <span>🥈 پلەی دووەم • خەڵاتی زیوین</span>
                     </span>
-                    <span className="font-mono font-black text-amber-500 text-sm">
-                      ⭐ {secondPerformer.avgOverall} / 5
+                    <span className="font-mono font-black text-slate-900 text-sm bg-white px-2 py-0.5 rounded-lg border border-slate-200">
+                      ٪{secondPerformer.avgScorePercent}
                     </span>
                   </div>
 
@@ -1261,10 +1349,11 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                     </div>
                   </div>
 
-                  <div className="mt-2.5 pt-2 border-t border-slate-200/70 grid grid-cols-3 gap-1 text-[10px] text-center font-bold">
-                    <div className="bg-white/80 p-1 rounded-lg">کڕیار: <span className="font-mono text-emerald-600 font-black">{secondPerformer.avgService}</span></div>
-                    <div className="bg-white/80 p-1 rounded-lg">فرۆشتن: <span className="font-mono text-blue-600 font-black">{secondPerformer.avgPerf}</span></div>
-                    <div className="bg-white/80 p-1 rounded-lg">دەوام: <span className="font-mono text-purple-600 font-black">{secondPerformer.avgDisc}</span></div>
+                  <div className="mt-2.5 pt-2 border-t border-slate-200/70 grid grid-cols-4 gap-1 text-[10px] text-center font-bold">
+                    <div className="bg-white/80 p-1 rounded-lg">ڕەفتار: <span className="font-mono text-emerald-600 font-black">{secondPerformer.avgQ1Pts}/20</span></div>
+                    <div className="bg-white/80 p-1 rounded-lg">هاوکاری: <span className="font-mono text-blue-600 font-black">{secondPerformer.avgQ2Pts}/20</span></div>
+                    <div className="bg-white/80 p-1 rounded-lg">دەوام: <span className="font-mono text-purple-600 font-black">{secondPerformer.avgQ3Pts}/20</span></div>
+                    <div className="bg-white/80 p-1 rounded-lg">خاوێنی: <span className="font-mono text-amber-600 font-black">{secondPerformer.avgQ4Pts}/20</span></div>
                   </div>
                 </div>
               ) : null}
@@ -1277,8 +1366,8 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                       <Award className="w-3.5 h-3.5 text-amber-700" />
                       <span>🥉 پلەی سێیەم • خەڵاتی برۆنزی</span>
                     </span>
-                    <span className="font-mono font-black text-amber-600 text-sm">
-                      ⭐ {thirdPerformer.avgOverall} / 5
+                    <span className="font-mono font-black text-amber-700 text-sm bg-white px-2 py-0.5 rounded-lg border border-amber-200">
+                      ٪{thirdPerformer.avgScorePercent}
                     </span>
                   </div>
 
@@ -1304,10 +1393,11 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                     </div>
                   </div>
 
-                  <div className="mt-2.5 pt-2 border-t border-amber-200/50 grid grid-cols-3 gap-1 text-[10px] text-center font-bold">
-                    <div className="bg-white/80 p-1 rounded-lg">کڕیار: <span className="font-mono text-emerald-600 font-black">{thirdPerformer.avgService}</span></div>
-                    <div className="bg-white/80 p-1 rounded-lg">فرۆشتن: <span className="font-mono text-blue-600 font-black">{thirdPerformer.avgPerf}</span></div>
-                    <div className="bg-white/80 p-1 rounded-lg">دەوام: <span className="font-mono text-purple-600 font-black">{thirdPerformer.avgDisc}</span></div>
+                  <div className="mt-2.5 pt-2 border-t border-amber-200/50 grid grid-cols-4 gap-1 text-[10px] text-center font-bold">
+                    <div className="bg-white/80 p-1 rounded-lg">ڕەفتار: <span className="font-mono text-emerald-600 font-black">{thirdPerformer.avgQ1Pts}/20</span></div>
+                    <div className="bg-white/80 p-1 rounded-lg">هاوکاری: <span className="font-mono text-blue-600 font-black">{thirdPerformer.avgQ2Pts}/20</span></div>
+                    <div className="bg-white/80 p-1 rounded-lg">دەوام: <span className="font-mono text-purple-600 font-black">{thirdPerformer.avgQ3Pts}/20</span></div>
+                    <div className="bg-white/80 p-1 rounded-lg">خاوێنی: <span className="font-mono text-amber-600 font-black">{thirdPerformer.avgQ4Pts}/20</span></div>
                   </div>
                 </div>
               ) : null}
@@ -1324,11 +1414,11 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                 <div className="flex items-center gap-2">
                   <BarChart3 className="w-5 h-5 text-amber-500" />
                   <h3 className="text-sm sm:text-base font-black text-slate-900">
-                    هێڵکاری بەراوردکاری نمرەی گشتی {isWarehouse ? 'سەرجەم ١١ کارمەندی کۆگا' : 'سەرجەم ٨ کارمەندی فرۆشیار و کاشێر'}
+                    هێڵکاری بەراوردکاری نمرەی گشتی {isWarehouse ? `سەرجەم ${currentTargetStaff.length} کارمەندی کۆگا` : `سەرجەم ${currentTargetStaff.length} کارمەندی فرۆشیار و کاشێر`}
                   </h3>
                 </div>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  بەراوردی ڕاستەوخۆ بەپێی دەنگ و هەڵسەنگاندنی هاوپیشەکان (لە ٥ ئەستێرە)
+                  بەراوردی ڕاستەوخۆ بەپێی کۆی خاڵەکانی هەڵسەنگاندن (لە ١٠٠٪ بە ڕێژەی تەواو)
                 </p>
               </div>
 
@@ -1364,7 +1454,7 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                     textAnchor="end" 
                     interval={0} 
                   />
-                  <YAxis domain={[0, 5]} ticks={[1, 2, 3, 4, 5]} tick={{ fontSize: 11, fontWeight: 700 }} />
+                  <YAxis domain={[0, 100]} ticks={[0, 20, 40, 60, 80, 100]} unit="%" tick={{ fontSize: 11, fontWeight: 700 }} />
                   <Tooltip 
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
@@ -1372,12 +1462,16 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                         return (
                           <div className="bg-slate-900 text-white p-3 rounded-2xl shadow-xl text-xs font-sans text-right" dir="rtl">
                             <div className="font-black text-amber-400 mb-1">{data.fullName}</div>
-                            <div className="text-[11px] text-slate-300 font-bold mb-1.5">ڕۆڵ: {data.role}</div>
+                            <div className="text-[11px] text-slate-300 font-bold mb-2">ڕۆڵ: {data.role}</div>
                             <div className="space-y-1 font-mono text-[11px]">
-                              <div>تێکڕای گشتی: <span className="text-amber-400 font-black">⭐ {data.score} / 5</span></div>
-                              <div>ڕەفتار: <span className="text-emerald-400">⭐ {data.service}</span></div>
-                              <div>چالاکی: <span className="text-blue-400">⭐ {data.perf}</span></div>
-                              <div>پابەندبوون: <span className="text-purple-400">⭐ {data.disc}</span></div>
+                              <div className="text-amber-400 font-black pb-1.5 mb-1 border-b border-slate-700">
+                                کۆی گشتی: ٪{data.score} ({data.score} / ١٠٠ خاڵ)
+                              </div>
+                              <div>١. ڕەفتار و ڕێز: <span className="text-emerald-400">{data.q1} / ٢٠</span></div>
+                              <div>٢. هاوکاری بێ پێ وتن: <span className="text-blue-400">{data.q2} / ٢٠</span></div>
+                              <div>٣. مۆبایل و پابەندبوون: <span className="text-purple-400">{data.q3} / ٢٠</span></div>
+                              <div>٤. پاک و خاوێنی: <span className="text-amber-400">{data.q4} / ٢٠</span></div>
+                              <div>٥. ڕەفتاری شوێنەکە: <span className="text-sky-400">{data.q5} / ٢٠</span></div>
                               <div className="text-slate-400 pt-1 border-t border-slate-700 font-sans">ژمارەی دەنگ: {data.count} جار</div>
                             </div>
                           </div>
@@ -1400,7 +1494,7 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
           </div>
 
           {/* ========================================================================= */}
-          {/* 📊 CHART SECTION 2: 4 QUALITY PILLARS RADAR & STAR DISTRIBUTION */}
+          {/* 📊 CHART SECTION 2: 4 QUALITY PILLARS RADAR & PERCENTAGE DISTRIBUTION */}
           {/* ========================================================================= */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
@@ -1410,11 +1504,11 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                 <div className="flex items-center gap-2 mb-1">
                   <TrendingUp className="w-5 h-5 text-amber-500" />
                   <h3 className="text-sm font-black text-slate-900">
-                    هێڵکاری ڕاداری ٤ تەوەرە سەرەکییەکە
+                    هێڵکاری ڕاداری ٤ تەوەرە سەرەکییەکە (بە ٪)
                   </h3>
                 </div>
                 <p className="text-xs text-slate-500 font-medium mb-2">
-                  شیکاری چوارچێوەی توانست و دیسیپلینی ستاف لە ٤ ڕەهەنددا
+                  شیکاری چوارچێوەی توانست و دیسیپلینی ستاف لە ٤ ڕەهەنددا (لە ١٠٠٪)
                 </p>
 
                 <div className="w-full h-64" dir="ltr">
@@ -1422,46 +1516,54 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                     <RadarChart data={radarData}>
                       <PolarGrid stroke="#e2e8f0" />
                       <PolarAngleAxis dataKey="subject" tick={{ fill: '#334155', fontSize: 10, fontWeight: 800 }} />
-                      <PolarRadiusAxis angle={30} domain={[0, 5]} tick={{ fontSize: 9 }} />
+                      <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9 }} />
                       <Radar name="تێکڕای تیم" dataKey="value" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.4} />
-                      <Tooltip />
+                      <Tooltip formatter={(val: any) => [`٪${val}`, 'ئاستی بەدەستهاتوو']} />
                     </RadarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="mt-2 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-[11px] font-bold">
+              <div className="mt-2 pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] sm:text-[11px] font-bold">
                 <div className="bg-slate-50 p-2 rounded-xl text-center">
-                  <span className="text-slate-500 block">مامەڵە/ڕەفتار:</span>
-                  <span className="font-mono text-emerald-600 font-black">⭐ {storeAnalytics.avgService}</span>
+                  <span className="text-slate-500 block">ڕەفتار:</span>
+                  <span className="font-mono text-emerald-600 font-black">{storeAnalytics.avgQ1}/20</span>
                 </div>
                 <div className="bg-slate-50 p-2 rounded-xl text-center">
-                  <span className="text-slate-500 block">چالاکی/خێرایی:</span>
-                  <span className="font-mono text-blue-600 font-black">⭐ {storeAnalytics.avgPerf}</span>
+                  <span className="text-slate-500 block">هاوکاری:</span>
+                  <span className="font-mono text-blue-600 font-black">{storeAnalytics.avgQ2}/20</span>
+                </div>
+                <div className="bg-slate-50 p-2 rounded-xl text-center">
+                  <span className="text-slate-500 block">پابەندبوون:</span>
+                  <span className="font-mono text-purple-600 font-black">{storeAnalytics.avgQ3}/20</span>
+                </div>
+                <div className="bg-slate-50 p-2 rounded-xl text-center">
+                  <span className="text-slate-500 block">خاوێنی:</span>
+                  <span className="font-mono text-amber-600 font-black">{storeAnalytics.avgQ4}/20</span>
                 </div>
               </div>
             </div>
 
-            {/* Card B: Star Distribution Area Curve (5★ to 1★) */}
+            {/* Card B: Percentage Distribution Area Curve (90-100% to <60%) */}
             <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs flex flex-col justify-between">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                  <BarChart3 className="w-5 h-5 text-emerald-500" />
                   <h3 className="text-sm font-black text-slate-900">
-                    هێڵکاری دابەشبوونی نمرەی فیدباکەکان (١ بۆ ٥ ئەستێرە)
+                    هێڵکاری دابەشبوونی ڕێژەی فیدباکەکان (بە ٪)
                   </h3>
                 </div>
                 <p className="text-xs text-slate-500 font-medium mb-2">
-                  ڕێژەی دەنگەکان بەپێی ئاستی ڕەزامەندی بەشداربووان
+                  ڕێژەی دەنگەکان بەپێی ئاستی ڕێژەی لەسەدا و پلەی ڕەزامەندی
                 </p>
 
                 <div className="w-full h-64" dir="ltr">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={scoreDistributionData} margin={{ top: 10, right: 15, left: -20, bottom: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="star" tick={{ fontSize: 9.5, fontWeight: 700 }} />
+                      <XAxis dataKey="tier" tick={{ fontSize: 9.5, fontWeight: 700 }} />
                       <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
-                      <Tooltip />
+                      <Tooltip formatter={(val: any) => [`${val} دەنگ`, 'ژمارەی دەنگەکان']} />
                       <Area type="monotone" dataKey="count" stroke="#10b981" fill="#10b981" fillOpacity={0.25} />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -1472,7 +1574,7 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                 <span>کۆی دەنگەکانی کارمەندان: <span className="font-mono text-slate-900 font-black">{storeAnalytics.totalStaffRatingsCount}</span></span>
                 <span className="font-mono text-emerald-600 font-black">
                   {metrics.totalSubmissions > 0 
-                    ? `${Math.round(((storeAnalytics.distribution[5] + storeAnalytics.distribution[4]) / metrics.totalSubmissions) * 100)}% ئەرێنی`
+                    ? `٪${Math.round(((storeAnalytics.distribution['90-100'] + storeAnalytics.distribution['80-89']) / Math.max(1, storeAnalytics.totalStaffRatingsCount)) * 100)} نایاب و زۆر باش`
                     : '٠%'}
                 </span>
               </div>
@@ -1488,11 +1590,11 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
               <div className="flex items-center gap-2">
                 <Table className="w-5 h-5 text-amber-500" />
                 <h3 className="text-sm font-black text-slate-900">
-                  خشتەی وردی شیکاری و نمرەی سەرجەم ٨ کارمەندەکە
+                  خشتەی وردی شیکاری و خاڵەکانی سەرجەم {currentTargetStaff.length} کارمەندەکە
                 </h3>
               </div>
               <span className="text-xs text-slate-500 font-bold">
-                ڕیزکراوە بەپێی تێکڕای نمرەی بەدەستهاتوو
+                ڕیزکراوە بەپێی کۆی گشتی خاڵەکان (بە ڕێژەی ٪ لەسەدا)
               </span>
             </div>
 
@@ -1503,12 +1605,13 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                     <th className="p-3.5 text-center">پلە</th>
                     <th className="p-3.5">کارمەند</th>
                     <th className="p-3.5">ڕۆڵ</th>
-                    <th className="p-3.5 text-center">ژمارەی دەنگ</th>
-                    <th className="p-3.5 text-center">{isWarehouse ? 'ڕەفتار لەگەڵ تیم' : 'مامەڵە لەگەڵ کڕیار'}</th>
-                    <th className="p-3.5 text-center">{isWarehouse ? 'چالاکی و لێهاتوویی' : 'چالاکی فرۆشتن'}</th>
-                    <th className="p-3.5 text-center">{isWarehouse ? 'پابەندبوون و سەلامەتی' : 'پابەندبوون بە دەوام'}</th>
-                    <th className="p-3.5 text-center">تێکڕای گشتی</th>
-                    <th className="p-3.5 text-center">ڕەفتاری بێزارکەر (پرسیاری ٥)</th>
+                    <th className="p-3.5 text-center">دەنگ</th>
+                    <th className="p-3.5 text-center">پ١: ڕەفتار (٢٠)</th>
+                    <th className="p-3.5 text-center">پ٢: هاوکاری (٢٠)</th>
+                    <th className="p-3.5 text-center">پ٣: دەوام و مۆبایل (٢٠)</th>
+                    <th className="p-3.5 text-center">پ٤: پاک و خاوێنی (٢٠)</th>
+                    <th className="p-3.5 text-center">پ٥: ڕەفتاری شوێن (٢٠)</th>
+                    <th className="p-3.5 text-center">کۆی گشتی (٪)</th>
                     <th className="p-3.5 text-center">شایستەیی</th>
                   </tr>
                 </thead>
@@ -1577,91 +1680,111 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
 
                         {/* Count */}
                         <td className="p-3.5 text-center font-mono font-bold text-slate-700">
-                          {item.count} جار
+                          {item.count} دەنگ
                         </td>
 
-                        {/* Service Rating */}
+                        {/* Question 1: Service / Behavior (out of 20) */}
                         <td className="p-3.5 text-center">
                           <span className="font-mono font-black text-emerald-600 text-xs">
-                            {item.avgService > 0 ? `⭐ ${item.avgService}` : '--'}
+                            {item.avgQ1Pts > 0 ? `${item.avgQ1Pts} / ٢٠` : '--'}
                           </span>
                         </td>
 
-                        {/* Performance Rating */}
+                        {/* Question 2: Helpfulness / Performance (out of 20) */}
                         <td className="p-3.5 text-center">
                           <span className="font-mono font-black text-blue-600 text-xs">
-                            {item.avgPerf > 0 ? `⭐ ${item.avgPerf}` : '--'}
+                            {item.avgQ2Pts > 0 ? `${item.avgQ2Pts} / ٢٠` : '--'}
                           </span>
                         </td>
 
-                        {/* Discipline Rating */}
+                        {/* Question 3: Discipline / Mobile (out of 20) */}
                         <td className="p-3.5 text-center">
                           <span className="font-mono font-black text-purple-600 text-xs">
-                            {item.avgDisc > 0 ? `⭐ ${item.avgDisc}` : '--'}
+                            {item.avgQ3Pts > 0 ? `${item.avgQ3Pts} / ٢٠` : '--'}
                           </span>
                         </td>
 
-                        {/* Overall Rating */}
+                        {/* Question 4: Cleanliness (out of 20) */}
                         <td className="p-3.5 text-center">
-                          <div className={`inline-flex items-center gap-1 font-mono font-black px-2.5 py-1 rounded-xl text-xs ${
-                            isFirst 
-                              ? 'bg-amber-400 text-slate-950 font-black shadow-xs' 
-                              : 'bg-amber-50 text-amber-700 border border-amber-200'
-                          }`}>
-                            <Star className={`w-3.5 h-3.5 ${isFirst ? 'fill-slate-950 text-slate-950' : 'fill-amber-500 text-amber-500'}`} />
-                            <span>{item.avgOverall > 0 ? `${item.avgOverall} / 5` : '--'}</span>
-                          </div>
+                          <span className="font-mono font-black text-amber-600 text-xs">
+                            {item.avgQ4Pts > 0 ? `${item.avgQ4Pts} / ٢٠` : '--'}
+                          </span>
                         </td>
 
-                        {/* Question 5: Annoying Behaviors Badge */}
+                        {/* Question 5: Annoying Behaviors Badge & Points (out of 20) */}
                         <td className="p-3.5 text-center">
                           {(() => {
                             const stat = annoyingBehaviorStats.perEmployee.find(p => p.emp.employeeId === item.emp.employeeId);
                             if (!stat || stat.total === 0) {
                               return <span className="text-[10px] text-slate-400 font-bold">چاوەڕوان</span>;
                             }
-                            if (stat.reportedCount > 0) {
-                              return (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setAnnoyingEmpFilter(item.emp.employeeId);
-                                    handleTabChange('annoying_qa');
-                                  }}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-black hover:bg-rose-100 transition-all cursor-pointer shadow-2xs"
-                                  title="کلیک بکە بۆ بینینی خاڵەکانی پرسیاری ٥"
-                                >
-                                  <AlertTriangle className="w-3 h-3 text-rose-600" />
-                                  <span>{stat.reportedCount} سەرنج</span>
-                                </button>
-                              );
-                            }
                             return (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
-                                <Check className="w-3 h-3 text-emerald-600" />
-                                <span>پاکە (١٠٠٪)</span>
-                              </span>
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="font-mono font-black text-sky-700 text-xs">
+                                  {item.avgQ5Pts > 0 ? `${item.avgQ5Pts} / ٢٠` : '--'}
+                                </span>
+                                {stat.reportedCount > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAnnoyingEmpFilter(item.emp.employeeId);
+                                      handleTabChange('annoying_qa');
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-black hover:bg-rose-100 transition-all cursor-pointer shadow-2xs"
+                                    title="کلیک بکە بۆ بینینی خاڵەکانی پرسیاری ٥"
+                                  >
+                                    <AlertTriangle className="w-2.5 h-2.5 text-rose-600" />
+                                    <span>{stat.reportedCount} سەرنج</span>
+                                  </button>
+                                ) : (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold">
+                                    <Check className="w-2.5 h-2.5 text-emerald-600" />
+                                    <span>خاوێن</span>
+                                  </span>
+                                )}
+                              </div>
                             );
                           })()}
+                        </td>
+
+                        {/* Overall Rating (Total Score in Percentage 0-100%, No Stars) */}
+                        <td className="p-3.5 text-center">
+                          <div className={`inline-flex items-center gap-0.5 font-mono font-black px-2.5 py-1 rounded-xl text-xs ${
+                            isFirst 
+                              ? 'bg-amber-400 text-slate-950 font-black shadow-xs ring-2 ring-amber-300' 
+                              : item.avgScorePercent >= 90
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
+                              : item.avgScorePercent >= 80
+                              ? 'bg-blue-50 text-blue-700 border border-blue-300'
+                              : item.avgScorePercent > 0
+                              ? 'bg-slate-100 text-slate-800 border border-slate-200'
+                              : 'text-slate-400'
+                          }`}>
+                            <span>{item.avgScorePercent > 0 ? `٪${item.avgScorePercent}` : '--'}</span>
+                          </div>
                         </td>
 
                         {/* Merit Badge */}
                         <td className="p-3.5 text-center">
                           {isFirst ? (
                             <span className="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[10px]">
-                              ئەستێرەی زێڕین
+                              پێشەنگی زێڕین
                             </span>
-                          ) : item.avgOverall >= 4.5 ? (
+                          ) : item.avgScorePercent >= 90 ? (
                             <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
                               نایاب
                             </span>
-                          ) : item.avgOverall >= 3.5 ? (
+                          ) : item.avgScorePercent >= 80 ? (
                             <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold text-[10px]">
                               زۆر باش
                             </span>
-                          ) : item.avgOverall > 0 ? (
-                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold text-[10px]">
+                          ) : item.avgScorePercent >= 70 ? (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[10px]">
                               باش
+                            </span>
+                          ) : item.avgScorePercent > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold text-[10px]">
+                              مامناوەند
                             </span>
                           ) : (
                             <span className="text-[10px] text-slate-400">چاوەڕوان</span>
@@ -2018,12 +2141,12 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                 onChange={(e) => setRatingFilter(e.target.value)}
                 className="h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold outline-none cursor-pointer"
               >
-                <option value="all">هەموو نمرەکان</option>
-                <option value="5">⭐⭐⭐⭐⭐ (٥ ئەستێرە)</option>
-                <option value="4">⭐⭐⭐⭐ (٤ ئەستێرە)</option>
-                <option value="3">⭐⭐⭐ (٣ ئەستێرە)</option>
-                <option value="2">⭐⭐ (٢ ئەستێرە)</option>
-                <option value="1">⭐ (١ ئەستێرە)</option>
+                <option value="all">هەموو ڕێژەکان (٪)</option>
+                <option value="90-100">٩٠٪ - ١٠٠٪ (نایاب)</option>
+                <option value="80-89">٨٠٪ - ٨٩٪ (زۆر باش)</option>
+                <option value="70-79">٧٠٪ - ٧٩٪ (باش)</option>
+                <option value="60-69">٦٠٪ - ٦٩٪ (مامناوەند)</option>
+                <option value="below-60">کەمتر لە ٦٠٪ (پێویستی بە چاککردنە)</option>
               </select>
 
               {submissions.length > 0 && (
@@ -2057,8 +2180,8 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                   <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-black">
                     <tr>
                       <th className="p-3.5">کۆدی PIN</th>
-                      <th className="p-3.5">بەشداربوو / مۆبایل</th>
-                      <th className="p-3.5 text-center">تێکڕای نمرە</th>
+                      <th className="p-3.5">بەشداربوو</th>
+                      <th className="p-3.5 text-center">کۆی خاڵەکان (٪)</th>
                       <th className="p-3.5 text-center">کارمەندانی هەڵسەنگێندراو</th>
                       <th className="p-3.5">پێشنیاری گشتی</th>
                       <th className="p-3.5">بەروار و کات</th>
@@ -2068,6 +2191,8 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                   <tbody className="divide-y divide-slate-100 font-semibold">
                     {filteredSubmissions.map((s) => {
                       const empEvaluationsCount = s.employeeRatings ? Object.keys(s.employeeRatings).length : 0;
+                      const subScore = getSubmissionOverallPercent(s);
+
                       return (
                         <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="p-3.5">
@@ -2077,20 +2202,21 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                           </td>
 
                           <td className="p-3.5">
-                            <div className="font-bold text-slate-900">
-                              {s.respondentName || s.targetName || 'نهێنی (ناونیشان نەکراو)'}
+                            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold text-[11px]">
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>نهێنی (پارێزراو)</span>
                             </div>
-                            {s.targetPhone && (
-                              <div className="text-[11px] font-mono text-slate-400" dir="ltr">
-                                {s.targetPhone}
-                              </div>
-                            )}
                           </td>
 
                           <td className="p-3.5 text-center">
-                            <div className="inline-flex items-center gap-1 font-mono font-black text-amber-500 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-lg">
-                              <Star className="w-3.5 h-3.5 fill-amber-500" />
-                              <span>{s.overallSatisfaction} / 5</span>
+                            <div className={`inline-flex items-center gap-0.5 font-mono font-black px-2.5 py-1 rounded-lg ${
+                              subScore >= 90
+                                ? 'text-emerald-700 bg-emerald-50 border border-emerald-300'
+                                : subScore >= 80
+                                ? 'text-blue-700 bg-blue-50 border border-blue-300'
+                                : 'text-amber-700 bg-amber-50 border border-amber-300'
+                            }`}>
+                              <span>٪{subScore}</span>
                             </div>
                           </td>
 
@@ -2532,10 +2658,10 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                   </div>
                   <div className="p-3 rounded-xl bg-slate-50 border border-slate-300 text-center">
                     <span className="text-[10px] font-bold text-slate-500 block">{isWarehouse ? "تێکڕای کۆگا" : "تێکڕای نمرەی پێشانگا"}</span>
-                    <span className="text-xl font-black font-mono text-amber-600">⭐ {metrics.avgOverall} / 5</span>
+                    <span className="text-xl font-black font-mono text-amber-600">٪{metrics.avgOverallPercent}</span>
                   </div>
                   <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-300 text-center">
-                    <span className="text-[10px] font-bold text-amber-800 block">ئەستێرەی زێڕینی مانگ</span>
+                    <span className="text-[10px] font-bold text-amber-800 block">پێشەنگی زێڕینی ستاف</span>
                     <span className="text-xs font-black text-amber-950 truncate block mt-1">
                       👑 {topPerformer?.emp.fullName || 'دیاری نەکراوە'}
                     </span>
@@ -2566,7 +2692,7 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 font-black text-[10px]">
-                            👑 پلەی یەکەم • ئەستێرەی زێڕینی ئاشڵی
+                            👑 پلەی یەکەم • خەڵاتی زێڕینی ئاشڵی
                           </span>
                         </div>
                         <h4 className="text-sm font-black text-slate-950 mt-1">{topPerformer.emp.fullName}</h4>
@@ -2577,8 +2703,8 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                     </div>
 
                     <div className="text-left font-mono font-black shrink-0">
-                      <span className="text-2xl text-amber-600 block">⭐ {topPerformer.avgOverall} / 5</span>
-                      <span className="text-[9px] text-slate-500 font-sans font-bold">تێکڕای خاڵی بەدەستهاتوو</span>
+                      <span className="text-2xl text-amber-600 block">٪{topPerformer.avgScorePercent}</span>
+                      <span className="text-[9px] text-slate-500 font-sans font-bold">{topPerformer.avgScorePercent} لە ١٠٠ خاڵ</span>
                     </div>
                   </div>
                 )}
@@ -2589,20 +2715,22 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                     <h4 className="text-xs font-black text-slate-900">
                       {isWarehouse ? `خشتەی نمرەی سەرجەم ${currentTargetStaff.length} کارمەندی بەڕێزی کۆگا:` : `خشتەی نمرەی سەرجەم ${currentTargetStaff.length} کارمەندی فرۆشیار و کاشێر:`}
                     </h4>
-                    <span className="text-[10px] text-slate-500 font-bold">پێوەری فەرمی ٥ ئەستێرە</span>
+                    <span className="text-[10px] text-slate-500 font-bold">پێوەری فەرمی خاڵەکان (٪)</span>
                   </div>
 
-                  <table className="w-full text-right text-[11px] border-collapse border border-slate-300">
+                  <table className="w-full text-right text-[10.5px] border-collapse border border-slate-300">
                     <thead className="bg-slate-100 text-slate-800 font-black">
                       <tr>
                         <th className="p-2 border border-slate-300 text-center">پلە</th>
                         <th className="p-2 border border-slate-300">ناوی کارمەند</th>
                         <th className="p-2 border border-slate-300 text-center">ڕۆڵ</th>
                         <th className="p-2 border border-slate-300 text-center">دەنگ</th>
-                        <th className="p-2 border border-slate-300 text-center">{isWarehouse ? 'مامەڵە لەگەڵ تیم' : 'مامەڵە لەگەڵ کڕیار'}</th>
-                        <th className="p-2 border border-slate-300 text-center">{isWarehouse ? 'چالاکی کۆگا' : 'چالاکی فرۆشتن'}</th>
-                        <th className="p-2 border border-slate-300 text-center">{isWarehouse ? 'دەوام و سەلامەتی' : 'پابەندبوون بە دەوام'}</th>
-                        <th className="p-2 border border-slate-300 text-center">تێکڕای گشتی</th>
+                        <th className="p-2 border border-slate-300 text-center">پ١: ڕەفتار (٢٠)</th>
+                        <th className="p-2 border border-slate-300 text-center">پ٢: هاوکاری (٢٠)</th>
+                        <th className="p-2 border border-slate-300 text-center">پ٣: دەوام (٢٠)</th>
+                        <th className="p-2 border border-slate-300 text-center">پ٤: خاوێنی (٢٠)</th>
+                        <th className="p-2 border border-slate-300 text-center">پ٥: شوێن (٢٠)</th>
+                        <th className="p-2 border border-slate-300 text-center">کۆی گشتی (٪)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 font-semibold">
@@ -2621,16 +2749,22 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                             {item.count}
                           </td>
                           <td className="p-2 border border-slate-300 text-center font-mono">
-                            {item.avgService > 0 ? `⭐ ${item.avgService}` : '--'}
+                            {item.avgQ1Pts > 0 ? item.avgQ1Pts : '--'}
                           </td>
                           <td className="p-2 border border-slate-300 text-center font-mono">
-                            {item.avgPerf > 0 ? `⭐ ${item.avgPerf}` : '--'}
+                            {item.avgQ2Pts > 0 ? item.avgQ2Pts : '--'}
                           </td>
                           <td className="p-2 border border-slate-300 text-center font-mono">
-                            {item.avgDisc > 0 ? `⭐ ${item.avgDisc}` : '--'}
+                            {item.avgQ3Pts > 0 ? item.avgQ3Pts : '--'}
+                          </td>
+                          <td className="p-2 border border-slate-300 text-center font-mono">
+                            {item.avgQ4Pts > 0 ? item.avgQ4Pts : '--'}
+                          </td>
+                          <td className="p-2 border border-slate-300 text-center font-mono">
+                            {item.avgQ5Pts > 0 ? item.avgQ5Pts : '--'}
                           </td>
                           <td className="p-2 border border-slate-300 text-center font-mono font-black text-amber-700">
-                            {item.avgOverall > 0 ? `⭐ ${item.avgOverall} / 5` : '--'}
+                            {item.avgScorePercent > 0 ? `٪${item.avgScorePercent}` : '--'}
                           </td>
                         </tr>
                       ))}
@@ -2662,24 +2796,24 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                     <div className="flex items-center gap-2">
                       <span className="w-6 h-6 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black text-xs">١</span>
                       <h4 className="text-xs font-black text-slate-900">
-                        {isWarehouse ? "پرسیاری ١: ڕەفتار و مامەڵە لەگەڵ تیمی کۆگا و هاوپیشەکان" : "پرسیاری ١: مامەڵە و ڕەفتار لەگەڵ کڕیار (خزمەتگوزاری و پێشوازی)"}
+                        {isWarehouse ? "پرسیاری ١: ڕەفتار و مامەڵە لەگەڵ تیمی کۆگا و هاوپیشەکان (لە ٢٠ خاڵ)" : "پرسیاری ١: مامەڵە و ڕەفتار لەگەڵ کڕیار (لە ٢٠ خاڵ)"}
                       </h4>
                     </div>
                     <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                      تێکڕا: ⭐ {storeAnalytics.avgService} / 5
+                      تێکڕا: {storeAnalytics.avgQ1} / ٢٠ (٪{Math.round((storeAnalytics.avgQ1 / 20) * 100)})
                     </span>
                   </div>
 
                   {/* Dynamic Column Bar Chart for Question 1 */}
                   <div className="flex items-end justify-between gap-2 h-32 px-2 pb-1 border-b border-slate-300">
-                    {staffLeaderboard.map((item, index) => {
-                      const percent = (item.avgService / 5) * 100;
+                    {staffLeaderboard.map((item) => {
+                      const percent = (item.avgQ1Pts / 20) * 100;
                       const h = item.count === 0 ? 8 : Math.max(12, percent);
 
                       return (
                         <div key={item.emp.employeeId} className="flex-1 flex flex-col items-center justify-end h-full">
                           <span className="text-[9px] font-mono font-black mb-1 text-emerald-700">
-                            {item.avgService > 0 ? item.avgService : '٠'}
+                            {item.avgQ1Pts > 0 ? item.avgQ1Pts : '٠'}
                           </span>
                           <div 
                             className="w-full max-w-[34px] rounded-t-md bg-emerald-500"
@@ -2700,24 +2834,24 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                     <div className="flex items-center gap-2">
                       <span className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-xs">٢</span>
                       <h4 className="text-xs font-black text-slate-900">
-                        {isWarehouse ? "پرسیاری ٢: چالاکی، لێهاتوویی و خێرایی لە کارەکانی کۆگا و گواستنەوە" : "پرسیاری ٢: چالاکی، زانیاری و لێهاتوویی لە فرۆشتن و کاش"}
+                        {isWarehouse ? "پرسیاری ٢: چالاکی، لێهاتوویی و خێرایی لە کارەکانی کۆگا (لە ٢٠ خاڵ)" : "پرسیاری ٢: چالاکی، زانیاری و لێهاتوویی لە فرۆشتن (لە ٢٠ خاڵ)"}
                       </h4>
                     </div>
                     <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
-                      تێکڕا: ⭐ {storeAnalytics.avgPerf} / 5
+                      تێکڕا: {storeAnalytics.avgQ2} / ٢٠ (٪{Math.round((storeAnalytics.avgQ2 / 20) * 100)})
                     </span>
                   </div>
 
                   {/* Dynamic Column Bar Chart for Question 2 */}
                   <div className="flex items-end justify-between gap-2 h-32 px-2 pb-1 border-b border-slate-300">
                     {staffLeaderboard.map((item) => {
-                      const percent = (item.avgPerf / 5) * 100;
+                      const percent = (item.avgQ2Pts / 20) * 100;
                       const h = item.count === 0 ? 8 : Math.max(12, percent);
 
                       return (
                         <div key={item.emp.employeeId} className="flex-1 flex flex-col items-center justify-end h-full">
                           <span className="text-[9px] font-mono font-black mb-1 text-blue-700">
-                            {item.avgPerf > 0 ? item.avgPerf : '٠'}
+                            {item.avgQ2Pts > 0 ? item.avgQ2Pts : '٠'}
                           </span>
                           <div 
                             className="w-full max-w-[34px] rounded-t-md bg-blue-600"
@@ -2738,24 +2872,24 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                     <div className="flex items-center gap-2">
                       <span className="w-6 h-6 rounded-lg bg-purple-600 text-white flex items-center justify-center font-black text-xs">٣</span>
                       <h4 className="text-xs font-black text-slate-900">
-                        {isWarehouse ? "پرسیاری ٣: پابەندبوون بە کاتی دەوام، پاراستنی کەلوپەل و سەلامەتی" : "پرسیاری ٣: پابەندبوون بە دەوام، کات، و ڕێنماییەکانی پێشانگا"}
+                        {isWarehouse ? "پرسیاری ٣: پابەندبوون بە دەوام و مۆبایل بەکارنەهێنان (لە ٢٠ خاڵ)" : "پرسیاری ٣: پابەندبوون بە دەوام و ڕێنماییەکان (لە ٢٠ خاڵ)"}
                       </h4>
                     </div>
                     <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-md">
-                      تێکڕا: ⭐ {storeAnalytics.avgDisc} / 5
+                      تێکڕا: {storeAnalytics.avgQ3} / ٢٠ (٪{Math.round((storeAnalytics.avgQ3 / 20) * 100)})
                     </span>
                   </div>
 
-                  {/* 8-Column Bar Chart for Question 3 */}
+                  {/* Column Bar Chart for Question 3 */}
                   <div className="flex items-end justify-between gap-2 h-32 px-2 pb-1 border-b border-slate-300">
                     {staffLeaderboard.map((item) => {
-                      const percent = (item.avgDisc / 5) * 100;
+                      const percent = (item.avgQ3Pts / 20) * 100;
                       const h = item.count === 0 ? 8 : Math.max(12, percent);
 
                       return (
                         <div key={item.emp.employeeId} className="flex-1 flex flex-col items-center justify-end h-full">
                           <span className="text-[9px] font-mono font-black mb-1 text-purple-700">
-                            {item.avgDisc > 0 ? item.avgDisc : '٠'}
+                            {item.avgQ3Pts > 0 ? item.avgQ3Pts : '٠'}
                           </span>
                           <div 
                             className="w-full max-w-[34px] rounded-t-md bg-purple-600"
@@ -2770,24 +2904,24 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                   </div>
                 </div>
 
-                {/* 2.4 Graph Question 4: Overall Rating & Winner Podium (تێکڕای نمرەی گشتی) */}
+                {/* 2.4 Graph Question 4: Cleanliness & Question 5 */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 break-inside-avoid">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <span className="w-6 h-6 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xs">٤</span>
                       <h4 className="text-xs font-black text-slate-900">
-                        پرسیاری ٤: نمرەی گشتی و بەراوردی کۆتایی سەرجەم کارمەندان
+                        پرسیاری ٤: پاک و خاوێنی و گرنگیدان بە شوێنەکە (لە ٢٠ خاڵ)
                       </h4>
                     </div>
                     <span className="text-[10px] font-mono font-bold text-amber-900 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-md">
-                      تێکڕا: ⭐ {metrics.avgOverall} / 5
+                      تێکڕا: {storeAnalytics.avgQ4} / ٢٠ (٪{Math.round((storeAnalytics.avgQ4 / 20) * 100)})
                     </span>
                   </div>
 
-                  {/* 8-Column Bar Chart for Question 4 (Gold, Silver, Bronze highlights) */}
+                  {/* Column Bar Chart for Question 4 */}
                   <div className="flex items-end justify-between gap-2 h-32 px-2 pb-1 border-b border-slate-300">
                     {staffLeaderboard.map((item, index) => {
-                      const percent = (item.avgOverall / 5) * 100;
+                      const percent = (item.avgQ4Pts / 20) * 100;
                       const h = item.count === 0 ? 8 : Math.max(12, percent);
                       const isFirst = index === 0 && item.count > 0;
                       const isSecond = index === 1 && item.count > 0;
@@ -2796,7 +2930,7 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                       return (
                         <div key={item.emp.employeeId} className="flex-1 flex flex-col items-center justify-end h-full">
                           <span className={`text-[9px] font-mono font-black mb-1 ${isFirst ? 'text-amber-600' : 'text-slate-800'}`}>
-                            {item.avgOverall > 0 ? item.avgOverall : '٠'}
+                            {item.avgQ4Pts > 0 ? item.avgQ4Pts : '٠'}
                           </span>
                           <div 
                             className={`w-full max-w-[34px] rounded-t-md ${
@@ -2813,44 +2947,58 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                   </div>
                 </div>
 
-                {/* 2.5 General Store Dimensions & Rating Distribution */}
+                {/* 2.5 General Store Dimensions & Percentage Distribution */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 break-inside-avoid">
                   
                   {/* Store Dimensions */}
                   <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2">
                     <span className="font-black text-slate-900 block pb-1 border-b border-slate-200">
-                      پوختەی ڕەزامەندی لەسەر تەوەرە سەرەکییەکان:
+                      پوختەی خاڵەکانی تەوەرە سەرەکییەکان:
                     </span>
                     <div className="flex items-center justify-between">
-                      <span>• خزمەتگوزاری کڕیار:</span>
-                      <span className="font-mono text-emerald-700 font-black">⭐ {storeAnalytics.avgService} / 5</span>
+                      <span>• ١. مامەڵە و ڕەفتار:</span>
+                      <span className="font-mono text-emerald-700 font-black">{storeAnalytics.avgQ1} / ٢٠</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span>• لێهاتوویی فرۆشتن:</span>
-                      <span className="font-mono text-blue-700 font-black">⭐ {storeAnalytics.avgPerf} / 5</span>
+                      <span>• ٢. چالاکی و هاوکاری:</span>
+                      <span className="font-mono text-blue-700 font-black">{storeAnalytics.avgQ2} / ٢٠</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span>• دەوام و دیسیپلین:</span>
-                      <span className="font-mono text-purple-700 font-black">⭐ {storeAnalytics.avgDisc} / 5</span>
+                      <span>• ٣. دەوام و مۆبایل:</span>
+                      <span className="font-mono text-purple-700 font-black">{storeAnalytics.avgQ3} / ٢٠</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span>• ڕەزامەندی گشتی:</span>
-                      <span className="font-mono text-amber-600 font-black">⭐ {metrics.avgOverall} / 5</span>
+                      <span>• ٤. پاک و خاوێنی:</span>
+                      <span className="font-mono text-amber-600 font-black">{storeAnalytics.avgQ4} / ٢٠</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>• ٥. ڕەفتاری شوێنەکە:</span>
+                      <span className="font-mono text-sky-700 font-black">{storeAnalytics.avgQ5} / ٢٠</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-200 font-black">
+                      <span>• تێکڕای گشتی ستاف:</span>
+                      <span className="font-mono text-emerald-600">٪{metrics.avgOverallPercent}</span>
                     </div>
                   </div>
 
-                  {/* Distribution 5-Star to 1-Star */}
+                  {/* Distribution Percentage Tiers */}
                   <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2">
                     <span className="font-black text-slate-900 block pb-1 border-b border-slate-200">
-                      دابەشبوونی نمرەکان (١ بۆ ٥ ئەستێرە):
+                      دابەشبوونی هەڵسەنگاندنەکان (بە ڕێژەی ٪):
                     </span>
-                    {[5, 4, 3, 2, 1].map((s) => {
-                      const c = storeAnalytics.distribution[s] || 0;
-                      const p = metrics.totalSubmissions > 0 ? Math.round((c / metrics.totalSubmissions) * 100) : 0;
+                    {[
+                      { key: '90-100', label: '٩٠٪ - ١٠٠٪ (نایاب)' },
+                      { key: '80-89', label: '٨٠٪ - ٨٩٪ (زۆر باش)' },
+                      { key: '70-79', label: '٧٠٪ - ٧٩٪ (باش)' },
+                      { key: '60-69', label: '٦٠٪ - ٦٩٪ (مامناوەند)' },
+                      { key: 'below-60', label: 'کەمتر لە ٦٠٪ (لاواز)' }
+                    ].map((tier) => {
+                      const c = storeAnalytics.distribution[tier.key] || 0;
+                      const p = storeAnalytics.totalStaffRatingsCount > 0 ? Math.round((c / storeAnalytics.totalStaffRatingsCount) * 100) : 0;
                       return (
-                        <div key={s} className="flex items-center justify-between text-[11px]">
-                          <span>{s} ئەستێرە:</span>
-                          <span className="font-mono font-bold text-slate-700">{c} جار ({p}%)</span>
+                        <div key={tier.key} className="flex items-center justify-between text-[11px]">
+                          <span>{tier.label}:</span>
+                          <span className="font-mono font-bold text-slate-700">{c} دەنگ (٪{p})</span>
                         </div>
                       );
                     })}
@@ -2891,9 +3039,9 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                       <thead className="bg-slate-100 text-slate-800 font-black">
                         <tr>
                           <th className="p-2 border border-slate-300 text-center">کۆدی PIN</th>
-                          <th className="p-2 border border-slate-300">بەشداربوو / مۆبایل</th>
+                          <th className="p-2 border border-slate-300">بەشداربوو</th>
                           <th className="p-2 border border-slate-300 text-center">بەروار و کات</th>
-                          <th className="p-2 border border-slate-300 text-center">تێکڕای نمرە</th>
+                          <th className="p-2 border border-slate-300 text-center">کۆی خاڵەکان (٪)</th>
                           <th className="p-2 border border-slate-300">سەرنج و پێشنیار بۆ بەڕێوەبەرایەتی</th>
                         </tr>
                       </thead>
@@ -2904,14 +3052,13 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                               {s.pin}
                             </td>
                             <td className="p-2 border border-slate-300">
-                              <span className="font-bold text-slate-950 block">{s.respondentName || s.targetName || 'نهێنی'}</span>
-                              {s.targetPhone && <span className="font-mono text-[9.5px] text-slate-500" dir="ltr">{s.targetPhone}</span>}
+                              <span className="font-bold text-slate-950 block">نهێنی (پارێزراو)</span>
                             </td>
                             <td className="p-2 border border-slate-300 text-center font-mono text-[10px]" dir="ltr">
                               {s.baghdadDate} {s.baghdadTime}
                             </td>
-                            <td className="p-2 border border-slate-300 text-center font-mono font-black text-amber-600">
-                              ⭐ {s.overallSatisfaction} / 5
+                            <td className="p-2 border border-slate-300 text-center font-mono font-black text-emerald-700">
+                              ٪{getSubmissionOverallPercent(s)}
                             </td>
                             <td className="p-2 border border-slate-300 text-[10px] text-slate-700">
                               {s.suggestionsForManagement || s.positiveHighlights || '--'}
@@ -3027,86 +3174,96 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
 
             {/* Scrollable Body */}
             <div className="p-5 overflow-y-auto space-y-4 text-xs font-medium">
-              {/* Respondent info */}
+              {/* Respondent info & Total percentage */}
               <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-2 gap-3">
                 <div>
-                  <span className="text-slate-400 font-bold block mb-0.5">بەشداربوو / ناو:</span>
-                  <span className="font-bold text-slate-900">
-                    {selectedSubmission.respondentName || selectedSubmission.targetName || 'نهێنی'}
+                  <span className="text-slate-400 font-bold block mb-0.5">بەشداربوو:</span>
+                  <span className="font-bold text-slate-900 inline-flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>نهێنی (پارێزراو)</span>
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 font-bold block mb-0.5">ژمارەی مۆبایل:</span>
-                  <span className="font-bold text-slate-900 font-mono" dir="ltr">
-                    {selectedSubmission.targetPhone || '--'}
+                  <span className="text-slate-400 font-bold block mb-0.5">کۆی گشتی خاڵەکان (٪):</span>
+                  <span className="font-black font-mono text-emerald-600 text-sm">
+                    ٪{getSubmissionOverallPercent(selectedSubmission)} (لە ١٠٠٪)
                   </span>
-                </div>
-                <div>
-                  <span className="text-slate-400 font-bold block mb-0.5">تێکڕای گشتی:</span>
-                  <span className="font-black font-mono text-amber-500">⭐ {selectedSubmission.overallSatisfaction} / 5</span>
                 </div>
                 <div>
                   <span className="text-slate-400 font-bold block mb-0.5">کاتی تۆمارکردن:</span>
                   <span className="font-mono text-slate-700">{selectedSubmission.baghdadDate} {selectedSubmission.baghdadTime}</span>
                 </div>
+                <div>
+                  <span className="text-slate-400 font-bold block mb-0.5">بەش:</span>
+                  <span className="font-bold text-slate-900">{selectedSubmission.department || (isWarehouse ? 'کۆگا و گواستنەوە' : 'فرۆشیار و کاشێر')}</span>
+                </div>
               </div>
 
-              {/* 🌟 8 EMPLOYEES DETAILED EVALUATION CARDS */}
+              {/* 🌟 EMPLOYEES DETAILED EVALUATION CARDS */}
               {selectedSubmission.employeeRatings && Object.keys(selectedSubmission.employeeRatings).length > 0 ? (
                 <div className="space-y-3">
                   <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
                     <Users className="w-4 h-4 text-amber-500" />
-                    <span>هەڵسەنگاندنی وردی کارمەندان ({selectedSubmission.department || 'فرۆشیار، کاشێر و کۆگا'}):</span>
+                    <span>هەڵسەنگاندنی وردی سەرجەم کارمەندان (خاڵ لەسەر ٢٠ بۆ هەر پرسیارێک):</span>
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {Object.values(selectedSubmission.employeeRatings).map((er: any) => (
-                      <div key={er.employeeId} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
-                        <div className="flex items-center justify-between border-b pb-2 border-slate-200">
-                          <span className="font-black text-slate-900">{er.fullName || er.name}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-bold">
-                            {er.role}
-                          </span>
-                        </div>
+                    {Object.values(selectedSubmission.employeeRatings).map((er: any) => {
+                      const sc = calculateEmployeeScoreBreakdown(er);
+                      return (
+                        <div key={er.employeeId} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+                          <div className="flex items-center justify-between border-b pb-2 border-slate-200">
+                            <span className="font-black text-slate-900">{er.fullName || er.name}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-bold">
+                              {er.role}
+                            </span>
+                          </div>
 
-                        <div className="space-y-1 text-[11px] text-slate-700 font-semibold">
-                          <div className="flex items-center justify-between">
-                            <span>• مامەڵە و ڕەفتار:</span>
-                            <span className="font-mono text-emerald-600 font-bold">⭐ {er.serviceRating} / 5</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span>• چالاکی و کار:</span>
-                            <span className="font-mono text-blue-600 font-bold">⭐ {er.performanceRating} / 5</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span>• پابەندبوون بە دەوام:</span>
-                            <span className="font-mono text-purple-600 font-bold">⭐ {er.disciplineRating} / 5</span>
-                          </div>
-                          {er.teamworkRating ? (
+                          <div className="space-y-1.5 text-[11px] text-slate-700 font-semibold">
                             <div className="flex items-center justify-between">
-                              <span>• هاوکاری و هەماهەنگی (پرسیاری ٥):</span>
-                              <span className="font-mono text-indigo-600 font-bold">⭐ {er.teamworkRating} / 5</span>
+                              <span>١. مامەڵە و ڕەفتار:</span>
+                              <span className="font-mono text-emerald-600 font-black">{sc.q1Pts} / ٢٠</span>
                             </div>
-                          ) : null}
-                          <div className="flex items-center justify-between pt-1 border-t border-slate-200">
-                            <span className="font-black">نمرەی گشتی:</span>
-                            <span className="font-mono text-amber-600 font-black text-xs">⭐ {er.overallRating} / 5</span>
+                            <div className="flex items-center justify-between">
+                              <span>٢. هاوکاری بێ پێ وتن:</span>
+                              <span className="font-mono text-blue-600 font-black">{sc.q2Pts} / ٢٠</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>٣. مۆبایل و پابەندبوون:</span>
+                              <span className="font-mono text-purple-600 font-black">{sc.q3Pts} / ٢٠</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>٤. پاک و خاوێنی:</span>
+                              <span className="font-mono text-amber-600 font-black">{sc.q4Pts} / ٢٠</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>٥. ڕەفتاری شوێنەکە:</span>
+                              <span className="font-mono text-sky-700 font-black">
+                                {sc.q5Pts} / ٢٠ {er.hasAnnoyingBehavior === 'yes' ? '(بەڵێ هەیەتی)' : '(نەخێر نییەتی)'}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between pt-1.5 border-t border-slate-200">
+                              <span className="font-black text-slate-900">کۆی گشتی خاڵەکان:</span>
+                              <span className="font-mono text-emerald-700 font-black text-xs px-2 py-0.5 bg-emerald-100 rounded-lg">
+                                ٪{sc.totalPts} ({sc.totalPts} / ١٠٠ خاڵ)
+                              </span>
+                            </div>
                           </div>
+
+                          {er.note5 && (
+                            <div className="p-2 rounded-xl bg-amber-50/70 border border-amber-200 text-[11px] text-amber-900 mt-1">
+                              📝 <span className="font-bold">تێبینی پرسیاری ٥:</span> {er.note5}
+                            </div>
+                          )}
+
+                          {er.comment && (
+                            <div className="p-2 rounded-xl bg-white border border-slate-200 text-[11px] text-slate-800 mt-1">
+                              💬 <span className="font-bold">سەرنج:</span> {er.comment}
+                            </div>
+                          )}
                         </div>
-
-                        {er.note5 && (
-                          <div className="p-2 rounded-xl bg-amber-50/70 border border-amber-200 text-[11px] text-amber-900 mt-1">
-                            📝 <span className="font-bold">تێبینی پرسیاری ٥:</span> {er.note5}
-                          </div>
-                        )}
-
-                        {er.comment && (
-                          <div className="p-2 rounded-xl bg-white border border-slate-200 text-[11px] text-slate-800 mt-1">
-                            💬 <span className="font-bold">سەرنج:</span> {er.comment}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : null}
