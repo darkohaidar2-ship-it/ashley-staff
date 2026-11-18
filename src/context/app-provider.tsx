@@ -405,8 +405,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (typeof window !== 'undefined') {
             try {
                 safeStorage.removeItem('ashley_live_checkins');
-                if (typeof window.localStorage !== 'undefined') {
-                    const keys = Object.keys(window.localStorage);
+                try {
+                    const keys = Object.keys(window.localStorage || {});
                     for (const k of keys) {
                         if (
                             k.startsWith('ashley_admin_notes_') ||
@@ -418,7 +418,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                             safeStorage.removeItem(k);
                         }
                     }
-                }
+                } catch {}
             } catch (err) { logger.warn(err); }
         }
 
@@ -655,7 +655,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // ViewMode & Scale Settings
     const [viewMode, setViewMode] = useState<ViewMode>(() => {
         if (typeof window !== 'undefined') {
-            const cached = localStorage.getItem('ashley_view_mode');
+            const cached = safeStorage.getItem('ashley_view_mode');
             if (cached === 'standard' || cached === 'compact' || cached === 'extra-large') {
                 return 'small';
             }
@@ -666,7 +666,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            localStorage.setItem('ashley_view_mode', viewMode);
+            safeStorage.setItem('ashley_view_mode', viewMode);
         }
     }, [viewMode]);
 

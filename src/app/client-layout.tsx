@@ -60,6 +60,18 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.setAttribute('dir', 'rtl');
     document.documentElement.setAttribute('lang', 'ku');
+
+    const handleChunkError = (event: ErrorEvent) => {
+      const msg = event?.message || '';
+      if (/Loading chunk|failed to fetch dynamically imported module/i.test(msg)) {
+        try {
+          event.preventDefault();
+          window.location.reload();
+        } catch {}
+      }
+    };
+    window.addEventListener('error', handleChunkError);
+    return () => window.removeEventListener('error', handleChunkError);
   }, []);
 
   return (

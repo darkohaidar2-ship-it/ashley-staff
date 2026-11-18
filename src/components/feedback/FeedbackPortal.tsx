@@ -156,42 +156,42 @@ const WAREHOUSE_Q4_OPTIONS: FeedbackScaleOption[] = [
 ];
 
 // ============================================================================
-// 🛍️ ٢. پرسیارەکانی فرۆشیاران و کاشێر (Sales & Cashiers • Based on 18 points)
+// 🛍️ ٢. پرسیارەکانی فرۆشیاران و کاشێر (Sales & Cashiers • Based on 18 handwritten points)
 // ============================================================================
-const SALES_Q1_LABEL = "١. تا چەند خزمەت بە کڕیار دەکات و هونەری قسەکردن و قەناعەت پێکردنی هەیە؟ (گوێگرتن و ئەتەکیەت)";
+const SALES_Q1_LABEL = "١. خزمەتکردن و قەناعەت پێکردنی کڕیار، هونەری قسەکردن و دەربڕین، گوێگرتن و ئەتەکیەت";
 const SALES_Q1_OPTIONS: FeedbackScaleOption[] = [
   { value: 1, kurdishDigit: '١', label: 'زۆر لاوازە (٤ خاڵ)', shortLabel: 'زۆر لاوازە' },
   { value: 2, kurdishDigit: '٢', label: 'کەمە (٨ خاڵ)', shortLabel: 'کەمە' },
   { value: 3, kurdishDigit: '٣', label: 'مامناوەندە (١٢ خاڵ)', shortLabel: 'مامناوەندە' },
   { value: 4, kurdishDigit: '٤', label: 'باشە (١٦ خاڵ)', shortLabel: 'باشە' },
-  { value: 5, kurdishDigit: '٥', label: 'زۆر نایابە (٢٠ خاڵ)', shortLabel: 'زۆر نایابە' },
+  { value: 5, kurdishDigit: '٥', label: 'زۆر نایاب و باڵایە (٢٠ خاڵ)', shortLabel: 'زۆر نایاب' },
 ];
 
-const SALES_Q2_LABEL = "٢. تا چەند گرنگی بە ڕێکخستنی عەرز، پاک و خاوێنی و ڕێکی پۆشینی خۆی دەدات؟";
+const SALES_Q2_LABEL = "٢. ڕێکخستنی عەرز، کۆڵنەدان لە کاتی دانانی کەلوپەل لە هۆڵەکە، پاک و خاوێنی و ڕێکی پۆشین";
 const SALES_Q2_OPTIONS: FeedbackScaleOption[] = [
   { value: 1, kurdishDigit: '١', label: 'گرنگی پێ نادات (٤ خاڵ)', shortLabel: 'گرنگی پێ نادات' },
-  { value: 2, kurdishDigit: '٢', label: 'کەم (٨ خاڵ)', shortLabel: 'کەم' },
-  { value: 3, kurdishDigit: '٣', label: 'مامناوەند (١٢ خاڵ)', shortLabel: 'مامناوەند' },
-  { value: 4, kurdishDigit: '٤', label: 'زۆربەی کات (١٦ خاڵ)', shortLabel: 'زۆربەی کات' },
-  { value: 5, kurdishDigit: '٥', label: 'هەمیشە بە ڕێکی و پاکی (٢٠ خاڵ)', shortLabel: 'هەمیشە ڕێک و پاک' },
+  { value: 2, kurdishDigit: '٢', label: 'کەم گرنگی پێ دەدات (٨ خاڵ)', shortLabel: 'کەمە' },
+  { value: 3, kurdishDigit: '٣', label: 'مامناوەندە (١٢ خاڵ)', shortLabel: 'مامناوەندە' },
+  { value: 4, kurdishDigit: '٤', label: 'زۆربەی کات ڕێکە (١٦ خاڵ)', shortLabel: 'زۆربەی کات' },
+  { value: 5, kurdishDigit: '٥', label: 'هەمیشە بە ڕێکی و پاکی نموونەییە (٢٠ خاڵ)', shortLabel: 'هەمیشە نموونەیی' },
 ];
 
-const SALES_Q3_LABEL = "٣. لە کاتی قەرەباڵغیدا هاوکاری هاوپیشەکانی دەکات، و دوورە لە تەداخول و دروستکردنی کێشە؟";
+const SALES_Q3_LABEL = "٣. هاوکاری هاوپیشەکان، ڕێکخستنی ئەرکەکان لە کاتی خۆیدا بەبێ چاودێری، و دووربوون لە تەداخل";
 const SALES_Q3_OPTIONS: FeedbackScaleOption[] = [
   { value: 1, kurdishDigit: '١', label: 'هاوکاری ناکات (٤ خاڵ)', shortLabel: 'هاوکاری ناکات' },
-  { value: 2, kurdishDigit: '٢', label: 'زۆر کەم (٨ خاڵ)', shortLabel: 'زۆر کەم' },
+  { value: 2, kurdishDigit: '٢', label: 'زۆر کەم هاوکارە (٨ خاڵ)', shortLabel: 'زۆر کەم' },
   { value: 3, kurdishDigit: '٣', label: 'مامناوەندە (١٢ خاڵ)', shortLabel: 'مامناوەندە' },
-  { value: 4, kurdishDigit: '٤', label: 'زۆربەی کات هاوکارە (١٦ خاڵ)', shortLabel: 'زۆربەی کات' },
-  { value: 5, kurdishDigit: '٥', label: 'هەمیشە هاوکار و تەبایە (٢٠ خاڵ)', shortLabel: 'هەمیشە هاوکار' },
+  { value: 4, kurdishDigit: '٤', label: 'زۆربەی کات هاوکار و ڕێکە (١٦ خاڵ)', shortLabel: 'زۆربەی کات' },
+  { value: 5, kurdishDigit: '٥', label: 'هەمیشە هاوکار، سەربەخۆ و تەبایە (٢٠ خاڵ)', shortLabel: 'هەمیشە هاوکار' },
 ];
 
-const SALES_Q4_LABEL = "٤. تا چەند پابەندە بە کاتی دەوام، ڕێنماییەکانی ئاشڵی و بەکارنەهێنانی مۆبایل بۆ کاری شەخسی؟";
+const SALES_Q4_LABEL = "٤. پابەندبوون بە کاتی دەوام (هاتن و ڕۆیشتن)، ڕێنماییەکانی ئاشڵی و بەکارنەهێنانی مۆبایل بۆ کاری شەخسی";
 const SALES_Q4_OPTIONS: FeedbackScaleOption[] = [
   { value: 1, kurdishDigit: '١', label: 'پابەند نییە (٤ خاڵ)', shortLabel: 'پابەند نییە' },
   { value: 2, kurdishDigit: '٢', label: 'کەم پابەندە (٨ خاڵ)', shortLabel: 'کەم پابەندە' },
   { value: 3, kurdishDigit: '٣', label: 'مامناوەندە (١٢ خاڵ)', shortLabel: 'مامناوەندە' },
   { value: 4, kurdishDigit: '٤', label: 'پابەندە (١٦ خاڵ)', shortLabel: 'پابەندە' },
-  { value: 5, kurdishDigit: '٥', label: 'زۆر پابەندە (٢٠ خاڵ)', shortLabel: 'زۆر پابەندە' },
+  { value: 5, kurdishDigit: '٥', label: 'زۆر پابەند و نموونەییە (٢٠ خاڵ)', shortLabel: 'زۆر پابەند' },
 ];
 
 // Fallback legacy aliases

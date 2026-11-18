@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 import { logger } from '@/lib/logger';
+import { safeStorage } from '@/lib/safe-storage';
 import { getBaghdadNow } from '@/lib/telegram/telegram-service';
 import { ASHLEY_OFFICIAL_EMPLOYEES } from '@/lib/ashley-employees';
 import type { Employee } from '@/lib/types';
@@ -87,7 +88,7 @@ export function getSyncedFeedbackStaffList(
   // 2. Overlay client localStorage cache (where /employees page saves live edits)
   if (typeof window !== 'undefined') {
     try {
-      const cached = localStorage.getItem('ashley_sb_employees') || localStorage.getItem('ashley_local_employees');
+      const cached = safeStorage.getItem('ashley_sb_employees') || safeStorage.getItem('ashley_local_employees');
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
