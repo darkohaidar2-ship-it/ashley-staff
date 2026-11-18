@@ -116,58 +116,105 @@ const SCALE_STYLES: Record<number, {
   },
 };
 
-// ١. تا چەند لە ئەدا و هەڵسوکەوتی ڕازیت؟ (ڕەفتار و ڕێز گرتن)
-const Q1_OPTIONS: FeedbackScaleOption[] = [
-  { value: 1, kurdishDigit: '١', label: 'زۆر ناڕازیم', shortLabel: 'زۆر ناڕازیم' },
-  { value: 2, kurdishDigit: '٢', label: 'ناڕازیم', shortLabel: 'ناڕازیم' },
-  { value: 3, kurdishDigit: '٣', label: 'مامناوەند', shortLabel: 'مامناوەند' },
-  { value: 4, kurdishDigit: '٤', label: 'ڕازیم', shortLabel: 'ڕازیم' },
-  { value: 5, kurdishDigit: '٥', label: 'زۆر ڕازیم', shortLabel: 'زۆر ڕازیم' },
+// ============================================================================
+// 📦 ١. پرسیارەکانی کۆگا (Warehouse Questions • 100-Point Model)
+// ============================================================================
+const WAREHOUSE_Q1_LABEL = "١. تا چەند لە ئەدا و هەڵسوکەوتی ڕازیت؟ (ڕەفتار و ڕێز گرتن)";
+const WAREHOUSE_Q1_OPTIONS: FeedbackScaleOption[] = [
+  { value: 1, kurdishDigit: '١', label: 'زۆر ناڕازیم (٤ خاڵ)', shortLabel: 'زۆر ناڕازیم' },
+  { value: 2, kurdishDigit: '٢', label: 'ناڕازیم (٨ خاڵ)', shortLabel: 'ناڕازیم' },
+  { value: 3, kurdishDigit: '٣', label: 'مامناوەند (١٢ خاڵ)', shortLabel: 'مامناوەند' },
+  { value: 4, kurdishDigit: '٤', label: 'ڕازیم (١٦ خاڵ)', shortLabel: 'ڕازیم' },
+  { value: 5, kurdishDigit: '٥', label: 'زۆر ڕازیم (٢٠ خاڵ)', shortLabel: 'زۆر ڕازیم' },
 ];
 
-// ٢. لە کاتی پێویست دا بە بێ پێ وتن هاوکاریتان دەکات؟
-const Q2_OPTIONS: FeedbackScaleOption[] = [
-  { value: 1, kurdishDigit: '١', label: 'هەرگیز', shortLabel: 'هەرگیز' },
-  { value: 2, kurdishDigit: '٢', label: 'زۆر کەم', shortLabel: 'زۆر کەم' },
-  { value: 3, kurdishDigit: '٣', label: 'هەندێک جار', shortLabel: 'هەندێک جار' },
-  { value: 4, kurdishDigit: '٤', label: 'زۆربەی کات', shortLabel: 'زۆربەی کات' },
-  { value: 5, kurdishDigit: '٥', label: 'هەمیشە هاوکارە', shortLabel: 'هەمیشە' },
+const WAREHOUSE_Q2_LABEL = "٢. لە کاتی پێویست دا بە بێ پێ وتن هاوکاریتان دەکات؟";
+const WAREHOUSE_Q2_OPTIONS: FeedbackScaleOption[] = [
+  { value: 1, kurdishDigit: '١', label: 'هەرگیز (٤ خاڵ)', shortLabel: 'هەرگیز' },
+  { value: 2, kurdishDigit: '٢', label: 'زۆر کەم (٨ خاڵ)', shortLabel: 'زۆر کەم' },
+  { value: 3, kurdishDigit: '٣', label: 'هەندێک جار (١٢ خاڵ)', shortLabel: 'هەندێک جار' },
+  { value: 4, kurdishDigit: '٤', label: 'زۆربەی کات (١٦ خاڵ)', shortLabel: 'زۆربەی کات' },
+  { value: 5, kurdishDigit: '٥', label: 'هەمیشە هاوکارە (٢٠ خاڵ)', shortLabel: 'هەمیشە' },
 ];
 
-// ٣. لە کاتی کارکردن مۆبایل بەکار دێنێت بۆ کار و باری خۆی؟
-const Q3_OPTIONS: FeedbackScaleOption[] = [
-  { value: 1, kurdishDigit: '١', label: 'بەردەوام', shortLabel: 'بەردەوام' },
-  { value: 2, kurdishDigit: '٢', label: 'زۆربەی کات', shortLabel: 'زۆربەی کات' },
-  { value: 3, kurdishDigit: '٣', label: 'مامناوەند', shortLabel: 'مامناوەند' },
-  { value: 4, kurdishDigit: '٤', label: 'زۆر بە دەگمەن', shortLabel: 'زۆر دەگمەن' },
-  { value: 5, kurdishDigit: '٥', label: 'هەرگیز بەکار ناهێنێت', shortLabel: 'هەرگیز' },
+const WAREHOUSE_Q3_LABEL = "٣. لە کاتی کارکردن مۆبایل بەکار دێنێت بۆ کار و باری خۆی؟";
+const WAREHOUSE_Q3_OPTIONS: FeedbackScaleOption[] = [
+  { value: 1, kurdishDigit: '١', label: 'بەردەوام (٤ خاڵ)', shortLabel: 'بەردەوام' },
+  { value: 2, kurdishDigit: '٢', label: 'زۆربەی کات (٨ خاڵ)', shortLabel: 'زۆربەی کات' },
+  { value: 3, kurdishDigit: '٣', label: 'مامناوەند (١٢ خاڵ)', shortLabel: 'مامناوەند' },
+  { value: 4, kurdishDigit: '٤', label: 'زۆر بە دەگمەن (١٦ خاڵ)', shortLabel: 'زۆر دەگمەن' },
+  { value: 5, kurdishDigit: '٥', label: 'هەرگیز بەکار ناهێنێت (٢٠ خاڵ)', shortLabel: 'هەرگیز' },
 ];
 
-// ٤. تا چەند گرنگی دە دات بە پاک و خاوێنی خۆی و شوێنەکە؟
-const Q4_OPTIONS: FeedbackScaleOption[] = [
-  { value: 1, kurdishDigit: '١', label: 'گرنگی نادات', shortLabel: 'گرنگی نادات' },
-  { value: 2, kurdishDigit: '٢', label: 'کەم', shortLabel: 'کەم' },
-  { value: 3, kurdishDigit: '٣', label: 'مامناوەند', shortLabel: 'مامناوەند' },
-  { value: 4, kurdishDigit: '٤', label: 'باشە', shortLabel: 'باشە' },
-  { value: 5, kurdishDigit: '٥', label: 'زۆر نایابە', shortLabel: 'زۆر نایاب' },
+const WAREHOUSE_Q4_LABEL = "٤. تا چەند گرنگی دە دات بە پاک و خاوێنی؟";
+const WAREHOUSE_Q4_OPTIONS: FeedbackScaleOption[] = [
+  { value: 1, kurdishDigit: '١', label: 'گرنگی نادات (٤ خاڵ)', shortLabel: 'گرنگی نادات' },
+  { value: 2, kurdishDigit: '٢', label: 'کەم (٨ خاڵ)', shortLabel: 'کەم' },
+  { value: 3, kurdishDigit: '٣', label: 'مامناوەند (١٢ خاڵ)', shortLabel: 'مامناوەند' },
+  { value: 4, kurdishDigit: '٤', label: 'باشە (١٦ خاڵ)', shortLabel: 'باشە' },
+  { value: 5, kurdishDigit: '٥', label: 'زۆر نایابە (٢٠ خاڵ)', shortLabel: 'زۆر نایاب' },
 ];
 
-// 🪄 PowerPoint Morph Transition Variants (Framer Motion)
+// ============================================================================
+// 🛍️ ٢. پرسیارەکانی فرۆشیاران و کاشێر (Sales & Cashiers • Based on 18 points)
+// ============================================================================
+const SALES_Q1_LABEL = "١. تا چەند خزمەت بە کڕیار دەکات و هونەری قسەکردن و قەناعەت پێکردنی هەیە؟ (گوێگرتن و ئەتەکیەت)";
+const SALES_Q1_OPTIONS: FeedbackScaleOption[] = [
+  { value: 1, kurdishDigit: '١', label: 'زۆر لاوازە (٤ خاڵ)', shortLabel: 'زۆر لاوازە' },
+  { value: 2, kurdishDigit: '٢', label: 'کەمە (٨ خاڵ)', shortLabel: 'کەمە' },
+  { value: 3, kurdishDigit: '٣', label: 'مامناوەندە (١٢ خاڵ)', shortLabel: 'مامناوەندە' },
+  { value: 4, kurdishDigit: '٤', label: 'باشە (١٦ خاڵ)', shortLabel: 'باشە' },
+  { value: 5, kurdishDigit: '٥', label: 'زۆر نایابە (٢٠ خاڵ)', shortLabel: 'زۆر نایابە' },
+];
+
+const SALES_Q2_LABEL = "٢. تا چەند گرنگی بە ڕێکخستنی عەرز، پاک و خاوێنی و ڕێکی پۆشینی خۆی دەدات؟";
+const SALES_Q2_OPTIONS: FeedbackScaleOption[] = [
+  { value: 1, kurdishDigit: '١', label: 'گرنگی پێ نادات (٤ خاڵ)', shortLabel: 'گرنگی پێ نادات' },
+  { value: 2, kurdishDigit: '٢', label: 'کەم (٨ خاڵ)', shortLabel: 'کەم' },
+  { value: 3, kurdishDigit: '٣', label: 'مامناوەند (١٢ خاڵ)', shortLabel: 'مامناوەند' },
+  { value: 4, kurdishDigit: '٤', label: 'زۆربەی کات (١٦ خاڵ)', shortLabel: 'زۆربەی کات' },
+  { value: 5, kurdishDigit: '٥', label: 'هەمیشە بە ڕێکی و پاکی (٢٠ خاڵ)', shortLabel: 'هەمیشە ڕێک و پاک' },
+];
+
+const SALES_Q3_LABEL = "٣. لە کاتی قەرەباڵغیدا هاوکاری هاوپیشەکانی دەکات، و دوورە لە تەداخول و دروستکردنی کێشە؟";
+const SALES_Q3_OPTIONS: FeedbackScaleOption[] = [
+  { value: 1, kurdishDigit: '١', label: 'هاوکاری ناکات (٤ خاڵ)', shortLabel: 'هاوکاری ناکات' },
+  { value: 2, kurdishDigit: '٢', label: 'زۆر کەم (٨ خاڵ)', shortLabel: 'زۆر کەم' },
+  { value: 3, kurdishDigit: '٣', label: 'مامناوەندە (١٢ خاڵ)', shortLabel: 'مامناوەندە' },
+  { value: 4, kurdishDigit: '٤', label: 'زۆربەی کات هاوکارە (١٦ خاڵ)', shortLabel: 'زۆربەی کات' },
+  { value: 5, kurdishDigit: '٥', label: 'هەمیشە هاوکار و تەبایە (٢٠ خاڵ)', shortLabel: 'هەمیشە هاوکار' },
+];
+
+const SALES_Q4_LABEL = "٤. تا چەند پابەندە بە کاتی دەوام، ڕێنماییەکانی ئاشڵی و بەکارنەهێنانی مۆبایل بۆ کاری شەخسی؟";
+const SALES_Q4_OPTIONS: FeedbackScaleOption[] = [
+  { value: 1, kurdishDigit: '١', label: 'پابەند نییە (٤ خاڵ)', shortLabel: 'پابەند نییە' },
+  { value: 2, kurdishDigit: '٢', label: 'کەم پابەندە (٨ خاڵ)', shortLabel: 'کەم پابەندە' },
+  { value: 3, kurdishDigit: '٣', label: 'مامناوەندە (١٢ خاڵ)', shortLabel: 'مامناوەندە' },
+  { value: 4, kurdishDigit: '٤', label: 'پابەندە (١٦ خاڵ)', shortLabel: 'پابەندە' },
+  { value: 5, kurdishDigit: '٥', label: 'زۆر پابەندە (٢٠ خاڵ)', shortLabel: 'زۆر پابەندە' },
+];
+
+// Fallback legacy aliases
+const Q1_OPTIONS = WAREHOUSE_Q1_OPTIONS;
+const Q2_OPTIONS = WAREHOUSE_Q2_OPTIONS;
+const Q3_OPTIONS = WAREHOUSE_Q3_OPTIONS;
+const Q4_OPTIONS = WAREHOUSE_Q4_OPTIONS;
+
+// 🪄 PowerPoint Morph Transition Variants (Framer Motion • iOS Safari Optimized)
 const morphVariants: Variants = {
   enter: (custom: any) => {
     const dir = typeof custom === 'object' && custom !== null ? custom.dir : (Number(custom) || 1);
     const idx = typeof custom === 'object' && custom !== null ? custom.idx : 0;
     const angleVariant = Math.abs(idx) % 3;
-    const yOffset = angleVariant === 1 ? 20 : angleVariant === 2 ? -20 : 0;
-    const rot = angleVariant === 1 ? (dir > 0 ? 1 : -1) : angleVariant === 2 ? (dir > 0 ? -1 : 1) : 0;
+    const yOffset = angleVariant === 1 ? 16 : angleVariant === 2 ? -16 : 0;
+    const rot = angleVariant === 1 ? (dir > 0 ? 0.8 : -0.8) : angleVariant === 2 ? (dir > 0 ? -0.8 : 0.8) : 0;
 
     return {
-      x: dir > 0 ? 90 : -90,
+      x: dir > 0 ? 80 : -80,
       y: yOffset,
       opacity: 0,
-      scale: 0.94,
+      scale: 0.96,
       rotate: rot,
-      filter: 'blur(8px)',
     };
   },
   center: {
@@ -176,27 +223,25 @@ const morphVariants: Variants = {
     opacity: 1,
     scale: 1,
     rotate: 0,
-    filter: 'blur(0px)',
     transition: {
       type: 'spring' as const,
-      stiffness: 300,
-      damping: 26,
-      mass: 0.8,
+      stiffness: 320,
+      damping: 28,
+      mass: 0.7,
     },
   },
   exit: (custom: any) => {
     const dir = typeof custom === 'object' && custom !== null ? custom.dir : (Number(custom) || 1);
     const idx = typeof custom === 'object' && custom !== null ? custom.idx : 0;
-    const yOffset = (idx % 2 === 0 ? -12 : 12);
+    const yOffset = (idx % 2 === 0 ? -8 : 8);
     return {
-      x: dir > 0 ? -90 : 90,
+      x: dir > 0 ? -80 : 80,
       y: yOffset,
       opacity: 0,
-      scale: 0.94,
-      filter: 'blur(8px)',
+      scale: 0.96,
       transition: {
-        duration: 0.22,
-        ease: [0.32, 0, 0.67, 0],
+        duration: 0.18,
+        ease: 'easeOut',
       },
     };
   },
@@ -1017,39 +1062,39 @@ export function FeedbackPortal({
 
           {/* 🌟 4 Tactile Questions (Manager Evaluation Style • No Stars!) */}
           <div className="space-y-3.5">
-            {/* ١. تا چەند لە ئەدا و هەڵسوکەوتی ڕازیت؟ (ڕەفتار و ڕێز گرتن) */}
+            {/* پ١: ئەدا و مامەڵە لەگەڵ کڕیار / هەڵسوکەوت */}
             <TactileChoiceSelector
               questionNum="١"
-              label="١. تا چەند لە ئەدا و هەڵسوکەوتی ڕازیت؟ (ڕەفتار و ڕێز گرتن)"
+              label={isWarehouse ? WAREHOUSE_Q1_LABEL : SALES_Q1_LABEL}
               value={ratings.serviceRating}
-              options={Q1_OPTIONS}
+              options={isWarehouse ? WAREHOUSE_Q1_OPTIONS : SALES_Q1_OPTIONS}
               onChange={(val) => handleRatingChange(emp.employeeId, 'serviceRating', val)}
             />
 
-            {/* ٢. لە کاتی پێویست دا بە بێ پێ وتن هاوکاریتان دەکات؟ */}
+            {/* پ٢: هاوکاری / عەرز و ڕێکی پۆشین */}
             <TactileChoiceSelector
               questionNum="٢"
-              label="٢. لە کاتی پێویست دا بە بێ پێ وتن هاوکاریتان دەکات؟"
+              label={isWarehouse ? WAREHOUSE_Q2_LABEL : SALES_Q2_LABEL}
               value={ratings.performanceRating}
-              options={Q2_OPTIONS}
+              options={isWarehouse ? WAREHOUSE_Q2_OPTIONS : SALES_Q2_OPTIONS}
               onChange={(val) => handleRatingChange(emp.employeeId, 'performanceRating', val)}
             />
 
-            {/* ٣. لە کاتی کارکردن مۆبایل بەکار دێنێت بۆ کار و باری خۆی؟ */}
+            {/* پ٣: مۆبایل / هاوکاری و نەبوونی تەداخل */}
             <TactileChoiceSelector
               questionNum="٣"
-              label="٣. لە کاتی کارکردن مۆبایل بەکار دێنێت بۆ کار و باری خۆی؟"
+              label={isWarehouse ? WAREHOUSE_Q3_LABEL : SALES_Q3_LABEL}
               value={ratings.disciplineRating}
-              options={Q3_OPTIONS}
+              options={isWarehouse ? WAREHOUSE_Q3_OPTIONS : SALES_Q3_OPTIONS}
               onChange={(val) => handleRatingChange(emp.employeeId, 'disciplineRating', val)}
             />
 
-            {/* ٤. تا چەند گرنگی دە دات بە پاک و خاوێنی خۆی و شوێنەکە؟ */}
+            {/* پ٤: پاک و خاوێنی / کاتی دەوام و ڕێنماییەکان */}
             <TactileChoiceSelector
               questionNum="٤"
-              label="٤. تا چەند گرنگی دە دات بە پاک و خاوێنی خۆی و شوێنەکە؟"
+              label={isWarehouse ? WAREHOUSE_Q4_LABEL : SALES_Q4_LABEL}
               value={ratings.overallRating}
-              options={Q4_OPTIONS}
+              options={isWarehouse ? WAREHOUSE_Q4_OPTIONS : SALES_Q4_OPTIONS}
               onChange={(val) => handleRatingChange(emp.employeeId, 'overallRating', val)}
             />
 
@@ -1063,7 +1108,9 @@ export function FeedbackPortal({
             }`}>
               <div className="flex items-center justify-between mb-2.5">
                 <span className={`text-xs sm:text-sm font-black ${isDark ? 'text-neutral-200' : 'text-slate-800'}`}>
-                  ٥. هیچ ڕەفتارێکی بێزارکەر یان نەگونجاو هەیە کە لەگەڵ شوێنەکە یەک ناگرێتەوە؟
+                  {isWarehouse 
+                    ? '٥. هیچ ڕەفتارێکی بێزارکەر یان نەگونجاو هەیە کە لەگەڵ شوێنەکە یەک ناگرێتەوە؟'
+                    : '٥. ئایا هیچ ڕەفتارێکی بێزارکەر یان نەگونجاو هەیە کە لەگەڵ هۆڵی نمایش و براندی ئاشڵی یەک ناگرێتەوە؟'}
                 </span>
                 <span className={`text-[10px] sm:text-xs font-bold px-2.5 py-0.5 rounded-full transition-all ${
                   ratings.hasAnnoyingBehavior === null

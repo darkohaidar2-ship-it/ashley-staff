@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { triggerHaptic } from '@/lib/offline-sync-manager';
 import { PinScope } from '@/lib/feedback/feedback-service';
+import { safeStorage, safeSessionStorage } from '@/lib/safe-storage';
 import {
   getClientSubmissionIds,
   clearClientSubmissionIds,
@@ -208,27 +209,26 @@ function RootPageContent() {
   const [pinAlreadySubmitted, setPinAlreadySubmitted] = useState<boolean>(false);
   const [shakeDots, setShakeDots] = useState<boolean>(false);
 
-  // 🌓 Theme State: Light / Dark Mode
+  // 🌓 Theme State: Light / Dark Mode (Safe for iOS WebKit & WhatsApp Webview)
   const [isDark, setIsDark] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('ashley_theme');
-      return saved === 'dark';
-    }
-    return false;
+    const saved = safeStorage.getItem('ashley_theme');
+    return saved === 'dark';
   });
 
   const toggleTheme = useCallback(() => {
     triggerHaptic('light');
     setIsDark((prev) => {
       const next = !prev;
+      safeStorage.setItem('ashley_theme', next ? 'dark' : 'light');
       if (typeof window !== 'undefined') {
-        localStorage.setItem('ashley_theme', next ? 'dark' : 'light');
-        if (next) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
-        window.dispatchEvent(new CustomEvent('ashley-theme-change', { detail: { isDark: next } }));
+        try {
+          if (next) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+          window.dispatchEvent(new CustomEvent('ashley-theme-change', { detail: { isDark: next } }));
+        } catch {}
       }
       return next;
     });
@@ -236,26 +236,34 @@ function RootPageContent() {
 
   // Sync theme with system and other tabs/components
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('ashley_theme');
-      const darkActive = saved === 'dark';
-      setIsDark(darkActive);
-      if (darkActive) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-
-      const handleThemeChange = (e: any) => {
-        if (e?.detail?.isDark !== undefined) {
-          setIsDark(e.detail.isDark);
-          if (e.detail.isDark) {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
+    const saved = safeStorage.getItem('ashley_theme');
+    const darkActive = saved === 'dark';
+    setIsDark(darkActive);
+    if (typeof document !== 'undefined') {
+      try {
+        if (darkActive) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
         }
-      };
+      } catch {}
+    }
+
+    const handleThemeChange = (e: any) => {
+      if (e?.detail?.isDark !== undefined) {
+        setIsDark(e.detail.isDark);
+        if (typeof document !== 'undefined') {
+          try {
+            if (e.detail.isDark) {
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.classList.remove('dark');
+            }
+          } catch {}
+        }
+      }
+    };
+    if (typeof window !== 'undefined') {
       window.addEventListener('ashley-theme-change', handleThemeChange);
       return () => window.removeEventListener('ashley-theme-change', handleThemeChange);
     }
@@ -283,11 +291,9 @@ function RootPageContent() {
 
   // Check stored sessions on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedWarehouse = sessionStorage.getItem('ashley_warehouse_auth_pin');
-      if (savedWarehouse && /^\d{5}$/.test(savedWarehouse)) {
-        setWarehouseAuthed(true);
-      }
+    const savedWarehouse = safeSessionStorage.getItem('ashley_warehouse_auth_pin');
+    if (savedWarehouse && /^\d{5}$/.test(savedWarehouse)) {
+      setWarehouseAuthed(true);
     }
   }, []);
 
@@ -378,17 +384,13 @@ function RootPageContent() {
 
   // 🔒 Lock / Logout Handlers
   const handleLockWarehouse = () => {
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('ashley_warehouse_auth_pin');
-    }
+    safeSessionStorage.removeItem('ashley_warehouse_auth_pin');
     setWarehouseAuthed(false);
     handleSwitchPortal('home');
   };
 
   const handleLockManager = () => {
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('ashley_manager_auth_pin');
-    }
+    safeSessionStorage.removeItem('ashley_manager_auth_pin');
     setManagerPin('');
     setManagerAuthed(false);
     handleSwitchPortal('feedback_hub');
@@ -433,9 +435,7 @@ function RootPageContent() {
           setManagerAuthed(true);
           handleSwitchPortal('feedback_admin');
         } else if (scopeToTest === 'warehouse') {
-          if (typeof window !== 'undefined') {
-            sessionStorage.setItem('ashley_warehouse_auth_pin', pinToTest);
-          }
+          safeSessionStorage.setItem('ashley_warehouse_auth_pin', pinToTest);
           setWarehouseAuthed(true);
           handleSwitchPortal('warehouse');
         } else if (

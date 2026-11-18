@@ -633,31 +633,31 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
   const radarData = useMemo(() => {
     return [
       {
-        subject: 'ئەدا و هەڵسوکەوت (ڕێز)',
+        subject: isWarehouse ? 'ئەدا و هەڵسوکەوت (ڕێز)' : 'کڕیار و فرۆشتن (ئەتەکیەت)',
         value: Math.round((storeAnalytics.avgQ1 / 20) * 100),
         rawPts: storeAnalytics.avgQ1,
         fullMark: 100,
       },
       {
-        subject: 'هاوکاری بێ پێ وتن',
+        subject: isWarehouse ? 'هاوکاری بێ پێ وتن' : 'عەرز و ڕێکی پۆشین',
         value: Math.round((storeAnalytics.avgQ2 / 20) * 100),
         rawPts: storeAnalytics.avgQ2,
         fullMark: 100,
       },
       {
-        subject: 'پابەندبوون (مۆبایل)',
+        subject: isWarehouse ? 'پابەندبوون (مۆبایل)' : 'هاوکاری و تەبایی (بێ تەداخل)',
         value: Math.round((storeAnalytics.avgQ3 / 20) * 100),
         rawPts: storeAnalytics.avgQ3,
         fullMark: 100,
       },
       {
-        subject: 'پاک و خاوێنی',
+        subject: isWarehouse ? 'پاک و خاوێنی' : 'کاتی دەوام و سنووری مۆبایل',
         value: Math.round((storeAnalytics.avgQ4 / 20) * 100),
         rawPts: storeAnalytics.avgQ4,
         fullMark: 100,
       },
     ];
-  }, [storeAnalytics]);
+  }, [storeAnalytics, isWarehouse]);
 
   // 🌟 RECHARTS DATA: Employee Leaderboard Bars (Domain: 0 to 100%)
   const employeeBarData = useMemo(() => {
@@ -1606,11 +1606,11 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                     <th className="p-3.5">کارمەند</th>
                     <th className="p-3.5">ڕۆڵ</th>
                     <th className="p-3.5 text-center">دەنگ</th>
-                    <th className="p-3.5 text-center">پ١: ڕەفتار (٢٠)</th>
-                    <th className="p-3.5 text-center">پ٢: هاوکاری (٢٠)</th>
-                    <th className="p-3.5 text-center">پ٣: دەوام و مۆبایل (٢٠)</th>
-                    <th className="p-3.5 text-center">پ٤: پاک و خاوێنی (٢٠)</th>
-                    <th className="p-3.5 text-center">پ٥: ڕەفتاری شوێن (٢٠)</th>
+                    <th className="p-3.5 text-center">{isWarehouse ? 'پ١: ڕەفتار (٢٠)' : 'پ١: کڕیار و فرۆشتن (٢٠)'}</th>
+                    <th className="p-3.5 text-center">{isWarehouse ? 'پ٢: هاوکاری (٢٠)' : 'پ٢: عەرز و پۆشین (٢٠)'}</th>
+                    <th className="p-3.5 text-center">{isWarehouse ? 'پ٣: مۆبایل (٢٠)' : 'پ٣: هاوکاری و تەبایی (٢٠)'}</th>
+                    <th className="p-3.5 text-center">{isWarehouse ? 'پ٤: پاک و خاوێنی (٢٠)' : 'پ٤: دەوام و مۆبایل (٢٠)'}</th>
+                    <th className="p-3.5 text-center">{isWarehouse ? 'پ٥: ڕەفتاری کۆگا (٢٠)' : 'پ٥: ڕەفتاری هۆڵ (٢٠)'}</th>
                     <th className="p-3.5 text-center">کۆی گشتی (٪)</th>
                     <th className="p-3.5 text-center">شایستەیی</th>
                   </tr>

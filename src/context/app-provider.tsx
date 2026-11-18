@@ -158,9 +158,20 @@ function useSupabaseCollection<T extends { id?: string }>(
 
     const [isLoading, setIsLoading] = useState(false);
 
-    // Initial fetch from Supabase
+    // Initial fetch from Supabase (Skipped for heavy non-employee collections on feedback pages)
     useEffect(() => {
         let mounted = true;
+        
+        // 🚀 Performance shield: on public feedback portal or direct PIN links, only fetch employees
+        if (typeof window !== 'undefined') {
+            const path = window.location.pathname || '';
+            const search = window.location.search || '';
+            const isFeedbackOnly = path.startsWith('/feedback') || search.includes('feedback') || search.includes('pin=');
+            if (isFeedbackOnly && key !== 'employees') {
+                return;
+            }
+        }
+
         fetchFn()
             .then((data) => {
                 if (!mounted) return;
@@ -422,8 +433,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const syncSupabaseAttendance = (force = false) => {
             if (isFetching) return;
             if (typeof document !== 'undefined' && document.hidden) return;
-            // 🚫 Do not run heavy attendance sync on public feedback pages
-            if (typeof window !== 'undefined' && window.location.pathname.startsWith('/feedback')) return;
+            // 🚫 Do not run heavy attendance sync on public feedback pages or direct PIN links
+            if (typeof window !== 'undefined') {
+                const p = window.location.pathname || '';
+                const s = window.location.search || '';
+                if (p.startsWith('/feedback') || s.includes('feedback') || s.includes('pin=')) return;
+            }
             isFetching = true;
             const url = force ? `/api/attendance/logs?force=true&t=${Date.now()}` : '/api/attendance/logs';
             fetch(url, { cache: force ? 'no-store' : 'default' })

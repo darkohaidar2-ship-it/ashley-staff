@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { safeStorage } from '@/lib/safe-storage';
 import { Megaphone, X, Clock, User, CheckCircle2 } from 'lucide-react';
 
 interface Announcement {
@@ -17,13 +18,24 @@ interface Announcement {
 }
 
 export function SystemBroadcastBanner() {
+  const pathname = usePathname();
   const [latestAnnouncement, setLatestAnnouncement] = useState<Announcement | null>(null);
   const [dismissedId, setDismissedId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
+  // 🚫 شریتی ڕاگەیاندن لە پەڕەی فیدباک، کیۆسک، و مۆبایل نیشان نادرێت و پێویست بە فێچ ناکات
+  const isExcluded = 
+    pathname === '/' ||
+    pathname?.startsWith('/feedback') ||
+    pathname?.startsWith('/warehouse') ||
+    pathname?.startsWith('/attendance') ||
+    pathname === '/login';
+
   useEffect(() => {
+    if (isExcluded) return;
+
     // Check local storage for dismissed announcement
-    const dismissed = localStorage.getItem('ashley_dismissed_announcement');
+    const dismissed = safeStorage.getItem('ashley_dismissed_announcement');
     if (dismissed) {
       setDismissedId(dismissed);
     }
@@ -57,25 +69,14 @@ export function SystemBroadcastBanner() {
     // Check periodically every 60 seconds
     const interval = setInterval(loadLatest, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isExcluded]);
 
-  const pathname = usePathname();
-
-  // 🚫 شریتی ڕاگەیاندن لە پەڕەی فیدباک، کیۆسک، و مۆبایل نیشان نادرێت
-  if (
-    pathname === '/' ||
-    pathname?.startsWith('/feedback') ||
-    pathname?.startsWith('/warehouse') ||
-    pathname?.startsWith('/attendance') ||
-    pathname === '/login' ||
-    !latestAnnouncement || 
-    latestAnnouncement.id === dismissedId
-  ) {
+  if (isExcluded || !latestAnnouncement || latestAnnouncement.id === dismissedId) {
     return null;
   }
 
   const handleDismiss = () => {
-    localStorage.setItem('ashley_dismissed_announcement', latestAnnouncement.id);
+    safeStorage.setItem('ashley_dismissed_announcement', latestAnnouncement.id);
     setDismissedId(latestAnnouncement.id);
   };
 
