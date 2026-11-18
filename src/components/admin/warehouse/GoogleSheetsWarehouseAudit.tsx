@@ -66,6 +66,7 @@ import {
   precacheSessionAudioClips,
 } from '@/lib/kurdish-audio-engine';
 import { SmartCameraCartonScanner } from '@/components/admin/warehouse/SmartCameraCartonScanner';
+import { safeStorage } from '@/lib/safe-storage';
 import * as XLSX from 'xlsx';
 
 // 💾 Local Storage Keys for 100% Persistent Data Guarantee
@@ -428,7 +429,7 @@ function isDemoSeedSessionId(id?: string): boolean {
 function getLocalResetBefore(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(RESET_BEFORE_STORAGE_KEY);
+    const raw = safeStorage.getItem(RESET_BEFORE_STORAGE_KEY);
     if (!raw || isNaN(Date.parse(raw))) return null;
     return raw;
   } catch {
@@ -439,7 +440,7 @@ function getLocalResetBefore(): string | null {
 function saveLocalResetBefore(isoTimestamp: string) {
   if (typeof window === 'undefined' || !isoTimestamp || isNaN(Date.parse(isoTimestamp))) return;
   try {
-    localStorage.setItem(RESET_BEFORE_STORAGE_KEY, isoTimestamp);
+    safeStorage.setItem(RESET_BEFORE_STORAGE_KEY, isoTimestamp);
   } catch {}
 }
 
@@ -454,7 +455,7 @@ function isBeforeResetEpoch(session: SheetsAuditSession | null | undefined, rese
 function getLocalWarehouseSessions(): SheetsAuditSession[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const raw = safeStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     const resetBefore = getLocalResetBefore();
@@ -469,7 +470,7 @@ function getLocalWarehouseSessions(): SheetsAuditSession[] {
 function saveLocalWarehouseSessions(sessionsList: SheetsAuditSession[]) {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessionsList));
+    safeStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessionsList));
   } catch (e) {
     console.warn('[Warehouse] Error saving local sessions:', e);
   }
@@ -478,7 +479,7 @@ function saveLocalWarehouseSessions(sessionsList: SheetsAuditSession[]) {
 function getLocalDeletedIds(): string[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(DELETED_IDS_STORAGE_KEY);
+    const raw = safeStorage.getItem(DELETED_IDS_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -489,7 +490,7 @@ function getLocalDeletedIds(): string[] {
 function saveLocalDeletedIds(ids: string[]) {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(DELETED_IDS_STORAGE_KEY, JSON.stringify(Array.from(new Set(ids)).slice(0, 300)));
+    safeStorage.setItem(DELETED_IDS_STORAGE_KEY, JSON.stringify(Array.from(new Set(ids)).slice(0, 300)));
   } catch {}
 }
 
@@ -803,7 +804,7 @@ export function GoogleSheetsWarehouseAudit({
     const local = getLocalWarehouseSessions();
     if (local.length > 0) {
       setSessions(local);
-      const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem(ACTIVE_SESSION_ID_KEY) : null;
+      const savedActiveId = typeof window !== 'undefined' ? safeStorage.getItem(ACTIVE_SESSION_ID_KEY) : null;
       const matchedActive = (savedActiveId ? local.find(s => s.id === savedActiveId) : null) || local[0];
       if (matchedActive) {
         setCurrentSession(matchedActive);
@@ -891,7 +892,7 @@ export function GoogleSheetsWarehouseAudit({
         saveLocalWarehouseSessions(merged);
 
         if (merged.length === 0 && typeof window !== 'undefined') {
-          localStorage.removeItem(ACTIVE_SESSION_ID_KEY);
+          safeStorage.removeItem(ACTIVE_SESSION_ID_KEY);
         }
 
         // Keep active currentSession strictly synchronized with authoritative cloud list
@@ -903,7 +904,7 @@ export function GoogleSheetsWarehouseAudit({
           isDemoSeedSessionId(cur.id) ||
           isBeforeResetEpoch(cur, serverResetBefore)
         ) {
-          const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem(ACTIVE_SESSION_ID_KEY) : null;
+          const savedActiveId = typeof window !== 'undefined' ? safeStorage.getItem(ACTIVE_SESSION_ID_KEY) : null;
           const matched = (savedActiveId ? merged.find(s => s.id === savedActiveId) : null) || merged[0] || null;
           setCurrentSession(matched);
           if (matched?.mode) {
@@ -975,8 +976,8 @@ export function GoogleSheetsWarehouseAudit({
     const matchingSession = sessions.find(s => (s.mode || 'shipment_receiving') === mode) || null;
     setCurrentSession(matchingSession);
     if (typeof window !== 'undefined') {
-      if (matchingSession) localStorage.setItem(ACTIVE_SESSION_ID_KEY, matchingSession.id);
-      else localStorage.removeItem(ACTIVE_SESSION_ID_KEY);
+      if (matchingSession) safeStorage.setItem(ACTIVE_SESSION_ID_KEY, matchingSession.id);
+      else safeStorage.removeItem(ACTIVE_SESSION_ID_KEY);
     }
   };
 
@@ -1097,7 +1098,7 @@ export function GoogleSheetsWarehouseAudit({
     const primary = finalList[0];
     setCurrentSession(primary);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(ACTIVE_SESSION_ID_KEY, primary.id);
+      safeStorage.setItem(ACTIVE_SESSION_ID_KEY, primary.id);
     }
     if (primary.mode) setWarehouseSection(primary.mode);
     setLastSavedNotice(
@@ -1460,7 +1461,7 @@ export function GoogleSheetsWarehouseAudit({
     });
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem(ACTIVE_SESSION_ID_KEY, sessionToSave.id);
+      safeStorage.setItem(ACTIVE_SESSION_ID_KEY, sessionToSave.id);
     }
 
     const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -1750,8 +1751,8 @@ export function GoogleSheetsWarehouseAudit({
             null;
           setCurrentSession(nextMatch);
           if (typeof window !== 'undefined') {
-            if (nextMatch) localStorage.setItem(ACTIVE_SESSION_ID_KEY, nextMatch.id);
-            else localStorage.removeItem(ACTIVE_SESSION_ID_KEY);
+            if (nextMatch) safeStorage.setItem(ACTIVE_SESSION_ID_KEY, nextMatch.id);
+            else safeStorage.removeItem(ACTIVE_SESSION_ID_KEY);
           }
         }
 
@@ -1793,8 +1794,8 @@ export function GoogleSheetsWarehouseAudit({
             remaining.find((s) => (s.mode || 'shipment_receiving') === warehouseSection) || remaining[0] || null;
           setCurrentSession(nextMatch);
           if (typeof window !== 'undefined') {
-            if (nextMatch) localStorage.setItem(ACTIVE_SESSION_ID_KEY, nextMatch.id);
-            else localStorage.removeItem(ACTIVE_SESSION_ID_KEY);
+            if (nextMatch) safeStorage.setItem(ACTIVE_SESSION_ID_KEY, nextMatch.id);
+            else safeStorage.removeItem(ACTIVE_SESSION_ID_KEY);
           }
         }
 
@@ -1872,7 +1873,7 @@ export function GoogleSheetsWarehouseAudit({
       saveLocalWarehouseSessions([]);
       setPushSuccessMsg(null);
       if (typeof window !== 'undefined') {
-        localStorage.removeItem(ACTIVE_SESSION_ID_KEY);
+        safeStorage.removeItem(ACTIVE_SESSION_ID_KEY);
       }
 
       const failedSheets = Array.isArray(data?.googleResults)
@@ -2718,7 +2719,7 @@ export function GoogleSheetsWarehouseAudit({
                                 triggerHaptic('light');
                                 setCurrentSession(s);
                                 if (typeof window !== 'undefined') {
-                                  localStorage.setItem(ACTIVE_SESSION_ID_KEY, s.id);
+                                  safeStorage.setItem(ACTIVE_SESSION_ID_KEY, s.id);
                                 }
                               }}
                               className="flex-1 px-2.5 py-2 text-right cursor-pointer flex items-center justify-between gap-2 active:scale-95 touch-manipulation min-w-0"
@@ -4463,7 +4464,7 @@ export function GoogleSheetsWarehouseAudit({
                                 setInputMode(s.mode || 'shipment_receiving');
                                 setCurrentSession(s);
                                 if (typeof window !== 'undefined') {
-                                  localStorage.setItem(ACTIVE_SESSION_ID_KEY, s.id);
+                                  safeStorage.setItem(ACTIVE_SESSION_ID_KEY, s.id);
                                 }
                                 setShowSessionsModal(false);
                               }}
@@ -4486,7 +4487,7 @@ export function GoogleSheetsWarehouseAudit({
                                   setInputMode(s.mode || 'shipment_receiving');
                                   setCurrentSession(s);
                                   if (typeof window !== 'undefined') {
-                                    localStorage.setItem(ACTIVE_SESSION_ID_KEY, s.id);
+                                    safeStorage.setItem(ACTIVE_SESSION_ID_KEY, s.id);
                                   }
                                   setShowSessionsModal(false);
                                 }}
@@ -5899,7 +5900,7 @@ export function GoogleSheetsWarehouseAudit({
             setInputMode(nextSession.mode || 'shipment_receiving');
             setCurrentSession(nextSession);
             if (typeof window !== 'undefined') {
-              localStorage.setItem(ACTIVE_SESSION_ID_KEY, nextSession.id);
+              safeStorage.setItem(ACTIVE_SESSION_ID_KEY, nextSession.id);
             }
           }}
           isOpen={showCameraScanner}

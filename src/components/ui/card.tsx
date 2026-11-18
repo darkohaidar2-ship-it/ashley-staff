@@ -1,7 +1,7 @@
 
 import * as React from "react"
-
 import { cn } from "@/lib/utils"
+import { safeStorage } from "@/lib/safe-storage"
 
 const Card = React.forwardRef<
   HTMLDivElement,
@@ -12,8 +12,10 @@ const Card = React.forwardRef<
 
   React.useEffect(() => {
     if (typeof window !== 'undefined' && id) {
-      const saved = localStorage.getItem(`card_h_${id}`);
-      if (saved) setPersistedHeight(saved);
+      try {
+        const saved = safeStorage.getItem(`card_h_${id}`);
+        if (saved) setPersistedHeight(saved);
+      } catch {}
     }
   }, [id]);
 
@@ -21,21 +23,25 @@ const Card = React.forwardRef<
     if (!id || !localRef.current) return;
     
     let timer: NodeJS.Timeout;
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) {
-        clearTimeout(timer);
-        timer = setTimeout(() => {
-          localStorage.setItem(`card_h_${id}`, `${Math.round(entry.contentRect.height)}px`);
-        }, 500);
-      }
-    });
+    try {
+      const observer = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (entry) {
+          clearTimeout(timer);
+          timer = setTimeout(() => {
+            try {
+              safeStorage.setItem(`card_h_${id}`, `${Math.round(entry.contentRect.height)}px`);
+            } catch {}
+          }, 500);
+        }
+      });
 
-    observer.observe(localRef.current);
-    return () => {
-      observer.disconnect();
-      clearTimeout(timer);
-    };
+      observer.observe(localRef.current);
+      return () => {
+        observer.disconnect();
+        clearTimeout(timer);
+      };
+    } catch {}
   }, [id]);
 
   const combinedRef = (node: HTMLDivElement) => {

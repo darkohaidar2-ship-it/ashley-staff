@@ -39,6 +39,7 @@ import {
 export type ActivePortal = 'home' | 'attendance' | 'feedback_hub' | 'feedback' | 'feedback_admin' | 'warehouse';
 
 function playAudioChime(success: boolean) {
+  if (typeof window === 'undefined') return;
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioCtx) return;
@@ -67,6 +68,7 @@ function playAudioChime(success: boolean) {
 
 /** 🔊 High-fidelity synthesized tactile pop/chime for mobile circles and buttons */
 function playCircleTapSound(variant: 'pop' | 'chime' | 'soft' = 'pop') {
+  if (typeof window === 'undefined') return;
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioCtx) return;

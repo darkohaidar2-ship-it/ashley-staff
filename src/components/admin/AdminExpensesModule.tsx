@@ -1,6 +1,7 @@
 'use client';
 
 import { logger } from '@/lib/logger';
+import { safeStorage } from '@/lib/safe-storage';
 import React, { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
 import type { Employee } from '@/lib/types';
 import { useAppContext } from '@/context/app-provider';
@@ -409,7 +410,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   const [archivedVouchers, setArchivedVouchers] = useState<ArchivedVoucher[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem('ashley_archived_vouchers_ledger_v3');
+        const stored = safeStorage.getItem('ashley_archived_vouchers_ledger_v3');
         if (stored) return JSON.parse(stored);
       } catch (err) { logger.warn(err); }
     }
@@ -421,7 +422,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('ashley_table_density') as 'cozy' | 'compact';
+      const saved = safeStorage.getItem('ashley_table_density') as 'cozy' | 'compact';
       if (saved === 'cozy' || saved === 'compact') {
         setTableDensity(saved);
       }
@@ -434,7 +435,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       if (cloudCats && cloudCats.length > 0) {
         setCategories(cloudCats as any);
         try {
-          localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(cloudCats));
+          safeStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(cloudCats));
         } catch (err) { logger.warn(err); }
       }
     });
@@ -443,7 +444,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       if (cloudReasons && Object.keys(cloudReasons).length > 0) {
         setPresetReasons(cloudReasons);
         try {
-          localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(cloudReasons));
+          safeStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(cloudReasons));
         } catch (err) { logger.warn(err); }
       }
     });
@@ -452,7 +453,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       if (cloudVouchers && cloudVouchers.length > 0) {
         setArchivedVouchers(cloudVouchers);
         try {
-          localStorage.setItem('ashley_archived_vouchers_ledger_v3', JSON.stringify(cloudVouchers));
+          safeStorage.setItem('ashley_archived_vouchers_ledger_v3', JSON.stringify(cloudVouchers));
         } catch (err) { logger.warn(err); }
       }
     });
@@ -462,7 +463,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     const next = tableDensity === 'cozy' ? 'compact' : 'cozy';
     setTableDensity(next);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('ashley_table_density', next);
+      safeStorage.setItem('ashley_table_density', next);
     }
   };
 
@@ -471,7 +472,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     setArchivedVouchers(updated);
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('ashley_archived_vouchers_ledger_v3', JSON.stringify(updated));
+        safeStorage.setItem('ashley_archived_vouchers_ledger_v3', JSON.stringify(updated));
       } catch (err) {
         logger.error('Failed to save vouchers to localStorage:', err);
       }
@@ -488,7 +489,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
 
     let storedVouchers: ArchivedVoucher[] = [];
     try {
-      const stored = localStorage.getItem('ashley_archived_vouchers_ledger_v3');
+      const stored = safeStorage.getItem('ashley_archived_vouchers_ledger_v3');
       if (stored) storedVouchers = JSON.parse(stored);
     } catch {
       storedVouchers = [];
@@ -598,7 +599,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
 
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem(FIELD_HISTORY_KEY);
+        const stored = safeStorage.getItem(FIELD_HISTORY_KEY);
         if (stored) {
           const parsed = JSON.parse(stored);
           return {
@@ -667,7 +668,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   const [categories, setCategories] = useState<CustomCategory[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem('ashley_custom_expense_categories_v2');
+        const stored = safeStorage.getItem('ashley_custom_expense_categories_v2');
         if (stored) return JSON.parse(stored);
       } catch (err) { logger.warn(err); }
     }
@@ -677,7 +678,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   const [presetReasons, setPresetReasons] = useState<Record<string, string[]>>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem('ashley_custom_preset_reasons_v2');
+        const stored = safeStorage.getItem('ashley_custom_preset_reasons_v2');
         if (stored) return JSON.parse(stored);
       } catch (err) { logger.warn(err); }
     }
@@ -709,7 +710,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     const updated = [...categories, { key: newKey, label: trimmed }];
     setCategories(updated);
     try {
-      localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
+      safeStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
     } catch (err) { logger.warn(err); }
     // 🌟 Supabase Cloud Sync
     saveCustomExpenseCategories(updated as any).catch(err => {
@@ -719,7 +720,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     setPresetReasons(prev => {
       const next = { ...prev, [newKey]: [] };
       try {
-        localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(next));
+        safeStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(next));
       } catch (err) { logger.warn(err); }
       saveCustomPresetReasons(next).catch(err => {
         logger.error('Failed to sync preset reasons to Supabase:', err);
@@ -739,7 +740,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     const updated = categories.map(c => c.key === key ? { ...c, label: trimmed } : c);
     setCategories(updated);
     try {
-      localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
+      safeStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
     } catch (err) { logger.warn(err); }
     saveCustomExpenseCategories(updated as any).catch(err => {
       logger.error('Failed to sync updated categories to Supabase:', err);
@@ -759,7 +760,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     const updated = categories.filter(c => c.key !== key);
     setCategories(updated);
     try {
-      localStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
+      safeStorage.setItem('ashley_custom_expense_categories_v2', JSON.stringify(updated));
     } catch (err) { logger.warn(err); }
     saveCustomExpenseCategories(updated as any).catch(err => {
       logger.error('Failed to sync deleted category to Supabase:', err);
@@ -787,7 +788,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     const updatedMap = { ...presetReasons, [catKey]: updatedList };
     setPresetReasons(updatedMap);
     try {
-      localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
+      safeStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
     } catch (err) { logger.warn(err); }
     saveCustomPresetReasons(updatedMap).catch(err => {
       logger.error('Failed to sync preset reasons to Supabase:', err);
@@ -807,7 +808,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     const updatedMap = { ...presetReasons, [catKey]: updatedList };
     setPresetReasons(updatedMap);
     try {
-      localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
+      safeStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
     } catch (err) { logger.warn(err); }
     saveCustomPresetReasons(updatedMap).catch(err => {
       logger.error('Failed to sync edited preset reason to Supabase:', err);
@@ -828,7 +829,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     const updatedMap = { ...presetReasons, [catKey]: updatedList };
     setPresetReasons(updatedMap);
     try {
-      localStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
+      safeStorage.setItem('ashley_custom_preset_reasons_v2', JSON.stringify(updatedMap));
     } catch (err) { logger.warn(err); }
     saveCustomPresetReasons(updatedMap).catch(err => {
       logger.error('Failed to sync deleted preset reason to Supabase:', err);
@@ -844,8 +845,8 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     setCategories(DEFAULT_EXPENSE_CATEGORIES);
     setPresetReasons(DEFAULT_PRESET_EXPENSE_REASONS);
     try {
-      localStorage.removeItem('ashley_custom_expense_categories_v2');
-      localStorage.removeItem('ashley_custom_preset_reasons_v2');
+      safeStorage.removeItem('ashley_custom_expense_categories_v2');
+      safeStorage.removeItem('ashley_custom_preset_reasons_v2');
     } catch (err) { logger.warn(err); }
     saveCustomExpenseCategories(DEFAULT_EXPENSE_CATEGORIES as any).catch(() => {});
     saveCustomPresetReasons(DEFAULT_PRESET_EXPENSE_REASONS).catch(() => {});
@@ -860,7 +861,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   const [customRoutes, setCustomRoutes] = useState<CustomRouteItem[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem('ashley_custom_routes_v1');
+        const stored = safeStorage.getItem('ashley_custom_routes_v1');
         if (stored) return JSON.parse(stored);
       } catch (err) { logger.warn(err); }
     }
@@ -873,7 +874,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       if (routes && Array.isArray(routes) && routes.length > 0) {
         setCustomRoutes(routes);
         try {
-          localStorage.setItem('ashley_custom_routes_v1', JSON.stringify(routes));
+          safeStorage.setItem('ashley_custom_routes_v1', JSON.stringify(routes));
         } catch (err) { logger.warn(err); }
       }
     }).catch(err => logger.warn('Failed to load custom routes from Supabase:', err));
@@ -890,7 +891,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     const updated = [...customRoutes, newRoute];
     setCustomRoutes(updated);
     try {
-      localStorage.setItem('ashley_custom_routes_v1', JSON.stringify(updated));
+      safeStorage.setItem('ashley_custom_routes_v1', JSON.stringify(updated));
     } catch (err) { logger.warn(err); }
     saveCustomRoutes(updated).catch(err => {
       logger.error('Failed to sync custom routes to Supabase:', err);
@@ -902,7 +903,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     const updated = customRoutes.map(r => r.id === id ? { ...r, from, to, label: `${from} ⬅️ ${to}` } : r);
     setCustomRoutes(updated);
     try {
-      localStorage.setItem('ashley_custom_routes_v1', JSON.stringify(updated));
+      safeStorage.setItem('ashley_custom_routes_v1', JSON.stringify(updated));
     } catch (err) { logger.warn(err); }
     saveCustomRoutes(updated).catch(err => {
       logger.error('Failed to sync updated routes to Supabase:', err);
@@ -916,7 +917,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     const updated = customRoutes.filter(r => r.id !== id);
     setCustomRoutes(updated);
     try {
-      localStorage.setItem('ashley_custom_routes_v1', JSON.stringify(updated));
+      safeStorage.setItem('ashley_custom_routes_v1', JSON.stringify(updated));
     } catch (err) { logger.warn(err); }
     saveCustomRoutes(updated).catch(err => {
       logger.error('Failed to sync deleted route to Supabase:', err);
@@ -928,7 +929,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     if (!window.confirm('ئایا دڵنیایت لە گەڕاندنەوەی سەرجەم هێڵەکانی هاتوچۆ بۆ باری بنەڕەتی سەرەتایی؟')) return;
     setCustomRoutes(DEFAULT_CUSTOM_ROUTES);
     try {
-      localStorage.removeItem('ashley_custom_routes_v1');
+      safeStorage.removeItem('ashley_custom_routes_v1');
     } catch (err) { logger.warn(err); }
     saveCustomRoutes(DEFAULT_CUSTOM_ROUTES).catch(() => {});
     logAudit('update', 'category', 'گەڕاندنەوەی هێڵەکانی هاتوچۆ بۆ ڕێکخستنی بنەڕەتی');
@@ -2035,7 +2036,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
           },
         };
         try {
-          localStorage.setItem(FIELD_HISTORY_KEY, JSON.stringify(next));
+          safeStorage.setItem(FIELD_HISTORY_KEY, JSON.stringify(next));
         } catch (err) { logger.warn(err); }
         return next;
       });

@@ -158,19 +158,9 @@ function useSupabaseCollection<T extends { id?: string }>(
 
     const [isLoading, setIsLoading] = useState(false);
 
-    // Initial fetch from Supabase (Skipped for heavy non-employee collections on feedback pages)
+    // Initial fetch from Supabase
     useEffect(() => {
         let mounted = true;
-        
-        // 🚀 Performance shield: on public feedback portal or direct PIN links, only fetch employees
-        if (typeof window !== 'undefined') {
-            const path = window.location.pathname || '';
-            const search = window.location.search || '';
-            const isFeedbackOnly = path.startsWith('/feedback') || search.includes('feedback') || search.includes('pin=');
-            if (isFeedbackOnly && key !== 'employees') {
-                return;
-            }
-        }
 
         fetchFn()
             .then((data) => {
@@ -415,17 +405,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (typeof window !== 'undefined') {
             try {
                 safeStorage.removeItem('ashley_live_checkins');
-                Object.keys(localStorage).forEach((k) => {
-                    if (
-                        k.startsWith('ashley_admin_notes_') ||
-                        k.startsWith('ashley_ot_notes_') ||
-                        k.startsWith('ashley_deleted_attendance_') ||
-                        k.startsWith('ashley_time_override_') ||
-                        k.startsWith('ashley_seed_')
-                    ) {
-                        safeStorage.removeItem(k);
+                if (typeof window.localStorage !== 'undefined') {
+                    const keys = Object.keys(window.localStorage);
+                    for (const k of keys) {
+                        if (
+                            k.startsWith('ashley_admin_notes_') ||
+                            k.startsWith('ashley_ot_notes_') ||
+                            k.startsWith('ashley_deleted_attendance_') ||
+                            k.startsWith('ashley_time_override_') ||
+                            k.startsWith('ashley_seed_')
+                        ) {
+                            safeStorage.removeItem(k);
+                        }
                     }
-                });
+                }
             } catch (err) { logger.warn(err); }
         }
 
@@ -433,11 +426,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const syncSupabaseAttendance = (force = false) => {
             if (isFetching) return;
             if (typeof document !== 'undefined' && document.hidden) return;
-            // 🚫 Do not run heavy attendance sync on public feedback pages or direct PIN links
+            // 🚫 Do not run heavy attendance sync on standalone public feedback page
             if (typeof window !== 'undefined') {
                 const p = window.location.pathname || '';
-                const s = window.location.search || '';
-                if (p.startsWith('/feedback') || s.includes('feedback') || s.includes('pin=')) return;
+                if (p === '/feedback' || p.startsWith('/feedback/')) return;
             }
             isFetching = true;
             const url = force ? `/api/attendance/logs?force=true&t=${Date.now()}` : '/api/attendance/logs';
