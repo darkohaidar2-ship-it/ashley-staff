@@ -1,37 +1,32 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader2, ShieldAlert } from 'lucide-react';
+import { safeStorage, safeSessionStorage } from '@/lib/safe-storage';
 
 export default function withAuth<P extends object>(WrappedComponent: React.ComponentType<P>) {
   const WithAuthComponent = (props: P) => {
     const { user, loading } = useAuth();
     const router = useRouter();
-    const [hasSession, setHasSession] = React.useState<boolean | null>(() => {
-      if (typeof window === 'undefined') return null;
-      try {
-        const stored = sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session');
-        return Boolean(stored);
-      } catch {
-        return null;
-      }
-    });
+    const [mounted, setMounted] = useState<boolean>(false);
+    const [isAuthed, setIsAuthed] = useState<boolean>(false);
 
-    React.useEffect(() => {
-      const stored = typeof window !== 'undefined' ? (sessionStorage.getItem('ashley_admin_session') || localStorage.getItem('ashley_admin_session')) : null;
-      const isAuth = !!stored || !!user;
-      setHasSession(isAuth);
-      if (!loading && !user && !stored) {
-        router.replace('/');
+    useEffect(() => {
+      setMounted(true);
+      try {
+        const stored = safeSessionStorage.getItem('ashley_admin_session') || safeStorage.getItem('ashley_admin_session');
+        const authOk = Boolean(stored) || Boolean(user);
+        setIsAuthed(authOk);
+        if (!loading && !user && !stored) {
+          router.replace('/');
+        }
+      } catch {
+        setIsAuthed(false);
       }
     }, [user, loading, router]);
 
-    // Fast-path: If user already has a valid stored session in browser storage, render instantly (0ms delay)
-    if (hasSession === true || user) {
-      return <WrappedComponent {...props} />;
-    }
-
-    if (loading || hasSession === null) {
+    // Until mounted on client, render identical SSR skeleton to prevent hydration mismatch (React #418)
+    if (!mounted || loading) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-6 font-sans dir-rtl" dir="rtl">
           <div className="bg-slate-800/80 backdrop-blur-xl border border-slate-700 p-8 rounded-2xl shadow-2xl flex flex-col items-center text-center space-y-4 max-w-sm">
@@ -45,7 +40,7 @@ export default function withAuth<P extends object>(WrappedComponent: React.Compo
       );
     }
 
-    if (!user && !hasSession) {
+    if (!isAuthed && !user) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white p-6 font-sans dir-rtl" dir="rtl">
           <div className="bg-rose-950/40 backdrop-blur-xl border border-rose-800 p-8 rounded-2xl shadow-2xl flex flex-col items-center text-center space-y-4 max-w-sm">

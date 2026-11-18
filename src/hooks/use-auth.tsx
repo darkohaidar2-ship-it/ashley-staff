@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
 import type { User } from '@/lib/types';
+import { safeStorage, safeSessionStorage } from '@/lib/safe-storage';
 
 interface AuthState {
   user: User | null;
@@ -29,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       if (typeof window !== 'undefined') {
-        const storedUser = localStorage.getItem('ashley_admin_session') || sessionStorage.getItem('ashley_admin_session');
+        const storedUser = safeStorage.getItem('ashley_admin_session') || safeSessionStorage.getItem('ashley_admin_session');
         if (storedUser) {
           const parsedUser = JSON.parse(storedUser);
           // Check if session token exists and is within 30 days
@@ -37,12 +38,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (parsedUser && parsedUser.token && !isExpired) {
             setCurrentUser(parsedUser);
             // Ensure both storages are synchronized
-            localStorage.setItem('ashley_admin_session', JSON.stringify(parsedUser));
-            sessionStorage.setItem('ashley_admin_session', JSON.stringify(parsedUser));
+            safeStorage.setItem('ashley_admin_session', JSON.stringify(parsedUser));
+            safeSessionStorage.setItem('ashley_admin_session', JSON.stringify(parsedUser));
           } else {
             setCurrentUser(null);
-            localStorage.removeItem('ashley_admin_session');
-            sessionStorage.removeItem('ashley_admin_session');
+            safeStorage.removeItem('ashley_admin_session');
+            safeSessionStorage.removeItem('ashley_admin_session');
           }
         } else {
           setCurrentUser(null);
