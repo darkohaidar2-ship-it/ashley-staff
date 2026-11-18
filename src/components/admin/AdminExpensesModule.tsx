@@ -535,10 +535,85 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       }
     }
 
+    // 2. Check existing bonuses
+    if (bonuses && bonuses.length > 0) {
+      const existingBonIds = new Set(
+        storedVouchers
+          .filter(v => v.type === 'bonuses')
+          .flatMap(v => (v.items || []).map((i: any) => i.id))
+      );
+      const unvoucheredBonuses = bonuses.filter(b => !existingBonIds.has(b.id));
+
+      if (unvoucheredBonuses.length > 0) {
+        const bonByDate: Record<string, any[]> = {};
+        unvoucheredBonuses.forEach(b => {
+          const d = b.date || format(new Date(), 'yyyy-MM-dd');
+          if (!bonByDate[d]) bonByDate[d] = [];
+          bonByDate[d].push(b);
+        });
+
+        Object.entries(bonByDate).forEach(([d, items]) => {
+          const total = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+          const m = d.substring(0, 7);
+          const reasonSample = items[0]?.reason ? ` (${items[0].reason})` : '';
+          const legacyVoucher: ArchivedVoucher = {
+            id: `vch_legacy_bon_${d}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            type: 'bonuses',
+            name: `لیستی پاداشت${reasonSample} • ${d}`,
+            month: m,
+            createdAt: items[0]?.createdAt || new Date().toISOString(),
+            dateRange: d,
+            itemCount: items.length,
+            totalAmount: total,
+            items: items,
+          };
+          storedVouchers.unshift(legacyVoucher);
+          modified = true;
+        });
+      }
+    }
+
+    // 3. Check existing withdrawals
+    if (withdrawals && withdrawals.length > 0) {
+      const existingWthIds = new Set(
+        storedVouchers
+          .filter(v => v.type === 'withdrawals')
+          .flatMap(v => (v.items || []).map((i: any) => i.id))
+      );
+      const unvoucheredWithdrawals = withdrawals.filter(w => !existingWthIds.has(w.id));
+
+      if (unvoucheredWithdrawals.length > 0) {
+        const wthByDate: Record<string, any[]> = {};
+        unvoucheredWithdrawals.forEach(w => {
+          const d = w.date || format(new Date(), 'yyyy-MM-dd');
+          if (!wthByDate[d]) wthByDate[d] = [];
+          wthByDate[d].push(w);
+        });
+
+        Object.entries(wthByDate).forEach(([d, items]) => {
+          const total = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+          const m = d.substring(0, 7);
+          const legacyVoucher: ArchivedVoucher = {
+            id: `vch_legacy_wth_${d}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            type: 'withdrawals',
+            name: `لیستی پێشینە • ${d}`,
+            month: m,
+            createdAt: items[0]?.createdAt || new Date().toISOString(),
+            dateRange: d,
+            itemCount: items.length,
+            totalAmount: total,
+            items: items,
+          };
+          storedVouchers.unshift(legacyVoucher);
+          modified = true;
+        });
+      }
+    }
+
     if (modified) {
       saveVouchersToStorage(storedVouchers);
     }
-  }, [expenses]);
+  }, [expenses, bonuses, withdrawals]);
 
   // -------------------------------------------------------------
   // DRAFT LIST STATE (Worksheet while creating / editing a list)
