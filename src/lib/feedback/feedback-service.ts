@@ -323,16 +323,6 @@ export const DEFAULT_SYSTEM_PINS: Record<string, FeedbackPin> = {
     createdBy: 'سیستەمی ئاشڵی',
     notes: 'کۆدی فیدباکی بەڕێوەبەر (0000 - 4999)',
   },
-  '6050': {
-    pin: '6050',
-    scope: 'warehouse_staff_feedback',
-    targetName: 'کۆدی تاقیکردنەوە (Test PIN)',
-    isSingleUse: false,
-    isUsed: false,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    createdBy: 'سیستەمی ئاشڵی',
-    notes: 'کۆدی تاقیکردنەوەی فیدباکی کۆگا (5000 - 7500) - فرەبەکارهێنان',
-  },
   '5382': {
     pin: '5382',
     scope: 'warehouse_staff_feedback',
