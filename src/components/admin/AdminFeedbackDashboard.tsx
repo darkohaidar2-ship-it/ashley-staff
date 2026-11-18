@@ -610,22 +610,30 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
   const metrics = useMemo(() => {
     const total = categorySubmissions.length;
     const pinValues = Object.values(categoryPins);
+    const totalPinsCount = pinValues.length;
+    const usedPinsCount = pinValues.filter(p => p.isUsed).length;
+    const effectiveUsed = Math.max(usedPinsCount, total);
+    const activePinsCount = Math.max(0, totalPinsCount - effectiveUsed);
+    const participationRate = totalPinsCount > 0 ? Math.min(100, Math.round((effectiveUsed / totalPinsCount) * 100)) : 0;
+
     if (total === 0) {
       return {
         totalSubmissions: 0,
         avgOverallPercent: 0,
-        totalPins: pinValues.length,
-        usedPinsCount: pinValues.filter(p => p.isUsed).length,
-        activePinsCount: pinValues.filter(p => !p.isUsed).length,
+        totalPins: totalPinsCount,
+        usedPinsCount: 0,
+        activePinsCount: totalPinsCount,
+        participationRate: 0,
       };
     }
 
     return {
       totalSubmissions: total,
       avgOverallPercent: storeAnalytics.avgOverallPercent,
-      totalPins: pinValues.length,
-      usedPinsCount: pinValues.filter(p => p.isUsed).length,
-      activePinsCount: pinValues.filter(p => !p.isUsed).length,
+      totalPins: totalPinsCount,
+      usedPinsCount: effectiveUsed,
+      activePinsCount,
+      participationRate,
     };
   }, [categorySubmissions, categoryPins, storeAnalytics]);
 
@@ -1045,36 +1053,56 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
 
       {/* 📊 2. TOP METRIC TILES */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Tile 1: ڕێژەی دەنگدان و بەشداری ستاف (Voting Turnout) */}
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
-          <span className="text-[11px] font-bold text-slate-500 block mb-1">کۆی فیدباکەکان</span>
+          <span className="text-[11px] font-black text-slate-500 block mb-1">ڕێژەی دەنگدان (بەشداری ستاف)</span>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black font-mono text-slate-900">{metrics.totalSubmissions}</span>
-            <span className="text-[10px] text-slate-400 font-bold">وەڵام</span>
+            <span className={`text-2xl font-black font-mono ${metrics.participationRate >= 100 ? 'text-emerald-600' : 'text-amber-500'}`}>
+              ٪{metrics.participationRate}
+            </span>
+            <span className="text-[10px] text-slate-400 font-bold">
+              ({metrics.usedPinsCount} لە {metrics.totalPins} کارمەند)
+            </span>
           </div>
+          <span className="text-[10px] text-emerald-600 font-bold block mt-1">
+            {metrics.participationRate >= 100 ? '✓ ١٠٠٪ سەرجەم ستافەکە دەنگیان داوە' : `${metrics.activePinsCount} دەنگ ماوە`}
+          </span>
         </div>
 
+        {/* Tile 2: تێکڕای نمرەی هەڵسەنگاندن (Overall Evaluation Score) */}
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
-          <span className="text-[11px] font-bold text-slate-500 block mb-1">تێکڕای ڕێژەی کۆی ستاف</span>
+          <span className="text-[11px] font-black text-slate-500 block mb-1">تێکڕای نمرەی هەڵسەنگاندن</span>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black font-mono text-amber-500">٪{metrics.avgOverallPercent}</span>
             <span className="text-[10px] text-slate-400 font-bold">لە ١٠٠٪</span>
           </div>
+          <span className="text-[10px] text-slate-500 font-bold block mt-1">
+            ئاستی بەدەستهاتووی نێوان کارمەندان
+          </span>
         </div>
 
+        {/* Tile 3: کۆی فیدباکەکان */}
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
-          <span className="text-[11px] font-bold text-slate-500 block mb-1">کۆدە بەکارهاتووەکان</span>
+          <span className="text-[11px] font-black text-slate-500 block mb-1">کۆی فیدباکەکان (دەنگەکان)</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-black font-mono text-slate-900">{metrics.totalSubmissions}</span>
+            <span className="text-[10px] text-slate-400 font-bold">فۆرمی وەڵامدراو</span>
+          </div>
+          <span className="text-[10px] text-slate-400 font-bold block mt-1">
+            تەواوی دەنگە نێردراوەکان
+          </span>
+        </div>
+
+        {/* Tile 4: دۆخی کۆدەکان */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
+          <span className="text-[11px] font-black text-slate-500 block mb-1">دۆخی کۆدەکانی PIN</span>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black font-mono text-emerald-600">{metrics.usedPinsCount}</span>
-            <span className="text-[10px] text-slate-400 font-bold">PIN</span>
+            <span className="text-[10px] text-slate-400 font-bold">بەکارگیراو لە {metrics.totalPins}</span>
           </div>
-        </div>
-
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
-          <span className="text-[11px] font-bold text-slate-500 block mb-1">PINە چالاکە بەردەستەکان</span>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black font-mono text-blue-600">{metrics.activePinsCount}</span>
-            <span className="text-[10px] text-slate-400 font-bold">چاوەڕوان</span>
-          </div>
+          <span className="text-[10px] font-bold block mt-1 text-slate-500">
+            {metrics.activePinsCount === 0 ? '✓ هەموو کۆدەکان بەکارهاتوون' : `${metrics.activePinsCount} کۆد بەردەستە`}
+          </span>
         </div>
       </div>
 
@@ -1247,7 +1275,7 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                             {topPerformer.emp.role}
                           </span>
                           <span className="text-xs text-amber-950 font-bold">
-                            {topPerformer.count} جار لەلایەن کڕیاران هەڵسەنگێندراوە
+                            {topPerformer.count} جار لەلایەن هاوپیشەکانی هەڵسەنگێندراوە
                           </span>
                         </div>
                       </div>
@@ -2653,23 +2681,21 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                 {/* 1.2 Executive KPI Summary Cards */}
                 <div className="grid grid-cols-4 gap-3 break-inside-avoid">
                   <div className="p-3 rounded-xl bg-slate-50 border border-slate-300 text-center">
+                    <span className="text-[10px] font-bold text-slate-500 block">ڕێژەی دەنگدان (بەشداری)</span>
+                    <span className="text-xl font-black font-mono text-emerald-600">٪{metrics.participationRate}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-300 text-center">
                     <span className="text-[10px] font-bold text-slate-500 block">کۆی فیدباکەکان</span>
                     <span className="text-xl font-black font-mono text-slate-900">{metrics.totalSubmissions}</span>
                   </div>
                   <div className="p-3 rounded-xl bg-slate-50 border border-slate-300 text-center">
-                    <span className="text-[10px] font-bold text-slate-500 block">{isWarehouse ? "تێکڕای کۆگا" : "تێکڕای نمرەی پێشانگا"}</span>
+                    <span className="text-[10px] font-bold text-slate-500 block">{isWarehouse ? "تێکڕای نمرەی کۆگا (لە ١٠٠٪)" : "تێکڕای نمرەی پێشانگا (لە ١٠٠٪)"}</span>
                     <span className="text-xl font-black font-mono text-amber-600">٪{metrics.avgOverallPercent}</span>
                   </div>
                   <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-300 text-center">
                     <span className="text-[10px] font-bold text-amber-800 block">پێشەنگی زێڕینی ستاف</span>
                     <span className="text-xs font-black text-amber-950 truncate block mt-1">
                       👑 {topPerformer?.emp.fullName || 'دیاری نەکراوە'}
-                    </span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-300 text-center">
-                    <span className="text-[10px] font-bold text-slate-500 block">ڕێژەی بەشداری PIN</span>
-                    <span className="text-xl font-black font-mono text-blue-700">
-                      {metrics.usedPinsCount} / {metrics.totalPins}
                     </span>
                   </div>
                 </div>
