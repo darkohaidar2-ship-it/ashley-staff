@@ -45,7 +45,8 @@ import {
   ShieldCheck,
   Lock,
   Unlock,
-  Building2
+  Building2,
+  Loader2
 } from 'lucide-react';
 import { format, addMonths, subMonths } from 'date-fns';
 import { exportToPDF, exportToCSV, type ExportTableColumn } from '@/lib/export-utils';
@@ -61,7 +62,10 @@ import {
   DEFAULT_OVERTIME_REASONS,
   saveCustomOvertimeReasons,
   fetchArchivedVouchers, 
-  saveArchivedVouchers 
+  saveArchivedVouchers,
+  saveExpenses,
+  saveBonuses,
+  saveWithdrawals
 } from '@/lib/supabase';
 import { CategoryManagerModal, type ManagerTabType } from './expenses/CategoryManagerModal';
 import { AuditLogModal } from './expenses/AuditLogModal';
@@ -468,7 +472,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   };
 
   // Sync Archived Vouchers to LocalStorage & Supabase Cloud
-  const saveVouchersToStorage = (updated: ArchivedVoucher[]) => {
+  const saveVouchersToStorage = async (updated: ArchivedVoucher[]): Promise<boolean> => {
     setArchivedVouchers(updated);
     if (typeof window !== 'undefined') {
       try {
@@ -478,14 +482,24 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       }
     }
     // 🌟 Realtime Supabase Cloud Sync
-    saveArchivedVouchers(updated).catch(err => {
+    try {
+      const ok = await saveArchivedVouchers(updated);
+      if (!ok) {
+        logger.error('Failed to sync vouchers to Supabase cloud');
+      }
+      return ok;
+    } catch (err) {
       logger.error('Failed to sync vouchers to Supabase cloud:', err);
-    });
+      return false;
+    }
   };
 
-  // Auto-Group Existing Legacy Data into Archived Lists on First Load so NO user data is lost
+  const legacyMigrationCheckedRef = useRef(false);
+
+  // Auto-Group Existing Legacy Data into Archived Lists on First Load ONLY if no vouchers exist
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (legacyMigrationCheckedRef.current) return;
 
     let storedVouchers: ArchivedVoucher[] = [];
     try {
@@ -493,6 +507,12 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
       if (stored) storedVouchers = JSON.parse(stored);
     } catch {
       storedVouchers = [];
+    }
+
+    // If vouchers already exist in memory or local storage, skip legacy migration
+    if ((archivedVouchers && archivedVouchers.length > 0) || storedVouchers.length > 0) {
+      legacyMigrationCheckedRef.current = true;
+      return;
     }
 
     let modified = false;
@@ -521,7 +541,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
           const legacyVoucher: ArchivedVoucher = {
             id: `vch_legacy_exp_${m}_${Date.now()}`,
             type: 'expenses',
-            name: `لیستی مەسروفات • ${m}-22 (ئەرشیفی پێشوو)`,
+            name: `لیستی مەسروفات • ${m}`,
             month: m,
             createdAt: new Date().toISOString(),
             dateRange,
@@ -613,6 +633,7 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
     if (modified) {
       saveVouchersToStorage(storedVouchers);
     }
+    legacyMigrationCheckedRef.current = true;
   }, [expenses, bonuses, withdrawals]);
 
   // -------------------------------------------------------------
@@ -1168,7 +1189,14 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   const currentMonthArchivedVouchers = useMemo(() => {
     return archivedVouchers.filter(v => {
       if (v.type !== activeTab) return false;
-      if (v.month !== selectedMonth) return false;
+      
+      const matchesMonth = v.month === selectedMonth || 
+        (v.month && v.month.startsWith(selectedMonth)) ||
+        (v.items && v.items.some((i: any) => (i.date || '').startsWith(selectedMonth))) ||
+        (v.dateRange && v.dateRange.includes(selectedMonth));
+
+      if (!matchesMonth) return false;
+
       if (archiveSearchQuery.trim()) {
         const q = archiveSearchQuery.toLowerCase().trim();
         const matchName = (v.name || '').toLowerCase().includes(q);
@@ -2148,142 +2176,188 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
   // -------------------------------------------------------------
   // COMMIT & SAVE LIST (Supports both NEW and EDITED Vouchers)
   // -------------------------------------------------------------
-  const handleSaveDraftList = () => {
+  const [isSavingDraftList, setIsSavingDraftList] = useState(false);
+
+  const handleSaveDraftList = async () => {
     if (draftItems.length === 0) {
       alert(`هیچ پسوولەیەک لەم لیستەدا نییە.\nتکایە سەرەتا پسوولەکان زیاد بکە پاشان کلیک لەسەر خەزنکردن بکە.`);
       return;
     }
+    if (isSavingDraftList) return;
+    setIsSavingDraftList(true);
 
-    const totalAmt = draftItems.reduce((sum, item) => sum + Number(item.amount || item.totalAmount || 0), 0);
+    try {
+      const totalAmt = draftItems.reduce((sum, item) => sum + Number(item.amount || item.totalAmount || 0), 0);
 
-    // Extract date range from items
-    const allDates = Array.from(new Set(draftItems.map(i => i.date))).filter(Boolean).sort();
-    const now = new Date();
-    const realTimeDateStr = format(now, 'yyyy-MM-dd');
-    let dateRange = realTimeDateStr;
-    if (allDates.length === 1) {
-      dateRange = String(allDates[0]);
-    } else if (allDates.length > 1) {
-      dateRange = `${allDates[0]} تا ${allDates[allDates.length - 1]}`;
-    }
+      // Extract date range from items
+      const allDates = Array.from(new Set(draftItems.map(i => i.date))).filter(Boolean).sort();
+      const now = new Date();
+      const realTimeDateStr = format(now, 'yyyy-MM-dd');
+      let dateRange = realTimeDateStr;
+      if (allDates.length === 1) {
+        dateRange = String(allDates[0]);
+      } else if (allDates.length > 1) {
+        dateRange = `${allDates[0]} تا ${allDates[allDates.length - 1]}`;
+      }
 
-    // 🌟 CASE 1: Updating an Existing Archived Voucher
-    if (editingVoucherId) {
-      const existingVoucher = archivedVouchers.find(v => v.id === editingVoucherId);
-      const updatedName = editingVoucherName.trim() || existingVoucher?.name || `لیستی ${activeTabMeta.name}`;
+      // Determine smart month from the latest item date or selectedMonth
+      const smartMonth = allDates.length > 0 
+        ? String(allDates[allDates.length - 1]).substring(0, 7)
+        : (selectedMonth || format(now, 'yyyy-MM'));
 
-      const updatedVoucher: ArchivedVoucher = {
-        ...(existingVoucher || {}),
-        id: editingVoucherId,
+      // 🌟 CASE 1: Updating an Existing Archived Voucher
+      if (editingVoucherId) {
+        const existingVoucher = archivedVouchers.find(v => v.id === editingVoucherId);
+        const updatedName = editingVoucherName.trim() || existingVoucher?.name || `لیستی ${activeTabMeta.name}`;
+
+        const updatedVoucher: ArchivedVoucher = {
+          ...(existingVoucher || {}),
+          id: editingVoucherId,
+          type: activeTab as any,
+          name: updatedName,
+          month: smartMonth || existingVoucher?.month || selectedMonth,
+          createdAt: existingVoucher?.createdAt || now.toISOString(),
+          dateRange,
+          totalAmount: totalAmt,
+          itemCount: draftItems.length,
+          items: [...draftItems],
+        };
+
+        const updatedVouchers = archivedVouchers.map(v => v.id === editingVoucherId ? updatedVoucher : v);
+        
+        // 1. Direct Supabase save of vouchers
+        await saveVouchersToStorage(updatedVouchers);
+
+        // 2. Clean old items from global context and replace with updated items in Supabase
+        const oldItemIds = new Set((existingVoucher?.items || []).map((i: any) => i.id));
+        if (activeTab === 'expenses') {
+          const next = [
+            ...draftItems,
+            ...(expenses || []).filter((e: any) => !oldItemIds.has(e.id))
+          ];
+          setExpenses(next);
+          await saveExpenses(next);
+        } else if (activeTab === 'bonuses') {
+          const next = [
+            ...draftItems,
+            ...(bonuses || []).filter((b: any) => !oldItemIds.has(b.id))
+          ];
+          setBonuses(next);
+          await saveBonuses(next);
+        } else if (activeTab === 'withdrawals') {
+          const next = [
+            ...draftItems,
+            ...(withdrawals || []).filter((w: any) => !oldItemIds.has(w.id))
+          ];
+          setWithdrawals(next);
+          await saveWithdrawals(next);
+        }
+
+        // Switch to the month of the edited voucher so user sees it immediately
+        setSelectedMonth(updatedVoucher.month);
+        setEditingVoucherId(null);
+        setDraftItems([]);
+        setViewMode('archive');
+        alert(`سەرکەوتوو بوو:\nگۆڕانکارییەکانی (${updatedName}) بە سەرکەوتوویی پاشەکەوت کران!\n• ژمارەی پسوولەکان: ${draftItems.length}\n• کۆی گشتی: ${totalAmt.toLocaleString()} IQD`);
+        return;
+      }
+
+      // 🌟 CASE 2: Saving a Fresh New Voucher with Real-Time Timestamp
+      const realTimeClockStr = format(now, 'HH:mm:ss');
+      const realTimeName = `لیستی ${activeTabMeta.name} • ${realTimeDateStr} (${realTimeClockStr})`;
+
+      const newVoucher: ArchivedVoucher = {
+        id: `vch_${activeTab}_${Date.now()}`,
         type: activeTab as any,
-        name: updatedName,
-        month: selectedMonth,
-        createdAt: existingVoucher?.createdAt || now.toISOString(),
+        name: realTimeName,
+        month: smartMonth,
+        createdAt: now.toISOString(),
         dateRange,
         totalAmount: totalAmt,
         itemCount: draftItems.length,
         items: [...draftItems],
       };
 
-      const updatedVouchers = archivedVouchers.map(v => v.id === editingVoucherId ? updatedVoucher : v);
-      saveVouchersToStorage(updatedVouchers);
+      // Save into Archived Vouchers in Supabase and SafeStorage
+      const updatedVouchers = [newVoucher, ...archivedVouchers];
+      await saveVouchersToStorage(updatedVouchers);
 
-      // Clean old items from global context and replace with updated items
-      const oldItemIds = new Set((existingVoucher?.items || []).map((i: any) => i.id));
+      // Push items to global context & Supabase
       if (activeTab === 'expenses') {
-        setExpenses((prev: any) => [
-          ...draftItems,
-          ...(prev || []).filter((e: any) => !oldItemIds.has(e.id))
-        ]);
+        const next = [...draftItems, ...(expenses || [])];
+        setExpenses(next);
+        await saveExpenses(next);
       } else if (activeTab === 'bonuses') {
-        setBonuses((prev: any) => [
-          ...draftItems,
-          ...(prev || []).filter((b: any) => !oldItemIds.has(b.id))
-        ]);
+        const next = [...draftItems, ...(bonuses || [])];
+        setBonuses(next);
+        await saveBonuses(next);
       } else if (activeTab === 'withdrawals') {
-        setWithdrawals((prev: any) => [
-          ...draftItems,
-          ...(prev || []).filter((w: any) => !oldItemIds.has(w.id))
-        ]);
+        const next = [...draftItems, ...(withdrawals || [])];
+        setWithdrawals(next);
+        await saveWithdrawals(next);
       }
 
-      setEditingVoucherId(null);
+      // Automatically switch to the voucher's month so it is visible immediately!
+      setSelectedMonth(smartMonth);
+
+      // Clear Draft
       setDraftItems([]);
+      setAmount('');
+      setFromLoc('');
+      setToLoc('');
+      setTripNo('');
+      setNote('');
+
+      // Automatically return to Archive View
       setViewMode('archive');
-      alert(`سەرکەوتوو بوو:\nگۆڕانکارییەکانی (${updatedName}) بە سەرکەوتوویی پاشەکەوت کران!\n• ژمارەی پسوولەکان: ${draftItems.length}\n• کۆی گشتی: ${totalAmt.toLocaleString()} IQD`);
-      return;
+
+      alert(`سەرکەوتوو بوو:\n${realTimeName} بە سەرکەوتوویی لە ئەرشیفدا خەزن کرا!\n• ژمارەی پسوولەکان: ${draftItems.length}\n• کۆی گشتی: ${totalAmt.toLocaleString()} IQD\n• مەودای بەروار: ${dateRange}`);
+    } catch (err) {
+      logger.error('Error saving draft list:', err);
+      alert('هەڵەیەک ڕوویدا لە کاتی خەزنکردندا. تکایە دووبارە هەوڵ بدەرەوە.');
+    } finally {
+      setIsSavingDraftList(false);
     }
-
-    // 🌟 CASE 2: Saving a Fresh New Voucher with Real-Time Timestamp
-    const realTimeClockStr = format(now, 'HH:mm:ss');
-    const realTimeName = `لیستی ${activeTabMeta.name} • ${realTimeDateStr} (${realTimeClockStr})`;
-
-    const newVoucher: ArchivedVoucher = {
-      id: `vch_${activeTab}_${Date.now()}`,
-      type: activeTab as any,
-      name: realTimeName,
-      month: selectedMonth,
-      createdAt: now.toISOString(),
-      dateRange,
-      totalAmount: totalAmt,
-      itemCount: draftItems.length,
-      items: [...draftItems],
-    };
-
-    // Save into Archived Vouchers
-    const updatedVouchers = [newVoucher, ...archivedVouchers];
-    saveVouchersToStorage(updatedVouchers);
-
-    // Push items to global context so employees statements & records stay synced
-    if (activeTab === 'expenses') {
-      setExpenses((prev: any) => [...draftItems, ...(prev || [])]);
-    } else if (activeTab === 'bonuses') {
-      setBonuses((prev: any) => [...draftItems, ...(prev || [])]);
-    } else if (activeTab === 'withdrawals') {
-      setWithdrawals((prev: any) => [...draftItems, ...(prev || [])]);
-    }
-
-    // Clear Draft
-    setDraftItems([]);
-    setAmount('');
-    setFromLoc('');
-    setToLoc('');
-    setTripNo('');
-    setNote('');
-
-    // Automatically return to Archive View
-    setViewMode('archive');
-
-    alert(`سەرکەوتوو بوو:\n${realTimeName} بە سەرکەوتوویی لە ئەرشیفدا خەزن کرا!\n• ژمارەی پسوولەکان: ${draftItems.length}\n• کۆی گشتی: ${totalAmt.toLocaleString()} IQD\n• مەودای بەروار: ${dateRange}`);
   };
 
   // -------------------------------------------------------------
   // DELETE ARCHIVED VOUCHER
   // -------------------------------------------------------------
-  const handleDeleteVoucher = (voucher: ArchivedVoucher) => {
+  const handleDeleteVoucher = async (voucher: ArchivedVoucher) => {
     if (!window.confirm(`ئایا دڵنیایت لە سڕینەوەی ئەم لیستە ئەرشیفکراوە؟\n«${voucher.name}»\nکۆی گشتی: ${voucher.totalAmount.toLocaleString()} IQD\nئەم کردارە سەرجەم پسوولەکانی ئەم لیستە دەسڕێتەوە.`)) {
       return;
     }
 
-    const updated = archivedVouchers.filter(v => v.id !== voucher.id);
-    saveVouchersToStorage(updated);
+    try {
+      const updated = archivedVouchers.filter(v => v.id !== voucher.id);
+      await saveVouchersToStorage(updated);
 
-    // Remove underlying items from global context
-    const itemIds = new Set(voucher.items.map((i: any) => i.id));
-    if (voucher.type === 'expenses') {
-      setExpenses((prev: any) => (prev || []).filter((e: any) => !itemIds.has(e.id)));
-    } else if (voucher.type === 'bonuses') {
-      setBonuses((prev: any) => (prev || []).filter((b: any) => !itemIds.has(b.id)));
-    } else {
-      setWithdrawals((prev: any) => (prev || []).filter((w: any) => !itemIds.has(w.id)));
+      // Remove underlying items from global context & Supabase
+      const itemIds = new Set((voucher.items || []).map((i: any) => i.id));
+      if (voucher.type === 'expenses') {
+        const next = (expenses || []).filter((e: any) => !itemIds.has(e.id));
+        setExpenses(next);
+        await saveExpenses(next);
+      } else if (voucher.type === 'bonuses') {
+        const next = (bonuses || []).filter((b: any) => !itemIds.has(b.id));
+        setBonuses(next);
+        await saveBonuses(next);
+      } else {
+        const next = (withdrawals || []).filter((w: any) => !itemIds.has(w.id));
+        setWithdrawals(next);
+        await saveWithdrawals(next);
+      }
+
+      if (selectedVoucher?.id === voucher.id) {
+        setSelectedVoucher(null);
+        setViewMode('archive');
+      }
+
+      alert(`✓ لیستی (${voucher.name}) بە سەرکەوتوویی سڕایەوە.`);
+    } catch (err) {
+      logger.error('Error deleting voucher:', err);
+      alert('هەڵەیەک ڕوویدا لە کاتی سڕینەوەی لیستدا.');
     }
-
-    if (selectedVoucher?.id === voucher.id) {
-      setSelectedVoucher(null);
-      setViewMode('archive');
-    }
-
-    alert(`✓ لیستی (${voucher.name}) بە سەرکەوتوویی سڕایەوە.`);
   };
 
   // -------------------------------------------------------------
@@ -4909,18 +4983,21 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
             {/* Prominent Save List Button */}
             <button
               type="button"
+              disabled={isSavingDraftList}
               onClick={handleSaveDraftList}
-              className={`px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm flex items-center gap-2 shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer text-white ${
+              className={`px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm flex items-center gap-2 shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer text-white disabled:opacity-60 disabled:cursor-not-allowed ${
                 editingVoucherId 
                   ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800' 
                   : 'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800'
               }`}
             >
-              <Save className="w-4 h-4" />
+              {isSavingDraftList ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               <span>
-                {editingVoucherId 
-                  ? `پاشەکەوتکردنی دەستکارییەکان (${draftItems.length} پسوولە)` 
-                  : `تەواوکردن و خەزنکردنی ئەم لیستە (${draftItems.length} پسوولە)`
+                {isSavingDraftList 
+                  ? 'پاشەکەوت دەکرێت...' 
+                  : editingVoucherId 
+                    ? `پاشەکەوتکردنی دەستکارییەکان (${draftItems.length} پسوولە)` 
+                    : `تەواوکردن و خەزنکردنی ئەم لیستە (${draftItems.length} پسوولە)`
                 }
               </span>
             </button>
@@ -5405,18 +5482,21 @@ export function AdminExpensesModule({ employees: propEmployees }: AdminExpensesM
 
                 <button
                   type="button"
+                  disabled={isSavingDraftList}
                   onClick={handleSaveDraftList}
-                  className={`px-6 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer text-white ${
+                  className={`px-6 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer text-white disabled:opacity-60 disabled:cursor-not-allowed ${
                     editingVoucherId 
                       ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800' 
                       : 'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800'
                   }`}
                 >
-                  <Save className="w-4 h-4" />
+                  {isSavingDraftList ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   <span>
-                    {editingVoucherId 
-                      ? 'پاشەکەوتکردنی گۆڕانکارییەکانی ئەم لیستە لە ئەرشیف' 
-                      : 'خەزنکردنی لیست لە ئەرشیف بە ناوی کاتی ئێستا'
+                    {isSavingDraftList
+                      ? 'پاشەکەوت دەکرێت لە سوپابەیس...'
+                      : editingVoucherId 
+                        ? 'پاشەکەوتکردنی گۆڕانکارییەکانی ئەم لیستە لە ئەرشیف' 
+                        : 'خەزنکردنی لیست لە ئەرشیف بە ناوی کاتی ئێستا'
                     }
                   </span>
                 </button>

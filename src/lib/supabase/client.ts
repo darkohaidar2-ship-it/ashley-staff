@@ -58,7 +58,9 @@ export async function fetchAllSupabaseWarehouseJson(force = false): Promise<Reco
     try {
       const { data, error } = await supabase
         .from('warehouses')
-        .select('id, qr_code');
+        .select('id, qr_code')
+        .not('id', 'like', 'audio_clip_%')
+        .not('id', 'in', '("ashley_sheets_audit_sessions","ashley_feedback_submissions","ashley_manual_attendance_records")');
 
       if (error || !data) {
         return WAREHOUSE_CACHE;
@@ -73,7 +75,8 @@ export async function fetchAllSupabaseWarehouseJson(force = false): Promise<Reco
           map[row.id] = row.qr_code;
         }
       }
-      WAREHOUSE_CACHE = { ...WAREHOUSE_CACHE, ...map };
+      // Preserve fresher memory cache updates by putting ...WAREHOUSE_CACHE last
+      WAREHOUSE_CACHE = { ...map, ...WAREHOUSE_CACHE };
       WAREHOUSE_CACHE_LOADED = true;
       return WAREHOUSE_CACHE;
     } catch (err) {
@@ -98,8 +101,13 @@ export async function fetchSupabaseJson<T>(key: string, fallback: T): Promise<T>
       return WAREHOUSE_CACHE[key] as T;
     }
 
-    // 2. Coalesce into the single batch fetch if not loaded yet
-    if (!WAREHOUSE_CACHE_LOADED || BATCH_FETCH_PROMISE) {
+    // 2. Coalesce into the single batch fetch if not loaded yet (skip for heavy keys)
+    const isHeavyKey = key.startsWith('audio_clip_') || 
+      key === 'ashley_sheets_audit_sessions' || 
+      key === 'ashley_feedback_submissions' || 
+      key === 'ashley_manual_attendance_records';
+
+    if (!isHeavyKey && (!WAREHOUSE_CACHE_LOADED || BATCH_FETCH_PROMISE)) {
       await fetchAllSupabaseWarehouseJson();
       if (WAREHOUSE_CACHE[key] !== undefined) {
         return WAREHOUSE_CACHE[key] as T;
