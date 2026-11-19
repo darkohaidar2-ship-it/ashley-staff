@@ -79,9 +79,10 @@ import { OfficialPrintHeader, OfficialPrintSignatures } from '@/components/repor
 
 export interface AdminFeedbackDashboardProps {
   initialStaffCategory?: 'sales_cashier' | 'warehouse';
+  embeddedInAdmin?: boolean;
 }
 
-export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' }: AdminFeedbackDashboardProps = {}) {
+export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier', embeddedInAdmin = false }: AdminFeedbackDashboardProps = {}) {
   const searchParams = useSearchParams();
 
   // 🎯 Category State: Sales & Cashiers (7500-9000) vs Warehouse Staff (5000-7500)
@@ -108,15 +109,15 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Active view: 'dashboard' | 'annoying_qa' | 'suggestions' | 'submissions' | 'pins'
+  // Active view: 'dashboard' | 'staff_table' | 'annoying_qa' | 'suggestions' | 'submissions' | 'pins'
   // Defaults to 'dashboard' or URL searchParam 'tab'
-  type FeedbackTab = 'dashboard' | 'annoying_qa' | 'suggestions' | 'submissions' | 'pins';
+  type FeedbackTab = 'dashboard' | 'staff_table' | 'annoying_qa' | 'suggestions' | 'submissions' | 'pins';
   const [activeTab, setActiveTab] = useState<FeedbackTab>('dashboard');
 
   // Synchronize activeTab with URL
   useEffect(() => {
     const tabParam = searchParams?.get('tab');
-    if (tabParam && ['dashboard', 'annoying_qa', 'suggestions', 'submissions', 'pins'].includes(tabParam)) {
+    if (tabParam && ['dashboard', 'staff_table', 'annoying_qa', 'suggestions', 'submissions', 'pins'].includes(tabParam)) {
       setActiveTab(tabParam as FeedbackTab);
     }
   }, [searchParams]);
@@ -900,53 +901,57 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
   return (
     <div className="space-y-5 text-slate-900 font-sans" dir="rtl">
       
-      {/* 🎯 TOP CATEGORY SWITCHER (فرۆشیار و کاشێر بەرامبەر کۆگا) */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setStaffCategory('sales_cashier')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
-              !isWarehouse
-                ? 'bg-amber-500 text-slate-950 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Users className="w-4 h-4 text-emerald-600" />
-            <span>فیدباکی فرۆشیار و کاشێر (٧٥٠٠ - ٩٠٠٠)</span>
-            <span className="px-2 py-0.5 rounded-md bg-black/10 text-[10px] font-mono font-bold">
-              {getSyncedFeedbackStaffList('sales', employees).length} کارمەند
-            </span>
-          </button>
+      {/* 🎯 TOP CATEGORY SWITCHER (فرۆشیار و کاشێر بەرامبەر کۆگا - تەنها کاتێک لە ئەدمین پانێڵدا نییە) */}
+      {!embeddedInAdmin && (
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setStaffCategory('sales_cashier')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
+                !isWarehouse
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>فیدباکی فرۆشیار و کاشێر (٧٥٠٠ - ٩٠٠٠)</span>
+              <span className="px-2 py-0.5 rounded-md bg-white/20 text-[10px] font-mono font-bold">
+                {getSyncedFeedbackStaffList('sales', employees).length} کارمەند
+              </span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setStaffCategory('warehouse')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
-              isWarehouse
-                ? 'bg-amber-500 text-slate-950 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Boxes className="w-4 h-4 text-blue-600" />
-            <span>فیدباکی کارمەندانی کۆگا (٥٠٠٠ - ٧٥٠٠)</span>
-            <span className="px-2 py-0.5 rounded-md bg-black/10 text-[10px] font-mono font-bold">
-              {getSyncedFeedbackStaffList('warehouse', employees).length} کارمەند
-            </span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => setStaffCategory('warehouse')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
+                isWarehouse
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Boxes className="w-4 h-4" />
+              <span>فیدباکی کارمەندانی کۆگا (٥٠٠٠ - ٧٥٠٠)</span>
+              <span className="px-2 py-0.5 rounded-md bg-white/20 text-[10px] font-mono font-bold">
+                {getSyncedFeedbackStaffList('warehouse', employees).length} کارمەند
+              </span>
+            </button>
+          </div>
 
-        <div className="text-xs text-slate-500 font-bold px-2">
-          {isWarehouse ? '📦 بەشی تایبەت بە کارمەندانی کۆگا' : '🛒 بەشی تایبەت بە فرۆشیار و کاشێرەکان'}
+          <div className="text-xs text-slate-500 font-bold px-2">
+            {isWarehouse ? '📦 بەشی تایبەت بە کارمەندانی کۆگا' : '🛒 بەشی تایبەت بە فرۆشیار و کاشێرەکان'}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 🌟 1. TOP HEADER & METRIC SUMMARY */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 flex items-center justify-center font-black shadow-xs">
-              <Trophy className="w-5 h-5 text-slate-950" />
+            <div className={`w-10 h-10 rounded-2xl text-white flex items-center justify-center font-black shadow-xs ${
+              isWarehouse ? 'bg-gradient-to-tr from-blue-600 to-indigo-600' : 'bg-gradient-to-tr from-emerald-600 to-teal-600'
+            }`}>
+              {isWarehouse ? <Boxes className="w-5 h-5 text-white" /> : <Users className="w-5 h-5 text-white" />}
             </div>
             <h2 className="text-base font-black text-slate-900">
               {isWarehouse ? 'داشبۆردی فیدباک و هەڵسەنگاندنی کارمەندانی کۆگا' : 'داشبۆردی فیدباک و هەڵسەنگاندنی فرۆشیار و کاشێرەکان'}
@@ -956,26 +961,28 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
             </span>
           </div>
           <p className="text-xs text-slate-500 font-medium">
-            بەڕێوەبردنی تەواوی سیستەمی فیدباک لەڕێگەی بەستەری ناونیشانەکان (URL Links)، گرافە تایبەتەکان، و ڕاپۆرتی فەرمی PDF
+            بەڕێوەبردنی تەواوی سیستەمی فیدباک بە هێڵکارییە ڕوونەکان، شیکاری کارمەندان، و ڕاپۆرتی فەرمی PDF
           </p>
         </div>
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Direct Link to Separated Manager Evaluation Studio */}
-          <Link
-            href="/adm1n_pan0l?view=manager_evaluation"
-            className="h-10 px-3.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 text-amber-900 font-black text-xs flex items-center gap-1.5 transition-all"
-            title="چوون بۆ بەشی جیاکراوەی هەڵسەنگاندنی بەڕێوەبەر (بەشی سێیەم ٢٠-١٠٠)"
-          >
-            <ExternalLink className="w-3.5 h-3.5 text-amber-600" />
-            <span>بەشی هەڵسەنگاندنی بەڕێوەبەر</span>
-            {managerEvalCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-mono text-[10px] font-black">
-                {managerEvalCount}
-              </span>
-            )}
-          </Link>
+          {/* Direct Link to Manager Evaluation Studio (only when outside admin panel) */}
+          {!embeddedInAdmin && (
+            <Link
+              href="/adm1n_pan0l?view=manager_evaluation"
+              className="h-10 px-3.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 text-amber-900 font-black text-xs flex items-center gap-1.5 transition-all"
+              title="چوون بۆ بەشی جیاکراوەی هەڵسەنگاندنی بەڕێوەبەر (بەشی سێیەم ٢٠-١٠٠)"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-amber-600" />
+              <span>بەشی هەڵسەنگاندنی بەڕێوەبەر</span>
+              {managerEvalCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-mono text-[10px] font-black">
+                  {managerEvalCount}
+                </span>
+              )}
+            </Link>
+          )}
 
           {/* Official PDF Report button */}
           <button
@@ -988,32 +995,35 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
             <span>ڕاپۆرتی فەرمی PDF</span>
           </button>
 
-          {/* New PIN button */}
-          <button
-            type="button"
-            onClick={() => {
-              setCreatePinResult(null);
-              setShowCreatePinModal(true);
-            }}
-            className="h-10 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center gap-2 cursor-pointer active:scale-95 shadow-xs transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>دروستکردنی PINی نوێ</span>
-          </button>
+          {/* New PIN button (shown outside admin or in standalone) */}
+          {!embeddedInAdmin && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setCreatePinResult(null);
+                  setShowCreatePinModal(true);
+                }}
+                className="h-10 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center gap-2 cursor-pointer active:scale-95 shadow-xs transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                <span>دروستکردنی PINی نوێ</span>
+              </button>
 
-          {/* Batch PIN button */}
-          <button
-            type="button"
-            onClick={() => {
-              setBatchCreatedPins([]);
-              setShowBatchModal(true);
-            }}
-            className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
-            title="دروستکردنی چەند PINێک بە یەک کلیک"
-          >
-            <KeyRound className="w-3.5 h-3.5 text-slate-500" />
-            <span>دروستکردنی بەکۆمەڵ</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setBatchCreatedPins([]);
+                  setShowBatchModal(true);
+                }}
+                className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                title="دروستکردنی چەند PINێک بە یەک کلیک"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+                <span>دروستکردنی بەکۆمەڵ</span>
+              </button>
+            </>
+          )}
 
           {/* Export Excel */}
           <button
@@ -1035,7 +1045,7 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
               title="سڕینەوەی گشت فیدباکەکانی تێست و چالاککردنەوەی هەموو PINەکان"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>سڕینەوەی داتای تێست</span>
+              <span>سڕینەوەی تێست</span>
             </button>
           )}
 
@@ -1051,34 +1061,56 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
         </div>
       </div>
 
-      {/* 📊 2. TOP METRIC TILES */}
+      {/* 📊 2. TOP METRIC TILES (بە شێوازی هێڵکارییە بازنەییەکان) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Tile 1: ڕێژەی دەنگدان و بەشداری ستاف (Voting Turnout) */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
-          <span className="text-[11px] font-black text-slate-500 block mb-1">ڕێژەی دەنگدان (بەشداری ستاف)</span>
-          <div className="flex items-baseline gap-2">
-            <span className={`text-2xl font-black font-mono ${metrics.participationRate >= 100 ? 'text-emerald-600' : 'text-amber-500'}`}>
-              ٪{metrics.participationRate}
-            </span>
-            <span className="text-[10px] text-slate-400 font-bold">
-              ({metrics.usedPinsCount} لە {metrics.totalPins} کارمەند)
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-black text-slate-500 block mb-1">ڕێژەی دەنگدان (بەشداری)</span>
+            <div className="flex items-baseline gap-2">
+              <span className={`text-2xl font-black font-mono ${metrics.participationRate >= 100 ? 'text-emerald-600' : 'text-amber-500'}`}>
+                ٪{metrics.participationRate}
+              </span>
+              <span className="text-[10px] text-slate-400 font-bold">
+                ({metrics.usedPinsCount}/{metrics.totalPins})
+              </span>
+            </div>
+            <span className="text-[10px] text-emerald-600 font-bold block mt-1">
+              {metrics.participationRate >= 100 ? '✓ ١٠٠٪ تەواوی ستاف دەنگیان دا' : `${metrics.activePinsCount} دەنگ ماوە`}
             </span>
           </div>
-          <span className="text-[10px] text-emerald-600 font-bold block mt-1">
-            {metrics.participationRate >= 100 ? '✓ ١٠٠٪ سەرجەم ستافەکە دەنگیان داوە' : `${metrics.activePinsCount} دەنگ ماوە`}
-          </span>
+          <div className="relative w-12 h-12 shrink-0 hidden sm:block">
+            <svg className="w-12 h-12 -rotate-90" viewBox="0 0 36 36">
+              <path className="text-slate-100" strokeWidth="3.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              <path className="text-emerald-500 transition-all duration-1000" strokeDasharray={`${metrics.participationRate}, 100`} strokeWidth="3.5" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center text-[10px] font-black font-mono text-emerald-700">
+              {metrics.participationRate}%
+            </div>
+          </div>
         </div>
 
         {/* Tile 2: تێکڕای نمرەی هەڵسەنگاندن (Overall Evaluation Score) */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
-          <span className="text-[11px] font-black text-slate-500 block mb-1">تێکڕای نمرەی هەڵسەنگاندن</span>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black font-mono text-amber-500">٪{metrics.avgOverallPercent}</span>
-            <span className="text-[10px] text-slate-400 font-bold">لە ١٠٠٪</span>
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-black text-slate-500 block mb-1">تێکڕای نمرەی هەڵسەنگاندن</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black font-mono text-amber-500">٪{metrics.avgOverallPercent}</span>
+              <span className="text-[10px] text-slate-400 font-bold">لە ١٠٠٪</span>
+            </div>
+            <span className="text-[10px] text-slate-500 font-bold block mt-1">
+              ئاستی نێوان هاوپیشەکان
+            </span>
           </div>
-          <span className="text-[10px] text-slate-500 font-bold block mt-1">
-            ئاستی بەدەستهاتووی نێوان کارمەندان
-          </span>
+          <div className="relative w-12 h-12 shrink-0 hidden sm:block">
+            <svg className="w-12 h-12 -rotate-90" viewBox="0 0 36 36">
+              <path className="text-slate-100" strokeWidth="3.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              <path className="text-amber-500 transition-all duration-1000" strokeDasharray={`${metrics.avgOverallPercent}, 100`} strokeWidth="3.5" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center text-[10px] font-black font-mono text-amber-700">
+              {metrics.avgOverallPercent}%
+            </div>
+          </div>
         </div>
 
         {/* Tile 3: کۆی فیدباکەکان */}
@@ -1106,83 +1138,119 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
         </div>
       </div>
 
-      {/* 🧭 3. TABS NAVIGATION (URL Addressable Pages / Tabs) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-2">
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80 flex-wrap">
+      {/* 🧭 3. TABS NAVIGATION (کڵێشەی هێڵکارییەکان - Tabs Based on Diagrams & Visuals) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex items-center gap-1.5 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/80 flex-wrap shadow-2xs">
           
           {/* Tab 1: Dashboard Link */}
           <button
             type="button"
             onClick={() => handleTabChange('dashboard')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all duration-200 cursor-pointer flex items-center gap-1.5 active:scale-95 ${
               activeTab === 'dashboard'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-slate-950 shadow-sm shadow-slate-200 border border-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
             }`}
           >
-            <BarChart3 className="w-4 h-4 text-amber-500" />
-            <span>داشبۆرد و هێڵکارەکان</span>
+            <BarChart3 className={`w-4 h-4 ${activeTab === 'dashboard' ? 'text-amber-500' : 'text-slate-400'}`} />
+            <span>هێڵکارییە سەرەکییەکان و پوختە</span>
           </button>
 
-          {/* Tab 2: Question 5 Annoying Behaviors Link */}
+          {/* Tab 2: Staff Table & Detailed Breakdown */}
+          <button
+            type="button"
+            onClick={() => handleTabChange('staff_table')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all duration-200 cursor-pointer flex items-center gap-1.5 active:scale-95 ${
+              activeTab === 'staff_table'
+                ? 'bg-white text-slate-950 shadow-sm shadow-slate-200 border border-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+            }`}
+          >
+            <Users className={`w-4 h-4 ${activeTab === 'staff_table' ? 'text-blue-600' : 'text-slate-400'}`} />
+            <span>خشتە و هێڵکاریی کارمەندان</span>
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+              activeTab === 'staff_table' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200/70 text-slate-600'
+            }`}>
+              {currentTargetStaff.length}
+            </span>
+          </button>
+
+          {/* Tab 3: Question 5 Annoying Behaviors Link */}
           <button
             type="button"
             onClick={() => handleTabChange('annoying_qa')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all duration-200 cursor-pointer flex items-center gap-1.5 active:scale-95 ${
               activeTab === 'annoying_qa'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-slate-950 shadow-sm shadow-slate-200 border border-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
             }`}
           >
-            <AlertTriangle className="w-4 h-4 text-rose-500" />
-            <span>ڕەفتارە بێزارکەرەکان (پرسیاری ٥)</span>
+            <AlertTriangle className={`w-4 h-4 ${activeTab === 'annoying_qa' ? 'text-rose-500' : 'text-slate-400'}`} />
+            <span>ڕەفتارە بێزارکەرەکان</span>
             {annoyingBehaviorStats.totalReported > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-bold">
+              <span className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold">
                 {annoyingBehaviorStats.totalReported}
               </span>
             )}
           </button>
 
-          {/* Tab 3: Improvement Suggestions (3 Points) Link */}
+          {/* Tab 4: Improvement Suggestions (3 Points) Link */}
           <button
             type="button"
             onClick={() => handleTabChange('suggestions')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all duration-200 cursor-pointer flex items-center gap-1.5 active:scale-95 ${
               activeTab === 'suggestions'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-slate-950 shadow-sm shadow-slate-200 border border-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
             }`}
           >
-            <Lightbulb className="w-4 h-4 text-amber-500" />
-            <span>پێشنیاری باشترکردن بە ٣ خاڵ ({improvementSuggestionsList.length})</span>
-          </button>
-
-          {/* Tab 4: Submissions Link */}
-          <button
-            type="button"
-            onClick={() => handleTabChange('submissions')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'submissions'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Table className="w-4 h-4 text-blue-600" />
-            <span>فیدباکە وەرگیراوەکان ({categorySubmissions.length})</span>
+            <Lightbulb className={`w-4 h-4 ${activeTab === 'suggestions' ? 'text-amber-500' : 'text-slate-400'}`} />
+            <span>پێشنیارەکانی باشترکردن</span>
+            {improvementSuggestionsList.length > 0 && (
+              <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+                activeTab === 'suggestions' ? 'bg-amber-100 text-amber-800' : 'bg-slate-200/70 text-slate-600'
+              }`}>
+                {improvementSuggestionsList.length}
+              </span>
+            )}
           </button>
 
           {/* Tab 5: PINs Link */}
           <button
             type="button"
             onClick={() => handleTabChange('pins')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all duration-200 cursor-pointer flex items-center gap-1.5 active:scale-95 ${
               activeTab === 'pins'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-slate-950 shadow-sm shadow-slate-200 border border-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
             }`}
           >
-            <KeyRound className="w-4 h-4 text-amber-600" />
-            <span>کۆدەکانی PIN ({Object.keys(categoryPins).length})</span>
+            <KeyRound className={`w-4 h-4 ${activeTab === 'pins' ? 'text-amber-600' : 'text-slate-400'}`} />
+            <span>کۆدەکانی PIN و واتسئاپ</span>
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+              activeTab === 'pins' ? 'bg-amber-100 text-amber-800' : 'bg-slate-200/70 text-slate-600'
+            }`}>
+              {Object.keys(categoryPins).length}
+            </span>
+          </button>
+
+          {/* Tab 6: Submissions Link */}
+          <button
+            type="button"
+            onClick={() => handleTabChange('submissions')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all duration-200 cursor-pointer flex items-center gap-1.5 active:scale-95 ${
+              activeTab === 'submissions'
+                ? 'bg-white text-slate-950 shadow-sm shadow-slate-200 border border-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+            }`}
+          >
+            <Table className={`w-4 h-4 ${activeTab === 'submissions' ? 'text-blue-600' : 'text-slate-400'}`} />
+            <span>تەواوی دەنگەکان</span>
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+              activeTab === 'submissions' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200/70 text-slate-600'
+            }`}>
+              {categorySubmissions.length}
+            </span>
           </button>
         </div>
 
@@ -1195,11 +1263,11 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
                 handleCopy(window.location.href, 'لینکی ئەم بەشە');
               }
             }}
-            className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all"
+            className="px-3 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/90 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs active:scale-95"
             title="کۆپیکردنی بەستەری ئەم پەیجە بۆ ئاسان دەستپێڕاگەیشتن"
           >
-            <Share2 className="w-3.5 h-3.5" />
-            <span>کۆپیکردنی لینکی بەشەکە</span>
+            <Share2 className="w-3.5 h-3.5 text-slate-500" />
+            <span>کۆپیکردنی لینک</span>
           </button>
 
           {copiedText && (
@@ -1610,13 +1678,18 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
 
           </div>
 
-          {/* ========================================================================= */}
-          {/* 📋 SECTION 3: COMPREHENSIVE 8-STAFF ANALYTICS TABLE */}
-          {/* ========================================================================= */}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 👥 VIEW 2: COMPREHENSIVE STAFF ANALYTICS TABLE (خشتە و هێڵکاریی کارمەندان) */}
+      {/* ========================================================================= */}
+      {activeTab === 'staff_table' && (
+        <div className="space-y-4">
           <div className="bg-white border border-slate-200/90 rounded-3xl overflow-hidden shadow-xs">
             <div className="p-5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50/70">
               <div className="flex items-center gap-2">
-                <Table className="w-5 h-5 text-amber-500" />
+                <Users className="w-5 h-5 text-blue-600" />
                 <h3 className="text-sm font-black text-slate-900">
                   خشتەی وردی شیکاری و خاڵەکانی سەرجەم {currentTargetStaff.length} کارمەندەکە
                 </h3>
@@ -1825,7 +1898,6 @@ export function AdminFeedbackDashboard({ initialStaffCategory = 'sales_cashier' 
               </table>
             </div>
           </div>
-
         </div>
       )}
 

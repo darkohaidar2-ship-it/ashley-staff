@@ -709,77 +709,87 @@ export function AdminDashboardWorkspace() {
       {/* 💬 VIEW 6: FEEDBACK & SURVEY MANAGEMENT DASHBOARD */}
       {/* ========================================================================= */}
       {['feedback', 'feedback_sales', 'feedback_warehouse', 'manager_evaluation', 'pins'].includes(adminView) && (
-        <div className="w-full mb-5 p-2 rounded-2xl bg-white border border-slate-200/90 shadow-xs flex flex-wrap items-center justify-between gap-2" dir="rtl">
-          <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="w-full mb-5 p-2.5 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs flex flex-wrap items-center justify-between gap-3" dir="rtl">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={() => handleViewChange('feedback_sales')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
+              className={`px-4 py-2 rounded-xl text-xs font-black transition-all duration-200 flex items-center gap-2 cursor-pointer active:scale-95 ${
                 adminView === 'feedback_sales' || adminView === 'feedback'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-500/20'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
-              <Users className="w-4 h-4 text-emerald-600" />
-              <span>فیدباکی فرۆشیار و کاشێر (٧٥٠٠ - ٩٠٠٠)</span>
+              <Users className={`w-4 h-4 ${adminView === 'feedback_sales' || adminView === 'feedback' ? 'text-white' : 'text-emerald-600'}`} />
+              <span>فیدباکی فرۆشیار و کاشێر</span>
+              <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+                adminView === 'feedback_sales' || adminView === 'feedback' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+              }`}>
+                ٨ کارمەند
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => handleViewChange('feedback_warehouse')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
+              className={`px-4 py-2 rounded-xl text-xs font-black transition-all duration-200 flex items-center gap-2 cursor-pointer active:scale-95 ${
                 adminView === 'feedback_warehouse'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
-              <Boxes className="w-4 h-4 text-blue-600" />
-              <span>فیدباکی کارمەندانی کۆگا (٥٠٠٠ - ٧٥٠٠)</span>
+              <Boxes className={`w-4 h-4 ${adminView === 'feedback_warehouse' ? 'text-white' : 'text-blue-600'}`} />
+              <span>فیدباکی کارمەندانی کۆگا</span>
+              <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+                adminView === 'feedback_warehouse' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+              }`}>
+                ١١ کارمەند • ٪١٠٠ بەشداری
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => handleViewChange('manager_evaluation')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
+              className={`px-4 py-2 rounded-xl text-xs font-black transition-all duration-200 flex items-center gap-2 cursor-pointer active:scale-95 ${
                 adminView === 'manager_evaluation'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-md shadow-amber-500/20'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
-              <ManagerEvalIcon className="w-4 h-4 text-amber-500" />
+              <ManagerEvalIcon className={`w-4 h-4 ${adminView === 'manager_evaluation' ? 'text-slate-950' : 'text-amber-500'}`} />
               <span>هەڵسەنگاندنی بەڕێوەبەر</span>
             </button>
 
             <button
               type="button"
               onClick={() => handleViewChange('pins')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
+              className={`px-4 py-2 rounded-xl text-xs font-black transition-all duration-200 flex items-center gap-2 cursor-pointer active:scale-95 ${
                 adminView === 'pins'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  ? 'bg-slate-900 text-white shadow-md shadow-slate-900/20'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
-              <KeyRound className="w-4 h-4 text-amber-500" />
-              <span>بەڕێوەبردنی کۆدەکانی PIN</span>
+              <KeyRound className={`w-4 h-4 ${adminView === 'pins' ? 'text-amber-400' : 'text-amber-500'}`} />
+              <span>کۆگای گشتی PIN</span>
             </button>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-900 text-xs font-bold border border-amber-200">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 text-slate-700 text-xs font-bold border border-slate-200/80">
             <ShieldCheck className="w-4 h-4 text-amber-500" />
-            <span>بەشی فیدباک • Feedback Hub</span>
+            <span>ناوەندی گشتگیری فیدباک • Feedback Hub</span>
           </div>
         </div>
       )}
 
       {(adminView === 'feedback' || adminView === 'feedback_sales') && (
         <section className="w-full transition-opacity duration-300">
-          <AdminFeedbackDashboard initialStaffCategory="sales_cashier" />
+          <AdminFeedbackDashboard initialStaffCategory="sales_cashier" embeddedInAdmin={true} />
         </section>
       )}
 
       {adminView === 'feedback_warehouse' && (
         <section className="w-full transition-opacity duration-300">
-          <AdminFeedbackDashboard initialStaffCategory="warehouse" />
+          <AdminFeedbackDashboard initialStaffCategory="warehouse" embeddedInAdmin={true} />
         </section>
       )}
 
