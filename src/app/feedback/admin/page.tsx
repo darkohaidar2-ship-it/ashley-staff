@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { AdminFeedbackDashboard } from '@/components/admin/AdminFeedbackDashboard';
 import { AdminManagerEvaluationDashboard } from '@/components/admin/AdminManagerEvaluationDashboard';
+import { PinKeypadProtection } from '@/components/admin/PinKeypadProtection';
 
 function FeedbackAdminContent() {
   const searchParams = useSearchParams();
@@ -206,9 +207,31 @@ function FeedbackAdminContent() {
       </header>
 
       <main className="p-3 sm:p-6">
-        {activeTab === 'manager_evaluation' && <AdminManagerEvaluationDashboard />}
+        {activeTab === 'manager_evaluation' && (
+          <PinKeypadProtection
+            requiredPin="0000"
+            title="هەڵسەنگاندنی بەڕێوەبەر"
+            subtitle="ئەم بەشە تایبەتە بە کارگێڕی باڵا، تکایە کۆدی نهێنی بنووسە بۆ بینینی ئەنجامەکان"
+            badgeText="کارگێڕی باڵا"
+            iconType="manager"
+            storageKey="ashley_unlocked_manager_0000"
+          >
+            <AdminManagerEvaluationDashboard />
+          </PinKeypadProtection>
+        )}
         {activeTab === 'feedback_sales' && <AdminFeedbackDashboard initialStaffCategory="sales_cashier" />}
-        {activeTab === 'feedback_warehouse' && <AdminFeedbackDashboard initialStaffCategory="warehouse" />}
+        {activeTab === 'feedback_warehouse' && (
+          <PinKeypadProtection
+            requiredPin="0000"
+            title="فیدباکی کارمەندانی کۆگا"
+            subtitle="ئەم بەشە پارێزراوە، تکایە کۆدی نهێنی ٤ ژمارەیی بنووسە بۆ بینینی هەڵسەنگاندنەکان"
+            badgeText="کارمەندانی کۆگا"
+            iconType="warehouse"
+            storageKey="ashley_unlocked_warehouse_0000"
+          >
+            <AdminFeedbackDashboard initialStaffCategory="warehouse" />
+          </PinKeypadProtection>
+        )}
       </main>
     </div>
   );

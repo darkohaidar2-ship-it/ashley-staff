@@ -16,6 +16,7 @@ import NotificationRoutingMatrix from '@/components/admin/NotificationRoutingMat
 import { AdminGoogleBindingsManager } from '@/components/admin/AdminGoogleBindingsManager';
 import { AdminFeedbackDashboard } from '@/components/admin/AdminFeedbackDashboard';
 import { AdminManagerEvaluationDashboard } from '@/components/admin/AdminManagerEvaluationDashboard';
+import { PinKeypadProtection } from '@/components/admin/PinKeypadProtection';
 import { GoogleSheetsWarehouseAudit } from '@/components/admin/warehouse/GoogleSheetsWarehouseAudit';
 import { AdminUniversalPinsManager } from '@/components/admin/pins/AdminUniversalPinsManager';
 import { Award as ManagerEvalIcon } from 'lucide-react';
@@ -789,7 +790,16 @@ export function AdminDashboardWorkspace() {
 
       {adminView === 'feedback_warehouse' && (
         <section className="w-full transition-opacity duration-300">
-          <AdminFeedbackDashboard initialStaffCategory="warehouse" embeddedInAdmin={true} />
+          <PinKeypadProtection
+            requiredPin="0000"
+            title="فیدباکی کارمەندانی کۆگا"
+            subtitle="ئەم بەشە پارێزراوە، تکایە کۆدی نهێنی ٤ ژمارەیی بنووسە بۆ بینینی هەڵسەنگاندنەکان"
+            badgeText="کارمەندانی کۆگا"
+            iconType="warehouse"
+            storageKey="ashley_unlocked_warehouse_0000"
+          >
+            <AdminFeedbackDashboard initialStaffCategory="warehouse" embeddedInAdmin={true} />
+          </PinKeypadProtection>
         </section>
       )}
 
@@ -798,7 +808,16 @@ export function AdminDashboardWorkspace() {
       {/* ========================================================================= */}
       {adminView === 'manager_evaluation' && (
         <section className="w-full transition-opacity duration-300">
-          <AdminManagerEvaluationDashboard />
+          <PinKeypadProtection
+            requiredPin="0000"
+            title="هەڵسەنگاندنی بەڕێوەبەر"
+            subtitle="ئەم بەشە تایبەتە بە کارگێڕی باڵا، تکایە کۆدی نهێنی بنووسە بۆ بینینی ئەنجامەکان"
+            badgeText="کارگێڕی باڵا"
+            iconType="manager"
+            storageKey="ashley_unlocked_manager_0000"
+          >
+            <AdminManagerEvaluationDashboard />
+          </PinKeypadProtection>
         </section>
       )}
 
